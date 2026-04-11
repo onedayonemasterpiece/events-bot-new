@@ -1,5 +1,10 @@
 # INC-2026-04-10 CrumpleVideo Audio Source Drift
 
+Status: closed
+Severity: sev1
+Service: CrumpleVideo `/v` audio contract
+Related Docs: `docs/features/crumple-video/README.md`, `docs/operations/release-governance.md`
+
 ## Summary
 
 `/v` завершил рендер и отдал mp4, но в финальном ролике после точки старта аудио (`1:17`) звучал `Pulsarium`, хотя канонический контракт `CrumpleVideo` требует только `The_xx_-_Intro.mp3`.
@@ -27,6 +32,27 @@
 1. Канонический audio contract был уже зафиксирован в docs/notebook, но не был доведён до server-side dataset builder.
 2. `video_announce/scenario.py` собирал Kaggle session dataset по legacy правилу: `The_xx_-_Intro.mp3` только для test, `Pulsarium.mp3` для non-test.
 3. Из-за этого Kaggle run честно использовал тот mp3, который ему положили в dataset, и производил “технически успешный”, но продуктово неверный mp4.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- меняется `/v`, `video_announce/scenario.py`, audio asset selection, Kaggle dataset assembly, notebook inputs или release packaging;
+- меняется final render smoke для CrumpleVideo;
+- правится документация/контракт по audio source или offset.
+
+### Mandatory checks before closure or deploy
+
+- подтвердить, что server-side helper для audio selection возвращает production track contract, а не legacy fallback;
+- выполнить targeted regression test на audio contract для test/prod;
+- выполнить smoke, который подтверждает фактический audio source в готовом output или в подготовленном dataset;
+- проверить, что docs и код согласованы по track name и expected behavior.
+
+### Required evidence
+
+- ссылка на regression test по audio contract;
+- evidence из dataset assembly или final output, что выбран `The_xx_-_Intro.mp3`;
+- deployed SHA и путь, которым изменение попало в prod.
 
 ## Corrective Actions
 

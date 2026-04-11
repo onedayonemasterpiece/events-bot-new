@@ -1,5 +1,10 @@
 # INC-2026-04-10 CrumpleVideo Story Prod Drift
 
+Status: closed
+Severity: sev1
+Service: CrumpleVideo `/v` story publish
+Related Docs: `docs/features/crumple-video/README.md`, `docs/operations/release-governance.md`
+
 ## Summary
 
 `/v` render завершился в `Kaggle`, но production story publish не выполнился и в логах kernel не было ни preflight, ни publish-следов. Разбор показал не runtime-сбой story helper, а release drift: на проде оказалась линия без активного story-layer и с `VIDEO_ANNOUNCE_STORY_ENABLED=0`.
@@ -28,6 +33,28 @@
 1. Прод был выкачен не из канонической линии CrumpleVideo story rollout.
 2. В активном продовом env story-path был фактически выключен через `VIDEO_ANNOUNCE_STORY_ENABLED=0`.
 3. Из-за этого Kaggle notebook не получал `story_publish.json` и не заходил в story preflight/publish branch, поэтому kernel log выглядел как “обычный render без упоминаний о stories”.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- меняется код под `/v`, `video_announce/`, `kaggle/CrumpleVideo/`, story publish, story auth, `fly.toml`, Fly secrets/env или release workflow;
+- идёт merge/recovery/reconcile веток, которые могут вернуть stale CrumpleVideo line;
+- меняется `/healthz` или fail-closed логика для story-path.
+
+### Mandatory checks before closure or deploy
+
+- подтвердить, что production config не выключает story-path без явного согласованного исключения;
+- прогнать целевой smoke на `/v` и убедиться, что story branch действительно активируется, а не остаётся mp4-only;
+- проверить, что `/healthz` краснеет при required story-path drift (`VIDEO_ANNOUNCE_STORY_REQUIRED=1`);
+- проверить, что deployed SHA достижим из `origin/main` по `docs/operations/release-governance.md`.
+
+### Required evidence
+
+- deployed SHA и способ deploy;
+- конфигурационное evidence по story-related env;
+- лог/артефакт, показывающий вход в story preflight/publish path;
+- ссылка на тест или smoke, которым закрыт regression-check.
 
 ## Corrective Actions
 

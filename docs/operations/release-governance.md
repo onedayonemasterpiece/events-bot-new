@@ -29,7 +29,8 @@
 3. Проверить чистоту дерева: `git status --short`
 4. Проверить, что deploy-ветка не потеряла связь с `origin/main`
 5. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
-6. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
+6. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
+7. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
 
 ## Emergency Hotfix Flow
 
@@ -51,8 +52,10 @@
 
 ## Evidence To Record
 
+- incident ID(s), если deploy связан с инцидентом или затрагивает известный incident surface
 - deployed SHA
 - branch name
 - способ deploy (`flyctl` или GitHub Actions)
 - ссылка на PR / merge commit, который вернул fix в `main`
+- краткий список выполненных incident regression checks и где лежит их evidence
 - краткая заметка, если deploy был emergency и почему нельзя было ждать обычного merge

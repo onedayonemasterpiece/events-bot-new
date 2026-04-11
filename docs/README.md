@@ -11,6 +11,7 @@
 
 - Архитектура: `docs/architecture/overview.md`
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
+- Incident management / closure gate: `docs/operations/incident-management.md`
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)
@@ -21,7 +22,7 @@
 - Фичи: `docs/features/`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
-- Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`)
+- Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
 - Инструменты: `docs/tools/`
 
 ## Правила добавления/обновления доков
@@ -29,3 +30,4 @@
 1. Новая фича → добавь `docs/features/<feature>/README.md` и внеси её в `docs/routes.yml`.
 2. Не создавай новый документ, если можно расширить существующий канонический.
 3. Если нужно сохранить старый путь (ссылки/история) — оставь короткий redirect‑stub без копирования текста.
+4. Новый production incident → добавь канонический record в `docs/reports/incidents/` по `TEMPLATE.md`, внеси его в incident index и убедись, что он пригоден для автоматического regression-check по ID.

@@ -10,6 +10,8 @@ description: Основные инструкции для AI-агента при
 > - [`CODEX.md`](../CODEX.md) — обязательные правила разработки и Definition of Done
 > - [`docs/README.md`](../docs/README.md) — карта документации (feature-oriented)
 > - [`docs/architecture/overview.md`](../docs/architecture/overview.md) — архитектура проекта, ключевые компоненты и пайплайны
+> - [`docs/operations/incident-management.md`](../docs/operations/incident-management.md) — канонический incident workflow, closure gate и regression discipline
+> - [`docs/reports/incidents/README.md`](../docs/reports/incidents/README.md) — индекс инцидентов и маршрутизация по `INC-*`
 > - [`CHANGELOG.md`](../CHANGELOG.md) — последние изменения и контекст текущей работы
 
 # Общие правила
@@ -24,6 +26,26 @@ description: Основные инструкции для AI-агента при
 8. **Исследование сайтов** — для исследования структуры веб-страниц всегда используй Playwright (создавай debug-скрипты), а НЕ browser subagent
 9. **E2E Тесты** — при реализации новой feature (функционала) ОБЯЗАТЕЛЬНО создавай интеграционные (E2E) тесты, проверяющие полный цикл работы от входа до результата (БД/API).
 10. **Двойная связка (Linear <-> Docs)** — во всех фиче-документах (`docs/features/*`) указывай ID задачи из Linear (например, `Task: [EVE-60]`). В задаче Linear указывай ссылку на документ.
+
+## Incident Mode (critical)
+
+- Достаточно указать конкретный incident ID вида `INC-YYYY-MM-DD-*`, чтобы агент автоматически перешёл в incident workflow.
+- При любом упоминании конкретного инцидента агент ОБЯЗАН открыть:
+  - `docs/operations/incident-management.md`
+  - `docs/reports/incidents/README.md`
+  - канонический incident record по указанному ID
+- Указанный incident record становится обязательным regression contract для всей задачи:
+  - агент извлекает affected surfaces;
+  - обязательные проверки до closure/deploy;
+  - release traps и required evidence.
+- Пока не собраны incident-specific regression checks и release evidence, задача не считается завершённой, даже если код “визуально починен”.
+- Если пользователь чинит продовый путь, который затрагивает surface из существующего incident record, агент должен сам поднять этот incident record как regression-check, даже если пользователь не попросил об этом отдельно.
+- Если релевантного канонического incident record ещё нет, агент должен создать его из `docs/reports/incidents/TEMPLATE.md` до завершения работы.
+- В финальном ответе по incident-related задаче агент обязан явно перечислить:
+  - какой incident ID был использован;
+  - какие regression checks выполнены;
+  - какое release/closure evidence собрано;
+  - что осталось follow-up action, если осталось.
 
 ## Навигация по докам (routes)
 

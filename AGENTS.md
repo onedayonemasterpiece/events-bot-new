@@ -7,6 +7,18 @@
 1. Открой `docs/README.md` (человеческий индекс).
 2. Для “быстрого роутинга” используй `docs/routes.yml` (машиночитаемая карта).
 3. Для задач по E2E всегда сверяйся с `docs/operations/e2e-scenarios.md` и поддерживай этот индекс актуальным при изменении сценариев.
+4. Для задач по инцидентам или при упоминании `INC-*` сразу открывай `docs/operations/incident-management.md` и `docs/reports/incidents/README.md`.
+
+## Incident Mode (critical)
+
+- Упоминание конкретного incident ID (`INC-*`) само по себе достаточно, чтобы агент перешёл в incident workflow.
+- В incident workflow агент обязан:
+  - открыть канонический incident record;
+  - трактовать его как regression contract;
+  - выполнить incident-specific checks до closure/deploy;
+  - в финальном ответе явно отчитаться по regression checks и release evidence.
+- Если изменение затрагивает surface из известного incident record, агент должен поднять этот record как regression-check даже без явной просьбы пользователя.
+- Если incident record отсутствует, его нужно создать из `docs/reports/incidents/TEMPLATE.md`; без этого задача по инциденту не считается корректно формализованной.
 
 ## E2E по умолчанию (важно)
 

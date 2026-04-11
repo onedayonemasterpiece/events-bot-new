@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Operations / Incident Discipline**: incident management formalized as a canonical workflow with an explicit playbook, incident template, automatic routing by `INC-*`, and mandatory regression/closure gates wired into agent instructions and release governance.
 - CherryFlash: nudged the scene-1 handoff to local `~1.80s`, reduced the final 3D poster fill, switched the first upward move to a cubic in/out curve, and gave the 3D push-in a non-zero tail velocity so the beat-lock is visible without swallowing the move-up or pausing before it.
 - CherryFlash: sharpened phone-screen CTA for the clean pass with supersampled Cygre label textures, reduced label-plane lift so the UI reads bonded to the glass without a shadow-like halo, raised the final 3D quality budget, disabled final motion blur, and retuned final H.264 export toward a lighter `1080x1920` approval file.
 - CherryFlash: retuned the white 3D push-in to a single coordinated camera-progress path and nudged the 2D `move_up` beat-lock deeper to local `~2.22s` to reduce visible micro-stalls before the first scene handoff.

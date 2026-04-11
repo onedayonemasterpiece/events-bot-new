@@ -9,8 +9,11 @@ sections:
   architecture:
     overview: docs/architecture/overview.md
   operations:
+    incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
     cron: docs/operations/cron.md
+    release_governance: docs/operations/release-governance.md
+    runtime_logs: docs/operations/runtime-logs.md
     scheduler_routing:
       docs: docs/operations/cron.md
       scheduler_defaults: scheduling.py
@@ -80,6 +83,10 @@ sections:
   reports:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
+    incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_crumple_story_prod_drift: docs/reports/incidents/INC-2026-04-10-crumple-story-prod-drift.md
+    incident_crumple_audio_source_drift: docs/reports/incidents/INC-2026-04-10-crumple-audio-source-drift.md
+    incident_tg_monitoring_festival_bool: docs/reports/incidents/INC-2026-04-10-tg-monitoring-festival-bool.md
     guide_excursions_fact_first_audit_2026_03_15: docs/reports/guide-excursions-fact-first-audit-2026-03-15.md
   tools:
     index: docs/tools/README.md
