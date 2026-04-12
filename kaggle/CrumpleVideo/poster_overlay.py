@@ -164,6 +164,7 @@ def apply_poster_overlay(
     text: str,
     out_dir: str | Path,
     search_roots: list[str | Path] | None = None,
+    highlight_title: bool | None = None,
 ) -> Path:
     """Draw a modern badge using a Cyrillic-capable TTF font (BebasNeue if available)."""
 
@@ -213,8 +214,10 @@ def apply_poster_overlay(
 
     # Title can wrap to 2 lines; details 1 line each; total <= 4 lines
     lines: list[tuple[str, ImageFont.FreeTypeFont]] = []
+    title_line_count = 0
     for part in _wrap_line(draw, raw[0], font_title, max_text_w, max_lines=2):
         lines.append((part, font_title))
+        title_line_count += 1
     for extra in raw[1:]:
         for part in _wrap_line(draw, extra, font_body, max_text_w, max_lines=1):
             lines.append((part, font_body))
@@ -262,12 +265,15 @@ def apply_poster_overlay(
     draw = ImageDraw.Draw(img)
     tx = x0 + pad_x
     ty = y0 + pad_y
-    for (t, f), lh in zip(lines, line_heights):
+    title_fill = (248, 216, 82, 255)
+    default_fill = (255, 255, 255, 255)
+    for idx, ((t, f), lh) in enumerate(zip(lines, line_heights)):
+        fill = title_fill if highlight_title and idx < title_line_count else default_fill
         draw.text(
             (tx, ty),
             t,
             font=f,
-            fill=(255, 255, 255, 255),
+            fill=fill,
             stroke_width=stroke_w,
             stroke_fill=(0, 0, 0, 140),
         )
@@ -278,4 +284,3 @@ def apply_poster_overlay(
     out_path = out_dir / f"{in_path.stem}__overlay.png"
     img.convert("RGB").save(out_path, format="PNG")
     return out_path
-

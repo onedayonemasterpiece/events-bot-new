@@ -16,6 +16,7 @@
   - открыть канонический incident record;
   - трактовать его как regression contract;
   - выполнить incident-specific checks до closure/deploy;
+  - если баг затронул daily/scheduled production task за текущий день, не останавливаться на фиксе и deploy: агент обязан довести инцидент до компенсирующего rerun/catch-up и проверить, что сегодняшние данные/публикация восстановлены;
   - в финальном ответе явно отчитаться по regression checks и release evidence.
 - Если изменение затрагивает surface из известного incident record, агент должен поднять этот record как regression-check даже без явной просьбы пользователя.
 - Если incident record отсутствует, его нужно создать из `docs/reports/incidents/TEMPLATE.md`; без этого задача по инциденту не считается корректно формализованной.
@@ -109,6 +110,7 @@
   - проверить, нет ли `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
 - GitHub Actions deploy допустим только если workflow явно checkout-ит и проверяет `main`.
 - Ручной `flyctl deploy` допустим только из clean worktree; если deploy emergency и идёт не из `main`, branch должен быть запушен, SHA зафиксирован, а тот же fix обязан вернуться в `main` в рамках того же инцидента.
+- Для daily/scheduled prod-задач (`cron`, ежедневные публикации, daily import/rebuild jobs) deploy не считается closure сам по себе: если из-за бага сегодняшний слот уже был пропущен или завершился аварийно, после доставки фикса нужно выполнить compensating rerun/catch-up и проверить, что текущий день больше не потерян.
 
 ## Избегаем дубликатов
 

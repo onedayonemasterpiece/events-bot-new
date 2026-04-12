@@ -4,6 +4,7 @@ import json
 import sys
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -12,6 +13,7 @@ import scheduling
 import vk_intake
 from db import Database
 from heavy_ops import HeavyOpMeta
+from ops_run import finish_ops_run, start_ops_run
 
 
 def test_scheduler_and_extract_do_not_import_main(monkeypatch):
@@ -175,3 +177,176 @@ async def test_job_wrapper_records_skipped_guide_monitoring_ops_run(tmp_path, mo
     assert status == "skipped"
     assert details["skip_reason"] == "heavy_busy"
     assert details["blocked_by_kind"] == "vk_auto_import"
+
+
+class _FixedVideoTomorrowDatetime(datetime):
+    fixed_now = datetime(2026, 4, 12, 15, 30, tzinfo=timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        value = cls.fixed_now
+        if tz is not None:
+            return value.astimezone(tz)
+        return value.replace(tzinfo=None)
+
+
+async def _insert_video_tomorrow_session(
+    db: Database,
+    *,
+    status: str,
+    target_date: str,
+    profile_key: str = "default",
+    error: str | None = None,
+    created_at: str,
+) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO videoannounce_session(status, profile_key, selection_params, created_at, error)
+            VALUES(?, ?, ?, ?, ?)
+            """,
+            (
+                status,
+                profile_key,
+                json.dumps({"target_date": target_date}),
+                created_at,
+                error,
+            ),
+        )
+        await conn.commit()
+
+
+def _configure_video_tomorrow_env(monkeypatch) -> None:
+    monkeypatch.setenv("ENABLE_V_TOMORROW_SCHEDULED", "1")
+    monkeypatch.setenv("V_TOMORROW_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("V_TOMORROW_TIME_LOCAL", "16:45")
+    monkeypatch.delenv("ENABLE_V_TEST_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.setattr(scheduling, "datetime", _FixedVideoTomorrowDatetime)
+
+
+@pytest.mark.asyncio
+async def test_video_tomorrow_startup_catchup_retries_single_recoverable_failed_session(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_video_tomorrow_env(monkeypatch)
+
+    run_id = await start_ops_run(
+        db,
+        kind="video_tomorrow",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 12, 14, 45, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(db, run_id=run_id, status="success")
+    await _insert_video_tomorrow_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-13",
+        error="missing video output",
+        created_at="2026-04-12 14:46:00",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_video_tomorrow_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is True
+    assert calls == [
+        {"profile_key": "default", "test_mode": False, "startup_catchup": True}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_video_tomorrow_watchdog_retries_single_recoverable_failed_session(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_video_tomorrow_env(monkeypatch)
+
+    run_id = await start_ops_run(
+        db,
+        kind="video_tomorrow",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 12, 14, 45, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(db, run_id=run_id, status="success")
+    await _insert_video_tomorrow_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-13",
+        error="kaggle push failed",
+        created_at="2026-04-12 14:46:00",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_video_tomorrow_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is True
+    assert calls == [
+        {"profile_key": "default", "test_mode": False, "startup_catchup": False}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_video_tomorrow_startup_catchup_skips_second_recoverable_retry_same_day(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_video_tomorrow_env(monkeypatch)
+
+    run_id = await start_ops_run(
+        db,
+        kind="video_tomorrow",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 12, 14, 45, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(db, run_id=run_id, status="success")
+    await _insert_video_tomorrow_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-13",
+        error="missing video output",
+        created_at="2026-04-12 14:46:00",
+    )
+    await _insert_video_tomorrow_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-13",
+        error="missing video output",
+        created_at="2026-04-12 15:00:00",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_video_tomorrow_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []

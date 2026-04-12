@@ -173,11 +173,17 @@ def _story_session_payload() -> dict[str, Any]:
     api_hash = _require_env_any("TG_API_HASH", "TELEGRAM_API_HASH")
     bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
     session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    source_channel_id_raw = (_get_env_value("SOURCE_CHANNEL_ID") or "").strip()
 
     auth: dict[str, Any] = {
         "api_id": int(api_id),
         "api_hash": str(api_hash),
     }
+    if source_channel_id_raw:
+        try:
+            auth["source_channel_id"] = int(source_channel_id_raw)
+        except ValueError as exc:
+            raise RuntimeError("SOURCE_CHANNEL_ID must be int") from exc
     if bundle_env_key:
         bundle_raw = _get_env_value(bundle_env_key)
         if not bundle_raw:

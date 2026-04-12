@@ -85,6 +85,8 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - `V_TOMORROW_TEST_MODE=1` can temporarily switch the same slot back to the legacy test-render path;
   - once `ENABLE_V_TOMORROW_SCHEDULED=1` is enabled, the runtime should resolve timing/profile only from `V_TOMORROW_*`; legacy `V_TEST_TOMORROW_*` remain backward-compatible only for older env sets that still use the legacy enable flag;
   - on app startup the scheduler now performs a same-day catch-up for a missed `video_tomorrow` slot, so a Fly restart after `16:45` local still dispatches the run once instead of silently waiting until tomorrow;
+  - if that same-day scheduled run did start but its only matching session for the target date ended in a recoverable early `FAILED` state (currently `missing video output` or `kaggle push failed`), startup catch-up and the live watchdog must allow one automatic rerun instead of treating the earlier `ops_run=success` marker as final delivery;
+  - this recovery is intentionally one-shot per local day/target-date/profile tuple: once there is more than one matching failed attempt, the scheduler stops auto-rerunning and leaves the incident for manual handling;
   - while the process is alive, a separate in-process watchdog now verifies that the same-day `video_tomorrow` dispatch really happened after the slot; if APScheduler silently misses the slot, the watchdog runs the same scheduled path once after its grace window instead of waiting for the next restart;
   - `/healthz` now also treats missing/stopped APScheduler state and a missing `video_tomorrow` job as unhealthy, so Fly can recycle a runtime that is “HTTP alive” but lost its cron layer;
   - when `VIDEO_ANNOUNCE_STORY_ENABLED=1`, the same Kaggle notebook can also publish the finished `/v` video to Telegram stories from inside Kaggle and attach `story_publish_report.json` to the kernel output;
@@ -142,7 +144,8 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_REQUIRED` – optional prod guard: when enabled, `/healthz` fails if `/v` story publish is disabled or obviously misconfigured.
-- `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish.
+- `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish; the same encrypted auth runtime is also reused by notebook-side Telegram poster-cache rescue when direct poster URLs are dead.
+- `SOURCE_CHANNEL_ID` – optional Telegram channel id embedded into the encrypted story auth payload so Kaggle can search that channel by filename for poster rescue instead of defaulting to Saved Messages.
 - `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`.
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.

@@ -39,8 +39,9 @@
 3. Прогнать таргетные тесты и smoke checks
 4. Запушить ветку в `origin`
 5. Задеплоить через `flyctl` из этой clean branch
-6. Открыть или обновить PR в `main`
-7. Не закрывать инцидент, пока deployed SHA не достижим из `origin/main`
+6. Если инцидент затронул daily/scheduled prod-задачу за текущий день, сразу после deploy выполнить compensating rerun/catch-up и убедиться, что сегодняшние данные/публикация восстановлены
+7. Открыть или обновить PR в `main`
+8. Не закрывать инцидент, пока deployed SHA не достижим из `origin/main`
 
 ## Branch Drift Audit
 

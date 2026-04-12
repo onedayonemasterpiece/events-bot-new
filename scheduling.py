@@ -513,6 +513,75 @@ async def _video_tomorrow_session_exists_today(
     return False
 
 
+def _video_tomorrow_failure_class(error: Any) -> str:
+    text = str(error or "").strip().lower()
+    if not text:
+        return "unknown"
+    if text == "missing video output":
+        return "missing_video_output"
+    if text == "kaggle push failed":
+        return "kaggle_push_failed"
+    return "other"
+
+
+async def _video_tomorrow_recoverable_failed_session_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    profile_key: str,
+    target_date: str,
+) -> dict[str, Any] | None:
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, status, profile_key, selection_params, error
+            FROM videoannounce_session
+            WHERE created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    matching: list[dict[str, Any]] = []
+    for session_id, status, row_profile_key, selection_params_raw, error in rows:
+        if str(row_profile_key or "").strip() != profile_key:
+            continue
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() != target_date:
+            continue
+        matching.append(
+            {
+                "id": int(session_id),
+                "status": str(status or "").strip(),
+                "error": str(error or "").strip(),
+            }
+        )
+    if len(matching) != 1:
+        return None
+    latest = matching[0]
+    if latest["status"] != "FAILED":
+        return None
+    failure_class = _video_tomorrow_failure_class(latest["error"])
+    if failure_class not in _VIDEO_TOMORROW_RECOVERABLE_FAILURE_CLASSES:
+        return None
+    latest["failure_class"] = failure_class
+    latest["matching_sessions"] = len(matching)
+    return latest
+
+
 async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     enabled, video_tz_name, video_time_raw, profile_key, video_test_mode = _video_tomorrow_schedule_settings()
     if not enabled:
@@ -539,18 +608,33 @@ async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     day_end_local = day_start_local + timedelta(days=1)
     day_start_utc = day_start_local.astimezone(timezone.utc)
     day_end_utc = day_end_local.astimezone(timezone.utc)
+    target_date = (now_local + timedelta(days=1)).date().isoformat()
+    normalized_profile_key = (profile_key or "default").strip() or "default"
+    recoverable_failed = await _video_tomorrow_recoverable_failed_session_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+        profile_key=normalized_profile_key,
+        target_date=target_date,
+    )
     if await _video_tomorrow_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
         day_end_utc=day_end_utc,
     ):
-        logging.info(
-            "SCHED startup catchup skip video_tomorrow: scheduled dispatch already recorded today"
-        )
-        return False
+        if recoverable_failed:
+            logging.warning(
+                "SCHED startup catchup allowing one-time recovery rerun for failed video_tomorrow session_id=%s class=%s error=%s",
+                recoverable_failed["id"],
+                recoverable_failed["failure_class"],
+                recoverable_failed["error"],
+            )
+        else:
+            logging.info(
+                "SCHED startup catchup skip video_tomorrow: scheduled dispatch already recorded today"
+            )
+            return False
 
-    target_date = (now_local + timedelta(days=1)).date().isoformat()
-    normalized_profile_key = (profile_key or "default").strip() or "default"
     if await _video_tomorrow_session_exists_today(
         db,
         day_start_utc=day_start_utc,
@@ -610,15 +694,30 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
     day_end_local = day_start_local + timedelta(days=1)
     day_start_utc = day_start_local.astimezone(timezone.utc)
     day_end_utc = day_end_local.astimezone(timezone.utc)
+    target_date = (now_local + timedelta(days=1)).date().isoformat()
+    normalized_profile_key = (profile_key or "default").strip() or "default"
+    recoverable_failed = await _video_tomorrow_recoverable_failed_session_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+        profile_key=normalized_profile_key,
+        target_date=target_date,
+    )
     if await _video_tomorrow_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
         day_end_utc=day_end_utc,
     ):
-        return False
+        if recoverable_failed:
+            logging.warning(
+                "SCHED watchdog allowing one-time recovery rerun for failed video_tomorrow session_id=%s class=%s error=%s",
+                recoverable_failed["id"],
+                recoverable_failed["failure_class"],
+                recoverable_failed["error"],
+            )
+        else:
+            return False
 
-    target_date = (now_local + timedelta(days=1)).date().isoformat()
-    normalized_profile_key = (profile_key or "default").strip() or "default"
     if await _video_tomorrow_session_exists_today(
         db,
         day_start_utc=day_start_utc,
@@ -1265,6 +1364,10 @@ _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
     "DONE",
     "PUBLISHED_TEST",
     "PUBLISHED_MAIN",
+}
+_VIDEO_TOMORROW_RECOVERABLE_FAILURE_CLASSES: set[str] = {
+    "missing_video_output",
+    "kaggle_push_failed",
 }
 
 # Jobs that can take minutes/hours (Kaggle/LLM/rendering) and should not overlap in prod.

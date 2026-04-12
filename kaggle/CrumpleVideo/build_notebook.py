@@ -29,6 +29,23 @@ def _replace_embedded_module(
     return source[:start] + replacement + source[end:]
 
 
+def _replace_block(
+    source: str,
+    *,
+    start_marker: str,
+    end_marker: str,
+    replacement: str,
+    label: str,
+) -> str:
+    start = source.find(start_marker)
+    if start < 0:
+        raise RuntimeError(f"Could not locate {label} start marker in notebook")
+    end = source.find(end_marker, start)
+    if end < 0:
+        raise RuntimeError(f"Could not locate {label} end marker in notebook")
+    return source[:start] + replacement + source[end:]
+
+
 def main() -> None:
     notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
     poster_module_source = POSTER_MODULE_PATH.read_text(encoding="utf-8").rstrip("\n")
@@ -91,8 +108,201 @@ def main() -> None:
         "# Import from working dir (preferred)\n"
         "sys.path.insert(0, '/kaggle/working')\n"
         "from poster_overlay import apply_poster_overlay\n"
-        "from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle\n"
+        "from story_publish import load_story_publish_runtime, preflight_story_publish_from_kaggle, publish_story_from_kaggle\n"
         "from story_gesture_overlay import GESTURE_STEP_COUNT, apply_story_gesture_frame\n"
+    )
+    telegram_runtime_old = (
+        "TELEGRAM_READY = False\n"
+        "TELEGRAM_ERROR = None\n"
+        "try:\n"
+        "    from telethon import TelegramClient\n"
+        "    from telethon.sessions import StringSession\n"
+        "    from kaggle_secrets import UserSecretsClient\n"
+        "    TELEGRAM_READY = True\n"
+        "except Exception as e:\n"
+        "    TELEGRAM_ERROR = e\n"
+    )
+    telegram_runtime_new = (
+        "TELEGRAM_READY = False\n"
+        "TELEGRAM_ERROR = None\n"
+        "KAGGLE_SECRETS_READY = False\n"
+        "KAGGLE_SECRETS_ERROR = None\n"
+        "try:\n"
+        "    from telethon import TelegramClient\n"
+        "    from telethon.sessions import StringSession\n"
+        "    TELEGRAM_READY = True\n"
+        "except Exception as e:\n"
+        "    TELEGRAM_ERROR = e\n"
+        "\n"
+        "try:\n"
+        "    from kaggle_secrets import UserSecretsClient\n"
+        "    KAGGLE_SECRETS_READY = True\n"
+        "except Exception as e:\n"
+        "    UserSecretsClient = None\n"
+        "    KAGGLE_SECRETS_ERROR = e\n"
+    )
+    telegram_download_old = (
+        "async def download_via_telegram(filenames_map):\n"
+        "    if not TELEGRAM_READY or not filenames_map:\n"
+        "        return\n"
+        "    log(f\"\\n--- 🔵 Telegram: cache lookup ({len(filenames_map)} files) ---\")\n"
+        "    try:\n"
+        "        secrets = UserSecretsClient()\n"
+        "        api_id = int(secrets.get_secret(\"TELEGRAM_API_ID\"))\n"
+        "        api_hash = secrets.get_secret(\"TELEGRAM_API_HASH\")\n"
+        "        session_str = secrets.get_secret(\"TELEGRAM_SESSION\")\n"
+        "        channel_id = None\n"
+        "        try:\n"
+        "            cid = secrets.get_secret(\"SOURCE_CHANNEL_ID\")\n"
+        "            if cid:\n"
+        "                channel_id = int(cid)\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "    except Exception as e:\n"
+        "        log(f\"[SKIP] Telegram secrets missing: {e}\")\n"
+        "        return\n"
+        "\n"
+        "    try:\n"
+        "        client = TelegramClient(StringSession(session_str), api_id, api_hash)\n"
+        "        await client.connect()\n"
+        "        if not await client.is_user_authorized():\n"
+        "            log(\"[ERROR] Telegram session invalid, skipping cache.\")\n"
+        "            await client.disconnect()\n"
+        "            return\n"
+        "        target = channel_id if channel_id else 'me'\n"
+        "        target_name = 'CHANNEL' if channel_id else 'SAVED MESSAGES'\n"
+        "        log(f\"   > Connected. Searching in: {target_name}\")\n"
+        "        for fname, local_path in filenames_map.items():\n"
+        "            if os.path.exists(local_path):\n"
+        "                continue\n"
+        "            log(f\"   > Search: {fname} ...\")\n"
+        "            found_msg = None\n"
+        "            try:\n"
+        "                async for message in client.iter_messages(target, search=fname, limit=100):\n"
+        "                    if message.media:\n"
+        "                        found_msg = message\n"
+        "                        break\n"
+        "            except Exception as e:\n"
+        "                log(f\"     [ERR] {e}\")\n"
+        "            if found_msg:\n"
+        "                log('     [FOUND] Downloading...')\n"
+        "                await found_msg.download_media(file=local_path)\n"
+        "                log('     [DONE]')\n"
+        "            else:\n"
+        "                log('     [NOT FOUND]')\n"
+        "        await client.disconnect()\n"
+        "    except Exception as e:\n"
+        "        log(f\"[TELEGRAM ERROR] {e}\")\n"
+    )
+    telegram_download_new = (
+        "def _telegram_runtime_search_roots():\n"
+        "    roots = []\n"
+        "    for raw in (Path('/kaggle/working'), SOURCE_FOLDER, Path(KAGGLE_INPUT_ROOT), Path('/kaggle/input')):\n"
+        "        try:\n"
+        "            root = Path(raw)\n"
+        "        except Exception:\n"
+        "            continue\n"
+        "        if root not in roots:\n"
+        "            roots.append(root)\n"
+        "    return roots\n"
+        "\n"
+        "\n"
+        "def _load_telegram_auth(log):\n"
+        "    runtime_error = None\n"
+        "    try:\n"
+        "        runtime = load_story_publish_runtime(search_roots=_telegram_runtime_search_roots(), log=lambda _msg: None)\n"
+        "    except Exception as e:\n"
+        "        runtime = None\n"
+        "        runtime_error = e\n"
+        "    if isinstance(runtime, dict):\n"
+        "        auth = runtime.get('auth') or {}\n"
+        "        session_str = str(auth.get('session') or '').strip()\n"
+        "        api_id = auth.get('api_id')\n"
+        "        api_hash = str(auth.get('api_hash') or '').strip()\n"
+        "        if session_str and api_id and api_hash:\n"
+        "            channel_id = auth.get('source_channel_id')\n"
+        "            try:\n"
+        "                channel_id = int(channel_id) if channel_id is not None else None\n"
+        "            except Exception:\n"
+        "                channel_id = None\n"
+        "            log('   > Telegram auth source: story runtime')\n"
+        "            return {\n"
+        "                'api_id': int(api_id),\n"
+        "                'api_hash': api_hash,\n"
+        "                'session': session_str,\n"
+        "                'channel_id': channel_id,\n"
+        "            }\n"
+        "\n"
+        "    kaggle_error = None\n"
+        "    if KAGGLE_SECRETS_READY and UserSecretsClient is not None:\n"
+        "        try:\n"
+        "            secrets = UserSecretsClient()\n"
+        "            api_id = int(secrets.get_secret('TELEGRAM_API_ID'))\n"
+        "            api_hash = secrets.get_secret('TELEGRAM_API_HASH')\n"
+        "            session_str = secrets.get_secret('TELEGRAM_SESSION')\n"
+        "            channel_id = None\n"
+        "            try:\n"
+        "                cid = secrets.get_secret('SOURCE_CHANNEL_ID')\n"
+        "                if cid:\n"
+        "                    channel_id = int(cid)\n"
+        "            except Exception:\n"
+        "                pass\n"
+        "            if session_str and api_hash:\n"
+        "                log('   > Telegram auth source: kaggle secrets')\n"
+        "                return {\n"
+        "                    'api_id': api_id,\n"
+        "                    'api_hash': api_hash,\n"
+        "                    'session': session_str,\n"
+        "                    'channel_id': channel_id,\n"
+        "                }\n"
+        "        except Exception as e:\n"
+        "            kaggle_error = e\n"
+        "\n"
+        "    error = runtime_error or kaggle_error or KAGGLE_SECRETS_ERROR or TELEGRAM_ERROR or 'no auth source available'\n"
+        "    log(f\"[SKIP] Telegram auth missing: {error}\")\n"
+        "    return None\n"
+        "\n"
+        "\n"
+        "async def download_via_telegram(filenames_map):\n"
+        "    if not TELEGRAM_READY or not filenames_map:\n"
+        "        return\n"
+        "    log(f\"\\n--- 🔵 Telegram: cache lookup ({len(filenames_map)} files) ---\")\n"
+        "    auth = _load_telegram_auth(log)\n"
+        "    if not auth:\n"
+        "        return\n"
+        "\n"
+        "    try:\n"
+        "        client = TelegramClient(StringSession(auth['session']), auth['api_id'], auth['api_hash'])\n"
+        "        await client.connect()\n"
+        "        if not await client.is_user_authorized():\n"
+        "            log(\"[ERROR] Telegram session invalid, skipping cache.\")\n"
+        "            await client.disconnect()\n"
+        "            return\n"
+        "        channel_id = auth.get('channel_id')\n"
+        "        target = channel_id if channel_id else 'me'\n"
+        "        target_name = 'CHANNEL' if channel_id else 'SAVED MESSAGES'\n"
+        "        log(f\"   > Connected. Searching in: {target_name}\")\n"
+        "        for fname, local_path in filenames_map.items():\n"
+        "            if os.path.exists(local_path):\n"
+        "                continue\n"
+        "            log(f\"   > Search: {fname} ...\")\n"
+        "            found_msg = None\n"
+        "            try:\n"
+        "                async for message in client.iter_messages(target, search=fname, limit=100):\n"
+        "                    if message.media:\n"
+        "                        found_msg = message\n"
+        "                        break\n"
+        "            except Exception as e:\n"
+        "                log(f\"     [ERR] {e}\")\n"
+        "            if found_msg:\n"
+        "                log('     [FOUND] Downloading...')\n"
+        "                await found_msg.download_media(file=local_path)\n"
+        "                log('     [DONE]')\n"
+        "            else:\n"
+        "                log('     [NOT FOUND]')\n"
+        "        await client.disconnect()\n"
+        "    except Exception as e:\n"
+        "        log(f\"[TELEGRAM ERROR] {e}\")\n"
     )
     sequence_init_old = (
         "    sequence = []\n"
@@ -279,10 +489,37 @@ def main() -> None:
             source = source.replace(helper_insert_old, helper_insert_new, 1)
         else:
             raise RuntimeError("Could not locate story gesture helper insertion point in notebook")
+        if (
+            "from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle\n"
+            in source
+            and "from story_publish import load_story_publish_runtime, preflight_story_publish_from_kaggle, publish_story_from_kaggle\n"
+            not in source
+        ):
+            source = source.replace(
+                "from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle\n",
+                "from story_publish import load_story_publish_runtime, preflight_story_publish_from_kaggle, publish_story_from_kaggle\n",
+                1,
+            )
         if overlay_call_old in source:
             source = source.replace(overlay_call_old, overlay_call_new, 1)
         elif overlay_call_new not in source:
             raise RuntimeError("Could not locate overlay call block in notebook")
+        if telegram_runtime_new not in source:
+            source = _replace_block(
+                source,
+                start_marker="TELEGRAM_READY = False\n",
+                end_marker="\n\nasync def download_via_telegram(filenames_map):\n",
+                replacement=telegram_runtime_new,
+                label="Telegram runtime",
+            )
+        if "_load_telegram_auth(log):" not in source:
+            source = _replace_block(
+                source,
+                start_marker="async def download_via_telegram(filenames_map):\n",
+                end_marker="\n\ndef _run_async(coro):\n",
+                replacement=telegram_download_new,
+                label="Telegram download",
+            )
         if sequence_init_old in source:
             source = source.replace(sequence_init_old, sequence_init_new, 1)
         elif sequence_init_new not in source:
