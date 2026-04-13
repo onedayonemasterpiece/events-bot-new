@@ -1128,6 +1128,7 @@ async def run_vk_auto_import(
     unbounded = limit_int <= 0
 
     await vk_review.release_stale_locks(db)
+    await vk_review.release_due_deferred(db, batch_id=batch_id)
 
     def _env_enabled(name: str, default: bool) -> bool:
         raw = (os.getenv(name) or "").strip().lower()
@@ -1946,14 +1947,15 @@ async def _process_vk_inbox_row(
                     if rl_max_wait_sec <= 0:
                         await vk_review.mark_pending(db, int(post.id))
                     else:
-                        # Keep the row locked to avoid immediately picking it again in the same
-                        # unbounded run. The lock will auto-expire via vk_review._unlock_stale().
-                        async with db.raw_conn() as conn:
-                            await conn.execute(
-                                "UPDATE vk_inbox SET status='locked', locked_at=CURRENT_TIMESTAMP WHERE id=?",
-                                (int(post.id),),
-                            )
-                            await conn.commit()
+                        retry_after_sec = (
+                            max(1.0, retry_after_ms / 1000.0) if retry_after_ms else rl_max_wait_sec
+                        )
+                        await vk_review.mark_deferred(
+                            db,
+                            int(post.id),
+                            batch_id=batch_id,
+                            retry_after_sec=retry_after_sec,
+                        )
                 except Exception:
                     logger.warning("vk_auto: defer_lock_failed after rate limit", exc_info=True)
                 retry_hint = (

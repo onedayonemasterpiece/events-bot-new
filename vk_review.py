@@ -119,6 +119,43 @@ async def release_stale_locks(db: Database) -> int:
     return count
 
 
+async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> int:
+    """Move due deferred rows back to ``pending`` for a new batch.
+
+    Rate-limited rows are persisted as ``status='deferred'`` with ``locked_at``
+    storing the earliest retry time. They must not be resumed inside the same
+    batch that deferred them, otherwise a long unbounded run can re-pick the
+    same post in a tight loop once the retry window expires.
+    """
+
+    async with db.raw_conn() as conn:
+        if batch_id:
+            cursor = await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                WHERE status='deferred'
+                  AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                  AND (review_batch IS NULL OR review_batch <> ?)
+                """,
+                (batch_id,),
+            )
+        else:
+            cursor = await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                WHERE status='deferred'
+                  AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                """
+            )
+        count = cursor.rowcount
+        await conn.commit()
+    if count:
+        logging.info("vk_review release_due_deferred count=%s batch=%s", count, batch_id or "")
+    return int(count or 0)
+
+
 async def release_all_locks(db: Database) -> int:
     """Unlock *all* locked inbox rows.
 
@@ -156,7 +193,7 @@ async def refresh_vk_event_ts_hints(db: Database) -> int:
                 """
                 SELECT id, text, date, event_ts_hint
                 FROM vk_inbox
-                WHERE status IN ('pending', 'locked', 'skipped', 'failed')
+                WHERE status IN ('pending', 'locked', 'skipped', 'failed', 'deferred')
                 """
             )
             rows = await cursor.fetchall()
@@ -716,6 +753,55 @@ async def mark_pending(db: Database, inbox_id: int) -> None:
             conn,
             _update,
             description=f"mark_pending inbox_id={inbox_id}",
+        )
+
+
+async def mark_deferred(
+    db: Database,
+    inbox_id: int,
+    *,
+    batch_id: str | None,
+    retry_after_sec: float | int | None = None,
+) -> None:
+    """Persist a rate-limited inbox row without turning it into a stale lock."""
+
+    try:
+        delay_seconds = max(0, int(math.ceil(float(retry_after_sec or 0.0))))
+    except Exception:
+        delay_seconds = 0
+    modifier = f"+{delay_seconds} seconds" if delay_seconds > 0 else None
+
+    async with db.raw_conn() as conn:
+        async def _update() -> None:
+            if modifier:
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='deferred',
+                        locked_by=NULL,
+                        locked_at=datetime('now', ?),
+                        review_batch=?
+                    WHERE id=?
+                    """,
+                    (modifier, batch_id, inbox_id),
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='deferred',
+                        locked_by=NULL,
+                        locked_at=CURRENT_TIMESTAMP,
+                        review_batch=?
+                    WHERE id=?
+                    """,
+                    (batch_id, inbox_id),
+                )
+
+        await _run_locked_write(
+            conn,
+            _update,
+            description=f"mark_deferred inbox_id={inbox_id}",
         )
 
 

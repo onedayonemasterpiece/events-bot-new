@@ -11248,6 +11248,7 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
     counts = {r[0]: r[1] for r in rows}
     lines = [
         f"pending: {counts.get('pending', 0)}",
+        f"deferred: {counts.get('deferred', 0)}",
         f"locked: {counts.get('locked', 0)}",
         f"skipped: {counts.get('skipped', 0)}",
         f"failed: {counts.get('failed', 0)}",

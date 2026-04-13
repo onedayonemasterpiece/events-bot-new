@@ -242,6 +242,41 @@ async def test_pick_next_recomputes_hint_and_rejects_recent_past(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_release_due_deferred_only_for_new_batch(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_inbox(group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status, locked_at, review_batch)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
+            """,
+            [
+                (1, 101, 0, "A", "k", 1, int(_time.time()) + 10_000, "deferred", "2026-01-01 00:00:00", "batch-old"),
+                (1, 102, 0, "B", "k", 1, int(_time.time()) + 10_000, "deferred", "2026-01-01 00:00:00", "batch-new"),
+                (1, 103, 0, "C", "k", 1, int(_time.time()) + 10_000, "deferred", "2099-01-01 00:00:00", "batch-old"),
+            ],
+        )
+        await conn.commit()
+
+    released = await vk_review.release_due_deferred(db, batch_id="batch-new")
+    assert released == 1
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT post_id, status, review_batch, locked_at FROM vk_inbox ORDER BY post_id"
+        )
+        rows = await cur.fetchall()
+
+    assert rows == [
+        (101, "pending", None, None),
+        (102, "deferred", "batch-new", "2026-01-01 00:00:00"),
+        (103, "deferred", "batch-old", "2099-01-01 00:00:00"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_pick_next_rejects_explicit_year_past(tmp_path, monkeypatch):
     fixed_now = int(real_datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp())
     monkeypatch.setattr(vk_review._time, "time", lambda: fixed_now)

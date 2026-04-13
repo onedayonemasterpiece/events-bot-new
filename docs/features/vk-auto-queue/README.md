@@ -39,7 +39,8 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 
 - Таблица очереди: `vk_inbox` (`db.py`).
 - Состояния:
-  - `pending`, `locked` — активная очередь (в обработке/ожидании),
+  - `pending`, `locked` — активная очередь (готово к разбору / сейчас разбирается),
+  - `deferred` — пост временно отложен после LLM rate limit; `locked_at` хранит `retry_after`, а не “сиротский lock”,
   - `imported` — пост успешно автоимпортирован (даже если он дал несколько событий),
   - `rejected` — пост обработан и признан не-событием (0 событий / invalid / promo),
   - `skipped` — оператор вручную отложил решение по посту,
@@ -83,7 +84,14 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 
 Важно: автоимпорт обрабатывает **pending** (и один раз может «подтянуть» часть `skipped`, если включён `include_skipped`), но не гоняет `skipped/failed` по кругу в рамках одного запуска. Если пост ушёл в `failed` из‑за технической ошибки (OCR/сеть/LLM), он не будет автоматически повторно обработан в этом же прогоне.
 
-Техническая деталь для SQLite: служебные обновления очереди (`locked -> imported/failed/rejected/pending/skipped`) теперь повторяют write+commit при кратковременном `database is locked`, чтобы локальный auto import не терял пост после успешного `Smart Update` только из-за transient lock на `vk_inbox`/`vk_review_batch`.
+Для provider-side `429` действует отдельный путь:
+
+- если `VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC>0`, строка уходит в `status='deferred'` с `retry_after` в `locked_at`;
+- такой post **не** подбирается повторно в том же batch;
+- в начале **следующего** run due-строки `deferred` автоматически возвращаются в `pending`;
+- это защищает от цикла `rate limit -> restart/OOM -> startup recovery -> тот же post снова`.
+
+Техническая деталь для SQLite: служебные обновления очереди (`locked/deferred -> imported/failed/rejected/pending/skipped`) теперь повторяют write+commit при кратковременном `database is locked`, чтобы локальный auto import не терял пост после успешного `Smart Update` только из-за transient lock на `vk_inbox`/`vk_review_batch`.
 
 ### DEV/E2E: Telegraph страницы из prod snapshot
 
@@ -181,7 +189,9 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 
 ### Recovery after restart/OOM
 
-- При старте приложения все `vk_inbox.status='locked'` сбрасываются в `pending`, чтобы очередь не зависала после OOM/рестарта.
+- При старте приложения в `pending` возвращаются только реальные рабочие locks: `vk_inbox.status='locked'`.
+- `status='deferred'` после рестарта **не** трогается: это не сиротский lock, а осознанный retry state после rate limit.
+- Due-строки `deferred` выпускаются обратно в `pending` только в начале нового `vk_auto_import` batch, а не в общем startup recovery.
 - Любые `ops_run.status='running'` помечаются как `crashed` с `finished_at=now` (диагностика незавершённых прогонов).
 
 ### Media safety
