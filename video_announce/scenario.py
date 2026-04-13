@@ -7,12 +7,13 @@ import logging
 import os
 import shutil
 import tempfile
-import zipfile
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Sequence
+from urllib.parse import urlparse
 
 from cachetools import TTLCache
 from aiogram import types
@@ -41,7 +42,21 @@ from net import http_call
 from .about import normalize_about_with_fallback
 from .finalize import prepare_final_texts
 from .poster_overlay import enrich_payload_with_poster_overlays
-from .kaggle_client import DEFAULT_KERNEL_PATH, KaggleClient, list_local_kernels
+from .kaggle_client import (
+    DEFAULT_KERNEL_PATH,
+    KaggleClient,
+    await_kernel_dataset_sources,
+    list_local_kernels,
+)
+from .popular_review import (
+    POPULAR_REVIEW_ANTI_REPEAT_DAYS,
+    POPULAR_REVIEW_INTRO_TEXT,
+    POPULAR_REVIEW_MAX_EVENTS,
+    POPULAR_REVIEW_MIN_EVENTS,
+    POPULAR_REVIEW_PROFILE,
+    POPULAR_REVIEW_TARGET_USERNAME,
+    build_popular_review_selection,
+)
 from .story_publish import (
     STORY_PUBLISH_CONFIG_FILENAME,
     build_story_publish_config,
@@ -93,6 +108,14 @@ TOMORROW_TEST_EXPAND_MAX_DAYS = 4
 PENDING_INSTRUCTION_TTL = 15 * 60
 IMPORT_PAYLOAD_FLAG_KEY = "imported_payload"
 IMPORT_PAYLOAD_JSON_KEY = "imported_payload_json"
+VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS = max(
+    5,
+    int(os.getenv("VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS", "120")),
+)
+VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS = max(
+    2,
+    int(os.getenv("VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS", "10")),
+)
 
 
 @dataclass
@@ -915,7 +938,12 @@ class VideoAnnounceScenario:
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text="🚀 Запустить подбор", callback_data=f"vidstart:{profile_key}"
+                    text=(
+                        "🚀 Запустить CherryFlash"
+                        if profile_key == POPULAR_REVIEW_PROFILE
+                        else "🚀 Запустить подбор"
+                    ),
+                    callback_data=f"vidstart:{profile_key}"
                 ),
                 types.InlineKeyboardButton(
                     text="📥 Импортировать payload",
@@ -942,6 +970,10 @@ class VideoAnnounceScenario:
             text_parts.append("\nРендеринг уже запущен, UI временно заблокирован.")
         keyboard: list[list[types.InlineKeyboardButton]] = []
         profiles = await fetch_profiles()
+        cherryflash_profile = next(
+            (profile for profile in profiles if profile.key == POPULAR_REVIEW_PROFILE),
+            None,
+        )
         if not rendering:
             keyboard.append(
                 [
@@ -959,7 +991,22 @@ class VideoAnnounceScenario:
                     )
                 ]
             )
+            if cherryflash_profile is not None:
+                keyboard.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=f"🍒 {cherryflash_profile.title}",
+                            callback_data="vidauto:cherryflash",
+                        ),
+                        types.InlineKeyboardButton(
+                            text="⚙️ Каналы",
+                            callback_data=f"vidprofile:{POPULAR_REVIEW_PROFILE}",
+                        ),
+                    ]
+                )
             for p in profiles:
+                if p.key == POPULAR_REVIEW_PROFILE:
+                    continue
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(
@@ -1013,6 +1060,9 @@ class VideoAnnounceScenario:
 
     async def start_session(self, profile_key: str) -> None:
         if not await self.ensure_access():
+            return
+        if profile_key == POPULAR_REVIEW_PROFILE:
+            await self.run_popular_review_pipeline()
             return
         existing = await self.has_rendering()
         if existing:
@@ -1249,18 +1299,200 @@ class VideoAnnounceScenario:
                 return ref
         return None
 
+    def _pick_cherryflash_kernel_ref(self) -> str | None:
+        local_kernels = list_local_kernels()
+        for kernel in local_kernels:
+            ref = kernel.get("ref")
+            if ref == "local:CherryFlash":
+                return ref
+        for kernel in local_kernels:
+            ref = kernel.get("ref")
+            title = str(kernel.get("title") or "")
+            if isinstance(ref, str) and ref and "cherryflash" in title.casefold():
+                return ref
+        return None
+
+    def _is_crumple_kernel_ref(self, kernel_ref: str | None) -> bool:
+        value = str(kernel_ref or "").strip()
+        if not value:
+            return False
+        return "crumple" in value.casefold()
+
+    def _is_cherryflash_kernel_ref(self, kernel_ref: str | None) -> bool:
+        value = str(kernel_ref or "").strip()
+        if not value:
+            return False
+        return "cherryflash" in value.casefold()
+
+    async def _resolve_channel_id_by_username(self, username: str | None) -> int | None:
+        normalized = str(username or "").strip().lstrip("@").casefold()
+        if not normalized:
+            return None
+        async with self.db.get_session() as session:
+            result = await session.execute(select(Channel).where(Channel.username == normalized))
+            channel = result.scalar_one_or_none()
+            if channel:
+                return int(channel.channel_id)
+            result = await session.execute(select(Channel))
+            for item in result.scalars().all():
+                if str(item.username or "").strip().lstrip("@").casefold() == normalized:
+                    return int(item.channel_id)
+        return None
+
+    def _popular_review_selection_params(self) -> dict[str, Any]:
+        today = datetime.now(LOCAL_TZ).date()
+        return {
+            "mode": POPULAR_REVIEW_PROFILE,
+            "target_date": today.isoformat(),
+            "primary_window_days": 0,
+            "fallback_window_days": 0,
+            "candidate_limit": POPULAR_REVIEW_MAX_EVENTS,
+            "default_selected_min": POPULAR_REVIEW_MIN_EVENTS,
+            "default_selected_max": POPULAR_REVIEW_MAX_EVENTS,
+            "render_scene_limit": POPULAR_REVIEW_MAX_EVENTS,
+            "selected_required_period": None,
+            "random_order": False,
+            "allow_empty_ocr": False,
+            "story_publish_enabled": False,
+            "story_publish_mode": "video",
+            "intro_text": POPULAR_REVIEW_INTRO_TEXT,
+            "intro_text_valid": True,
+        }
+
+    async def _store_popular_review_selection(
+        self,
+        session_obj: VideoAnnounceSession,
+        *,
+        selection,
+    ) -> None:
+        ready_ids = {int(item.event.id) for item in selection.picks if item.event.id is not None}
+        await prepare_session_items(
+            self.db,
+            session_obj,
+            selection.ranked,
+            default_ready_ids=ready_ids,
+        )
+        async with self.db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, session_obj.id)
+            if not fresh:
+                return
+            params = self._get_selection_params(fresh)
+            params["popular_review_trace"] = {
+                str(event_id): meta for event_id, meta in selection.trace.items()
+            }
+            params["render_scene_limit"] = len(ready_ids)
+            params["default_selected_max"] = len(ready_ids)
+            params["default_selected_min"] = min(
+                POPULAR_REVIEW_MIN_EVENTS,
+                len(ready_ids),
+            )
+            fresh.selection_params = params
+            session.add(fresh)
+            await session.commit()
+            await session.refresh(fresh)
+            session_obj.selection_params = params
+        await self._persist_intro_text(
+            session_obj,
+            POPULAR_REVIEW_INTRO_TEXT,
+            valid=True,
+        )
+
+    async def run_popular_review_pipeline(self) -> None:
+        if not await self.ensure_access():
+            return
+        existing = await self.has_rendering()
+        if existing:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
+            )
+            return
+
+        try:
+            selection = await build_popular_review_selection(
+                self.db,
+                max_events=POPULAR_REVIEW_MAX_EVENTS,
+                min_events=POPULAR_REVIEW_MIN_EVENTS,
+                anti_repeat_days=POPULAR_REVIEW_ANTI_REPEAT_DAYS,
+            )
+        except Exception as exc:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    "CherryFlash: не удалось собрать валидный popularity-набор "
+                    f"для публикации ({type(exc).__name__}: {exc})"
+                ),
+            )
+            return
+
+        kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
+        if not kernel_ref:
+            await self.bot.send_message(self.chat_id, "Не удалось подобрать CherryFlash kernel для Kaggle")
+            return
+
+        configured_test_chat_id, _configured_main_chat_id = await self._get_profile_channels(
+            POPULAR_REVIEW_PROFILE
+        )
+        test_chat_id = configured_test_chat_id or await self._resolve_channel_id_by_username(
+            POPULAR_REVIEW_TARGET_USERNAME
+        )
+        if not test_chat_id:
+            await self.bot.send_message(
+                self.chat_id,
+                f"CherryFlash: не найден target channel @{POPULAR_REVIEW_TARGET_USERNAME} в таблице channel",
+            )
+            return
+        main_chat_id = None
+        params = self._popular_review_selection_params()
+
+        async with self.db.get_session() as session:
+            obj = VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.SELECTED,
+                profile_key=POPULAR_REVIEW_PROFILE,
+                selection_params=params,
+                test_chat_id=test_chat_id,
+                main_chat_id=main_chat_id,
+                kaggle_kernel_ref=kernel_ref,
+            )
+            session.add(obj)
+            await session.commit()
+            await session.refresh(obj)
+
+        await self._store_popular_review_selection(obj, selection=selection)
+
+        await self.bot.send_message(
+            self.chat_id,
+            (
+                f"Сессия #{obj.id} запущена: CherryFlash / popular_review, "
+                f"{len(selection.event_ids)} событий, target=@{POPULAR_REVIEW_TARGET_USERNAME}. Kernel: {kernel_ref}"
+            ),
+        )
+        await self.bot.send_message(
+            self.chat_id,
+            "CherryFlash picks: "
+            + ", ".join(
+                f"{item.event.id}:{meta.get('source_window')}"
+                for item, meta in zip(selection.picks, selection.trace.values())
+            ),
+        )
+
+        msg = await self.start_render(
+            obj.id,
+            message=None,
+            limit_scenes=len(selection.event_ids),
+        )
+        if msg and msg != "Рендеринг запущен":
+            await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
+
     def _dataset_audio_name_for_kernel(
         self,
         kernel_ref: str | None,
         *,
         is_test: bool,
     ) -> str:
-        # CrumpleVideo keeps one audio contract for both test and prod runs:
-        # the session dataset must only deliver The xx @ 1:17, never a legacy
-        # VideoAfisha/CherryFlash cue.
-        _ = kernel_ref
-        _ = is_test
-        return "The_xx_-_Intro.mp3"
+        if self._is_crumple_kernel_ref(kernel_ref):
+            return "The_xx_-_Intro.mp3"
+        return "The_xx_-_Intro.mp3" if is_test else "Pulsarium.mp3"
 
     def _extract_import_payload_json(
         self, session_obj: VideoAnnounceSession
@@ -2203,6 +2435,13 @@ class VideoAnnounceScenario:
             if actual_ref != kernel_ref:
                 logger.info("Kernel ref changed from %s to %s", kernel_ref, actual_ref)
                 kernel_ref = actual_ref
+            await await_kernel_dataset_sources(
+                client,
+                kernel_ref,
+                dataset_sources,
+                timeout_seconds=VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS,
+                poll_interval_seconds=VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS,
+            )
 
             session_obj.kaggle_dataset = dataset_slug
             session_obj.kaggle_kernel_ref = kernel_ref
@@ -3023,15 +3262,15 @@ class VideoAnnounceScenario:
             / "assets"
             / "ro_znanie_fonts"
         )
-        cygre_zip = cygre_dir.parent / "ro_znanie.zip"
-        # CrumpleVideo session datasets carry only the canonical font/final
-        # frame pair plus the single required audio track for the render.
+        # Kernel-specific audio is injected into the Kaggle dataset together with the shared font/final frame.
         # We need to find the font. The example says "Oswald-VariableFont_wght.ttf"
         font_name = "BebasNeue-Bold.ttf"
         final_path = Path(__file__).resolve().parent / "crumple_references" / "Final.png"
         assets = [
             (assets_dir / font_name, tmp_path / font_name),
             (final_path, tmp_path / "Final.png"),
+            (cygre_dir / "Cygre-Medium.ttf", tmp_path / "Cygre-Medium.ttf"),
+            (cygre_dir / "Cygre-Regular.ttf", tmp_path / "Cygre-Regular.ttf"),
         ]
         if audio_name:
             assets.append((assets_dir / audio_name, tmp_path / audio_name))
@@ -3048,57 +3287,401 @@ class VideoAnnounceScenario:
                 continue
             shutil.copy2(src, dest)
             logger.info("video_announce: copied asset %s (%s bytes)", dest.name, dest.stat().st_size)
-        for font_name in ("Cygre-Medium.ttf", "Cygre-Regular.ttf"):
-            font_src = cygre_dir / font_name
-            if font_src.exists():
-                shutil.copy2(font_src, tmp_path / font_name)
-                logger.info("video_announce: copied asset %s (%s bytes)", font_name, (tmp_path / font_name).stat().st_size)
-                continue
-            if cygre_zip.exists():
-                with zipfile.ZipFile(cygre_zip) as zf:
-                    member = next(
-                        (
-                            name
-                            for name in zf.namelist()
-                            if not name.endswith("/") and Path(name).name == font_name
-                        ),
-                        None,
-                    )
-                    if member is not None:
-                        (tmp_path / font_name).write_bytes(zf.read(member))
-                        logger.info("video_announce: extracted asset %s from %s", font_name, cygre_zip)
-                        continue
-                    nested_zip_name = next(
-                        (
-                            name
-                            for name in zf.namelist()
-                            if not name.endswith("/") and Path(name).name == "cygre_default.zip"
-                        ),
-                        None,
-                    )
-                    if nested_zip_name is not None:
-                        with zipfile.ZipFile(BytesIO(zf.read(nested_zip_name))) as nested:
-                            nested_member = next(
-                                (
-                                    name
-                                    for name in nested.namelist()
-                                    if not name.endswith("/") and Path(name).name == font_name
-                                ),
-                                None,
-                            )
-                            if nested_member is not None:
-                                (tmp_path / font_name).write_bytes(nested.read(nested_member))
-                                logger.info(
-                                    "video_announce: extracted asset %s from %s -> %s",
-                                    font_name,
-                                    cygre_zip,
-                                    nested_zip_name,
-                                )
-                                continue
-            logger.error("video_announce: MISSING required asset %s", font_src)
-            missing.append(font_name)
         if missing:
             raise RuntimeError(f"Missing required assets: {missing}. Check that assets folder is deployed.")
+
+    def _iter_cherryflash_bundle_files(self) -> list[tuple[Path, str]]:
+        project_root = Path(__file__).resolve().parent.parent
+        final_path = project_root / "video_announce" / "crumple_references" / "Final.png"
+        files = [
+            (
+                project_root / "kaggle" / "CherryFlash" / "mobilefeed_intro_still.py",
+                "mobilefeed_intro_still.py",
+            ),
+            (
+                project_root / "scripts" / "render_mobilefeed_intro_still.py",
+                "scripts/render_mobilefeed_intro_still.py",
+            ),
+            (
+                project_root / "scripts" / "render_mobilefeed_intro_scene1_approval.py",
+                "scripts/render_mobilefeed_intro_scene1_approval.py",
+            ),
+            (
+                project_root / "scripts" / "render_cherryflash_full.py",
+                "scripts/render_cherryflash_full.py",
+            ),
+            (
+                project_root / "video_announce" / "__init__.py",
+                "video_announce/__init__.py",
+            ),
+            (
+                project_root / "video_announce" / "video_afisha_2d.py",
+                "video_announce/video_afisha_2d.py",
+            ),
+            (
+                project_root / "video_announce" / "cherryflash_text.py",
+                "video_announce/cherryflash_text.py",
+            ),
+            (
+                project_root / "kaggle" / "CrumpleVideo" / "story_publish.py",
+                "kaggle_common/story_publish.py",
+            ),
+            (
+                project_root / "kaggle" / "CherryFlash" / "assets" / "iphone_16_pro_max.glb",
+                "assets/iphone_16_pro_max.glb",
+            ),
+            (
+                project_root / "kaggle" / "CherryFlash" / "assets" / "Pulsarium_scene1_clip.mp3",
+                "assets/Pulsarium_scene1_clip.mp3",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "Pulsarium.mp3",
+                "assets/Pulsarium.mp3",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "Akrobat-Black.otf",
+                "assets/Akrobat-Black.otf",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "Akrobat-Bold.otf",
+                "assets/Akrobat-Bold.otf",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "Akrobat-Regular.otf",
+                "assets/Akrobat-Regular.otf",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "BebasNeue-Bold.ttf",
+                "assets/BebasNeue-Bold.ttf",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "DrukCyr-Bold.ttf",
+                "assets/DrukCyr-Bold.ttf",
+            ),
+            (
+                project_root / "video_announce" / "assets" / "DrukCyr-Super.ttf",
+                "assets/DrukCyr-Super.ttf",
+            ),
+            (
+                final_path,
+                "Final.png",
+            ),
+        ]
+        for name in (
+            "Cygre-Regular.ttf",
+            "Cygre-Book.ttf",
+            "Cygre-Medium.ttf",
+            "Cygre-SemiBold.ttf",
+            "Cygre-Bold.ttf",
+            "Cygre-ExtraBold.ttf",
+        ):
+            files.append(
+                (
+                    project_root / "kaggle" / "CherryFlash" / "assets" / "ro_znanie_fonts" / name,
+                    f"assets/ro_znanie_fonts/{name}",
+                )
+            )
+        return files
+
+    async def _prefetch_scene_images(
+        self,
+        payload_obj: dict,
+        tmp_path: Path,
+        *,
+        max_images_per_scene: int = 3,
+    ) -> None:
+        scenes = payload_obj.get("scenes") or []
+        if not isinstance(scenes, list):
+            return
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+            ),
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        }
+        downloaded = 0
+        for idx, scene in enumerate(scenes):
+            if not isinstance(scene, dict):
+                continue
+            images = scene.get("images") or []
+            if isinstance(images, str):
+                images = [images]
+            local_images: list[str] = []
+            for image_idx, candidate in enumerate(images[:max(1, max_images_per_scene)]):
+                if not isinstance(candidate, str):
+                    continue
+                candidate = candidate.strip()
+                if not candidate:
+                    continue
+                if not candidate.startswith("http"):
+                    local_images.append(candidate)
+                    continue
+                ext = Path(candidate.split("?", 1)[0]).suffix.lower()
+                if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+                    ext = ".jpg"
+                filename = f"scene_{idx + 1}_{image_idx + 1}{ext}"
+                dest = tmp_path / "assets" / "posters" / filename
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    host = urlparse(candidate).netloc.lower()
+                    timeout = 6 if host.endswith("files.catbox.moe") else 20
+                    retries = 1 if host.endswith("files.catbox.moe") else 3
+                    backoff = 0.25 if host.endswith("files.catbox.moe") else 1.0
+                    resp = await http_call(
+                        "video_announce.poster_prefetch",
+                        "GET",
+                        candidate,
+                        timeout=timeout,
+                        retries=retries,
+                        backoff=backoff,
+                        headers=headers,
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to prefetch scene image=%s",
+                        candidate,
+                        exc_info=True,
+                    )
+                    continue
+                if resp.status_code != 200 or not resp.content:
+                    logger.warning(
+                        "video_announce: scene image fetch failed status=%s url=%s",
+                        resp.status_code,
+                        candidate,
+                    )
+                    continue
+                dest.write_bytes(resp.content)
+                local_images.append(filename)
+                downloaded += 1
+            if local_images:
+                scene["images"] = local_images
+                scene["image"] = local_images[0]
+        if downloaded:
+            logger.info("video_announce: prefetched %s scene images", downloaded)
+
+    def _build_cherryflash_selection_manifest(
+        self,
+        payload_obj: dict,
+        *,
+        selection_params: dict[str, Any],
+        story_publish_enabled: bool,
+    ) -> dict[str, Any]:
+        def _scene_poster_candidates(scene: dict[str, Any]) -> list[str]:
+            images = scene.get("images") or []
+            if isinstance(images, str):
+                images = [images]
+            candidates: list[str] = []
+            for raw in images:
+                candidate = str(raw or "").strip()
+                if candidate:
+                    candidates.append(candidate)
+            return candidates
+
+        scenes = payload_obj.get("scenes") or []
+        primary_scenes = [
+            scene
+            for scene in scenes
+            if isinstance(scene, dict) and str(scene.get("scene_variant") or "primary") == "primary"
+        ]
+        selected_event_ids = [
+            int(scene["event_id"])
+            for scene in primary_scenes
+            if scene.get("event_id") is not None
+        ]
+        focus_event_id = selected_event_ids[0] if selected_event_ids else None
+        if len(selected_event_ids) >= 2:
+            ribbon_order = [selected_event_ids[1], selected_event_ids[0], *selected_event_ids[2:]]
+        else:
+            ribbon_order = list(selected_event_ids)
+        trace = selection_params.get("popular_review_trace") or {}
+        return {
+            "selection_source": "/popular_posts",
+            "selection_profile_key": POPULAR_REVIEW_PROFILE,
+            "test_publish_target": f"https://t.me/{POPULAR_REVIEW_TARGET_USERNAME}",
+            "story_publish_enabled": bool(story_publish_enabled),
+            "story_publish_mode": str(selection_params.get("story_publish_mode") or "video"),
+            "focus_event_id": focus_event_id,
+            "selected_event_ids": selected_event_ids,
+            "ribbon_order": ribbon_order,
+            "events": [
+                {
+                    "event_id": scene.get("event_id"),
+                    "title": scene.get("title") or "",
+                    "date": scene.get("date_iso") or scene.get("date") or "",
+                    "date_display": scene.get("date") or "",
+                    "end_date": scene.get("end_date_iso") or "",
+                    "time": scene.get("time") or "",
+                    "city": scene.get("city") or "",
+                    "location_name": scene.get("location_name") or "",
+                    "location": scene.get("location") or "",
+                    "poster_file": (
+                        Path(_scene_poster_candidates(scene)[0]).name
+                        if _scene_poster_candidates(scene)
+                        else ""
+                    ),
+                    "poster_candidates": _scene_poster_candidates(scene),
+                    "description": scene.get("description") or "",
+                    **(
+                        (
+                            trace.get(str(scene.get("event_id")))
+                            or trace.get(scene.get("event_id"))
+                            or {}
+                        )
+                        if isinstance(trace, dict)
+                        else {}
+                    ),
+                }
+                for scene in primary_scenes
+            ],
+        }
+
+    async def _create_cherryflash_dataset(
+        self,
+        session_obj: VideoAnnounceSession,
+        json_text: str,
+        *,
+        client: KaggleClient,
+        selection_params: dict[str, Any],
+    ) -> tuple[str, list[str]]:
+        username = os.getenv("KAGGLE_USERNAME", "")
+        if not username:
+            raise RuntimeError("KAGGLE_USERNAME not set")
+        run_suffix = f"{session_obj.id}-{int(time.time())}"
+        slug = f"cherryflash-session-{run_suffix}"
+        dataset_id = f"{username}/{slug}"
+        meta = {
+            "title": f"CherryFlash Session {session_obj.id} {run_suffix}",
+            "id": dataset_id,
+            "licenses": [{"name": "CC0-1.0"}],
+        }
+        story_dataset_sources: list[str] = []
+        bootstrap_meta = dict(meta)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "dataset-metadata.json").write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            payload_obj = json.loads(json_text)
+            await self._prefetch_scene_images(payload_obj, tmp_path, max_images_per_scene=3)
+            payload_path = tmp_path / "payload.json"
+            payload_path.write_text(
+                json.dumps(payload_obj, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            story_publish_requested = bool(selection_params.get("story_publish_enabled"))
+            if story_publish_requested:
+                selected_event_dates = await self._selected_event_dates(session_obj.id)
+                story_config = await build_story_publish_config(
+                    self.db,
+                    main_chat_id=session_obj.main_chat_id,
+                    selection_params=selection_params,
+                    selected_event_dates=selected_event_dates,
+                )
+                if story_config:
+                    (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
+                        json.dumps(story_config, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    story_dataset_sources = await ensure_story_secret_datasets(client)
+            selection_manifest = self._build_cherryflash_selection_manifest(
+                payload_obj,
+                selection_params=selection_params,
+                story_publish_enabled=story_publish_requested,
+            )
+            selection_manifest_path = tmp_path / "assets" / "cherryflash_selection.json"
+            selection_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            selection_manifest_path.write_text(
+                json.dumps(selection_manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            bundle_manifest_files = ["payload.json", "assets/cherryflash_selection.json"]
+            for src, rel in self._iter_cherryflash_bundle_files():
+                if not src.exists():
+                    raise RuntimeError(f"Missing CherryFlash runtime asset: {src}")
+                dest = tmp_path / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+                bundle_manifest_files.append(rel)
+            (tmp_path / "bundle_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "session_id": session_obj.id,
+                        "mode": POPULAR_REVIEW_PROFILE,
+                        "files": sorted(bundle_manifest_files),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            total_size = sum(
+                file.stat().st_size for file in tmp_path.glob("**/*") if file.is_file()
+            )
+            if total_size > DATASET_PAYLOAD_MAX_MB * 1024 * 1024:
+                raise RuntimeError(
+                    f"dataset payload exceeds {DATASET_PAYLOAD_MAX_MB}MB"
+                )
+            try:
+                with tempfile.TemporaryDirectory() as bootstrap_tmp:
+                    bootstrap_path = Path(bootstrap_tmp)
+                    (bootstrap_path / "dataset-metadata.json").write_text(
+                        json.dumps(bootstrap_meta, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    # Kaggle CreateDataset is more fragile than CreateDatasetVersion on
+                    # large mounted CherryFlash bundles. Bootstrap the unique dataset
+                    # with a tiny payload, then upload the real runtime as version 1.
+                    (bootstrap_path / "bootstrap.txt").write_text(
+                        f"CherryFlash session {session_obj.id} bootstrap\n",
+                        encoding="utf-8",
+                    )
+                    try:
+                        await asyncio.to_thread(client.create_dataset, bootstrap_path)
+                    except Exception:
+                        logger.exception(
+                            "video_announce: CherryFlash bootstrap dataset create failed"
+                        )
+                        try:
+                            await asyncio.to_thread(client.dataset_status, dataset_id)
+                        except Exception:
+                            raise
+                        logger.info(
+                            "video_announce: CherryFlash bootstrap dataset already exists id=%s",
+                            dataset_id,
+                        )
+
+                version_notes = f"CherryFlash session {session_obj.id}"
+                for attempt in range(1, 4):
+                    try:
+                        await asyncio.to_thread(
+                            client.create_dataset_version,
+                            tmp_path,
+                            version_notes=version_notes,
+                        )
+                        break
+                    except Exception as exc:
+                        error_text = str(exc)
+                        transient_token_race = "Invalid token" in error_text
+                        if not transient_token_race or attempt >= 3:
+                            raise
+                        delay_seconds = 10 * attempt
+                        logger.warning(
+                            "video_announce: CherryFlash dataset version retry after transient Kaggle token race "
+                            "dataset=%s attempt=%s/%s delay=%ss error=%s",
+                            dataset_id,
+                            attempt,
+                            3,
+                            delay_seconds,
+                            error_text,
+                        )
+                        await asyncio.sleep(delay_seconds)
+            except Exception:
+                logger.exception("video_announce: CherryFlash dataset upload failed")
+                raise
+        logger.info("video_announce: CherryFlash dataset created id=%s", dataset_id)
+        return dataset_id, story_dataset_sources
 
     async def _create_dataset(
         self,
@@ -3149,6 +3732,20 @@ class VideoAnnounceScenario:
                     selection_params.get("test")
                     or selection_params.get("is_test")
                     or (isinstance(mode, str) and mode.lower() == "test")
+                )
+
+            is_cherryflash = self._is_cherryflash_kernel_ref(
+                session_obj.kaggle_kernel_ref
+            ) or (
+                isinstance(selection_params, dict)
+                and str(selection_params.get("mode") or "").strip().lower() == POPULAR_REVIEW_PROFILE
+            )
+            if is_cherryflash:
+                return await self._create_cherryflash_dataset(
+                    session_obj,
+                    json_text,
+                    client=client,
+                    selection_params=selection_params if isinstance(selection_params, dict) else {},
                 )
 
             if is_test and isinstance(payload_obj, dict):
@@ -3251,13 +3848,17 @@ class VideoAnnounceScenario:
                 filename = f"poster_{idx + 1}{ext}"
                 dest = tmp_path / filename
                 try:
+                    host = urlparse(url).netloc.lower()
+                    timeout = 6 if host.endswith("files.catbox.moe") else 20
+                    retries = 1 if host.endswith("files.catbox.moe") else 3
+                    backoff = 0.25 if host.endswith("files.catbox.moe") else 1.0
                     resp = await http_call(
                         "video_announce.poster_prefetch",
                         "GET",
                         url,
-                        timeout=20,
-                        retries=3,
-                        backoff=1.0,
+                        timeout=timeout,
+                        retries=retries,
+                        backoff=backoff,
                         headers=headers,
                     )
                 except Exception:

@@ -1,6 +1,6 @@
 # CherryFlash / Popular Video Afisha
 
-> **Status:** Not implemented / Design-ready  
+> **Status:** In active implementation / Not confirmed by user  
 > **Scope:** daily popularity-driven video announce mode for `/v` ("Быстрый обзор") with automatic publication to `@keniggpt` in phase 1.
 >
 > **Naming + product boundary**
@@ -17,6 +17,13 @@
 - Popularity signal and `/popular_posts`: `docs/features/post-metrics/README.md`
 - Scheduler policy: `docs/operations/cron.md`
 
+## Operator launch contract
+
+- `/v` must expose CherryFlash as a direct one-click operator action, not only as a generic profile hidden behind the manual selection flow.
+- The dedicated CherryFlash button must call `VideoAnnounceScenario.run_popular_review_pipeline()` directly.
+- The legacy `vidstart:popular_review` route must resolve to the same direct pipeline and must not create a generic manual-selection session for `popular_review`.
+- `/v` may still keep a separate `⚙️ Каналы` path for CherryFlash channel configuration, but launch and configuration must be distinct actions.
+
 ## Product identity
 
 - `CherryFlash` is the user-facing / marketing name of the daily popularity-driven video product described in this document.
@@ -24,13 +31,141 @@
 - `popular_review` remains the canonical internal mode / profile key in code and session metadata.
 - planned canonical Kaggle runtime path for this product:
   - `kaggle/CherryFlash/`
+- current notebook delivery path:
+  - the launcher mirrors the working Telegram/Telegraph Kaggle pattern: it creates a one-run Kaggle dataset with a unique slug, uploads a mounted CherryFlash runtime tree (`mobilefeed_intro_still.py`, `scripts/`, `assets/`) directly, waits until Kaggle reports that dataset ready and the mounted runtime files are visible, then waits for kernel metadata to bind that dataset through `dataset_sources`, and the notebook runs `scripts/render_mobilefeed_intro_scene1_approval.py` from the mounted tree.
+  - the runtime dataset must be populated from the real `/popular_posts` pool for that run, not from a stale baked poster pack: launcher-side prep writes a fresh `assets/cherryflash_selection.json` plus poster files under `assets/posters/`, so the mounted Kaggle render uses the same current event payload that was selected before upload.
+  - the Kaggle notebook must resolve the runtime source from the newest mounted top-level `cherryflash-session-*` bundle and must not pick the first recursive `scripts/render_cherryflash_full.py` match anywhere under `/kaggle/input`, because older still-mounted session datasets may coexist with the new one during manual reruns or debugging.
+  - the Kaggle notebook must reuse the same shared story-helper dependency contract as `CrumpleVideo`: if `kaggle_common/story_publish.py` is shipped in the bundle, the notebook environment must already install its runtime dependencies (`opencv-python`, `requests`, `telethon`, `cryptography`) instead of introducing a CherryFlash-only conditional bootstrap path.
+  - the Kaggle notebook must also reuse the same thread-safe async bridge pattern as the working `CrumpleVideo` papermill runtime when calling story preflight/publish helpers; nested `asyncio.run()` or direct `new_event_loop().run_until_complete(...)` from inside the notebook cell are not allowed because papermill already executes under a running event loop.
+  - CherryFlash keeps the one-run unique dataset naming pattern, but dataset upload is now explicitly two-step: `CreateDataset` first bootstraps the unique slug with a tiny marker file, then `CreateDatasetVersion` uploads the full runtime bundle; this avoids Kaggle `CreateDataset` fragility on the mounted CherryFlash payload while preserving the same per-run dataset isolation contract used in production flows.
+  - CherryFlash runtime prefetch must fail fast on unstable poster hosts such as `files.catbox.moe`: remote poster prefetch is a best-effort acceleration step, not a mandatory gate before Kaggle upload, so dead Catbox URLs must not burn multiple 20-second retries before the run can even reach Kaggle.
+  - the selection manifest must preserve `poster_candidates`, not only a derived `poster_file` basename: if launcher-side prefetch could not materialize a local poster into `assets/posters/`, the Kaggle intro runtime must still be able to resolve the same event artwork from the original remote candidate list instead of crashing on a synthetic missing local filename.
+  - CherryFlash selection itself must be renderability-aware before dataset upload: an event may enter the runtime bundle only if it already has at least one non-`files.catbox.moe` poster URL or if a source-specific rehydrate recovers one (`t.me` public-page poster fallback or production `VK wall.getById` poster fetch); catbox-only events that still have no renderable poster after that rehydrate must be dropped from selection instead of being pushed into Kaggle with a guaranteed missing `assets/posters/*` dependency.
+- canonical local launch path for live runs:
+  - `scripts/run_cherryflash_live.py`
+  - this runner must start CherryFlash through the same scheduled scenario path as production (`_run_scheduled_popular_review` -> `VideoAnnounceScenario.run_popular_review_pipeline()`), keep the event loop alive until a terminal session status, and must not bypass the scenario by pushing Kaggle notebooks manually.
+  - `--no-wait` is not a valid CherryFlash live-run mode: `start_render()` hands the real Kaggle push to a background asyncio task, so exiting the runner immediately after session creation kills the render before any visible Kaggle kernel run can appear.
+  - for stale local prod snapshots, the runner may reset an already stuck `RENDERING` video session only through its explicit `--force-reset-rendering` flag before the new CherryFlash start.
+  - Kaggle dataset/kernel API failures on this path must surface the raw Kaggle response body in logs instead of a bare `400/403`, so auth and dataset-contract incidents are diagnosable without a second repro pass.
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;
+  - CherryFlash selection is `future-start-only`: events whose `start date` is already before the current local day must not appear in the ribbon/date strip even if they still have a later `end_date`;
   - intro comes from the new `Мобильная лента` / `MobileFeed Intro` 3D block;
   - main 2D scene flow follows `kaggle/VideoAfisha/video_afisha.ipynb`;
+  - the runtime selection manifest for the intro must carry raw machine-readable event fields (`date_iso`, `time`, `city`, `location_name`) in addition to viewer-facing display text, so the intro date strip never falls back to the old sample April cluster when a real CherryFlash selection exists;
+  - intro poster loading must accept both mounted local poster filenames and remote fallback candidates from the same selection manifest, because real CherryFlash runs may contain a mix of successfully prefetched posters and runtime-only remote poster URLs;
   - the existing `CrumpleVideo` daily pipeline remains a separate product and must not be regressed by this work.
 
 ## Current state against the request
+
+## Requirements confirmation gate: 2026-04-13 selection/runtime delta
+
+This delta records the latest mismatch found after reviewing the broken CherryFlash full runs and the user reports about past dates in the intro.
+
+### Already present
+
+- The canon already requires the low-event expansion path:
+  - when there are `<=3` base events and a selected event has a second image, CherryFlash may add one follow-up scene with `soft-move-left` and a short description in the lower text block;
+  - current implementation status: code path exists, but the user has not yet confirmed it on a full live run.
+- The canon now also requires a renderability gate before CherryFlash bundle upload:
+  - selection may reuse existing direct poster URLs as-is;
+  - if the stored event media is catbox-only, CherryFlash may only keep that event after source-specific rehydrate finds a non-catbox poster;
+  - approved reuse paths are the existing public Telegram poster fallback and the production `VK wall.getById` poster fetcher, not a new CherryFlash-only downloader.
+
+### Needs clarification
+
+- `Future events only` is now interpreted as a start-date rule for CherryFlash selection:
+  - events starting `today` are still allowed;
+  - events whose start date is already before `today` must be excluded even if they are technically ongoing through `end_date`;
+  - this rule applies to the CherryFlash popularity product and its intro/date-strip payload.
+
+### Missing
+
+- The launcher/runtime contract needed an explicit safety rule:
+  - after pushing the CherryFlash kernel update, the server must wait until Kaggle metadata really shows the new `dataset_sources` bound to the kernel before treating the run as started;
+  - otherwise a rerun may still execute against an older mounted `cherryflash-session-*` bundle and silently reproduce stale video defects.
+- The notebook/runtime contract needed an explicit parity rule with `CrumpleVideo`:
+  - CherryFlash must not invent a separate story-helper bootstrap that can fail earlier than render;
+  - the same shared `story_publish.py` helper may stay mounted but the notebook environment must satisfy its imports up front, while actual story publish remains controlled only by config/preflight availability;
+  - the notebook-side async bridge for story preflight/publish must stay papermill-safe and match the proven `CrumpleVideo` thread-runner pattern.
+
+## Requirements confirmation gate: 2026-04-12 full-run delta
+
+This delta records the latest requirement check after the user accepted moving beyond the `intro + scene1` approval artifact and requested the full daily product path.
+
+### Already present
+
+- The canon already fixes CherryFlash as a separate daily `popular_review` product with:
+  - `/popular_posts`-driven candidate sourcing;
+  - phase-1 publication to `@keniggpt`;
+  - story autopublish disabled by default;
+  - readiness measured by `12:30 Europe/Kaliningrad`, not by a hardcoded final public story slot yet.
+- The canon already fixes the rollout boundary that Blender owns only the intro block while the main scene flow stays in the `VideoAfisha` 2D family.
+- The canon already fixes the minimum/maximum editorial payload:
+  - `2..6` events per release;
+  - skip the run instead of publishing a fake single-event video.
+
+### Needs clarification
+
+- The new low-event expansion rule needs one implementation-level interpretation lock:
+  - the user confirmed `soft-move-left` for the extra follow-up beat and confirmed that the text should switch from `title + date/time` to a short description;
+  - the canon still needed an explicit statement that the description continues to live in the lower text block of the 2D scene grammar unless a later shot-specific approval replaces that layout.
+- Scheduler wording needed one correction:
+  - the old `11:10 Europe/Kaliningrad` text is no longer the active operational requirement;
+  - the canon should instead require an independently switchable CherryFlash cron slot that is early enough for the publish surface to be ready by `12:30 Europe/Kaliningrad`.
+
+### Missing
+
+- A canonical full-run stage after `intro + scene1` acceptance:
+  - `intro + scene1` is now accepted as the handoff/design baseline for expanding CherryFlash;
+  - duplicate-frame cleanup is still an open defect and is **not** considered user-confirmed solved until the full-run result is checked.
+- An explicit render rule for low-event follow-up scenes:
+  - when there are `<=3` base events and a selected event has a second image, CherryFlash may add one extra follow-up scene for that event using the second image.
+- An explicit frame-dedup rule for the 2D assembly:
+  - exact consecutive duplicate frames may be removed only for accidental intro / handoff duplicates before the first approved `move-up` anchor;
+  - intended 2D hold frames after the intro must stay untouched and must not be globally hash-deduped;
+  - if intro-side removal happens before the first `move-up` beat anchor, audio timing must be shifted so the same strong beat still lands on the same visual `move-up` frame.
+- A mandatory final brand scene after the event scenes:
+  - CherryFlash full release is not complete without the final branded outro;
+  - the active approved contract is no longer a static last frame;
+  - CherryFlash should reuse the proven `Video Afisha` three-line slide-in outro grammar;
+  - the outro palette must follow the canonical `Final.png` color family without changing the shared black video background;
+  - approved current direction: black background, yellow strips, dark typography on the strips;
+  - `Final.png` remains the canonical visual reference asset for the outro family, not the literal required final frame.
+ - A primary-scene cadence guard after `move-up`:
+  - the late 2D hold after the main `move-up` must not use a micro-drift that reads as `15 fps` / every-second-frame motion;
+  - if the drift cannot stay perceptually smooth at `30 fps`, the poster should hold steady until the exit phase instead of simulating a weak continuous crawl.
+
+## Requirements confirmation gate: 2026-04-12 delta
+
+This delta records the latest requirement check against the current CherryFlash canon before implementation continues.
+
+### Already present
+
+- `CherryFlash` is already fixed as a separate daily product with internal mode key `popular_review`.
+- The intro contract already captures the `Мобильная лента` ribbon geometry:
+  - the second poster is the main handoff poster;
+  - it is aligned to the phone-screen width first;
+  - ribbon height is then derived from that poster;
+  - all other posters are scaled by the shared ribbon height and stitched flush edge-to-edge;
+  - the ribbon is glossy dense paper, not elastic rubber.
+- The product boundary already states that the current technical milestone is `intro + first 2D scene`, before expanding to the full `2..6` daily release.
+- The docs already fix phase-1 testing publication to `@keniggpt` and keep story autopublish disabled until the mode is validated.
+
+### Needs clarification
+
+- Scheduler time should no longer be treated as a single hardcoded start-time requirement; the canonical operational requirement is now readiness by `12:30 Europe/Kaliningrad`, while the exact start time may be back-calculated during implementation from measured runtime plus safety margin.
+- The testing/publication language needs one explicit split:
+  - while story publish is disabled, the validation surface is the ordinary publish target `@keniggpt`;
+  - when story publish is later enabled, the production readiness criterion becomes a live story already published by `12:30 Europe/Kaliningrad`.
+
+### Missing or conflicting with older canon
+
+- The selection window traversal order needs to be updated from the older maturity-first reading to the newly confirmed editorial order:
+  - `24 часа` first;
+  - then `3 суток`;
+  - then `7 суток`.
+- The implementation notes should explicitly say that this mode does not contend for Gemma capacity and therefore must not be blocked by Gemma-related heavy-job guards by default.
 
 ## Requirements confirmation gate: `Мобильная лента`
 
@@ -171,6 +306,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - the latest motion-approval pass now renders a cheaper `360 x 640` preview clip for `intro + scene1 + music`, while keeping the same `9:16` geometry and the same beat-lock target as the future clean pass;
   - both preview and clean `--final` approval clips must now render every intro frame at full cadence; synthetic in-between intro frames from `Image.blend` or similar shortcuts are rejected because they create staircase motion and false smoothness;
   - the current handoff retune keeps scene `1` near local `~1.80s`, so the cut lands just after the start of `move_up`; the upward move must already be visible on the strong accent, but the intro must not swallow the whole upward phase;
+  - the current clean pass also applies a targeted intro timing warp around the previously reported near-static pairs (`second 2: frames 11/12 and 26/27`, `second 3: frames 26/27`) so those beats no longer read as duplicate holds while the handoff frame and `move_up` strong-beat anchor stay unchanged;
   - the 2D upward move now uses a less delayed cubic in/out motion for the validation clip; the previous quintic curve delayed visible movement too much and made the upward shift feel late and then abrupt;
   - the 3D camera progress curve must keep a small non-zero tail velocity into the handoff; a fully eased-to-zero close-in plateau reads as a micro-stop before the 2D upward move and is a defect;
   - the white 3D push-in should use one coordinated progress path for camera location, target, up vector, and lens; if those components run on competing progress curves and create visible micro-stalls, the render is defective even if every frame is technically rendered for real.
@@ -254,6 +390,10 @@ This section captures the latest intro-direction request as an explicit delta to
   - the supplied `Cygre` pack should remain the active source, but the layout and weights should read as wide modern UI typography rather than narrow poster fallback;
   - it is acceptable to start the phone screen already dark if that gives a cleaner result than trying to keep the screen bright and then abruptly darkening it later;
   - whichever option is used, the perceived white-to-dark move should happen in the 3D phase, not be introduced for the first time by the early 2D continuation.
+- Current implementation note for this defect cluster:
+  - phone-screen event counters now use plural-safe Russian copy (`1 событие`, `2 события`, `4 события`, `5 событий`);
+  - the current local screen-label generation now prefers wider `Cygre` weights (`Bold` / `SemiBold`) instead of the earlier narrower-looking phone treatment;
+  - this typography fix remains `Not confirmed by user` until the next CherryFlash render is manually checked.
 - User provided local downloaded phone assets and approved the Pro Max variant for implementation:
   - `/workspaces/events-bot-new/docs/reference/iphone-16-pro-max.zip`
   - `/workspaces/events-bot-new/docs/reference/iphone-16-free.zip`
@@ -298,22 +438,27 @@ This section captures the latest intro-direction request as an explicit delta to
 
 ## Requested product behavior
 
-### Current rollout stage: Kaggle preproduction
+### Current rollout stage: full-run implementation
 
-- Current validation path is no longer local-only:
-  - approval and clean test renders should move onto the Kaggle-side path that is intended to become the real working render path for this product.
-- The current preproduction target is intentionally narrow:
-  - render `Мобильная лента` intro plus only the first 2D `VideoAfisha` scene;
-  - use this artifact to validate visual quality, timing, music sync, and the handoff into the first upward-moving 2D beat;
-  - do not spend preproduction cycles on rendering the full multi-scene release until this intro+scene1 artifact is accepted.
-- After intro+scene1 approval:
-  - extend the same Kaggle path to a real CherryFlash release with `2..6` scenes/posters;
-  - then validate publication behavior on the full daily product flow.
+- The current validation path remains Kaggle-first:
+  - approval and clean test renders should stay on the same Kaggle-side path that is intended to become the real working render path for this product.
+  - the final mux step must stay compatible with multiple Kaggle `moviepy` API variants; CherryFlash must not depend on one specific volume-scaling method because the notebook image can expose a different audio-clip surface after `subclip/set_duration`.
+  - the final mux should not needlessly degrade music quality relative to the approved source cue; for the current `Pulsarium.mp3` source (`192 kb/s` stereo), CherryFlash should export AAC audio at `192 kb/s` stereo unless a later approved delivery constraint requires a lower bitrate.
+- The earlier `intro + scene1` gate is now considered passed enough to continue:
+  - the handoff, ribbon alignment, and beat placement were accepted as the baseline for expanding CherryFlash into a full daily product run;
+  - exact duplicate-frame cleanup is still an active defect-fix track and must be revalidated on the full run.
+- The active implementation target is now:
+  - render the full CherryFlash release with `3D intro + 2..6` event scenes/posters on real data, followed by the canonical animated brand outro;
+  - validate scheduled generation;
+  - validate phase-1 publication to `@keniggpt`;
+  - keep story autopublish code path disabled in this step.
 
 ### Phase 1 rollout
 
 - One automatic run per day.
-- Run at `11:10 Europe/Kaliningrad`.
+- Use a dedicated CherryFlash schedule slot that is independently switchable from `/v tomorrow`.
+- Scheduler start time may be back-calculated from observed runtime, but the operational requirement is:
+  - by `12:30 Europe/Kaliningrad` the current day's CherryFlash result is already published on its phase-1 target surface.
 - Publish final mp4 to `https://t.me/keniggpt`.
 - Do not publish stories yet.
 - This mode may include events not only for tomorrow/near future, but also clearly future events that already proved audience interest through source-post popularity.
@@ -351,10 +496,10 @@ This section captures the latest intro-direction request as an explicit delta to
 ### 1. Source candidate pool
 
 - The source pool must be derived from the same selection principle as `/popular_posts`.
-- Use the same three popularity windows:
-  - `7 суток` with preferred `age_day=6` and fallback to the last available `age_day<=6`;
-  - `3 суток` with preferred `age_day=2` and fallback to the last available `age_day<=2`;
-  - `24 часа` with `age_day=0`.
+- Use the same three popularity windows, but traverse them in the confirmed CherryFlash editorial order:
+  - `24 часа` with `age_day=0`;
+  - then `3 суток` with preferred `age_day=2` and fallback to the last available `age_day<=2`;
+  - then `7 суток` with preferred `age_day=6` and fallback to the last available `age_day<=6`.
 - Include only source posts that are strictly above the per-source median on `views` or `likes`.
 - Keep the same upcoming-only rule as `/popular_posts`:
   - events scheduled for today or later are eligible;
@@ -386,8 +531,42 @@ This section captures the latest intro-direction request as an explicit delta to
 - Tie-breakers:
   - higher raw `views`;
   - higher raw `likes`;
-  - more mature popularity window when the same event is available from several windows (`7 суток` > `3 суток` > `24 часа`).
+  - earlier confirmed CherryFlash traversal window when several candidates are otherwise comparable inside one run (`24 часа` > `3 суток` > `7 суток`).
 - Near-date proximity is **not** a required tie-breaker for this mode; far-future events remain eligible if they are in the popularity candidate set.
+
+## Scene expansion contract
+
+### 5. Low-event follow-up scenes
+
+- Base CherryFlash releases still select `2..6` **events**, not arbitrary scene fragments.
+- If the base event count for one run is `<=3`, CherryFlash may expand the release with one extra follow-up scene per event when:
+  - that event has a second non-empty image in `photo_urls`;
+  - the event also has a short descriptive text suitable for the lower scene block.
+- Follow-up scene rules:
+  - the extra beat belongs to the same event and must immediately follow that event's primary scene;
+  - it uses the second image of the event;
+  - its motion swaps the normal soft `move-up` emphasis for an analogous soft `move-left`;
+  - the lower text block switches from `title + date/time + location` to a compact description text in the `search_digest` family;
+  - the preferred source for that description is `search_digest`, with existing event short-description fallbacks if needed;
+  - the intended copy density is roughly `16-20` words, but the hard requirement is meaning-preserving short descriptive copy rather than an exact token count.
+- The intro/ribbon still counts **events**, not follow-up beats:
+  - intro `count`, ribbon panel count, and second-poster handoff logic continue to be derived from the base selected events only.
+
+## Render sync contract
+
+### 6. Exact-frame dedupe and beat lock
+
+- CherryFlash full-run assembly must automatically detect and remove **exact consecutive duplicate frames**.
+- This dedupe runs after frame generation and before final audio muxing.
+- Beat-lock rule:
+  - if duplicate removal changes clip duration **before** the first `move-up` beat anchor, the audio start offset must be shifted by the removed duration so the strong beat still lands on the same `move-up` frame;
+  - duplicate removal after that anchor must not force a second retime of the already-approved first `move-up` beat.
+- Dedupe output should be visible in artifacts/logs so remaining visual holds can be audited from the run output.
+- The preferred fix for late-scene duplicate frames is to prevent them at render time, not to paper over them with a second global dedupe pass:
+  - the post-`move_up` 2D poster drift must stay visually continuous at `30 fps`;
+  - if a scene uses subpixel drift, the compositor must preserve that subpixel motion instead of rounding every frame to the same integer placement and generating full duplicates;
+  - CherryFlash must not rely on a `moviepy` composition path that snaps clip placement to integer pixel coordinates for the primary-scene post-`move_up` drift;
+  - a CherryFlash render that still contains obvious exact-neighbour duplicates in the late 2D drift is defective even if the intro beat lock remains correct.
 
 ## Delivery contract
 
@@ -413,20 +592,25 @@ This section captures the latest intro-direction request as an explicit delta to
   - `V_POPULAR_REVIEW_TIME_LOCAL`
   - `V_POPULAR_REVIEW_TZ`
   - `V_POPULAR_REVIEW_PROFILE`
-- Confirmed target default for implementation planning:
-  - `V_POPULAR_REVIEW_TIME_LOCAL=11:10`
-  - `V_POPULAR_REVIEW_TZ=Europe/Kaliningrad`
-  - `V_POPULAR_REVIEW_PROFILE=popular_review`
-- Exact env names may still change during implementation, but the schedule must stay independently switchable from `/v tomorrow`.
+- Confirmed operational target for implementation planning:
+  - the mode runs daily;
+  - it does not consume Gemma and should not be blocked by Gemma-related heavy-job scheduling by default;
+  - by `12:30 Europe/Kaliningrad` the daily output should already be ready on its target surface for the current rollout phase.
+- Exact env names and start-time knobs may still change during implementation, but the schedule must stay independently switchable from `/v tomorrow`.
 
 ## Story readiness, but disabled
 
 - The implementation should remain compatible with the existing Kaggle-side story publish pipeline.
+- Current implementation state:
+  - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
+  - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
+  - the `popular_review` path still keeps `story_publish_enabled=false` by default, so the common story path is implemented but intentionally inactive until the user explicitly enables it.
 - Phase 1 default:
   - story autopublish disabled;
+  - while the story gate is off, the validation publication target is `@keniggpt`;
   - no story failure path may affect the normal mp4 publication while the story gate is off.
 - Required readiness for later enablement:
-  - the future production target is story publication in the first half of the day, so by noon the story should already be live on the target surface;
+  - the future production target is story publication in the first half of the day, and the explicit readiness bar is a live story by `12:30 Europe/Kaliningrad`;
   - story autopublish should be enabled only after CherryFlash passes preproduction validation on Kaggle;
   - the existing story-autopublish path already proven on `CrumpleVideo` may be reused / adapted for CherryFlash when this gate opens;
   - story targets can be configured without redesigning selection logic;
@@ -456,7 +640,9 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] Intro date rendering correctly distinguishes single-day, true-range, and sparse-date releases.
 - [ ] The active `MobileFeed Intro` work unit stops exactly on the first full-frame handoff poster and does not redesign later `video_afisha` scenes in the same pass.
 - [ ] The intro handoff animation reaches a synced zoom-handoff in `~3.2-3.4s` with premium easing, no backward step, and a clean continuation toward the start of the upward move in `video_afisha`, with the strongest early music accent landing on the end of the late zoom tail / start of the upward move.
-- [ ] The current preproduction Kaggle artifact validates `intro + first 2D scene + music` before the team expands CherryFlash to the full `2..6` scene daily release.
+- [ ] The full CherryFlash Kaggle artifact now renders the complete `2..6` scene daily release on real data, using the already-approved `intro + scene1` handoff as its baseline.
+- [ ] Exact duplicate-frame cleanup is applied automatically, and the first strong beat still lands on the same visual `move-up` anchor after dedupe.
+- [ ] When a run has `<=3` base events and an event has a second image, CherryFlash can append a follow-up `move-left` scene with description text for that event.
 - [ ] The ribbon behaves like glossy paper, with plausible contact against the phone and desk surfaces plus visible soft folds/sag.
 - [ ] Ribbon poster/text orientation remains readable and non-mirrored throughout the intro.
 - [ ] The ribbon never clips into the phone body or the desk surface.
@@ -465,7 +651,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase 1 publication goes only to `@keniggpt`.
 - [ ] Story autopublish stays off, while the mode remains story-ready for later rollout.
-- [ ] When story autopublish is later enabled, the target operating expectation is that the story is already published by noon local time.
+- [ ] When story autopublish is later enabled, the target operating expectation is that the story is already published by `12:30 Europe/Kaliningrad`.
 
 ## Linked design work
 
@@ -481,8 +667,10 @@ This section captures the latest intro-direction request as an explicit delta to
 - Current implementation note:
   - CherryFlash now owns its own Kaggle notebook path under `kaggle/CherryFlash/`;
   - the intended long-term Kaggle contract is still a mounted CherryFlash render bundle under `/kaggle/input`, matching the project's production-proven notebook style;
-  - current preproduction bootstrap stays input-first: `zigomaro/cherryflash` should first resolve a mounted CherryFlash bundle under `/kaggle/input`, and only then fall back to cloning the already-pushed CherryFlash branch head when dataset propagation is missing;
+  - current preproduction bootstrap stays input-first: `zigomaro/cherryflash` should receive a one-run Kaggle dataset with a unique slug and a mounted runtime tree under `/kaggle/input`, the launcher should wait until Kaggle marks that dataset ready and exposes the required files before pushing the kernel, and the runtime payload must avoid nested non-ASCII zip names such as the old `ro_znanie.zip` path that Kaggle rejected during dataset creation;
   - the current Kaggle preproduction entrypoint must remain compatible with Kaggle's bundled `moviepy` layout, because the approval clip assembly happens inside `scripts/render_mobilefeed_intro_scene1_approval.py` in the remote runtime;
+  - CherryFlash runtime payloads may carry viewer-facing formatted dates inside the selection manifest, so intro/scene loaders must accept either ISO dates or preformatted date strings and must not crash on already-rendered copies such as `3 мая`;
+  - the launcher/runtime path must tolerate mixed ORM + `raw_conn()` access on the same SQLite DB during live popularity selection; if SQLite temporarily refuses `PRAGMA journal_mode=...` with `database is locked`, CherryFlash should continue rather than abort before the session is even created;
   - canonical kernel ref for the current preproduction route: `zigomaro/cherryflash`;
   - the existing `CrumpleVideo` runtime remains separate and must not be used as the CherryFlash render/notebook home.
 - Current working refinement track for approval:
