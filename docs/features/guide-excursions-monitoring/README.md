@@ -69,6 +69,8 @@
 
 ## Команды
 
+Guide admin surface подключается в основной bot runtime через `guide_excursions.commands.guide_excursions_router`; отсутствие этого router import/registration в `create_app()` считается startup-blocking prod regression, а не допустимой деградацией feature-surface.
+
 - `/guide_excursions` — основное меню управления;
 - `/guide_sources` — список источников и текущее покрытие;
 - `/guide_events [page]` — список всех будущих occurrences с inline delete/facts/log actions;

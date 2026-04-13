@@ -168,6 +168,7 @@ from html import escape
 import vk_intake
 import vk_review
 import poster_ocr
+from guide_excursions.commands import guide_excursions_router
 from handlers.ik_poster_cmd import ik_poster_router
 from handlers.special_cmd import special_router
 from source_parsing.telegram.commands import tg_monitor_router
