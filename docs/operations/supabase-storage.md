@@ -196,11 +196,19 @@ ENV:
   - для безопасного prod backfill без старых событий:
     - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --future-only --apply`
     - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --future-only --apply`
+- рекомендуемый low-risk rollout:
+  - локально на свежем prod snapshot выполнить тяжёлую часть `fetch + upload` и записать plan:
+    - `python scripts/backfill_catbox_posters_to_yandex.py --db /tmp/prod.sqlite --source tg --future-only --apply --plan-out artifacts/backfill_tg_future.json`
+    - `python scripts/backfill_catbox_posters_to_yandex.py --db /tmp/prod.sqlite --source vk --future-only --apply --plan-out artifacts/backfill_vk_future.json`
+  - на проде применить только лёгкий SQLite patch:
+    - `python scripts/apply_backfill_plan.py --db /data/db.sqlite --plan /data/backfill_tg_future.json`
+    - `python scripts/apply_backfill_plan.py --db /data/db.sqlite --plan /data/backfill_vk_future.json`
 
 Инварианты скрипта:
 
 - fetch идёт из исходного post URL (`t.me/...` public page или `vk.com/wall...`);
 - новые объекты грузятся только в managed storage (`UPLOAD_IMAGES_SUPABASE_MODE=only` внутри скрипта);
+- при `--plan-out` backfill script сохраняет JSON patch только для реально изменённых событий; patch можно переиспользовать для лёгкого prod apply без повторного fetch/upload;
 - по умолчанию скрипт fail-closed для partial match'ей:
   - если catbox-only `EventPoster` rows нельзя уверенно сматчить с заново fetched афишами, событие пропускается;
   - `--allow-partial` разрешает частичное обновление, но это сознательный operator override.

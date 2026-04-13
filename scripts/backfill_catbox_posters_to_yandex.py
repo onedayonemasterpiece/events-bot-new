@@ -9,7 +9,7 @@ import os
 import re
 import sys
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -84,6 +84,41 @@ class BackfillResult:
     unmatched_existing: int = 0
     unmatched_fetched: int = 0
     note: str | None = None
+    plan_entry: dict[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class PosterUpdatePatch:
+    id: int
+    supabase_url: str
+    supabase_path: str | None
+    phash: str | None
+    updated_at: str
+
+
+@dataclass(slots=True)
+class PosterInsertPatch:
+    catbox_url: str | None
+    supabase_url: str
+    supabase_path: str | None
+    poster_hash: str
+    phash: str | None
+    updated_at: str
+
+
+@dataclass(slots=True)
+class BackfillPlanEntry:
+    event_id: int
+    title: str
+    source_kind: str
+    source_url: str | None
+    status: str
+    note: str | None
+    photo_urls: list[str]
+    photo_count: int
+    poster_updates: list[PosterUpdatePatch]
+    poster_inserts: list[PosterInsertPatch]
+    enqueue_telegraph: bool = True
 
 
 def _get_default_db_path() -> str:
@@ -635,7 +670,10 @@ async def _process_event(
         catbox_db_rows = [row for row in rows_db if row.catbox_url and not row.supabase_url]
 
         now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
         matched_fetch_indices = set(matches.values())
+        plan_updates: list[PosterUpdatePatch] = []
+        plan_inserts: list[PosterInsertPatch] = []
         for row_idx, fetch_idx in matches.items():
             if row_idx >= len(catbox_db_rows):
                 continue
@@ -649,6 +687,16 @@ async def _process_event(
             row.updated_at = now
             session.add(row)
             result.changed_rows += 1
+            if fetched.hosted_url:
+                plan_updates.append(
+                    PosterUpdatePatch(
+                        id=int(row.id),
+                        supabase_url=str(fetched.hosted_url),
+                        supabase_path=str(fetched.hosted_path or "").strip() or None,
+                        phash=str(getattr(row, "phash", None) or fetched.dhash_hex or "").strip() or None,
+                        updated_at=now_iso,
+                    )
+                )
 
         for fetch_idx, fetched in enumerate(fetched_rows):
             if fetch_idx in matched_fetch_indices:
@@ -665,6 +713,17 @@ async def _process_event(
                 )
             )
             result.inserted_rows += 1
+            if fetched.hosted_url:
+                plan_inserts.append(
+                    PosterInsertPatch(
+                        catbox_url=fetched.original_url if (allow_partial and _is_catbox_url(fetched.original_url)) else None,
+                        supabase_url=str(fetched.hosted_url),
+                        supabase_path=str(fetched.hosted_path or "").strip() or None,
+                        poster_hash=str(fetched.raw_sha256),
+                        phash=str(fetched.dhash_hex or "").strip() or None,
+                        updated_at=now_iso,
+                    )
+                )
 
         if result.photo_urls_changed:
             event_db.photo_urls = updated_photo_urls
@@ -679,6 +738,22 @@ async def _process_event(
 
     result.status = "applied_full" if full_match else "applied_partial"
     result.note = ",".join(notes) or ("full_match" if full_match else "partial_match")
+    if result.changed_rows or result.inserted_rows or result.photo_urls_changed:
+        result.plan_entry = asdict(
+            BackfillPlanEntry(
+                event_id=int(result.event_id),
+                title=str(result.title or ""),
+                source_kind=str(result.source_kind),
+                source_url=str(result.source_url or "").strip() or None,
+                status=str(result.status),
+                note=str(result.note or "").strip() or None,
+                photo_urls=list(updated_photo_urls),
+                photo_count=len(updated_photo_urls),
+                poster_updates=plan_updates,
+                poster_inserts=plan_inserts,
+                enqueue_telegraph=bool(enqueue_telegraph and result.event_id),
+            )
+        )
     return result
 
 
@@ -753,6 +828,28 @@ def _print_result(res: BackfillResult) -> None:
     print(" ".join(parts))
 
 
+def _write_plan_file(
+    *,
+    path: str,
+    source_kind: str,
+    from_date: str | None,
+    db_path: str,
+    entries: list[dict[str, Any]],
+) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source": source_kind,
+        "from_date": from_date,
+        "db_path": str(db_path),
+        "entry_count": len(entries),
+        "entries": entries,
+    }
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -778,6 +875,11 @@ async def main() -> int:
     parser.add_argument("--image-limit", type=int, default=5, help="Max images fetched per source post")
     parser.add_argument("--apply", action="store_true", help="Write changes to DB")
     parser.add_argument(
+        "--plan-out",
+        default="",
+        help="When used with --apply, write a JSON patch plan for lightweight prod DB apply",
+    )
+    parser.add_argument(
         "--allow-partial",
         action="store_true",
         help="Apply partial matches too; default is fail-closed for events with unmatched catbox poster rows",
@@ -799,6 +901,8 @@ async def main() -> int:
         parser.error("--from-date must use YYYY-MM-DD")
     if bool(args.future_only) and not from_date:
         from_date = datetime.now(timezone.utc).date().isoformat()
+    if args.plan_out and not args.apply:
+        parser.error("--plan-out requires --apply")
 
     db = Database(str(args.db))
     await db.init()
@@ -816,6 +920,7 @@ async def main() -> int:
             f"allow_partial={int(bool(args.allow_partial))} from_date={from_date or '-'}"
         )
         stats: dict[str, int] = {}
+        plan_entries: list[dict[str, Any]] = []
         for event, _sources, poster_rows, source_url in candidates:
             if args.source == "tg":
                 fetched = await _download_tg_public_images(str(source_url), limit=max(1, int(args.image_limit or 1)))
@@ -838,9 +943,20 @@ async def main() -> int:
                 enqueue_telegraph=bool(args.apply and not args.no_enqueue_telegraph),
             )
             stats[result.status] = stats.get(result.status, 0) + 1
+            if result.plan_entry:
+                plan_entries.append(result.plan_entry)
             _print_result(result)
         summary = " ".join(f"{key}={stats[key]}" for key in sorted(stats))
         print(f"summary {summary or 'none=0'}")
+        if args.plan_out:
+            _write_plan_file(
+                path=str(args.plan_out),
+                source_kind=str(args.source),
+                from_date=from_date,
+                db_path=str(args.db),
+                entries=plan_entries,
+            )
+            print(f"plan_out={args.plan_out} entry_count={len(plan_entries)}")
         return 0
     finally:
         await _close_http_clients()
