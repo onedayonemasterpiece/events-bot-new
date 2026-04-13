@@ -1439,10 +1439,19 @@ def _extract_message_text_from_public_tg_html(
 
 
 def _looks_like_supabase_url(url: str | None) -> bool:
-    raw = str(url or "").strip().lower()
-    if not raw:
-        return False
-    return "/storage/v1/object/" in raw or "supabase.co/storage/" in raw
+    try:
+        from poster_media import is_supabase_storage_url
+
+        return bool(is_supabase_storage_url(url))
+    except Exception:
+        raw = str(url or "").strip().lower()
+        if not raw:
+            return False
+        return (
+            "/storage/v1/object/" in raw
+            or "supabase.co/storage/" in raw
+            or "storage.yandexcloud.net/" in raw
+        )
 
 
 async def _fallback_fetch_posters_from_public_tg_page(

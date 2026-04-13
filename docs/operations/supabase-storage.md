@@ -1,5 +1,15 @@
 # Supabase Storage (buckets)
 
+Важно: название документа и имена полей (`eventposter.supabase_url`, `event_media_asset.supabase_url`,
+`supabase_delete_queue`) исторические. Для **медиа событий** проект теперь может использовать не только Supabase,
+но и **Yandex Object Storage**. При этом:
+
+- ICS по-прежнему живут в Supabase;
+- новые картинки/постеры при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY`
+  (или dev-fallback `YC_SA_ML_DEV` / `YC_SA_ML_DEV_key`) пишутся в публичный bucket `kenigevents`
+  через `https://storage.yandexcloud.net/<bucket>/<path>`;
+- legacy имена полей в БД сохраняются ради обратной совместимости, но могут содержать Yandex URL.
+
 Этот документ фиксирует **текущее** использование Supabase Storage в проекте и спецификацию
 планового разделения на два bucket'а: отдельно для **ICS** и отдельно для **медиа** (постеры/картинки).
 
@@ -18,6 +28,8 @@
 - `SUPABASE_MEDIA_BUCKET` используется для медиа (афиши/картинки):
   - Telegram Monitoring (Kaggle) пишет постеры в `SUPABASE_MEDIA_BUCKET`;
   - server-side media upload pipeline (`upload_images`, используется в `/addevent`, VK auto import и source parsers) по умолчанию работает в режиме `UPLOAD_IMAGES_SUPABASE_MODE=prefer` (сначала Supabase, затем Catbox fallback).
+- При наличии Yandex credentials server-side media upload pipeline и Kaggle `TelegramMonitor`
+  предпочитают **Yandex Object Storage** для новых постеров, а Supabase остаётся legacy fallback/backend для старых URL.
 - `SUPABASE_PARSER_BUCKET` (default: `festival-parsing`) уже отдельный bucket для артефактов festival parser.
 
 Важно: очистка `cleanup_old_events` сейчас удаляет объекты из **одного** bucket'а `SUPABASE_BUCKET` и тем самым
@@ -51,10 +63,10 @@
 - Постеры (Kaggle `TelegramMonitor`, Supabase fallback):
   - key: `<prefix>/dh16/<first2>/<dhash>.webp`, где `prefix` default `p`
   - `dhash` — перцептивный dHash16 (content‑addressed ключ): одинаковая картинка с разным разрешением/реэнкодом
-    должна попадать в один и тот же ключ → Supabase не хранит дубли.
+    должна попадать в один и тот же ключ → storage backend не хранит дубли.
   - В Storage сохраняются только WebP (без JPEG); качество: `TG_MONITORING_POSTERS_WEBP_QUALITY` (Kaggle) /
     `SUPABASE_POSTERS_WEBP_QUALITY` (server-side), default `82`.
-  - сохраняется как `eventposter.supabase_url` + `eventposter.supabase_path`.
+  - сохраняется как `eventposter.supabase_url` + `eventposter.supabase_path` (legacy names, URL может быть Yandex).
 - Видео (Kaggle `TelegramMonitor`):
   - key: `v/sha256/<first2>/<sha256>.<ext>` (content‑addressed дедуп)
   - legacy fast‑path: producer может reuse уже существующий объект `v/tg/<document.id>.<ext>` без повторной скачки.
@@ -159,15 +171,37 @@ ENV:
 
 ## Режимы server-side загрузки картинок (`upload_images`)
 
-- `UPLOAD_IMAGES_SUPABASE_MODE=prefer` (default): сначала попытка загрузки в Supabase, затем fallback в Catbox.
-- `UPLOAD_IMAGES_SUPABASE_MODE=fallback`: сначала Catbox, Supabase только при неуспехе Catbox (legacy-поведение).
-- `UPLOAD_IMAGES_SUPABASE_MODE=only`: только Supabase.
-- `UPLOAD_IMAGES_SUPABASE_MODE=off`: Supabase отключён для этого pipeline.
-- Telegraph upload fallback не поддерживается: `telegra.ph/upload` недоступен/устарел, поэтому используем только Supabase/Catbox.
+- `UPLOAD_IMAGES_SUPABASE_MODE=prefer` (default): сначала попытка загрузки в managed storage
+  (Yandex Object Storage, если он настроен; иначе legacy Supabase), затем fallback в Catbox.
+- `UPLOAD_IMAGES_SUPABASE_MODE=fallback`: сначала Catbox, managed storage только при неуспехе Catbox (legacy-поведение).
+- `UPLOAD_IMAGES_SUPABASE_MODE=only`: только managed storage.
+- `UPLOAD_IMAGES_SUPABASE_MODE=off`: managed storage отключён для этого pipeline.
+- Telegraph upload fallback не поддерживается: `telegra.ph/upload` недоступен/устарел, поэтому используем только managed storage/Catbox.
+
+## Backfill Catbox -> Yandex
+
+Чтобы быстро снять зависимость от `files.catbox.moe` для уже созданных событий, используем отдельный backfill script:
+
+- dry-run для Telegram:
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --days 30`
+- dry-run для VK:
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --days 30`
+- apply + enqueue `telegraph_build`:
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --days 30 --apply`
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --days 30 --apply`
+
+Инварианты скрипта:
+
+- fetch идёт из исходного post URL (`t.me/...` public page или `vk.com/wall...`);
+- новые объекты грузятся только в managed storage (`UPLOAD_IMAGES_SUPABASE_MODE=only` внутри скрипта);
+- по умолчанию скрипт fail-closed для partial match'ей:
+  - если catbox-only `EventPoster` rows нельзя уверенно сматчить с заново fetched афишами, событие пропускается;
+  - `--allow-partial` разрешает частичное обновление, но это сознательный operator override.
+- при `--apply` изменённые события дополнительно enqueue-ят `telegraph_build`, чтобы существующие Telegraph pages подтянули новые URL.
 
 ## Гарантированная очистка Supabase (durable delete queue)
 
-Исторически проблема: если Supabase временно недоступен во время `cleanup_old_events`, объекты могли “утечь” —
+Исторически проблема: если storage backend временно недоступен во время `cleanup_old_events`, объекты могли “утечь” —
 события уже удалены из SQLite, а ссылки на объекты потеряны.
 
 Теперь удаление объектов **persisted**:
@@ -177,7 +211,8 @@ ENV:
   - ICS (`event.ics_url`)
   - постеров (`eventposter.supabase_url/supabase_path`) — если `SUPABASE_MEDIA_DELETE_ENABLED=1`
   - прочих медиа-ассетов (`event_media_asset`, включая Telegram Monitoring videos) — если `SUPABASE_MEDIA_DELETE_ENABLED=1`
-- затем (best-effort) пытается удалить из Supabase и убрать строки из очереди;
+- затем (best-effort) пытается удалить из соответствующего backend-а
+  (Supabase или Yandex, если bucket распознан как `kenigevents`) и убрать строки из очереди;
 - если удаление не удалось — строки остаются и будут удалены на следующем запуске cleanup’а.
 
 Важно: при включённом удалении медиа `cleanup_old_events` дополнительно проверяет, что `supabase_path` больше не
@@ -203,6 +238,14 @@ ENV:
   - `python scripts/inspect/audit_media_dedup.py --db /tmp/db.sqlite --hours 24`
 - DB + проверка Storage (HEAD по объектам, медленнее, но надёжнее):
   - `python scripts/inspect/audit_media_dedup.py --db /tmp/db.sqlite --hours 24 --check-storage`
+
+Для статистической проверки rollout/backfill по host'ам картинок:
+
+- `python scripts/inspect/audit_event_image_hosts.py --db /data/db.sqlite --days 7 --source tg`
+- `python scripts/inspect/audit_event_image_hosts.py --db /data/db.sqlite --days 7 --source vk`
+
+Скрипт считает события по классам `yandex`, `catbox`, `supabase`, `mixed_*`, `empty` на основе `event.photo_urls`
+и показывает sample `event_id:title` для каждого bucket'а.
 
 Скрипт проверяет инварианты:
 

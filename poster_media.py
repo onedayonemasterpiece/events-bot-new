@@ -92,10 +92,15 @@ def _ensure_ocr_http() -> None:
 
 
 def is_supabase_storage_url(url: str | None) -> bool:
-    raw = str(url or "").strip().lower()
-    if not raw:
-        return False
-    return "/storage/v1/object/" in raw or "supabase.co/storage/" in raw
+    try:
+        from yandex_storage import is_managed_storage_url
+
+        return bool(is_managed_storage_url(url))
+    except Exception:
+        raw = str(url or "").strip().lower()
+        if not raw:
+            return False
+        return "/storage/v1/object/" in raw or "supabase.co/storage/" in raw
 
 
 async def _run_ocr(poster: PosterMedia, model: str, detail: str) -> None:

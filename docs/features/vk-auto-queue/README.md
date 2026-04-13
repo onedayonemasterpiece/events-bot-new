@@ -12,6 +12,12 @@
    - на каждое извлечённое событие запускает `vk_intake.persist_event_and_pages` (внутри Smart Update);
    - пишет в лог источников факты (added/duplicate/conflict/note) и даёт оператору ссылки на Telegraph + `/log`.
 
+Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
+
+- при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY` новые постеры пишутся в Yandex Object Storage (`kenigevents`);
+- `eventposter.supabase_url/supabase_path` остаются legacy именами полей, но могут хранить Yandex URL/paths;
+- именно эти URL дальше попадают в Telegraph-страницы и video announce pipelines без отдельной product-line логики.
+
 ## Доступность VK поста (важно)
 
 Автоимпорт делает live‑запрос `wall.getById` и **не должен** создавать события, если пост уже недоступен в VK:
@@ -144,7 +150,7 @@ Scheduler job: `vk_auto_queue.vk_auto_import_scheduler` (`scheduling.py`).
 
 ENV:
 - `ENABLE_VK_AUTO_IMPORT=1` включает job.
-- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:15,10:15,12:00,18:30`) локальные времена запуска.
+- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:30,18:30`) локальные времена запуска.
 - `VK_AUTO_IMPORT_TZ` (по умолчанию `Europe/Kaliningrad`) таймзона расписания.
 - `VK_AUTO_IMPORT_LIMIT` (по умолчанию `15`) сколько постов обработать за один запуск.
 - `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `1`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета).
@@ -169,8 +175,6 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - scheduler entrypoint теперь создаёт bootstrap `ops_run` ещё до резолва superadmin/limit, а сам `run_vk_auto_import()` переиспользует эту же запись; поэтому ложный outer fire APScheduler без реального разбора очереди больше не должен исчезать бесследно;
 - если entrypoint или делегированный run падают до нормального summary, bootstrap-запись закрывается как `status='error'` с `fatal_error` в `details_json`;
 - `/general_stats` показывает такие записи в блоке `vk_auto_import runs`, чтобы было видно разницу между “очередь была пустой”, “run реально выполнился” и “scheduler попытался, но пропустил запуск”.
-- Если APScheduler задержал или потерял слот до входа в `vk_auto_import_scheduler()` (`JOB_SUBMITTED`/`JOB_MISSED` без материализованного `ops_run`), critical-run watchdog проверяет последний плановый слот по `ops_run` и запускает тот же scheduled entrypoint как catch-up. Catch-up `run_id` начинается с `startup_catchup_vk_auto_import_...` или `watchdog_vk_auto_import_...`; для этих критичных запусков heavy-guard по умолчанию ждёт предыдущую тяжёлую операцию, чтобы ближайший слот не скипался только из-за локальной конкуренции.
-
 Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update, но префетч N+1 может выполняться параллельно. По умолчанию префетч лёгкий; полный (media/OCR/LLM) включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
 
 Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build`, поэтому двойное ожидание убрано без потери качества/полноты отчёта.
@@ -251,5 +255,4 @@ ENV:
 - `vk_auto_queue.py` — автоимпорт очереди (manual + scheduled).
 - `vk_review.py` — очередь/локи + `mark_imported_events` (мульти-события).
 - `vk_intake.py` — LLM извлечение EventDraft + интеграция с Smart Update.
-- Важно для prod/infrastructure: VK auto-import идёт через обычный bot-side `GoogleAIClient` и должен резервировать только generic bot key (`GOOGLE_API_KEY`), если оператор явно не настраивал иной scoped consumer; guide-only `GOOGLE_API_KEY2` не является штатным ключом для этого pipeline.
 - `smart_event_update.py` — матчинг/мердж/лог фактов.

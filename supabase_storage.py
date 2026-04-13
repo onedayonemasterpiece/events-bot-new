@@ -37,12 +37,16 @@ def resolve_bucket_env(*, primary: str, fallback: str, default: str) -> str:
 
 
 def parse_storage_object_url(url: str | None) -> tuple[str, str] | None:
-    """Parse a Supabase Storage object URL into (bucket, object_path).
+    """Parse a managed storage object URL into (bucket, object_path).
 
     Supports common Supabase Storage URL formats:
     - /storage/v1/object/public/<bucket>/<path...>
     - /storage/v1/object/sign/<bucket>/<path...> (signed URLs)
     - /storage/v1/object/<bucket>/<path...> (rare; no public/sign segment)
+
+    Also supports Yandex Object Storage public URLs:
+    - https://storage.yandexcloud.net/<bucket>/<path...>
+    - https://<bucket>.storage.yandexcloud.net/<path...>
     """
 
     if not url:
@@ -50,6 +54,15 @@ def parse_storage_object_url(url: str | None) -> tuple[str, str] | None:
     raw = str(url).strip()
     if not raw:
         return None
+
+    try:
+        from yandex_storage import parse_yandex_storage_url
+
+        parsed_yandex = parse_yandex_storage_url(raw)
+        if parsed_yandex:
+            return parsed_yandex
+    except Exception:
+        pass
 
     try:
         u = urlparse(raw)
@@ -106,11 +119,26 @@ def storage_object_exists_http(
     - None when the check failed (network error, unexpected status, etc.)
     """
 
-    base = (supabase_url or "").strip().rstrip("/")
     key = (supabase_key or "").strip()
     b = (bucket or "").strip()
     p = (object_path or "").strip().lstrip("/")
-    if not (base and key and b and p):
+    if not (b and p):
+        return None
+
+    try:
+        from yandex_storage import (
+            get_yandex_storage_bucket,
+            yandex_storage_enabled,
+            yandex_storage_object_exists,
+        )
+
+        if yandex_storage_enabled() and b == get_yandex_storage_bucket():
+            return yandex_storage_object_exists(bucket=b, object_path=p)
+    except Exception:
+        pass
+
+    base = (supabase_url or "").strip().rstrip("/")
+    if not (base and key):
         return None
 
     url = f"{base}/storage/v1/object/{b}/{p}"
@@ -415,15 +443,13 @@ async def flush_supabase_delete_queue(
     chunk_size: int = 1000,
     path_filter: Callable[[str], bool] | None = None,
 ) -> int:
-    """Try to delete queued storage objects from Supabase (best-effort).
+    """Try to delete queued storage objects from managed storage (best-effort).
 
     The queue is stored in SQLite table `supabase_delete_queue` and is intended to make
     cleanup durable: if Supabase is temporarily unavailable, we keep delete targets and
     retry on the next scheduler run.
     """
 
-    if supabase_client is None:
-        return 0
     limit = max(1, int(limit or 0))
     chunk_size = max(1, min(1000, int(chunk_size or 0)))
 
@@ -479,6 +505,16 @@ async def flush_supabase_delete_queue(
 
     removed_ids: list[int] = []
     failed_ids: list[int] = []
+    yandex_bucket = ""
+    yandex_client = None
+    try:
+        from yandex_storage import get_yandex_storage_bucket, get_yandex_storage_client
+
+        yandex_bucket = get_yandex_storage_bucket()
+        yandex_client = get_yandex_storage_client()
+    except Exception:
+        yandex_bucket = ""
+        yandex_client = None
 
     for bucket, items in by_bucket.items():
         paths = [p for _, p in items]
@@ -487,10 +523,24 @@ async def flush_supabase_delete_queue(
             chunk_paths = paths[start : start + chunk_size]
             chunk_ids = ids[start : start + chunk_size]
             try:
-                await asyncio.to_thread(
-                    supabase_client.storage.from_(bucket).remove,
-                    chunk_paths,
-                )
+                if yandex_bucket and bucket == yandex_bucket:
+                    if yandex_client is None:
+                        raise RuntimeError("yandex storage client unavailable")
+                    from yandex_storage import delete_yandex_objects
+
+                    await asyncio.to_thread(
+                        delete_yandex_objects,
+                        bucket=bucket,
+                        object_paths=chunk_paths,
+                        client=yandex_client,
+                    )
+                else:
+                    if supabase_client is None:
+                        raise RuntimeError("supabase client unavailable")
+                    await asyncio.to_thread(
+                        supabase_client.storage.from_(bucket).remove,
+                        chunk_paths,
+                    )
                 removed_ids.extend(chunk_ids)
             except Exception as exc:
                 failed_ids.extend(chunk_ids)

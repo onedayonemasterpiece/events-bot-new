@@ -496,13 +496,17 @@ def _build_secrets_payload() -> str:
     for key, value in os.environ.items():
         if key.startswith("GOOGLE_API_KEY") and key not in payload and value:
             payload[key] = value
-    # Pass Supabase credentials to Kaggle for global rate limiting.
+    # Pass storage credentials to Kaggle runtime.
     for key in (
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_KEY",
         "SUPABASE_SCHEMA",
         "SUPABASE_DISABLED",
+        "YC_SA_BOT_STORAGE",
+        "YC_SA_BOT_STORAGE_KEY",
+        "YC_STORAGE_BUCKET",
+        "YC_STORAGE_ENDPOINT",
     ):
         value = (os.getenv(key) or "").strip()
         if value:

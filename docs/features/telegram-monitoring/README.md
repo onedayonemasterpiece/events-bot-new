@@ -5,17 +5,21 @@
 ## Что делает
 
 - По расписанию запускает Kaggle‑kernel `TelegramMonitor`.
-- Kaggle читает сообщения источников, делает OCR и извлекает события; афиши по умолчанию грузятся в Supabase Storage (public media bucket), Catbox используется только в fallback/off режимах.
+- Kaggle читает сообщения источников, делает OCR и извлекает события; афиши по умолчанию грузятся в managed storage:
+  - **Yandex Object Storage** (`https://storage.yandexcloud.net/<bucket>/<path>`), если в runtime есть `YC_SA_BOT_STORAGE[_KEY]`;
+  - legacy **Supabase Storage** остаётся fallback/backend для старых URL и для окружений без `YC_*`;
+  - Catbox используется только в `fallback/off` режимах.
   - Инвариант: extractor **не должен придумывать дату события** из даты публикации поста.
     - Дата/период должны быть явно в тексте/афише (или в виде относительных слов типа «сегодня/завтра», которые разрешено резолвить от даты поста).
     - Посты вида `open call` / «конкурсный отбор» / «приём заявок» считаются **не‑событиями** (это не «куда пойти») и должны отфильтровываться на стороне Kaggle (server-side guard существует как safety-net).
     - Посты‑отчёты о уже прошедшем мероприятии (`приняли участие`, `встреча прошла`, `педагоги отметили`, `администрация выразила благодарность`) не должны создавать event card; серверный Smart Update режет их как `skipped_non_event:completed_event_report`, если в тексте нет invite/registration/ticket сигналов.
-- Для афиш (постеров) по умолчанию использует **Supabase Storage** (public bucket) для стабильных URL:
-  - `TG_MONITORING_POSTERS_SUPABASE_MODE=always` (default): Supabase‑upload всегда включён; Catbox используется только если Supabase недоступен;
-  - `fallback`: приоритет Catbox, Supabase — только если Catbox‑загрузка не удалась;
+- Для афиш (постеров) по умолчанию использует **managed storage** для стабильных URL:
+  - `TG_MONITORING_POSTERS_SUPABASE_MODE=always` (default): upload в managed storage всегда включён; Catbox используется только если storage недоступен;
+  - `fallback`: приоритет Catbox, managed storage — только если Catbox‑загрузка не удалась;
   - `off`: только Catbox.
-- Bucket для афиш берётся из `SUPABASE_MEDIA_BUCKET` (не из legacy `SUPABASE_BUCKET`), чтобы медиа не смешивались с ICS.
-- При загрузке афиш в Supabase:
+- Если настроен Yandex runtime, bucket для афиш берётся из `YC_STORAGE_BUCKET` (default `kenigevents`).
+- Если Yandex не настроен, legacy Supabase fallback берёт bucket из `SUPABASE_MEDIA_BUCKET` (не из `SUPABASE_BUCKET`), чтобы медиа не смешивались с ICS.
+- При загрузке афиш в managed storage:
   - объект сохраняется **в WebP** (только WebP, без JPEG) для экономии объёма;
   - ключ объекта content‑addressed по перцептивному хешу (dHash16), чтобы одно и то же изображение (даже при разном разрешении/реэнкоде) не загружалось повторно:
     - `supabase_path`: `<prefix>/dh16/<first2>/<dhash>.webp` (prefix по умолчанию `p`, настраивается через `TG_MONITORING_POSTERS_PREFIX`);
@@ -225,7 +229,8 @@
 - `event_source` — источники события (много на одно событие).
 - `ticket_site_queue` — очередь обогащения событий по ticket‑ссылкам из постов (см. `docs/features/ticket-sites-queue/README.md`).
 - `eventposter.phash` — опциональный перцептивный хеш.
-- `eventposter.supabase_url/supabase_path` — fallback URL/путь в Supabase Storage для афиш (для надёжного preview и контролируемой очистки).
+- `eventposter.supabase_url/supabase_path` — legacy имена полей для managed-storage URL/путей афиш
+  (могут хранить как Supabase, так и Yandex URL для надёжного preview и контролируемой очистки).
 
 ## Видео (Supabase)
 
@@ -320,7 +325,10 @@
 
 Дополнительно:
 
-- Supabase (нужно для poster fallback в Storage и для глобального rate-limit RPC, если включено):
+- Yandex Object Storage (primary poster backend в текущем rollout):
+  - `YC_SA_BOT_STORAGE`, `YC_SA_BOT_STORAGE_KEY`
+  - optional: `YC_STORAGE_BUCKET` (default `kenigevents`), `YC_STORAGE_ENDPOINT` (default `https://storage.yandexcloud.net`)
+- Supabase (legacy poster fallback и глобальный rate-limit RPC, если включено):
   - `SUPABASE_URL`, `SUPABASE_KEY` (или `SUPABASE_SERVICE_KEY`), `SUPABASE_SCHEMA`, `SUPABASE_DISABLED`
   - bucket'и: legacy `SUPABASE_BUCKET` (default `events-ics`); плановое разделение: `SUPABASE_ICS_BUCKET`, `SUPABASE_MEDIA_BUCKET`
     (см. `docs/operations/supabase-storage.md`)
