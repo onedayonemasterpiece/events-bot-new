@@ -123,6 +123,29 @@ def _parse_dt(value: Any) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+def _normalize_iso_date(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date().isoformat()
+    except Exception:
+        return None
+
+
+def _event_in_date_window(event: Event, *, from_date: str | None) -> bool:
+    normalized_from = _normalize_iso_date(from_date)
+    if not normalized_from:
+        return True
+    start_date = _normalize_iso_date(getattr(event, "date", None))
+    end_date = _normalize_iso_date(getattr(event, "end_date", None))
+    if start_date and start_date >= normalized_from:
+        return True
+    if end_date and end_date >= normalized_from:
+        return True
+    return False
+
+
 def _safe_json_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item or "").strip()]
@@ -665,6 +688,7 @@ async def _iter_candidates(
     source_kind: str,
     event_id: int | None,
     days: int | None,
+    from_date: str | None,
     limit: int,
 ) -> list[tuple[Event, list[EventSource], list[ExistingPosterState], str | None]]:
     cutoff = None
@@ -681,6 +705,8 @@ async def _iter_candidates(
         events = list((await session.execute(stmt)).scalars().all())
 
         for event in events:
+            if not event_id and not _event_in_date_window(event, from_date=from_date):
+                continue
             source_rows = list(
                 (
                     await session.execute(
@@ -738,6 +764,16 @@ async def main() -> int:
     parser.add_argument("--source", choices=["tg", "vk"], required=True, help="Source kind to backfill")
     parser.add_argument("--event-id", type=int, default=0, help="Process only one event_id")
     parser.add_argument("--days", type=int, default=0, help="Only events added in the last N days")
+    parser.add_argument(
+        "--from-date",
+        default="",
+        help="Only events whose date or end_date is on/after YYYY-MM-DD",
+    )
+    parser.add_argument(
+        "--future-only",
+        action="store_true",
+        help="Shortcut for --from-date=today (UTC)",
+    )
     parser.add_argument("--limit", type=int, default=100, help="Max events to inspect (0 = unlimited)")
     parser.add_argument("--image-limit", type=int, default=5, help="Max images fetched per source post")
     parser.add_argument("--apply", action="store_true", help="Write changes to DB")
@@ -758,6 +794,12 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
+    from_date = _normalize_iso_date(args.from_date)
+    if args.from_date and not from_date:
+        parser.error("--from-date must use YYYY-MM-DD")
+    if bool(args.future_only) and not from_date:
+        from_date = datetime.now(timezone.utc).date().isoformat()
+
     db = Database(str(args.db))
     await db.init()
     try:
@@ -766,11 +808,12 @@ async def main() -> int:
             source_kind=str(args.source),
             event_id=int(args.event_id or 0) or None,
             days=int(args.days or 0) or None,
+            from_date=from_date,
             limit=int(args.limit or 0),
         )
         print(
             f"candidates={len(candidates)} source={args.source} apply={int(bool(args.apply))} "
-            f"allow_partial={int(bool(args.allow_partial))}"
+            f"allow_partial={int(bool(args.allow_partial))} from_date={from_date or '-'}"
         )
         stats: dict[str, int] = {}
         for event, _sources, poster_rows, source_url in candidates:

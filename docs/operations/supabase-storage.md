@@ -186,9 +186,16 @@ ENV:
   - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --days 30`
 - dry-run для VK:
   - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --days 30`
+- dry-run только для текущих и будущих событий:
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --future-only`
+  - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --future-only`
+  - если нужен фиксированный порог даты: `--from-date YYYY-MM-DD`
 - apply + enqueue `telegraph_build`:
   - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --days 30 --apply`
   - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --days 30 --apply`
+  - для безопасного prod backfill без старых событий:
+    - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source tg --future-only --apply`
+    - `python scripts/backfill_catbox_posters_to_yandex.py --db /data/db.sqlite --source vk --future-only --apply`
 
 Инварианты скрипта:
 
