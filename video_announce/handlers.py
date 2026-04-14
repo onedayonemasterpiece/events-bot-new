@@ -176,6 +176,10 @@ async def handle_video_callback(
                 test_mode=True,
             )
             return
+        if action == "cherryflash":
+            await callback.answer("Запускаю CherryFlash…")
+            await scenario.run_popular_review_pipeline()
+            return
         await callback.answer("Неизвестное действие", show_alert=True)
         return
     if data.startswith("vidkstat:"):

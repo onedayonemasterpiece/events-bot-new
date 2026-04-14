@@ -22,6 +22,7 @@ from models import (
     VideoAnnounceSessionStatus,
 )
 from video_announce.custom_types import RankedEvent
+from video_announce.handlers import handle_video_callback
 from video_announce.popular_review import PopularReviewPick, PopularReviewSelection
 from video_announce.scenario import TOMORROW_TEST_MIN_POSTERS, VideoAnnounceScenario
 
@@ -35,6 +36,17 @@ class _DummyBot:
 
     async def send_document(self, chat_id: int, document, **kwargs) -> None:  # noqa: ANN001,ARG002
         self.messages.append((chat_id, "document", kwargs))
+
+
+class _DummyCallback:
+    def __init__(self, data: str, *, chat_id: int = 123, user_id: int = 1) -> None:
+        self.data = data
+        self.message = SimpleNamespace(chat=SimpleNamespace(id=chat_id), message_id=1)
+        self.from_user = SimpleNamespace(id=user_id)
+        self.answers: list[tuple[str, bool]] = []
+
+    async def answer(self, text: str, show_alert: bool = False) -> None:
+        self.answers.append((text, show_alert))
 
 
 @pytest.mark.asyncio
@@ -302,6 +314,68 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
         assert all(item.final_description for item in items)
 
 
+@pytest.mark.asyncio
+async def test_start_session_popular_review_dispatches_direct_pipeline(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    captured: dict[str, int] = {}
+
+    async def _fake_run_popular_review_pipeline(self):
+        captured["chat_id"] = self.chat_id
+        captured["user_id"] = self.user_id
+
+    monkeypatch.setattr(
+        VideoAnnounceScenario,
+        "run_popular_review_pipeline",
+        _fake_run_popular_review_pipeline,
+    )
+    async def _fake_ensure_access(self):
+        return True
+
+    monkeypatch.setattr(VideoAnnounceScenario, "ensure_access", _fake_ensure_access)
+
+    scenario = VideoAnnounceScenario(db, _DummyBot(), chat_id=321, user_id=7)
+    await scenario.start_session("popular_review")
+
+    assert captured == {"chat_id": 321, "user_id": 7}
+
+
+@pytest.mark.asyncio
+async def test_handle_video_callback_vidauto_cherryflash_runs_direct_pipeline(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    captured: dict[str, int] = {}
+
+    async def _fake_run_popular_review_pipeline(self):
+        captured["chat_id"] = self.chat_id
+        captured["user_id"] = self.user_id
+
+    monkeypatch.setattr(
+        VideoAnnounceScenario,
+        "run_popular_review_pipeline",
+        _fake_run_popular_review_pipeline,
+    )
+
+    callback = _DummyCallback("vidauto:cherryflash", chat_id=456, user_id=9)
+    await handle_video_callback(
+        callback,
+        db,
+        _DummyBot(),
+        build_events_message=lambda *args, **kwargs: None,
+        get_tz_offset=lambda *args, **kwargs: None,
+        offset_to_timezone=lambda *args, **kwargs: None,
+    )
+
+    assert captured == {"chat_id": 456, "user_id": 9}
+    assert callback.answers == [("Запускаю CherryFlash…", False)]
+
+
 def test_build_cherryflash_selection_manifest_tolerates_missing_trace_entry():
     scenario = VideoAnnounceScenario(db=None, bot=_DummyBot(), chat_id=0, user_id=0)
 
@@ -354,8 +428,45 @@ def test_build_cherryflash_selection_manifest_tolerates_missing_trace_entry():
     assert manifest["events"][0]["time"] == "19:00"
     assert manifest["events"][0]["city"] == "Калининград"
     assert manifest["events"][0]["location_name"] == "Hall One"
+    assert manifest["events"][0]["poster_file"] == "poster_1.jpg"
+    assert manifest["events"][0]["poster_candidates"] == ["poster_1.jpg"]
     assert manifest["events"][0]["score"] == 4.2
     assert "score" not in manifest["events"][1]
+
+
+def test_build_cherryflash_selection_manifest_keeps_remote_poster_candidates():
+    scenario = VideoAnnounceScenario(db=None, bot=_DummyBot(), chat_id=0, user_id=0)
+
+    manifest = scenario._build_cherryflash_selection_manifest(
+        {
+            "scenes": [
+                {
+                    "event_id": 101,
+                    "title": "Remote Poster Event",
+                    "date": "13 апреля",
+                    "date_iso": "2026-04-13",
+                    "time": "19:00",
+                    "city": "Калининград",
+                    "location_name": "Hall One",
+                    "location": "Калининград",
+                    "images": [
+                        "https://files.catbox.moe/7fp9nh.jpg",
+                        "https://example.com/poster.webp",
+                    ],
+                    "description": "desc one",
+                    "scene_variant": "primary",
+                },
+            ]
+        },
+        selection_params={"story_publish_mode": "video"},
+        story_publish_enabled=False,
+    )
+
+    assert manifest["events"][0]["poster_file"] == "7fp9nh.jpg"
+    assert manifest["events"][0]["poster_candidates"] == [
+        "https://files.catbox.moe/7fp9nh.jpg",
+        "https://example.com/poster.webp",
+    ]
 
 
 def test_cherryflash_bundle_files_include_final_png():
@@ -565,6 +676,41 @@ async def test_prefetch_scene_images_writes_into_assets_posters(monkeypatch, tmp
     assert (tmp_path / "assets" / "posters" / "scene_1_1.jpg").exists()
     assert payload["scenes"][0]["images"] == ["scene_1_1.jpg"]
     assert payload["scenes"][0]["image"] == "scene_1_1.jpg"
+
+
+@pytest.mark.asyncio
+async def test_prefetch_scene_images_uses_normal_policy_for_yandex_bucket(monkeypatch, tmp_path):
+    scenario = VideoAnnounceScenario(db=None, bot=_DummyBot(), chat_id=0, user_id=0)
+    payload = {
+        "scenes": [
+            {
+                "images": [
+                    "https://storage.yandexcloud.net/cherryflash-backfill/posters/abc123.webp?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                ],
+            }
+        ]
+    }
+    calls: list[dict] = []
+
+    class _Resp:
+        status_code = 200
+        content = b"fake-image"
+
+    async def _fake_http_call(*args, **kwargs):
+        calls.append(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("video_announce.scenario.http_call", _fake_http_call)
+
+    await scenario._prefetch_scene_images(payload, tmp_path, max_images_per_scene=3)
+
+    assert calls
+    assert calls[0]["timeout"] == 20
+    assert calls[0]["retries"] == 3
+    assert calls[0]["backoff"] == 1.0
+    assert (tmp_path / "assets" / "posters" / "scene_1_1.webp").exists()
+    assert payload["scenes"][0]["images"] == ["scene_1_1.webp"]
+    assert payload["scenes"][0]["image"] == "scene_1_1.webp"
 
 
 @pytest.mark.asyncio

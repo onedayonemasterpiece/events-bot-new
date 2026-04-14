@@ -10,5 +10,11 @@
     "title": "Семейный уикенд",
     "description": "Отбор семейных событий и прогулок",
     "prompt_name": "script"
+  },
+  {
+    "key": "popular_review",
+    "title": "CherryFlash",
+    "description": "Ежедневный popularity-driven видеоанонс CherryFlash",
+    "prompt_name": "script"
   }
 ]
