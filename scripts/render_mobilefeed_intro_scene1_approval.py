@@ -4,7 +4,6 @@ import json
 import math
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -18,6 +17,19 @@ try:
 except ImportError:
     from moviepy.audio.io.AudioFileClip import AudioFileClip
     from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+
+try:
+    from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
+except ImportError:
+    MultiplyVolume = None
+
+try:
+    from moviepy.audio.fx.volumex import volumex as volumex_fx
+except ImportError:
+    try:
+        from moviepy.audio.fx.all import volumex as volumex_fx
+    except ImportError:
+        volumex_fx = None
 
 def resolve_root() -> Path:
     candidates = [
@@ -45,6 +57,7 @@ from scripts.render_mobilefeed_intro_still import (
     DRUK_SUPER,
     FOCUS_EVENT_ID,
     POSTERS,
+    SELECTION_MANIFEST,
     VARIANTS,
     atlas_and_meta,
     build_variant_config,
@@ -93,27 +106,46 @@ HANDOFF_BLEND_START = 105 if FINAL_MODE else 104
 HANDOFF_BLEND_END = 106
 DENSE_TAIL_START = 88 if FINAL_MODE else 96
 SCENE1_TEXT_START = T_ENTRY + T_HOLD + (T_MOVE * 0.2)
+AUDIO_BITRATE = "192k"
 
 TITLE_COLOR = ImageColor.getrgb("#FFFFFF")
 ACCENT_COLOR = ImageColor.getrgb("#F1C40F")
 DETAIL_COLOR = ImageColor.getrgb("#BDC3C7")
 BG_BLACK = ImageColor.getrgb("#000000")
 BG_MILKY = ImageColor.getrgb("#E7E6E1")
+DISABLE_DENOISE = str(os.environ.get("CHERRYFLASH_DISABLE_DENOISE", "")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 AUDIO_PATH = next(
     (
         candidate
         for candidate in (
+            ROOT / "assets" / "Pulsarium_scene1_clip.mp3",
             ROOT / "kaggle" / "CherryFlash" / "assets" / "Pulsarium_scene1_clip.mp3",
+            ROOT.parent / "assets" / "Pulsarium.mp3",
             ROOT / "video_announce" / "assets" / "Pulsarium.mp3",
         )
         if candidate.exists()
     ),
-    ROOT / "video_announce" / "assets" / "Pulsarium.mp3",
+    ROOT.parent / "assets" / "Pulsarium.mp3",
 )
 AUDIO_START_SEC = 0 if AUDIO_PATH.name == "Pulsarium_scene1_clip.mp3" else 294
-DB_SNAPSHOT = ROOT / "artifacts" / "db" / "db_prod_snapshot_2026-04-06_114841.sqlite"
-BEBAS_BOLD = ROOT / "video_announce" / "assets" / "BebasNeue-Bold.ttf"
+BEBAS_BOLD = next(
+    (
+        candidate
+        for candidate in (
+            ROOT / "video_announce" / "assets" / "BebasNeue-Bold.ttf",
+            ROOT.parent / "assets" / "BebasNeue-Bold.ttf",
+            ROOT / "assets" / "BebasNeue-Bold.ttf",
+        )
+        if candidate.exists()
+    ),
+    ROOT.parent / "assets" / "BebasNeue-Bold.ttf",
+)
 
 
 MONTHS_GENITIVE = {
@@ -245,31 +277,22 @@ def _safe_stem(name: str) -> str:
 def load_scene_payload() -> ScenePayload:
     poster = POSTERS[FOCUS_EVENT_ID]
     title = poster.title
-    date_line = "10 АПРЕЛЯ"
-    location_line = poster.city.upper()
-    if DB_SNAPSHOT.exists():
-        connection = sqlite3.connect(DB_SNAPSHOT)
-        connection.row_factory = sqlite3.Row
+    raw_date = (poster.date or "").strip()
+    raw_time = poster.time or ""
+    date_line = raw_date
+    if raw_date:
         try:
-            row = connection.execute(
-                "SELECT title, date, time, location_name, city FROM event WHERE id = ?",
-                (FOCUS_EVENT_ID,),
-            ).fetchone()
-        finally:
-            connection.close()
-        if row:
-            title = row["title"] or title
-            raw_date = row["date"] or poster.date
-            raw_time = row["time"] or ""
             dt = date.fromisoformat(raw_date)
+        except ValueError:
+            dt = None
+        if dt is not None:
             date_line = f"{dt.day} {MONTHS_GENITIVE[dt.month]}"
-            if raw_time and raw_time != "00:00":
-                date_line = f"{date_line} • {raw_time}"
-            location_name = (row["location_name"] or row["city"] or poster.city or "").split(",")[0].strip()
-            city = (row["city"] or poster.city or "").strip()
-            parts = [part.upper() for part in (location_name, city) if part]
-            if parts:
-                location_line = " • ".join(dict.fromkeys(parts))
+    if raw_time and raw_time != "00:00" and raw_time not in date_line:
+        date_line = f"{date_line} • {raw_time}"
+    location_name = (poster.location_name or poster.city or "").split(",")[0].strip()
+    city = (poster.city or "").strip()
+    parts = [part.upper() for part in (location_name, city) if part]
+    location_line = " • ".join(dict.fromkeys(parts)) if parts else poster.city.upper()
     return ScenePayload(
         title=title,
         date_line=date_line,
@@ -323,7 +346,7 @@ def render_intro_frames() -> None:
             "render_engine": "CYCLES",
             "samples": 48 if FINAL_MODE else 1,
             "allow_cycles_gpu": True,
-            "use_denoising": True,
+            "use_denoising": not DISABLE_DENOISE,
             "denoiser": "OPENIMAGEDENOISE",
             "use_adaptive_sampling": True,
             "adaptive_threshold": 0.014 if FINAL_MODE else 0.12,
@@ -368,6 +391,20 @@ def render_intro_frames() -> None:
                 "frame_step": INTRO_RENDER_STEP,
                 "frame_start": INTRO_START_FRAME,
                 "frame_end": INTRO_END_FRAME,
+                "timing_warp_control_points": [
+                    [0.0, 0.0],
+                    [0.32, 0.32],
+                    [0.38, 0.392],
+                    [0.42, 0.434],
+                    [0.50, 0.510],
+                    [0.54, 0.556],
+                    [0.59, 0.610],
+                    [0.76, 0.770],
+                    [0.82, 0.846],
+                    [0.88, 0.898],
+                    [0.94, 0.950],
+                    [1.0, 1.0],
+                ],
                 "combo_mid_frame": 36,
                 "sync_start_frame": 72,
                 "sync_mid_frame": 96,
@@ -786,10 +823,12 @@ def write_storyboard(final_frame: int) -> Path:
 
 def write_manifest(payload: ScenePayload, final_frame: int) -> Path:
     manifest = OUT_DIR / f"scene1_manifest_{date.today().isoformat()}.md"
+    source_db = str(SELECTION_MANIFEST.get("db_snapshot") or "runtime payload")
     lines = [
         f"# MobileFeed Intro {MODE_SLUG.title()} Clip",
         "",
         f"- Variant: `{ACTIVE_VARIANT.slug}`",
+        f"- Source DB / payload: `{source_db}`",
         f"- Canvas: `{W}x{H}`",
         f"- FPS: `{FPS}`",
         f"- Render mode: `{MODE_SLUG}`",
@@ -815,6 +854,24 @@ def write_manifest(payload: ScenePayload, final_frame: int) -> Path:
     return manifest
 
 
+def scale_audio_volume(audio: object, factor: float) -> object:
+    if hasattr(audio, "with_volume_scaled"):
+        return audio.with_volume_scaled(factor)
+    if hasattr(audio, "volumex"):
+        return audio.volumex(factor)
+    if MultiplyVolume is not None and hasattr(audio, "with_effects"):
+        return audio.with_effects([MultiplyVolume(factor)])
+    if volumex_fx is not None:
+        if hasattr(audio, "fx"):
+            return audio.fx(volumex_fx, factor)
+        return volumex_fx(audio, factor)
+    print(
+        "CherryFlash intro: moviepy build has no supported volume-scaling API; keeping original level.",
+        file=sys.stderr,
+    )
+    return audio
+
+
 def encode_video(final_frame: int) -> Path:
     frame_paths = [str(FRAMES_DIR / f"frame_{frame_num:04d}.png") for frame_num in range(1, final_frame + 1)]
     clip = ImageSequenceClip(frame_paths, fps=FPS)
@@ -828,8 +885,7 @@ def encode_video(final_frame: int) -> Path:
         audio = audio.with_duration(clip.duration)
     else:
         audio = audio.set_duration(clip.duration)
-    if hasattr(audio, "with_volume_scaled"):
-        audio = audio.with_volume_scaled(0.45)
+    audio = scale_audio_volume(audio, 0.45)
     if hasattr(clip, "with_audio"):
         clip = clip.with_audio(audio)
     else:
@@ -841,7 +897,7 @@ def encode_video(final_frame: int) -> Path:
         codec="libx264",
         audio_codec="aac",
         preset="slow",
-        audio_bitrate="96k",
+        audio_bitrate=AUDIO_BITRATE,
         ffmpeg_params=[
             "-pix_fmt",
             "yuv420p",

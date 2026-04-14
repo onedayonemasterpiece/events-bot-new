@@ -168,7 +168,6 @@ from html import escape
 import vk_intake
 import vk_review
 import poster_ocr
-from guide_excursions.commands import guide_excursions_router
 from handlers.ik_poster_cmd import ik_poster_router
 from handlers.special_cmd import special_router
 from source_parsing.telegram.commands import tg_monitor_router
@@ -259,9 +258,7 @@ from shortlinks import (
 from scheduling import (
     startup as scheduler_startup,
     cleanup as scheduler_cleanup,
-    critical_scheduler_watchdog_enabled as scheduler_critical_watchdog_enabled,
     maybe_dispatch_video_tomorrow_watchdog as scheduler_video_tomorrow_watchdog_tick,
-    maybe_dispatch_critical_scheduler_watchdog as scheduler_critical_watchdog_tick,
     runtime_health_status as scheduler_runtime_health_status,
     video_tomorrow_watchdog_enabled as scheduler_video_tomorrow_watchdog_enabled,
 )
@@ -563,7 +560,7 @@ SUPABASE_MEDIA_BUCKET = (os.getenv("SUPABASE_MEDIA_BUCKET") or SUPABASE_BUCKET).
 VK_TOKEN = os.getenv("VK_TOKEN")
 VK_TOKEN_AFISHA = os.getenv("VK_TOKEN_AFISHA")  # NEW
 VK_USER_TOKEN = os.getenv("VK_USER_TOKEN")
-VK_SERVICE_TOKEN = os.getenv("VK_SERVICE_TOKEN")
+VK_SERVICE_TOKEN = os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_SERVICE_KEY")
 VK_READ_VIA_SERVICE = os.getenv("VK_READ_VIA_SERVICE", "true").lower() == "true"
 VK_MIN_INTERVAL_MS = int(os.getenv("VK_MIN_INTERVAL_MS", "350"))
 _last_vk_call = 0.0

@@ -110,39 +110,6 @@ def story_publish_enabled() -> bool:
     return _env_enabled("VIDEO_ANNOUNCE_STORY_ENABLED", default=False)
 
 
-def story_publish_required() -> bool:
-    return _env_enabled("VIDEO_ANNOUNCE_STORY_REQUIRED", default=False)
-
-
-def story_publish_health_status() -> str:
-    required = story_publish_required()
-    enabled = story_publish_enabled()
-    if not enabled:
-        return "disabled" if required else "disabled_optional"
-
-    bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
-    session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
-    if bundle_env_key:
-        if not _get_env_value(bundle_env_key):
-            return f"auth_bundle_missing:{bundle_env_key}"
-    elif session_env_key:
-        if not _get_env_value(session_env_key):
-            return f"session_missing:{session_env_key}"
-    else:
-        return "auth_source_missing"
-
-    try:
-        explicit_targets = _parse_story_targets_json()
-        extra_targets = [] if explicit_targets else _parse_extra_targets_json()
-    except RuntimeError as exc:
-        return f"config_error:{exc}"
-
-    use_main_target = _env_enabled("VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL", default=True)
-    if not explicit_targets and not use_main_target and not extra_targets:
-        return "targets_missing"
-    return "ok"
-
-
 def _normalize_peer(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -173,17 +140,11 @@ def _story_session_payload() -> dict[str, Any]:
     api_hash = _require_env_any("TG_API_HASH", "TELEGRAM_API_HASH")
     bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
     session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
-    source_channel_id_raw = (_get_env_value("SOURCE_CHANNEL_ID") or "").strip()
 
     auth: dict[str, Any] = {
         "api_id": int(api_id),
         "api_hash": str(api_hash),
     }
-    if source_channel_id_raw:
-        try:
-            auth["source_channel_id"] = int(source_channel_id_raw)
-        except ValueError as exc:
-            raise RuntimeError("SOURCE_CHANNEL_ID must be int") from exc
     if bundle_env_key:
         bundle_raw = _get_env_value(bundle_env_key)
         if not bundle_raw:

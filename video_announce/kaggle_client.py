@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import random
 import shutil
 import tempfile
+import time
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable
@@ -52,10 +54,69 @@ DEFAULT_KERNEL_IGNORE_PATTERNS = (
 )
 
 
-def _should_force_gpu_for_local_kernel(
-    folder_name: str,
-    meta_data: dict[str, Any],
-) -> bool:
+async def await_kernel_dataset_sources(
+    client: "KaggleClient",
+    kernel_ref: str,
+    expected_sources: list[str],
+    *,
+    timeout_seconds: int = 120,
+    poll_interval_seconds: int = 10,
+) -> dict[str, Any]:
+    expected_clean = [str(item).strip() for item in expected_sources if str(item).strip()]
+    if not expected_clean:
+        return {}
+
+    started = time.monotonic()
+    deadline = started + max(1, int(timeout_seconds))
+    last_meta: dict[str, Any] | None = None
+    last_error: str | None = None
+
+    while time.monotonic() < deadline:
+        try:
+            matched, meta = await asyncio.to_thread(
+                client.kernel_has_dataset_sources,
+                kernel_ref,
+                expected_clean,
+            )
+            last_meta = meta or {}
+            if matched:
+                return last_meta
+            last_error = None
+        except Exception as exc:
+            last_error = str(exc) or exc.__class__.__name__
+        await asyncio.sleep(max(1, int(poll_interval_seconds)))
+
+    actual_sources = list((last_meta or {}).get("dataset_sources") or [])
+    details = (
+        f"expected={expected_clean} actual={actual_sources}"
+        if actual_sources
+        else f"expected={expected_clean}"
+    )
+    if last_error:
+        details = f"{details} last_error={last_error}"
+    raise RuntimeError(
+        f"Kaggle kernel metadata did not bind expected datasets in time ({details})"
+    )
+
+
+def _response_error_suffix(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    if response is None:
+        return ""
+    status_code = getattr(response, "status_code", None)
+    try:
+        body = str(response.text or "").strip()
+    except Exception:
+        body = ""
+    parts: list[str] = []
+    if status_code is not None:
+        parts.append(f"status={status_code}")
+    if body:
+        parts.append(body[:800])
+    return f" ({'; '.join(parts)})" if parts else ""
+
+
+def _should_force_gpu_for_local_kernel(folder_name: str, meta_data: dict[str, Any]) -> bool:
     if str(folder_name or "").strip().casefold() == "crumplevideo":
         return True
     kernel_id = str(meta_data.get("id") or "").strip().casefold()
@@ -79,12 +140,7 @@ def _load_kernel_ignore_patterns(base_path: Path) -> list[str]:
     return patterns
 
 
-def _matches_kernel_ignore(
-    rel_path: Path,
-    *,
-    is_dir: bool,
-    patterns: Iterable[str],
-) -> bool:
+def _matches_kernel_ignore(rel_path: Path, *, is_dir: bool, patterns: Iterable[str]) -> bool:
     rel = rel_path.as_posix()
     name = rel_path.name
     for pattern in patterns:
@@ -137,6 +193,7 @@ def _prune_kernel_tree(root: Path) -> None:
             shutil.rmtree(path, ignore_errors=True)
         elif path.exists():
             path.unlink()
+
 
 
 def list_local_kernels() -> list[dict]:
@@ -260,13 +317,19 @@ class KaggleClient:
     ) -> None:
         api = self._get_api()
         logger.info("kaggle: creating dataset from folder=%s", folder)
-        api.dataset_create_new(
-            str(folder),
-            public=public,
-            quiet=quiet,
-            convert_to_csv=convert_to_csv,
-            dir_mode=dir_mode,
-        )
+        try:
+            api.dataset_create_new(
+                str(folder),
+                public=public,
+                quiet=quiet,
+                convert_to_csv=convert_to_csv,
+                dir_mode=dir_mode,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Kaggle dataset_create_new failed"
+                + _response_error_suffix(exc)
+            ) from exc
         logger.info("kaggle: dataset created successfully from folder=%s", folder)
 
     def create_dataset_version(
@@ -285,15 +348,49 @@ class KaggleClient:
             folder,
             version_notes,
         )
-        api.dataset_create_version(
-            str(folder),
-            version_notes=version_notes,
-            quiet=quiet,
-            convert_to_csv=convert_to_csv,
-            delete_old_versions=delete_old_versions,
-            dir_mode=dir_mode,
-        )
+        try:
+            api.dataset_create_version(
+                str(folder),
+                version_notes=version_notes,
+                quiet=quiet,
+                convert_to_csv=convert_to_csv,
+                delete_old_versions=delete_old_versions,
+                dir_mode=dir_mode,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Kaggle dataset_create_version failed"
+                + _response_error_suffix(exc)
+            ) from exc
         logger.info("kaggle: dataset version created successfully folder=%s", folder)
+
+    def dataset_status(self, dataset: str) -> str:
+        api = self._get_api()
+        logger.info("kaggle: dataset status dataset=%s", dataset)
+        return str(api.dataset_status(dataset))
+
+    def dataset_list_files(self, dataset: str, *, page_size: int = 20) -> list[dict[str, Any]]:
+        api = self._get_api()
+        logger.info("kaggle: dataset list files dataset=%s", dataset)
+        response = api.dataset_list_files(dataset, page_size=page_size)
+        files = getattr(response, "files", None)
+        if files is None and isinstance(response, list):
+            files = response
+        result: list[dict[str, Any]] = []
+        for item in files or []:
+            result.append(
+                {
+                    "name": getattr(item, "name", None) or str(item),
+                    "totalBytes": getattr(item, "totalBytes", None),
+                    "creationDate": getattr(item, "creationDate", None),
+                }
+            )
+        logger.info(
+            "kaggle: dataset files dataset=%s names=%s",
+            dataset,
+            [entry.get("name") for entry in result],
+        )
+        return result
 
     def delete_dataset(self, dataset: str, *, no_confirm: bool = True) -> None:
         api = self._get_api()
@@ -302,7 +399,13 @@ class KaggleClient:
         else:
             owner_slug = os.getenv("KAGGLE_USERNAME") or ""
             dataset_slug = dataset
-        api.dataset_delete(owner_slug, dataset_slug, no_confirm=no_confirm)
+        try:
+            api.dataset_delete(owner_slug, dataset_slug, no_confirm=no_confirm)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Kaggle dataset_delete failed for {owner_slug}/{dataset_slug}"
+                + _response_error_suffix(exc)
+            ) from exc
 
     def push_kernel(
         self,
@@ -381,15 +484,15 @@ class KaggleClient:
 
         local_kernel = find_local_kernel(kernel_ref)
         is_local = local_kernel is not None
-
+        
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-
+            
             if is_local:
                 local_kernel_path = Path(str(local_kernel.get("path") or ""))
                 if not local_kernel_path.exists():
                     raise FileNotFoundError(f"Local kernel path not found: {local_kernel_path}")
-
+                
                 logger.info(
                     "kaggle: deploying REPO kernel source=%s requested_ref=%s datasets=%s",
                     local_kernel_path.name,
@@ -400,10 +503,12 @@ class KaggleClient:
                     "kaggle: local kernel path resolved=%s",
                     local_kernel_path.resolve(),
                 )
-
+                
+                # Copy local kernel files to temp directory
                 _copy_kernel_tree(local_kernel_path, tmp_path)
                 logger.info("kaggle: copied local kernel from %s", local_kernel_path)
             else:
+                # Pull from Kaggle (original behavior)
                 logger.info(
                     "kaggle: deploying REMOTE kernel ref=%s datasets=%s",
                     kernel_ref,
@@ -412,7 +517,7 @@ class KaggleClient:
                 api.kernels_pull(kernel_ref, path=str(tmp_path), metadata=True)
                 _prune_kernel_tree(tmp_path)
                 logger.info("kaggle: pulled kernel from Kaggle")
-
+            
             meta_path = tmp_path / "kernel-metadata.json"
             if not meta_path.exists():
                 raise FileNotFoundError(f"kernel-metadata.json not found")
@@ -448,6 +553,7 @@ class KaggleClient:
                 if dataset_slug not in existing_sources:
                     existing_sources.append(dataset_slug)
             meta_data["dataset_sources"] = existing_sources
+            # Ensure internet is enabled for pip installs
             meta_data["enable_internet"] = True
             local_kernel_name = (
                 local_kernel_path.name

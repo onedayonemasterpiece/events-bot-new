@@ -4,7 +4,6 @@ import html
 import re
 import asyncio
 import time as _time
-from collections import defaultdict
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
@@ -12,9 +11,9 @@ from aiogram import Bot, types
 
 from aiohttp import web
 from telegraph import Telegraph
-from markup import md_to_html, telegraph_br, linkify_for_telegraph, unescape_public_text_escapes
+from markup import md_to_html, telegraph_br, linkify_for_telegraph
 
-from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, MonthExhibitionsPage, VkMissRecord, VkMissReviewSession, User, TelegramSource
+from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
 from source_parsing.telegram.commands import tg_monitor_router
 from poster_media import PosterMedia
 from db import Database
@@ -187,7 +186,7 @@ def event_to_nodes(
                 "tag": "figure",
                 "children": [{"tag": "img", "attrs": {"src": preview_url}, "children": []}]
             })
-        elif show_image and not show_3d_only and e.photo_urls:
+        elif show_image and e.photo_urls:
             # Fallback to first photo (only if show_image=True, not show_3d_only)
             first_url = e.photo_urls[0]
             if isinstance(first_url, str):
@@ -406,146 +405,6 @@ def exhibition_to_nodes(e: Event) -> list[dict]:
     return nodes
 
 
-def exhibition_compact_to_nodes(e: Event) -> list[dict]:
-    nodes = [{"tag": "h4", "children": exhibition_title_nodes(e)}]
-    loc = str(getattr(e, "location_name", None) or "").strip()
-    addr = str(getattr(e, "location_address", None) or "").strip()
-    city = str(getattr(e, "city", None) or "").strip()
-    if addr and city:
-        addr = strip_city_from_address(addr, city)
-    if addr:
-        loc = f"{loc}, {addr}" if loc else addr
-    if city:
-        loc = f"{loc}, #{city}" if loc else f"#{city}"
-
-    period = ""
-    if getattr(e, "end_date", None):
-        end = parse_iso_date(str(e.end_date).split("..", 1)[0].strip())
-        if end:
-            period = f"по {format_day_pretty(end)}"
-    summary = ", ".join(part for part in (period, loc) if part)
-    if summary:
-        nodes.append({"tag": "p", "children": [{"tag": "i", "children": [summary]}]})
-    nodes.extend(telegraph_br())
-    return nodes
-
-
-_EXHIBITION_DISPLAY_LOCATION_STOPWORDS = {
-    "калининград",
-    "черняховск",
-    "светлогорск",
-    "областной",
-    "областная",
-    "калининградский",
-    "калининградская",
-    "музей",
-    "галерея",
-    "центр",
-    "информационно",
-    "туристический",
-}
-
-
-def _normalize_exhibition_display_text(value: str | None) -> str:
-    if not value:
-        return ""
-    raw = str(value).replace("ё", "е").lower()
-    raw = re.sub(r"[«»\"'()]", " ", raw)
-    raw = re.sub(r"[^\w\s]+", " ", raw, flags=re.UNICODE)
-    return re.sub(r"\s+", " ", raw).strip()
-
-
-def _normalize_exhibition_display_location(event: Event) -> str:
-    parts = [
-        str(getattr(event, "location_name", None) or "").strip(),
-        str(getattr(event, "location_address", None) or "").strip(),
-        str(getattr(event, "city", None) or "").strip(),
-    ]
-    return _normalize_exhibition_display_text(" ".join(part for part in parts if part))
-
-
-def _exhibition_display_location_tokens(value: str | None) -> set[str]:
-    norm = _normalize_exhibition_display_text(value)
-    if not norm:
-        return set()
-    out: set[str] = set()
-    for tok in norm.split():
-        if tok.isdigit():
-            out.add(tok)
-            continue
-        if len(tok) < 4:
-            continue
-        if tok in _EXHIBITION_DISPLAY_LOCATION_STOPWORDS:
-            continue
-        out.add(tok)
-    return out
-
-
-def _exhibitions_display_locations_match(left: Event, right: Event) -> bool:
-    loc_left = _normalize_exhibition_display_location(left)
-    loc_right = _normalize_exhibition_display_location(right)
-    name_left = _normalize_exhibition_display_text(getattr(left, "location_name", None))
-    name_right = _normalize_exhibition_display_text(getattr(right, "location_name", None))
-    if not loc_left or not loc_right:
-        return False
-    if loc_left == loc_right:
-        return True
-    if loc_left in loc_right or loc_right in loc_left:
-        return True
-    if name_left and name_right and (name_left in name_right or name_right in name_left):
-        return True
-    overlap = _exhibition_display_location_tokens(loc_left) & _exhibition_display_location_tokens(loc_right)
-    return len(overlap) >= 2
-
-
-def _exhibition_display_score(event: Event) -> tuple[int, int]:
-    score = 0
-    if (getattr(event, "telegraph_url", None) or "").strip():
-        score += 4
-    if (getattr(event, "location_address", None) or "").strip():
-        score += 3
-    score += min(len(_normalize_exhibition_display_location(event)), 60) // 15
-    if not str(getattr(event, "time", None) or "").strip():
-        score += 1
-    event_id = int(getattr(event, "id", 0) or 0)
-    return score, -event_id
-
-
-def dedupe_exhibitions_for_display(events: Sequence[Event]) -> list[Event]:
-    grouped: dict[tuple[str, str, str], list[Event]] = {}
-    for event in events:
-        key = (
-            str(getattr(event, "city", None) or "").strip().casefold(),
-            _normalize_exhibition_display_text(getattr(event, "title", None)),
-            str(getattr(event, "end_date", None) or "").strip(),
-        )
-        grouped.setdefault(key, []).append(event)
-
-    deduped: list[Event] = []
-    for key in sorted(grouped.keys()):
-        clusters: list[list[Event]] = []
-        for event in grouped[key]:
-            placed = False
-            for cluster in clusters:
-                if any(_exhibitions_display_locations_match(event, existing) for existing in cluster):
-                    cluster.append(event)
-                    placed = True
-                    break
-            if not placed:
-                clusters.append([event])
-        for cluster in clusters:
-            deduped.append(max(cluster, key=_exhibition_display_score))
-
-    deduped.sort(
-        key=lambda event: (
-            str(getattr(event, "date", None) or ""),
-            _normalize_exhibition_display_text(getattr(event, "title", None)),
-            int(getattr(event, "id", 0) or 0),
-        )
-    )
-    return deduped
-
-
 def add_day_sections(
     days: Iterable[date],
     by_day: dict[date, list[Event]],
@@ -673,66 +532,6 @@ async def get_month_data(db: Database, month: str, *, fallback: bool = True):
     return events, exhibitions
 
 
-def month_exhibitions_page_threshold() -> int:
-    raw = (os.getenv("MONTH_EXHIBITIONS_PAGE_THRESHOLD") or "").strip()
-    if raw:
-        try:
-            value = int(raw)
-            if value >= 0:
-                return value
-        except Exception:
-            pass
-    return 10
-
-
-def should_split_month_exhibitions_page(exhibitions: Sequence[Event] | None) -> bool:
-    return len(list(exhibitions or [])) > month_exhibitions_page_threshold()
-
-
-def _month_exhibitions_link_text(month: str) -> str:
-    month_num = int(month.split("-")[1])
-    return f"Постоянные выставки {MONTHS_GEN[month_num]}"
-
-
-async def build_month_exhibitions_page_content(
-    db: Database,
-    month: str,
-    exhibitions: list[Event] | None = None,
-) -> tuple[str, list, int]:
-    if exhibitions is None:
-        _, exhibitions = await get_month_data(db, month)
-
-    async with span("db"):
-        async with db.get_session() as session:
-            res_f = await session.execute(select(Festival))
-            fest_map = {f.name.casefold(): f for f in res_f.scalars().all()}
-
-    for e in exhibitions:
-        fest = fest_map.get((e.festival or "").casefold())
-        await ensure_event_telegraph_link(e, fest, db)
-    exhibitions = dedupe_exhibitions_for_display(exhibitions)
-
-    month_num = int(month.split("-")[1])
-    year = month.split("-")[0]
-    title = f"Постоянные выставки {MONTHS_GEN[month_num]} {year}: полный анонс"
-    content: list[dict] = [
-        {
-            "tag": "p",
-            "children": [
-                f"На этой странице собраны все постоянные выставки в {month_name_prepositional(month)}. "
-                "Под каждой выставкой указана подтверждённая дата окончания в формате "
-                f"«по {MONTHS_GEN[month_num]}» и площадка показа.",
-            ],
-        }
-    ]
-    content.extend(telegraph_br())
-
-    for ev in exhibitions:
-        content.extend(exhibition_compact_to_nodes(ev))
-
-    return title, content, rough_size(content)
-
-
 async def build_month_page_content(
     db: Database,
     month: str,
@@ -746,7 +545,6 @@ async def build_month_page_content(
     page_number: int = 1,
     first_date: date | None = None,
     last_date: date | None = None,
-    exhibitions_page_url: str | None = None,
 ) -> tuple[str, list, int]:
     if events is None or exhibitions is None:
         events, exhibitions = await get_month_data(db, month)
@@ -802,7 +600,6 @@ async def build_month_page_content(
             page_number,
             first_date,
             last_date,
-            exhibitions_page_url,
         )
     logging.info("build_month_page_content size=%d page=%d", size, page_number)
     return title, content, size
@@ -822,7 +619,6 @@ def _build_month_page_content_sync(
     page_number: int = 1,
     first_date: date | None = None,
     last_date: date | None = None,
-    exhibitions_page_url: str | None = None,
 ) -> tuple[str, list, int]:
     # Ensure festivals have full Telegraph URLs for easy linking
     for fest in fest_map.values():
@@ -842,7 +638,6 @@ def _build_month_page_content_sync(
     exhibitions = [
         e for e in exhibitions if e.end_date and e.date <= today_str and e.end_date >= today_str
     ]
-    exhibitions = dedupe_exhibitions_for_display(exhibitions)
 
     by_day: dict[date, list[Event]] = {}
     for e in events:
@@ -917,28 +712,6 @@ def _build_month_page_content_sync(
                 break
             add_many(exhibition_to_nodes(ev))
         add_many([PERM_END])
-    elif exhibitions_page_url and not exceeded:
-        add_many(telegraph_br())
-        add(
-            {
-                "tag": "h3",
-                "children": [
-                    {
-                        "tag": "a",
-                        "attrs": {"href": exhibitions_page_url},
-                        "children": [_month_exhibitions_link_text(month)],
-                    }
-                ],
-            }
-        )
-        add(
-            {
-                "tag": "p",
-                "children": [
-                    "Все постоянные выставки месяца собраны на отдельной странице с периодами показа.",
-                ],
-            }
-        )
 
 
     if continuation_url and not exceeded:
@@ -994,69 +767,6 @@ def _build_month_page_content_sync(
         else:
             title = f"{test_prefix}События Калининграда в {month_name_prepositional(month)} (продолжение)"
     return title, content, size
-
-
-async def sync_month_exhibitions_page(
-    db: Database,
-    tg: Telegraph,
-    month: str,
-    exhibitions: list[Event],
-) -> str | None:
-    if not should_split_month_exhibitions_page(exhibitions):
-        async with db.get_session() as session:
-            page = await session.get(MonthExhibitionsPage, month)
-            if page is not None:
-                await session.delete(page)
-                await session.commit()
-        return None
-
-    from telegraph.utils import nodes_to_html
-
-    title, content, _ = await build_month_exhibitions_page_content(
-        db,
-        month,
-        exhibitions,
-    )
-    html_content = unescape_html_comments(nodes_to_html(content))
-    html_content = apply_footer_link(html_content)
-    content_hash_value = content_hash(html_content)
-
-    async with db.get_session() as session:
-        page = await session.get(MonthExhibitionsPage, month)
-        if page and page.content_hash == content_hash_value and page.url:
-            return page.url
-        if page is None or not page.path:
-            data = await telegraph_create_page(
-                tg,
-                title=title,
-                html_content=html_content,
-                caller="month_exhibitions_build",
-            )
-            url = normalize_telegraph_url(data.get("url"))
-            path = data.get("path")
-            if page is None:
-                page = MonthExhibitionsPage(
-                    month=month,
-                    url=url,
-                    path=path,
-                    content_hash=content_hash_value,
-                )
-                session.add(page)
-            else:
-                page.url = url
-                page.path = path
-                page.content_hash = content_hash_value
-        else:
-            await telegraph_edit_page(
-                tg,
-                page.path,
-                title=title,
-                html_content=html_content,
-                caller="month_exhibitions_build",
-            )
-            page.content_hash = content_hash_value
-        await session.commit()
-        return page.url
 
 
 async def _sync_month_page_inner(
@@ -1177,23 +887,12 @@ async def _sync_month_page_inner(
             logging.info("Falling back to full rebuild for %s", month)
 
         events, exhibitions = await get_month_data(db, month)
-        exhibitions_page_url = await sync_month_exhibitions_page(db, tg, month, exhibitions)
-        page_exhibitions = [] if exhibitions_page_url else exhibitions
-        nav_block = ""
-        if not (update_links and not page.path):
-            nav_block = await build_month_nav_block(db, month)
+        nav_block = await build_month_nav_block(db, month)
 
         from telegraph.utils import nodes_to_html
 
-        build_kwargs = {}
-        if exhibitions_page_url:
-            build_kwargs["exhibitions_page_url"] = exhibitions_page_url
         title, content, _ = await build_month_page_content(
-            db,
-            month,
-            events,
-            page_exhibitions,
-            **build_kwargs,
+            db, month, events, exhibitions
         )
         html_full = unescape_html_comments(nodes_to_html(content))
         html_full = ensure_footer_nav_with_hr(html_full, nav_block, month=month, page=1)
@@ -1251,14 +950,7 @@ async def _sync_month_page_inner(
                 )
                 had_path = bool(page.path)
                 await split_month_until_ok(
-                    db,
-                    tg,
-                    page,
-                    month,
-                    events,
-                    page_exhibitions,
-                    nav_block,
-                    exhibitions_page_url=exhibitions_page_url,
+                    db, tg, page, month, events, exhibitions, nav_block
                 )
                 if not had_path and page.path:
                     created = True
@@ -1286,14 +978,7 @@ async def _sync_month_page_inner(
                 logging.warning("Month page %s too big, splitting", month)
                 had_path = bool(page.path)
                 await split_month_until_ok(
-                    db,
-                    tg,
-                    page,
-                    month,
-                    events,
-                    page_exhibitions,
-                    nav_block,
-                    exhibitions_page_url=exhibitions_page_url,
+                    db, tg, page, month, events, exhibitions, nav_block
                 )
                 if not had_path and page.path:
                     created = True
@@ -1345,9 +1030,8 @@ async def sync_month_page(
         needs_nav = await _sync_month_page_inner(
             db, month, update_links, force, progress
         )
-    if needs_nav and not update_links:
+    if needs_nav:
         await refresh_month_nav(db)
-    return needs_nav
 
 
 def week_start_for_date(d: date) -> date:
@@ -2593,6 +2277,11 @@ async def build_festival_page_content(db: Database, fest: Festival) -> tuple[str
             if _is_preview_friendly(p3d):
                 safe_cover = p3d
                 break
+            for raw in list(getattr(ev, "photo_urls", []) or []):
+                u = str(raw or "").strip()
+                if _is_preview_friendly(u):
+                    safe_cover = u
+                    break
             if safe_cover:
                 break
     if not safe_cover:
@@ -5294,9 +4983,6 @@ async def init_db_and_scheduler(
     app["video_tomorrow_watchdog"] = asyncio.create_task(
         _video_tomorrow_watchdog_loop(db, bot)
     )
-    app["critical_scheduler_watchdog"] = asyncio.create_task(
-        _critical_scheduler_watchdog_loop(db, bot)
-    )
     app["add_event_worker"] = asyncio.create_task(add_event_queue_worker(db, bot))
     app["add_event_watch"] = asyncio.create_task(_watch_add_event_worker(app, db, bot))
     if (os.getenv("ENABLE_JOB_OUTBOX_WORKER") or "1").strip().lower() in {"1", "true", "yes"}:
@@ -5345,15 +5031,6 @@ def _video_tomorrow_watchdog_interval_sec() -> float:
     return max(15.0, value)
 
 
-def _critical_scheduler_watchdog_interval_sec() -> float:
-    raw = (os.getenv("CRITICAL_SCHED_WATCHDOG_INTERVAL_SECONDS") or "").strip()
-    try:
-        value = float(raw) if raw else 60.0
-    except ValueError:
-        value = 60.0
-    return max(15.0, value)
-
-
 def _runtime_health_state(app: Mapping[str, Any]) -> dict[str, Any]:
     existing = app.get("runtime_health")
     if isinstance(existing, dict):
@@ -5367,7 +5044,9 @@ def _runtime_health_state(app: Mapping[str, Any]) -> dict[str, Any]:
     return state
 
 
-def _mark_runtime_health_tick(app: Mapping[str, Any], *, ready: bool | None = None) -> dict[str, Any]:
+def _mark_runtime_health_tick(
+    app: Mapping[str, Any], *, ready: bool | None = None
+) -> dict[str, Any]:
     state = _runtime_health_state(app)
     state["last_tick_monotonic"] = _time.monotonic()
     if ready is not None:
@@ -5391,18 +5070,6 @@ async def _video_tomorrow_watchdog_loop(db: Database, bot: Bot) -> None:
             raise
         except Exception:
             logging.exception("video_tomorrow_watchdog tick failed")
-        await asyncio.sleep(interval)
-
-
-async def _critical_scheduler_watchdog_loop(db: Database, bot: Bot) -> None:
-    interval = _critical_scheduler_watchdog_interval_sec()
-    while True:
-        try:
-            await scheduler_critical_watchdog_tick(db, bot)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logging.exception("critical_scheduler_watchdog tick failed")
         await asyncio.sleep(interval)
 
 
@@ -5436,16 +5103,6 @@ def _runtime_task_status(task: object | None) -> str:
     return "finished"
 
 
-def _video_story_publish_health_status() -> str:
-    try:
-        from video_announce.story_publish import story_publish_health_status
-
-        status = str(story_publish_health_status() or "").strip()
-        return status or "unknown"
-    except Exception as exc:
-        return f"exception:{type(exc).__name__}"
-
-
 async def _runtime_health_report(
     app: Mapping[str, Any],
     db: Database,
@@ -5471,8 +5128,6 @@ async def _runtime_health_report(
     required_tasks = ["daily_scheduler", "add_event_watch"]
     if scheduler_video_tomorrow_watchdog_enabled():
         required_tasks.append("video_tomorrow_watchdog")
-    if scheduler_critical_watchdog_enabled():
-        required_tasks.append("critical_scheduler_watchdog")
     if "job_outbox_worker" in app:
         required_tasks.append("job_outbox_worker")
     for name in required_tasks:
@@ -5515,13 +5170,6 @@ async def _runtime_health_report(
             issues.append(f"apscheduler:{scheduler_status}")
         if video_tomorrow_status not in {"ok", "disabled"}:
             issues.append(f"video_tomorrow_job:{video_tomorrow_status}")
-        for critical_kind in ("tg_monitoring", "vk_auto_import"):
-            critical_status = str(scheduler_health.get(critical_kind) or "").strip()
-            if critical_status and critical_status not in {"ok", "disabled"}:
-                issues.append(f"{critical_kind}_job:{critical_status}")
-    video_story_publish_status = _video_story_publish_health_status()
-    if ready and video_story_publish_status not in {"ok", "disabled_optional"}:
-        issues.append(f"video_story_publish:{video_story_publish_status}")
 
     payload = {
         "ok": not issues,
@@ -5531,7 +5179,6 @@ async def _runtime_health_report(
         "db": db_status,
         "bot_session_closed": session_closed,
         "scheduler": scheduler_health,
-        "video_story_publish": video_story_publish_status,
         "tasks": tasks,
         "issues": issues,
     }
@@ -5748,7 +5395,6 @@ async def build_exhibitions_message(
             .order_by(Event.date)
         )
         events = result.scalars().all()
-    events = dedupe_exhibitions_for_display(events)
 
     lines = []
     for e in events:
@@ -11248,7 +10894,6 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
     counts = {r[0]: r[1] for r in rows}
     lines = [
         f"pending: {counts.get('pending', 0)}",
-        f"deferred: {counts.get('deferred', 0)}",
         f"locked: {counts.get('locked', 0)}",
         f"skipped: {counts.get('skipped', 0)}",
         f"failed: {counts.get('failed', 0)}",
@@ -16823,7 +16468,6 @@ async def build_source_page_content(
 
     if html_text:
         html_text = strip_title(html_text)
-        html_text = unescape_public_text_escapes(html_text) or html_text
         html_text = html_text.replace("\r\n", "\n")
         html_text = sanitize_telegram_html(html_text)
         # Replace internal <hr> tags with visual spacers to prevent apply_month_nav
@@ -16835,7 +16479,6 @@ async def build_source_page_content(
         paragraphs = _editor_html_blocks(html_text)
     else:
         clean_text = strip_title(text)
-        clean_text = unescape_public_text_escapes(clean_text) or clean_text
         tg_emoji_cleaned = len(emoji_pat.findall(clean_text))
         tg_spoiler_unwrapped = len(spoiler_pat.findall(clean_text))
         # Custom Telegram emoji (<tg-emoji>) is not portable to Telegraph; strip it fully.
@@ -16843,6 +16486,12 @@ async def build_source_page_content(
         clean_text = spoiler_pat.sub(r"\1", clean_text)
         for k, v in CUSTOM_EMOJI_MAP.items():
             clean_text = clean_text.replace(k, v)
+
+        # Some LLM outputs (or JSON-ish source snippets) may contain backslash-escaped
+        # quotes like `\"Сигнал\"`, which look broken on Telegraph. This is a
+        # display-only cleanup (does not change meaning).
+        if "\\\"" in clean_text:
+            clean_text = clean_text.replace("\\\\\"", "\"").replace("\\\"", "\"")
 
         # Event Telegraph pages use Smart Update outputs. As a final safety-net, strip
         # low-signal noise that sometimes leaks from Telegram multi-event posts.
@@ -17374,14 +17023,13 @@ def create_app() -> web.Application:
     dp.include_router(special_router)  # must be after db init
     from handlers.admin_assist_cmd import admin_assist_router
     dp.include_router(admin_assist_router)
-    from handlers.popular_posts_cmd import popular_posts_router
-    dp.include_router(popular_posts_router)
     from handlers.recent_imports_cmd import recent_imports_router
     dp.include_router(recent_imports_router)
+    from handlers.popular_posts_cmd import popular_posts_router
+    dp.include_router(popular_posts_router)
     from handlers.telegraph_cache_cmd import telegraph_cache_router
     dp.include_router(telegraph_cache_router)
     dp.include_router(tg_monitor_router)
-    dp.include_router(guide_excursions_router)
     import video_announce.handlers as video_handlers
     import preview_3d.handlers as preview_3d_handlers
 
@@ -18308,10 +17956,6 @@ def create_app() -> web.Application:
             app["video_tomorrow_watchdog"].cancel()
             with contextlib.suppress(Exception):
                 await app["video_tomorrow_watchdog"]
-        if "critical_scheduler_watchdog" in app:
-            app["critical_scheduler_watchdog"].cancel()
-            with contextlib.suppress(Exception):
-                await app["critical_scheduler_watchdog"]
         scheduler_cleanup()
         await close_vk_session()
         close_supabase_client()
@@ -18706,10 +18350,6 @@ async def run_dev_mode():
             app["video_tomorrow_watchdog"].cancel()
             with contextlib.suppress(Exception):
                 await app["video_tomorrow_watchdog"]
-        if "critical_scheduler_watchdog" in app:
-            app["critical_scheduler_watchdog"].cancel()
-            with contextlib.suppress(Exception):
-                await app["critical_scheduler_watchdog"]
         scheduler_cleanup()
         await close_vk_session()
         close_supabase_client()

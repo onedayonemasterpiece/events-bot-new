@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable
 
 from aiogram import types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile
 from sqlalchemy import select
 
@@ -296,6 +297,14 @@ async def update_status_message(
                 )
                 remember_status_message(session_obj.id, chat_id, message_id)
                 return (chat_id, message_id)
+        except TelegramBadRequest as exc:
+            if "message is not modified" in str(exc).lower():
+                remember_status_message(session_obj.id, chat_id, message_id)
+                return (chat_id, message_id) if chat_id is not None and message_id is not None else stored
+            logger.exception(
+                "video_announce: failed to update status message session_id=%s",
+                session_obj.id,
+            )
         except Exception:
             logger.exception(
                 "video_announce: failed to update status message session_id=%s",
@@ -564,47 +573,6 @@ async def _cleanup_dataset(client: KaggleClient, dataset_slug: str | None) -> No
     except Exception:
         logger.exception("video_announce: failed to delete dataset %s", dataset_slug)
 
-
-async def _fail_binding_superseded(
-    db: Database,
-    session_id: int,
-    *,
-    bot,
-    status: dict | None,
-    notify_chat_id: int,
-    status_chat_id: int | None,
-    status_message_id: int | None,
-    dataset_slug: str | None,
-    client: KaggleClient,
-    actual_sources: list[str],
-) -> VideoAnnounceSession | None:
-    session_obj = await _update_status(
-        db,
-        session_id,
-        status=VideoAnnounceSessionStatus.FAILED,
-        error="kernel superseded before output download",
-    )
-    if not session_obj:
-        return None
-    await update_status_message(
-        bot,
-        session_obj,
-        status,
-        chat_id=status_chat_id,
-        message_id=status_message_id,
-        allow_send=True,
-    )
-    details = f" (actual={actual_sources})" if actual_sources else ""
-    await bot.send_message(
-        notify_chat_id,
-        (
-            f"❌ Сессия #{session_obj.id}: kernel больше не привязан к ожидаемому "
-            f"dataset {dataset_slug or '—'}{details}"
-        ),
-    )
-    await _cleanup_dataset(client, dataset_slug)
-    return session_obj
-
 async def run_kernel_poller(
     db: Database,
     client: KaggleClient,
@@ -804,68 +772,6 @@ async def run_kernel_poller(
         )
         await _cleanup_dataset(client, dataset_slug)
         return
-
-    if dataset_slug:
-        try:
-            binding_ok, binding_meta = await asyncio.to_thread(
-                client.kernel_has_dataset_sources,
-                kernel_ref,
-                [dataset_slug],
-            )
-        except Exception:
-            logger.exception(
-                "video_announce: kernel dataset binding check failed session=%s kernel=%s dataset=%s",
-                session_obj.id,
-                kernel_ref,
-                dataset_slug,
-            )
-            session_obj = await _update_status(
-                db,
-                session_obj.id,
-                status=VideoAnnounceSessionStatus.FAILED,
-                error="kernel dataset binding check failed",
-            )
-            if session_obj:
-                await update_status_message(
-                    bot,
-                    session_obj,
-                    status,
-                    chat_id=status_chat_id,
-                    message_id=status_message_id,
-                    allow_send=True,
-                )
-                await bot.send_message(
-                    notify_chat_id,
-                    (
-                        f"❌ Сессия #{session_obj.id}: не удалось подтвердить binding kernel "
-                        f"к dataset {dataset_slug}"
-                    ),
-                )
-                await _cleanup_dataset(client, dataset_slug)
-            return
-
-        actual_sources = list((binding_meta or {}).get("dataset_sources") or [])
-        if not binding_ok:
-            logger.warning(
-                "video_announce: kernel binding superseded session=%s kernel=%s expected=%s actual=%s",
-                session_obj.id,
-                kernel_ref,
-                dataset_slug,
-                actual_sources,
-            )
-            await _fail_binding_superseded(
-                db,
-                session_obj.id,
-                bot=bot,
-                status=status,
-                notify_chat_id=notify_chat_id,
-                status_chat_id=status_chat_id,
-                status_message_id=status_message_id,
-                dataset_slug=dataset_slug,
-                client=client,
-                actual_sources=actual_sources,
-            )
-            return
 
     tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
     output_dir = tmp_dir / f"videoannounce-{session_obj.id}"

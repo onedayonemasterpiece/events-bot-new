@@ -3,11 +3,17 @@ from __future__ import annotations
 import json
 import io
 import os
+import re
 import shutil
 import subprocess
+import sys
 import zipfile
+import hashlib
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
@@ -27,6 +33,10 @@ def resolve_root() -> Path:
 
 ROOT = resolve_root()
 ARTIFACTS_ROOT = Path(os.environ.get("CHERRYFLASH_ARTIFACTS_ROOT", str(ROOT / "artifacts"))).expanduser()
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from video_announce.cherryflash_text import event_count_label
 
 
 def first_existing_path(*candidates: Path) -> Path:
@@ -50,8 +60,12 @@ def resolve_blender() -> Path:
 
 
 BLENDER = resolve_blender()
-BLENDER_SCRIPT = ROOT / "kaggle" / "CherryFlash" / "mobilefeed_intro_still.py"
+BLENDER_SCRIPT = first_existing_path(
+    ROOT / "mobilefeed_intro_still.py",
+    ROOT / "kaggle" / "CherryFlash" / "mobilefeed_intro_still.py",
+)
 PHONE_MODEL = first_existing_path(
+    ROOT / "assets" / "iphone_16_pro_max.glb",
     ROOT / "kaggle" / "CherryFlash" / "assets" / "iphone_16_pro_max.glb",
     ROOT / "docs" / "reference" / "iphone_16_pro_max.glb",
 )
@@ -72,20 +86,51 @@ SAFE_TOP = 204
 SAFE_SIDE = 84
 SAFE_BOTTOM = 260
 
-DRUK_SUPER = ROOT / "video_announce" / "assets" / "DrukCyr-Super.ttf"
-DRUK_BOLD = ROOT / "video_announce" / "assets" / "DrukCyr-Bold.ttf"
-AKROBAT_BLACK = ROOT / "video_announce" / "assets" / "Akrobat-Black.otf"
-AKROBAT_BOLD = ROOT / "video_announce" / "assets" / "Akrobat-Bold.otf"
-AKROBAT_REGULAR = ROOT / "video_announce" / "assets" / "Akrobat-Regular.otf"
+DRUK_SUPER = first_existing_path(
+    ROOT / "video_announce" / "assets" / "DrukCyr-Super.ttf",
+    ROOT.parent / "assets" / "DrukCyr-Super.ttf",
+    ROOT / "assets" / "DrukCyr-Super.ttf",
+)
+DRUK_BOLD = first_existing_path(
+    ROOT / "video_announce" / "assets" / "DrukCyr-Bold.ttf",
+    ROOT.parent / "assets" / "DrukCyr-Bold.ttf",
+    ROOT / "assets" / "DrukCyr-Bold.ttf",
+)
+AKROBAT_BLACK = first_existing_path(
+    ROOT / "video_announce" / "assets" / "Akrobat-Black.otf",
+    ROOT.parent / "assets" / "Akrobat-Black.otf",
+    ROOT / "assets" / "Akrobat-Black.otf",
+)
+AKROBAT_BOLD = first_existing_path(
+    ROOT / "video_announce" / "assets" / "Akrobat-Bold.otf",
+    ROOT.parent / "assets" / "Akrobat-Bold.otf",
+    ROOT / "assets" / "Akrobat-Bold.otf",
+)
+AKROBAT_REGULAR = first_existing_path(
+    ROOT / "video_announce" / "assets" / "Akrobat-Regular.otf",
+    ROOT.parent / "assets" / "Akrobat-Regular.otf",
+    ROOT / "assets" / "Akrobat-Regular.otf",
+)
 RO_ZNANIE_ZIP = first_existing_path(
+    ROOT / "assets" / "ro_znanie.zip",
     ROOT / "kaggle" / "CherryFlash" / "assets" / "ro_znanie.zip",
     ROOT / "docs" / "reference" / "шрифт РО Знание.zip",
 )
+RO_ZNANIE_FONT_DIR = first_existing_path(
+    ROOT / "assets" / "ro_znanie_fonts",
+    ROOT / "kaggle" / "CherryFlash" / "assets" / "ro_znanie_fonts",
+)
 FONT_CACHE_DIR = TEXTURE_DIR / "_font_cache"
+POSTER_CACHE_DIR = TEXTURE_DIR / "_poster_cache"
 
 POSTER_DIR = first_existing_path(
+    ROOT / "assets" / "posters",
     ROOT / "kaggle" / "CherryFlash" / "assets" / "posters",
     ROOT / "artifacts" / "codex" / "mobilefeed_posters" / "sparse_april",
+)
+SELECTION_MANIFEST_PATH = first_existing_path(
+    ROOT / "assets" / "cherryflash_selection.json",
+    ROOT / "kaggle" / "CherryFlash" / "assets" / "cherryflash_selection.json",
 )
 
 
@@ -96,10 +141,33 @@ class Poster:
     date: str
     city: str
     file_name: str
+    file_candidates: tuple[str, ...] = ()
+    time: str = ""
+    location_name: str = ""
 
     @property
     def image_path(self) -> Path:
-        return POSTER_DIR / self.file_name
+        candidates = list(self.file_candidates) or [self.file_name]
+        for candidate in candidates:
+            raw = str(candidate or "").strip()
+            if not raw:
+                continue
+            if raw.startswith("http://") or raw.startswith("https://"):
+                resolved = _download_runtime_poster(raw)
+                if resolved is not None:
+                    return resolved
+                continue
+            local_name = Path(raw).name
+            local_path = POSTER_DIR / local_name
+            if local_path.exists():
+                return local_path
+        fallback = POSTER_DIR / self.file_name
+        if fallback.exists():
+            return fallback
+        raise FileNotFoundError(
+            f"CherryFlash poster asset is missing event_id={self.event_id} "
+            f"file_name={self.file_name} candidates={candidates}"
+        )
 
 
 @dataclass(frozen=True)
@@ -125,46 +193,292 @@ def unique_in_order(values):
     return ordered
 
 
-POSTERS = {
-    3666: Poster(3666, "Встреча киноклуба «Декалог»", "2026-04-06", "Калининград", "3666.jpg"),
-    3616: Poster(3616, 'Кинолекторий "Знать и помнить": Штурм Кёнигсберга', "2026-04-07", "Черняховск", "3616.jpg"),
-    3664: Poster(3664, "Открытая встреча с директором Калининградского зоопарка", "2026-04-08", "Калининград", "3664.jpg"),
-    3565: Poster(3565, "Апрельский штурм", "2026-04-09", "Калининград", "3565.jpg"),
-    3292: Poster(3292, "Стендап-концерт Саши Малого", "2026-04-10", "Калининград", "3292.jpg"),
-    3670: Poster(3670, "Гуси-Лебеди", "2026-04-12", "Калининград", "3670.jpg"),
+def _download_runtime_poster(url: str) -> Path | None:
+    parsed = urlparse(url)
+    suffix = Path(parsed.path).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+        suffix = ".jpg"
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    cached = POSTER_CACHE_DIR / f"{digest}{suffix}"
+    if cached.exists():
+        return cached
+    POSTER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    req = Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+            ),
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+    )
+    try:
+        with urlopen(req, timeout=20) as resp:
+            data = resp.read()
+    except Exception:
+        return None
+    if not data:
+        return None
+    cached.write_bytes(data)
+    return cached
+
+
+MONTHS_NOMINATIVE = {
+    1: "ЯНВАРЬ",
+    2: "ФЕВРАЛЬ",
+    3: "МАРТ",
+    4: "АПРЕЛЬ",
+    5: "МАЙ",
+    6: "ИЮНЬ",
+    7: "ИЮЛЬ",
+    8: "АВГУСТ",
+    9: "СЕНТЯБРЬ",
+    10: "ОКТЯБРЬ",
+    11: "НОЯБРЬ",
+    12: "ДЕКАБРЬ",
 }
 
-RIBBON_ORDER = [3565, 3292, 3616, 3664, 3666, 3670]
-FOCUS_EVENT_ID = 3292
+
+def _fallback_posters() -> dict[int, Poster]:
+    return {
+        3666: Poster(
+            3666,
+            "Встреча киноклуба «Декалог»",
+            "2026-04-06",
+            "Калининград",
+            "3666.jpg",
+            time="19:30",
+            location_name="Бар Суспирия, Коперника 21, Калининград",
+        ),
+        3616: Poster(
+            3616,
+            'Кинолекторий "Знать и помнить": Штурм Кёнигсберга',
+            "2026-04-07",
+            "Черняховск",
+            "3616.jpg",
+            time="14:00",
+            location_name="Библиротека им. Лунина, Калинина 4, Черняховск",
+        ),
+        3664: Poster(
+            3664,
+            "Открытая встреча с директором Калининградского зоопарка",
+            "2026-04-08",
+            "Калининград",
+            "3664.jpg",
+            time="16:00",
+            location_name="Музей Мирового океана, наб. Петра Великого 1, Калининград",
+        ),
+        3565: Poster(
+            3565,
+            "Апрельский штурм",
+            "2026-04-09",
+            "Калининград",
+            "3565.jpg",
+            time="15:00",
+            location_name="Историко-художественный музей, Клиническая 21, Калининград",
+        ),
+        3292: Poster(
+            3292,
+            "Стендап-концерт Саши Малого",
+            "2026-04-10",
+            "Калининград",
+            "3292.jpg",
+            time="20:00",
+            location_name="Дом железнодорожников (ДКЖ), Железнодорожная 2, Калининград",
+        ),
+        3670: Poster(
+            3670,
+            "Гуси-Лебеди",
+            "2026-04-12",
+            "Калининград",
+            "3670.jpg",
+            time="12:00",
+            location_name="Театр кукол, Победы 1А, Калининград",
+        ),
+    }
+
+
+def _parse_iso_date(value: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except Exception:
+        return None
+
+
+def _month_period_copy(dates: list[date]) -> str:
+    months = unique_in_order(MONTHS_NOMINATIVE.get(item.month, "") for item in dates if item)
+    months = [item for item in months if item]
+    return " • ".join(months) if months else "АПРЕЛЬ"
+
+
+def _date_copy(dates: list[date]) -> str:
+    grouped: list[str] = []
+    current_month: int | None = None
+    current_days: list[str] = []
+    for item in dates:
+        if current_month is None:
+            current_month = item.month
+        if item.month != current_month:
+            if current_days:
+                grouped.append(" • ".join(current_days))
+            current_month = item.month
+            current_days = []
+        current_days.append(str(item.day))
+    if current_days:
+        grouped.append(" • ".join(current_days))
+    return " / ".join(grouped) if grouped else "6 • 7 • 8 • 9 • 10 • 12"
+
+
+def _type_cluster(items: list[dict]) -> str:
+    mapping = {
+        "концерт": "концерты",
+        "лекция": "лекции",
+        "спектакль": "театр",
+        "образование": "образование",
+        "экскурсия": "экскурсии",
+        "встреча": "встречи",
+        "кино": "кино",
+    }
+    labels: list[str] = []
+    for item in items:
+        raw = str(item.get("event_type") or "").strip().lower()
+        if not raw:
+            continue
+        label = mapping.get(raw, raw)
+        if label not in labels:
+            labels.append(label)
+        if len(labels) >= 4:
+            break
+    if not labels:
+        return "популярное сейчас"
+    return " • ".join(labels)
+
+
+def _default_variants(
+    *,
+    scene_count: int,
+    date_copy: str,
+    period_copy: str,
+    city_copy: str,
+    screen_top: str,
+    screen_bottom: str,
+) -> tuple[Variant, ...]:
+    return (
+        Variant(
+            slug="v1_choose_event",
+            title_lines=("ВЫБЕРИ", "СОБЫТИЕ"),
+            kicker="ПОПУЛЯРНОЕ",
+            date_copy=date_copy,
+            period_copy=period_copy,
+            city_copy=city_copy,
+            screen_top=screen_top,
+            screen_bottom=screen_bottom,
+        ),
+        Variant(
+            slug="v2_dont_miss",
+            title_lines=("ЧТО НЕ", "ПРОПУСТИТЬ"),
+            kicker="ПОПУЛЯРНОЕ",
+            date_copy=date_copy,
+            period_copy=period_copy,
+            city_copy=city_copy,
+            screen_top=screen_top,
+            screen_bottom=screen_bottom,
+        ),
+    )
+
+
+def _load_runtime_selection() -> tuple[dict[int, Poster], list[int], int, tuple[Variant, ...], dict]:
+    fallback_posters = _fallback_posters()
+    fallback_ribbon = [3565, 3292, 3616, 3664, 3666, 3670]
+    fallback_focus = 3292
+    fallback_scene_count = len(fallback_ribbon)
+    fallback_city_ui = " · ".join(
+        unique_in_order(fallback_posters[event_id].city for event_id in fallback_ribbon)
+    )
+    fallback_variants = _default_variants(
+        scene_count=fallback_scene_count,
+        date_copy="6 • 7 • 8 • 9 • 10 • 12",
+        period_copy="АПРЕЛЬ",
+        city_copy="КАЛИНИНГРАД / ЧЕРНЯХОВСК",
+        screen_top=f"{event_count_label(fallback_scene_count)}\nкино • лекции • встречи • экскурсии",
+        screen_bottom=fallback_city_ui,
+    )
+    if not SELECTION_MANIFEST_PATH.exists():
+        return fallback_posters, fallback_ribbon, fallback_focus, fallback_variants, {}
+
+    raw = json.loads(SELECTION_MANIFEST_PATH.read_text(encoding="utf-8"))
+    events = list(raw.get("events") or [])
+    posters: dict[int, Poster] = {}
+    for item in events:
+        try:
+            event_id = int(item["event_id"])
+        except Exception:
+            continue
+        poster_file = str(item.get("poster_file") or "").strip()
+        if not poster_file:
+            poster_file = f"{event_id}.jpg"
+        poster_candidates = item.get("poster_candidates") or []
+        if isinstance(poster_candidates, str):
+            poster_candidates = [poster_candidates]
+        cleaned_candidates = tuple(
+            str(candidate or "").strip()
+            for candidate in poster_candidates
+            if str(candidate or "").strip()
+        )
+        raw_date = str(item.get("date_iso") or item.get("date") or "").strip()
+        posters[event_id] = Poster(
+            event_id=event_id,
+            title=str(item.get("title") or "").strip() or f"event {event_id}",
+            date=raw_date,
+            city=str(item.get("city") or "").strip(),
+            file_name=Path(poster_file).name,
+            file_candidates=cleaned_candidates,
+            time=str(item.get("time") or "").strip(),
+            location_name=str(item.get("location_name") or "").strip(),
+        )
+    ribbon_order = [int(item) for item in list(raw.get("ribbon_order") or []) if int(item) in posters]
+    focus_event_id = int(raw.get("focus_event_id") or 0)
+    if not ribbon_order:
+        ribbon_order = list(fallback_ribbon)
+    if focus_event_id not in posters:
+        focus_event_id = ribbon_order[1] if len(ribbon_order) > 1 and ribbon_order[1] in posters else (
+            next(iter(posters)) if posters else fallback_focus
+        )
+    if not posters:
+        return fallback_posters, fallback_ribbon, fallback_focus, fallback_variants, {}
+
+    ordered_events = [posters[event_id] for event_id in ribbon_order if event_id in posters]
+    date_points = [item for item in (_parse_iso_date(poster.date) for poster in ordered_events) if item]
+    city_ui = " · ".join(unique_in_order(poster.city for poster in ordered_events if poster.city))
+    city_copy = " / ".join(unique_in_order(poster.city.upper() for poster in ordered_events if poster.city))
+    type_cluster = _type_cluster(events)
+    scene_count = len(ribbon_order)
+    variant_overrides = dict(raw.get("variant") or {})
+    variants = _default_variants(
+        scene_count=scene_count,
+        date_copy=str(variant_overrides.get("date_copy") or _date_copy(date_points)),
+        period_copy=str(variant_overrides.get("period_copy") or _month_period_copy(date_points)),
+        city_copy=str(variant_overrides.get("city_copy") or city_copy or "КАЛИНИНГРАД"),
+        screen_top=str(
+            variant_overrides.get("screen_top")
+            or f"{event_count_label(scene_count)}\n{type_cluster}"
+        ),
+        screen_bottom=str(variant_overrides.get("screen_bottom") or city_ui or "Калининград"),
+    )
+    return posters, ribbon_order, focus_event_id, variants, raw
+
+
+POSTERS, RIBBON_ORDER, FOCUS_EVENT_ID, VARIANTS, SELECTION_MANIFEST = _load_runtime_selection()
 SCENE_COUNT = len(RIBBON_ORDER)
 CITY_CLUSTER = " • ".join(unique_in_order(POSTERS[event_id].city.upper() for event_id in RIBBON_ORDER))
 CITY_CLUSTER_UI = " · ".join(unique_in_order(POSTERS[event_id].city for event_id in RIBBON_ORDER))
-SCREEN_PERIOD_CLUSTER = "Апрель"
-SCREEN_TYPE_CLUSTER = "кино • лекции • встречи • экскурсии"
-SCREEN_TOP_COPY = f"{SCENE_COUNT} событий\n{SCREEN_TYPE_CLUSTER}"
-
-VARIANTS = (
-    Variant(
-        slug="v1_choose_event",
-        title_lines=("ВЫБЕРИ", "СОБЫТИЕ"),
-        kicker="ПОПУЛЯРНОЕ",
-        date_copy="6 • 7 • 8 • 9 • 10 • 12",
-        period_copy="АПРЕЛЬ",
-        city_copy="КАЛИНИНГРАД / ЧЕРНЯХОВСК",
-        screen_top=SCREEN_TOP_COPY,
-        screen_bottom=CITY_CLUSTER_UI,
-    ),
-    Variant(
-        slug="v2_dont_miss",
-        title_lines=("ЧТО НЕ", "ПРОПУСТИТЬ"),
-        kicker="ПОПУЛЯРНОЕ",
-        date_copy="6 • 7 • 8 • 9 • 10 • 12",
-        period_copy="АПРЕЛЬ",
-        city_copy="КАЛИНИНГРАД / ЧЕРНЯХОВСК",
-        screen_top=SCREEN_TOP_COPY,
-        screen_bottom=CITY_CLUSTER_UI,
-    ),
-)
+SCREEN_PERIOD_CLUSTER = VARIANTS[0].period_copy
+SCREEN_TYPE_CLUSTER = VARIANTS[0].screen_top.split("\n", 1)[1] if "\n" in VARIANTS[0].screen_top else ""
+SCREEN_TOP_COPY = VARIANTS[0].screen_top
 
 
 def font(path: Path, size: int) -> ImageFont.FreeTypeFont:
@@ -186,6 +500,19 @@ def ensure_ro_znanie_fonts() -> tuple[Path, Path, Path, Path, Path, Path]:
     bold = FONT_CACHE_DIR / "Cygre-Bold.ttf"
     extra_bold = FONT_CACHE_DIR / "Cygre-ExtraBold.ttf"
     if all(path.exists() for path in (regular, book, medium, semibold, bold, extra_bold)):
+        return regular, book, medium, semibold, bold, extra_bold
+    extracted_mapping = {
+        RO_ZNANIE_FONT_DIR / "Cygre-Regular.ttf": regular,
+        RO_ZNANIE_FONT_DIR / "Cygre-Book.ttf": book,
+        RO_ZNANIE_FONT_DIR / "Cygre-Medium.ttf": medium,
+        RO_ZNANIE_FONT_DIR / "Cygre-SemiBold.ttf": semibold,
+        RO_ZNANIE_FONT_DIR / "Cygre-Bold.ttf": bold,
+        RO_ZNANIE_FONT_DIR / "Cygre-ExtraBold.ttf": extra_bold,
+    }
+    if all(src.exists() for src in extracted_mapping):
+        for src, dest in extracted_mapping.items():
+            if not dest.exists():
+                dest.write_bytes(src.read_bytes())
         return regular, book, medium, semibold, bold, extra_bold
     if not RO_ZNANIE_ZIP.exists():
         return AKROBAT_REGULAR, AKROBAT_REGULAR, AKROBAT_BOLD, AKROBAT_BOLD, AKROBAT_BLACK, AKROBAT_BLACK
@@ -387,26 +714,26 @@ def make_screen_label_texture(text: str, out_path: Path, *, position: str):
 
     if position == "top":
         if len(lines) <= 1:
-            label_font = fit_font(text, CYGRE_SEMIBOLD, s(122), s(84), w - s(148))
+            label_font = fit_font(text, CYGRE_BOLD, s(130), s(92), w - s(156))
             draw.rounded_rectangle((s(26), s(28), s(54), s(56)), radius=s(14), fill=accent)
             draw.text((s(74), 0), text, font=label_font, fill=ink)
         else:
             line_1 = lines[0]
             line_2 = lines[1]
             draw.rounded_rectangle((s(26), s(28), s(54), s(56)), radius=s(14), fill=accent)
-            count_font = fit_font(line_1, CYGRE_SEMIBOLD, s(118), s(80), w - s(170))
-            types_font = fit_font(line_2, CYGRE_BOOK, s(42), s(28), w - s(170))
+            count_font = fit_font(line_1, CYGRE_BOLD, s(128), s(90), w - s(184))
+            types_font = fit_font(line_2, CYGRE_SEMIBOLD, s(50), s(34), w - s(184))
             draw.text((s(74), 0), line_1, font=count_font, fill=ink)
             line_1_h = text_size(draw, line_1, count_font)[1]
-            draw.text((s(74), max(s(6), s(2) + line_1_h)), line_2, font=types_font, fill=muted)
+            draw.text((s(74), max(s(8), s(4) + line_1_h)), line_2, font=types_font, fill=muted)
     else:
         if len(text) <= 22:
-            size = 88
+            size = 96
         elif len(text) <= 34:
-            size = 74
+            size = 82
         else:
-            size = 62
-        label_font = fit_font(text, CYGRE_BOOK, s(size), s(42), w - s(110))
+            size = 70
+        label_font = fit_font(text, CYGRE_BOLD, s(size), s(48), w - s(110))
         draw.rounded_rectangle((s(18), s(22), s(94), s(34)), radius=s(6), fill=accent)
         draw.text((s(18), s(42)), text, font=label_font, fill=ink)
     image.save(out_path)
@@ -612,13 +939,14 @@ def make_index(paths: list[Path]):
 
 
 def write_manifest(atlas_meta: dict):
-    out = OUT_DIR / "selection_manifest_2026-04-06.md"
+    source_db = str(SELECTION_MANIFEST.get("db_snapshot") or "runtime payload")
+    out = OUT_DIR / f"selection_manifest_{date.today().isoformat()}.md"
     lines = [
         "# MobileFeed Intro Real Selection",
         "",
-        "- DB: `/workspaces/events-bot-new/artifacts/db/db_prod_snapshot_2026-04-06_114841.sqlite`",
-        "- Payload topology: `sparse_same_month`",
-        "- Date copy: `6 • 7 • 8 • 9 • 10 • 12` / `АПРЕЛЬ`",
+        f"- DB / source: `{source_db}`",
+        f"- Payload topology: `{SELECTION_MANIFEST.get('date_topology') or 'runtime'}`",
+        f"- Date copy: `{VARIANTS[0].date_copy}` / `{VARIANTS[0].period_copy}`",
         "- Ribbon order is art-directed but uses only real selected events.",
         f"- Focus / handoff poster: `{FOCUS_EVENT_ID}`",
         "",

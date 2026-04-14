@@ -558,7 +558,7 @@ def setup_scene(cfg):
         if hasattr(scene.cycles, "use_denoising"):
             scene.cycles.use_denoising = bool(cfg.get("use_denoising", False))
         if hasattr(scene.cycles, "denoiser") and cfg.get("denoiser"):
-            scene.cycles.denoiser = str(cfg["denoiser"])
+            _try_set_enum(scene.cycles, "denoiser", str(cfg["denoiser"]))
         if hasattr(scene.cycles, "use_adaptive_sampling"):
             scene.cycles.use_adaptive_sampling = bool(cfg.get("use_adaptive_sampling", False))
         if hasattr(scene.cycles, "adaptive_threshold") and cfg.get("adaptive_threshold") is not None:
@@ -1228,6 +1228,35 @@ def _luxury_progress(t: float) -> float:
     )
 
 
+def _apply_timing_warp(t: float, control_points) -> float:
+    t = max(0.0, min(1.0, t))
+    if not control_points:
+        return t
+    points = []
+    for point in control_points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            continue
+        src = max(0.0, min(1.0, float(point[0])))
+        dst = max(0.0, min(1.0, float(point[1])))
+        points.append((src, dst))
+    if not points:
+        return t
+    points.sort(key=lambda item: item[0])
+    if points[0][0] > 0.0:
+        points.insert(0, (0.0, 0.0))
+    if points[-1][0] < 1.0:
+        points.append((1.0, 1.0))
+    for idx in range(len(points) - 1):
+        x0, y0 = points[idx]
+        x1, y1 = points[idx + 1]
+        if t <= x1:
+            if x1 <= x0:
+                return y1
+            u = (t - x0) / (x1 - x0)
+            return y0 + (y1 - y0) * u
+    return points[-1][1]
+
+
 def _bezier_point(values, t: float):
     current = [value.copy() if hasattr(value, "copy") else value for value in values]
     t = max(0.0, min(1.0, t))
@@ -1497,10 +1526,12 @@ def setup_handoff_animation(scene, cam, screen_obj, cfg):
     ]
 
     total_frames = max(1, frame_end - keyframe_start_frame)
+    timing_warp_points = anim.get("timing_warp_control_points") or []
 
     for frame_num in range(keyframe_start_frame, frame_end + 1):
         linear_u = (frame_num - keyframe_start_frame) / total_frames
-        move_u = _luxury_progress(linear_u)
+        warped_u = _apply_timing_warp(linear_u, timing_warp_points)
+        move_u = _luxury_progress(warped_u)
         lens_value = float(_bezier_point(lens_bezier, move_u))
         loc_value = _bezier_point(loc_bezier, move_u)
         # Keep a subtle residual height/side cleanup tied to the same progress

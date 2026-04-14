@@ -19,7 +19,7 @@ def _cell_source(index: int) -> str:
 def test_cherryflash_notebook_installs_shared_story_helper_dependencies():
     source = _cell_source(0)
 
-    assert "NOTEBOOK_VERSION = 'v11-crumple-shared-runtime-deps'" in source
+    assert "NOTEBOOK_VERSION = 'v12-thread-safe-story-preflight'" in source
     assert "'opencv-python'" in source
     assert "'requests'" in source
     assert "'telethon'" in source
@@ -31,3 +31,5 @@ def test_cherryflash_notebook_uses_common_story_publish_helper():
 
     assert "helper_path = source_folder / 'kaggle_common' / 'story_publish.py'" in source
     assert "from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle" in source
+    assert "thread = threading.Thread(target=_runner)" in source
+    assert "asyncio.get_running_loop()" in source
