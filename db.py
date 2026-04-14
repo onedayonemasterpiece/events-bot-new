@@ -1520,6 +1520,7 @@ class Database:
                     locked_at    TIMESTAMP,
                     imported_event_id INTEGER,
                     review_batch TEXT,
+                    attempts     INTEGER NOT NULL DEFAULT 0,
                     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -1529,6 +1530,7 @@ class Database:
             )
 
             await _add_column(conn, "vk_inbox", "event_ts_hint INTEGER")
+            await _add_column(conn, "vk_inbox", "attempts INTEGER NOT NULL DEFAULT 0")
 
             await conn.execute(
                 """

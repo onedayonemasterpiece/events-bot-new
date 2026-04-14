@@ -89,6 +89,38 @@ async def test_vk_actor_auto_no_fallback(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
+async def test_vk_actor_auto_fallbacks_blocked_user_shortlink_to_group(monkeypatch):
+    monkeypatch.setattr(main, "_vk_captcha_needed", False)
+    monkeypatch.setattr(main, "VK_ACTOR_MODE", "auto")
+    monkeypatch.setattr(main, "VK_TOKEN", "g")
+    monkeypatch.setenv("VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "_vk_user_token_bad", None)
+    monkeypatch.setattr(main, "BACKOFF_DELAYS", [0])
+
+    calls: list[str] = []
+
+    async def fake_http_call(name, method, url, timeout, data, **kwargs):
+        calls.append(data["access_token"])
+        if data["access_token"] == "u":
+            return DummyResp(
+                {
+                    "error": {
+                        "error_code": 8,
+                        "error_msg": "Invalid request: Application is blocked",
+                    }
+                }
+            )
+        return DummyResp({"response": {"short_url": "https://vk.cc/abcd"}})
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+
+    data = await main._vk_api("utils.getShortLink", {"url": "https://example.com"}, db=None, bot=None)
+
+    assert data["response"]["short_url"] == "https://vk.cc/abcd"
+    assert calls == ["u", "g"]
+
+
+@pytest.mark.asyncio
 async def test_vk_actor_no_retry_edit_time_expired(monkeypatch):
     monkeypatch.setattr(main, "_vk_captcha_needed", False)
     monkeypatch.setattr(main, "VK_ACTOR_MODE", "group")
@@ -128,4 +160,3 @@ def test_choose_vk_actor(monkeypatch):
     actors_afisha = main.choose_vk_actor(-2, "wall.post")
     assert [a.label for a in actors_afisha] == ["group:afisha", "user"]
     assert actors_afisha[0].token == "ga"
-

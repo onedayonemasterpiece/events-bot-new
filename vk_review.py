@@ -112,8 +112,11 @@ async def release_stale_locks(db: Database) -> int:
     """Public helper to unlock stale rows outside of review flow."""
 
     async with db.raw_conn() as conn:
-        count = await _unlock_stale(conn)
-        await conn.commit()
+        count = await _run_locked_write(
+            conn,
+            lambda: _unlock_stale(conn),
+            description="release_stale_locks",
+        )
     if count:
         logging.info("vk_review release_stale_locks count=%s", count)
     return count
@@ -129,28 +132,34 @@ async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> 
     """
 
     async with db.raw_conn() as conn:
-        if batch_id:
-            cursor = await conn.execute(
-                """
-                UPDATE vk_inbox
-                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
-                WHERE status='deferred'
-                  AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
-                  AND (review_batch IS NULL OR review_batch <> ?)
-                """,
-                (batch_id,),
-            )
-        else:
-            cursor = await conn.execute(
-                """
-                UPDATE vk_inbox
-                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
-                WHERE status='deferred'
-                  AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
-                """
-            )
-        count = cursor.rowcount
-        await conn.commit()
+        async def _update() -> int:
+            if batch_id:
+                cursor = await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                    WHERE status='deferred'
+                      AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                      AND (review_batch IS NULL OR review_batch <> ?)
+                    """,
+                    (batch_id,),
+                )
+            else:
+                cursor = await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                    WHERE status='deferred'
+                      AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                    """
+                )
+            return int(cursor.rowcount or 0)
+
+        count = await _run_locked_write(
+            conn,
+            _update,
+            description=f"release_due_deferred batch={batch_id or ''}",
+        )
     if count:
         logging.info("vk_review release_due_deferred count=%s batch=%s", count, batch_id or "")
     return int(count or 0)
@@ -165,15 +174,21 @@ async def release_all_locks(db: Database) -> int:
     """
 
     async with db.raw_conn() as conn:
-        cursor = await conn.execute(
-            """
-            UPDATE vk_inbox
-            SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
-            WHERE status='locked'
-            """
+        async def _unlock_all() -> int:
+            cursor = await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                WHERE status='locked'
+                """
+            )
+            return int(cursor.rowcount or 0)
+
+        count = await _run_locked_write(
+            conn,
+            _unlock_all,
+            description="release_all_locks",
         )
-        count = cursor.rowcount
-        await conn.commit()
     if count:
         logging.info("vk_review release_all_locks count=%s", count)
     return int(count or 0)
@@ -802,6 +817,81 @@ async def mark_deferred(
             conn,
             _update,
             description=f"mark_deferred inbox_id={inbox_id}",
+        )
+
+
+async def mark_rate_limited(
+    db: Database,
+    inbox_id: int,
+    *,
+    batch_id: str | None,
+    retry_after_sec: float | int | None = None,
+    max_attempts: int,
+) -> tuple[str, int]:
+    """Persist a rate-limit defer and return the new queue state with attempts."""
+
+    try:
+        delay_seconds = max(0, int(math.ceil(float(retry_after_sec or 0.0))))
+    except Exception:
+        delay_seconds = 0
+    modifier = f"+{delay_seconds} seconds" if delay_seconds > 0 else None
+    normalized_max_attempts = max(0, int(max_attempts))
+
+    async with db.raw_conn() as conn:
+        async def _update() -> tuple[str, int]:
+            cur = await conn.execute(
+                "SELECT COALESCE(attempts, 0) FROM vk_inbox WHERE id=?",
+                (inbox_id,),
+            )
+            row = await cur.fetchone()
+            next_attempts = int((row[0] if row else 0) or 0) + 1
+            terminal = normalized_max_attempts > 0 and next_attempts >= normalized_max_attempts
+            if terminal:
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='failed',
+                        locked_by=NULL,
+                        locked_at=NULL,
+                        review_batch=NULL,
+                        attempts=?
+                    WHERE id=?
+                    """,
+                    (next_attempts, inbox_id),
+                )
+                return "failed", next_attempts
+            if modifier:
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='deferred',
+                        locked_by=NULL,
+                        locked_at=datetime('now', ?),
+                        review_batch=?,
+                        attempts=?
+                    WHERE id=?
+                    """,
+                    (modifier, batch_id, next_attempts, inbox_id),
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='deferred',
+                        locked_by=NULL,
+                        locked_at=CURRENT_TIMESTAMP,
+                        review_batch=?,
+                        attempts=?
+                    WHERE id=?
+                    """,
+                    (batch_id, next_attempts, inbox_id),
+                )
+            return "deferred", next_attempts
+
+        return await _run_locked_write(
+            conn,
+            _update,
+            description=f"mark_rate_limited inbox_id={inbox_id}",
         )
 
 

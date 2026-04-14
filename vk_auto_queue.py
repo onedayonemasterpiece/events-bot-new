@@ -641,6 +641,15 @@ def _shorten_reason(value: str | None, *, limit: int = 220) -> str | None:
     return text[: limit - 1].rstrip() + "…"
 
 
+def _rate_limit_max_defers() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS") or "3").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 3
+    return max(0, min(value, 1000))
+
+
 def _render_progress_text(
     icon: str,
     *,
@@ -1939,23 +1948,24 @@ async def _process_vk_inbox_row(
                     retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
 
             if is_rate_limit:
-                report.inbox_deferred += 1
-                report.errors.append(f"drafts_rate_limited {source_url}: {exc}")
+                max_defers = _rate_limit_max_defers()
+                queue_state = "deferred"
+                attempts = 1
                 try:
                     rl_max_wait_sec = float(os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
                     rl_max_wait_sec = max(0.0, min(rl_max_wait_sec, 1800.0))
-                    if rl_max_wait_sec <= 0:
-                        await vk_review.mark_pending(db, int(post.id))
-                    else:
-                        retry_after_sec = (
-                            max(1.0, retry_after_ms / 1000.0) if retry_after_ms else rl_max_wait_sec
-                        )
-                        await vk_review.mark_deferred(
-                            db,
-                            int(post.id),
-                            batch_id=batch_id,
-                            retry_after_sec=retry_after_sec,
-                        )
+                    retry_after_sec = (
+                        max(1.0, retry_after_ms / 1000.0)
+                        if retry_after_ms
+                        else rl_max_wait_sec
+                    )
+                    queue_state, attempts = await vk_review.mark_rate_limited(
+                        db,
+                        int(post.id),
+                        batch_id=batch_id,
+                        retry_after_sec=retry_after_sec,
+                        max_attempts=max_defers,
+                    )
                 except Exception:
                     logger.warning("vk_auto: defer_lock_failed after rate limit", exc_info=True)
                 retry_hint = (
@@ -1963,11 +1973,35 @@ async def _process_vk_inbox_row(
                     if retry_after_ms
                     else "Retry-after: —"
                 )
+                attempts_hint = (
+                    f"Попытка: {attempts}/{max_defers}"
+                    if max_defers > 0
+                    else f"Попытка: {attempts}"
+                )
+                if queue_state == "failed":
+                    report.inbox_failed += 1
+                    report.errors.append(f"drafts_rate_limited_terminal {source_url}: {exc}")
+                    await _emit_progress(
+                        "⛔",
+                        [
+                            "Результат: лимит LLM — пост помечен failed",
+                            f"Причина: {_shorten_reason(str(exc)) or '—'}",
+                            attempts_hint,
+                            retry_hint,
+                            f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                        ],
+                    )
+                    _log_row_timing(drafts_count=0, ok_value=False)
+                    return
+
+                report.inbox_deferred += 1
+                report.errors.append(f"drafts_rate_limited {source_url}: {exc}")
                 await _emit_progress(
                     "⏸️",
                     [
                         "Результат: лимит LLM — пост отложен",
                         f"Причина: {_shorten_reason(str(exc)) or '—'}",
+                        attempts_hint,
                         retry_hint,
                         f"took_sec: {(time.monotonic() - start_ts):.1f}",
                     ],

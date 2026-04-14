@@ -1074,6 +1074,7 @@ class VKInbox(SQLModel, table=True):
     locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     imported_event_id: Optional[int] = None
     review_batch: Optional[str] = None
+    attempts: int = 0
     created_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )

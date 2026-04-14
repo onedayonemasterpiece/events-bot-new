@@ -40,7 +40,7 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 - Таблица очереди: `vk_inbox` (`db.py`).
 - Состояния:
   - `pending`, `locked` — активная очередь (готово к разбору / сейчас разбирается),
-  - `deferred` — пост временно отложен после LLM rate limit; `locked_at` хранит `retry_after`, а не “сиротский lock”,
+  - `deferred` — пост временно отложен после LLM rate limit; `locked_at` хранит `retry_after`, а не “сиротский lock”; число таких defer-попыток хранится в `vk_inbox.attempts`,
   - `imported` — пост успешно автоимпортирован (даже если он дал несколько событий),
   - `rejected` — пост обработан и признан не-событием (0 событий / invalid / promo),
   - `skipped` — оператор вручную отложил решение по посту,
@@ -89,9 +89,12 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 - если `VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC>0`, строка уходит в `status='deferred'` с `retry_after` в `locked_at`;
 - такой post **не** подбирается повторно в том же batch;
 - в начале **следующего** run due-строки `deferred` автоматически возвращаются в `pending`;
+- каждый такой defer увеличивает `vk_inbox.attempts`;
+- после `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS` подряд (по умолчанию `3`) строка переводится в `failed`, чтобы один и тот же проблемный post не возвращался бесконечно в будущих batch;
+- `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS=0` отключает terminal cap и оставляет только deferred-поведение;
 - это защищает от цикла `rate limit -> restart/OOM -> startup recovery -> тот же post снова`.
 
-Техническая деталь для SQLite: служебные обновления очереди (`locked/deferred -> imported/failed/rejected/pending/skipped`) теперь повторяют write+commit при кратковременном `database is locked`, чтобы локальный auto import не терял пост после успешного `Smart Update` только из-за transient lock на `vk_inbox`/`vk_review_batch`.
+Техническая деталь для SQLite: служебные обновления очереди (`locked/deferred -> imported/failed/rejected/pending/skipped`) и startup/scheduler recovery writes (`release_stale_locks`, `release_due_deferred`, `release_all_locks`, `ops_run` bootstrap/cleanup) теперь повторяют write+commit при кратковременном `database is locked`, чтобы локальный auto import и cron recovery не деградировали из-за transient lock на SQLite.
 
 ### DEV/E2E: Telegraph страницы из prod snapshot
 
@@ -167,6 +170,7 @@ ENV:
 - `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` (по умолчанию `0`) ждать ICS inline вместе с Telegraph (обычно не нужно для E2E/local).
 - `VK_AUTO_IMPORT_SLOW_ROW_LOG_SEC` (по умолчанию `60`) порог для автоматического stage timing log по одной строке очереди даже без `PIPELINE_TIMINGS=1`; `0` означает логировать все строки.
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` (по умолчанию `1800`) жёсткий ceiling на один пост очереди; если обработка одного VK row зависла дольше лимита, строка помечается как `failed`, оператор получает timeout-сообщение, а run продолжает следующий пост. Значение `<=0` отключает guard.
+- `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS` (по умолчанию `3`) сколько раз один и тот же post можно подряд отложить из-за provider-side `429` перед переводом в terminal `failed`.
 
 Плановый отчёт scheduler отправляется в чат superadmin из БД (`user.is_superadmin=1`). `ADMIN_CHAT_ID` больше не нужен для штатной работы и используется только как legacy fallback до регистрации superadmin в БД.
 

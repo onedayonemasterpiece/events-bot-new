@@ -3643,6 +3643,19 @@ async def _vk_api(
                     if db and bot:
                         await notify_superadmin(db, bot, "VK_USER_TOKEN expired")
                 break
+            app_blocked_error = code == 8 and "application is blocked" in msg_l
+            if app_blocked_error:
+                logging.info(
+                    "vk no-retry blocked app actor=%s method=%s",
+                    kind,
+                    method,
+                )
+                if idx < len(tokens) - 1:
+                    last_err = err
+                    last_actor = kind
+                    last_token = redacted_token
+                    fallback_next = True
+                break
             if any(x in msg_l for x in ("already deleted", "already exists")):
                 logging.info("vk no-retry error: %s", msg)
                 return data
@@ -3683,7 +3696,7 @@ async def _vk_api(
                 break
             await asyncio.sleep(delay)
         if err:
-            if fallback_next and kind == "group":
+            if fallback_next and idx < len(tokens) - 1:
                 continue
             code = err.get("error_code")
             raise VKAPIError(

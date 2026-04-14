@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from db import Database
 
 logger = logging.getLogger(__name__)
+
+try:  # pragma: no cover - optional dependency for typing only
+    from aiosqlite import Error as AioSqliteError
+except ImportError:  # pragma: no cover - optional dependency for typing only
+    _LOCK_ERROR_CLASSES: tuple[type[Exception], ...] = (sqlite3.OperationalError,)
+else:
+    _LOCK_ERROR_CLASSES = (sqlite3.OperationalError, AioSqliteError)
+
+_LOCK_RETRY_ATTEMPTS = 5
+_LOCK_RETRY_BASE_DELAY_SEC = 0.1
 
 
 def _utc_sql(dt: datetime | None = None) -> str:
@@ -27,6 +39,44 @@ def _json_dumps(payload: Mapping[str, Any] | None) -> str:
         return "{}"
 
 
+async def _retry_locked_write(
+    conn: Any,
+    operation,
+    *,
+    description: str,
+):
+    last_exc: Exception | None = None
+    for attempt in range(_LOCK_RETRY_ATTEMPTS):
+        try:
+            return await operation()
+        except _LOCK_ERROR_CLASSES as exc:
+            message = str(exc).lower()
+            if "database is locked" not in message:
+                raise
+            last_exc = exc
+            if attempt == _LOCK_RETRY_ATTEMPTS - 1:
+                break
+            logger.warning(
+                "ops_run: locked_retry %s attempt=%s/%s",
+                description,
+                attempt + 1,
+                _LOCK_RETRY_ATTEMPTS,
+            )
+            rollback = getattr(conn, "rollback", None)
+            if callable(rollback):
+                try:
+                    await rollback()
+                except Exception:  # pragma: no cover - best effort cleanup
+                    logger.debug(
+                        "ops_run: locked_retry rollback_failed %s",
+                        description,
+                        exc_info=True,
+                    )
+            await asyncio.sleep(_LOCK_RETRY_BASE_DELAY_SEC * (2**attempt))
+    assert last_exc is not None  # pragma: no cover - for type checkers
+    raise last_exc
+
+
 async def start_ops_run(
     db: Database,
     *,
@@ -40,32 +90,39 @@ async def start_ops_run(
 ) -> int | None:
     try:
         async with db.raw_conn() as conn:
-            cursor = await conn.execute(
-                """
-                INSERT INTO ops_run(
-                    kind,
-                    trigger,
-                    chat_id,
-                    operator_id,
-                    started_at,
-                    status,
-                    metrics_json,
-                    details_json
+            async def _insert() -> int | None:
+                cursor = await conn.execute(
+                    """
+                    INSERT INTO ops_run(
+                        kind,
+                        trigger,
+                        chat_id,
+                        operator_id,
+                        started_at,
+                        status,
+                        metrics_json,
+                        details_json
+                    )
+                    VALUES(?, ?, ?, ?, ?, 'running', ?, ?)
+                    """,
+                    (
+                        str(kind or "").strip(),
+                        str(trigger or "").strip() or "manual",
+                        int(chat_id) if chat_id is not None else None,
+                        int(operator_id) if operator_id is not None else None,
+                        _utc_sql(started_at),
+                        _json_dumps(metrics),
+                        _json_dumps(details),
+                    ),
                 )
-                VALUES(?, ?, ?, ?, ?, 'running', ?, ?)
-                """,
-                (
-                    str(kind or "").strip(),
-                    str(trigger or "").strip() or "manual",
-                    int(chat_id) if chat_id is not None else None,
-                    int(operator_id) if operator_id is not None else None,
-                    _utc_sql(started_at),
-                    _json_dumps(metrics),
-                    _json_dumps(details),
-                ),
+                await conn.commit()
+                return int(cursor.lastrowid or 0) or None
+
+            return await _retry_locked_write(
+                conn,
+                _insert,
+                description=f"start kind={str(kind or '').strip() or 'unknown'} trigger={str(trigger or '').strip() or 'manual'}",
             )
-            await conn.commit()
-            return int(cursor.lastrowid or 0) or None
     except Exception:
         logger.warning("ops_run: failed to start run kind=%s trigger=%s", kind, trigger, exc_info=True)
         return None
@@ -84,25 +141,32 @@ async def finish_ops_run(
         return
     try:
         async with db.raw_conn() as conn:
-            await conn.execute(
-                """
-                UPDATE ops_run
-                SET
-                    finished_at = ?,
-                    status = ?,
-                    metrics_json = ?,
-                    details_json = ?
-                WHERE id = ?
-                """,
-                (
-                    _utc_sql(finished_at),
-                    str(status or "").strip() or "success",
-                    _json_dumps(metrics),
-                    _json_dumps(details),
-                    int(run_id),
-                ),
+            async def _update() -> None:
+                await conn.execute(
+                    """
+                    UPDATE ops_run
+                    SET
+                        finished_at = ?,
+                        status = ?,
+                        metrics_json = ?,
+                        details_json = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        _utc_sql(finished_at),
+                        str(status or "").strip() or "success",
+                        _json_dumps(metrics),
+                        _json_dumps(details),
+                        int(run_id),
+                    ),
+                )
+                await conn.commit()
+
+            await _retry_locked_write(
+                conn,
+                _update,
+                description=f"finish id={int(run_id)} status={str(status or '').strip() or 'success'}",
             )
-            await conn.commit()
     except Exception:
         logger.warning("ops_run: failed to finish run id=%s status=%s", run_id, status, exc_info=True)
 
@@ -123,22 +187,29 @@ async def cleanup_running_ops_runs_on_startup(
 
     try:
         async with db.raw_conn() as conn:
-            cursor = await conn.execute(
-                """
-                UPDATE ops_run
-                SET
-                    finished_at = ?,
-                    status = ?
-                WHERE status = 'running'
-                  AND finished_at IS NULL
-                """,
-                (
-                    _utc_sql(finished_at),
-                    str(status or "").strip() or "crashed",
-                ),
+            async def _update() -> int:
+                cursor = await conn.execute(
+                    """
+                    UPDATE ops_run
+                    SET
+                        finished_at = ?,
+                        status = ?
+                    WHERE status = 'running'
+                      AND finished_at IS NULL
+                    """,
+                    (
+                        _utc_sql(finished_at),
+                        str(status or "").strip() or "crashed",
+                    ),
+                )
+                await conn.commit()
+                return int(cursor.rowcount or 0)
+
+            count = await _retry_locked_write(
+                conn,
+                _update,
+                description=f"startup_cleanup status={str(status or '').strip() or 'crashed'}",
             )
-            await conn.commit()
-            count = int(cursor.rowcount or 0)
     except Exception:
         logger.warning("ops_run: startup cleanup failed", exc_info=True)
         return 0

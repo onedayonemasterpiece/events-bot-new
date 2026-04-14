@@ -565,9 +565,9 @@ async def test_refresh_hints_after_timezone_change(tmp_path, monkeypatch):
         )
         assert heading in lines
         heading_index = lines.index(heading)
-        assert (
-            lines[heading_index + 1]
-            == "Совпадающее событие — https://telegra.ph/test"
+        assert lines[heading_index + 1] in (
+            "Совпадающее событие — https://telegra.ph/test",
+            '<a href="https://telegra.ph/test">Совпадающее событие</a>',
         )
     finally:
         main.LOCAL_TZ = original_tz

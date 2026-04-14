@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-14-daily-delay-vk-auto-queue-lock-storm.md`
+  - Scope: `ops_run.py`, `vk_review.py`, `vk_auto_queue.py`, `main.py::_vk_api`, Fly prod recovery, `/daily`, `/start`.
+  - Must not regress: transient SQLite locks не должны системно останавливать scheduler recovery, проблемный VK post не должен бесконечно всплывать после rate-limit, а `/daily` shortlink failures не должны растягивать ежедневный анонс на повторные bad-token попытки.
 - `INC-2026-04-10-crumple-story-prod-drift.md`
   - Scope: `/v`, `video_announce/`, `kaggle/CrumpleVideo/`, `fly.toml`, story-related env и release drift.
   - Must not regress: story publish не должен silently деградировать в mp4-only режим.
