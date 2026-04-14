@@ -523,16 +523,11 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
 
     snapshot_dir = tmp_path / "snapshot"
-    bootstrap_dir = tmp_path / "bootstrap"
     calls: list[tuple[str, Path]] = []
 
     class _DummyClient:
         def create_dataset(self, path):
             calls.append(("create_dataset", Path(path)))
-            shutil.copytree(path, bootstrap_dir, dirs_exist_ok=True)
-
-        def create_dataset_version(self, path, **kwargs):  # noqa: ANN003
-            calls.append(("create_dataset_version", Path(path)))
             shutil.copytree(path, snapshot_dir, dirs_exist_ok=True)
 
         def dataset_status(self, dataset):  # noqa: ANN001
@@ -564,9 +559,8 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
 
     assert dataset_id.startswith("zigomaro/cherryflash-session-42-")
     assert story_sources == ["zigomaro/story-cipher", "zigomaro/story-key"]
+    assert len(calls) == 1
     assert calls[0][0] == "create_dataset"
-    assert calls[1][0] == "create_dataset_version"
-    assert (bootstrap_dir / "bootstrap.txt").exists()
     assert (snapshot_dir / "story_publish.json").exists()
     assert (snapshot_dir / "kaggle_common" / "story_publish.py").exists()
 
@@ -578,7 +572,7 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
 
 
 @pytest.mark.asyncio
-async def test_create_cherryflash_dataset_retries_dataset_version_after_invalid_token(
+async def test_create_cherryflash_dataset_retries_dataset_create_after_invalid_token(
     monkeypatch,
     tmp_path,
 ):
@@ -602,18 +596,15 @@ async def test_create_cherryflash_dataset_retries_dataset_version_after_invalid_
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
 
     sleep_calls: list[int] = []
-    version_calls = 0
+    create_calls = 0
 
     class _DummyClient:
         def create_dataset(self, path):  # noqa: ANN001
-            return None
-
-        def create_dataset_version(self, path, **kwargs):  # noqa: ANN001,ANN003
-            nonlocal version_calls
-            version_calls += 1
-            if version_calls == 1:
+            nonlocal create_calls
+            create_calls += 1
+            if create_calls == 1:
                 raise RuntimeError(
-                    'Kaggle dataset_create_version failed (status=400; '
+                    'Kaggle dataset_create_new failed (status=400; '
                     '{"error":{"code":400,"message":"Invalid token","status":"INVALID_ARGUMENT"}})'
                 )
             return None
@@ -647,7 +638,7 @@ async def test_create_cherryflash_dataset_retries_dataset_version_after_invalid_
 
     assert dataset_id.startswith("zigomaro/cherryflash-session-42-")
     assert story_sources == []
-    assert version_calls == 2
+    assert create_calls == 2
     assert sleep_calls == [10]
 
 

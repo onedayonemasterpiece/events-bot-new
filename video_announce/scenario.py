@@ -3556,7 +3556,6 @@ class VideoAnnounceScenario:
             "licenses": [{"name": "CC0-1.0"}],
         }
         story_dataset_sources: list[str] = []
-        bootstrap_meta = dict(meta)
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             (tmp_path / "dataset-metadata.json").write_text(
@@ -3624,41 +3623,11 @@ class VideoAnnounceScenario:
                     f"dataset payload exceeds {DATASET_PAYLOAD_MAX_MB}MB"
                 )
             try:
-                with tempfile.TemporaryDirectory() as bootstrap_tmp:
-                    bootstrap_path = Path(bootstrap_tmp)
-                    (bootstrap_path / "dataset-metadata.json").write_text(
-                        json.dumps(bootstrap_meta, ensure_ascii=False, indent=2),
-                        encoding="utf-8",
-                    )
-                    # Kaggle CreateDataset is more fragile than CreateDatasetVersion on
-                    # large mounted CherryFlash bundles. Bootstrap the unique dataset
-                    # with a tiny payload, then upload the real runtime as version 1.
-                    (bootstrap_path / "bootstrap.txt").write_text(
-                        f"CherryFlash session {session_obj.id} bootstrap\n",
-                        encoding="utf-8",
-                    )
-                    try:
-                        await asyncio.to_thread(client.create_dataset, bootstrap_path)
-                    except Exception:
-                        logger.exception(
-                            "video_announce: CherryFlash bootstrap dataset create failed"
-                        )
-                        try:
-                            await asyncio.to_thread(client.dataset_status, dataset_id)
-                        except Exception:
-                            raise
-                        logger.info(
-                            "video_announce: CherryFlash bootstrap dataset already exists id=%s",
-                            dataset_id,
-                        )
-
-                version_notes = f"CherryFlash session {session_obj.id}"
                 for attempt in range(1, 4):
                     try:
                         await asyncio.to_thread(
-                            client.create_dataset_version,
+                            client.create_dataset,
                             tmp_path,
-                            version_notes=version_notes,
                         )
                         break
                     except Exception as exc:
@@ -3668,7 +3637,7 @@ class VideoAnnounceScenario:
                             raise
                         delay_seconds = 10 * attempt
                         logger.warning(
-                            "video_announce: CherryFlash dataset version retry after transient Kaggle token race "
+                            "video_announce: CherryFlash dataset create retry after transient Kaggle token race "
                             "dataset=%s attempt=%s/%s delay=%ss error=%s",
                             dataset_id,
                             attempt,
