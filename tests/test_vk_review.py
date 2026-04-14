@@ -277,6 +277,52 @@ async def test_release_due_deferred_only_for_new_batch(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_release_all_locks_caps_auto_recovery_attempts(tmp_path, monkeypatch):
+    monkeypatch.setenv("VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS", "3")
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_inbox(
+                id, group_id, post_id, date, text, matched_kw, has_date,
+                status, locked_by, locked_at, review_batch, attempts
+            )
+            VALUES(?,?,?,?,?,?,?,'locked',?,CURRENT_TIMESTAMP,?,?)
+            """,
+            [
+                (1, 10, 1001, 0, "auto row keep", "k", 1, 123, "auto:batch-1", 1),
+                (2, 10, 1002, 0, "auto row fail", "k", 1, 123, "auto:batch-1", 2),
+                (3, 10, 1003, 0, "manual row", "k", 1, 321, "manual:batch-1", 4),
+            ],
+        )
+        await conn.commit()
+
+    recovery = await vk_review.release_all_locks(db)
+
+    assert recovery.unlocked == 2
+    assert recovery.failed == 1
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, status, locked_by, locked_at, review_batch, attempts
+            FROM vk_inbox
+            ORDER BY id
+            """
+        )
+        rows = await cur.fetchall()
+
+    assert rows == [
+        (1, "pending", None, None, None, 2),
+        (2, "failed", None, None, None, 3),
+        (3, "pending", None, None, None, 4),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_pick_next_rejects_explicit_year_past(tmp_path, monkeypatch):
     fixed_now = int(real_datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp())
     monkeypatch.setattr(vk_review._time, "time", lambda: fixed_now)

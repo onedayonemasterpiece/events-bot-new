@@ -5026,12 +5026,12 @@ async def upload_images(
     force: bool = False,
     event_hint: str | None = None,
 ) -> tuple[list[str], str]:
-    """Upload images to Catbox with retries."""
+    """Upload images to managed storage and Catbox with retries."""
     catbox_urls: list[str] = []
     catbox_msg = ""
     if not images:
         return [], ""
-    logging.info("CATBOX start images=%d limit=%d", len(images or []), limit)
+    logging.info("poster_upload start images=%d limit=%d", len(images or []), limit)
     supabase_mode = (os.getenv("UPLOAD_IMAGES_SUPABASE_MODE") or "prefer").strip().lower()
     if supabase_mode not in {"off", "fallback", "prefer", "only"}:
         supabase_mode = "prefer"
@@ -5224,7 +5224,7 @@ async def upload_images(
 
     if not CATBOX_ENABLED and not force:
         logging.info(
-            "CATBOX disabled catbox_enabled=%s force=%s images=%d event_hint=%s",
+            "poster_upload disabled catbox_enabled=%s force=%s images=%d event_hint=%s",
             CATBOX_ENABLED,
             force,
             len(images or []),
@@ -5257,7 +5257,7 @@ async def upload_images(
         except Exception as exc:
             logging.warning("upload_images convert_failed name=%s error=%s", name, exc)
             continue
-        logging.info("CATBOX candidate name=%s size=%d", name, len(data))
+        logging.info("poster_upload candidate name=%s size=%d", name, len(data))
         kind = detect_image_type(data)
         if not kind:
             logging.warning("catbox upload %s: not image", name)
@@ -5334,7 +5334,7 @@ async def upload_images(
                 catbox_msg += f"{name}: failed; "
         catbox_msg = catbox_msg.strip("; ")
     logging.info(
-        "CATBOX done uploaded=%d skipped=%d msg=%s",
+        "poster_upload done uploaded=%d skipped=%d msg=%s",
         len(catbox_urls),
         max(0, len(images[:limit]) - len(catbox_urls)),
         catbox_msg,

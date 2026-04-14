@@ -178,6 +178,12 @@ ENV:
 - `UPLOAD_IMAGES_SUPABASE_MODE=off`: managed storage отключён для этого pipeline.
 - Telegraph upload fallback не поддерживается: `telegra.ph/upload` недоступен/устарел, поэтому используем только managed storage/Catbox.
 
+Runtime-диагностика:
+
+- server-side upload path теперь пишет логи как `poster_upload ... msg=<...>` вместо legacy `CATBOX ...`;
+- `msg=storage_primary` означает, что первичным backend сработал managed storage (обычно Yandex Object Storage), а не Catbox;
+- `poster_media upload complete: storage_msg=...` — агрегированный итог для poster pipeline поверх `upload_images()`.
+
 ## Backfill Catbox -> Yandex
 
 Чтобы быстро снять зависимость от `files.catbox.moe` для уже созданных событий, используем отдельный backfill script:

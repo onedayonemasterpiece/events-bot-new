@@ -38,7 +38,7 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
         )
         await conn.commit()
 
-    async def fake_fetch_vk_post_text_and_photos(_group_id, _post_id, *, db, bot):  # noqa: ARG001
+    async def fake_fetch_vk_post_text_and_photos(_group_id, _post_id, *, db, bot, limit):  # noqa: ARG001
         return "text", [], None, {"views": 10, "likes": 1}, vk_auto_queue.VkFetchStatus(True, "ok")
 
     async def fake_build_event_drafts(*_args, **_kwargs):
@@ -110,7 +110,7 @@ async def test_vk_auto_queue_rate_limit_marks_row_failed_after_max_defers(tmp_pa
         )
         await conn.commit()
 
-    async def fake_fetch_vk_post_text_and_photos(_group_id, _post_id, *, db, bot):  # noqa: ARG001
+    async def fake_fetch_vk_post_text_and_photos(_group_id, _post_id, *, db, bot, limit):  # noqa: ARG001
         return "text", [], None, {"views": 10, "likes": 1}, vk_auto_queue.VkFetchStatus(True, "ok")
 
     async def fake_build_event_drafts(*_args, **_kwargs):

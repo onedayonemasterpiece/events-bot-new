@@ -69,7 +69,7 @@ async def test_upload_images_catbox_disabled(monkeypatch, caplog):
     assert urls == []
     assert msg == "disabled"
     assert any(
-        "CATBOX disabled catbox_enabled=False force=False images=1 event_hint=test"
+        "poster_upload disabled catbox_enabled=False force=False images=1 event_hint=test"
         in record.message
         for record in caplog.records
     )

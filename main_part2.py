@@ -4921,12 +4921,13 @@ async def init_db_and_scheduler(
         from vk_review import release_all_locks
 
         crashed = await cleanup_running_ops_runs_on_startup(db)
-        unlocked = await release_all_locks(db)
-        if crashed or unlocked:
+        recovery = await release_all_locks(db)
+        if crashed or recovery.unlocked or recovery.failed:
             logging.info(
-                "startup_recovery ops_run_crashed=%s vk_inbox_unlocked=%s",
+                "startup_recovery ops_run_crashed=%s vk_inbox_unlocked=%s vk_inbox_failed=%s",
                 crashed,
-                unlocked,
+                recovery.unlocked,
+                recovery.failed,
             )
     except Exception:
         logging.exception("startup_recovery failed")

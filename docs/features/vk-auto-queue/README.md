@@ -164,13 +164,15 @@ ENV:
 - `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:30,18:30`) локальные времена запуска.
 - `VK_AUTO_IMPORT_TZ` (по умолчанию `Europe/Kaliningrad`) таймзона расписания.
 - `VK_AUTO_IMPORT_LIMIT` (по умолчанию `15`) сколько постов обработать за один запуск.
-- `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `1`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета).
+- `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `0`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета). При `0` очередь держит только текущий row locked и берёт следующий post уже после завершения текущего, что безопаснее для startup recovery.
 - `VK_AUTO_IMPORT_PREFETCH_DRAFTS` (по умолчанию `0`) если включён — в префетче дополнительно выполняется (download media + OCR + LLM-parse) для N+1. ⚠️ Может заметно увеличить RAM и привести к OOM на маленьких машинах (например Fly `512MB`).
+- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей.
 - `VK_AUTO_IMPORT_INLINE_JOBS` (по умолчанию `1`) ждать inline-джобы для отчёта (Telegraph/ICS).
 - `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` (по умолчанию `0`) ждать ICS inline вместе с Telegraph (обычно не нужно для E2E/local).
 - `VK_AUTO_IMPORT_SLOW_ROW_LOG_SEC` (по умолчанию `60`) порог для автоматического stage timing log по одной строке очереди даже без `PIPELINE_TIMINGS=1`; `0` означает логировать все строки.
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` (по умолчанию `1800`) жёсткий ceiling на один пост очереди; если обработка одного VK row зависла дольше лимита, строка помечается как `failed`, оператор получает timeout-сообщение, а run продолжает следующий пост. Значение `<=0` отключает guard.
 - `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS` (по умолчанию `3`) сколько раз один и тот же post можно подряд отложить из-за provider-side `429` перед переводом в terminal `failed`.
+- `VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS` (по умолчанию fallback к `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS`, иначе `3`) сколько crash-recovery unlock’ов для `auto:*` row допускается до terminal `failed` при следующем startup.
 
 Плановый отчёт scheduler отправляется в чат superadmin из БД (`user.is_superadmin=1`). `ADMIN_CHAT_ID` больше не нужен для штатной работы и используется только как legacy fallback до регистрации superadmin в БД.
 
@@ -187,7 +189,7 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - scheduler entrypoint теперь создаёт bootstrap `ops_run` ещё до резолва superadmin/limit, а сам `run_vk_auto_import()` переиспользует эту же запись; поэтому ложный outer fire APScheduler без реального разбора очереди больше не должен исчезать бесследно;
 - если entrypoint или делегированный run падают до нормального summary, bootstrap-запись закрывается как `status='error'` с `fatal_error` в `details_json`;
 - `/general_stats` показывает такие записи в блоке `vk_auto_import runs`, чтобы было видно разницу между “очередь была пустой”, “run реально выполнился” и “scheduler попытался, но пропустил запуск”.
-Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update, но префетч N+1 может выполняться параллельно. По умолчанию префетч лёгкий; полный (media/OCR/LLM) включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
+Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update. По умолчанию очередь идёт строго row-by-row без N+1 reserve; если `VK_AUTO_IMPORT_PREFETCH=1`, включается лёгкий prefetch следующего post, а полный (media/OCR/LLM) префетч по-прежнему включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
 
 Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build`, поэтому двойное ожидание убрано без потери качества/полноты отчёта.
 
@@ -196,11 +198,13 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - При старте приложения в `pending` возвращаются только реальные рабочие locks: `vk_inbox.status='locked'`.
 - `status='deferred'` после рестарта **не** трогается: это не сиротский lock, а осознанный retry state после rate limit.
 - Due-строки `deferred` выпускаются обратно в `pending` только в начале нового `vk_auto_import` batch, а не в общем startup recovery.
+- Для `review_batch LIKE 'auto:%'` startup recovery увеличивает `vk_inbox.attempts`; после `VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS` такой row переводится в `failed`, чтобы crash/restart не возвращал один и тот же проблемный post бесконечно.
 - Любые `ops_run.status='running'` помечаются как `crashed` с `finished_at=now` (диагностика незавершённых прогонов).
 
 ### Media safety
 
 - `ENSURE_JPEG_MAX_PIXELS` (по умолчанию `20000000`) — ограничение на конвертацию WEBP/AVIF→JPEG: слишком большие изображения пропускаются вместо риска OOM.
+- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) — отдельный runtime cap для auto-import, чтобы тяжёлые VK posts не тащили в row одновременно 10-12 больших афиш и не раздували RAM/OCR/upload path.
 
 ### LLM budget for poster OCR
 

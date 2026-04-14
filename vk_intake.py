@@ -2465,7 +2465,7 @@ async def build_event_drafts(
                 hash_to_indices=hash_to_indices if hash_to_indices else None,
             )
         logging.info(
-            "vk.build_event_draft posters=%d catbox=%s",
+            "vk.build_event_draft posters=%d storage=%s",
             len(poster_items),
             catbox_msg or "",
         )

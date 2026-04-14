@@ -151,7 +151,7 @@ async def process_media(
         upload_images = main_mod.upload_images
         catbox_urls, catbox_msg = await upload_images(raw)
         logging.info(
-            "poster_media upload complete: url_count=%d catbox_msg=%s",
+            "poster_media upload complete: url_count=%d storage_msg=%s",
             len(catbox_urls),
             catbox_msg,
         )

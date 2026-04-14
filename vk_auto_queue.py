@@ -650,6 +650,15 @@ def _rate_limit_max_defers() -> int:
     return max(0, min(value, 1000))
 
 
+def _vk_auto_import_max_photos() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_MAX_PHOTOS") or "4").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 4
+    return max(1, min(value, 32))
+
+
 def _render_progress_text(
     icon: str,
     *,
@@ -1004,7 +1013,11 @@ async def _prefetch_vk_inbox_row(
     # Refresh text/photos from VK (best effort) to include attachments.
     t0 = time.monotonic()
     fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-        post.group_id, post.post_id, db=db, bot=bot
+        post.group_id,
+        post.post_id,
+        db=db,
+        bot=bot,
+        limit=_vk_auto_import_max_photos(),
     )
     stage["vk_fetch_post"] = float(time.monotonic() - t0)
     allow_stale = _vk_auto_allow_stale_inbox_text()
@@ -1263,7 +1276,7 @@ async def run_vk_auto_import(
         chat_id=chat_id,
     ):
         current_no = 0
-        prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", True)
+        prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
 
         async def _await_prefetch(task: asyncio.Task | None) -> VkInboxPrefetch | None:
             if task is None:
@@ -1409,22 +1422,34 @@ async def run_vk_auto_import(
                     )
                 )
 
-                next_post = await vk_review.pick_next(
-                    db,
-                    operator_id,
-                    batch_id,
-                    requeue_skipped=False,
-                    prefer_oldest=True,
-                    strict_chronological=True,
-                    resume_locked=False,
-                )
-                next_prefetch_task = _start_prefetch(next_post) if next_post else None
-
                 await _await_process_task(
                     post_obj=post,
                     source_url=source_url,
                     process_task=process_task,
                 )
+
+                next_post = None
+                next_prefetch_task = None
+                if prefetch_enabled:
+                    next_post = await vk_review.pick_next(
+                        db,
+                        operator_id,
+                        batch_id,
+                        requeue_skipped=False,
+                        prefer_oldest=True,
+                        strict_chronological=True,
+                        resume_locked=False,
+                    )
+                    next_prefetch_task = _start_prefetch(next_post) if next_post else None
+                else:
+                    next_post = await vk_review.pick_next(
+                        db,
+                        operator_id,
+                        batch_id,
+                        requeue_skipped=False,
+                        prefer_oldest=True,
+                        strict_chronological=True,
+                    )
 
                 post = next_post
                 prefetch_task = next_prefetch_task
@@ -1489,25 +1514,35 @@ async def run_vk_auto_import(
                     )
                 )
 
-                next_post = None
-                next_prefetch_task = None
-                if remaining > 0:
-                    next_post = await vk_review.pick_next(
-                        db,
-                        operator_id,
-                        batch_id,
-                        requeue_skipped=False,
-                        prefer_oldest=True,
-                        strict_chronological=True,
-                        resume_locked=False,
-                    )
-                    next_prefetch_task = _start_prefetch(next_post) if next_post else None
-
                 await _await_process_task(
                     post_obj=post,
                     source_url=source_url,
                     process_task=process_task,
                 )
+
+                next_post = None
+                next_prefetch_task = None
+                if remaining > 0:
+                    if prefetch_enabled:
+                        next_post = await vk_review.pick_next(
+                            db,
+                            operator_id,
+                            batch_id,
+                            requeue_skipped=False,
+                            prefer_oldest=True,
+                            strict_chronological=True,
+                            resume_locked=False,
+                        )
+                        next_prefetch_task = _start_prefetch(next_post) if next_post else None
+                    else:
+                        next_post = await vk_review.pick_next(
+                            db,
+                            operator_id,
+                            batch_id,
+                            requeue_skipped=False,
+                            prefer_oldest=True,
+                            strict_chronological=True,
+                        )
 
                 post = next_post
                 prefetch_task = next_prefetch_task
@@ -1667,7 +1702,11 @@ async def _process_vk_inbox_row(
         # Refresh text/photos from VK (best effort) to include attachments.
         t0 = time.monotonic()
         fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-            post.group_id, post.post_id, db=db, bot=bot
+            post.group_id,
+            post.post_id,
+            db=db,
+            bot=bot,
+            limit=_vk_auto_import_max_photos(),
         )
         _tmark("vk_fetch_post", time.monotonic() - t0)
         allow_stale = _vk_auto_allow_stale_inbox_text()

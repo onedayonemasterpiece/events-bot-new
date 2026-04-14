@@ -69,7 +69,7 @@ async def test_process_media_uses_active_main(monkeypatch, caplog):
         assert complete_log.levelno == logging.INFO
         complete_message = complete_log.getMessage()
         assert "url_count=1" in complete_message
-        assert "catbox_msg=ok" in complete_message
+        assert "storage_msg=ok" in complete_message
     finally:
         if original_main is not None:
             sys.modules["main"] = original_main

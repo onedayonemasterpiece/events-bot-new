@@ -165,7 +165,26 @@ async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> 
     return int(count or 0)
 
 
-async def release_all_locks(db: Database) -> int:
+@dataclass(frozen=True)
+class LockRecoveryCounts:
+    unlocked: int = 0
+    failed: int = 0
+
+
+def _auto_import_recovery_max_attempts() -> int:
+    raw = (
+        os.getenv("VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS")
+        or os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS")
+        or "3"
+    ).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 3
+    return max(0, min(value, 1000))
+
+
+async def release_all_locks(db: Database) -> LockRecoveryCounts:
     """Unlock *all* locked inbox rows.
 
     Intended for app startup recovery after unexpected restarts/OOM, when the
@@ -173,25 +192,69 @@ async def release_all_locks(db: Database) -> int:
     orphaned.
     """
 
+    max_attempts = _auto_import_recovery_max_attempts()
+
     async with db.raw_conn() as conn:
-        async def _unlock_all() -> int:
+        async def _unlock_all() -> LockRecoveryCounts:
+            failed = 0
+            if max_attempts > 0:
+                cursor = await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET status='failed',
+                        locked_by=NULL,
+                        locked_at=NULL,
+                        review_batch=NULL,
+                        attempts=COALESCE(attempts, 0) + 1
+                    WHERE status='locked'
+                      AND review_batch LIKE 'auto:%'
+                      AND COALESCE(attempts, 0) + 1 >= ?
+                    """,
+                    (max_attempts,),
+                )
+                failed = int(cursor.rowcount or 0)
+
+            cursor = await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='pending',
+                    locked_by=NULL,
+                    locked_at=NULL,
+                    review_batch=NULL,
+                    attempts=COALESCE(attempts, 0) + 1
+                WHERE status='locked'
+                  AND review_batch LIKE 'auto:%'
+                """
+            )
+            unlocked_auto = int(cursor.rowcount or 0)
+
             cursor = await conn.execute(
                 """
                 UPDATE vk_inbox
                 SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
                 WHERE status='locked'
+                  AND (review_batch IS NULL OR review_batch NOT LIKE 'auto:%')
                 """
             )
-            return int(cursor.rowcount or 0)
+            unlocked_other = int(cursor.rowcount or 0)
+            return LockRecoveryCounts(
+                unlocked=unlocked_auto + unlocked_other,
+                failed=failed,
+            )
 
-        count = await _run_locked_write(
+        counts = await _run_locked_write(
             conn,
             _unlock_all,
             description="release_all_locks",
         )
-    if count:
-        logging.info("vk_review release_all_locks count=%s", count)
-    return int(count or 0)
+    if counts.unlocked or counts.failed:
+        logging.info(
+            "vk_review release_all_locks unlocked=%s failed=%s max_attempts=%s",
+            counts.unlocked,
+            counts.failed,
+            max_attempts,
+        )
+    return counts
 
 
 async def refresh_vk_event_ts_hints(db: Database) -> int:
