@@ -221,6 +221,7 @@ Target channels для manual/scheduled publish задаются через `GUI
 - multi-target publish должен отправлять один и тот же digest payload в каждый configured target channel; issue-level storage при этом хранит legacy primary target в `target_chat` и per-target message maps в `published_targets_json`, чтобы можно было безопасно backfill-ить новый канал без text-only костылей;
 - backfill нового target channel должен копировать исторические media albums как album-group, а затем перевязывать caption первого media-сообщения на текстовые части уже в целевом канале, чтобы copied album ссылался на локальные digest posts, а не на исходный канал;
 - caption media album должен компактно показывать временной охват найденных экскурсий: одна дата (`12 апреля`), короткий список редких дат (`12, 14 и 16 апреля`) или диапазон (`11-15 апреля`), после чего той же строкой можно указывать `карточки 1-8`; если валидных дат нет, runtime откатывается к старому нейтральному `В альбоме карточки ...`;
+- если весь digest укладывается в один безопасный caption (`<=1000` символов), runtime публикует materialized album одним сообщением без отдельной текстовой части;
 - после публикации текстовых частей digest runtime редактирует caption первого сообщения media album и добавляет короткие понятные down-links вида `Подробнее: Описание` или `Подробнее: Часть 1 · Часть 2` на все связанные текстовые посты ниже в том же канале, чтобы пересланная медиагруппа оставалась связанной с описаниями экскурсий без односимвольных tap-targets;
 - если несколько published occurrences приходят из одного multi-announce source post, digest должен распределять разные `media_refs` по карточкам этого поста, а не повторять одну и ту же фотографию 3-4 раза подряд;
 - media selection не должна останавливаться на первых нескольких карточках без фото: runtime добирает media дальше по digest rows, пока не соберёт доступный album pack (до Telegram cap).
@@ -257,6 +258,8 @@ Guide digest не должен произвольно смешивать `про
 
 - `new_occurrences` публикует только те future occurrences, у которых `published_new_digest_issue_id IS NULL`;
 - после публикации карточка считается уже покрытой в family `new_occurrences` и на следующий день туда повторно не попадёт;
+  При этом published-mark можно ставить только тем occurrences, которые реально вошли в опубликованный digest, плюс их dedup-cluster siblings, схлопнутым в ту же canonical card;
+- occurrences, которые были выкинуты editorial fallback'ом и не дошли до финального digest text/caption, не считаются опубликованными и должны оставаться кандидатами для следующего `full` run;
 - `last_call` — отдельная family: туда попадают только occurrences с `is_last_call=1`, у которых ещё нет `published_last_call_digest_issue_id`;
 - простое служебное обновление `updated_at` или повторный импорт тех же фактов не должны приводить к повторной публикации в `new_occurrences`;
 - существенные update-digest'ы (`new route facts`, `резко изменились цена/место сбора`, `добавился booking`, `перенос`, `last seats`) пока не выделены в отдельную auto-family и в каноническом MVP считаются следующим этапом.

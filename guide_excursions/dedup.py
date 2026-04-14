@@ -65,6 +65,7 @@ class DedupResult:
     covered_occurrence_ids: list[int]
     suppressed_occurrence_ids: list[int]
     pair_decisions: list[dict[str, Any]]
+    coverage_by_display_id: dict[int, list[int]]
 
 def _normalize_text(value: object | None) -> str:
     return collapse_ws("" if value is None else str(value)).lower().replace("ё", "е")
@@ -623,7 +624,14 @@ async def deduplicate_occurrence_rows(
     if not GUIDE_EXCURSIONS_DEDUP_ENABLED or len(items) <= 1:
         display = [dict(row) for row in items[:limit]]
         ids = [int(row.get("id") or 0) for row in display]
-        return DedupResult(display_rows=display, covered_occurrence_ids=ids, suppressed_occurrence_ids=[], pair_decisions=[])
+        coverage = {row_id: [row_id] for row_id in ids if row_id > 0}
+        return DedupResult(
+            display_rows=display,
+            covered_occurrence_ids=ids,
+            suppressed_occurrence_ids=[],
+            pair_decisions=[],
+            coverage_by_display_id=coverage,
+        )
 
     index_by_id = {int(row.get("id") or 0): idx for idx, row in enumerate(items)}
     row_by_id = {int(row.get("id") or 0): row for row in items}
@@ -683,12 +691,15 @@ async def deduplicate_occurrence_rows(
     display_rows: list[dict[str, Any]] = []
     covered_occurrence_ids: list[int] = []
     suppressed_ids: list[int] = []
+    coverage_by_display_id: dict[int, list[int]] = {}
     for meta in cluster_meta:
         if len(display_rows) >= limit:
             break
         display_rows.append(dict(meta["display_row"]))
+        canonical_id = int(meta["canonical_id"])
+        coverage_by_display_id[canonical_id] = [int(mid) for mid in meta["member_ids"]]
         covered_occurrence_ids.extend(int(mid) for mid in meta["member_ids"])
-        suppressed_ids.extend(int(mid) for mid in meta["member_ids"] if int(mid) != int(meta["canonical_id"]))
+        suppressed_ids.extend(int(mid) for mid in meta["member_ids"] if int(mid) != canonical_id)
 
     covered_occurrence_ids = list(dict.fromkeys(covered_occurrence_ids))
     suppressed_ids = list(dict.fromkeys(suppressed_ids))
@@ -706,4 +717,5 @@ async def deduplicate_occurrence_rows(
         covered_occurrence_ids=covered_occurrence_ids,
         suppressed_occurrence_ids=suppressed_ids,
         pair_decisions=pair_decisions,
+        coverage_by_display_id=coverage_by_display_id,
     )

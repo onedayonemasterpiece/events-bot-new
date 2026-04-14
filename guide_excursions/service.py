@@ -251,6 +251,54 @@ def _published_targets_map(value: Any) -> dict[str, dict[str, list[int]]]:
     return out
 
 
+GUIDE_INLINE_DIGEST_CAPTION_MAX_CHARS = 1000
+
+
+def _inline_digest_caption_text(texts: Sequence[str] | None) -> str | None:
+    if not texts or len(texts) != 1:
+        return None
+    text = str(texts[0] or "").strip()
+    if not text or len(text) > GUIDE_INLINE_DIGEST_CAPTION_MAX_CHARS:
+        return None
+    return text
+
+
+def _build_media_input(
+    *,
+    payload: bytes,
+    filename: str,
+    asset_kind: str,
+    caption: str | None,
+) -> types.InputMediaPhoto | types.InputMediaVideo:
+    upload = BufferedInputFile(payload, filename=filename)
+    parse_mode = "HTML" if caption else None
+    if asset_kind == "video":
+        return types.InputMediaVideo(media=upload, caption=caption, parse_mode=parse_mode)
+    return types.InputMediaPhoto(media=upload, caption=caption, parse_mode=parse_mode)
+
+
+def _covered_occurrence_ids_for_published_rows(
+    rows: Sequence[Mapping[str, Any]] | None,
+    *,
+    coverage_by_display_id: Mapping[int, Sequence[int]] | None,
+) -> list[int]:
+    covered_ids: list[int] = []
+    coverage = coverage_by_display_id or {}
+    for row in rows or []:
+        occurrence_id = int(_mapping_value(row, "id") or 0)
+        if occurrence_id <= 0:
+            continue
+        member_ids = coverage.get(occurrence_id) or [occurrence_id]
+        for member_id in member_ids:
+            try:
+                normalized_id = int(member_id)
+            except Exception:
+                continue
+            if normalized_id > 0:
+                covered_ids.append(normalized_id)
+    return list(dict.fromkeys(covered_ids))
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -3399,7 +3447,10 @@ async def build_guide_digest_preview(
             date_formatter=format_date_time,
         )
         texts = build_digest_messages(display_rows, family=family)
-        occurrence_ids = list(dict.fromkeys([*dedup.covered_occurrence_ids, *editorial_suppressed_ids]))
+        occurrence_ids = _covered_occurrence_ids_for_published_rows(
+            display_rows,
+            coverage_by_display_id=dedup.coverage_by_display_id,
+        )
         media_items: list[dict[str, Any]] = []
         media_positions: dict[str, int] = {}
         for row in display_rows:
@@ -3487,6 +3538,7 @@ async def publish_guide_digest(
     period_label = _digest_period_label_from_items(preview.get("items"))
     if not texts:
         return {"issue_id": issue_id, "published": False, "reason": "empty"}
+    inline_caption_text = _inline_digest_caption_text(texts)
 
     async def _send_preview_to_target(target: str) -> dict[str, Any]:
         message_ids: list[int] = []
@@ -3516,17 +3568,22 @@ async def publish_guide_digest(
             if not payload:
                 missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=empty_file")
                 continue
-            caption = build_media_caption(
-                family=family,
-                item_count=len(preview["items"]),
-                media_count=len(requested_media),
-                period_label=period_label,
-            ) if not media_payload else None
-            upload = BufferedInputFile(payload, filename=asset_path.name or f"guide_{idx}.jpg")
-            if asset_kind == "video":
-                media_payload.append(types.InputMediaVideo(media=upload, caption=caption))
-            else:
-                media_payload.append(types.InputMediaPhoto(media=upload, caption=caption))
+            caption = None
+            if not media_payload:
+                caption = inline_caption_text or build_media_caption(
+                    family=family,
+                    item_count=len(preview["items"]),
+                    media_count=len(requested_media),
+                    period_label=period_label,
+                )
+            media_payload.append(
+                _build_media_input(
+                    payload=payload,
+                    filename=asset_path.name or f"guide_{idx}.jpg",
+                    asset_kind=asset_kind,
+                    caption=caption,
+                )
+            )
         if requested_media and not media_payload:
             logger.error(
                 "guide_digest: publish aborted issue_id=%s target=%s missing materialized media assets sample=%s",
@@ -3549,11 +3606,13 @@ async def publish_guide_digest(
             sent = await bot.send_media_group(chat_id=target, media=media_payload)
             media_message_ids = [int(msg.message_id) for msg in sent if getattr(msg, "message_id", None)]
             message_ids.extend(media_message_ids)
-        for text in texts:
-            sent = await bot.send_message(target, text, parse_mode="HTML", disable_web_page_preview=True)
-            if getattr(sent, "message_id", None):
-                text_message_ids.append(int(sent.message_id))
-                message_ids.append(int(sent.message_id))
+        should_send_text_messages = not (media_message_ids and inline_caption_text)
+        if should_send_text_messages:
+            for text in texts:
+                sent = await bot.send_message(target, text, parse_mode="HTML", disable_web_page_preview=True)
+                if getattr(sent, "message_id", None):
+                    text_message_ids.append(int(sent.message_id))
+                    message_ids.append(int(sent.message_id))
         if media_message_ids and text_message_ids:
             linked_caption = build_media_caption(
                 family=family,
@@ -3751,6 +3810,8 @@ async def backfill_guide_digest_target(
         has_source = collapse_ws(row["target_chat"]) == source or source in published_targets
         if not has_source:
             continue
+        texts = _split_digest_issue_text(row["text"])
+        inline_caption_text = _inline_digest_caption_text(texts)
 
         message_ids: list[int] = []
         media_message_ids: list[int] = []
@@ -3835,7 +3896,6 @@ async def backfill_guide_digest_target(
                     parse_mode="HTML",
                 )
         else:
-            texts = _split_digest_issue_text(row["text"])
             if not texts:
                 continue
             media_items = _issue_media_items(row["media_items_json"])
@@ -3859,28 +3919,35 @@ async def backfill_guide_digest_target(
                 if not payload:
                     missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=empty_file")
                     continue
-                caption = build_media_caption(
-                    family=str(row["family"] or "new_occurrences"),
-                    item_count=_issue_items_count(row["items_json"]),
-                    media_count=len(requested_media),
-                    period_label=period_label,
-                ) if not media_payload else None
-                upload = BufferedInputFile(payload, filename=asset_path.name or f"guide_{idx}.jpg")
-                if asset_kind == "video":
-                    media_payload.append(types.InputMediaVideo(media=upload, caption=caption))
-                else:
-                    media_payload.append(types.InputMediaPhoto(media=upload, caption=caption))
+                caption = None
+                if not media_payload:
+                    caption = inline_caption_text or build_media_caption(
+                        family=str(row["family"] or "new_occurrences"),
+                        item_count=_issue_items_count(row["items_json"]),
+                        media_count=len(requested_media),
+                        period_label=period_label,
+                    )
+                media_payload.append(
+                    _build_media_input(
+                        payload=payload,
+                        filename=asset_path.name or f"guide_{idx}.jpg",
+                        asset_kind=asset_kind,
+                        caption=caption,
+                    )
+                )
             if requested_media and not media_payload:
                 raise RuntimeError(f"Guide digest issue {issue_id} media album requires materialized assets before backfill")
             if media_payload:
                 sent = await bot.send_media_group(chat_id=target, media=media_payload)
                 media_message_ids = [int(msg.message_id) for msg in sent if getattr(msg, "message_id", None)]
                 message_ids.extend(media_message_ids)
-            for text in texts:
-                sent = await bot.send_message(target, text, parse_mode="HTML", disable_web_page_preview=True)
-                if getattr(sent, "message_id", None):
-                    text_message_ids.append(int(sent.message_id))
-                    message_ids.append(int(sent.message_id))
+            should_send_text_messages = not (media_message_ids and inline_caption_text)
+            if should_send_text_messages:
+                for text in texts:
+                    sent = await bot.send_message(target, text, parse_mode="HTML", disable_web_page_preview=True)
+                    if getattr(sent, "message_id", None):
+                        text_message_ids.append(int(sent.message_id))
+                        message_ids.append(int(sent.message_id))
             if media_message_ids and text_message_ids:
                 linked_caption = build_media_caption(
                     family=str(row["family"] or "new_occurrences"),
