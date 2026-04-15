@@ -72,11 +72,15 @@ INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
 AUDIO_BITRATE = "192k"
+TELEGRAM_PUBLISH_AUDIO_BITRATE = "160k"
 FIRST_PRIMARY_SCENE_START_LOCAL = approval.SCENE1_START_LOCAL
 FINAL_VIDEO_CODEC = "libx265"
 FINAL_VIDEO_TAG = "hvc1"
 FINAL_VIDEO_PRESET = "medium"
 FINAL_VIDEO_CRF = "20"
+TELEGRAM_PUBLISH_CODEC = "libx264"
+TELEGRAM_PUBLISH_PRESET = "medium"
+TELEGRAM_PUBLISH_CRF = "22"
 PREVIEW_VIDEO_CODEC = "libx264"
 PREVIEW_VIDEO_PRESET = "slow"
 PREVIEW_VIDEO_CRF = "23"
@@ -739,6 +743,35 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
         str(out_path),
     ]
     subprocess.run(cmd, check=True)
+    if FINAL_MODE:
+        telegram_path = OUT_DIR / "telegram_publish.mp4"
+        telegram_cmd = [
+            _ffmpeg_bin(),
+            "-y",
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(FRAMES_DIR / "frame_%04d.png"),
+            "-i",
+            str(tmp_audio),
+            "-c:v",
+            TELEGRAM_PUBLISH_CODEC,
+            "-preset",
+            TELEGRAM_PUBLISH_PRESET,
+            "-crf",
+            TELEGRAM_PUBLISH_CRF,
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            TELEGRAM_PUBLISH_AUDIO_BITRATE,
+            "-shortest",
+            "-movflags",
+            "+faststart",
+            str(telegram_path),
+        ]
+        subprocess.run(telegram_cmd, check=True)
     tmp_audio.unlink(missing_ok=True)
     return out_path
 
