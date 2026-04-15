@@ -759,6 +759,16 @@ def _write_cover_frame(scenes: list[RenderScene]) -> Path:
     return out_path
 
 
+def _write_telegram_preview_frame() -> Path | None:
+    frame_path = FRAMES_DIR / "frame_0001.png"
+    if not frame_path.exists():
+        return None
+    out_path = OUT_DIR / "telegram_preview.jpg"
+    with Image.open(frame_path).convert("RGB") as image:
+        image.save(out_path, format="JPEG", quality=95, optimize=True)
+    return out_path
+
+
 def main() -> None:
     _ensure_dirs()
     payload = _load_payload()
@@ -783,9 +793,12 @@ def main() -> None:
         output_path=output_path,
     )
     cover = _write_cover_frame(scenes)
+    telegram_preview = _write_telegram_preview_frame()
     print(output_path, flush=True)
     print(manifest, flush=True)
     print(cover, flush=True)
+    if telegram_preview:
+        print(telegram_preview, flush=True)
 
 
 if __name__ == "__main__":

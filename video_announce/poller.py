@@ -67,7 +67,10 @@ logger.info(
 )
 
 
-def _video_thumbnail_input(video_path: str | Path) -> types.BufferedInputFile | None:
+def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
+    preview_path = Path(video_path).with_name("telegram_preview.jpg")
+    if preview_path.exists():
+        return FSInputFile(preview_path)
     encoded_bytes: bytes | None = None
     if cv2 is not None:
         cap = cv2.VideoCapture(str(video_path))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from pathlib import Path
 
 from video_announce import poller
 
@@ -39,3 +40,15 @@ def test_video_thumbnail_input_builds_jpeg_from_first_frame(monkeypatch):
     assert thumb is not None
     assert thumb.filename == "cherryflash_thumb.jpg"
     assert thumb.data == b"jpeg-data"
+
+
+def test_video_thumbnail_input_prefers_sibling_preview_file(tmp_path: Path) -> None:
+    video_path = tmp_path / "cherryflash.mp4"
+    preview_path = tmp_path / "telegram_preview.jpg"
+    video_path.write_bytes(b"mp4")
+    preview_path.write_bytes(b"jpg")
+
+    thumb = poller._video_thumbnail_input(video_path)
+
+    assert isinstance(thumb, poller.FSInputFile)
+    assert thumb.path == preview_path

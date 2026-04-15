@@ -625,7 +625,7 @@ This section captures the latest intro-direction request as an explicit delta to
 
 ## Telegram publish surface
 
-- Final CherryFlash video publication to Telegram channels now goes through `send_video(..., supports_streaming=True)` and explicitly attaches a thumbnail extracted from the first frame of the rendered mp4.
+- Final CherryFlash render now exports a sibling `telegram_preview.jpg` built from frame `0001`, and Telegram publication goes through `send_video(..., supports_streaming=True)` while explicitly attaching that file as the channel/list thumbnail.
 - The expected feed/list preview in Telegram should therefore match the first frame of the produced release instead of relying on Telegram-side thumbnail inference.
 ## Data and observability deltas
 

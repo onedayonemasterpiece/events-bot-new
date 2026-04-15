@@ -401,3 +401,22 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     assert "libx265" in ffmpeg_cmd
     assert "-tag:v" in ffmpeg_cmd
     assert "hvc1" in ffmpeg_cmd
+
+
+def test_write_telegram_preview_frame_exports_first_frame(monkeypatch, tmp_path: Path) -> None:
+    frames_dir = tmp_path / "frames"
+    out_dir = tmp_path / "out"
+    frames_dir.mkdir()
+    out_dir.mkdir()
+    Image.new("RGBA", (8, 8), (12, 34, 56, 255)).save(frames_dir / "frame_0001.png")
+
+    monkeypatch.setattr(full, "FRAMES_DIR", frames_dir)
+    monkeypatch.setattr(full, "OUT_DIR", out_dir)
+
+    preview = full._write_telegram_preview_frame()
+
+    assert preview == out_dir / "telegram_preview.jpg"
+    assert preview.exists()
+    with Image.open(preview) as image:
+        assert image.mode == "RGB"
+        assert image.size == (8, 8)
