@@ -72,15 +72,14 @@ INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
 AUDIO_BITRATE = "192k"
-TELEGRAM_PUBLISH_AUDIO_BITRATE = "160k"
 FIRST_PRIMARY_SCENE_START_LOCAL = approval.SCENE1_START_LOCAL
 FINAL_VIDEO_CODEC = "libx265"
 FINAL_VIDEO_TAG = "hvc1"
 FINAL_VIDEO_PRESET = "medium"
 FINAL_VIDEO_CRF = "20"
-TELEGRAM_PUBLISH_CODEC = "libx264"
-TELEGRAM_PUBLISH_PRESET = "medium"
-TELEGRAM_PUBLISH_CRF = "22"
+FINAL_X265_PARAMS = (
+    f"keyint={FPS}:min-keyint={FPS}:scenecut=0:no-open-gop=1:repeat-headers=1:bframes=0"
+)
 PREVIEW_VIDEO_CODEC = "libx264"
 PREVIEW_VIDEO_PRESET = "slow"
 PREVIEW_VIDEO_CRF = "23"
@@ -678,7 +677,14 @@ def _encode_profile() -> dict[str, str | list[str]]:
             "preset": FINAL_VIDEO_PRESET,
             "crf": FINAL_VIDEO_CRF,
             "audio_bitrate": AUDIO_BITRATE,
-            "extra_args": ["-tag:v", FINAL_VIDEO_TAG],
+            "extra_args": [
+                "-tag:v",
+                FINAL_VIDEO_TAG,
+                "-g",
+                str(FPS),
+                "-x265-params",
+                FINAL_X265_PARAMS,
+            ],
         }
     return {
         "video_codec": PREVIEW_VIDEO_CODEC,
@@ -743,35 +749,6 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
         str(out_path),
     ]
     subprocess.run(cmd, check=True)
-    if FINAL_MODE:
-        telegram_path = OUT_DIR / "telegram_publish.mp4"
-        telegram_cmd = [
-            _ffmpeg_bin(),
-            "-y",
-            "-framerate",
-            str(FPS),
-            "-i",
-            str(FRAMES_DIR / "frame_%04d.png"),
-            "-i",
-            str(tmp_audio),
-            "-c:v",
-            TELEGRAM_PUBLISH_CODEC,
-            "-preset",
-            TELEGRAM_PUBLISH_PRESET,
-            "-crf",
-            TELEGRAM_PUBLISH_CRF,
-            "-pix_fmt",
-            "yuv420p",
-            "-c:a",
-            "aac",
-            "-b:a",
-            TELEGRAM_PUBLISH_AUDIO_BITRATE,
-            "-shortest",
-            "-movflags",
-            "+faststart",
-            str(telegram_path),
-        ]
-        subprocess.run(telegram_cmd, check=True)
     tmp_audio.unlink(missing_ok=True)
     return out_path
 
@@ -789,16 +766,6 @@ def _write_cover_frame(scenes: list[RenderScene]) -> Path:
     draw.text((84, 438), first.date_line or first.description[:80], font=approval.font(approval.AKROBAT_BOLD, 30), fill=ink)
     out_path = OUT_DIR / "approval_cover.png"
     image.save(out_path)
-    return out_path
-
-
-def _write_telegram_preview_frame() -> Path | None:
-    frame_path = FRAMES_DIR / "frame_0001.png"
-    if not frame_path.exists():
-        return None
-    out_path = OUT_DIR / "telegram_preview.jpg"
-    with Image.open(frame_path).convert("RGB") as image:
-        image.save(out_path, format="JPEG", quality=95, optimize=True)
     return out_path
 
 
@@ -826,12 +793,9 @@ def main() -> None:
         output_path=output_path,
     )
     cover = _write_cover_frame(scenes)
-    telegram_preview = _write_telegram_preview_frame()
     print(output_path, flush=True)
     print(manifest, flush=True)
     print(cover, flush=True)
-    if telegram_preview:
-        print(telegram_preview, flush=True)
 
 
 if __name__ == "__main__":
