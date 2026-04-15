@@ -68,7 +68,6 @@ FPS = approval.FPS
 SPLIT_Y = approval.SPLIT_Y
 SCENE_TOTAL_LOCAL = approval.SCENE1_TOTAL_LOCAL
 SCENE_TEXT_START = approval.SCENE1_TEXT_START
-FIRST_SCENE_LOCAL_START = approval.SCENE1_START_LOCAL
 INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
@@ -226,6 +225,7 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
     for idx, raw_scene in enumerate(scenes_data, start=1):
         if not isinstance(raw_scene, dict):
             continue
+        scene_variant = str(raw_scene.get("scene_variant") or "primary")
         images = raw_scene.get("images") or []
         if isinstance(images, str):
             images = [images]
@@ -239,13 +239,13 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
         scenes.append(
             RenderScene(
                 index=idx,
-                variant=str(raw_scene.get("scene_variant") or "primary"),
+                variant=scene_variant,
                 title=str(raw_scene.get("about") or raw_scene.get("title") or "").strip(),
                 date_line=str(raw_scene.get("date") or "").strip(),
                 location_line=str(raw_scene.get("location") or "").strip(),
                 description=_scene_description(raw_scene),
                 image_path=image_path,
-                start_local=FIRST_SCENE_LOCAL_START if not scenes else 0.0,
+                start_local=0.0,
             )
         )
     final_card_path = _resolve_final_card_path()
@@ -417,7 +417,12 @@ def _render_scene_frame(scene: RenderScene, local_t: float, text_blocks) -> Imag
         if positioned is None:
             continue
         bx, by, alpha = positioned
-        canvas.alpha_composite(approval._alpha_image(block.image.copy(), alpha), (bx, by))
+        _paste_rgba_subpixel(
+            canvas,
+            approval._alpha_image(block.image.copy(), alpha),
+            bx,
+            by,
+        )
     return canvas
 
 

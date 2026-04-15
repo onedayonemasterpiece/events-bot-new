@@ -393,6 +393,8 @@ This section captures the latest intro-direction request as an explicit delta to
 - Current implementation note for this defect cluster:
   - phone-screen event counters now use plural-safe Russian copy (`1 событие`, `2 события`, `4 события`, `5 событий`);
   - the current local screen-label generation now prefers wider `Cygre` weights (`Bold` / `SemiBold`) instead of the earlier narrower-looking phone treatment;
+  - the current local screen-label texture canvas now also preserves the real on-phone label-plane aspect, so the correct `Cygre` glyphs are no longer horizontally squeezed into a narrow fallback-like read by the Blender screen plane;
+  - all primary CherryFlash 2D scenes must keep the full local timing contract (`zoom-in -> move-up -> post-move continuation -> exit`); reusing the approved first-scene late-start shortcut for scene `2+` is defective because it hides cadence bugs by cutting away part of the scene instead of fixing active-motion math;
   - this typography fix remains `Not confirmed by user` until the next CherryFlash render is manually checked.
 - User provided local downloaded phone assets and approved the Pro Max variant for implementation:
   - `/workspaces/events-bot-new/docs/reference/iphone-16-pro-max.zip`
@@ -566,6 +568,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - the post-`move_up` 2D poster drift must stay visually continuous at `30 fps`;
   - if a scene uses subpixel drift, the compositor must preserve that subpixel motion instead of rounding every frame to the same integer placement and generating full duplicates;
   - CherryFlash must not rely on a `moviepy` composition path that snaps clip placement to integer pixel coordinates for the primary-scene post-`move_up` drift;
+  - the same active-motion rule applies to word blocks and the approved first-scene renderer: during `fly-in` / `fall-out`, text and poster geometry must remain subpixel-aware until final compositing, because early `int(...)` / direct integer paste can freeze visibly moving elements on adjacent `30 fps` frames;
   - a CherryFlash render that still contains obvious exact-neighbour duplicates in the late 2D drift is defective even if the intro beat lock remains correct.
 
 ## Delivery contract

@@ -257,6 +257,27 @@ def _alpha_image(base: Image.Image, alpha: float) -> Image.Image:
     return image
 
 
+def _paste_rgba_subpixel(
+    canvas: Image.Image,
+    overlay: Image.Image,
+    x: float,
+    y: float,
+) -> None:
+    ix = math.floor(x)
+    iy = math.floor(y)
+    fx = x - ix
+    fy = y - iy
+    shifted = overlay
+    if abs(fx) > 1e-6 or abs(fy) > 1e-6:
+        shifted = overlay.transform(
+            overlay.size,
+            Image.AFFINE,
+            (1, 0, -fx, 0, 1, -fy),
+            resample=Image.Resampling.BICUBIC,
+        )
+    canvas.paste(shifted, (ix, iy), shifted)
+
+
 def _resize_poster_clean(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     resized = image.resize(size, Image.Resampling.LANCZOS)
     return resized.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=2))
@@ -555,11 +576,11 @@ def render_intro_frames() -> None:
     shutil.copy2(FRAMES_DIR / f"frame_{INTRO_END_FRAME:04d}.png", OUT_DIR / "last_intro_frame.png")
 
 
-def _poster_geometry(local_t: float, poster_size: tuple[int, int]) -> tuple[int, int, int, int]:
+def _poster_geometry(local_t: float, poster_size: tuple[int, int]) -> tuple[float, float, int, int]:
     src_w, src_h = poster_size
     if local_t < T_ENTRY:
         scale = 0.4 + (0.5 * ease_out_cubic(local_t / T_ENTRY))
-        y_mode = "center"
+        y_mode: float | str = "center"
     elif local_t < (T_ENTRY + T_HOLD):
         scale = 0.9 + (0.1 * ((local_t - T_ENTRY) / T_HOLD))
         y_mode = "center"
@@ -568,19 +589,19 @@ def _poster_geometry(local_t: float, poster_size: tuple[int, int]) -> tuple[int,
         progress = (local_t - (T_ENTRY + T_HOLD)) / T_MOVE
         start_y = H / 2
         end_y = SPLIT_Y / 2
-        y_mode = int(start_y + (end_y - start_y) * ease_in_out_cubic(progress))
+        y_mode = start_y + (end_y - start_y) * ease_in_out_cubic(progress)
     elif local_t < (SCENE1_TOTAL_LOCAL - T_EXIT):
         scale = 1.0
-        y_mode = int(SPLIT_Y / 2 - 10 * (local_t - (T_ENTRY + T_HOLD + T_MOVE)))
+        y_mode = (SPLIT_Y / 2.0) - (10.0 * (local_t - (T_ENTRY + T_HOLD + T_MOVE)))
     else:
         scale = 1.0
         progress = (local_t - (SCENE1_TOTAL_LOCAL - T_EXIT)) / T_EXIT
         start_y = SPLIT_Y / 2 - 10 * T_INFO
-        y_mode = int(start_y + (-src_h - start_y) * ease_in_cubic(progress))
+        y_mode = start_y + (-src_h - start_y) * ease_in_cubic(progress)
     poster_w = round(W * scale)
     poster_h = round(poster_w * src_h / src_w)
-    x = (W - poster_w) // 2
-    y = (H - poster_h) // 2 if y_mode == "center" else int(y_mode - poster_h / 2)
+    x = (W - poster_w) / 2.0
+    y = (H - poster_h) / 2.0 if y_mode == "center" else (float(y_mode) - poster_h / 2.0)
     return x, y, poster_w, poster_h
 
 
@@ -698,7 +719,7 @@ def build_scene_text_blocks(payload: ScenePayload) -> list[WordBlock]:
     return blocks
 
 
-def _block_position(block: WordBlock, local_t: float) -> tuple[int, int, float] | None:
+def _block_position(block: WordBlock, local_t: float) -> tuple[float, float, float] | None:
     fly_in_dur = 0.7
     fly_in_dist = 200
     fall_dur = 0.4
@@ -718,7 +739,7 @@ def _block_position(block: WordBlock, local_t: float) -> tuple[int, int, float] 
     alpha_in = min(1.0, elapsed / 0.2)
     alpha_out = min(1.0, max(0.0, block.life_duration - elapsed) / fall_dur)
     alpha = min(alpha_in, alpha_out)
-    return block.x, int(y), alpha
+    return float(block.x), float(y), alpha
 
 
 def render_scene1_frame(local_t: float, payload: ScenePayload, text_blocks: list[WordBlock]) -> Image.Image:
@@ -727,7 +748,7 @@ def render_scene1_frame(local_t: float, payload: ScenePayload, text_blocks: list
         canvas = Image.new("RGBA", (W, H), (*scene_bg, 255))
         x, y, poster_w, poster_h = _poster_geometry(local_t, poster_src.size)
         poster = _resize_poster_clean(poster_src, (poster_w, poster_h))
-        canvas.paste(poster, (x, y), poster)
+        _paste_rgba_subpixel(canvas, poster, x, y)
 
     draw = ImageDraw.Draw(canvas)
     if local_t >= (T_ENTRY + T_HOLD):
@@ -741,7 +762,7 @@ def render_scene1_frame(local_t: float, payload: ScenePayload, text_blocks: list
         if positioned is None:
             continue
         bx, by, alpha = positioned
-        canvas.alpha_composite(_alpha_image(block.image.copy(), alpha), (bx, by))
+        _paste_rgba_subpixel(canvas, _alpha_image(block.image.copy(), alpha), bx, by)
 
     return canvas
 
