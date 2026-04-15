@@ -4012,6 +4012,143 @@ def _normalize_fact_item(value: str | None, limit: int = 200) -> str | None:
     return cleaned
 
 
+_FACT_GROUNDING_STOPWORDS = {
+    "и",
+    "в",
+    "во",
+    "на",
+    "по",
+    "для",
+    "от",
+    "до",
+    "без",
+    "при",
+    "с",
+    "со",
+    "из",
+    "или",
+    "это",
+    "будет",
+    "будут",
+    "мероприятие",
+    "мероприятия",
+    "программа",
+}
+_SENSITIVE_FACT_GROUNDING_RE = re.compile(
+    r"(?iu)(?:"
+    r"\b\d{1,2}\+\b|"
+    r"\bвозраст\w+\b|"
+    r"\b(?:максимальн\w+\s+)?размер\s+групп\w*\b|"
+    r"\bгрупп\w*\b.*\bчеловек\b|"
+    r"\bмест[ао]?\b|"
+    r"\bучастник\w*\b.*\bмаксим\w*\b|"
+    r"\bпродл\w+\b|"
+    r"\bдлительност\w+\b|"
+    r"\bантракт\w*\b|"
+    r"\bконцерт\w*\b|"
+    r"\bмузык\w*\b|"
+    r"\bклассическ\w*\b|"
+    r"\bсимфони\w*\b|"
+    r"\bтоккат\w*\b|"
+    r"\bбах\b|"
+    r"\bбетховен\b|"
+    r"\bчайковск\w*\b|"
+    r"\bравель\b|"
+    r"\bболеро\b|"
+    r"\bлебедин\w+\s+озер\w+\b"
+    r")"
+)
+
+
+def _normalize_fact_grounding_text(text: str | None) -> str:
+    raw = (text or "").strip().casefold().replace("ё", "е")
+    if not raw:
+        return ""
+    raw = re.sub(r"[^\w\s]+", " ", raw, flags=re.U)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
+def _fact_grounding_tokens(text: str | None) -> list[str]:
+    raw = _normalize_fact_grounding_text(text)
+    if not raw:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in raw.split():
+        if token in _FACT_GROUNDING_STOPWORDS:
+            continue
+        if token.isdigit():
+            key = token
+        else:
+            if len(token) < 3:
+                continue
+            key = token[:7]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _candidate_fact_grounding_corpus(candidate: EventCandidate) -> str:
+    parts: list[str] = []
+    for value in (
+        _strip_promo_lines(candidate.source_text) or candidate.source_text,
+        _strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt,
+    ):
+        if str(value or "").strip():
+            parts.append(str(value or "").strip())
+    for poster in candidate.posters or []:
+        for value in (getattr(poster, "ocr_text", None), getattr(poster, "ocr_title", None)):
+            if str(value or "").strip():
+                parts.append(str(value or "").strip())
+    return _normalize_fact_grounding_text("\n".join(parts))
+
+
+def _fact_requires_strict_grounding(fact: str | None) -> bool:
+    return bool(_SENSITIVE_FACT_GROUNDING_RE.search(str(fact or "")))
+
+
+def _fact_is_grounded_in_candidate_sources(fact: str | None, candidate: EventCandidate) -> bool:
+    if not _fact_requires_strict_grounding(fact):
+        return True
+    probe = _candidate_fact_grounding_corpus(candidate)
+    tokens = _fact_grounding_tokens(fact)
+    if not probe or not tokens:
+        return False
+    matched = sum(1 for token in tokens if token and token in probe)
+    required = 1 if len(tokens) <= 1 else 2
+    return matched >= min(required, len(tokens))
+
+
+def _filter_ungrounded_sensitive_facts(
+    facts: Sequence[object] | None,
+    *,
+    candidate: EventCandidate,
+) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in facts or []:
+        cleaned = _normalize_fact_item(str(item or ""), limit=180)
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        if not _fact_is_grounded_in_candidate_sources(cleaned, candidate):
+            logger.warning(
+                "smart_update.fact_rejected reason=ungrounded_sensitive_fact source_type=%s source_url=%s fact=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip(cleaned, 180),
+            )
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
+
+
 _RU_MONTHS_GENITIVE: dict[str, int] = {
     "января": 1,
     "февраля": 2,
@@ -4339,6 +4476,14 @@ _CANONICAL_ZAKHEIM_NAME = "Закхаймские ворота"
 _CANONICAL_ZAKHEIM_ADDRESS = "Литовский Вал 61"
 _CANONICAL_ZAKHEIM_CITY = "Калининград"
 
+_CANONICAL_FRIEDLAND_NAME = "Фридландские ворота"
+_CANONICAL_FRIEDLAND_ADDRESS = "Дзержинского 30"
+_CANONICAL_FRIEDLAND_CITY = "Калининград"
+
+_CANONICAL_RAILWAY_GATES_NAME = "Железнодорожные ворота"
+_CANONICAL_RAILWAY_GATES_ADDRESS = "Гвардейский проспект 51А"
+_CANONICAL_RAILWAY_GATES_CITY = "Калининград"
+
 
 def _normalize_location_compact(value: str | None) -> str:
     if not value:
@@ -4372,11 +4517,40 @@ def _looks_like_zakheim_alias(norm_compact: str) -> bool:
         return False
     norm_soft = norm_compact.replace("-", " ").replace("—", " ")
     norm_soft = re.sub(r"\s+", " ", norm_soft).strip()
-    if "фридланд" in norm_soft:
-        return False
     if "закхайм" in norm_soft or "закхейм" in norm_soft:
         return True
-    return norm_soft in {"ворота", "арт пространство ворота", "артпространство ворота"}
+    if "литовск" in norm_soft and "61" in norm_soft:
+        return True
+    return norm_soft in {
+        "арт пространство ворота",
+        "артпространство ворота",
+        "пространство ворота",
+        "ворота галерея",
+    }
+
+
+def _looks_like_friedland_alias(norm_compact: str) -> bool:
+    if not norm_compact:
+        return False
+    norm_soft = norm_compact.replace("-", " ").replace("—", " ")
+    norm_soft = re.sub(r"\s+", " ", norm_soft).strip()
+    if "фридланд" in norm_soft:
+        return True
+    return "дзержинского 30" in norm_soft
+
+
+def _looks_like_railway_gates_alias(norm_compact: str) -> bool:
+    if not norm_compact:
+        return False
+    norm_soft = norm_compact.replace("-", " ").replace("—", " ")
+    norm_soft = re.sub(r"\s+", " ", norm_soft).strip()
+    if "железнодорож" in norm_soft:
+        return True
+    if "гвардейск" in norm_soft and "51а" in norm_soft:
+        return True
+    if "генерала буткова" in norm_soft:
+        return True
+    return False
 
 
 def _canonicalize_location_fields(
@@ -4415,10 +4589,30 @@ def _canonicalize_location_fields(
             _CANONICAL_DOM_KITOBOYA_CITY,
         )
 
+    if _looks_like_friedland_alias(combined_norm):
+        return (
+            _CANONICAL_FRIEDLAND_NAME,
+            _CANONICAL_FRIEDLAND_ADDRESS,
+            _CANONICAL_FRIEDLAND_CITY,
+        )
+
+    if _looks_like_railway_gates_alias(combined_norm):
+        return (
+            _CANONICAL_RAILWAY_GATES_NAME,
+            _CANONICAL_RAILWAY_GATES_ADDRESS,
+            _CANONICAL_RAILWAY_GATES_CITY,
+        )
+
     zakheim_by_source = bool(
         source_hint
         and "vorotagallery" in source_hint
-        and (not name_norm or "ворота" in name_norm or "закх" in name_norm)
+        and (
+            not name_norm
+            or "закх" in name_norm
+            or "литовск" in combined_norm
+            or "арт пространство ворота" in combined_norm
+            or "артпространство ворота" in combined_norm
+        )
     )
     if _looks_like_zakheim_alias(combined_norm) or zakheim_by_source:
         return (
@@ -4452,7 +4646,15 @@ def _normalize_location(value: str | None) -> str:
         return ""
     # Normalize for matching only (not for public display): remove punctuation noise and
     # make "Янтарь-холл" ~= "Янтарь холл, Ленина 11".
-    norm = _normalize_location_compact(value)
+    raw_norm_compact = _normalize_location_compact(value)
+    if _looks_like_zakheim_alias(raw_norm_compact):
+        return "закхаймские ворота"
+    if _looks_like_friedland_alias(raw_norm_compact):
+        return "фридландские ворота"
+    if _looks_like_railway_gates_alias(raw_norm_compact):
+        return "железнодорожные ворота"
+
+    norm = raw_norm_compact
     norm = norm.replace("-", " ").replace("—", " ")
     norm = re.sub(r"[«»\"']", " ", norm)
     norm = re.sub(r"\s+", " ", norm).strip()
@@ -4464,6 +4666,10 @@ def _normalize_location(value: str | None) -> str:
         return "научная библиотека"
     if _looks_like_dom_kitoboya_alias(norm_compact):
         return "дом китобоя"
+    if _looks_like_friedland_alias(norm_compact):
+        return "фридландские ворота"
+    if _looks_like_railway_gates_alias(norm_compact):
+        return "железнодорожные ворота"
     if _looks_like_zakheim_alias(norm_compact):
         return "закхаймские ворота"
     return norm
@@ -5077,7 +5283,7 @@ async def _llm_extract_candidate_facts(
         out.append(cleaned)
         if len(out) >= 20:
             break
-    return out
+    return _filter_ungrounded_sensitive_facts(out, candidate=candidate)
 
 
 async def _llm_enforce_blockquote(
@@ -10187,7 +10393,10 @@ async def _smart_event_update_impl(
                 bundled_facts_out.append(cleaned)
                 if len(bundled_facts_out) >= 18:
                     break
-            bundled_facts = bundled_facts_out
+            bundled_facts = _filter_ungrounded_sensitive_facts(
+                bundled_facts_out,
+                candidate=candidate,
+            )
 
         # Bot/manual sources should keep operator-provided titles as-is.
         if (candidate.source_type or "").strip().lower() in {"bot"}:
@@ -11043,8 +11252,14 @@ async def _smart_event_update_impl(
                 if merge_data:
                     merge_digest_from_llm = _clean_search_digest(merge_data.get("search_digest"))
                     deterministic_skipped_conflicts = list(skipped_conflicts)
-                    added_facts = list(merge_data.get("added_facts") or [])
-                    duplicate_facts = list(merge_data.get("duplicate_facts") or [])
+                    added_facts = _filter_ungrounded_sensitive_facts(
+                        merge_data.get("added_facts") or [],
+                        candidate=candidate,
+                    )
+                    duplicate_facts = _filter_ungrounded_sensitive_facts(
+                        merge_data.get("duplicate_facts") or [],
+                        candidate=candidate,
+                    )
                     conflict_facts = list(merge_data.get("conflict_facts") or [])
                     llm_skipped_conflicts = list(merge_data.get("skipped_conflicts") or [])
                     skipped_conflicts = []

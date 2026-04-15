@@ -2335,6 +2335,30 @@ _ADDRESS_HINT_RE = re.compile(
 _CITY_PREFIX_RE = re.compile(
     r"(?i)^\s*(?:г\.?|город|пос\.?|посёлок|поселок|пгт|село|деревня)\s+"
 )
+_LOCATION_GROUNDING_STOPWORDS = {
+    "в",
+    "во",
+    "на",
+    "у",
+    "из",
+    "под",
+    "для",
+    "или",
+    "the",
+    "and",
+    "калининград",
+    "светлогорск",
+    "зеленоградск",
+    "советск",
+    "гусев",
+    "черняховск",
+    "ворота",
+    "музей",
+    "театр",
+    "центр",
+    "парк",
+    "город",
+}
 
 
 def _infer_city_from_location_string(text: str | None) -> str | None:
@@ -2363,6 +2387,56 @@ def _infer_city_from_location_string(text: str | None) -> str | None:
             continue
         return p
     return None
+
+
+def _normalize_location_probe_text(text: str | None) -> str:
+    raw = str(text or "").strip().casefold().replace("ё", "е")
+    if not raw:
+        return ""
+    raw = re.sub(r"[^\w\s]+", " ", raw, flags=re.U)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
+def _location_support_tokens(text: str | None) -> list[str]:
+    raw = _normalize_location_probe_text(text)
+    if not raw:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in raw.split():
+        if token in _LOCATION_GROUNDING_STOPWORDS:
+            continue
+        if token.isdigit():
+            continue
+        if len(token) < 5:
+            continue
+        key = token[:7]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _normalize_ocr_location_case(text: str | None) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    letters = [ch for ch in raw if ch.isalpha()]
+    if letters:
+        uppercase = sum(1 for ch in letters if ch.isupper())
+        if uppercase / max(1, len(letters)) >= 0.8:
+            return raw.title()
+    return raw
+
+
+def _location_is_grounded_in_text(location: str | None, text: str | None) -> bool:
+    loc_tokens = _location_support_tokens(location)
+    probe = _normalize_location_probe_text(text)
+    if not loc_tokens or not probe:
+        return False
+    return all(tok in probe for tok in loc_tokens)
 
 
 def _looks_like_bad_title(title: str | None) -> bool:
@@ -2423,7 +2497,17 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
             continue
         if "зарегистрироваться" in low or "подписаться" in low:
             continue
-        if "📍" in ln or _ADDRESS_HINT_RE.search(cleaned) or ("," in cleaned and re.search(r"\b\d{1,3}\b", cleaned)):
+        if (
+            "📍" in ln
+            or _ADDRESS_HINT_RE.search(cleaned)
+            or (
+                "," in cleaned
+                and (
+                    re.search(r"\b\d{1,3}\b", cleaned)
+                    or _infer_city_from_location_string(cleaned.split(",", 1)[0])
+                )
+            )
+        ):
             candidates.append(cleaned)
 
     for cleaned in candidates[:6]:
@@ -2431,12 +2515,36 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if "," in cleaned:
             left, right = (part.strip() for part in cleaned.split(",", 1))
             if left and right:
+                if re.search(r"\b\d{1,2}:\d{2}\b", cleaned) and re.search(
+                    r"\b\d{1,2}\s+[А-Яа-яЁё]+\b",
+                    left,
+                ):
+                    continue
                 if _ADDRESS_HINT_RE.search(left) or re.search(r"\b\d{1,3}\b", left):
                     return cleaned, None
+                left_city = _infer_city_from_location_string(left)
+                if left_city and not _ADDRESS_HINT_RE.search(right) and not re.search(r"\b\d{1,3}\b", right):
+                    normalized_right = _normalize_ocr_location_case(right)
+                    if normalized_right:
+                        return normalized_right, None
                 return left, right
         # No comma: treat the whole line as a venue/address blob.
         if len(cleaned) >= 3:
             return cleaned, None
+    return None, None
+
+
+def _infer_location_from_poster_payloads(payload: list[dict[str, Any]] | None) -> tuple[str | None, str | None]:
+    for item in payload or []:
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if not chunk:
+                continue
+            inferred_name, inferred_addr = _infer_location_from_text(chunk)
+            if inferred_name:
+                return inferred_name, inferred_addr
     return None, None
 
 
@@ -3150,15 +3258,19 @@ def _build_candidate(
             )
             title = inferred_title
 
-    # If location wasn't extracted by Kaggle, try to infer it from the message text.
+    inferred_loc, inferred_addr = _infer_location_from_text(message_text_s or event_source_text)
+    poster_loc, poster_addr = _infer_location_from_poster_payloads(
+        assigned_posters_payload or posters_payload or message_posters_payload
+    )
     if not location_name:
-        inferred_loc, inferred_addr = _infer_location_from_text(message_text_s or event_source_text)
-        if inferred_loc:
-            location_name = inferred_loc
-            if inferred_addr and not location_address:
-                location_address = inferred_addr
+        fallback_loc = inferred_loc or poster_loc
+        fallback_addr = inferred_addr or poster_addr
+        if fallback_loc:
+            location_name = fallback_loc
+            if fallback_addr and not location_address:
+                location_address = fallback_addr
             logger.info(
-                "telegram: inferred missing location from message text source=%s message_id=%s title=%r location=%r",
+                "telegram: inferred missing location source=%s message_id=%s title=%r location=%r",
                 username,
                 message_id,
                 title,
@@ -3190,9 +3302,66 @@ def _build_candidate(
             location_name = extracted_location
             location_address = extracted_location_address
         else:
-            location_name = source.default_location
-            location_address = None
-            location_overridden_by_default = True
+            grounded_loc = inferred_loc or poster_loc
+            grounded_addr = inferred_addr or poster_addr
+            probe_parts = [str(message_text_s or event_source_text or "").strip()]
+            for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+                if not isinstance(item, dict):
+                    continue
+                for key in ("ocr_text", "ocr_title"):
+                    chunk = str(item.get(key) or "").strip()
+                    if chunk:
+                        probe_parts.append(chunk)
+            probe_text = "\n".join(part for part in probe_parts if part).strip()
+            if (
+                grounded_loc
+                and not _location_matches(extracted_location, grounded_loc)
+                and _location_is_grounded_in_text(grounded_loc, probe_text)
+                and not _location_is_grounded_in_text(extracted_location, probe_text)
+            ):
+                logger.warning(
+                    "telegram: replacing unsupported extracted location for @%s msg=%s extracted=%s grounded=%s default=%s",
+                    username,
+                    message_id,
+                    extracted_location,
+                    grounded_loc,
+                    source.default_location,
+                )
+                location_name = grounded_loc
+                location_address = grounded_addr
+            else:
+                location_name = source.default_location
+                location_address = None
+                location_overridden_by_default = True
+    elif extracted_location:
+        probe_parts = [str(message_text_s or event_source_text or "").strip()]
+        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+            if not isinstance(item, dict):
+                continue
+            for key in ("ocr_text", "ocr_title"):
+                chunk = str(item.get(key) or "").strip()
+                if chunk:
+                    probe_parts.append(chunk)
+        probe_text = "\n".join(part for part in probe_parts if part).strip()
+        grounded_loc = inferred_loc or poster_loc
+        grounded_addr = inferred_addr or poster_addr
+        if (
+            grounded_loc
+            and not _location_matches(extracted_location, grounded_loc)
+            and _location_is_grounded_in_text(grounded_loc, probe_text)
+            and not _location_is_grounded_in_text(extracted_location, probe_text)
+        ):
+            logger.warning(
+                "telegram: replaced unsupported extracted location source=%s message_id=%s title=%r extracted=%r grounded=%r",
+                username,
+                message_id,
+                title,
+                extracted_location,
+                grounded_loc,
+            )
+            location_name = grounded_loc
+            if grounded_addr:
+                location_address = grounded_addr
 
     kept_explicit_location = bool(
         extracted_location
