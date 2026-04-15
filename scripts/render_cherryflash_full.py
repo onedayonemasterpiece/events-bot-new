@@ -8,15 +8,15 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw
 
 try:
-    from moviepy import AudioFileClip, ImageSequenceClip
+    from moviepy import AudioFileClip
 except ImportError:
     from moviepy.audio.io.AudioFileClip import AudioFileClip
-    from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
 try:
     from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
@@ -72,6 +72,13 @@ INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
 AUDIO_BITRATE = "192k"
+FINAL_VIDEO_CODEC = "libx265"
+FINAL_VIDEO_TAG = "hvc1"
+FINAL_VIDEO_PRESET = "medium"
+FINAL_VIDEO_CRF = "20"
+PREVIEW_VIDEO_CODEC = "libx264"
+PREVIEW_VIDEO_PRESET = "slow"
+PREVIEW_VIDEO_CRF = "23"
 
 PRIMARY_TITLE_FONT = approval.BEBAS_BOLD
 DESCRIPTION_FONT = approval.AKROBAT_BOLD
@@ -83,6 +90,15 @@ OUTRO_BG = BG_BLACK
 OUTRO_STRIP = ImageColor.getrgb("#F1E44B")
 OUTRO_TEXT = ImageColor.getrgb("#100E0E")
 LEGACY_STRIP = (80, 20, 140, 255)
+
+KNOWN_CITY_NAMES = {
+    "Калининград",
+    "Светлогорск",
+    "Зеленоградск",
+    "Янтарный",
+    "Черняховск",
+    "Балтийск",
+}
 
 @dataclass(frozen=True)
 class RenderScene:
@@ -157,6 +173,54 @@ def _scene_description(raw_scene: dict) -> str:
             or ""
         ).split()
     )
+
+
+def _normalize_text(value: str | None) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+def _format_display_date(raw_date: str | None, raw_time: str | None = None) -> str:
+    date_line = _normalize_text(raw_date)
+    if date_line:
+        try:
+            dt = date.fromisoformat(date_line)
+        except ValueError:
+            dt = None
+        if dt is not None:
+            date_line = f"{dt.day} {approval.MONTHS_GENITIVE[dt.month]}"
+    time_line = _normalize_text(raw_time)
+    if time_line and time_line != "00:00" and time_line not in date_line:
+        date_line = f"{date_line} • {time_line}" if date_line else time_line
+    return date_line.upper()
+
+
+def _extract_city_from_location(raw_location: str | None) -> str:
+    parts = [part.strip() for part in str(raw_location or "").split(",") if part.strip()]
+    for part in reversed(parts):
+        if part in KNOWN_CITY_NAMES:
+            return part
+    return ""
+
+
+def _format_display_location(
+    *,
+    location_name: str | None = None,
+    city: str | None = None,
+    raw_location: str | None = None,
+) -> str:
+    explicit_location = _normalize_text(location_name)
+    explicit_city = _normalize_text(city).split(",")[0].strip()
+    raw_location_norm = _normalize_text(raw_location)
+    fallback_location = raw_location_norm.split(",")[0].strip() if raw_location_norm else ""
+    city_value = explicit_city or _extract_city_from_location(raw_location_norm)
+    parts = [
+        part.upper()
+        for part in (explicit_location or fallback_location, city_value)
+        if part
+    ]
+    if parts:
+        return " • ".join(dict.fromkeys(parts))
+    return raw_location_norm.upper()
 
 
 def _resolve_final_card_path() -> Path | None:
@@ -241,8 +305,15 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                 index=idx,
                 variant=scene_variant,
                 title=str(raw_scene.get("about") or raw_scene.get("title") or "").strip(),
-                date_line=str(raw_scene.get("date") or "").strip(),
-                location_line=str(raw_scene.get("location") or "").strip(),
+                date_line=_format_display_date(
+                    raw_scene.get("date_iso") or raw_scene.get("date"),
+                    raw_scene.get("time"),
+                ),
+                location_line=_format_display_location(
+                    location_name=raw_scene.get("location_name"),
+                    city=raw_scene.get("city"),
+                    raw_location=raw_scene.get("location"),
+                ),
                 description=_scene_description(raw_scene),
                 image_path=image_path,
                 start_local=0.0,
@@ -580,12 +651,36 @@ def _scale_audio_volume(audio: object, factor: float) -> object:
     return audio
 
 
+def _ffmpeg_bin() -> str:
+    """Return path to the ffmpeg binary (imageio-ffmpeg bundled copy)."""
+    try:
+        from imageio_ffmpeg import get_ffmpeg_exe
+
+        return get_ffmpeg_exe()
+    except ImportError:
+        return "ffmpeg"
+
+
+def _encode_profile() -> dict[str, str | list[str]]:
+    if FINAL_MODE:
+        return {
+            "video_codec": FINAL_VIDEO_CODEC,
+            "preset": FINAL_VIDEO_PRESET,
+            "crf": FINAL_VIDEO_CRF,
+            "audio_bitrate": AUDIO_BITRATE,
+            "extra_args": ["-tag:v", FINAL_VIDEO_TAG],
+        }
+    return {
+        "video_codec": PREVIEW_VIDEO_CODEC,
+        "preset": PREVIEW_VIDEO_PRESET,
+        "crf": PREVIEW_VIDEO_CRF,
+        "audio_bitrate": AUDIO_BITRATE,
+        "extra_args": [],
+    }
+
+
 def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
-    frame_paths = [
-        str(FRAMES_DIR / f"frame_{frame_num:04d}.png")
-        for frame_num in range(1, final_frame + 1)
-    ]
-    clip = ImageSequenceClip(frame_paths, fps=FPS)
+    # --- 1. Prepare trimmed + volume-scaled audio as a temp WAV ----------
     audio_path = _candidate_audio_path()
     audio = AudioFileClip(str(audio_path))
     start_seconds = _audio_start_seconds(audio_path) + max(0.0, audio_shift_seconds)
@@ -594,35 +689,51 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
             audio = audio.subclipped(start_seconds)
         else:
             audio = audio.subclip(start_seconds)
+    video_duration = final_frame / FPS
     if hasattr(audio, "with_duration"):
-        audio = audio.with_duration(clip.duration)
+        audio = audio.with_duration(video_duration)
     else:
-        audio = audio.set_duration(clip.duration)
+        audio = audio.set_duration(video_duration)
     audio = _scale_audio_volume(audio, 0.45)
-    if hasattr(clip, "with_audio"):
-        clip = clip.with_audio(audio)
-    else:
-        clip = clip.set_audio(audio)
-    out_path = OUT_DIR / f"cherryflash_full_{MODE_SLUG}.mp4"
-    clip.write_videofile(
-        str(out_path),
-        fps=FPS,
-        codec="libx264",
-        audio_codec="aac",
-        preset="slow",
-        audio_bitrate=AUDIO_BITRATE,
-        ffmpeg_params=[
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
-            "-crf",
-            "20" if FINAL_MODE else "23",
-        ],
-        logger="bar",
-    )
+    tmp_audio = FRAMES_DIR / "_audio_tmp.wav"
+    audio.write_audiofile(str(tmp_audio), fps=44100, logger=None)
     audio.close()
-    clip.close()
+
+    # --- 2. Encode video + audio with ffmpeg directly --------------------
+    # MoviePy's ImageSequenceClip can introduce timestamp jitter that causes
+    # certain decoded frames to map back to the previous source PNG.  Calling
+    # ffmpeg directly with image2 + -framerate preserves exact 1/FPS timing.
+    out_path = OUT_DIR / f"cherryflash_full_{MODE_SLUG}.mp4"
+    profile = _encode_profile()
+    cmd = [
+        _ffmpeg_bin(),
+        "-y",
+        "-framerate",
+        str(FPS),
+        "-i",
+        str(FRAMES_DIR / "frame_%04d.png"),
+        "-i",
+        str(tmp_audio),
+        "-c:v",
+        str(profile["video_codec"]),
+        "-preset",
+        str(profile["preset"]),
+        "-crf",
+        str(profile["crf"]),
+        "-pix_fmt",
+        "yuv420p",
+        *list(profile["extra_args"]),
+        "-c:a",
+        "aac",
+        "-b:a",
+        str(profile["audio_bitrate"]),
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        str(out_path),
+    ]
+    subprocess.run(cmd, check=True)
+    tmp_audio.unlink(missing_ok=True)
     return out_path
 
 

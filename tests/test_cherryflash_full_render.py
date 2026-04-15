@@ -111,6 +111,37 @@ def test_build_render_scenes_keeps_full_timing_for_all_primary_scenes(
     assert {scene.start_local for scene in primary_scenes} == {0.0}
 
 
+def test_build_render_scenes_formats_viewer_facing_date_and_location(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_frame(tmp_path / "scene1.png", (255, 255, 255, 255))
+    _write_frame(tmp_path / "Final.png", (255, 255, 0, 255))
+
+    monkeypatch.setattr(full, "ROOT", tmp_path)
+
+    scenes = full._build_render_scenes(
+        {
+            "scenes": [
+                {
+                    "title": "Scene 1",
+                    "about": "Scene 1",
+                    "date": "2026-04-15",
+                    "time": "19:00",
+                    "location": "Янтарь холл, Ленина 11, Светлогорск",
+                    "location_name": "Янтарь холл",
+                    "city": "Светлогорск",
+                    "images": ["scene1.png"],
+                }
+            ]
+        }
+    )
+
+    scene = scenes[0]
+    assert scene.date_line == "15 АПРЕЛЯ • 19:00"
+    assert scene.location_line == "ЯНТАРЬ ХОЛЛ • СВЕТЛОГОРСК"
+
+
 def test_primary_geometry_advances_primary_drift_every_30fps_frame(
     monkeypatch,
     tmp_path: Path,
@@ -251,3 +282,73 @@ def test_render_scene_frames_uses_short_brand_outro_duration(
         "frame_0002.png",
         "frame_0003.png",
     ]
+
+
+def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    frames_dir = tmp_path / "frames"
+    out_dir = tmp_path / "out"
+    frames_dir.mkdir()
+    out_dir.mkdir()
+
+    class DummyAudio:
+        duration = 999.0
+
+        def subclipped(self, start):
+            self.start = start
+            return self
+
+        def with_duration(self, duration):
+            self.trimmed_duration = duration
+            return self
+
+        def write_audiofile(self, path, fps=44100, logger=None):
+            Path(path).write_bytes(b"RIFF")
+
+        def close(self):
+            return None
+
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(full, "FRAMES_DIR", frames_dir)
+    monkeypatch.setattr(full, "OUT_DIR", out_dir)
+    monkeypatch.setattr(full, "MODE_SLUG", "final")
+    monkeypatch.setattr(full, "FINAL_MODE", True)
+    monkeypatch.setattr(full, "FPS", 30)
+    monkeypatch.setattr(full, "AUDIO_BITRATE", "192k")
+    monkeypatch.setattr(full, "FINAL_VIDEO_CODEC", "libx265")
+    monkeypatch.setattr(full, "FINAL_VIDEO_TAG", "hvc1")
+    monkeypatch.setattr(full, "FINAL_VIDEO_PRESET", "medium")
+    monkeypatch.setattr(full, "FINAL_VIDEO_CRF", "20")
+    monkeypatch.setattr(full, "_candidate_audio_path", lambda: tmp_path / "audio.mp3")
+    monkeypatch.setattr(full, "_audio_start_seconds", lambda _: 0.0)
+    monkeypatch.setattr(full, "_scale_audio_volume", lambda audio, factor: audio)
+    monkeypatch.setattr(full, "_ffmpeg_bin", lambda: "ffmpeg-bin")
+    monkeypatch.setattr(full, "AudioFileClip", lambda _: DummyAudio())
+
+    def fake_run(cmd, check=True):
+        commands.append(cmd)
+        if cmd and cmd[0] == "ffmpeg-bin":
+            (out_dir / "cherryflash_full_final.mp4").write_bytes(b"mp4")
+        return None
+
+    monkeypatch.setattr(full.subprocess, "run", fake_run)
+
+    output = full._encode_video(final_frame=60, audio_shift_seconds=0.0)
+
+    assert output == out_dir / "cherryflash_full_final.mp4"
+    ffmpeg_cmd = commands[-1]
+    assert ffmpeg_cmd[:5] == [
+        "ffmpeg-bin",
+        "-y",
+        "-framerate",
+        "30",
+        "-i",
+    ]
+    assert str(frames_dir / "frame_%04d.png") in ffmpeg_cmd
+    assert "-c:v" in ffmpeg_cmd
+    assert "libx265" in ffmpeg_cmd
+    assert "-tag:v" in ffmpeg_cmd
+    assert "hvc1" in ffmpeg_cmd

@@ -564,12 +564,17 @@ This section captures the latest intro-direction request as an explicit delta to
   - if duplicate removal changes clip duration **before** the first `move-up` beat anchor, the audio start offset must be shifted by the removed duration so the strong beat still lands on the same `move-up` frame;
   - duplicate removal after that anchor must not force a second retime of the already-approved first `move-up` beat.
 - Dedupe output should be visible in artifacts/logs so remaining visual holds can be audited from the run output.
-- The preferred fix for late-scene duplicate frames is to prevent them at render time, not to paper over them with a second global dedupe pass:
-  - the post-`move_up` 2D poster drift must stay visually continuous at `30 fps`;
-  - if a scene uses subpixel drift, the compositor must preserve that subpixel motion instead of rounding every frame to the same integer placement and generating full duplicates;
-  - CherryFlash must not rely on a `moviepy` composition path that snaps clip placement to integer pixel coordinates for the primary-scene post-`move_up` drift;
-  - the same active-motion rule applies to word blocks and the approved first-scene renderer: during `fly-in` / `fall-out`, text and poster geometry must remain subpixel-aware until final compositing, because early `int(...)` / direct integer paste can freeze visibly moving elements on adjacent `30 fps` frames;
-  - a CherryFlash render that still contains obvious exact-neighbour duplicates in the late 2D drift is defective even if the intro beat lock remains correct.
+- The proven fix for the reproduced “frozen / near-frozen” 2D pairs is now in the encode stage, not in the scene math:
+  - the source PNG frame sequence may already be visually smooth while the final mp4 is defective;
+  - the root cause for the reproduced two-scene probe was `MoviePy.ImageSequenceClip.write_videofile()`, which introduced presentation-timestamp jitter during encode and caused certain decoded frames to map back to the previous source PNG;
+  - CherryFlash must therefore encode the final mp4 through a direct `ffmpeg` image-sequence path (`image2` demuxer with explicit `-framerate <FPS>`), so each `frame_%04d.png` receives an exact `1/FPS` timestamp and no synthetic duplicate-frame pattern is introduced by the wrapper layer;
+  - when validating similar incidents, always inspect both the source PNG sequence and the decoded mp4 frame mapping before changing scene math, easing, or drift-speed hypotheses;
+  - viewer-facing `date_line` / `location_line` in the full CherryFlash renderer must still use the same human formatter as the approved first-scene path, so ISO dates or raw comma-heavy address strings never leak into the final 2D scenes;
+  - a CherryFlash render that still contains obvious exact-neighbour duplicates after the direct `ffmpeg` image-sequence encode is defective and should be investigated as a render-math issue, not silently masked by a second global dedupe pass.
+- The final publish-grade mp4 must also use a compact HEVC profile on that same direct `ffmpeg` path:
+  - target budget: the complete daily release with intro, `2..6` event scenes, and branded outro should fit within about `15 MB` for Telegram/Stories-style delivery;
+  - final mode should therefore prefer `libx265` / HEVC with `hvc1` tagging, while local preview mode may keep `libx264` for faster iteration;
+  - this compact publish profile is a delivery optimization on top of the direct image-sequence encode, not a replacement for source-frame validation.
 
 ## Delivery contract
 
