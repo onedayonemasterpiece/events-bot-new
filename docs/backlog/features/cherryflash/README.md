@@ -625,9 +625,23 @@ This section captures the latest intro-direction request as an explicit delta to
 
 ## Telegram publish surface
 
-- Final CherryFlash render now exports a sibling `telegram_preview.jpg` built from frame `0001`, and Telegram publication goes through `send_video(..., supports_streaming=True)` while explicitly attaching that file as the channel/list thumbnail.
-- Final CherryFlash render also exports a sibling `telegram_publish.mp4` in H.264/AVC specifically for Telegram channel delivery, while the main release artifact may stay on the more compact HEVC path.
-- The expected feed/list preview in Telegram should therefore come from the first frame of that Telegram-compatible publish copy instead of relying on Telegram-side HEVC thumbnail inference.
+- CherryFlash must publish a single final mp4 artifact, not a separate Telegram-only transcode.
+- The final artifact stays on the compact HEVC path and is encoded through direct `ffmpeg image2` muxing with:
+  - `libx265`
+  - `-tag:v hvc1`
+  - `-movflags +faststart`
+  - fixed one-second GOP / closed GOP / repeated headers / disabled B-frames
+- Telegram publication goes through the same final file via `send_video(..., supports_streaming=True)`.
+- If Telegram feed preview regresses again, the first place to inspect is the final HEVC mux settings and keyframe contract, not an auxiliary publish-sidecar.
+
+## Story publish contract
+
+- CherryFlash manual `/v -> CherryFlash` and scheduled `popular_review` runs share the same story runtime contract.
+- If the selection manifest requests story publish, the Kaggle notebook must fail closed when:
+  - the shared `story_publish.py` helper is absent from the mounted bundle;
+  - `story_publish.json` is not mounted into Kaggle input;
+  - preflight/publish returns a failing report.
+- A run where `story_publish_enabled=true` but `story_publish.json` is missing must never silently continue to mp4-only delivery.
 ## Data and observability deltas
 
 - Session metadata should explicitly mark this mode, for example `selection_params.mode=popular_review`.
@@ -662,8 +676,8 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase 1 publication goes only to `@keniggpt`.
-- [ ] Story autopublish stays off, while the mode remains story-ready for later rollout.
-- [ ] When story autopublish is later enabled, the target operating expectation is that the story is already published by `12:30 Europe/Kaliningrad`.
+- [ ] Story autopublish is enabled for the production CherryFlash route and uses the same contract for manual and scheduled runs.
+- [ ] By `12:30 Europe/Kaliningrad`, the scheduled CherryFlash story is already published to its target surfaces.
 
 ## Linked design work
 

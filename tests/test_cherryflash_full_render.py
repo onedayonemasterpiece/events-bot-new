@@ -401,32 +401,7 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     assert "libx265" in commands[0]
     assert "-tag:v" in commands[0]
     assert "hvc1" in commands[0]
-    assert commands[1][:5] == [
-        "ffmpeg-bin",
-        "-y",
-        "-framerate",
-        "30",
-        "-i",
-    ]
-    assert str(frames_dir / "frame_%04d.png") in commands[1]
-    assert "libx264" in commands[1]
-    assert str(out_dir / "telegram_publish.mp4") in commands[1]
-
-
-def test_write_telegram_preview_frame_exports_first_frame(monkeypatch, tmp_path: Path) -> None:
-    frames_dir = tmp_path / "frames"
-    out_dir = tmp_path / "out"
-    frames_dir.mkdir()
-    out_dir.mkdir()
-    Image.new("RGBA", (8, 8), (12, 34, 56, 255)).save(frames_dir / "frame_0001.png")
-
-    monkeypatch.setattr(full, "FRAMES_DIR", frames_dir)
-    monkeypatch.setattr(full, "OUT_DIR", out_dir)
-
-    preview = full._write_telegram_preview_frame()
-
-    assert preview == out_dir / "telegram_preview.jpg"
-    assert preview.exists()
-    with Image.open(preview) as image:
-        assert image.mode == "RGB"
-        assert image.size == (8, 8)
+    assert "-x265-params" in commands[0]
+    params_idx = commands[0].index("-x265-params") + 1
+    assert commands[0][params_idx] == "keyint=30:min-keyint=30:scenecut=0:no-open-gop=1:repeat-headers=1:bframes=0"
+    assert len(commands) == 1

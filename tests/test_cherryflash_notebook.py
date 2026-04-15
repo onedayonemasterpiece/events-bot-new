@@ -45,3 +45,6 @@ def test_cherryflash_notebook_uses_common_story_publish_helper():
     assert "from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle" in source
     assert "thread = threading.Thread(target=_runner)" in source
     assert "asyncio.get_running_loop()" in source
+    assert "story_publish_requested = bool((selection_manifest or {}).get('story_publish_enabled'))" in source
+    assert "CherryFlash story publish requested but shared story helper is unavailable in Kaggle bundle" in source
+    assert "CherryFlash story publish requested but story_publish.json was not mounted into Kaggle input" in source
