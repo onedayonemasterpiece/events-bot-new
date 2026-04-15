@@ -5,6 +5,7 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -569,6 +570,57 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
     )
     assert selection_manifest["story_publish_enabled"] is True
     assert selection_manifest["story_publish_mode"] == "video"
+
+
+@pytest.mark.asyncio
+async def test_create_cherryflash_dataset_fails_when_story_requested_but_config_missing(
+    monkeypatch,
+    tmp_path,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+
+    async def _fake_prefetch(payload_obj, tmp_dir, *, max_images_per_scene=3):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(scenario, "_prefetch_scene_images", _fake_prefetch)
+    monkeypatch.setattr(
+        "video_announce.scenario.build_story_publish_config",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "video_announce.scenario.ensure_story_secret_datasets",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+
+    class _DummyClient:
+        def create_dataset(self, path):  # noqa: ANN001
+            raise AssertionError("dataset create must not happen when story config is missing")
+
+    payload = {
+        "scenes": [
+            {
+                "event_id": 101,
+                "title": "Event One",
+                "date": "12 апреля",
+                "location": "Калининград",
+                "images": ["poster_1.jpg"],
+                "description": "desc one",
+                "scene_variant": "primary",
+            }
+        ]
+    }
+
+    with pytest.raises(RuntimeError, match="story_publish.json was not generated"):
+        await scenario._create_cherryflash_dataset(
+            SimpleNamespace(id=42, main_chat_id=-100123),
+            json.dumps(payload, ensure_ascii=False),
+            client=_DummyClient(),
+            selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        )
 
 
 @pytest.mark.asyncio

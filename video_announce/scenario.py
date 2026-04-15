@@ -3596,6 +3596,10 @@ class VideoAnnounceScenario:
                         encoding="utf-8",
                     )
                     story_dataset_sources = await ensure_story_secret_datasets(client)
+                else:
+                    raise RuntimeError(
+                        "CherryFlash story publish was requested but story_publish.json was not generated"
+                    )
             selection_manifest = self._build_cherryflash_selection_manifest(
                 payload_obj,
                 selection_params=selection_params,

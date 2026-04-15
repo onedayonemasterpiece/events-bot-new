@@ -389,18 +389,28 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
 
     assert output == out_dir / "cherryflash_full_final.mp4"
     ffmpeg_cmd = commands[-1]
-    assert ffmpeg_cmd[:5] == [
+    assert commands[0][:5] == [
         "ffmpeg-bin",
         "-y",
         "-framerate",
         "30",
         "-i",
     ]
-    assert str(frames_dir / "frame_%04d.png") in ffmpeg_cmd
-    assert "-c:v" in ffmpeg_cmd
-    assert "libx265" in ffmpeg_cmd
-    assert "-tag:v" in ffmpeg_cmd
-    assert "hvc1" in ffmpeg_cmd
+    assert str(frames_dir / "frame_%04d.png") in commands[0]
+    assert "-c:v" in commands[0]
+    assert "libx265" in commands[0]
+    assert "-tag:v" in commands[0]
+    assert "hvc1" in commands[0]
+    assert commands[1][:5] == [
+        "ffmpeg-bin",
+        "-y",
+        "-framerate",
+        "30",
+        "-i",
+    ]
+    assert str(frames_dir / "frame_%04d.png") in commands[1]
+    assert "libx264" in commands[1]
+    assert str(out_dir / "telegram_publish.mp4") in commands[1]
 
 
 def test_write_telegram_preview_frame_exports_first_frame(monkeypatch, tmp_path: Path) -> None:

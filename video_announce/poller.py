@@ -115,6 +115,12 @@ def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
     return types.BufferedInputFile(encoded_bytes, filename=f"{stem}_thumb.jpg")
 
 
+def _telegram_publish_video_path(video_path: str | Path) -> Path:
+    path = Path(video_path)
+    sibling = path.with_name("telegram_publish.mp4")
+    return sibling if sibling.exists() else path
+
+
 async def _send_video_with_preview(
     bot,
     chat_id: int,
@@ -122,10 +128,11 @@ async def _send_video_with_preview(
     *,
     caption: str,
 ) -> None:
+    publish_path = _telegram_publish_video_path(video_path)
     await bot.send_video(
         chat_id,
-        FSInputFile(video_path),
-        thumbnail=_video_thumbnail_input(video_path),
+        FSInputFile(publish_path),
+        thumbnail=_video_thumbnail_input(publish_path),
         caption=caption,
         supports_streaming=True,
     )

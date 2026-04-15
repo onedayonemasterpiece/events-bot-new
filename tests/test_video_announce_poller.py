@@ -52,3 +52,14 @@ def test_video_thumbnail_input_prefers_sibling_preview_file(tmp_path: Path) -> N
 
     assert isinstance(thumb, poller.FSInputFile)
     assert thumb.path == preview_path
+
+
+def test_telegram_publish_video_path_prefers_h264_sibling(tmp_path: Path) -> None:
+    video_path = tmp_path / "cherryflash_full_final.mp4"
+    publish_path = tmp_path / "telegram_publish.mp4"
+    video_path.write_bytes(b"hevc")
+    publish_path.write_bytes(b"h264")
+
+    chosen = poller._telegram_publish_video_path(video_path)
+
+    assert chosen == publish_path
