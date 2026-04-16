@@ -624,6 +624,63 @@ async def test_create_cherryflash_dataset_fails_when_story_requested_but_config_
 
 
 @pytest.mark.asyncio
+async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_is_stripped(
+    monkeypatch,
+    tmp_path,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    captured: dict[str, object] = {}
+
+    async def _fake_create_cherryflash_dataset(session_obj, json_text, *, client, selection_params):  # noqa: ANN001
+        captured["selection_params"] = dict(selection_params)
+        return "zigomaro/cherryflash-session-test", []
+
+    monkeypatch.setattr(scenario, "_create_cherryflash_dataset", _fake_create_cherryflash_dataset)
+
+    payload = {
+        "selection_params": {
+            "mode": "popular_review",
+        },
+        "scenes": [],
+    }
+    session_obj = SimpleNamespace(
+        id=158,
+        kaggle_kernel_ref="local:CherryFlash",
+        selection_params={
+            "mode": "popular_review",
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_targets_override": [
+                {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
+                {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+            ],
+        },
+    )
+
+    dataset_id, story_sources = await scenario._create_dataset(
+        session_obj,
+        json.dumps(payload, ensure_ascii=False),
+        [],
+        client=SimpleNamespace(),
+    )
+
+    assert dataset_id == "zigomaro/cherryflash-session-test"
+    assert story_sources == []
+    assert captured["selection_params"] == {
+        "mode": "popular_review",
+        "story_publish_enabled": True,
+        "story_publish_mode": "video",
+        "story_targets_override": [
+            {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
+            {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+        ],
+    }
+
+
+@pytest.mark.asyncio
 async def test_create_cherryflash_dataset_retries_dataset_create_after_invalid_token(
     monkeypatch,
     tmp_path,

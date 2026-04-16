@@ -19,7 +19,7 @@ def _cell_source(index: int) -> str:
 def test_cherryflash_notebook_installs_shared_story_helper_dependencies():
     source = _cell_source(0)
 
-    assert "NOTEBOOK_VERSION = 'v13-apt-resilient-hevc-final'" in source
+    assert "NOTEBOOK_VERSION = 'v14-story-merge-hevc-compact'" in source
     assert "'opencv-python'" in source
     assert "'requests'" in source
     assert "'telethon'" in source

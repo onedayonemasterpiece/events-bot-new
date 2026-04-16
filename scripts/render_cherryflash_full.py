@@ -75,10 +75,10 @@ AUDIO_BITRATE = "192k"
 FIRST_PRIMARY_SCENE_START_LOCAL = approval.SCENE1_START_LOCAL
 FINAL_VIDEO_CODEC = "libx265"
 FINAL_VIDEO_TAG = "hvc1"
-FINAL_VIDEO_PRESET = "medium"
-FINAL_VIDEO_CRF = "20"
+FINAL_VIDEO_PRESET = "slow"
+FINAL_VIDEO_CRF = "24"
 FINAL_X265_PARAMS = (
-    f"keyint={FPS}:min-keyint={FPS}:scenecut=0:no-open-gop=1:repeat-headers=1:bframes=0"
+    f"keyint={FPS}:min-keyint={FPS}:scenecut=0:no-open-gop=1:repeat-headers=1"
 )
 PREVIEW_VIDEO_CODEC = "libx264"
 PREVIEW_VIDEO_PRESET = "slow"

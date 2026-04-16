@@ -630,13 +630,18 @@ This section captures the latest intro-direction request as an explicit delta to
   - `libx265`
   - `-tag:v hvc1`
   - `-movflags +faststart`
-  - fixed one-second GOP / closed GOP / repeated headers / disabled B-frames
+  - fixed one-second GOP / closed GOP / repeated headers
+- The compact HEVC publish profile is tuned for story-size budget rather than archival quality:
+  - `preset=slow`
+  - `crf=24`
 - Telegram publication goes through the same final file via `send_video(..., supports_streaming=True)`.
 - If Telegram feed preview regresses again, the first place to inspect is the final HEVC mux settings and keyframe contract, not an auxiliary publish-sidecar.
 
 ## Story publish contract
 
 - CherryFlash manual `/v -> CherryFlash` and scheduled `popular_review` runs share the same story runtime contract.
+- The dataset builder must merge `session.selection_params` over the payload-level viewer metadata before deciding whether story publish is requested.
+- The payload JSON may intentionally carry a reduced `selection_params` object for render/runtime needs; that reduced payload metadata must not disable story publish or drop target overrides during Kaggle bundle assembly.
 - If the selection manifest requests story publish, the Kaggle notebook must fail closed when:
   - the shared `story_publish.py` helper is absent from the mounted bundle;
   - `story_publish.json` is not mounted into Kaggle input;

@@ -3705,11 +3705,13 @@ class VideoAnnounceScenario:
             except Exception:
                 logger.warning("video_announce: failed to parse payload json for prefetch")
 
-            selection_params = {}
+            selection_params: dict[str, Any] = {}
+            if isinstance(session_obj.selection_params, dict):
+                selection_params.update(session_obj.selection_params)
             if isinstance(payload_obj, dict):
-                selection_params = payload_obj.get("selection_params") or {}
-            if not selection_params and isinstance(session_obj.selection_params, dict):
-                selection_params = session_obj.selection_params
+                payload_selection_params = payload_obj.get("selection_params") or {}
+                if isinstance(payload_selection_params, dict):
+                    selection_params.update(payload_selection_params)
             is_test = False
             if isinstance(selection_params, dict):
                 mode = selection_params.get("mode")
