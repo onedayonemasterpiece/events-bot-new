@@ -25,6 +25,7 @@ from models import (
 from video_announce.custom_types import RankedEvent
 from video_announce.handlers import handle_video_callback
 from video_announce.popular_review import PopularReviewPick, PopularReviewSelection
+import video_announce.scenario as scenario_module
 from video_announce.scenario import TOMORROW_TEST_MIN_POSTERS, VideoAnnounceScenario
 
 
@@ -313,6 +314,106 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
         assert len(items) == 2
         assert all(item.status == VideoAnnounceItemStatus.READY for item in items)
         assert all(item.final_description for item in items)
+
+
+@pytest.mark.asyncio
+async def test_render_and_notify_waits_for_dataset_ready_and_persists_actual_kernel_ref_on_bind_failure(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            selection_params={"mode": "popular_review"},
+            test_chat_id=-1002210431821,
+            main_chat_id=None,
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class _DummyClient:
+        def get_kernel_status(self, kernel_ref: str) -> dict[str, str]:
+            assert kernel_ref == "zigomaro/cherryflash"
+            return {"status": "RUNNING"}
+
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db, bot, chat_id=123, user_id=1)
+    call_order: list[tuple[str, str]] = []
+
+    async def _fake_create_dataset(self, session_obj, json_text, finalized, *, client):  # noqa: ANN001,ARG002
+        assert session_obj.id == session_id
+        return "zigomaro/cherryflash-session-161", ["zigomaro/story-cipher"]
+
+    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref):  # noqa: ANN001
+        assert kernel_ref == "local:CherryFlash"
+        assert dataset_sources == [
+            "zigomaro/cherryflash-session-161",
+            "zigomaro/story-cipher",
+        ]
+        call_order.append(("push_kernel", kernel_ref))
+        return "zigomaro/cherryflash"
+
+    async def _fake_update_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return (123, 1)
+
+    async def _fake_await_dataset_ready(client, dataset_ref, **kwargs):  # noqa: ANN001
+        call_order.append(("dataset_ready", dataset_ref))
+        assert kwargs["expected_files"] == ["payload.json"]
+        return {"status": "ready", "files": ["payload.json"]}
+
+    async def _fake_await_kernel_dataset_sources(client, kernel_ref, expected_sources, **kwargs):  # noqa: ANN001
+        call_order.append(("bind_wait", kernel_ref))
+        assert kernel_ref == "zigomaro/cherryflash"
+        assert expected_sources == [
+            "zigomaro/cherryflash-session-161",
+            "zigomaro/story-cipher",
+        ]
+        raise RuntimeError("bind failed")
+
+    monkeypatch.setattr(scenario_module, "KaggleClient", _DummyClient)
+    monkeypatch.setattr(VideoAnnounceScenario, "_create_dataset", _fake_create_dataset)
+    monkeypatch.setattr(VideoAnnounceScenario, "_push_kernel", _fake_push_kernel)
+    monkeypatch.setattr(scenario_module, "update_status_message", _fake_update_status_message)
+    monkeypatch.setattr(scenario_module, "await_dataset_ready", _fake_await_dataset_ready)
+    monkeypatch.setattr(
+        scenario_module,
+        "await_kernel_dataset_sources",
+        _fake_await_kernel_dataset_sources,
+    )
+
+    session_obj = SimpleNamespace(
+        id=session_id,
+        kaggle_kernel_ref="local:CherryFlash",
+        kaggle_dataset=None,
+        main_chat_id=None,
+    )
+    await scenario._render_and_notify(  # noqa: SLF001
+        session_obj,
+        [],
+        status_message=(123, 1),
+        payload_json="{}",
+    )
+
+    assert call_order == [
+        ("dataset_ready", "zigomaro/cherryflash-session-161"),
+        ("push_kernel", "local:CherryFlash"),
+        ("bind_wait", "zigomaro/cherryflash"),
+    ]
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.error == "kaggle push failed"
+        assert refreshed.kaggle_dataset == "zigomaro/cherryflash-session-161"
+        assert refreshed.kaggle_kernel_ref == "zigomaro/cherryflash"
 
 
 @pytest.mark.asyncio

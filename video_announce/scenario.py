@@ -45,6 +45,7 @@ from .poster_overlay import enrich_payload_with_poster_overlays
 from .kaggle_client import (
     DEFAULT_KERNEL_PATH,
     KaggleClient,
+    await_dataset_ready,
     await_kernel_dataset_sources,
     list_local_kernels,
 )
@@ -115,6 +116,14 @@ VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS = max(
 VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS = max(
     2,
     int(os.getenv("VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS", "10")),
+)
+VIDEO_KAGGLE_DATASET_READY_WAIT_SECONDS = max(
+    15,
+    int(os.getenv("VIDEO_KAGGLE_DATASET_READY_WAIT_SECONDS", "180")),
+)
+VIDEO_KAGGLE_DATASET_READY_POLL_SECONDS = max(
+    2,
+    int(os.getenv("VIDEO_KAGGLE_DATASET_READY_POLL_SECONDS", "5")),
 )
 
 
@@ -2431,10 +2440,13 @@ class VideoAnnounceScenario:
                 finalized,
                 client=client,
             )
-            
-            # Wait for Kaggle to fully process the dataset before attaching to kernel
-            logger.info("video_announce: waiting 15s for dataset to be processed...")
-            await asyncio.sleep(15)
+            await await_dataset_ready(
+                client,
+                dataset_slug,
+                timeout_seconds=VIDEO_KAGGLE_DATASET_READY_WAIT_SECONDS,
+                poll_interval_seconds=VIDEO_KAGGLE_DATASET_READY_POLL_SECONDS,
+                expected_files=["payload.json"],
+            )
 
             kernel_ref = session_obj.kaggle_kernel_ref
             if not kernel_ref:
@@ -2447,6 +2459,9 @@ class VideoAnnounceScenario:
             if actual_ref != kernel_ref:
                 logger.info("Kernel ref changed from %s to %s", kernel_ref, actual_ref)
                 kernel_ref = actual_ref
+            session_obj.kaggle_dataset = dataset_slug
+            session_obj.kaggle_kernel_ref = kernel_ref
+            await self._store_kaggle_meta(session_obj.id, dataset_slug, kernel_ref)
             await await_kernel_dataset_sources(
                 client,
                 kernel_ref,
@@ -2455,9 +2470,6 @@ class VideoAnnounceScenario:
                 poll_interval_seconds=VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS,
             )
 
-            session_obj.kaggle_dataset = dataset_slug
-            session_obj.kaggle_kernel_ref = kernel_ref
-            await self._store_kaggle_meta(session_obj.id, dataset_slug, kernel_ref)
             try:
                 kaggle_status = await asyncio.to_thread(
                     client.get_kernel_status, kernel_ref

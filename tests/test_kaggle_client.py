@@ -2,6 +2,8 @@ import importlib
 import sys
 import types
 
+import pytest
+
 
 class DummyDataset:
     def __init__(self, title=None):
@@ -68,3 +70,40 @@ def test_kaggle_test_handles_missing_titles(monkeypatch):
     result = client.kaggle_test()
 
     assert result == "ok (datasets=2)"
+
+
+@pytest.mark.asyncio
+async def test_await_dataset_ready_waits_until_status_ready_and_payload_visible(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    class StubClient:
+        def __init__(self) -> None:
+            self.status_calls = 0
+            self.files_calls = 0
+
+        def dataset_status(self, dataset_ref: str) -> str:
+            assert dataset_ref == "zigomaro/cherryflash-session-161"
+            self.status_calls += 1
+            if self.status_calls == 1:
+                return "running"
+            return "ready"
+
+        def dataset_list_files(self, dataset_ref: str, *, page_size: int = 20) -> list[dict[str, object]]:
+            assert dataset_ref == "zigomaro/cherryflash-session-161"
+            assert page_size >= 20
+            self.files_calls += 1
+            if self.files_calls == 1:
+                return [{"name": "bootstrap.txt"}]
+            return [{"name": "payload.json"}, {"name": "assets/cherryflash_selection.json"}]
+
+    meta = await module.await_dataset_ready(
+        StubClient(),
+        "zigomaro/cherryflash-session-161",
+        timeout_seconds=2,
+        poll_interval_seconds=1,
+        expected_files=["payload.json"],
+    )
+
+    assert meta["status"] == "ready"
+    assert "payload.json" in meta["files"]

@@ -99,6 +99,74 @@ async def await_kernel_dataset_sources(
     )
 
 
+async def await_dataset_ready(
+    client: "KaggleClient",
+    dataset_ref: str,
+    *,
+    timeout_seconds: int = 180,
+    poll_interval_seconds: int = 5,
+    expected_files: list[str] | None = None,
+) -> dict[str, Any]:
+    expected_clean = [
+        str(item).strip() for item in (expected_files or []) if str(item).strip()
+    ]
+    started = time.monotonic()
+    deadline = started + max(1, int(timeout_seconds))
+    last_status: str | None = None
+    last_files: list[str] = []
+    last_error: str | None = None
+
+    while time.monotonic() < deadline:
+        try:
+            status = await asyncio.to_thread(client.dataset_status, dataset_ref)
+            files = await asyncio.to_thread(
+                client.dataset_list_files,
+                dataset_ref,
+                page_size=max(20, len(expected_clean) + 5),
+            )
+            file_names = [
+                str(item.get("name") or "").strip()
+                for item in files
+                if str(item.get("name") or "").strip()
+            ]
+            status_ready = status.strip().lower() == "ready"
+            files_ready = all(name in file_names for name in expected_clean)
+            logger.info(
+                "kaggle: dataset ready check dataset=%s status=%s files=%s ready=%s",
+                dataset_ref,
+                status,
+                file_names,
+                status_ready and files_ready,
+            )
+            last_status = status
+            last_files = file_names
+            last_error = None
+            if status_ready and files_ready:
+                return {
+                    "status": status,
+                    "files": file_names,
+                }
+        except Exception as exc:
+            last_error = str(exc) or exc.__class__.__name__
+            logger.warning(
+                "kaggle: dataset ready check error dataset=%s err=%s",
+                dataset_ref,
+                last_error,
+            )
+        await asyncio.sleep(max(1, int(poll_interval_seconds)))
+
+    details = f"dataset={dataset_ref}"
+    if last_status:
+        details = f"{details} status={last_status}"
+    if last_files:
+        details = f"{details} files={last_files}"
+    if expected_clean:
+        details = f"{details} expected_files={expected_clean}"
+    if last_error:
+        details = f"{details} last_error={last_error}"
+    raise RuntimeError(f"Kaggle dataset did not become ready in time ({details})")
+
+
 def _response_error_suffix(exc: Exception) -> str:
     response = getattr(exc, "response", None)
     if response is None:
