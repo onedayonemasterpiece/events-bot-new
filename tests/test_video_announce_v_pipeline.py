@@ -317,7 +317,7 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
 
 
 @pytest.mark.asyncio
-async def test_render_and_notify_waits_for_dataset_ready_and_persists_actual_kernel_ref_on_bind_failure(
+async def test_render_and_notify_cherryflash_continues_after_bind_wait_failure_and_persists_actual_kernel_ref(
     monkeypatch, tmp_path
 ):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -390,8 +390,10 @@ async def test_render_and_notify_waits_for_dataset_ready_and_persists_actual_ker
 
     session_obj = SimpleNamespace(
         id=session_id,
+        profile_key="popular_review",
         kaggle_kernel_ref="local:CherryFlash",
         kaggle_dataset=None,
+        test_chat_id=-1002210431821,
         main_chat_id=None,
     )
     await scenario._render_and_notify(  # noqa: SLF001
@@ -410,10 +412,92 @@ async def test_render_and_notify_waits_for_dataset_ready_and_persists_actual_ker
     async with db.get_session() as session:
         refreshed = await session.get(VideoAnnounceSession, session_id)
         assert refreshed is not None
-        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
-        assert refreshed.error == "kaggle push failed"
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+        assert refreshed.error in (None, "")
         assert refreshed.kaggle_dataset == "zigomaro/cherryflash-session-161"
         assert refreshed.kaggle_kernel_ref == "zigomaro/cherryflash"
+
+
+@pytest.mark.asyncio
+async def test_render_and_notify_non_cherryflash_still_fails_on_bind_wait_error(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.CREATED,
+            profile_key="default",
+            selection_params={"mode": "default"},
+            test_chat_id=-1002210431821,
+            main_chat_id=None,
+            kaggle_kernel_ref="owner/video-announce-renderer",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class _DummyClient:
+        def get_kernel_status(self, kernel_ref: str) -> dict[str, str]:
+            assert kernel_ref == "owner/video-announce-renderer"
+            return {"status": "RUNNING"}
+
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db, bot, chat_id=123, user_id=1)
+
+    async def _fake_create_dataset(self, session_obj, json_text, finalized, *, client):  # noqa: ANN001,ARG002
+        assert session_obj.id == session_id
+        return "zigomaro/video-afisha-session-161", []
+
+    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref):  # noqa: ANN001
+        assert kernel_ref == "owner/video-announce-renderer"
+        assert dataset_sources == ["zigomaro/video-afisha-session-161"]
+        return "owner/video-announce-renderer"
+
+    async def _fake_update_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return (123, 1)
+
+    async def _fake_await_dataset_ready(client, dataset_ref, **kwargs):  # noqa: ANN001
+        assert dataset_ref == "zigomaro/video-afisha-session-161"
+        return {"status": "ready", "files": ["payload.json"]}
+
+    async def _fake_await_kernel_dataset_sources(client, kernel_ref, expected_sources, **kwargs):  # noqa: ANN001
+        assert kernel_ref == "owner/video-announce-renderer"
+        assert expected_sources == ["zigomaro/video-afisha-session-161"]
+        raise RuntimeError("bind failed")
+
+    monkeypatch.setattr(scenario_module, "KaggleClient", _DummyClient)
+    monkeypatch.setattr(VideoAnnounceScenario, "_create_dataset", _fake_create_dataset)
+    monkeypatch.setattr(VideoAnnounceScenario, "_push_kernel", _fake_push_kernel)
+    monkeypatch.setattr(scenario_module, "update_status_message", _fake_update_status_message)
+    monkeypatch.setattr(scenario_module, "await_dataset_ready", _fake_await_dataset_ready)
+    monkeypatch.setattr(
+        scenario_module,
+        "await_kernel_dataset_sources",
+        _fake_await_kernel_dataset_sources,
+    )
+
+    session_obj = SimpleNamespace(
+        id=session_id,
+        profile_key="default",
+        kaggle_kernel_ref="owner/video-announce-renderer",
+        kaggle_dataset=None,
+        main_chat_id=None,
+    )
+    await scenario._render_and_notify(  # noqa: SLF001
+        session_obj,
+        [],
+        status_message=(123, 1),
+        payload_json="{}",
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.error == "kaggle push failed"
 
 
 @pytest.mark.asyncio

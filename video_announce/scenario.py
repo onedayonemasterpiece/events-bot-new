@@ -2462,13 +2462,23 @@ class VideoAnnounceScenario:
             session_obj.kaggle_dataset = dataset_slug
             session_obj.kaggle_kernel_ref = kernel_ref
             await self._store_kaggle_meta(session_obj.id, dataset_slug, kernel_ref)
-            await await_kernel_dataset_sources(
-                client,
-                kernel_ref,
-                dataset_sources,
-                timeout_seconds=VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS,
-                poll_interval_seconds=VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS,
-            )
+            try:
+                await await_kernel_dataset_sources(
+                    client,
+                    kernel_ref,
+                    dataset_sources,
+                    timeout_seconds=VIDEO_KAGGLE_DATASET_BIND_WAIT_SECONDS,
+                    poll_interval_seconds=VIDEO_KAGGLE_DATASET_BIND_POLL_SECONDS,
+                )
+            except Exception:
+                if str(getattr(session_obj, "profile_key", "") or "").strip() == POPULAR_REVIEW_PROFILE:
+                    logger.warning(
+                        "video_announce: CherryFlash kernel metadata did not expose expected dataset_sources in time; "
+                        "continuing with normal Kaggle polling because kernels_push already succeeded",
+                        exc_info=True,
+                    )
+                else:
+                    raise
 
             try:
                 kaggle_status = await asyncio.to_thread(
