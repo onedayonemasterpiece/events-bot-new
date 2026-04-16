@@ -72,6 +72,44 @@ def test_kaggle_test_handles_missing_titles(monkeypatch):
     assert result == "ok (datasets=2)"
 
 
+def test_dataset_list_files_paginates_until_expected_file_can_be_seen(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    KaggleClient = importlib.import_module("video_announce.kaggle_client").KaggleClient
+
+    class File:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+    class Response:
+        def __init__(self, files, next_page_token=None) -> None:
+            self.files = files
+            self.nextPageToken = next_page_token
+
+    calls: list[tuple[str | None, int]] = []
+
+    class StubApi:
+        def dataset_list_files(self, dataset, page_token=None, page_size=20):
+            assert dataset == "zigomaro/cherryflash-session-162"
+            calls.append((page_token, page_size))
+            if page_token is None:
+                return Response([File("Final.png"), File("assets/Akrobat-Bold.otf")], "page-2")
+            assert page_token == "page-2"
+            return Response([File("payload.json"), File("assets/cherryflash_selection.json")])
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+
+    files = client.dataset_list_files("zigomaro/cherryflash-session-162", page_size=20)
+
+    assert [item["name"] for item in files] == [
+        "Final.png",
+        "assets/Akrobat-Bold.otf",
+        "payload.json",
+        "assets/cherryflash_selection.json",
+    ]
+    assert calls == [(None, 20), ("page-2", 20)]
+
+
 @pytest.mark.asyncio
 async def test_await_dataset_ready_waits_until_status_ready_and_payload_visible(monkeypatch):
     _install_dummy_kaggle(monkeypatch)

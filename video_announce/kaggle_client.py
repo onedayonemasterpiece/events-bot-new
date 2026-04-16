@@ -440,19 +440,38 @@ class KaggleClient:
     def dataset_list_files(self, dataset: str, *, page_size: int = 20) -> list[dict[str, Any]]:
         api = self._get_api()
         logger.info("kaggle: dataset list files dataset=%s", dataset)
-        response = api.dataset_list_files(dataset, page_size=page_size)
-        files = getattr(response, "files", None)
-        if files is None and isinstance(response, list):
-            files = response
         result: list[dict[str, Any]] = []
-        for item in files or []:
-            result.append(
-                {
-                    "name": getattr(item, "name", None) or str(item),
-                    "totalBytes": getattr(item, "totalBytes", None),
-                    "creationDate": getattr(item, "creationDate", None),
-                }
+        seen_names: set[str] = set()
+        next_page_token: str | None = None
+
+        while True:
+            response = api.dataset_list_files(
+                dataset,
+                page_token=next_page_token,
+                page_size=page_size,
             )
+            files = getattr(response, "files", None)
+            if files is None and isinstance(response, list):
+                files = response
+            for item in files or []:
+                name = getattr(item, "name", None) or str(item)
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                result.append(
+                    {
+                        "name": name,
+                        "totalBytes": getattr(item, "totalBytes", None),
+                        "creationDate": getattr(item, "creationDate", None),
+                    }
+                )
+            next_page_token = (
+                getattr(response, "nextPageToken", None)
+                or getattr(response, "next_page_token", None)
+                or None
+            )
+            if not next_page_token or isinstance(response, list):
+                break
         logger.info(
             "kaggle: dataset files dataset=%s names=%s",
             dataset,
