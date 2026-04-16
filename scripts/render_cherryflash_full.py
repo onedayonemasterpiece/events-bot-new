@@ -71,14 +71,15 @@ SCENE_TEXT_START = approval.SCENE1_TEXT_START
 INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
-AUDIO_BITRATE = "192k"
+AUDIO_BITRATE = "128k"
 FIRST_PRIMARY_SCENE_START_LOCAL = approval.SCENE1_START_LOCAL
 FINAL_VIDEO_CODEC = "libx265"
 FINAL_VIDEO_TAG = "hvc1"
 FINAL_VIDEO_PRESET = "slow"
-FINAL_VIDEO_CRF = "24"
+FINAL_VIDEO_CRF = "28"
 FINAL_X265_PARAMS = (
-    f"keyint={FPS}:min-keyint={FPS}:scenecut=0:no-open-gop=1:repeat-headers=1"
+    f"keyint={FPS}:min-keyint={FPS}:scenecut=0:no-open-gop=1:"
+    "repeat-headers=1:aq-mode=3:vbv-maxrate=3000:vbv-bufsize=6000"
 )
 PREVIEW_VIDEO_CODEC = "libx264"
 PREVIEW_VIDEO_PRESET = "slow"

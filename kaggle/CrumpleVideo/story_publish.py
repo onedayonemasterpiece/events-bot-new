@@ -117,19 +117,20 @@ def _ensure_story_safe_video(
     log,
 ) -> Path:
     dimensions = _video_dimensions(path)
-    if dimensions == (STORY_VIDEO_WIDTH, STORY_VIDEO_HEIGHT):
-        return path
     if not _ffmpeg_available():
         raise RuntimeError("ffmpeg is required to prepare story-safe video upload")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     story_path = output_dir / STORY_SAFE_VIDEO_FILENAME
-    filter_graph = (
-        f"scale={STORY_VIDEO_WIDTH}:{STORY_VIDEO_HEIGHT}:"
-        "force_original_aspect_ratio=decrease:flags=lanczos,"
-        f"pad={STORY_VIDEO_WIDTH}:{STORY_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,"
-        "setsar=1"
-    )
+    if dimensions == (STORY_VIDEO_WIDTH, STORY_VIDEO_HEIGHT):
+        filter_graph = "setsar=1"
+    else:
+        filter_graph = (
+            f"scale={STORY_VIDEO_WIDTH}:{STORY_VIDEO_HEIGHT}:"
+            "force_original_aspect_ratio=decrease:flags=lanczos,"
+            f"pad={STORY_VIDEO_WIDTH}:{STORY_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            "setsar=1"
+        )
     result = subprocess.run(
         [
             "ffmpeg",
@@ -138,18 +139,34 @@ def _ensure_story_safe_video(
             str(path),
             "-vf",
             filter_graph,
+            "-r",
+            "30",
             "-map",
             "0:v:0",
             "-map",
             "0:a?",
             "-c:v",
             "libx264",
+            "-profile:v",
+            "high",
+            "-level:v",
+            "4.1",
             "-preset",
             "veryfast",
             "-crf",
             "20",
             "-pix_fmt",
             "yuv420p",
+            "-g",
+            "30",
+            "-keyint_min",
+            "30",
+            "-sc_threshold",
+            "0",
+            "-bf",
+            "0",
+            "-tag:v",
+            "avc1",
             "-movflags",
             "+faststart",
             "-c:a",
@@ -186,7 +203,7 @@ def _ensure_story_safe_video(
     )
     log(
         "✅ Story-safe video prepared: "
-        f"{story_path.name} ({original_label} -> {STORY_VIDEO_WIDTH}x{STORY_VIDEO_HEIGHT})"
+        f"{story_path.name} ({original_label} -> {STORY_VIDEO_WIDTH}x{STORY_VIDEO_HEIGHT}, h264/aac)"
     )
     return story_path
 

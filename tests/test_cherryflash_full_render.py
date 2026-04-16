@@ -366,11 +366,11 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     monkeypatch.setattr(full, "MODE_SLUG", "final")
     monkeypatch.setattr(full, "FINAL_MODE", True)
     monkeypatch.setattr(full, "FPS", 30)
-    monkeypatch.setattr(full, "AUDIO_BITRATE", "192k")
+    monkeypatch.setattr(full, "AUDIO_BITRATE", "128k")
     monkeypatch.setattr(full, "FINAL_VIDEO_CODEC", "libx265")
     monkeypatch.setattr(full, "FINAL_VIDEO_TAG", "hvc1")
     monkeypatch.setattr(full, "FINAL_VIDEO_PRESET", "slow")
-    monkeypatch.setattr(full, "FINAL_VIDEO_CRF", "24")
+    monkeypatch.setattr(full, "FINAL_VIDEO_CRF", "28")
     monkeypatch.setattr(full, "_candidate_audio_path", lambda: tmp_path / "audio.mp3")
     monkeypatch.setattr(full, "_audio_start_seconds", lambda _: 0.0)
     monkeypatch.setattr(full, "_scale_audio_volume", lambda audio, factor: audio)
@@ -403,5 +403,5 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     assert "hvc1" in commands[0]
     assert "-x265-params" in commands[0]
     params_idx = commands[0].index("-x265-params") + 1
-    assert commands[0][params_idx] == "keyint=30:min-keyint=30:scenecut=0:no-open-gop=1:repeat-headers=1"
+    assert commands[0][params_idx] == "keyint=30:min-keyint=30:scenecut=0:no-open-gop=1:repeat-headers=1:aq-mode=3:vbv-maxrate=3000:vbv-bufsize=6000"
     assert len(commands) == 1

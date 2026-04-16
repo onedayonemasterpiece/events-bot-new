@@ -70,7 +70,7 @@ def test_scale_audio_volume_keeps_original_when_no_api_available(
         "scripts.render_mobilefeed_intro_scene1_approval",
     ],
 )
-def test_cherryflash_encodes_audio_at_192k(module_name: str) -> None:
+def test_cherryflash_encodes_audio_at_128k(module_name: str) -> None:
     module = importlib.import_module(module_name)
 
-    assert getattr(module, "AUDIO_BITRATE") == "192k"
+    assert getattr(module, "AUDIO_BITRATE") == "128k"
