@@ -101,6 +101,17 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 
 Техническая деталь: в таблице `google_ai_model_limits.tpm` "Unlimited TPM" хранится как `2147483647`, потому что схема лимитера требует целочисленный cap.
 
+### 2.6. Structured output и thought filtering для Gemma 4
+
+Для `Gemma 4` клиент теперь различает два runtime-контракта:
+
+*   `Gemma 3` / старые Gemma-path по-прежнему fail-open работают через prompt-only JSON contract: `response_mime_type` / `response_schema` снимаются на клиенте, потому что эти модели часто отвергали native JSON knobs.
+*   `Gemma 4` (`gemma-4-31b`, `gemma-4-26b-a4b`) теперь сохраняет native `response_mime_type=application/json` и `response_schema`, если вызывающий stage их передал. Это нужно для structured extract / classify / dedup stages, где `lollipop g4` уже показал реальный practical uplift именно от native schema discipline.
+
+Дополнительное правило transport hygiene:
+
+*   при чтении `candidates[].content.parts[]` клиент отбрасывает `parts[].thought = true`, чтобы Gemma 4 thought-channel не утекал в parsed JSON, persisted history или operator-facing surfaces.
+
 ### 2.2. Алгоритм работы
 1.  **Reserve**: Клиент запрашивает резерв (примерно `max_output_tokens + 1000`).
     *   Для длинных текстовых prompt’ов используется консервативная оценка по байтам **и** символам; это особенно важно для русскоязычных/OCR-heavy запросов, где простой `bytes/4` может занизить реальный input TPM.
@@ -122,7 +133,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
     * ENV `GOOGLE_AI_INCIDENT_NOTIFICATIONS=0` — выключить инцидент-алерты.
     * ENV `GOOGLE_AI_INCIDENT_COOLDOWN_SECONDS` — антиспам/дедуп уведомлений (по умолчанию 900 сек).
 *   **Model fallback chain**: при финальном провале основной модели клиент переключается на запасные модели из `GOOGLE_AI_FALLBACK_MODELS` (через запятую) и логирует `google_ai.model_fallback`.
-    * Для текстовых вызовов действует policy качества: `gemma-3-27b` всегда пробуется первой в цепочке.
+    * Gateway уважает `requested_model`: первой в цепочке всегда идёт запрошенная модель, а запасные модели остаются только fallback-хвостом.
     * Gemma-модели меньше `12b` (`1b/4b`) автоматически исключаются из цепочки и не используются для текста.
 
 ### 3.1. Логирование конкретной модели (обязательно)
@@ -180,6 +191,20 @@ python kaggle/execute_gemma_key2_probe.py --env-file ".env copy"
 * если в `.env` ключа нет, можно передать второй env-файл через `--env-file`;
 * Kaggle output фиксирует только `ok/status_code/model/response_excerpt` и диагностические excerpts,
   без секрета.
+
+### 4.2. Gemma 4 structured-output caveat
+
+Практический вывод из live guide-monitoring smoke `2026-04-19`:
+
+* для `Gemma 4` нельзя считать поддержкой "весь JSON Schema";
+* provider contract успешно принимает `response_schema`, но может отвергать отдельные поля schema-слоя;
+* в нашем runtime подтверждённый несовместимый ключ — `additionalProperties`.
+
+Следствие:
+
+* structured `Gemma 4` stages должны использовать упрощённое schema-подмножество;
+* prompt-level contract `Return only JSON` остаётся обязательным, но сам по себе не заменяет native schema;
+* любые новые `Gemma 4` structured stages нужно smoke-проверять именно на реальном provider, а не только по локальным unit-тестам.
 
 ## TODO / Risks
 - Проверить и зафиксировать статус возможной deprecation `google.generativeai` (источник сигнала: операторский репорт), подготовить план миграции SDK при подтверждении.

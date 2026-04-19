@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 GUIDE_OCCURRENCE_ENRICH_ENABLED = (
     (os.getenv("GUIDE_OCCURRENCE_ENRICH_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-GUIDE_OCCURRENCE_ENRICH_MODEL = (os.getenv("GUIDE_OCCURRENCE_ENRICH_MODEL") or "gemma-3-27b").strip() or "gemma-3-27b"
+GUIDE_OCCURRENCE_ENRICH_MODEL = (os.getenv("GUIDE_OCCURRENCE_ENRICH_MODEL") or "gemma-4-31b").strip() or "gemma-4-31b"
 GUIDE_OCCURRENCE_ENRICH_BATCH_SIZE = max(
     1,
     min(int((os.getenv("GUIDE_OCCURRENCE_ENRICH_BATCH_SIZE") or "3") or 3), 10),
@@ -260,13 +260,29 @@ def _get_enrich_runtime(*, consumer: str = "guide_occurrence_enrich"):
     return client, candidate_key_ids
 
 
-async def _ask_batch(client: Any, *, prompt: str, candidate_key_ids: Sequence[str] | None) -> dict[str, Any] | None:
+async def _ask_batch(
+    client: Any,
+    *,
+    prompt: str,
+    candidate_key_ids: Sequence[str] | None,
+    response_schema: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
     for attempt in range(3):
         try:
             raw, _usage = await client.generate_content_async(
                 model=GUIDE_OCCURRENCE_ENRICH_MODEL,
                 prompt=prompt,
-                generation_config={"temperature": 0},
+                generation_config={
+                    "temperature": 0,
+                    **(
+                        {
+                            "response_mime_type": "application/json",
+                            "response_schema": dict(response_schema),
+                        }
+                        if response_schema is not None
+                        else {}
+                    ),
+                },
                 max_output_tokens=2400,
                 candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
             )
@@ -302,12 +318,10 @@ async def _ask_main_hook_batch(
                         "evidence": {"type": "array", "items": {"type": "string"}},
                     },
                     "required": ["occurrence_id", "main_hook", "confidence", "evidence"],
-                    "additionalProperties": False,
                 },
             }
         },
         "required": ["items"],
-        "additionalProperties": False,
     }
     prompt = (
         "Ты выделяешь главный grounded hook экскурсии по структурированным фактам и короткому фрагменту исходного поста.\n"
@@ -325,10 +339,11 @@ async def _ask_main_hook_batch(
         "3. Не пиши hype и не преувеличивай.\n"
         "4. Предпочитай именную фразу, а не полное предложение с конструкциями вроде `экскурсия раскрывает...` или `прогулка расскажет...`.\n"
         "5. Если сильного hook нет, выбери самый конкретный содержательный фокус маршрута.\n"
+        "6. Не выводи рассуждение, пояснения или thinking traces; только JSON по схеме.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'items': list(payload_rows)}, ensure_ascii=False)}"
     )
-    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids)
+    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids, response_schema=schema)
     items = data.get("items") if isinstance(data, dict) else None
     out: dict[int, dict[str, Any]] = {}
     if not isinstance(items, list):
@@ -386,12 +401,10 @@ async def _ask_audience_region_batch(
                         "evidence",
                         "ambiguity",
                     ],
-                    "additionalProperties": False,
                 },
             }
         },
         "required": ["items"],
-        "additionalProperties": False,
     }
     prompt = (
         "Проанализируй экскурсионный анонс для Калининградской области и определи, кому он больше подходит:\n"
@@ -412,10 +425,11 @@ async def _ask_audience_region_batch(
         "evidence: 3-5 коротких текстовых маркеров из input.\n"
         "ambiguity: коротко, что мешает однозначности.\n"
         "Не додумывай аудиторию без маркеров.\n"
+        "Не выводи рассуждение, пояснения или thinking traces; только JSON по схеме.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'items': list(payload_rows)}, ensure_ascii=False)}"
     )
-    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids)
+    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids, response_schema=schema)
     items = data.get("items") if isinstance(data, dict) else None
     out: dict[int, dict[str, Any]] = {}
     if not isinstance(items, list):
@@ -577,12 +591,10 @@ async def _ask_profile_batch(
                         "expertise_tags",
                         "confidence",
                     ],
-                    "additionalProperties": False,
                 },
             }
         },
         "required": ["items"],
-        "additionalProperties": False,
     }
     prompt = (
         "Ты materialize-ишь публичный профиль гида по facts-first input.\n"
@@ -601,10 +613,11 @@ async def _ask_profile_batch(
         "3. Не используй URL, usernames, телефоны и призывы записываться.\n"
         "4. Если источник больше похож на бренд/проект, а не на конкретного человека, не форсируй персональное ФИО.\n"
         "5. Стиль нейтральный, информативный, без hype.\n"
+        "6. Не выводи рассуждение, пояснения или thinking traces; только JSON по схеме.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'items': list(payload_rows)}, ensure_ascii=False)}"
     )
-    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids)
+    data = await _ask_batch(client, prompt=prompt, candidate_key_ids=candidate_key_ids, response_schema=schema)
     items = data.get("items") if isinstance(data, dict) else None
     out: dict[int, dict[str, Any]] = {}
     if not isinstance(items, list):

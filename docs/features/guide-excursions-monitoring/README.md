@@ -24,6 +24,10 @@
 Для guide-track LLM path должен быть только Gemma-only:
 
 - Kaggle extraction использует `GoogleAIClient` + Supabase-backed limiter с primary secret `GOOGLE_API_KEY2` и guide account label `GOOGLE_API_LOCALNAME2`;
+- default model split для первого production migration на `Gemma 4` такой:
+  - `trail_scout.screen.v1` -> `models/gemma-4-26b-a4b-it`
+  - `trail_scout.*extract*` + `route_weaver.enrich.v1` -> `models/gemma-4-31b-it`
+  - server-side `guide_occurrence_enrich`, `guide_profile_enrich`, `guide_excursions_dedup`, `guide_excursions_digest_batch` -> `gemma-4-31b`
 - для Telegram auth Kaggle guide path по умолчанию использует только `TELEGRAM_AUTH_BUNDLE_S22`; локальная `TELEGRAM_AUTH_BUNDLE_E2E` не считается допустимым автоматическим fallback и может быть использована только через явный аварийный override;
 - перед запуском guide Kaggle kernel сервер обязан проверить общий `kaggle_registry`: если другой remote Telegram job (`tg_monitoring`, `guide_monitoring`, `telegraph_cache_probe`) ещё жив или его Kaggle status не удалось надёжно прочитать, guide run должен завершиться `skipped` с явной диагностикой `remote_telegram_session_busy`, а не запускать вторую Telethon session;
 - guide digest publish-time fallback для media запрещён: bot-side `forward -> file_id`, Telethon download и public-web scraping не считаются каноническим путём; если materialized assets не доехали из Kaggle/import path, publish должен останавливаться явно, а не деградировать до text-only поста.
@@ -32,6 +36,8 @@
 - `4o` для guide pipeline не используется.
 - mixed-region sources не дают “автоматического доверия по региону”: generic/out-of-region travel calendars должны отсеиваться ещё в Kaggle extraction и не materialize'иться как guide occurrence.
 - first-pass `base_region_fit` теперь относится к screen/extraction LLM layer, а не к смысловым regex в local fallback.
+- `Gemma 4` structured stages в guide path должны использовать native `response_schema` / `response_mime_type`, а не только prompt-level "верни JSON" contract.
+- runtime обязан фильтровать `parts[].thought = true` до JSON parsing и materialization, чтобы guide fact-pack и admin surfaces не протаскивали hidden reasoning text.
 
 ## Что уже мигрировано
 
@@ -46,6 +52,9 @@
 - server-side digest eligibility теперь остаётся fact-first: undated / cancelled / private occurrences fail-closed, но `limited`-объявления с реальной будущей датой и достаточным набором публичных фактов (`time/city/meeting/route/price/booking/summary`) могут быть повышены до digest-ready вместо немого выпадения из daily выпуска;
 - digest/editorial, где `fact_pack` считается primary truth source, а исходный post text используется только как secondary evidence;
 - guide-specific `Lollipop Trails` fork для digest copy: Gemma batch-пишет `title`, `digest_blurb` и короткие public lines (`Гид` / `Организатор`, `Цена`, `Что в маршруте`, `Запись`, house-line про local-vs-tourist fit) из materialized fact pack + guide profile rollup;
+- migration `2026-04-19`: guide path переведён на `Gemma 4` defaults с quality-first split (`26b-a4b` для screen, `31b` для extract/enrich/writer), а Kaggle/server structured stages теперь передают native `response_schema` вместо чисто prompt-only JSON режима;
+- live smoke `2026-04-19` подтвердил, что guide Kaggle path реально стартует и доходит до `Gemma 4` stages на `GOOGLE_API_KEY2`, а server import больше не откатывается на `gemma-3-27b` из-за gateway model-chain bug;
+- тот же smoke выявил текущий rollout risk: часть posts на `trail_scout.screen.v1` всё ещё уходит в `llm_deferred_timeout` даже при `GUIDE_MONITORING_LLM_TIMEOUT_SEC=240`, поэтому migration уже технически поднят, но production switch должен оставаться staged/canary, пока не будет снижен screen-stage latency surface;
 - materialized fact pack теперь явно несёт `duration_text`, `route_summary`, `group_format` и `base_region_fit`, чтобы оператор видел не только title/date/booking, но и что именно было извлечено про маршрут, длительность и формат участия;
 - эти richer semantic fields считаются Gemma-owned: local fallback parser может резать пост на блоки и вытаскивать базовые operational facts, но не должен эвристически материализовывать `duration_text`, `route_summary` или `group_format` без LLM extraction;
 - inspectability фактов через `/guide_facts <occurrence_id>`;

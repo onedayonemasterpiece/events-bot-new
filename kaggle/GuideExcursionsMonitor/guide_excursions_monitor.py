@@ -134,9 +134,11 @@ from cryptography.fernet import Fernet  # noqa: E402
 from telethon import TelegramClient, functions  # noqa: E402
 from telethon.sessions import StringSession  # noqa: E402
 
-MODEL = "models/gemma-3-27b-it"
-SCREEN_MODEL = MODEL
-EXTRACT_MODEL = MODEL
+DEFAULT_GUIDE_MONITORING_MODEL = "models/gemma-4-31b-it"
+DEFAULT_GUIDE_MONITORING_SCREEN_MODEL = "models/gemma-4-26b-a4b-it"
+MODEL = DEFAULT_GUIDE_MONITORING_MODEL
+SCREEN_MODEL = DEFAULT_GUIDE_MONITORING_SCREEN_MODEL
+EXTRACT_MODEL = DEFAULT_GUIDE_MONITORING_MODEL
 GOOGLE_KEY_ENV = "GOOGLE_API_KEY2"
 GOOGLE_FALLBACK_KEY_ENV = "GOOGLE_API_KEY"
 GOOGLE_ACCOUNT_ENV = "GOOGLE_API_LOCALNAME2"
@@ -179,8 +181,8 @@ def _retry_after_seconds(message: str) -> float | None:
 def refresh_runtime_settings() -> None:
     global MODEL, SCREEN_MODEL, EXTRACT_MODEL, GOOGLE_KEY_ENV, GOOGLE_ACCOUNT_ENV, LLM_TIMEOUT_SECONDS
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
-    MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or "models/gemma-3-27b-it").strip()
-    SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or MODEL).strip()
+    MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
+    SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
     EXTRACT_MODEL = (os.getenv("GUIDE_MONITORING_EXTRACT_MODEL") or MODEL).strip()
     GOOGLE_KEY_ENV = (os.getenv("GUIDE_MONITORING_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY2").strip() or "GOOGLE_API_KEY2"
     GOOGLE_ACCOUNT_ENV = (os.getenv("GUIDE_MONITORING_GOOGLE_ACCOUNT_ENV") or "GOOGLE_API_LOCALNAME2").strip() or "GOOGLE_API_LOCALNAME2"
@@ -926,12 +928,88 @@ def _extract_json(raw: str) -> Any | None:
     return None
 
 
+_OCCURRENCE_FIELD_TYPES: dict[str, dict[str, Any]] = {
+    "source_block_id": {"type": "string"},
+    "canonical_title": {"type": "string"},
+    "title_normalized": {"type": "string"},
+    "date": {"type": "string"},
+    "time": {"type": "string"},
+    "duration_text": {"type": "string"},
+    "city": {"type": "string"},
+    "meeting_point": {"type": "string"},
+    "route_summary": {"type": "string"},
+    "audience_fit": {"type": "array", "items": {"type": "string"}},
+    "group_format": {"type": "string"},
+    "price_text": {"type": "string"},
+    "booking_text": {"type": "string"},
+    "booking_url": {"type": "string"},
+    "channel_url": {"type": "string"},
+    "status": {"type": "string"},
+    "seats_text": {"type": "string"},
+    "summary_one_liner": {"type": "string"},
+    "digest_blurb": {"type": "string"},
+    "digest_eligible": {"type": "boolean"},
+    "digest_eligibility_reason": {"type": "string"},
+    "is_last_call": {"type": "boolean"},
+    "post_kind": {"type": "string"},
+    "availability_mode": {"type": "string"},
+    "guide_names": {"type": "array", "items": {"type": "string"}},
+    "organizer_names": {"type": "array", "items": {"type": "string"}},
+    "base_region_fit": {"type": "string"},
+    "fact_pack": {"type": "object"},
+    "fact_claims": {"type": "array", "items": {"type": "object"}},
+    "template_hint": {"type": "object"},
+    "profile_hint": {"type": "object"},
+}
+
+
+def _occurrence_schema(*keys: str) -> dict[str, Any]:
+    properties = {
+        key: dict(_OCCURRENCE_FIELD_TYPES[key])
+        for key in keys
+        if key in _OCCURRENCE_FIELD_TYPES
+    }
+    return {
+        "type": "object",
+        "properties": properties,
+    }
+
+
+def _occurrences_wrapper_schema(*keys: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "occurrences": {
+                "type": "array",
+                "items": _occurrence_schema(*keys),
+            }
+        },
+        "required": ["occurrences"],
+    }
+
+
+def _single_occurrence_wrapper_schema(*keys: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "occurrence": {
+                "anyOf": [
+                    _occurrence_schema(*keys),
+                    {"type": "null"},
+                ]
+            }
+        },
+        "required": ["occurrence"],
+    }
+
+
 async def ask_gemma(
     model: str,
     prompt: str,
     *,
     consumer: str,
     max_output_tokens: int = 2200,
+    response_schema: dict[str, Any] | None = None,
 ) -> Any | None:
     if not (os.getenv(GOOGLE_KEY_ENV) or os.getenv(GOOGLE_FALLBACK_KEY_ENV) or "").strip():
         raise RuntimeError(f"{GOOGLE_KEY_ENV} is missing in Kaggle runtime")
@@ -942,7 +1020,17 @@ async def ask_gemma(
                 client.generate_content_async(
                     model=model,
                     prompt=prompt,
-                    generation_config={"temperature": 0},
+                    generation_config={
+                        "temperature": 0,
+                        **(
+                            {
+                                "response_mime_type": "application/json",
+                                "response_schema": response_schema,
+                            }
+                            if response_schema is not None
+                            else {}
+                        ),
+                    },
                     max_output_tokens=max_output_tokens,
                 ),
                 timeout=LLM_TIMEOUT_SECONDS,
@@ -1097,6 +1185,31 @@ def _semantic_focus_excerpt(post: ScannedPost, *, source_block_id: str | None = 
 async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: dict[str, Any]) -> dict[str, Any]:
     compact_source = _compact_source_payload(source_payload)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=False)
+    schema = {
+        "type": "object",
+        "properties": {
+            "decision": {"type": "string"},
+            "post_kind": {"type": "string"},
+            "extract_mode": {"type": "string"},
+            "digest_eligible_default": {"type": "string"},
+            "contains_future_public_signal": {"type": "boolean"},
+            "contains_past_report_signal": {"type": "boolean"},
+            "base_region_fit": {"type": "string"},
+            "reasons": {"type": "array", "items": {"type": "string"}},
+            "confidence": {"type": "string"},
+        },
+        "required": [
+            "decision",
+            "post_kind",
+            "extract_mode",
+            "digest_eligible_default",
+            "contains_future_public_signal",
+            "contains_past_report_signal",
+            "base_region_fit",
+            "reasons",
+            "confidence",
+        ],
+    }
     prompt = (
         "You classify one Telegram post from a guide-related excursions source.\n"
         "Return only JSON with keys: decision, post_kind, extract_mode, digest_eligible_default, contains_future_public_signal, contains_past_report_signal, base_region_fit, reasons, confidence.\n"
@@ -1110,6 +1223,8 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
         "- Ignore generic travel calendars, bloom calendars, inspiration lists, and lifestyle posts that do not announce a real excursion inside the source base region.\n"
         "- If the post mostly gives historical/contextual background but still invites people to tomorrow/this date walk, keep it as announce or status_update rather than pure reportage.\n"
         "- base_region_fit is a semantic judgment about whether the post belongs to the source base region.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1117,6 +1232,7 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
         prompt,
         consumer="guide_scout_screen",
         max_output_tokens=240,
+        response_schema=schema,
     )
     if not isinstance(data, dict):
         return {
@@ -1153,6 +1269,34 @@ async def _extract_announce_post_tier1(
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    schema = _occurrences_wrapper_schema(
+        "source_block_id",
+        "canonical_title",
+        "title_normalized",
+        "date",
+        "time",
+        "duration_text",
+        "city",
+        "meeting_point",
+        "route_summary",
+        "audience_fit",
+        "group_format",
+        "price_text",
+        "booking_text",
+        "booking_url",
+        "channel_url",
+        "status",
+        "seats_text",
+        "digest_eligible",
+        "digest_eligibility_reason",
+        "is_last_call",
+        "post_kind",
+        "availability_mode",
+        "guide_names",
+        "organizer_names",
+        "base_region_fit",
+        "fact_pack",
+    )
     prompt = (
         "You are trail_scout.announce_extract_tier1.v1.\n"
         "Extract only Tier-1 public occurrence facts from one Telegram post about guide excursions.\n"
@@ -1164,6 +1308,8 @@ async def _extract_announce_post_tier1(
         "- If the post contains several dated excursions, return several occurrences.\n"
         "- Do not invent details. If a field is unclear, leave it empty.\n"
         "- Do not generate summary_one_liner, digest_blurb, fact_claims, template_hint, or profile_hint in this stage.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1171,6 +1317,7 @@ async def _extract_announce_post_tier1(
         prompt,
         consumer="guide_scout_announce_tier1_extract",
         max_output_tokens=720,
+        response_schema=schema,
     )
     return _coerce_occurrence_items(data)
 
@@ -1185,6 +1332,31 @@ async def _extract_status_post(
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    schema = _occurrences_wrapper_schema(
+        "source_block_id",
+        "canonical_title",
+        "title_normalized",
+        "date",
+        "time",
+        "city",
+        "meeting_point",
+        "route_summary",
+        "price_text",
+        "booking_text",
+        "booking_url",
+        "status",
+        "seats_text",
+        "digest_eligible",
+        "digest_eligibility_reason",
+        "is_last_call",
+        "post_kind",
+        "availability_mode",
+        "guide_names",
+        "organizer_names",
+        "base_region_fit",
+        "fact_claims",
+        "fact_pack",
+    )
     prompt = (
         "You are trail_scout.status_claim_extract.v1.\n"
         "Extract one occurrence or direct occurrence update from a Telegram post.\n"
@@ -1194,6 +1366,8 @@ async def _extract_status_post(
         "- Focus on status deltas such as last_call, seats left, moved time, changed meeting point, cancellation, or clarified booking.\n"
         "- Do not invent missing fields.\n"
         "- fact_claims should use claim_role anchor or status_delta only.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1201,6 +1375,7 @@ async def _extract_status_post(
         prompt,
         consumer="guide_scout_status_claim_extract",
         max_output_tokens=520,
+        response_schema=schema,
     )
     return _coerce_occurrence_items(data)
 
@@ -1215,6 +1390,28 @@ async def _extract_template_post(
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    schema = _occurrences_wrapper_schema(
+        "source_block_id",
+        "canonical_title",
+        "title_normalized",
+        "city",
+        "route_summary",
+        "audience_fit",
+        "group_format",
+        "booking_text",
+        "booking_url",
+        "post_kind",
+        "availability_mode",
+        "guide_names",
+        "organizer_names",
+        "base_region_fit",
+        "digest_eligible",
+        "digest_eligibility_reason",
+        "template_hint",
+        "profile_hint",
+        "fact_claims",
+        "fact_pack",
+    )
     prompt = (
         "You are trail_scout.template_extract.v1.\n"
         "Extract template-level excursion information from a Telegram post that has no concrete future occurrence yet.\n"
@@ -1224,6 +1421,8 @@ async def _extract_template_post(
         "- No future date means digest_eligible must stay false.\n"
         "- Use template_hint for reusable route/topic information.\n"
         "- Do not invent schedule facts.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1231,6 +1430,7 @@ async def _extract_template_post(
         prompt,
         consumer="guide_scout_template_extract",
         max_output_tokens=420,
+        response_schema=schema,
     )
     return _coerce_occurrence_items(data)
 
@@ -1339,6 +1539,34 @@ async def _extract_occurrence_block(
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    schema = _single_occurrence_wrapper_schema(
+        "source_block_id",
+        "canonical_title",
+        "title_normalized",
+        "date",
+        "time",
+        "duration_text",
+        "city",
+        "meeting_point",
+        "route_summary",
+        "audience_fit",
+        "group_format",
+        "price_text",
+        "booking_text",
+        "booking_url",
+        "channel_url",
+        "status",
+        "seats_text",
+        "digest_eligible",
+        "digest_eligibility_reason",
+        "is_last_call",
+        "post_kind",
+        "availability_mode",
+        "guide_names",
+        "organizer_names",
+        "base_region_fit",
+        "fact_pack",
+    )
     prompt = (
         "You are trail_scout.announce_extract_tier1.v1.\n"
         "Extract Tier 1 guide-excursion facts for exactly one candidate occurrence block from a multi-announcement Telegram post.\n"
@@ -1351,6 +1579,8 @@ async def _extract_occurrence_block(
         "- Ignore unrelated side notes inside the same block if the main scheduled excursion is clear.\n"
         "- Do not invent details. Keep source_block_id equal to the input block id.\n"
         "- Do not generate summary_one_liner, digest_blurb, fact_claims, template_hint, or profile_hint in this stage.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:700], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1358,6 +1588,7 @@ async def _extract_occurrence_block(
         prompt,
         consumer="guide_scout_tier1_extract_block",
         max_output_tokens=460,
+        response_schema=schema,
     )
     items = _coerce_occurrence_items(data)
     item = items[0] if items else None
@@ -1414,6 +1645,31 @@ async def _extract_occurrence_semantics(
         "post_kind": collapse_ws(occurrence_seed.get("post_kind")),
         "availability_mode": collapse_ws(occurrence_seed.get("availability_mode")),
     }
+    schema = _single_occurrence_wrapper_schema(
+        "audience_fit",
+        "group_format",
+        "duration_text",
+        "route_summary",
+        "city",
+        "meeting_point",
+        "price_text",
+        "booking_text",
+        "booking_url",
+        "status",
+        "seats_text",
+        "summary_one_liner",
+        "digest_blurb",
+        "digest_eligible",
+        "digest_eligibility_reason",
+        "is_last_call",
+        "guide_names",
+        "organizer_names",
+        "base_region_fit",
+        "fact_claims",
+        "template_hint",
+        "profile_hint",
+        "fact_pack",
+    )
     prompt = (
         "You are route_weaver.enrich.v1 for guide excursions.\n"
         "Enrich one already extracted occurrence with missing semantic facts from the same Telegram post.\n"
@@ -1425,6 +1681,8 @@ async def _extract_occurrence_semantics(
         "- Preserve the dominant term family from the source: if the title/seed says прогулка, do not rewrite it as экскурсия; if it says экскурсия, do not rewrite it as прогулка.\n"
         "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak.\n"
         "- fact_claims must use claim_role from: anchor, support, status_delta, template_hint, guide_profile_hint.\n"
+        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
+        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post, 'occurrence_seed': seed}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
@@ -1432,6 +1690,7 @@ async def _extract_occurrence_semantics(
         prompt,
         consumer="route_weaver_enrich",
         max_output_tokens=380,
+        response_schema=schema,
     )
     items = _coerce_occurrence_items(data)
     item = items[0] if items else None

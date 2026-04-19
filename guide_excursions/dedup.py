@@ -21,7 +21,7 @@ GUIDE_EXCURSIONS_DEDUP_ENABLED = (
 GUIDE_EXCURSIONS_DEDUP_LLM_ENABLED = (
     (os.getenv("GUIDE_EXCURSIONS_DEDUP_LLM_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-GUIDE_EXCURSIONS_DEDUP_MODEL = (os.getenv("GUIDE_EXCURSIONS_DEDUP_MODEL") or "gemma-3-27b").strip() or "gemma-3-27b"
+GUIDE_EXCURSIONS_DEDUP_MODEL = (os.getenv("GUIDE_EXCURSIONS_DEDUP_MODEL") or "gemma-4-31b").strip() or "gemma-4-31b"
 GUIDE_EXCURSIONS_DEDUP_MAX_PAIRS = max(
     1,
     min(int((os.getenv("GUIDE_EXCURSIONS_DEDUP_MAX_PAIRS") or "12") or 12), 40),
@@ -509,6 +509,7 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
         "Будь консервативен: совпадение даты, телефона или канала само по себе недостаточно.\n"
         "Если один пост выглядит как тизер/фокус на часть маршрута внутри более общего анонса на ту же дату, это same_occurrence.\n"
         "Верни только JSON без markdown.\n"
+        "Не выводи рассуждение, пояснения или thinking traces.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -516,7 +517,11 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
         raw, _usage = await client.generate_content_async(
             model=GUIDE_EXCURSIONS_DEDUP_MODEL,
             prompt=prompt,
-            generation_config={"temperature": 0},
+            generation_config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+                "response_schema": schema,
+            },
             max_output_tokens=420,
             candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
         )

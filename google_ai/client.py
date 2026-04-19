@@ -156,6 +156,11 @@ class GoogleAIClient:
         return normalized.startswith("gemma-")
 
     @classmethod
+    def _is_gemma4_model(cls, model: str) -> bool:
+        normalized = cls._normalize_rate_limit_model(model).strip().lower()
+        return normalized.startswith("gemma-4-")
+
+    @classmethod
     def _is_disallowed_text_model(cls, model: str) -> bool:
         size = cls._gemma_b_size(model)
         return size is not None and size < cls.TEXT_MIN_GEMMA_B
@@ -435,22 +440,7 @@ class GoogleAIClient:
                 continue
             seen.add(key)
             chain.append(m)
-        has_gemma = self._is_gemma_model(requested) or any(
-            self._is_gemma_model(m) for m in self.fallback_models
-        )
-        if has_gemma:
-            primary = self.TEXT_PRIMARY_MODEL
-            primary_key = self._normalize_rate_limit_model(primary).lower()
-            head = next(
-                (m for m in chain if self._normalize_rate_limit_model(m).lower() == primary_key),
-                primary,
-            )
-            tail = [
-                m
-                for m in chain
-                if self._normalize_rate_limit_model(m).lower() != primary_key
-            ]
-            chain = [head, *tail]
+        has_gemma = self._is_gemma_model(requested) or any(self._is_gemma_model(m) for m in self.fallback_models)
         return chain or [self.TEXT_PRIMARY_MODEL if has_gemma else requested_model]
 
     async def _notify_incident(
@@ -1347,14 +1337,21 @@ class GoogleAIClient:
         # - For Gemini, use the model name as-is (no "-it" suffix).
         _provider_model, model_name = self._resolve_provider_model(model)
 
-        # Gemma models frequently reject JSON-mode knobs like `response_mime_type`.
-        # Callers still request JSON in the prompt and then parse it from text.
+        # Gemma 3 frequently rejects native JSON-mode knobs, while Gemma 4
+        # benefits from native structured output contracts. Keep the old guard
+        # for pre-Gemma-4 models, but allow `response_mime_type` /
+        # `response_schema` through for Gemma 4.
         if self._is_gemma_model(model_name) or self._is_gemma_model(model):
             stripped = []
-            for key in ("response_mime_type", "response_schema", "response_schema_name"):
-                if key in config:
-                    stripped.append(key)
-                    config.pop(key, None)
+            if self._is_gemma4_model(model_name) or self._is_gemma4_model(model):
+                if "response_schema_name" in config:
+                    stripped.append("response_schema_name")
+                    config.pop("response_schema_name", None)
+            else:
+                for key in ("response_mime_type", "response_schema", "response_schema_name"):
+                    if key in config:
+                        stripped.append(key)
+                        config.pop(key, None)
             if stripped:
                 logger.info(
                     "google_ai: stripped_generation_config model=%s provider_model=%s stripped=%s",
@@ -1391,15 +1388,9 @@ class GoogleAIClient:
             return usage
 
         def _extract_text(resp: Any) -> str:
-            # Old `google.generativeai`: response.text
-            try:
-                text = getattr(resp, "text", None)
-                if isinstance(text, str) and text.strip():
-                    return text.strip()
-            except Exception:
-                pass
-
-            # Newer responses often store content in candidates[].content.parts[].text
+            # Newer responses often store content in candidates[].content.parts[].text.
+            # Gemma 4 may emit thought-channel parts; those must not leak into
+            # parsed JSON, persisted history, or public operator paths.
             parts: list[str] = []
             cands = getattr(resp, "candidates", None)
             if cands:
@@ -1414,6 +1405,11 @@ class GoogleAIClient:
                         cand_parts = content.get("parts")
                     if cand_parts:
                         for part in list(cand_parts):
+                            thought = getattr(part, "thought", None)
+                            if thought is None and isinstance(part, dict):
+                                thought = part.get("thought")
+                            if thought:
+                                continue
                             t = getattr(part, "text", None)
                             if t is None and isinstance(part, dict):
                                 t = part.get("text")
@@ -1425,6 +1421,14 @@ class GoogleAIClient:
                             parts.append(t.strip())
             if parts:
                 return "\n".join(parts).strip()
+
+            # Old `google.generativeai`: response.text
+            try:
+                text = getattr(resp, "text", None)
+                if isinstance(text, str) and text.strip():
+                    return text.strip()
+            except Exception:
+                pass
 
             # Last resort: stringify.
             try:
