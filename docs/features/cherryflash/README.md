@@ -651,26 +651,24 @@ This section captures the latest intro-direction request as an explicit delta to
   - the scheduler contract above applies to `popular_review`;
   - `cherryflash_libsvtav1` must not register its own cron/autostart slot and is launched only from `/v` UI buttons.
 
-## Story readiness, but disabled
+## Story publish rollout state
 
 - The implementation should remain compatible with the existing Kaggle-side story publish pipeline.
 - Current implementation state:
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
-  - the `popular_review` path still keeps `story_publish_enabled=false` by default, so the common story path is implemented but intentionally inactive until the user explicitly enables it.
+  - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
+  - the current CherryFlash story fanout is an ordered repost chain:
+    - first upload to `@kenigevents`;
+    - then after `600` seconds repost to `@lovekenig`;
+    - then after another `600` seconds repost to `@loving_guide39`.
 - Sibling profile rule:
   - `cherryflash_libsvtav1` reuses the same common story path but requests `story_publish_enabled=true` by default in its session params;
   - actual story publication still depends on the shared global story infra (`build_story_publish_config()` and secret datasets) being available for that run.
-- Phase 1 default:
-  - story autopublish disabled;
-  - while the story gate is off, the validation publication target is `@keniggpt`;
-  - no story failure path may affect the normal mp4 publication while the story gate is off.
-- Required readiness for later enablement:
-  - the future production target is story publication in the first half of the day, and the explicit readiness bar is a live story by `12:30 Europe/Kaliningrad`;
-  - story autopublish should be enabled only after CherryFlash passes preproduction validation on Kaggle;
-  - the existing story-autopublish path already proven on `CrumpleVideo` may be reused / adapted for CherryFlash when this gate opens;
-  - story targets can be configured without redesigning selection logic;
-  - caption / mode metadata for this video type can be supplied when stories are enabled later.
+- Current rollout expectation:
+  - the production target is story publication in the first half of the day, and the explicit readiness bar is a live story by `12:30 Europe/Kaliningrad`;
+  - story targets can be reconfigured without redesigning selection logic;
+  - caption / mode metadata for this video type can still be supplied later without changing the shared publish helper contract.
 
 ## Data and observability deltas
 
@@ -707,10 +705,10 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The default CTA family is evergreen for daily scheduled releases and does not depend on a specific month name in the headline.
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
-- [ ] Phase 1 publication goes only to `@keniggpt`.
-- [ ] Story autopublish stays off, while the mode remains story-ready for later rollout.
+- [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
+- [ ] Story autopublish publishes the current ordered fanout `@kenigevents -> @lovekenig -> @loving_guide39` through the shared repost-capable helper path.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
-- [ ] When story autopublish is later enabled, the target operating expectation is that the story is already published by `12:30 Europe/Kaliningrad`.
+- [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 
 ## Linked design work
 

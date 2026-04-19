@@ -1375,6 +1375,11 @@ class VideoAnnounceScenario:
                     "delay_seconds": 600,
                     "mode": "repost_previous",
                 },
+                {
+                    "peer": "@loving_guide39",
+                    "delay_seconds": 600,
+                    "mode": "repost_previous",
+                },
             ],
             "intro_text": POPULAR_REVIEW_INTRO_TEXT,
             "intro_text_valid": True,

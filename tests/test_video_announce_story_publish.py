@@ -32,6 +32,7 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
     assert params["story_targets_override"] == [
         {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
         {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+        {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
     ]
 
 
@@ -49,6 +50,7 @@ async def test_build_story_publish_config_prefers_selection_override_targets(mon
             "story_targets_override": [
                 {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
                 {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+                {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
             ],
         },
         selected_event_dates=["2026-04-16"],
@@ -65,6 +67,12 @@ async def test_build_story_publish_config_prefers_selection_override_targets(mon
         {
             "peer": "@lovekenig",
             "label": "@lovekenig",
+            "delay_seconds": 600,
+            "mode": "repost_previous",
+        },
+        {
+            "peer": "@loving_guide39",
+            "label": "@loving_guide39",
             "delay_seconds": 600,
             "mode": "repost_previous",
         },

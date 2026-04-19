@@ -813,6 +813,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
     monkeypatch,
     tmp_path,
 ):
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -841,6 +842,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
             "story_targets_override": [
                 {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
                 {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+                {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
             ],
         },
     )
@@ -861,6 +863,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
         "story_targets_override": [
             {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
             {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+            {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
         ],
     }
 
