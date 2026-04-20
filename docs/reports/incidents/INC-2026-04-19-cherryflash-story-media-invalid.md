@@ -95,10 +95,17 @@ CherryFlash scheduled run `#170` rendered the final mp4 and passed story preflig
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `78e8834a24797a3d1a2d641feb75af5ed921ed6a`
+- deploy path: manual `~/.fly/bin/flyctl deploy --app events-bot-new-wngqia --config fly.toml` from clean worktree `hotfix/cherryflash-one-pass-story-2026-04-20`, then fast-forward push to `origin/main`
 - regression checks:
+  - `BLENDER_BIN=/usr/bin/true pytest -q tests/test_kaggle_story_publish.py tests/test_crumple_build_notebook.py tests/test_video_announce_story_publish.py tests/test_cherryflash_notebook.py tests/test_cherryflash_full_render.py` → `25 passed`
+  - `python -m py_compile scripts/render_cherryflash_full.py kaggle/CrumpleVideo/story_publish.py video_announce/story_publish.py video_announce/scenario.py`
+  - `python kaggle/CrumpleVideo/build_notebook.py`
 - post-deploy verification:
+  - `flyctl status` shows machine `48e42d5b714228` on version `971` with image `deployment-01KPN9WFKB3BW213QNCMRXBN92`
+  - `curl https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ...}`
+  - prod live CherryFlash run `#174` started on deployed code, generated `story_publish.json` with `upload_profile=telegram_story_native_hevc_720p_v1`, and reached Kaggle kernel `zigomaro/cherryflash` version `61`
+  - the live run still failed before media upload because preflight for repost target `@lovekenig` returned `BOOSTS_REQUIRED`; `story_publish_report.json` therefore does not yet prove end-to-end one-pass media delivery, and this incident stays open
 
 ## Prevention
 
