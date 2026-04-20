@@ -663,6 +663,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
   - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
+  - the shared helper treats the first ordered story target as the blocking gate for render/publish success; later repost/fanout targets are best-effort by default and must not cancel the run when only they hit `BOOSTS_REQUIRED` or another target-local error;
   - the current CherryFlash story fanout is an ordered repost chain:
     - first upload to `@kenigevents`;
     - then after `600` seconds repost to `@lovekenig`;

@@ -12,7 +12,8 @@
 - Автопубликация stories теперь живёт внутри `Kaggle` notebook:
   - после успешного рендера notebook сам вызывает Telegram stories API через Telethon;
   - auth доставляется через encrypted split-datasets, а target config приходит отдельным `story_publish.json`;
-  - перед тяжёлым рендером notebook делает story preflight и падает сразу, если сессия не имеет прав на stories;
+  - перед тяжёлым рендером notebook делает story preflight и падает сразу, только если blocking primary target не может принять story;
+  - downstream fanout targets считаются best-effort: их `BOOSTS_REQUIRED`/repost ошибки должны попасть в report, но не отменять render и не останавливать попытку публикации в следующий target;
   - production target-order нужно фиксировать через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, а не через скрытый `main`-канал профиля;
   - для story-video preview frame жёстко привязан к первому кадру CrumpleVideo;
   - для быстрых проверок без полного рендера есть `kaggle/execute_crumple_story_smoke.py`.

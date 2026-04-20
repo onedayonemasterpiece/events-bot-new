@@ -175,3 +175,145 @@ def test_validate_native_story_video_rejects_non_native_profile(monkeypatch, tmp
 
     with pytest.raises(RuntimeError, match="native Telegram-ready final mp4"):
         helper._validate_native_story_video(src, log=lambda *_args, **_kwargs: None)
+
+
+class _FakeCanSendStoryRequest:
+    def __init__(self, *, peer):  # noqa: ANN001
+        self.peer = peer
+
+
+class _FakeSendStoryRequest:
+    def __init__(self, **kwargs):  # noqa: ANN003
+        self.kwargs = kwargs
+
+
+class _FakeCanSendResult:
+    def __init__(self, peer: str):
+        self.peer = peer
+
+    def to_dict(self) -> dict[str, str]:
+        return {"peer": self.peer}
+
+
+class _FakeStoryClient:
+    def __init__(self, *, boost_fail_peers: set[str], story_ids: dict[str, int]):
+        self.boost_fail_peers = boost_fail_peers
+        self.story_ids = story_ids
+        self.sent_requests: list[dict[str, object]] = []
+
+    async def get_me(self) -> SimpleNamespace:
+        return SimpleNamespace(id=1, username="story", premium=True)
+
+    async def get_input_entity(self, peer_ref: str) -> str:
+        return f"peer:{peer_ref}"
+
+    async def __call__(self, request):  # noqa: ANN001
+        if isinstance(request, _FakeCanSendStoryRequest):
+            if request.peer in self.boost_fail_peers:
+                raise RuntimeError("BOOSTS_REQUIRED")
+            return _FakeCanSendResult(request.peer)
+        if isinstance(request, _FakeSendStoryRequest):
+            peer = str(request.kwargs["peer"])
+            if peer in self.boost_fail_peers:
+                raise RuntimeError("BOOSTS_REQUIRED")
+            self.sent_requests.append(request.kwargs)
+            return SimpleNamespace(
+                story_id=self.story_ids[peer],
+                to_dict=lambda: {"story_id": self.story_ids[peer]},
+            )
+        raise AssertionError(f"Unexpected request: {request!r}")
+
+
+def _patch_story_request_types(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(helper.functions.stories, "CanSendStoryRequest", _FakeCanSendStoryRequest)
+    monkeypatch.setattr(helper.functions.stories, "SendStoryRequest", _FakeSendStoryRequest)
+    monkeypatch.setattr(
+        helper.types,
+        "InputPrivacyValueAllowAll",
+        lambda: "allow_all",  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        helper.types,
+        "InputMediaStory",
+        lambda *, peer, id: {"peer": peer, "id": id},
+    )
+    monkeypatch.setattr(helper, "_video_probe", lambda path: {"path": str(path)})
+
+
+@pytest.mark.asyncio
+async def test_story_preflight_only_requires_primary_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(
+        boost_fail_peers={"peer:@lovekenig"},
+        story_ids={},
+    )
+
+    report = await helper._story_targets_report(
+        client,
+        config={
+            "targets": [
+                {"peer": "@kenigevents", "mode": "upload"},
+                {"peer": "@lovekenig", "mode": "repost_previous"},
+                {"peer": "@loving_guide39", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="preflight",
+        media_path=None,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["blocking_ok"] is True
+    assert report["fanout_ok"] is False
+    assert report["partial_ok"] is True
+    assert [item["ok"] for item in report["targets"]] == [True, False, True]
+    assert [item["blocking"] for item in report["targets"]] == [True, False, False]
+
+
+@pytest.mark.asyncio
+async def test_story_publish_continues_after_non_blocking_fanout_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers={"peer:@lovekenig"},
+        story_ids={
+            "peer:@kenigevents": 101,
+            "peer:@loving_guide39": 202,
+        },
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        config={
+            "targets": [
+                {"peer": "@kenigevents", "mode": "upload"},
+                {"peer": "@lovekenig", "mode": "repost_previous"},
+                {"peer": "@loving_guide39", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["blocking_ok"] is True
+    assert report["fanout_ok"] is False
+    assert report["partial_ok"] is True
+    assert [item.get("story_id") for item in report["targets"]] == [101, None, 202]
+    assert len(client.sent_requests) == 2
+    assert client.sent_requests[1]["fwd_from_story"] == 101
+    assert client.sent_requests[1]["fwd_from_id"] == "peer:@kenigevents"

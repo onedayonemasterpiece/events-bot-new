@@ -395,7 +395,9 @@ color: #100E0E;
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - `main`-канал профиля + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` остаются только как legacy fallback, если explicit ordered list не задан;
   - exact scheduled rerun через `_run_scheduled_video_tomorrow` должен наследовать тот же story-config, что и обычный cron-slot; если `story_publish.json` отсутствует в таком rerun, это считается prod-config defect, а не отдельным режимом работы;
-  - перед долгим video-render notebook делает `CanSendStoryRequest` preflight; если текущая Telegram-сессия не умеет публиковать stories (например, user account без `Telegram Premium`) или target не принимает stories, run останавливается до рендера и пишет понятный `story_publish_report.json`;
+  - перед долгим video-render notebook делает `CanSendStoryRequest` preflight и трактует первый target в ordered fanout как blocking publish gate;
+  - если blocking target не принимает stories (например, user account без `Telegram Premium` или канал требует дополнительные boosts), run останавливается до рендера и пишет понятный `story_publish_report.json`;
+  - downstream fanout targets после первого считаются best-effort по умолчанию: их preflight/publish ошибки попадают в `story_publish_report.json`, но не должны отменять render, если первый target уже прошёл;
   - `story_publish_report.json` записывается в JSON-safe виде даже если Telethon возвращает `datetime`/TL-object поля в `result`;
   - для story-video cover/preview принудительно ставится на `0` секунд, то есть CrumpleVideo использует первый кадр ролика как preview frame;
   - перед story-upload notebook должен готовить отдельную story-safe копию `720x1280`, в которую исходный `1080x1572` ролик вписывается целиком с вертикальным паддингом без дополнительного zoom/crop;
@@ -403,7 +405,7 @@ color: #100E0E;
   - production story publish должен отправляться с `pinned=true`, чтобы история попадала в Telegram surface со списком опубликованных stories, тогда как smoke/image-only runs не должны туда добавляться;
   - story lifetime зависит от охвата дат: `12h`, если выбранные события покрывают только одну дату (`завтра`), и `24h`, если ролик охватывает две и более дат;
   - для story-video действует отдельный guard `30 MB`: если финальный mp4 больше, notebook считает story publish failed и пишет это в report;
-  - notebook пишет `story_publish_report.json` в output и считает run failed, если story publish был включён, но любой target завершился ошибкой.
+  - notebook пишет `story_publish_report.json` в output и считает run failed, если story publish был включён, но blocking target завершился ошибкой; partial fanout failures после первого target остаются visible в report как non-blocking.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
 - Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path.
 - Live preflight on `2026-04-07` уже проходил для обоих production targets `@kenigevents` и `@lovekenig` на premium-сессии, поэтому актуальный rollout-risk для stories лежит в code/config path, а не в старом `BOOSTS_REQUIRED`.

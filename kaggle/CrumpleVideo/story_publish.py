@@ -580,11 +580,21 @@ def _build_story_report(
         "pinned": bool(config.get("pinned")),
         "account": account,
         "targets": [],
+        "blocking_ok": False,
+        "fanout_ok": False,
+        "partial_ok": False,
     }
     if media_path is not None:
         report["media_path"] = str(media_path)
         report["media"] = _video_probe(media_path)
     return report
+
+
+def _story_target_is_blocking(target_cfg: dict[str, Any], *, index: int) -> bool:
+    blocking = target_cfg.get("blocking")
+    if isinstance(blocking, bool):
+        return blocking
+    return index == 0
 
 
 async def _story_targets_report(
@@ -613,6 +623,7 @@ async def _story_targets_report(
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
         delay_seconds = max(0, int(target_cfg.get("delay_seconds") or 0))
         publish_mode = str(target_cfg.get("mode") or "upload").strip().lower()
+        blocking = _story_target_is_blocking(target_cfg, index=idx)
         if publish_mode not in {"upload", "repost_previous"}:
             publish_mode = "upload"
         if honor_delays and delay_seconds:
@@ -625,6 +636,7 @@ async def _story_targets_report(
             "label": label,
             "delay_seconds": delay_seconds,
             "mode": publish_mode,
+            "blocking": blocking,
             "period_seconds": int(config.get("period_seconds") or 24 * 60 * 60),
             "pinned": bool(config.get("pinned")),
             "ok": False,
@@ -698,9 +710,25 @@ async def _story_targets_report(
                 f"❌ Story {phase} failed for {label}: {target_report['error']}"
             )
         report["targets"].append(target_report)
-    report["ok"] = bool(report["targets"]) and all(
-        bool(item.get("ok")) for item in report["targets"]
+    targets = report["targets"]
+    blocking_targets = [item for item in targets if item.get("blocking")]
+    report["fanout_ok"] = bool(targets) and all(bool(item.get("ok")) for item in targets)
+    report["blocking_ok"] = bool(blocking_targets) and all(
+        bool(item.get("ok")) for item in blocking_targets
     )
+    report["partial_ok"] = bool(report["blocking_ok"]) and not bool(report["fanout_ok"])
+    report["ok"] = bool(report["blocking_ok"])
+    if report["partial_ok"]:
+        failed_labels = [
+            str(item.get("label") or item.get("peer") or "?")
+            for item in targets
+            if not item.get("ok")
+        ]
+        phase_label = phase.capitalize()
+        log(
+            f"⚠️ {phase_label} primary target passed; "
+            f"continuing despite best-effort fanout failures: {', '.join(failed_labels)}"
+        )
     return report
 
 
@@ -726,7 +754,7 @@ async def preflight_story_publish_from_kaggle(
             media_path=None,
             honor_delays=False,
         )
-        if not report.get("ok"):
+        if not report.get("fanout_ok", report.get("ok")):
             write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
