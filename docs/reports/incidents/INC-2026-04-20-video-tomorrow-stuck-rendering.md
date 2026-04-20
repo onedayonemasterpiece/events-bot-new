@@ -91,7 +91,9 @@ The scheduled production `/v tomorrow` run for April 20, 2026 created session `#
 
 ## Corrective Actions
 
-- pending root-cause fix;
+- deployed guard that fails closed on restart recovery for `local:*` kernel refs instead of polling impossible Kaggle slugs;
+- operator-facing progress copy now stays on "готовлю рендер…" until real Kaggle handoff;
+- added an emergency fail-open lever `VIDEO_ANNOUNCE_DISABLE_ABOUT_FILL=1` so compensating rerun can bypass LLM `about_fill` on the pre-Kaggle critical path if production recovery is blocked before render launch;
 - pending recovery / catch-up for the missed April 20, 2026 scheduled slot.
 
 ## Follow-up Actions
@@ -99,6 +101,7 @@ The scheduled production `/v tomorrow` run for April 20, 2026 created session `#
 - [ ] Identify the exact crash trigger that caused `ops_run.id=760` to finish as `crashed` before Kaggle handoff completed.
 - [ ] Keep repo-local `local:*` refs out of restart recovery / Kaggle poller paths.
 - [ ] Move or rename the operator-facing "запускаю Kaggle…" notification so it reflects a real handoff milestone.
+- [ ] Verify whether `fill_missing_about()` was the concrete pre-handoff blocker for the missed April 20 rerun or only an emergency bypass candidate.
 - [ ] After the fix, perform compensating rerun/catch-up and record evidence that the April 20, 2026 slot has been restored.
 
 ## Release And Closure Evidence
