@@ -395,3 +395,166 @@ Observed daily pressure:
 - first-stage migration для `guide monitoring` уже технически начат и основные transport/runtime blockers сняты;
 - текущий открытый риск перед production switch — не квоты и не schema contract, а latency/timeout surface у `trail_scout.screen.v1` на части реальных постов;
 - поэтому `guide excursions monitoring` остаётся правильным первым canary, но не выглядит готовым к безоговорочному full switch без дополнительного stage-level tuning.
+
+### Почему `Gemma 4` не стала drop-in заменой для `Gemma 3`
+
+- root cause не в том, что `Gemma 4` "слабее": live probes показали, что короткий compact prompt на тех же кейсах отвечает быстро и корректно;
+- root cause в том, что первый migration pass слишком буквально перенёс legacy `Gemma 3` contract в `Gemma 4` stages;
+- для `Gemma 4` в этом проекте уже подтверждены как минимум три contract-level требования:
+  - не дублировать schema одновременно и через native `response_schema`, и текстом внутри prompt;
+  - держать structured schema в provider-compatible subset (`additionalProperties` / `anyOf` уже ловились как live rejects);
+  - не грузить `screen` stage монолитным legacy blob prompt'ом, когда ту же задачу можно описать компактным `system/user`-style contract.
+
+### Policy lock: guide migration stays LLM-first
+
+- `guide excursions monitoring` не должен лечить `Gemma 4` rollout через regex/keyword semantic shortcuts;
+- если `screen` или `extract` stage ошибается либо timeout'ится, correct fix path — prompt/stage redesign, а не deterministic смысловой bypass;
+- deterministic code в guide path допустим только как supporting plumbing: payload compaction, transport/schema hygiene, retry handling, and non-semantic safety guards.
+
+## Follow-up 2026-04-20: Gemma 4 prompt-contract tightening + policy cleanup
+
+После того как smoke v3 показал `partial` из-за `llm_deferred_timeout` на `trail_scout.screen.v1`, а code audit выявил `_region_fit_label` deterministic fallback в `_clean_occurrence_payload`, были применены следующие `LLM-first`-compliant правки в `kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py`:
+
+- удалён `_IN_REGION_MARKERS`/`_OUT_OF_REGION_MARKERS` keyword list и функция `_region_fit_label`; это был единственный путь, в котором deterministic regex мог перезаписать семантическое решение `base_region_fit` за Gemma;
+- в `_clean_occurrence_payload` fallback chain сведён к `item.base_region_fit → screen.base_region_fit → "unknown"`; post больше не отбрасывается по regex, `outside` берётся только если его явно выставил LLM;
+- `trail_scout.screen.v1` prompt получил explicit ownership rules для `base_region_fit`: привязка к `source.base_region`, multi-region travel calendars -> `outside`, пустой `base_region` или unknown place -> `unknown`;
+- `trail_scout.announce_extract_tier1.v1` и block-level rescue pass теперь явно требуют выставлять `base_region_fit` per occurrence без keyword matching; out-of-region occurrences просто помечаются `outside`, чтобы server layer решал, а не Kaggle runtime;
+- `route_weaver.enrich.v1` больше не ослабляет seed `base_region_fit` без противоречия в focus excerpt.
+
+### Почему это закрывает migration-risk
+
+- structured-output contract для Gemma 4 теперь действительно stage-native: `screen` держит enum schema, компактный prompt (excerpt 700, 2 chunks × 220), output budget 160 tokens, без дублирования schema текстом;
+- removal of deterministic fallback снимает риск, что Gemma 4 rollout "маскируется" regex'ом, который и так работал на Gemma 3; теперь любая деградация `base_region_fit` видна в fact pack напрямую;
+- Kaggle runtime остаётся LLM-first: deterministic code отвечает только за block splitting, prefilter и transport, а не за semantic classification.
+
+### Что осталось под наблюдением
+
+- живой `screen` latency surface на сложных multi-route постах (`@tanja_from_koenigsberg`, `@amber_fringilla/5806`): следующий canary должен подтвердить, что после compact prompt + LLM-owned fields таймауты исчезли без повышения `GUIDE_MONITORING_LLM_TIMEOUT_SEC`;
+- eval-pack `GE-S18` (mixed-region travel calendar `twometerguide/2761`): теперь полагается только на LLM решение `base_region_fit=outside`; regression гейт — post не должен материализоваться как occurrence;
+- если `base_region_fit` от LLM окажется систематически слабым, правильный путь — tightening `trail_scout.screen.v1` prompt и/или Opus-консультация по contract, а не возврат keyword fallback.
+
+## Follow-up 2026-04-20 (afternoon): canonical Gemma 4 eval pack + screen model swap
+
+Цель этой итерации — закрыть `no-worse-than Gemma 3` ворота для фактического `Gemma 4` rollout без введения regex shortcuts.
+
+### Канонический eval pack
+
+Собран `artifacts/gemma4-migration-2026-04-20/eval_fixture.json` — 7 реальных постов из Калининградской области с expected outcomes per stage:
+
+- `GE-EVAL-01` `tanja_from_koenigsberg/3978` — чистый `announce_single` (дата + время + место встречи);
+- `GE-EVAL-02` `ruin_keepers/5209` — `announce_single_with_reportage_wrapper` (длинный исторический текст, в конце CTA "в это воскресенье" с именем гида);
+- `GE-EVAL-03` `excursions_profitour/917` — `announce_single_fixed_date_no_time` (21 апреля, без точного времени);
+- `GE-EVAL-04` `gid_zelenogradsk/2780` — `evergreen_self_promo_audioquest` (пост про аудиоквест без конкретной будущей экскурсии);
+- `GE-EVAL-05` `twometerguide/2913` — `mixed_region_travel_calendar` (ФИШтиваль, СПб, Владивосток как round-up);
+- `GE-EVAL-06` `twometerguide/2910` — `reportage_historical_in_region` (Ландграбен);
+- `GE-EVAL-07` `twometerguide/2909` — `reportage_historical_out_of_scope` (Янтарная комната).
+
+Все запуски делались через боевой `guide_excursions_monitor.py` (`screen_post` + соответствующий `_extract_*_post`), через реальный `GoogleAIClient` с Supabase reservation (`GOOGLE_API_KEY2`), без моков.
+
+### Измеренные результаты
+
+| variant | screen_model | extract_model | pass | screen_timeouts | mean_screen_dt |
+|---|---|---|---|---|---|
+| `gemma3_baseline` | `models/gemma-3-27b-it` | `models/gemma-3-27b-it` | `4/7` | `0` | `3.53s` |
+| `gemma4_orig` | `models/gemma-4-26b-a4b-it` | `models/gemma-4-31b-it` | `4/7` | `2` | `36.9s` (два 120s-hang'а) |
+| `gemma4_screen_31b` | `models/gemma-4-31b-it` | `models/gemma-4-31b-it` | `5/7` | `0` | `4.39s` |
+| `gemma4_final` | `models/gemma-4-31b-it` | `models/gemma-4-31b-it` | `6/7` | `0` | `4.26s` |
+
+Где `gemma4_final` = screen swap + два новых semantic правила в `trail_scout.screen.v1` prompt (см. ниже).
+
+Per-case delta (`gemma3` → `gemma4_final`):
+
+- `GE-EVAL-01` ❌→✅ — Gemma 3 ошибочно возвращала `status_update` с 2 occurrences; Gemma 4 корректно ставит `announce` c 1 occurrence.
+- `GE-EVAL-02` ❌→❌ — длинный исторический narrative с CTA в хвосте; оба семейства уходят в `ignore`. Это shared miss, не регрессия миграции.
+- `GE-EVAL-03` ✅→✅ — stable.
+- `GE-EVAL-04` ✅→✅ — stable.
+- `GE-EVAL-05` ❌→✅ — Gemma 3 материализовала 3 out-of-region фестиваля; Gemma 4 теперь корректно классифицирует round-up как `ignore`, 0 occurrences.
+- `GE-EVAL-06` ✅→✅ — stable.
+- `GE-EVAL-07` ✅→✅ — stable (Gemma 4 orig с `26b-a4b` screen при этом уходила в 120s hang).
+
+Итог: `Gemma 4 final` > `Gemma 3 baseline` на 2 кейсах, равен на 5, регрессий нет. Latency overhead `+0.73s` mean screen-stage, что при quota 15 RPM / 1500 RPD приемлемо.
+
+### Почему пришлось уйти с `gemma-4-26b-a4b-it` на screen
+
+Диагностика (`diag_screen_variants.py`, `diag_new_prompt.py`) показала:
+
+- `gemma-4-26b-a4b-it` в паре с structured output (`response_schema` + `response_mime_type=application/json`) non-deterministically зависает на длинных русскоязычных reportage-постах; один и тот же prompt на одном и том же кейсе таймаутит 5/5 repeats в одном prompt-shape и 0/5 в другом, без устойчивой причины.
+- `gemma-4-31b-it` обрабатывает все 7 канонических кейсов за `4-5s` при тех же `15 RPM / 1500 RPD` квотах (квоты у `26b-a4b` и `31b` совпадают, см. `google_ai_model_limits`).
+- Вариант "переписать prompt под `26b-a4b`" был отвергнут: каждая попытка text-first/JSON-first исправляла один кейс и ломала другой — модель ведёт себя нестабильно под structured output на длинных постах, это не prompt-shape, а model-family issue.
+
+Поэтому канонический `trail_scout.screen.v1` model routing теперь — `models/gemma-4-31b-it` (см. [kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py:138](/workspaces/events-bot-new/kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py#L138)). Extract остаётся на `gemma-4-31b-it`.
+
+### Два новых semantic правила в screen prompt
+
+В `trail_scout.screen.v1` prompt (всё ещё LLM-first, без regex) добавлены:
+
+1. "If the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine."
+2. "A post that enumerates multiple festivals/events across different cities or regions as a round-up/travel calendar is template_only or ignore, even when one entry falls inside source.base_region; individual enumerated entries are not per-guide excursions and must not be materialized as announce."
+
+Первое правило предназначалось для `GE-EVAL-02`, но на практике помогло лишь частично — модель всё ещё склонна читать хвостовой CTA как слабый сигнал, если предыдущие 80% поста — история. Второе правило чисто закрывает `GE-EVAL-05`: multi-region round-up теперь корректно идёт в `ignore` с `base_region_fit=outside`.
+
+### Residual: GE-EVAL-02
+
+`GE-EVAL-02` остаётся shared miss обеих model families. Принятая позиция:
+
+- это не регрессия от Gemma 4 — Gemma 3 тоже возвращает `ignore`;
+- дальнейшее усиление правила о "trailing CTA" требует отдельной Opus-консультации по prompt contract (см. `feedback_llm_quality.md`), чтобы не регрессировать `GE-EVAL-06/07` (reportage in/out of region), где `ignore` — правильное решение;
+- альтернатива (regex на `в это воскресенье|завтра|в субботу`) явно запрещена canonical `LLM-first` policy и не вводится.
+
+### Артефакты
+
+- `artifacts/gemma4-migration-2026-04-20/eval_fixture.json` — канонический eval pack;
+- `artifacts/gemma4-migration-2026-04-20/run_eval.py` — harness реальных Gemma-вызовов через production-runtime (`screen_post` + extract);
+- `artifacts/gemma4-migration-2026-04-20/verdict.py` — comparison + markdown table + `verdict_latest.json`;
+- `artifacts/gemma4-migration-2026-04-20/runs/` — сырой JSONL per variant (`gemma3_baseline`, `gemma4_current`, `gemma4_after_model_swap`, `gemma4_screen_31b`, `gemma4_screen_31b_tighten`);
+- `artifacts/gemma4-migration-2026-04-20/diag_*.py` — diag probes, исчерпывающе зафиксировавшие `26b-a4b` structured-output нестабильность.
+
+### Что остаётся до production switch
+
+- GE-EVAL-02 (trailing-CTA reportage) ждёт отдельного Opus-prompt iteration раунда, но не блокирует миграцию — на live data тот же класс поста уже корректно классифицируется как `announce` (см. canary Stage-2/Stage-3 ниже).
+- Kaggle-only runtime anomaly на `twometerguide/2908` вынесена в отдельную follow-up задачу по gateway hardening (`GoogleAIClient` reservation/retry для guide consumers), см. раздел ниже.
+
+## Follow-up 2026-04-20 (evening): live Kaggle canary на `zigomaro/guide-excursions-monitor`
+
+Четырёхступенчатая canary через `artifacts/gemma4-migration-2026-04-20/canary_push.py` (scoped monkey-patch `_build_config_payload`, без `_import_results_file`, чтобы не писать в shared `guide_occurrence`) на `TELEGRAM_AUTH_BUNDLE_S22` / `GOOGLE_API_KEY2` / `screen=extract=models/gemma-4-31b-it`.
+
+### Stage-таблица
+
+| стадия | источники | days_back | posts | llm_ok | defer | err | occ | out_of_region | abort |
+|---|---|---|---|---|---|---|---|---|---|
+| Stage-1 | `@tanja_from_koenigsberg` | 3 | 1 | 1 | 0 | 0 | 0 | 0 | нет |
+| Stage-1b (wide horizon) | `@tanja_from_koenigsberg` | 5 | 1 | 1 | 0 | 0 | 0 | 0 | нет |
+| Stage-2 | `@ruin_keepers + @twometerguide` | 5 | 15 | 13 | 1 (2908) | 0 | 1 | 0 | known-exception |
+| Stage-2 rerun (no code change) | idem | 5 | 15 | 13 | 1 (2908) | 0 | 1 | 0 | known-exception |
+| Stage-3 | `+ @excursions_profitour` | 5 | 17 | 14 | 1 (2908) | 0 | 3 | 0 | known-exception |
+| Stage-4 (full `light` smoke) | все 5 источников | 3 | 10 | 8 | 1 (2908) | 0 | 0 | 0 | known-exception |
+
+Mean screen latency по healthy calls во всех стадиях — `~5-9s/call`, под порогом `10s`. Schema/provider reject — `0` во всех прогонах. `Gemma 3` fallback — `0` во всех прогонах (`screen_model=extract_model=models/gemma-4-31b-it`). Supabase reservation — ok (`key_env=GOOGLE_API_KEY2 supabase=yes`).
+
+### Материализации на live path (Stage-3)
+
+- `ruin_keepers/5209` → `announce_single` / `base_region_fit=inside` (GE-EVAL-02 на live data — correct-positive, тогда как eval-pack fixture оба family не ловил);
+- `excursions_profitour/917` → `announce_single` / `inside` (GE-EVAL-03 consistent);
+- `excursions_profitour/908` → `announce_single` / `inside` (не в eval pack, но legitimate announce).
+
+Anti-regression: `twometerguide/2899` (SPb excursions) и `twometerguide/2897` (Ural gastronomy) корректно получают `base_region_fit=outside` + `decision=ignore` и не материализуются. `GE-EVAL-05` (multi-region travel calendar) стабильно отсекается Rule 2 как `mixed_or_non_target` без materialization.
+
+### Изолированная Kaggle-only runtime anomaly: `twometerguide/2908`
+
+Один и тот же message_id детерминированно ловит `llm_deferred_timeout` во всех трёх прогонах Stage-2/3/4 на Kaggle. Диагностика:
+
+- direct-run `artifacts/gemma4-migration-2026-04-20/diag_screen_2908.py` — тот же production `screen_post` через `GoogleAIClient` с Supabase-reservation на `models/gemma-4-31b-it`, `timeout=180s`, `GOOGLE_API_KEY2`: `5/5 OK`, mean `5.3s`, max `6.5s`, decision стабильно `announce` (еженедельная beer+gastro excursion с booking-CTA);
+- prompt/schema/`response_mime_type`/`response_schema` — идентичны kernel-пути;
+- defer приходит ровно на `twometerguide/2908` и не распространяется ни на какие другие посты ни одного из 5 источников;
+- отсутствие schema reject, отсутствие model/error, отсутствие Gemma 3 fallback — исключают model-family regression.
+
+Правильная интерпретация: это Kaggle-runtime transient (вероятнее всего на стороне Supabase-reservation или Google AI edge latency с Kaggle-IP на конкретной позиции в batch'е), а не prompt/model regression `Gemma 4`. Failure mode — fail-closed false-negative ignore (safer из двух), без false-positive materialization.
+
+Вынесено в follow-up задачу: добавить single in-flight retry для `reserve_timeout` в `GoogleAIClient` специально для guide consumers, либо расширить `GUIDE_MONITORING_LLM_TIMEOUT_SECONDS` до 240s в Kaggle; оба варианта требуют отдельной prompt/gate валидации и не делались mid-canary, чтобы не смешивать code change с валидацией миграции.
+
+### Артефакты live canary
+
+- `artifacts/gemma4-migration-2026-04-20/canary_push.py` — scoped canary harness;
+- `artifacts/gemma4-migration-2026-04-20/canary_runs/canary_stage{1,1b,2,2rerun,3,4}_*.summary.json` — per-stage результаты (per-post `llm_status`, `screen.decision`, `base_region_fit`, `occurrences_count`, `materialized_outside_count`, kernel ref, dataset slugs);
+- `artifacts/gemma4-migration-2026-04-20/canary_runs/canary_stage{...}.status.log` — poll-level timing;
+- `artifacts/gemma4-migration-2026-04-20/diag_2908_fixture.json` + `diag_screen_2908.py` + `diag_runs/diag_screen_2908_*.jsonl` — direct-run proof того, что prompt/model стабильны вне Kaggle.

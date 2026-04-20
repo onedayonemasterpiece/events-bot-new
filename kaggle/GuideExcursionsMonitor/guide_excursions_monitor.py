@@ -135,7 +135,7 @@ from telethon import TelegramClient, functions  # noqa: E402
 from telethon.sessions import StringSession  # noqa: E402
 
 DEFAULT_GUIDE_MONITORING_MODEL = "models/gemma-4-31b-it"
-DEFAULT_GUIDE_MONITORING_SCREEN_MODEL = "models/gemma-4-26b-a4b-it"
+DEFAULT_GUIDE_MONITORING_SCREEN_MODEL = "models/gemma-4-31b-it"
 MODEL = DEFAULT_GUIDE_MONITORING_MODEL
 SCREEN_MODEL = DEFAULT_GUIDE_MONITORING_SCREEN_MODEL
 EXTRACT_MODEL = DEFAULT_GUIDE_MONITORING_MODEL
@@ -782,9 +782,9 @@ def _compact_screen_payload(screen: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compact_post_payload(post: ScannedPost, *, flags: dict[str, Any], for_extract: bool = False) -> dict[str, Any]:
-    excerpt_limit = 1500 if for_extract else 1100
+    excerpt_limit = 1500 if for_extract else 700
     chunk_limit = 3 if for_extract else 2
-    chunk_text_limit = 420 if for_extract else 320
+    chunk_text_limit = 420 if for_extract else 220
     chunks = []
     for item in split_text_chunks(post.text, limit=chunk_limit):
         chunks.append(
@@ -848,55 +848,6 @@ def _string_list_value(value: Any, *, limit: int = 8) -> list[str]:
         if len(out) >= limit:
             break
     return out
-
-
-_IN_REGION_MARKERS = (
-    "калининград",
-    "калининградск",
-    "зеленоградск",
-    "светлогорск",
-    "черняховск",
-    "советск",
-    "гусев",
-    "курш",
-    "самби",
-    "роминт",
-    "канта",
-    "амалиенау",
-    "ладушкин",
-    "ново-московск",
-    "новомосковск",
-    "балтийск",
-    "янтарн",
-    "полесск",
-    "мамоново",
-    "правдинск",
-    "озерск",
-    "гурьевск",
-)
-_OUT_OF_REGION_MARKERS = (
-    "калмык",
-    "крым",
-    "саратов",
-    "волг",
-    "волга",
-    "санкт-петербург",
-    "петербург",
-    "москва",
-    "карел",
-    "байкал",
-    "казань",
-    "ульянов",
-)
-
-
-def _region_fit_label(text: str) -> str:
-    low = collapse_ws(text).lower().replace("ё", "е")
-    if any(marker in low for marker in _IN_REGION_MARKERS):
-        return "inside"
-    if any(marker in low for marker in _OUT_OF_REGION_MARKERS):
-        return "outside"
-    return "unknown"
 
 
 def _extract_json(raw: str) -> Any | None:
@@ -992,12 +943,7 @@ def _single_occurrence_wrapper_schema(*keys: str) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
-            "occurrence": {
-                "anyOf": [
-                    _occurrence_schema(*keys),
-                    {"type": "null"},
-                ]
-            }
+            "occurrence": _occurrence_schema(*keys)
         },
         "required": ["occurrence"],
     }
@@ -1052,6 +998,27 @@ def _boolish(value: Any) -> bool:
     if not raw:
         return False
     return raw.lower() in {"1", "true", "yes", "y", "on", "да"}
+
+
+def _normalize_choice(value: Any, *, allowed: set[str], default: str, aliases: dict[str, str] | None = None) -> str:
+    raw = collapse_ws(value).lower()
+    if aliases:
+        raw = aliases.get(raw, raw)
+    return raw if raw in allowed else default
+
+
+def _normalize_reasons(value: Any, *, limit: int = 3) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        text = collapse_ws(item)
+        if not text or text in out:
+            continue
+        out.append(text[:220])
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _normalize_digest_eligibility(
@@ -1188,15 +1155,26 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
     schema = {
         "type": "object",
         "properties": {
-            "decision": {"type": "string"},
-            "post_kind": {"type": "string"},
-            "extract_mode": {"type": "string"},
-            "digest_eligible_default": {"type": "string"},
+            "decision": {"type": "string", "enum": ["ignore", "announce", "status_update", "template_only"]},
+            "post_kind": {
+                "type": "string",
+                "enum": [
+                    "announce_single",
+                    "announce_multi",
+                    "status_update",
+                    "reportage",
+                    "template_signal",
+                    "on_demand_offer",
+                    "mixed_or_non_target",
+                ],
+            },
+            "extract_mode": {"type": "string", "enum": ["none", "announce", "status", "template"]},
+            "digest_eligible_default": {"type": "string", "enum": ["yes", "no", "mixed"]},
             "contains_future_public_signal": {"type": "boolean"},
             "contains_past_report_signal": {"type": "boolean"},
-            "base_region_fit": {"type": "string"},
+            "base_region_fit": {"type": "string", "enum": ["inside", "outside", "ambiguous", "unknown"]},
             "reasons": {"type": "array", "items": {"type": "string"}},
-            "confidence": {"type": "string"},
+            "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
         },
         "required": [
             "decision",
@@ -1211,27 +1189,34 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
         ],
     }
     prompt = (
-        "You classify one Telegram post from a guide-related excursions source.\n"
-        "Return only JSON with keys: decision, post_kind, extract_mode, digest_eligible_default, contains_future_public_signal, contains_past_report_signal, base_region_fit, reasons, confidence.\n"
-        "Allowed decision: ignore, announce, status_update, template_only.\n"
-        "Allowed post_kind: announce_single, announce_multi, status_update, reportage, template_signal, on_demand_offer, mixed_or_non_target.\n"
-        "Allowed extract_mode: none, announce, status, template.\n"
-        "Allowed base_region_fit: inside, outside, ambiguous, unknown.\n"
-        "Do not invent missing facts.\n"
-        "Important:\n"
-        "- If one post clearly contains several excursion announcements with different dates/routes, classify it as announce_multi.\n"
-        "- Ignore generic travel calendars, bloom calendars, inspiration lists, and lifestyle posts that do not announce a real excursion inside the source base region.\n"
-        "- If the post mostly gives historical/contextual background but still invites people to tomorrow/this date walk, keep it as announce or status_update rather than pure reportage.\n"
-        "- base_region_fit is a semantic judgment about whether the post belongs to the source base region.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "Classify one Telegram post from a guide/excursions source. Return only JSON.\n"
+        "Allowed values:\n"
+        "- decision: ignore | announce | status_update | template_only\n"
+        "- post_kind: announce_single | announce_multi | status_update | reportage | template_signal | on_demand_offer | mixed_or_non_target\n"
+        "- extract_mode: none | announce | status | template\n"
+        "- digest_eligible_default: yes | no | mixed\n"
+        "- base_region_fit: inside | outside | ambiguous | unknown\n"
+        "- confidence: low | medium | high\n"
+        "Rules:\n"
+        "- announce/status_update only if the post contains a real excursion signal grounded in the input\n"
+        "- if there is a concrete future walk/excursion with date/time/meeting point, prefer announce or status_update over reportage\n"
+        "- if the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine\n"
+        "- generic calendars, inspiration, bloom/lifestyle, or travel-wishlist posts without a concrete excursion -> ignore\n"
+        "- if one post clearly contains several different excursions led by the source's own guide, use announce_multi\n"
+        "- a post that enumerates multiple festivals/events across different cities or regions as a round-up/travel calendar is template_only or ignore, even when one entry falls inside source.base_region; individual enumerated entries are not per-guide excursions and must not be materialized as announce\n"
+        "- base_region_fit is your own semantic judgement about whether the concrete excursion(s) in the post take place inside source.base_region; it must not be derived from keyword matching alone\n"
+        "- if the post is about places outside source.base_region (other regions/countries/cities) or is a multi-region travel calendar, set base_region_fit=outside or ambiguous and prefer decision=ignore or template_only\n"
+        "- if source.base_region is empty or the post has no concrete place, use base_region_fit=unknown\n"
+        "- do not invent facts\n"
+        "- reasons must be 1-3 short grounded strings\n"
+        "- no reasoning, analysis, or hidden thinking traces\n"
         f"Input:\n{json.dumps({'source': compact_source, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         SCREEN_MODEL,
         prompt,
         consumer="guide_scout_screen",
-        max_output_tokens=240,
+        max_output_tokens=160,
         response_schema=schema,
     )
     if not isinstance(data, dict):
@@ -1246,16 +1231,55 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
             "reasons": ["llm_parse_failed"],
             "confidence": "low",
         }
+    decision = _normalize_choice(
+        data.get("decision"),
+        allowed={"ignore", "announce", "status_update", "template_only"},
+        default="ignore",
+    )
+    post_kind = _normalize_choice(
+        data.get("post_kind"),
+        allowed={
+            "announce_single",
+            "announce_multi",
+            "status_update",
+            "reportage",
+            "template_signal",
+            "on_demand_offer",
+            "mixed_or_non_target",
+        },
+        default="mixed_or_non_target",
+    )
+    extract_mode = _normalize_choice(
+        data.get("extract_mode"),
+        allowed={"none", "announce", "status", "template"},
+        default="none",
+    )
+    digest_eligible_default = _normalize_choice(
+        data.get("digest_eligible_default"),
+        allowed={"yes", "no", "mixed"},
+        aliases={"true": "yes", "false": "no"},
+        default="mixed",
+    )
+    base_region_fit = _normalize_choice(
+        data.get("base_region_fit"),
+        allowed={"inside", "outside", "ambiguous", "unknown"},
+        default="unknown",
+    )
+    confidence = _normalize_choice(
+        data.get("confidence"),
+        allowed={"low", "medium", "high"},
+        default="low",
+    )
     return {
-        "decision": str(data.get("decision") or "ignore"),
-        "post_kind": str(data.get("post_kind") or "mixed_or_non_target"),
-        "extract_mode": str(data.get("extract_mode") or "none"),
-        "digest_eligible_default": str(data.get("digest_eligible_default") or "mixed"),
+        "decision": decision,
+        "post_kind": post_kind,
+        "extract_mode": extract_mode,
+        "digest_eligible_default": digest_eligible_default,
         "contains_future_public_signal": _boolish(data.get("contains_future_public_signal")),
         "contains_past_report_signal": _boolish(data.get("contains_past_report_signal")),
-        "base_region_fit": str(data.get("base_region_fit") or "unknown"),
-        "reasons": data.get("reasons") if isinstance(data.get("reasons"), list) else [],
-        "confidence": str(data.get("confidence") or "low"),
+        "base_region_fit": base_region_fit,
+        "reasons": _normalize_reasons(data.get("reasons")),
+        "confidence": confidence,
     }
 
 
@@ -1299,24 +1323,23 @@ async def _extract_announce_post_tier1(
     )
     prompt = (
         "You are trail_scout.announce_extract_tier1.v1.\n"
-        "Extract only Tier-1 public occurrence facts from one Telegram post about guide excursions.\n"
-        "Return only JSON with key occurrences. Do not return a bare array.\n"
-        "Each occurrence may contain only these keys: source_block_id, canonical_title, title_normalized, date, time, duration_text, city, meeting_point, route_summary, audience_fit, group_format, price_text, booking_text, booking_url, channel_url, status, seats_text, digest_eligible, digest_eligibility_reason, is_last_call, post_kind, availability_mode, guide_names, organizer_names, base_region_fit, fact_pack.\n"
+        "Extract Tier-1 public occurrence facts from one Telegram post about guide excursions.\n"
+        "Return only JSON with key occurrences.\n"
         "Rules:\n"
-        "- Extract only real excursion occurrences or direct public updates about a specific occurrence.\n"
-        "- Ignore past occurrences for MVP.\n"
-        "- If the post contains several dated excursions, return several occurrences.\n"
-        "- Do not invent details. If a field is unclear, leave it empty.\n"
-        "- Do not generate summary_one_liner, digest_blurb, fact_claims, template_hint, or profile_hint in this stage.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "- extract only real excursion occurrences or direct public updates about a specific occurrence\n"
+        "- ignore past occurrences for MVP\n"
+        "- if the post contains several different dated excursions, return several occurrences\n"
+        "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
+        "- if an occurrence clearly takes place outside source.base_region, set base_region_fit=outside; do not silently drop it, let the server filter\n"
+        "- do not invent details; if a field is unclear, leave it empty\n"
+        "- keep only Tier-1 public facts; no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
         prompt,
         consumer="guide_scout_announce_tier1_extract",
-        max_output_tokens=720,
+        max_output_tokens=520,
         response_schema=schema,
     )
     return _coerce_occurrence_items(data)
@@ -1360,21 +1383,19 @@ async def _extract_status_post(
     prompt = (
         "You are trail_scout.status_claim_extract.v1.\n"
         "Extract one occurrence or direct occurrence update from a Telegram post.\n"
-        "Return only JSON with key occurrences. Do not return a bare array.\n"
-        "Each occurrence may contain only these keys: source_block_id, canonical_title, title_normalized, date, time, city, meeting_point, route_summary, price_text, booking_text, booking_url, status, seats_text, digest_eligible, digest_eligibility_reason, is_last_call, post_kind, availability_mode, guide_names, organizer_names, base_region_fit, fact_claims, fact_pack.\n"
+        "Return only JSON with key occurrences.\n"
         "Rules:\n"
-        "- Focus on status deltas such as last_call, seats left, moved time, changed meeting point, cancellation, or clarified booking.\n"
-        "- Do not invent missing fields.\n"
-        "- fact_claims should use claim_role anchor or status_delta only.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "- focus on status deltas such as last_call, seats left, moved time, changed meeting point, cancellation, or clarified booking\n"
+        "- do not invent missing fields\n"
+        "- fact_claims should use only claim_role anchor or status_delta\n"
+        "- no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
         prompt,
         consumer="guide_scout_status_claim_extract",
-        max_output_tokens=520,
+        max_output_tokens=380,
         response_schema=schema,
     )
     return _coerce_occurrence_items(data)
@@ -1415,21 +1436,19 @@ async def _extract_template_post(
     prompt = (
         "You are trail_scout.template_extract.v1.\n"
         "Extract template-level excursion information from a Telegram post that has no concrete future occurrence yet.\n"
-        "Return only JSON with key occurrences. Do not return a bare array.\n"
-        "Each occurrence may contain only these keys: source_block_id, canonical_title, title_normalized, city, route_summary, audience_fit, group_format, booking_text, booking_url, post_kind, availability_mode, guide_names, organizer_names, base_region_fit, digest_eligible, digest_eligibility_reason, template_hint, profile_hint, fact_claims, fact_pack.\n"
+        "Return only JSON with key occurrences.\n"
         "Rules:\n"
-        "- No future date means digest_eligible must stay false.\n"
-        "- Use template_hint for reusable route/topic information.\n"
-        "- Do not invent schedule facts.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "- no future date means digest_eligible must stay false\n"
+        "- use template_hint for reusable route/topic information\n"
+        "- do not invent schedule facts\n"
+        "- no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
         prompt,
         consumer="guide_scout_template_extract",
-        max_output_tokens=420,
+        max_output_tokens=320,
         response_schema=schema,
     )
     return _coerce_occurrence_items(data)
@@ -1454,22 +1473,10 @@ def _clean_occurrence_payload(
     city = collapse_ws(item.get("city")) or None
     meeting_point = collapse_ws(item.get("meeting_point")) or None
     summary_one_liner = collapse_ws(item.get("summary_one_liner")) or None
-    region_probe = " ".join(
-        part
-        for part in (
-            title,
-            city or "",
-            meeting_point or "",
-            route_summary or "",
-            summary_one_liner or "",
-            collapse_ws(post.text)[:500],
-        )
-        if part
-    )
     base_region_fit = (
         collapse_ws(item.get("base_region_fit"))
         or collapse_ws((screen or {}).get("base_region_fit"))
-        or _region_fit_label(region_probe)
+        or "unknown"
     )
     if base_region_fit == "outside":
         return None
@@ -1570,24 +1577,22 @@ async def _extract_occurrence_block(
     prompt = (
         "You are trail_scout.announce_extract_tier1.v1.\n"
         "Extract Tier 1 guide-excursion facts for exactly one candidate occurrence block from a multi-announcement Telegram post.\n"
-        "Return only JSON with key occurrence. Do not return a bare object or bare array.\n"
-        "If the block is not a real public or template-like excursion signal inside the base region, return {\"occurrence\": null}.\n"
-        "Occurrence keys: source_block_id, canonical_title, title_normalized, date, time, duration_text, city, meeting_point, route_summary, audience_fit, group_format, price_text, booking_text, booking_url, channel_url, status, seats_text, digest_eligible, digest_eligibility_reason, is_last_call, post_kind, availability_mode, guide_names, organizer_names, base_region_fit, fact_pack.\n"
+        "Return only JSON with key occurrence.\n"
+        "If the block is not a real public or template-like excursion signal inside the base region, return {\"occurrence\": {}}.\n"
         "Rules:\n"
-        "- Treat the block as one primary excursion candidate. If it clearly announces one excursion in the source base region, materialize it even when some details are still pending.\n"
-        "- Do not drop the occurrence only because the block says details will come later; if title/date/route signal is present, return the occurrence with missing fields left empty.\n"
-        "- Ignore unrelated side notes inside the same block if the main scheduled excursion is clear.\n"
-        "- Do not invent details. Keep source_block_id equal to the input block id.\n"
-        "- Do not generate summary_one_liner, digest_blurb, fact_claims, template_hint, or profile_hint in this stage.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "- treat the block as one primary excursion candidate\n"
+        "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
+        "- ignore unrelated side notes inside the same block\n"
+        "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
+        "- do not invent details; keep source_block_id equal to the input block id\n"
+        "- no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:700], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
         prompt,
         consumer="guide_scout_tier1_extract_block",
-        max_output_tokens=460,
+        max_output_tokens=340,
         response_schema=schema,
     )
     items = _coerce_occurrence_items(data)
@@ -1673,16 +1678,15 @@ async def _extract_occurrence_semantics(
     prompt = (
         "You are route_weaver.enrich.v1 for guide excursions.\n"
         "Enrich one already extracted occurrence with missing semantic facts from the same Telegram post.\n"
-        "Return only JSON with key occurrence. Do not return a bare object or bare array.\n"
-        "Allowed keys inside occurrence: audience_fit, group_format, duration_text, route_summary, city, meeting_point, price_text, booking_text, booking_url, status, seats_text, summary_one_liner, digest_blurb, digest_eligible, digest_eligibility_reason, is_last_call, guide_names, organizer_names, base_region_fit, fact_claims, template_hint, profile_hint, fact_pack.\n"
+        "Return only JSON with key occurrence.\n"
         "Rules:\n"
-        "- Do not rename or replace canonical_title/date/time/source_block_id from the seed.\n"
-        "- Fill only facts supported by the focus excerpt.\n"
-        "- Preserve the dominant term family from the source: if the title/seed says прогулка, do not rewrite it as экскурсия; if it says экскурсия, do not rewrite it as прогулка.\n"
-        "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak.\n"
-        "- fact_claims must use claim_role from: anchor, support, status_delta, template_hint, guide_profile_hint.\n"
-        "- Do not output reasoning, analysis, or hidden thinking traces.\n"
-        f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
+        "- do not rename or replace canonical_title/date/time/source_block_id from the seed\n"
+        "- fill only facts supported by the focus excerpt\n"
+        "- preserve the dominant term family from the source: прогулка stays прогулка, экскурсия stays экскурсия\n"
+        "- base_region_fit is your own semantic judgement versus source.base_region; do not weaken seed.base_region_fit unless the focus excerpt explicitly contradicts it\n"
+        "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak\n"
+        "- fact_claims may use only claim_role: anchor, support, status_delta, template_hint, guide_profile_hint\n"
+        "- no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post, 'occurrence_seed': seed}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
