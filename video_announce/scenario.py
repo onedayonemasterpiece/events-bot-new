@@ -1166,7 +1166,7 @@ class VideoAnnounceScenario:
 
         await self.bot.send_message(
             self.chat_id,
-            f"Сессия #{obj.id}: выбрано {len(result.default_ready_ids)} событий, запускаю Kaggle…",
+            f"Сессия #{obj.id}: выбрано {len(result.default_ready_ids)} событий, готовлю рендер…",
         )
         msg = await self.start_render(
             obj.id,

@@ -115,8 +115,10 @@ async def test_run_tomorrow_pipeline_creates_session_and_starts(monkeypatch, tmp
         assert any(it.status == VideoAnnounceItemStatus.READY for it in items)
 
     assert any(
-        f"Сессия #{started['session_id']}" in text for _, text, _ in bot.messages
+        text == f"Сессия #{started['session_id']}: выбрано 1 событий, готовлю рендер…"
+        for _, text, _ in bot.messages
     )
+    assert all("запускаю Kaggle" not in text for _, text, _ in bot.messages)
 
 
 @pytest.mark.asyncio

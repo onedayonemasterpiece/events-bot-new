@@ -399,6 +399,8 @@ color: #100E0E;
   - если blocking target не принимает stories (например, user account без `Telegram Premium` или канал требует дополнительные boosts), run останавливается до рендера и пишет понятный `story_publish_report.json`;
   - downstream fanout targets после первого считаются best-effort по умолчанию: их preflight/publish ошибки попадают в `story_publish_report.json`, но не должны отменять render, если первый target уже прошёл;
   - `story_publish_report.json` записывается в JSON-safe виде даже если Telethon возвращает `datetime`/TL-object поля в `result`;
+  - repo-local kernel refs (`local:CrumpleVideo`) считаются только pre-handoff состоянием: если рантайм перезапустился до сохранения реального Kaggle slug, recovery не должен возобновлять `kernels_status` polling по `local:*`, а должен перевести сессию в rerun-required `FAILED`;
+  - операторское сообщение до `start_render()` должно описывать подготовку рендера, а не заявлять, что Kaggle уже запущен;
   - для story-video cover/preview принудительно ставится на `0` секунд, то есть CrumpleVideo использует первый кадр ролика как preview frame;
   - перед story-upload notebook должен готовить отдельную story-safe копию `720x1280`, в которую исходный `1080x1572` ролик вписывается целиком с вертикальным паддингом без дополнительного zoom/crop;
   - story-safe копия кодируется как Telegram-safe `H.264/AAC` (`avc1`, `yuv420p`, `+faststart`, `b:v=900k`, `maxrate=1200k`, `AAC 128k`) и report содержит media diagnostics для exact-файла, отправленного в `SendStoryRequest`;
