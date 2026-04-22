@@ -31,6 +31,7 @@ Scheduled guide-excursions monitoring started finishing as `partial` after the G
 - 2026-04-18 18:10 UTC: `ops_run_id=732`, `run_id=8b0fa1cc56ff`, `success`: `llm_ok=33`, `llm_deferred=0`, `llm_error=0`.
 - 2026-04-19 07:05 UTC: `ops_run_id=737`, `run_id=bf8569cee486`, `success`: `llm_ok=18`, `llm_deferred=0`, `llm_error=0`.
 - 2026-04-19 18:10 UTC: `ops_run_id=746`, `run_id=97921f0bd604`, `success`: `llm_ok=30`, `llm_deferred=0`, `llm_error=0`.
+- 2026-04-19 18:30 UTC: guide digest issue `#36` was created and published successfully to `@wheretogo39` / `@youwillsee39`.
 - 2026-04-20 07:03 UTC: Fly release `970` deployed shortly before the first observed `partial` run.
 - 2026-04-20 07:05 UTC: `ops_run_id=751`, `run_id=dc4bbf72877d`, `partial`: `llm_deferred=7`, `llm_error=3`.
 - 2026-04-20 11:20 UTC: `ops_run_id=755`, `run_id=fc89c94e492d`, later marked `crashed` by startup cleanup with no source reports or results path.
@@ -39,6 +40,8 @@ Scheduled guide-excursions monitoring started finishing as `partial` after the G
 - 2026-04-21 11:20 UTC: `ops_run_id=774`, `run_id=f5cc85e89511`, `partial`: one provider error on `@vkaliningrade/4674`.
 - 2026-04-21 18:10 UTC: `ops_run_id=779`, `run_id=a13e5f3e1d35`, `partial`: one provider error on `@twometerguide/2908`, while 10 occurrences were extracted.
 - 2026-04-22 07:05 UTC: `ops_run_id=784`, `run_id=47313bc11072`, `success`: `llm_ok=16`, `llm_deferred=0`, `llm_error=0`, `occurrences_updated=4`.
+
+Production `guide_digest_issue` evidence: after `#36` on 2026-04-19 18:30 UTC, no guide digest issues were created through the inspected 2026-04-22 window. This means the scheduled digest path did not reach `build_guide_digest_preview()` for the partial `full` runs; it returned earlier on the scheduler/import error gate.
 
 ## Error Inventory Since Gemma 4 Rollout
 
@@ -67,6 +70,7 @@ Timeouts were not limited to huge posts: observed timed-out post text lengths ra
 - The digest gate couples publish eligibility to run-level success instead of occurrence-level freshness and extraction quality.
 - `ask_gemma()` retries explicit provider `retry after ... ms` hints, and `GoogleAIClient` retries retryable provider errors internally, but the Kaggle wrapper does not currently retry `asyncio.TimeoutError` and does not add a second bounded retry for provider 5xx after the client has exhausted its short internal retry loop.
 - Scheduled digest auto-publish in `scheduling._run_scheduled_guide_excursions()` checks `not result.errors`; `run_guide_monitor()` adds `kaggle result marked as partial` to `errors` for any Kaggle `partial=true`, so a single post-level LLM failure suppresses auto-publish for the whole scheduled `full` run.
+- Guide digest writer/enrich/dedup are Gemma 4 by default in current code and production env has no override: `GUIDE_DIGEST_WRITER_MODEL`, `GUIDE_OCCURRENCE_ENRICH_MODEL`, and `GUIDE_EXCURSIONS_DEDUP_MODEL` resolve to `gemma-4-31b` on the guide key (`GOOGLE_API_KEY2`). `4o` is not used in the guide pipeline.
 
 ## Automation Contract
 
