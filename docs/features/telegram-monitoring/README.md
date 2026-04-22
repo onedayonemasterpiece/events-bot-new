@@ -58,6 +58,10 @@
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
     - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста.
 - В Kaggle используются только модели Gemma (текст/vision); 4o там не участвует.
+- Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
+- Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
+- Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`, с fail-open fallback только на `GOOGLE_API_KEY` / `GOOGLE_API_LOCALNAME`.
+- Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 
@@ -385,7 +389,7 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 - `schema_version=1` (legacy): только `messages[]` (без `sources_meta`);
 - `schema_version=2`: `messages[]` + top-level `sources_meta[]` с метаданными источников и подсказками.
 
-- Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.ipynb`
+- Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.py` -> sync в `telegram_monitor.ipynb`
 - Consumer (server): `source_parsing/telegram/handlers.py`
 
 ## FloodWait (Telegram rate limits)

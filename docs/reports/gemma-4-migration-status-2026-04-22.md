@@ -43,7 +43,7 @@
 | Event topics | `main.py` | inherits `TG_MONITORING_TEXT_MODEL`, default `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
 | Admin action assistant | `handlers/admin_assist_cmd.py` | `gemma-3-27b` | `GoogleAIClient` | not migrated |
 | Geo region fallback | `geo_region.py` | `gemma-3-27b` | bot Gemma client | not migrated |
-| Telegram Monitoring Kaggle text/vision | `kaggle/TelegramMonitor/telegram_monitor.ipynb` | `gemma-3-27b-it` | direct `google.generativeai` | not migrated |
+| Telegram Monitoring Kaggle text/vision | `kaggle/TelegramMonitor/telegram_monitor.py`, `telegram_monitor.ipynb` | `models/gemma-4-31b-it` | `GoogleAIClient` | migrated in code; live Kaggle validation pending |
 | Universal Festival Parser | `kaggle/UniversalFestivalParser/src/*` | `gemma-3-27b` / `models/gemma-3-27b-it` | direct `google.generativeai` | not migrated |
 | Video announce poster completeness check | `video_announce/poster_overlay.py` | `gemma-3-27b` | `GoogleAIClient` | not migrated |
 
@@ -110,12 +110,14 @@
 - `EVENT_TOPICS_MODEL` по умолчанию наследует `TG_MONITORING_TEXT_MODEL`, который в Kaggle всё ещё `gemma-3-27b-it`: [main.py](/workspaces/events-bot-new/main.py:2201), [kaggle/TelegramMonitor/telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:169);
 - docs по темам есть, но migration-specific каноники нет: [docs/llm/topics.md](/workspaces/events-bot-new/docs/llm/topics.md:37).
 
-### 4. Telegram Monitoring Kaggle не переведён
+### 4. Telegram Monitoring Kaggle — переведён в коде, но live rollout ещё не закрыт
 
 Факты:
 
-- Kaggle notebook по умолчанию остаётся на `gemma-3-27b-it`: [kaggle/TelegramMonitor/telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:170);
-- в research memo этот path отдельно отмечен как direct-SDK caller и отдельный future wave на `GOOGLE_API_KEY3`: [docs/reports/gemma-4-migration-research-2026-04-19.md](/workspaces/events-bot-new/docs/reports/gemma-4-migration-research-2026-04-19.md:189).
+- Kaggle producer вынесен в канонический script-source [kaggle/TelegramMonitor/telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а notebook теперь синхронизируется из него перед push;
+- text/vision stages переведены на shared `GoogleAIClient` с native `response_schema` и primary key isolation `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`;
+- прямой `google.generativeai` path для этого surface убран из producer runtime;
+- локальные regression/contract tests зелёные, но живой Kaggle run не был подтверждён в этой сессии из-за отсутствия доступных local secrets (`KAGGLE_*`, `TELEGRAM_AUTH_BUNDLE_S22`, `GOOGLE_API_KEY3`, `TG_API_*`, `SUPABASE_*`).
 
 ### 5. Universal Festival Parser не переведён
 
@@ -180,5 +182,6 @@
 
 - документация по миграции в проекте была, но не полная repo-wide;
 - реально завершён и production-proven только `guide-excursions`;
-- `Smart Update`, `event_parse`, `event_topics`, `Telegram Monitoring`, `Universal Festival Parser`, `admin_assist`, `geo_region`, `video_announce` всё ещё не переведены на `Gemma 4` по умолчанию;
+- `Smart Update`, `event_parse`, `event_topics`, `Universal Festival Parser`, `admin_assist`, `geo_region`, `video_announce` всё ещё не переведены на `Gemma 4` по умолчанию;
+- `Telegram Monitoring` уже переведён в коде и покрыт локальными контрактами, но live Kaggle validation ещё не подтверждена;
 - этот документ фиксирует текущий repo-wide status, которого раньше в канонике не было.

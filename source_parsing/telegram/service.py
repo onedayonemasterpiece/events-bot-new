@@ -10,6 +10,7 @@ import tempfile
 import time
 import uuid
 import contextlib
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -215,6 +216,8 @@ async def _tg_monitor_global_lock(
 
 KERNEL_REF = os.getenv("TG_MONITORING_KERNEL_REF", "artkoder/telegram-monitor-bot")
 KERNEL_PATH = Path(os.getenv("TG_MONITORING_KERNEL_PATH", "kaggle/TelegramMonitor"))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+GOOGLE_AI_PACKAGE_PATH = PROJECT_ROOT / "google_ai"
 
 DATASET_PROPAGATION_WAIT_SECONDS = int(os.getenv("TG_MONITORING_DATASET_WAIT", "30"))
 POLL_INTERVAL_SECONDS = int(os.getenv("TG_MONITORING_POLL_INTERVAL", "30"))
@@ -517,7 +520,7 @@ def _build_secrets_payload() -> str:
             continue
         if key.startswith(("TG_MONITORING_", "TG_GEMMA_")):
             payload[key] = value
-        elif key == "GOOGLE_API_LOCALNAME":
+        elif key.startswith("GOOGLE_API_LOCALNAME"):
             payload[key] = value
     return json.dumps(payload, ensure_ascii=False)
 
@@ -671,16 +674,124 @@ def _kernel_ref_from_meta(kernel_path: Path) -> str:
         return KERNEL_REF
 
 
+def _stage_google_ai_bundle(output_root: Path) -> Path:
+    if not GOOGLE_AI_PACKAGE_PATH.exists():
+        raise FileNotFoundError(f"Missing package: {GOOGLE_AI_PACKAGE_PATH}")
+    shutil.copytree(GOOGLE_AI_PACKAGE_PATH, output_root / "google_ai")
+    return output_root
+
+
+def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
+    script_source = script_path.read_text(encoding="utf-8")
+    script_lines = script_source.splitlines(keepends=True)
+    future_import_lines: list[str] = []
+    while script_lines and script_lines[0].startswith("from __future__ import "):
+        future_import_lines.append(script_lines.pop(0))
+    if script_lines and not script_lines[0].strip():
+        future_import_lines.append(script_lines.pop(0))
+    source_lines = list(future_import_lines)
+    source_lines.extend(
+        [
+            "from pathlib import Path as _TgNotebookPath\n",
+            "import sys as _TgNotebookSys\n",
+            "_TG_NOTEBOOK_ROOT = _TgNotebookPath.cwd().resolve()\n",
+            "if str(_TG_NOTEBOOK_ROOT) not in _TgNotebookSys.path:\n",
+            "    _TgNotebookSys.path.insert(0, str(_TG_NOTEBOOK_ROOT))\n",
+            "\n",
+        ]
+    )
+    source_lines.extend(script_lines)
+    if source_lines and not source_lines[-1].endswith("\n"):
+        source_lines[-1] = f"{source_lines[-1]}\n"
+    return {
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# Telegram Monitor\n",
+                    "\n",
+                    "Kaggle notebook for scanning Telegram sources and exporting `telegram_results.json`.\n",
+                ],
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": source_lines,
+            },
+        ],
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {
+                "codemirror_mode": {"name": "ipython", "version": 3},
+                "file_extension": ".py",
+                "mimetype": "text/x-python",
+                "name": "python",
+                "nbconvert_exporter": "python",
+                "pygments_lexer": "ipython3",
+                "version": "3.12",
+            },
+        },
+        "nbformat": 4,
+        "nbformat_minor": 4,
+    }
+
+
+def _sync_notebook_entrypoint(kernel_path: Path) -> None:
+    meta_path = kernel_path / "kernel-metadata.json"
+    if not meta_path.exists():
+        return
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    code_file = str(meta.get("code_file") or "").strip()
+    if not code_file.endswith(".ipynb"):
+        return
+    notebook_path = kernel_path / code_file
+    script_path = kernel_path / f"{Path(code_file).stem}.py"
+    if not script_path.exists():
+        raise FileNotFoundError(
+            f"Telegram Monitoring Kaggle runner script missing for notebook build: {script_path}"
+        )
+    notebook = _build_notebook_payload_from_script(script_path)
+    notebook_path.write_text(
+        json.dumps(notebook, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+@contextlib.contextmanager
+def _prepared_kernel_path(kernel_path: Path) -> Path:
+    if not _kernel_has_code(kernel_path):
+        raise RuntimeError(f"Telegram Monitoring kernel code missing: {kernel_path}")
+    with tempfile.TemporaryDirectory(prefix="tg-monitor-kernel-") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        prepared = tmp_path / kernel_path.name
+        shutil.copytree(kernel_path, prepared)
+        _stage_google_ai_bundle(prepared)
+        _sync_notebook_entrypoint(prepared)
+        yield prepared
+
+
 async def _push_kernel(
     client: KaggleClient,
     dataset_sources: list[str],
 ) -> str:
-    kernel_ref = _kernel_ref_from_meta(KERNEL_PATH)
     if _kernel_has_code(KERNEL_PATH):
-        logger.info("tg_monitor: pushing local kernel %s", KERNEL_PATH)
-        client.push_kernel(kernel_path=KERNEL_PATH, dataset_sources=dataset_sources)
-        return kernel_ref
+        with _prepared_kernel_path(KERNEL_PATH) as prepared_path:
+            kernel_ref = _kernel_ref_from_meta(prepared_path)
+            logger.info("tg_monitor: pushing local kernel %s", prepared_path)
+            client.push_kernel(kernel_path=prepared_path, dataset_sources=dataset_sources)
+            return kernel_ref
     logger.info("tg_monitor: local kernel code missing, deploying remote kernel")
+    kernel_ref = _kernel_ref_from_meta(KERNEL_PATH)
     for slug in dataset_sources:
         kernel_ref = client.deploy_kernel_update(kernel_ref, slug)
     return kernel_ref
