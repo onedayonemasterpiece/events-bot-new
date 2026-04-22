@@ -27,10 +27,14 @@
 1. `git fetch origin --prune`
 2. Убедиться, что рабочая ветка понятна и ожидаема: `git branch --show-current`
 3. Проверить чистоту дерева: `git status --short`
-4. Проверить, что deploy-ветка не потеряла связь с `origin/main`
-5. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
-6. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
-7. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
+4. Проверить локальный deploy-tooling:
+   - искать нужные CLI не только в текущем `PATH`, но и в стандартных user-level install locations (`~/.fly/bin/flyctl`, `~/.local/bin`, и т.п.);
+   - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` до начала deploy;
+   - отсутствие CLI не считается достаточным оправданием остановки, пока не предпринят self-bootstrap/install или не подготовлен минимальный reproducible bootstrap.
+5. Проверить, что deploy-ветка не потеряла связь с `origin/main`
+6. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
+7. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
+8. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
 
 ## Emergency Hotfix Flow
 

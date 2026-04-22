@@ -103,6 +103,11 @@
 - `origin/main` — единственный steady-state source of truth для production. Каноника: `docs/operations/release-governance.md`.
 - `release/*` и `hotfix/*` допустимы только как короткоживущие ветки; prod-fix не считается доставленным, пока commit не достижим из `origin/main`.
 - Не оставляй production-значимые фиксы только в side-ветках и не закрывай инцидент до back-merge в `main`.
+- Для prod-bound задач агент обязан сам привести deploy/tooling в рабочее состояние:
+  - сначала проверить стандартные локальные пути и user-level install locations для нужных CLI (`flyctl`, `gh`, и т.п.), а не только текущий `PATH`;
+  - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` в текущем процессе;
+  - если CLI действительно отсутствует, агент должен установить его или предложить минимальный reproducible bootstrap, а не объявлять отсутствие инструмента достаточным оправданием остановки;
+  - фразы вида "локально нет `flyctl`" не считаются допустимым closure/release explanation, если агент ещё не попытался self-bootstrap tooling.
 - Перед deploy обязательно:
   - `git fetch origin --prune`
   - проверить branch, чистоту worktree и связь с `origin/main`
