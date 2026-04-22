@@ -1,6 +1,6 @@
 # INC-2026-04-22-cherryflash-false-failed-after-successful-story-publish CherryFlash False `FAILED` After Successful Story Publish
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: CherryFlash / scheduled `popular_review` / Fly runtime state vs Kaggle remote completion
 Opened: 2026-04-22
@@ -100,10 +100,16 @@ The scheduled CherryFlash run on April 22, 2026 persisted production session `#1
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `4662e06b85a63e462d2ec0e3a9c698a11b1d5415`
+- deploy path: manual `~/.fly/bin/flyctl deploy --app events-bot-new-wngqia --config fly.toml --remote-only` from clean local `main`, then Fly release `v979`
 - regression checks:
+  - `pytest -q tests/test_video_announce_poller.py tests/test_video_announce_popular_review.py tests/test_video_announce_v_pipeline.py` → `28 passed`
+  - `python -m py_compile video_announce/poller.py video_announce/scenario.py video_announce/popular_review.py` → ok
+  - verified release commit reachable from `origin/main`
 - post-deploy verification:
+  - Fly app `events-bot-new-wngqia` is on machine version `979`, image `deployment-01KPT9NT9QXSADD855M29823Q8`
+  - `GET /healthz` after deploy returned `{"ok": true, "ready": true, ...}`
+  - no compensating rerun was required for April 22, 2026 because the affected CherryFlash run already produced viewer-facing stories successfully; the defect was state drift, not lost publication
 
 ## Prevention
 
