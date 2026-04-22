@@ -17,6 +17,7 @@
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
 *   **Supabase RPC (`google_ai_reserve`)**: Атомарное резервирование лимитов. Возвращает `env_var_name` (какую переменную среды читать).
     *   По умолчанию reserve теперь **scope-ится к `default_env_var_name` клиента**: если вызывающий consumer не передал явные `candidate_key_ids`, клиент сначала резолвит metadata только для своего ENV-ключа (`GOOGLE_API_KEY` для обычных bot-потоков, `GOOGLE_API_KEY2` для guide-only runtimes). Это защищает общие пайплайны от случайного “перетекания” на чужой ключ только потому, что в `google_ai_api_keys` появилась новая активная строка.
+    *   Если metadata для scoped ENV-ключа отсутствует в Supabase registry (например `GOOGLE_API_KEY3` в Telegram Monitoring canary), клиент **не** снимает scope и не берёт общий key pool. Он переходит на process-local limiter fallback с тем же `default_env_var_name`, чтобы provider call всё равно шёл через выбранный runtime key.
 *   **Supabase RPC (`google_ai_mark_sent`)**: Помечает, что запрос реально отправлен провайдеру (для диагностики/восстановления).
 *   **Supabase RPC (`google_ai_finalize`)**: Фиксирует фактическое потребление токенов и статус провайдера.
 *   **Reserve fallback (защита от “вечного fallback в Smart Update”)**:

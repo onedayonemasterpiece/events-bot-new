@@ -60,12 +60,19 @@
 - В Kaggle используются только модели Gemma (текст/vision); 4o там не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
-- Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`, с fail-open fallback только на `GOOGLE_API_KEY` / `GOOGLE_API_LOCALNAME`.
+- Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
 - Kaggle notebook теперь embed-ит `google_ai` sources прямо в generated `.ipynb`, а runner дополнительно ищет bundled package в kernel root, `/kaggle/working` и `/kaggle/input`; это нужно, потому что plain extra files рядом с notebook не гарантированно попадают в Kaggle runtime.
 - Generated Kaggle `.ipynb` вырезает script-only tail `asyncio.run(main())` / `already running event loop` guard и запускает `main()` отдельной notebook-cell через `nest_asyncio`; иначе Papermill падает в уже запущенном event loop.
+
+Live validation (`2026-04-22`):
+
+- Run `tg_g4_live_smoke_subset_20260422g` на Kaggle `zigomaro/telegram-monitor-bot` завершил producer stage и выгрузил `telegram_results.json` (`schema_version=2`, `sources_total=3`, `messages_scanned=2`, `messages_with_events=1`, `events_extracted=4`).
+- Kaggle log подтвердил `text_model=models/gemma-4-31b-it`, `vision_model=models/gemma-4-31b-it`, `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`; Gemma 3 fallback не использовался.
+- Server import/recovery по этому output зафиксирован в `ops_run`: `id=797`, `trigger=recovery_import`, `status=success`, `errors_count=0`; повторный import-only `id=798` тоже завершился `success`, `errors_count=0`.
+- Известное ограничение smoke: это subset-canary на 3 источниках, а не full scheduled run на всех источниках. Во время проверки provider вернул несколько retryable `500/504`, которые были отретраены; для одного источника без primary key row в Supabase quota registry зафиксирован fallback на local limiter, после чего gateway hardening запрещает уход в общий key pool.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 

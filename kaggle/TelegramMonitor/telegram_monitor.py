@@ -1113,8 +1113,15 @@ def _resolve_candidate_key_ids() -> list[str] | None:
         if row.get('id') and str(row.get('env_var_name') or '') in fallback_envs
     ]
     if primary_envs and not primary_ids:
-        logger.warning('tg_monitor.key_candidates_missing_primary consumer=%s env=%s fallback=%s', SUPABASE_CONSUMER, ','.join(primary_envs), bool(fallback_ids))
-    resolved = primary_ids or fallback_ids
+        logger.warning(
+            'tg_monitor.key_candidates_missing_primary consumer=%s env=%s fallback=%s action=local_primary_limiter',
+            SUPABASE_CONSUMER,
+            ','.join(primary_envs),
+            bool(fallback_ids),
+        )
+        _CANDIDATE_KEY_IDS = []
+        return None
+    resolved = primary_ids
     _CANDIDATE_KEY_IDS = list(resolved)
     return list(resolved) if resolved else None
 

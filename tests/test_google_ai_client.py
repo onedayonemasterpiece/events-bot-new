@@ -4,7 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from google_ai.client import GoogleAIClient
+from google_ai.client import (
+    _DEFAULT_ENV_CANDIDATE_CACHE,
+    GoogleAIClient,
+    RequestContext,
+)
 
 
 class _FakeModel:
@@ -35,6 +39,34 @@ class _FakeGenAI:
 
     def GenerativeModel(self, model_name: str):
         return _FakeModel(self, model_name)
+
+
+class _FakeSupabaseQuery:
+    def __init__(self, data=None):
+        self.data = data or []
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def eq(self, *_args, **_kwargs):
+        return self
+
+    def in_(self, *_args, **_kwargs):
+        return self
+
+    def order(self, *_args, **_kwargs):
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=self.data)
+
+
+class _FakeSupabaseClient:
+    def __init__(self, data=None):
+        self.data = data or []
+
+    def table(self, _name: str):
+        return _FakeSupabaseQuery(self.data)
 
 
 @pytest.mark.asyncio
@@ -174,3 +206,31 @@ def test_multimodal_prompt_estimate_ignores_raw_blob_bytes_and_counts_image_over
     assert prompt_text == "Extract poster facts"
     assert blob_count == 1
     assert client._estimate_prompt_tokens(prompt) >= client.DEFAULT_MULTIMODAL_IMAGE_TOKENS
+
+
+@pytest.mark.asyncio
+async def test_missing_scoped_env_key_uses_local_default_env_limiter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    monkeypatch.setenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "1")
+    client = GoogleAIClient(
+        supabase_client=_FakeSupabaseClient(data=[]),
+        consumer="kaggle",
+        default_env_var_name="GOOGLE_API_KEY3",
+    )
+    ctx = RequestContext(
+        request_uid="req-1",
+        consumer="kaggle",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="models/gemma-4-31b-it",
+        reserved_tpm=123,
+    )
+
+    reserve = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is True
+    assert reserve.env_var_name == "GOOGLE_API_KEY3"
+    assert reserve.key_alias == "local-fallback-default-env-missing"
+    assert reserve.blocked_reason == "default_env_candidates_missing"

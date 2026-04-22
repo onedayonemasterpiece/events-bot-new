@@ -43,7 +43,7 @@
 | Event topics | `main.py` | inherits `TG_MONITORING_TEXT_MODEL`, default `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
 | Admin action assistant | `handlers/admin_assist_cmd.py` | `gemma-3-27b` | `GoogleAIClient` | not migrated |
 | Geo region fallback | `geo_region.py` | `gemma-3-27b` | bot Gemma client | not migrated |
-| Telegram Monitoring Kaggle text/vision | `kaggle/TelegramMonitor/telegram_monitor.py`, `telegram_monitor.ipynb` | `models/gemma-4-31b-it` | `GoogleAIClient` | migrated in code; live Kaggle validation pending |
+| Telegram Monitoring Kaggle text/vision | `kaggle/TelegramMonitor/telegram_monitor.py`, `telegram_monitor.ipynb` | `models/gemma-4-31b-it` | `GoogleAIClient` | migrated; subset live Kaggle canary passed |
 | Universal Festival Parser | `kaggle/UniversalFestivalParser/src/*` | `gemma-3-27b` / `models/gemma-3-27b-it` | direct `google.generativeai` | not migrated |
 | Video announce poster completeness check | `video_announce/poster_overlay.py` | `gemma-3-27b` | `GoogleAIClient` | not migrated |
 
@@ -86,6 +86,26 @@
 - это ещё не migration фактического продового `smart_update.py`;
 - production default в коде остаётся `gemma-3-27b-it`: [smart_event_update.py](/workspaces/events-bot-new/smart_event_update.py:146).
 
+### 4. Telegram Monitoring — migrated, subset live canary passed
+
+Сделано в текущем hardening wave:
+
+- Kaggle producer переведён на `models/gemma-4-31b-it` для text/vision stages и shared `GoogleAIClient` с native `response_schema`;
+- source metadata prompt запрещает сохранять social/profile links как `suggested_website_url`;
+- extract prompt явно требует мерджить OCR/date/time/venue facts, не возвращать whitespace-only strings и не придумывать `end_date` для single-date events;
+- generated Kaggle notebook embed-ит `google_ai` sources и запускает `main()` через `nest_asyncio`, что исправило два live-failure класса: `ModuleNotFoundError: google_ai` и `telegram_monitor.py should not be imported while an event loop is already running`;
+- key isolation tightened: если `GOOGLE_API_KEY3` отсутствует в Supabase quota registry, gateway uses process-local limiter with `GOOGLE_API_KEY3` instead of silently falling through to the shared key pool.
+
+Live evidence (`2026-04-22`):
+
+- Kaggle run `tg_g4_live_smoke_subset_20260422g` produced `telegram_results.json` with `schema_version=2`, `sources_total=3`, `messages_scanned=2`, `messages_with_events=1`, `events_extracted=4`;
+- Kaggle log confirms `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`; no Gemma 3 model fallback was observed;
+- server recovery import `ops_run id=797` finished `success`, `errors_count=0`; repeat import-only `id=798` also finished `success`, `errors_count=0`.
+
+Оставшийся caveat:
+
+- это subset-canary, а не full scheduled all-source run. Для closure всего surface следующим gate остаётся один full scheduled/manual prod run после key registry sync for `GOOGLE_API_KEY3`.
+
 ## Что ещё не сделано
 
 ### 1. Smart Update core не переведён
@@ -110,14 +130,13 @@
 - `EVENT_TOPICS_MODEL` по умолчанию наследует `TG_MONITORING_TEXT_MODEL`, который в Kaggle всё ещё `gemma-3-27b-it`: [main.py](/workspaces/events-bot-new/main.py:2201), [kaggle/TelegramMonitor/telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:169);
 - docs по темам есть, но migration-specific каноники нет: [docs/llm/topics.md](/workspaces/events-bot-new/docs/llm/topics.md:37).
 
-### 4. Telegram Monitoring Kaggle — переведён в коде, но live rollout ещё не закрыт
+### 4. Telegram Monitoring full scheduled rollout ещё не закрыт
 
 Факты:
 
-- Kaggle producer вынесен в канонический script-source [kaggle/TelegramMonitor/telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а notebook теперь синхронизируется из него перед push;
-- text/vision stages переведены на shared `GoogleAIClient` с native `response_schema` и primary key isolation `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`;
-- прямой `google.generativeai` path для этого surface убран из producer runtime;
-- локальные regression/contract tests зелёные, но живой Kaggle run не был подтверждён в этой сессии из-за отсутствия доступных local secrets (`KAGGLE_*`, `TELEGRAM_AUTH_BUNDLE_S22`, `GOOGLE_API_KEY3`, `TG_API_*`, `SUPABASE_*`).
+- subset live canary passed (см. раздел выше);
+- full scheduled run на всех источниках после hardening ещё нужно прогнать и сравнить с recent Gemma 3 baseline по import volume/ошибкам;
+- Supabase quota registry нужно синхронизировать с `GOOGLE_API_KEY3`, чтобы межсервисный лимитер видел primary key row; код уже защищён от silent shared-pool fallback, но registry sync вернёт централизованный accounting.
 
 ### 5. Universal Festival Parser не переведён
 
@@ -183,5 +202,5 @@
 - документация по миграции в проекте была, но не полная repo-wide;
 - реально завершён и production-proven только `guide-excursions`;
 - `Smart Update`, `event_parse`, `event_topics`, `Universal Festival Parser`, `admin_assist`, `geo_region`, `video_announce` всё ещё не переведены на `Gemma 4` по умолчанию;
-- `Telegram Monitoring` уже переведён в коде и покрыт локальными контрактами, но live Kaggle validation ещё не подтверждена;
+- `Telegram Monitoring` уже переведён в коде, покрыт локальными контрактами и прошёл subset live Kaggle canary; full scheduled rollout ещё требует отдельного all-source прогона;
 - этот документ фиксирует текущий repo-wide status, которого раньше в канонике не было.

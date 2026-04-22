@@ -343,8 +343,8 @@ class GoogleAIClient:
                 consumer,
                 ",".join(env_names),
             )
-            _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = None
-            return None
+            _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = ()
+            return []
         _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = ids
         return list(ids)
 
@@ -821,6 +821,26 @@ class GoogleAIClient:
         if scoped_candidate_key_ids is None:
             scoped_candidate_key_ids = self._resolve_default_env_candidate_key_ids(
                 consumer=ctx.consumer,
+            )
+        if scoped_candidate_key_ids == []:
+            logger.warning(
+                "google_ai.reserve_default_env_candidates_missing_fallback "
+                "consumer=%s env=%s",
+                ctx.consumer,
+                self.default_env_var_name,
+            )
+            if self.allow_local_limiter_fallback:
+                return await self._local_reserve(
+                    ctx,
+                    attempt_no=attempt_no,
+                    key_alias="local-fallback-default-env-missing",
+                    blocked_reason="default_env_candidates_missing",
+                )
+            return ReserveResult(
+                ok=True,
+                env_var_name=self.default_env_var_name,
+                key_alias="reserve-fallback-default-env-missing",
+                blocked_reason="default_env_candidates_missing",
             )
 
         payload = {

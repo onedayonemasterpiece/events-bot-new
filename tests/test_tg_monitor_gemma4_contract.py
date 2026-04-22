@@ -14,6 +14,9 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "SupabaseLimiter" not in source
     assert "import google.generativeai as genai" not in source
     assert "genai.configure(" not in source
+    assert "action=local_primary_limiter" in source
+    assert "resolved = primary_ids" in source
+    assert "primary_ids or fallback_ids" not in source
 
 
 def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
