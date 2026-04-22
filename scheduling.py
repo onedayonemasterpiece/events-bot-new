@@ -90,6 +90,7 @@ async def _run_scheduled_guide_excursions(
         send_progress=bool(target_chat_id),
     )
     auto_publish = _env_enabled("ENABLE_GUIDE_DIGEST_SCHEDULED", default=False)
+    warnings = [str(item) for item in (getattr(result, "warnings", None) or []) if str(item).strip()]
     if not auto_publish or mode != "full" or result.errors or bot is None:
         return
     try:
@@ -122,6 +123,13 @@ async def _run_scheduled_guide_excursions(
                     "📣 Scheduled guide digest published\n"
                     f"issue_id={publish_result.get('issue_id')}\n"
                     f"target={publish_result.get('target_chat') or '—'}"
+                    + (
+                        "\n"
+                        f"warnings={len(warnings)}\n"
+                        f"/guide_report {getattr(result, 'ops_run_id', None)}"
+                        if warnings and getattr(result, "ops_run_id", None)
+                        else ""
+                    )
                 ),
                 disable_web_page_preview=True,
             )
@@ -134,6 +142,13 @@ async def _run_scheduled_guide_excursions(
                 (
                     "ℹ️ Scheduled guide digest: новых экскурсионных находок нет\n"
                     f"issue_id={publish_result.get('issue_id')}"
+                    + (
+                        "\n"
+                        f"warnings={len(warnings)}\n"
+                        f"/guide_report {getattr(result, 'ops_run_id', None)}"
+                        if warnings and getattr(result, "ops_run_id", None)
+                        else ""
+                    )
                 ),
                 disable_web_page_preview=True,
             )

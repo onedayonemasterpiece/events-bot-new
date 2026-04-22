@@ -112,9 +112,9 @@ Timeouts were not limited to huge posts: observed timed-out post text lengths ra
 
 ## Corrective Actions
 
-- Pending: make guide scheduled digest publish eligible fresh material even if the scan result is `partial` due to unrelated post-level LLM errors.
-- Pending: improve report/import surfacing so source/post-level LLM errors are visible in operator summaries.
-- Pending: add bounded retry around guide Gemma timeouts/provider 5xx at the Kaggle wrapper layer, with per-attempt diagnostics.
+- Implemented: guide scheduled digest can publish eligible fresh material even if the scan result is `partial` due to unrelated post-level LLM errors; those partials are recorded as warnings instead of blocking `result.errors`.
+- Implemented: run completion, `/guide_report`, and `/guide_runs` keep warning/`llm_error` visibility.
+- Implemented: bounded retry around guide Gemma timeouts/provider 5xx at the Kaggle wrapper layer, with per-attempt diagnostics.
 
 ## Follow-up Actions
 

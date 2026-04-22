@@ -144,6 +144,8 @@ GOOGLE_FALLBACK_KEY_ENV = "GOOGLE_API_KEY"
 GOOGLE_ACCOUNT_ENV = "GOOGLE_API_LOCALNAME2"
 GOOGLE_ACCOUNT_FALLBACK_ENV = "GOOGLE_API_LOCALNAME"
 LLM_TIMEOUT_SECONDS = 120
+LLM_TIMEOUT_RETRY_ATTEMPTS = 1
+LLM_PROVIDER_5XX_RETRY_ATTEMPTS = 1
 _GEMMA_CLIENTS: dict[str, Any] = {}
 _SUPABASE_CLIENT: Any | None = None
 _LLM_GATEWAY_LOGGED = False
@@ -178,8 +180,25 @@ def _retry_after_seconds(message: str) -> float | None:
     return max(0.5, min(delay_ms / 1000.0, 65.0))
 
 
+def _provider_5xx_status(exc: Exception) -> int | None:
+    status_code = int(getattr(exc, "status_code", 0) or 0)
+    if status_code in {500, 502, 503, 504}:
+        return status_code
+    message = str(exc or "")
+    if "Unknown field for Schema" in message or "anyOf" in message:
+        return None
+    for code in (500, 502, 503, 504):
+        if str(code) in message:
+            return code
+    lowered = message.lower()
+    if "internalservererror" in lowered or "internal error" in lowered or "unavailable" in lowered:
+        return 500
+    return None
+
+
 def refresh_runtime_settings() -> None:
     global MODEL, SCREEN_MODEL, EXTRACT_MODEL, GOOGLE_KEY_ENV, GOOGLE_ACCOUNT_ENV, LLM_TIMEOUT_SECONDS
+    global LLM_TIMEOUT_RETRY_ATTEMPTS, LLM_PROVIDER_5XX_RETRY_ATTEMPTS
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
     SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
@@ -190,6 +209,20 @@ def refresh_runtime_settings() -> None:
         LLM_TIMEOUT_SECONDS = max(30, int(float((os.getenv("GUIDE_MONITORING_LLM_TIMEOUT_SEC") or "120").strip() or 120)))
     except Exception:
         LLM_TIMEOUT_SECONDS = 120
+    try:
+        LLM_TIMEOUT_RETRY_ATTEMPTS = max(
+            0,
+            min(int(float((os.getenv("GUIDE_MONITORING_LLM_TIMEOUT_RETRIES") or "1").strip() or 1)), 3),
+        )
+    except Exception:
+        LLM_TIMEOUT_RETRY_ATTEMPTS = 1
+    try:
+        LLM_PROVIDER_5XX_RETRY_ATTEMPTS = max(
+            0,
+            min(int(float((os.getenv("GUIDE_MONITORING_LLM_PROVIDER_5XX_RETRIES") or "1").strip() or 1)), 3),
+        )
+    except Exception:
+        LLM_PROVIDER_5XX_RETRY_ATTEMPTS = 1
     _GEMMA_CLIENTS = {}
     _SUPABASE_CLIENT = None
     _LLM_GATEWAY_LOGGED = False
@@ -255,6 +288,8 @@ def _log_llm_gateway_once() -> None:
             f"account_name={_guide_account_name() or '-'} "
             f"supabase={'yes' if _get_supabase_client() is not None else 'no'} "
             f"timeout={LLM_TIMEOUT_SECONDS}s "
+            f"timeout_retries={LLM_TIMEOUT_RETRY_ATTEMPTS} "
+            f"provider_5xx_retries={LLM_PROVIDER_5XX_RETRY_ATTEMPTS} "
             f"reserve_fallback={os.getenv('GOOGLE_AI_ALLOW_RESERVE_FALLBACK', '1')} "
             f"local_fallback={os.getenv('GOOGLE_AI_LOCAL_LIMITER_FALLBACK', '1')}"
         ),
@@ -960,6 +995,8 @@ async def ask_gemma(
     if not (os.getenv(GOOGLE_KEY_ENV) or os.getenv(GOOGLE_FALLBACK_KEY_ENV) or "").strip():
         raise RuntimeError(f"{GOOGLE_KEY_ENV} is missing in Kaggle runtime")
     client = _get_gemma_client(consumer)
+    timeout_retries_used = 0
+    provider_5xx_retries_used = 0
     for attempt in range(4):
         try:
             raw, _usage = await asyncio.wait_for(
@@ -986,6 +1023,35 @@ async def ask_gemma(
             retry_after = _retry_after_seconds(str(exc))
             if retry_after is not None and attempt < 3:
                 await asyncio.sleep(min(90.0, retry_after + 1.0))
+                continue
+            if isinstance(exc, asyncio.TimeoutError) and attempt < 3 and timeout_retries_used < LLM_TIMEOUT_RETRY_ATTEMPTS:
+                timeout_retries_used += 1
+                delay = min(12.0, 2.0 * timeout_retries_used)
+                print(
+                    (
+                        "[gemma:retry] "
+                        f"consumer={consumer} model={model} reason=timeout "
+                        f"attempt={attempt + 1} retry={timeout_retries_used}/{LLM_TIMEOUT_RETRY_ATTEMPTS} "
+                        f"delay={delay:.1f}s"
+                    ),
+                    flush=True,
+                )
+                await asyncio.sleep(delay)
+                continue
+            status_5xx = _provider_5xx_status(exc)
+            if status_5xx is not None and attempt < 3 and provider_5xx_retries_used < LLM_PROVIDER_5XX_RETRY_ATTEMPTS:
+                provider_5xx_retries_used += 1
+                delay = min(15.0, 3.0 * provider_5xx_retries_used)
+                print(
+                    (
+                        "[gemma:retry] "
+                        f"consumer={consumer} model={model} reason=provider_{status_5xx} "
+                        f"attempt={attempt + 1} retry={provider_5xx_retries_used}/{LLM_PROVIDER_5XX_RETRY_ATTEMPTS} "
+                        f"delay={delay:.1f}s"
+                    ),
+                    flush=True,
+                )
+                await asyncio.sleep(delay)
                 continue
             raise
     return None
