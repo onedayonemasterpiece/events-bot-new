@@ -1361,12 +1361,37 @@ def _build_source_metadata_prompt(payload: dict) -> str:
         "Даны username, title, about и about_links. "
         "Верни только JSON без markdown. "
         "Правила: не выдумывай факты; если уверенности нет, оставь пустые строки и низкую confidence. "
-        "website_url: только внешний сайт фестиваля (не t.me и не telegra.ph). "
+        "website_url: только официальный standalone website фестиваля/проекта/источника. "
+        "Никогда не возвращай как website_url ссылки на Telegram, Telegra.ph, Instagram, VK, YouTube, Linktree, Taplink, Boosty, Patreon и другие соцсети/линк-агрегаторы. "
         "aliases: только варианты, реально встречающиеся в title/about. "
         "Схема ответа: "
         "{\"is_festival_channel\": bool, \"festival_series\": str, \"website_url\": str, \"aliases\": [str], \"confidence\": number, \"rationale_short\": str}.\n"
         "Input JSON:\n" + json.dumps(payload, ensure_ascii=False)
     )
+
+
+_SOURCE_WEBSITE_BLOCK_RE = re.compile(
+    r"^https?://(?:"
+    r"(?:www\.)?t\.me/"
+    r"|(?:www\.)?telegra\.ph/"
+    r"|(?:www\.)?instagram\.com/"
+    r"|(?:www\.)?vk(?:video)?\.com/"
+    r"|(?:www\.)?youtube\.com/"
+    r"|youtu\.be/"
+    r"|(?:www\.)?linktr\.ee/"
+    r"|(?:www\.)?taplink\.cc/"
+    r"|(?:www\.)?boosty\.to/"
+    r"|(?:www\.)?patreon\.com/"
+    r")",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_disallowed_source_website_url(value: str | None) -> bool:
+    url = str(value or '').strip()
+    if not url:
+        return False
+    return bool(_SOURCE_WEBSITE_BLOCK_RE.match(url))
 
 
 def _sanitize_source_suggestions(data: dict | None) -> dict | None:
@@ -1377,7 +1402,7 @@ def _sanitize_source_suggestions(data: dict | None) -> dict | None:
     website_url = str(data.get('website_url') or '').strip()
     if website_url and (not website_url.lower().startswith(('http://', 'https://'))):
         website_url = ''
-    if website_url and re.match(r"^https?://(?:t\.me|telegra\.ph)/", website_url, flags=re.IGNORECASE):
+    if website_url and _is_disallowed_source_website_url(website_url):
         website_url = ''
     aliases = []
     seen_aliases = set()
@@ -1821,7 +1846,12 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
         'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
         'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
+        'Never return whitespace-only strings. '
+        'Use evidence from both message text and OCR. If OCR contains venue, hall/floor, city, exact date, exact time, '
+        'or better speaker/title spelling, merge those facts into the event object. '
+        'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
         'Title must be the event name (not just a date, weekday, or time). '
+        'Prefer concise human event titles; for talks/lectures/meetups keep project or series context in raw_excerpt/search_digest, not inside an overlong title. '
         'If the message begins with a date marker like "19.02, четверг" treat it as a date, not a title. '
         'Title must not start with punctuation like commas. '
         'raw_excerpt should be a short (1-3 sentences) excerpt from the message without adding new facts. '
@@ -1829,6 +1859,7 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
         'Date is REQUIRED: never invent a date from the message date. '
         'For exhibitions/fairs: allow missing time, but require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
         'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
+        'Do not invent end_date for single-date events. '
         'Do not include hashtags in title, raw_excerpt, or search_digest. '
         'If OCR contains an explicit date or time, prefer it over the message date. '
         'If a date is missing a year, infer it from the message date and choose '

@@ -16,6 +16,24 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "genai.configure(" not in source
 
 
+def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "_SOURCE_WEBSITE_BLOCK_RE" in source
+    assert "instagram\\.com" in source
+    assert "linktr\\.ee" in source
+    assert "_is_disallowed_source_website_url" in source
+
+
+def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "Never return whitespace-only strings." in source
+    assert "Use evidence from both message text and OCR." in source
+    assert "Prefer filling location_name and location_address" in source
+    assert "Do not invent end_date for single-date events." in source
+
+
 def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() -> None:
     source = Path("source_parsing/telegram/service.py").read_text(encoding="utf-8")
 

@@ -62,6 +62,8 @@
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`, с fail-open fallback только на `GOOGLE_API_KEY` / `GOOGLE_API_LOCALNAME`.
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
+- `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
+- `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 
