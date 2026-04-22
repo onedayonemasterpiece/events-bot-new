@@ -694,6 +694,12 @@ def _embedded_google_ai_sources() -> dict[str, str]:
 
 def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
     script_source = script_path.read_text(encoding="utf-8")
+    script_source = re.sub(
+        r"\ntry:\n\s+_loop = asyncio\.get_running_loop\(\)\nexcept RuntimeError:\n\s+asyncio\.run\(main\(\)\)\nelse:\n\s+raise RuntimeError\([^\n]+\)\n?$",
+        "\n",
+        script_source,
+        flags=re.MULTILINE,
+    )
     script_lines = script_source.splitlines(keepends=True)
     embedded_google_ai = json.dumps(_embedded_google_ai_sources(), ensure_ascii=False)
     future_import_lines: list[str] = []
@@ -741,6 +747,31 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
                 "metadata": {},
                 "outputs": [],
                 "source": source_lines,
+            },
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "import asyncio\n",
+                    "import nest_asyncio\n",
+                    "\n",
+                    "def _tg_run_main_sync() -> None:\n",
+                    "    try:\n",
+                    "        loop = asyncio.get_event_loop()\n",
+                    "    except RuntimeError:\n",
+                    "        loop = asyncio.new_event_loop()\n",
+                    "        asyncio.set_event_loop(loop)\n",
+                    "    if loop.is_closed():\n",
+                    "        loop = asyncio.new_event_loop()\n",
+                    "        asyncio.set_event_loop(loop)\n",
+                    "    if loop.is_running():\n",
+                    "        nest_asyncio.apply(loop)\n",
+                    "    loop.run_until_complete(main())\n",
+                    "\n",
+                    "_tg_run_main_sync()\n",
+                ],
             },
         ],
         "metadata": {
