@@ -61,6 +61,8 @@
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
+- Kaggle secrets для Telegram Monitoring не передают unrelated `GOOGLE_API_KEY*` pools: `GOOGLE_API_KEY` внутри notebook является legacy alias на выбранный monitoring key, а дефолтный fallback env тоже указывает на `GOOGLE_API_KEY3`.
+- Provider calls ограничены таймаутом: `TG_MONITORING_LLM_TIMEOUT_SECONDS` (default `180`) выставляет `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`, чтобы retryable Gemma 4 `500/504` или зависшие calls fail-open на уровне поста/стадии, а не съедали весь Kaggle window.
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
@@ -72,7 +74,7 @@ Live validation (`2026-04-22`):
 - Run `tg_g4_live_smoke_subset_20260422g` на Kaggle `zigomaro/telegram-monitor-bot` завершил producer stage и выгрузил `telegram_results.json` (`schema_version=2`, `sources_total=3`, `messages_scanned=2`, `messages_with_events=1`, `events_extracted=4`).
 - Kaggle log подтвердил `text_model=models/gemma-4-31b-it`, `vision_model=models/gemma-4-31b-it`, `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`; Gemma 3 fallback не использовался.
 - Server import/recovery по этому output зафиксирован в `ops_run`: `id=797`, `trigger=recovery_import`, `status=success`, `errors_count=0`; повторный import-only `id=798` тоже завершился `success`, `errors_count=0`.
-- Известное ограничение smoke: это subset-canary на 3 источниках, а не full scheduled run на всех источниках. Во время проверки provider вернул несколько retryable `500/504`, которые были отретраены; для одного источника без primary key row в Supabase quota registry зафиксирован fallback на local limiter, после чего gateway hardening запрещает уход в общий key pool.
+- Известное ограничение smoke: это subset-canary на 3 источниках, а не full scheduled run на всех источниках. Во время проверки provider вернул несколько retryable `500/504`; после этого runtime hardened таймаутами provider-call и запретом передачи unrelated key pools в Kaggle notebook.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 

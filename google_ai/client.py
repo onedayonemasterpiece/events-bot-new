@@ -117,6 +117,7 @@ class GoogleAIClient:
     RESERVE_DIRECT_RETRY_ENV = "GOOGLE_AI_RESERVE_DIRECT_RETRY"
     RESERVE_DIRECT_SCHEMA_ENV = "GOOGLE_AI_RESERVE_DIRECT_SCHEMA"
     RESERVE_SCOPE_TO_DEFAULT_ENV_ENV = "GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV"
+    PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
 
     # Process-local limiter (used when Supabase reserve RPC is missing/flaky).
     _local_limiter_lock = asyncio.Lock()
@@ -238,6 +239,7 @@ class GoogleAIClient:
         self.max_retries = self._read_int_env("GOOGLE_AI_MAX_RETRIES", self.MAX_RETRIES)
         self.retry_delays_ms = self._read_retry_delays()
         self.fallback_models = self._read_fallback_models()
+        self.provider_timeout_seconds = self._read_float_env(self.PROVIDER_TIMEOUT_ENV, 0.0)
         self._incident_last_sent: dict[str, float] = {}
         self.scope_reserve_to_default_env = (
             os.getenv(self.RESERVE_SCOPE_TO_DEFAULT_ENV_ENV, "1").strip().lower()
@@ -264,6 +266,16 @@ class GoogleAIClient:
         try:
             value = int(raw)
             return max(1, value)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _read_float_env(name: str, default: float) -> float:
+        raw = (os.getenv(name) or "").strip()
+        if not raw:
+            return default
+        try:
+            return max(0.0, float(raw))
         except Exception:
             return default
 
@@ -311,7 +323,9 @@ class GoogleAIClient:
         cache_key = (consumer, env_names)
         if cache_key in _DEFAULT_ENV_CANDIDATE_CACHE:
             cached = _DEFAULT_ENV_CANDIDATE_CACHE[cache_key]
-            return list(cached) if cached else None
+            if cached is None:
+                return None
+            return list(cached)
         try:
             result = (
                 self.supabase.table("google_ai_api_keys")
@@ -1388,11 +1402,23 @@ class GoogleAIClient:
         gen_model = self.genai.GenerativeModel(model_name)
         
         # Generate content
-        response = await gen_model.generate_content_async(
+        provider_call = gen_model.generate_content_async(
             prompt,
             generation_config=config,
             safety_settings=safety_settings,
         )
+        if self.provider_timeout_seconds > 0:
+            try:
+                response = await asyncio.wait_for(
+                    provider_call,
+                    timeout=self.provider_timeout_seconds,
+                )
+            except asyncio.TimeoutError as exc:
+                raise TimeoutError(
+                    f"Google AI provider call timed out after {self.provider_timeout_seconds:.1f}s"
+                ) from exc
+        else:
+            response = await provider_call
         
         def _get_usage(resp: Any) -> UsageInfo:
             usage = UsageInfo()

@@ -471,11 +471,24 @@ def _build_secrets_payload() -> str:
             bundle_ok = True
         except Exception as exc:  # pragma: no cover - validation only
             logger.warning("tg_monitor.secrets_payload invalid bundle: %s", exc)
+    google_key_env = (_get_env_value("TG_MONITORING_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY3").strip() or "GOOGLE_API_KEY3"
+    google_fallback_env = (
+        _get_env_value("TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV") or google_key_env
+    ).strip() or google_key_env
+    google_key_value = _require_env(google_key_env)
     payload = {
         "TG_API_ID": _require_env("TG_API_ID"),
         "TG_API_HASH": _require_env("TG_API_HASH"),
-        "GOOGLE_API_KEY": _require_env("GOOGLE_API_KEY"),
+        # Keep the legacy GOOGLE_API_KEY alias pointed at the selected Telegram
+        # monitoring key so accidental unscoped provider access cannot borrow
+        # the bot/guide pools.
+        "GOOGLE_API_KEY": google_key_value,
+        google_key_env: google_key_value,
+        "TG_MONITORING_GOOGLE_KEY_ENV": google_key_env,
+        "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV": google_fallback_env,
     }
+    if google_fallback_env != google_key_env:
+        payload[google_fallback_env] = _require_env(google_fallback_env)
     logger.info(
         "tg_monitor.secrets_payload bundle_env=%s bundle_len=%s bundle_ok=%s tg_session=%s days_back=%s limit=%s",
         bundle_env_key or "-",
@@ -495,10 +508,8 @@ def _build_secrets_payload() -> str:
     else:
         payload["TG_SESSION"] = _require_env("TG_SESSION")
         payload["TG_MONITORING_ALLOW_TG_SESSION"] = "1"
-    # Include any additional Google API keys for pooled rate limiting.
-    for key, value in os.environ.items():
-        if key.startswith("GOOGLE_API_KEY") and key not in payload and value:
-            payload[key] = value
+    # Do not ship unrelated GOOGLE_API_KEY* values into the Telegram monitoring
+    # Kaggle runtime. This surface is isolated to GOOGLE_API_KEY3.
     # Pass storage credentials to Kaggle runtime.
     for key in (
         "SUPABASE_URL",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -62,11 +63,22 @@ class _FakeSupabaseQuery:
 
 
 class _FakeSupabaseClient:
-    def __init__(self, data=None):
+    def __init__(self, data=None, reserve_data=None):
         self.data = data or []
+        self.reserve_data = reserve_data
+        self.rpc_calls: list[dict] = []
 
     def table(self, _name: str):
         return _FakeSupabaseQuery(self.data)
+
+    def rpc(self, _name: str, payload: dict):
+        self.rpc_calls.append(dict(payload))
+        data = self.reserve_data or {
+            "ok": True,
+            "env_var_name": "GOOGLE_API_KEY2",
+            "key_alias": "unexpected-unscoped-key",
+        }
+        return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
 
 
 @pytest.mark.asyncio
@@ -234,3 +246,63 @@ async def test_missing_scoped_env_key_uses_local_default_env_limiter(
     assert reserve.env_var_name == "GOOGLE_API_KEY3"
     assert reserve.key_alias == "local-fallback-default-env-missing"
     assert reserve.blocked_reason == "default_env_candidates_missing"
+
+
+@pytest.mark.asyncio
+async def test_missing_scoped_env_key_cache_stays_local_not_unscoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    monkeypatch.setenv("GOOGLE_AI_LOCAL_LIMITER_FALLBACK", "1")
+    supabase = _FakeSupabaseClient(data=[])
+    client = GoogleAIClient(
+        supabase_client=supabase,
+        consumer="kaggle",
+        default_env_var_name="GOOGLE_API_KEY3",
+    )
+    ctx = RequestContext(
+        request_uid="req-cache",
+        consumer="kaggle",
+        account_name=None,
+        model="gemma-4-31b",
+        requested_model="models/gemma-4-31b-it",
+        reserved_tpm=123,
+    )
+
+    first = await client._reserve(ctx, attempt_no=1, candidate_key_ids=None)
+    second = await client._reserve(ctx, attempt_no=2, candidate_key_ids=None)
+
+    assert first.env_var_name == "GOOGLE_API_KEY3"
+    assert second.env_var_name == "GOOGLE_API_KEY3"
+    assert first.blocked_reason == "default_env_candidates_missing"
+    assert second.blocked_reason == "default_env_candidates_missing"
+    assert supabase.rpc_calls == []
+
+
+@pytest.mark.asyncio
+async def test_provider_call_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _SlowModel:
+        async def generate_content_async(self, *_args, **_kwargs):
+            await asyncio.sleep(1)
+            return SimpleNamespace(text='{"late":true}', usage_metadata={})
+
+    class _SlowGenAI:
+        def configure(self, api_key: str) -> None:
+            pass
+
+        def GenerativeModel(self, _model_name: str):
+            return _SlowModel()
+
+    monkeypatch.setenv("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", "0.01")
+    client = GoogleAIClient()
+    client._genai = _SlowGenAI()
+
+    with pytest.raises(TimeoutError, match="timed out"):
+        await client._call_provider(
+            api_key="test-key",
+            model="models/gemma-4-31b-it",
+            prompt="hello",
+            generation_config={"temperature": 0},
+            safety_settings=None,
+            max_output_tokens=None,
+        )

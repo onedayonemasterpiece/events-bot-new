@@ -9,6 +9,8 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "GoogleAIClient" in source
     assert "GOOGLE_API_KEY3" in source
     assert "GOOGLE_API_LOCALNAME3" in source
+    assert "or GOOGLE_KEY_ENV" in source
+    assert "or GOOGLE_ACCOUNT_ENV" in source
     assert "models/gemma-4-31b-it" in source
     assert "response_schema" in source
     assert "SupabaseLimiter" not in source
@@ -17,6 +19,9 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "action=local_primary_limiter" in source
     assert "resolved = primary_ids" in source
     assert "primary_ids or fallback_ids" not in source
+    assert "return list(_CANDIDATE_KEY_IDS)" in source
+    assert "GOOGLE_AI_PROVIDER_TIMEOUT_SEC" in source
+    assert "TG_MONITORING_LLM_TIMEOUT_SECONDS" in source
 
 
 def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
@@ -61,3 +66,5 @@ def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() 
     assert "nest_asyncio.apply(loop)" in source
     assert "loop.run_until_complete(main())" in source
     assert "key.startswith(\"GOOGLE_API_LOCALNAME\")" in source
+    assert "Do not ship unrelated GOOGLE_API_KEY* values" in source
+    assert "\"TG_MONITORING_GOOGLE_KEY_ENV\": google_key_env" in source

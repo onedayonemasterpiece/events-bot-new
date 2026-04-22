@@ -94,7 +94,8 @@
 - source metadata prompt запрещает сохранять social/profile links как `suggested_website_url`;
 - extract prompt явно требует мерджить OCR/date/time/venue facts, не возвращать whitespace-only strings и не придумывать `end_date` для single-date events;
 - generated Kaggle notebook embed-ит `google_ai` sources и запускает `main()` через `nest_asyncio`, что исправило два live-failure класса: `ModuleNotFoundError: google_ai` и `telegram_monitor.py should not be imported while an event loop is already running`;
-- key isolation tightened: если `GOOGLE_API_KEY3` отсутствует в Supabase quota registry, gateway uses process-local limiter with `GOOGLE_API_KEY3` instead of silently falling through to the shared key pool.
+- key isolation tightened: если `GOOGLE_API_KEY3` отсутствует в Supabase quota registry, gateway uses process-local limiter with `GOOGLE_API_KEY3` instead of silently falling through to the shared key pool;
+- post-canary hardening added: Telegram Monitoring Kaggle secrets no longer ship unrelated `GOOGLE_API_KEY*` pools, empty scoped-key cache no longer widens to unscoped reserve on later calls, and Gemma 4 provider calls are bounded by `TG_MONITORING_LLM_TIMEOUT_SECONDS` / `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`.
 
 Live evidence (`2026-04-22`):
 
@@ -105,6 +106,7 @@ Live evidence (`2026-04-22`):
 Оставшийся caveat:
 
 - это subset-canary, а не full scheduled all-source run. Для closure всего surface следующим gate остаётся один full scheduled/manual prod run после key registry sync for `GOOGLE_API_KEY3`.
+- follow-up subset canary after timeout/key-pool hardening is required before calling the Telegram Monitoring surface fully closed.
 
 ## Что ещё не сделано
 
