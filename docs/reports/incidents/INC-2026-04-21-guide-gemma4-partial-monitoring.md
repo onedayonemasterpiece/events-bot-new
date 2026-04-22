@@ -1,6 +1,6 @@
 # INC-2026-04-21 Guide Gemma 4 Partial Monitoring
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: guide excursions monitoring / scheduled guide digest
 Opened: 2026-04-21
@@ -40,8 +40,15 @@ Scheduled guide-excursions monitoring started finishing as `partial` after the G
 - 2026-04-21 11:20 UTC: `ops_run_id=774`, `run_id=f5cc85e89511`, `partial`: one provider error on `@vkaliningrade/4674`.
 - 2026-04-21 18:10 UTC: `ops_run_id=779`, `run_id=a13e5f3e1d35`, `partial`: one provider error on `@twometerguide/2908`, while 10 occurrences were extracted.
 - 2026-04-22 07:05 UTC: `ops_run_id=784`, `run_id=47313bc11072`, `success`: `llm_ok=16`, `llm_deferred=0`, `llm_error=0`, `occurrences_updated=4`.
+- 2026-04-22 07:53 UTC: deployed `c1f6f966` / Fly release `977`, separating non-fatal Kaggle partials into warnings so scheduled digest is not blocked by isolated post-level LLM errors.
+- 2026-04-22 08:10 UTC: deployed `059317cc` / Fly release `978`, adding bounded local Gemma 4 timeouts for digest preview stages.
+- 2026-04-22 08:13 UTC: attempted sidecar catch-up on the 1024 MB Fly machine OOM-killed the app process before `guide_digest_issue` creation; sidecar catch-up must not be run beside the main runtime at this size.
+- 2026-04-22 08:18 UTC: after temporary scale-up to 2048 MB, compensating catch-up published guide digest issue `#37` for occurrence `#134` (`Тайны Северной горы. Часть 2`) to `@wheretogo39` and `@youwillsee39`.
+- 2026-04-22 08:20 UTC: memory was scaled back to 1024 MB; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
 
 Production `guide_digest_issue` evidence: after `#36` on 2026-04-19 18:30 UTC, no guide digest issues were created through the inspected 2026-04-22 window. This means the scheduled digest path did not reach `build_guide_digest_preview()` for the partial `full` runs; it returned earlier on the scheduler/import error gate.
+
+Compensating publish evidence: issue `#37` was created at `2026-04-22 08:18:57 UTC`, marked `published` at `2026-04-22 08:18:59 UTC`, and `guide_occurrence #134` now has `published_new_digest_issue_id=37`; remaining eligible unpublished `new_occurrences` in the digest window: `0`.
 
 ## Error Inventory Since Gemma 4 Rollout
 
@@ -71,6 +78,7 @@ Timeouts were not limited to huge posts: observed timed-out post text lengths ra
 - `ask_gemma()` retries explicit provider `retry after ... ms` hints, and `GoogleAIClient` retries retryable provider errors internally, but the Kaggle wrapper does not currently retry `asyncio.TimeoutError` and does not add a second bounded retry for provider 5xx after the client has exhausted its short internal retry loop.
 - Scheduled digest auto-publish in `scheduling._run_scheduled_guide_excursions()` checks `not result.errors`; `run_guide_monitor()` adds `kaggle result marked as partial` to `errors` for any Kaggle `partial=true`, so a single post-level LLM failure suppresses auto-publish for the whole scheduled `full` run.
 - Guide digest writer/enrich/dedup are Gemma 4 by default in current code and production env has no override: `GUIDE_DIGEST_WRITER_MODEL`, `GUIDE_OCCURRENCE_ENRICH_MODEL`, and `GUIDE_EXCURSIONS_DEDUP_MODEL` resolve to `gemma-4-31b` on the guide key (`GOOGLE_API_KEY2`). `4o` is not used in the guide pipeline.
+- One-off prod sidecar scripts that import `guide_excursions.service` can double the app memory footprint because `digest_writer` resolves the shared gateway through `main`; on the 1024 MB Fly machine this caused OOM during manual catch-up. Prefer the running bot path or temporarily scale memory before sidecar catch-up.
 
 ## Automation Contract
 
@@ -119,17 +127,19 @@ Timeouts were not limited to huge posts: observed timed-out post text lengths ra
 
 ## Follow-up Actions
 
-- [ ] Add regression coverage for Gemma 4-compatible guide response schemas.
-- [ ] Add regression coverage for scheduled guide auto-publish with mixed successful occurrences and one provider failure.
+- [x] Add regression coverage for Gemma 4-compatible guide response schemas.
+- [x] Add regression coverage for scheduled guide auto-publish with mixed successful occurrences and one provider failure.
+- [x] Add regression coverage for local Gemma 4 digest-preview calls being timeout-bounded.
 - [ ] Add regression coverage for timeout/provider-5xx retry classification in the Kaggle guide runner.
 - [ ] Decide whether provider 500/timeout on a post with a past date should be downgraded to non-blocking warning after import, while preserving visibility in reports.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending for remaining corrective actions
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHAs: `c1f6f966` (`fix(guide): keep digest publishing after nonfatal partials`), `059317cc` (`fix(guide): bound digest Gemma calls`), both reachable from `origin/main`.
+- deploy path: manual `fly deploy -a events-bot-new-wngqia`; latest Fly release `978`, image `deployment-01KPT3T9CQ6MR0CAXM7EP8P5NW`, machine `48e42d5b714228` started.
+- regression checks: `python -m pytest tests/test_scheduling_guide_digest.py tests/test_guide_kaggle_schema_contract.py tests/test_guide_local_llm_timeout_contract.py -q` -> `5 passed`; `python -m py_compile guide_excursions/service.py scheduling.py kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py guide_excursions/llm_support.py guide_excursions/enrich.py guide_excursions/dedup.py guide_excursions/digest_writer.py`; `git diff --check`.
+- post-deploy verification: `fly status` shows release `978` started; `/healthz` returned `{"ok": true, "ready": true, "db": "ok", "issues": []}` after catch-up and scale-back.
+- compensating catch-up: guide digest issue `#37`, published targets `@wheretogo39` message `47` and `@youwillsee39` message `65`; remaining eligible unpublished `new_occurrences`: `0`.
 
 ## Prevention
 
