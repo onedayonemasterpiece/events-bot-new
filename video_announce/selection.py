@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import re
 import random
 from collections import defaultdict
@@ -139,6 +140,11 @@ def _log_event_selection_stats(events: Sequence[Event]) -> None:
         period,
         breakdown,
     )
+
+
+def _about_fill_disabled() -> bool:
+    raw = str(os.getenv("VIDEO_ANNOUNCE_DISABLE_ABOUT_FILL") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _filter_events_with_posters(events: Sequence[Event]) -> list[Event]:
@@ -1025,6 +1031,12 @@ async def fill_missing_about(
     """
     missing = [item for item in items if not item.final_about]
     if not missing:
+        return {}
+    if _about_fill_disabled():
+        logger.warning(
+            "video_announce: skipping about fill for session %s because VIDEO_ANNOUNCE_DISABLE_ABOUT_FILL is enabled",
+            session_id,
+        )
         return {}
     
     # Load OCR data for missing events

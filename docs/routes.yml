@@ -89,6 +89,7 @@ sections:
     incident_crumple_audio_source_drift: docs/reports/incidents/INC-2026-04-10-crumple-audio-source-drift.md
     incident_tg_monitoring_festival_bool: docs/reports/incidents/INC-2026-04-10-tg-monitoring-festival-bool.md
     guide_excursions_fact_first_audit_2026_03_15: docs/reports/guide-excursions-fact-first-audit-2026-03-15.md
+    gemma_4_migration_research_2026_04_19: docs/reports/gemma-4-migration-research-2026-04-19.md
   tools:
     index: docs/tools/README.md
     codex_cli: docs/tools/codex-cli.md

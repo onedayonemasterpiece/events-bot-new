@@ -8635,6 +8635,70 @@ def _deterministic_copy_post_ticket_same_day_match(
     return None
 
 
+def _deterministic_copy_post_source_text_match(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> tuple[Event | None, str]:
+    """Match cross-post copies by near-identical source text, even if ticket links differ.
+
+    This protects repost families where one channel keeps the direct ticket URL while
+    another uses a shortlink/button-only CTA, but the actual event copy is otherwise the same.
+    """
+
+    cand_date = str(candidate.date or "").strip()
+    cand_loc = str(candidate.location_name or "").strip()
+    source_text = candidate.source_text or candidate.raw_excerpt
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    if not (cand_date and cand_loc and source_text):
+        return None, ""
+
+    same_slot: list[Event] = []
+    bridge_matches: list[Event] = []
+    cand_minutes = _time_to_minutes_for_match(cand_time)
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if str(getattr(ev, "date", "") or "").strip() != cand_date:
+            continue
+        if not _event_candidate_location_matches(ev, candidate):
+            continue
+        if not _source_texts_look_nearly_identical(source_text, getattr(ev, "source_text", None)):
+            continue
+        if not _titles_look_related(candidate.title, getattr(ev, "title", None)):
+            continue
+
+        ev_time = _event_anchor_time(ev)
+        if not _has_explicit_time_conflict(cand_time, ev_time):
+            same_slot.append(ev)
+            continue
+
+        ev_minutes = _time_to_minutes_for_match(ev_time)
+        if cand_minutes is None or ev_minutes is None:
+            continue
+        if abs(cand_minutes - ev_minutes) > 90:
+            continue
+        if not _source_text_mentions_both_times(source_text, cand_time, ev_time):
+            continue
+        if not re.search(r"(?iu)\b(сбор\s+гостей|doors|начал[оа]|start)\b", str(source_text or "")):
+            continue
+        bridge_matches.append(ev)
+
+    if len(same_slot) == 1:
+        return same_slot[0], "deterministic_copy_post_same_day_text"
+    if same_slot:
+        sigs = {_anchor_signature_for_duplicate_event(ev) for ev in same_slot}
+        if len(sigs) == 1:
+            return _pick_best_duplicate_event(same_slot), "deterministic_copy_post_same_day_text"
+
+    if len(bridge_matches) == 1:
+        return bridge_matches[0], "deterministic_doors_start_text_bridge"
+    if bridge_matches:
+        sigs = {_anchor_signature_for_duplicate_event(ev) for ev in bridge_matches}
+        if len(sigs) == 1:
+            return _pick_best_duplicate_event(bridge_matches), "deterministic_doors_start_text_bridge"
+    return None, ""
+
+
 async def _match_existing_event_by_city_noise_rescue(
     db: Database,
     candidate: EventCandidate,
@@ -10083,6 +10147,20 @@ async def _smart_event_update_impl(
             if ticket_anchor_match is not None:
                 match_event = ticket_anchor_match
                 match_reason = ticket_anchor_reason
+                logger.info(
+                    "smart_update.match type=%s event_id=%s",
+                    match_reason,
+                    getattr(match_event, "id", None),
+                )
+
+        if match_event is None:
+            text_copy_match, text_copy_reason = _deterministic_copy_post_source_text_match(
+                candidate,
+                shortlist,
+            )
+            if text_copy_match is not None:
+                match_event = text_copy_match
+                match_reason = text_copy_reason
                 logger.info(
                     "smart_update.match type=%s event_id=%s",
                     match_reason,

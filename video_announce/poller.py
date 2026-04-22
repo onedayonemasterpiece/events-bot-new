@@ -29,7 +29,7 @@ from models import (
     VideoAnnounceSession,
     VideoAnnounceSessionStatus,
 )
-from .kaggle_client import KaggleClient
+from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,10 @@ logger.info(
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
 )
+
+
+def _is_local_kernel_ref(kernel_ref: str | None) -> bool:
+    return str(kernel_ref or "").strip().startswith(LOCAL_KERNEL_PREFIX)
 
 
 def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
@@ -1088,12 +1092,34 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
                 admin_chat_id = None
     client = KaggleClient()
     for sess in sessions:
-        if not sess.kaggle_kernel_ref:
-            continue
-        if _poller_active(sess.id):
+        kernel_ref = str(sess.kaggle_kernel_ref or "").strip()
+        if not kernel_ref:
             continue
         notify_chat_id = _resolve_notify_chat_id(sess) or chat_id or admin_chat_id or sess.test_chat_id or sess.main_chat_id
         if not notify_chat_id:
+            continue
+        if _is_local_kernel_ref(kernel_ref):
+            logger.error(
+                "video_announce: refusing to resume session_id=%s with local kernel ref=%s",
+                sess.id,
+                kernel_ref,
+            )
+            failed = await _update_status(
+                db,
+                sess.id,
+                status=VideoAnnounceSessionStatus.FAILED,
+                error="runtime restart before Kaggle handoff; rerun required",
+            )
+            if failed:
+                await bot.send_message(
+                    notify_chat_id,
+                    (
+                        f"⚠️ Сессия #{failed.id}: рантайм перезапустился до подтверждённого запуска Kaggle.\n"
+                        "Сессия переведена в FAILED; нужен повторный запуск."
+                    ),
+                )
+            continue
+        if _poller_active(sess.id):
             continue
         start_kernel_poller_task(
             db,

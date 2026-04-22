@@ -455,6 +455,13 @@ def _story_should_be_pinned(
     return _env_enabled("VIDEO_ANNOUNCE_STORY_PINNED", default=True)
 
 
+def _story_upload_profile(selection_params: dict[str, Any]) -> str | None:
+    raw = str(selection_params.get("story_upload_profile") or "").strip().lower()
+    if raw == "telegram_story_native_hevc_720p_v1":
+        return raw
+    return None
+
+
 async def build_story_publish_config(
     db,
     *,
@@ -494,15 +501,17 @@ async def build_story_publish_config(
         "version": 1,
         "mode": mode,
         "smoke_only": smoke_only,
+        "upload_profile": _story_upload_profile(selection_params),
         "period_seconds": _story_period_seconds(selected_event_dates=selected_event_dates),
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,
         "targets": [target.as_dict() for target in targets],
     }
     logger.info(
-        "video_announce.story config mode=%s smoke_only=%s period_seconds=%s pinned=%s dates=%s targets=%s",
+        "video_announce.story config mode=%s smoke_only=%s upload_profile=%s period_seconds=%s pinned=%s dates=%s targets=%s",
         mode,
         smoke_only,
+        config["upload_profile"] or "-",
         config["period_seconds"],
         config["pinned"],
         _normalize_story_event_dates(selected_event_dates),

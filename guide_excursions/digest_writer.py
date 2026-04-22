@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 GUIDE_DIGEST_WRITER_ENABLED = (
     (os.getenv("GUIDE_DIGEST_WRITER_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-GUIDE_DIGEST_WRITER_MODEL = (os.getenv("GUIDE_DIGEST_WRITER_MODEL") or "gemma-3-27b").strip() or "gemma-3-27b"
+GUIDE_DIGEST_WRITER_MODEL = (os.getenv("GUIDE_DIGEST_WRITER_MODEL") or "gemma-4-31b").strip() or "gemma-4-31b"
 GUIDE_DIGEST_WRITER_GOOGLE_KEY_ENV = (
     os.getenv("GUIDE_DIGEST_WRITER_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY2"
 ).strip() or "GOOGLE_API_KEY2"
@@ -529,12 +529,10 @@ async def _ask_digest_batch_llm_batch(
                         "booking_line": {"type": "string"},
                     },
                     "required": ["occurrence_id", "title", "digest_blurb"],
-                    "additionalProperties": False,
                 },
             }
         },
         "required": ["items"],
-        "additionalProperties": False,
     }
     prompt = (
         "Ты пишешь короткий публичный copy-block для digest-карточек экскурсий.\n"
@@ -576,7 +574,8 @@ async def _ask_digest_batch_llm_batch(
         "Если booking_url это `tel:`, верни только один лучший номер телефона в читабельной форме; при наличии нескольких телефонов предпочитай мобильный.\n"
         "Если booking_url ведёт на telegram username, верни только `@username`.\n"
         "Если booking_url это сайт, верни короткую нейтральную подпись вроде `сайт организатора` или `форма записи`.\n"
-        "16. Возвращай JSON и ничего больше.\n"
+        "16. Не выводи рассуждение, пояснения или thinking traces; только JSON по схеме.\n"
+        "17. Возвращай JSON и ничего больше.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'items': list(payload_rows)}, ensure_ascii=False)}"
     )
@@ -587,7 +586,11 @@ async def _ask_digest_batch_llm_batch(
             raw, _usage = await client.generate_content_async(
                 model=GUIDE_DIGEST_WRITER_MODEL,
                 prompt=prompt,
-                generation_config={"temperature": 0.2},
+                generation_config={
+                    "temperature": 0.2,
+                    "response_mime_type": "application/json",
+                    "response_schema": schema,
+                },
                 max_output_tokens=2400,
                 candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
             )

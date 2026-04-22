@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+from fractions import Fraction
 from pathlib import Path
 import shutil
 import subprocess
@@ -29,6 +30,15 @@ STORY_VIDEO_PRESET = "fast"
 STORY_VIDEO_BITRATE = "900k"
 STORY_VIDEO_MAXRATE = "1200k"
 STORY_VIDEO_BUFSIZE = "2400k"
+STORY_UPLOAD_PROFILE_LEGACY_H264 = "legacy_h264_transcode"
+STORY_UPLOAD_PROFILE_NATIVE_HEVC = "telegram_story_native_hevc_720p_v1"
+CHERRYFLASH_NATIVE_TARGET_BYTES = 15 * 1024 * 1024
+CHERRYFLASH_NATIVE_VIDEO_TAG = "hvc1"
+CHERRYFLASH_NATIVE_VIDEO_CODEC = "hevc"
+CHERRYFLASH_NATIVE_AUDIO_CODEC = "aac"
+CHERRYFLASH_NATIVE_AUDIO_SAMPLE_RATE = 48000
+CHERRYFLASH_NATIVE_AUDIO_CHANNELS = 2
+CHERRYFLASH_NATIVE_MAX_DURATION_SECONDS = 60.0
 
 
 def _find_input_file(filename: str, *, search_roots: list[Path]) -> Path | None:
@@ -102,6 +112,10 @@ def _ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+def _ffprobe_available() -> bool:
+    return shutil.which("ffprobe") is not None
+
+
 def _video_dimensions(path: Path) -> tuple[int, int] | None:
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
@@ -112,6 +126,43 @@ def _video_dimensions(path: Path) -> tuple[int, int] | None:
         return width, height
     finally:
         cap.release()
+
+
+def _ffprobe_json(path: Path) -> dict[str, Any] | None:
+    if not _ffprobe_available():
+        return None
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_format",
+            "-show_streams",
+            "-print_format",
+            "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout or "{}")
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _fps_from_ratio(value: str | None) -> float | None:
+    raw = str(value or "").strip()
+    if not raw or raw == "0/0":
+        return None
+    try:
+        return float(Fraction(raw))
+    except Exception:
+        return None
 
 
 def _video_probe(path: Path) -> dict[str, Any]:
@@ -145,7 +196,125 @@ def _video_probe(path: Path) -> dict[str, Any]:
             info["approx_bitrate_kbps"] = round(size_bytes * 8 / duration / 1000, 1)
     finally:
         cap.release()
+    ffprobe_data = _ffprobe_json(path)
+    if isinstance(ffprobe_data, dict):
+        format_info = ffprobe_data.get("format")
+        if isinstance(format_info, dict):
+            format_name = format_info.get("format_name")
+            if format_name:
+                info["format_name"] = str(format_name)
+            format_bit_rate = format_info.get("bit_rate")
+            if format_bit_rate:
+                try:
+                    info["format_bit_rate"] = int(format_bit_rate)
+                except Exception:
+                    pass
+        streams = ffprobe_data.get("streams")
+        if isinstance(streams, list):
+            video_stream = next(
+                (stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "video"),
+                None,
+            )
+            audio_stream = next(
+                (stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "audio"),
+                None,
+            )
+            if isinstance(video_stream, dict):
+                codec_name = video_stream.get("codec_name")
+                if codec_name:
+                    info["video_codec"] = str(codec_name)
+                pix_fmt = video_stream.get("pix_fmt")
+                if pix_fmt:
+                    info["pix_fmt"] = str(pix_fmt)
+                codec_tag = video_stream.get("codec_tag_string")
+                if codec_tag:
+                    info["video_tag"] = str(codec_tag)
+                ffprobe_fps = _fps_from_ratio(
+                    str(video_stream.get("avg_frame_rate") or video_stream.get("r_frame_rate") or "")
+                )
+                if ffprobe_fps is not None:
+                    info["fps"] = round(ffprobe_fps, 3)
+            if isinstance(audio_stream, dict):
+                audio_codec = audio_stream.get("codec_name")
+                if audio_codec:
+                    info["audio_codec"] = str(audio_codec)
+                sample_rate = audio_stream.get("sample_rate")
+                if sample_rate:
+                    try:
+                        info["audio_sample_rate"] = int(sample_rate)
+                    except Exception:
+                        pass
+                channels = audio_stream.get("channels")
+                if channels:
+                    try:
+                        info["audio_channels"] = int(channels)
+                    except Exception:
+                        pass
     return info
+
+
+def _story_upload_profile(config: dict[str, Any]) -> str:
+    raw = str(config.get("upload_profile") or "").strip().lower()
+    if raw == STORY_UPLOAD_PROFILE_NATIVE_HEVC:
+        return STORY_UPLOAD_PROFILE_NATIVE_HEVC
+    return STORY_UPLOAD_PROFILE_LEGACY_H264
+
+
+def _validate_native_story_video(path: Path, *, log) -> Path:
+    if not path.exists():
+        raise RuntimeError("Story video publish requested but final video is missing")
+    probe = _video_probe(path)
+    problems: list[str] = []
+    if int(probe.get("size_bytes") or 0) > CHERRYFLASH_NATIVE_TARGET_BYTES:
+        problems.append(
+            f"size={probe.get('size_bytes')} exceeds {CHERRYFLASH_NATIVE_TARGET_BYTES} bytes"
+        )
+    if int(probe.get("width") or 0) != STORY_VIDEO_WIDTH or int(probe.get("height") or 0) != STORY_VIDEO_HEIGHT:
+        problems.append(
+            f"canvas={probe.get('width')}x{probe.get('height')} expected {STORY_VIDEO_WIDTH}x{STORY_VIDEO_HEIGHT}"
+        )
+    fps = probe.get("fps")
+    if not isinstance(fps, (int, float)) or abs(float(fps) - 30.0) > 0.2:
+        problems.append(f"fps={fps!r} expected ~30")
+    duration_seconds = probe.get("duration_seconds")
+    if isinstance(duration_seconds, (int, float)) and float(duration_seconds) > CHERRYFLASH_NATIVE_MAX_DURATION_SECONDS:
+        problems.append(
+            f"duration_seconds={duration_seconds} exceeds {CHERRYFLASH_NATIVE_MAX_DURATION_SECONDS}"
+        )
+    if str(probe.get("format_name") or "").find("mp4") < 0:
+        problems.append(f"format={probe.get('format_name')!r} is not mp4")
+    if str(probe.get("video_codec") or "").strip().lower() != CHERRYFLASH_NATIVE_VIDEO_CODEC:
+        problems.append(f"video_codec={probe.get('video_codec')!r} expected {CHERRYFLASH_NATIVE_VIDEO_CODEC}")
+    if str(probe.get("video_tag") or "").strip().lower() != CHERRYFLASH_NATIVE_VIDEO_TAG:
+        problems.append(f"video_tag={probe.get('video_tag')!r} expected {CHERRYFLASH_NATIVE_VIDEO_TAG}")
+    if str(probe.get("pix_fmt") or "").strip().lower() != "yuv420p":
+        problems.append(f"pix_fmt={probe.get('pix_fmt')!r} expected 'yuv420p'")
+    if str(probe.get("audio_codec") or "").strip().lower() != CHERRYFLASH_NATIVE_AUDIO_CODEC:
+        problems.append(f"audio_codec={probe.get('audio_codec')!r} expected {CHERRYFLASH_NATIVE_AUDIO_CODEC}")
+    if int(probe.get("audio_sample_rate") or 0) != CHERRYFLASH_NATIVE_AUDIO_SAMPLE_RATE:
+        problems.append(
+            f"audio_sample_rate={probe.get('audio_sample_rate')!r} expected {CHERRYFLASH_NATIVE_AUDIO_SAMPLE_RATE}"
+        )
+    if int(probe.get("audio_channels") or 0) != CHERRYFLASH_NATIVE_AUDIO_CHANNELS:
+        problems.append(
+            f"audio_channels={probe.get('audio_channels')!r} expected {CHERRYFLASH_NATIVE_AUDIO_CHANNELS}"
+        )
+    if problems:
+        raise RuntimeError(
+            "CherryFlash story upload requires a native Telegram-ready final mp4; "
+            + "; ".join(problems)
+        )
+    story_kb = int(probe.get("size_bytes") or path.stat().st_size) / 1024
+    bitrate_label = ""
+    if isinstance(probe.get("approx_bitrate_kbps"), (int, float)):
+        bitrate_label = f", ~{probe['approx_bitrate_kbps']} kbps"
+    log(
+        "✅ Story-native video validated: "
+        f"{path.name} ({probe.get('width')}x{probe.get('height')}, "
+        f"{probe.get('video_codec')}/{probe.get('audio_codec')}, "
+        f"{story_kb:.1f} KiB{bitrate_label})"
+    )
+    return path
 
 
 def _ensure_story_safe_video(
@@ -411,11 +580,21 @@ def _build_story_report(
         "pinned": bool(config.get("pinned")),
         "account": account,
         "targets": [],
+        "blocking_ok": False,
+        "fanout_ok": False,
+        "partial_ok": False,
     }
     if media_path is not None:
         report["media_path"] = str(media_path)
         report["media"] = _video_probe(media_path)
     return report
+
+
+def _story_target_is_blocking(target_cfg: dict[str, Any], *, index: int) -> bool:
+    blocking = target_cfg.get("blocking")
+    if isinstance(blocking, bool):
+        return blocking
+    return index == 0
 
 
 async def _story_targets_report(
@@ -444,6 +623,7 @@ async def _story_targets_report(
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
         delay_seconds = max(0, int(target_cfg.get("delay_seconds") or 0))
         publish_mode = str(target_cfg.get("mode") or "upload").strip().lower()
+        blocking = _story_target_is_blocking(target_cfg, index=idx)
         if publish_mode not in {"upload", "repost_previous"}:
             publish_mode = "upload"
         if honor_delays and delay_seconds:
@@ -456,6 +636,7 @@ async def _story_targets_report(
             "label": label,
             "delay_seconds": delay_seconds,
             "mode": publish_mode,
+            "blocking": blocking,
             "period_seconds": int(config.get("period_seconds") or 24 * 60 * 60),
             "pinned": bool(config.get("pinned")),
             "ok": False,
@@ -529,9 +710,25 @@ async def _story_targets_report(
                 f"❌ Story {phase} failed for {label}: {target_report['error']}"
             )
         report["targets"].append(target_report)
-    report["ok"] = bool(report["targets"]) and all(
-        bool(item.get("ok")) for item in report["targets"]
+    targets = report["targets"]
+    blocking_targets = [item for item in targets if item.get("blocking")]
+    report["fanout_ok"] = bool(targets) and all(bool(item.get("ok")) for item in targets)
+    report["blocking_ok"] = bool(blocking_targets) and all(
+        bool(item.get("ok")) for item in blocking_targets
     )
+    report["partial_ok"] = bool(report["blocking_ok"]) and not bool(report["fanout_ok"])
+    report["ok"] = bool(report["blocking_ok"])
+    if report["partial_ok"]:
+        failed_labels = [
+            str(item.get("label") or item.get("peer") or "?")
+            for item in targets
+            if not item.get("ok")
+        ]
+        phase_label = phase.capitalize()
+        log(
+            f"⚠️ {phase_label} primary target passed; "
+            f"continuing despite best-effort fanout failures: {', '.join(failed_labels)}"
+        )
     return report
 
 
@@ -557,7 +754,7 @@ async def preflight_story_publish_from_kaggle(
             media_path=None,
             honor_delays=False,
         )
-        if not report.get("ok"):
+        if not report.get("fanout_ok", report.get("ok")):
             write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
@@ -589,11 +786,15 @@ async def publish_story_from_kaggle(
         posters=posters,
     )
     if str(config.get("mode") or "video").strip().lower() == "video":
-        media_path = _ensure_story_safe_video(
-            media_path,
-            output_dir=output_dir,
-            log=log,
-        )
+        upload_profile = _story_upload_profile(config)
+        if upload_profile == STORY_UPLOAD_PROFILE_NATIVE_HEVC:
+            media_path = _validate_native_story_video(media_path, log=log)
+        else:
+            media_path = _ensure_story_safe_video(
+                media_path,
+                output_dir=output_dir,
+                log=log,
+            )
     client = await _create_client(auth)
     try:
         report = await _story_targets_report(

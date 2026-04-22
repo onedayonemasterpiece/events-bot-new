@@ -49,6 +49,7 @@
   - this readiness step must be a real Kaggle `dataset_status + dataset_list_files` poll, not a fixed `sleep(15)`: the live incident on session `#161` showed that Kaggle may accept `CreateDatasetVersion` and `kernels_push` before the new `cherryflash-session-*` bundle is actually bindable, leaving `zigomaro/cherryflash` stuck on only its static secret datasets.
   - the readiness poll must inspect the full paginated dataset file list, not only the first `20` names returned by Kaggle: live session `#162` uploaded the correct CherryFlash bundle, but the first page contained only early asset names and omitted `payload.json`, so a first-page-only check falsely declared the dataset “not ready” and aborted the run before `kernels_push`.
   - once `kernels_push` returns the actual Kaggle slug (for CherryFlash: `zigomaro/cherryflash`), the session must persist that real slug immediately, before the dataset-bind wait finishes; otherwise recovery/poller paths fall back to the repo-local pseudo-ref `local:CherryFlash`, which cannot be queried via Kaggle `kernels_status`.
+  - startup recovery must not resume Kaggle status polling for still-local refs like `local:CherryFlash`; if the runtime restarted before the real slug was persisted, the session should fail closed as rerun-required instead of hanging in `RENDERING`.
   - the post-push `dataset_sources` bind check for CherryFlash is telemetry, not a pre-start fatal gate: live session `#163` proved that Kaggle may successfully deploy and start `zigomaro/cherryflash` while `GetKernel` still reports only the static secret datasets in metadata, so CherryFlash must continue into normal kernel status/output polling after a successful `kernels_push` instead of marking the whole run failed at that intermediate metadata state.
   - the launcher must treat Kaggle `SaveKernel` response fields as authoritative launch state, not just the absence of an HTTP exception:
     - a non-empty `error` in `ApiSaveKernelResponse` means the push failed, even if the Python API call returned normally;
@@ -600,19 +601,24 @@ This section captures the latest intro-direction request as an explicit delta to
 
 - CherryFlash final mode must render directly to a story-native `720x1280` canvas instead of building a `1080x1920` master and relying on downstream downscale/transcode.
 - The single publish-grade mp4 must stay on the same direct `ffmpeg image2` encode path described above and use:
-  - `libx264`
-  - `crf=26`
-  - `preset=fast`
-  - `profile:v high`
-  - `level:v 4.1`
+  - `libx265`
+  - `preset=medium`
+  - `b:v=1300k`
+  - `maxrate=1600k`
+  - `bufsize=3200k`
   - `pix_fmt yuv420p`
+  - `tag:v hvc1`
+  - `x265-params keyint=30:min-keyint=30:scenecut=0:open-gop=0:repeat-headers=1`
   - `movflags +faststart`
-  - `AAC 128k`
-- The target budget for the complete daily release with intro, `2..6` event scenes, and branded outro remains about `<=15 MB`.
+  - `AAC-LC 128k stereo 48 kHz`
+- The target budget for the complete daily release with intro, `2..6` event scenes, and branded outro is about `~10 MB` for the current max `~53s` / `6`-event run shape, with a hard delivery ceiling of `<=15 MB`.
 - This story-native contract is not a publish-side transcode workaround:
   - intro, 2D scenes, and outro should be laid out against the same `720x1280` canvas directly;
   - if geometry regresses after the switch, the first place to inspect is render math / scale conversion, not a secondary export helper.
-- The shared Kaggle story helper should target the same `720x1280` `H.264/AAC` canvas for story upload normalization, rather than converting from a separate FHD master.
+- The CherryFlash story upload must be one-pass:
+  - the final render itself is the exact upload artifact for Telegram Stories;
+  - the shared Kaggle story helper must validate and log the final CherryFlash mp4 instead of transcoding it again by default;
+  - a second lossy helper transcode on CherryFlash is defective even if it improves publish reliability, because the product contract prioritizes production-grade audio/video quality and official-native upload format over degraded fallback delivery.
 - The shared `video_afisha_2d.create_advanced_scene()` helper must stay compatible with both MoviePy 1.x and 2.x clip-scaling APIs:
   - use `clip.resized(...)` when the build exposes the MoviePy 2.x rename;
   - fall back to `clip.resize(...)` on older builds;
@@ -651,26 +657,25 @@ This section captures the latest intro-direction request as an explicit delta to
   - the scheduler contract above applies to `popular_review`;
   - `cherryflash_libsvtav1` must not register its own cron/autostart slot and is launched only from `/v` UI buttons.
 
-## Story readiness, but disabled
+## Story publish rollout state
 
 - The implementation should remain compatible with the existing Kaggle-side story publish pipeline.
 - Current implementation state:
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
-  - the `popular_review` path still keeps `story_publish_enabled=false` by default, so the common story path is implemented but intentionally inactive until the user explicitly enables it.
+  - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
+  - the shared helper treats the first ordered story target as the blocking gate for render/publish success; later repost/fanout targets are best-effort by default and must not cancel the run when only they hit `BOOSTS_REQUIRED` or another target-local error;
+  - the current CherryFlash story fanout is an ordered repost chain:
+    - first upload to `@kenigevents`;
+    - then after `600` seconds repost to `@lovekenig`;
+    - then after another `600` seconds repost to `@loving_guide39`.
 - Sibling profile rule:
   - `cherryflash_libsvtav1` reuses the same common story path but requests `story_publish_enabled=true` by default in its session params;
   - actual story publication still depends on the shared global story infra (`build_story_publish_config()` and secret datasets) being available for that run.
-- Phase 1 default:
-  - story autopublish disabled;
-  - while the story gate is off, the validation publication target is `@keniggpt`;
-  - no story failure path may affect the normal mp4 publication while the story gate is off.
-- Required readiness for later enablement:
-  - the future production target is story publication in the first half of the day, and the explicit readiness bar is a live story by `12:30 Europe/Kaliningrad`;
-  - story autopublish should be enabled only after CherryFlash passes preproduction validation on Kaggle;
-  - the existing story-autopublish path already proven on `CrumpleVideo` may be reused / adapted for CherryFlash when this gate opens;
-  - story targets can be configured without redesigning selection logic;
-  - caption / mode metadata for this video type can be supplied when stories are enabled later.
+- Current rollout expectation:
+  - the production target is story publication in the first half of the day, and the explicit readiness bar is a live story by `12:30 Europe/Kaliningrad`;
+  - story targets can be reconfigured without redesigning selection logic;
+  - caption / mode metadata for this video type can still be supplied later without changing the shared publish helper contract.
 
 ## Data and observability deltas
 
@@ -707,10 +712,10 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The default CTA family is evergreen for daily scheduled releases and does not depend on a specific month name in the headline.
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
-- [ ] Phase 1 publication goes only to `@keniggpt`.
-- [ ] Story autopublish stays off, while the mode remains story-ready for later rollout.
+- [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
+- [ ] Story autopublish publishes the current ordered fanout `@kenigevents -> @lovekenig -> @loving_guide39` through the shared repost-capable helper path.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
-- [ ] When story autopublish is later enabled, the target operating expectation is that the story is already published by `12:30 Europe/Kaliningrad`.
+- [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 
 ## Linked design work
 

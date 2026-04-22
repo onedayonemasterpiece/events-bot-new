@@ -72,10 +72,15 @@ INTRO_END_FRAME = approval.INTRO_END_FRAME
 FINAL_CARD_DURATION = 3.5
 FINAL_CARD_FADE_IN = 0.3
 AUDIO_BITRATE = "128k"
+AUDIO_SAMPLE_RATE = "48000"
 FIRST_PRIMARY_SCENE_START_LOCAL = approval.SCENE1_START_LOCAL
-FINAL_VIDEO_CODEC = "libx264"
-FINAL_VIDEO_PRESET = "fast"
-FINAL_VIDEO_CRF = "26"
+FINAL_VIDEO_CODEC = "libx265"
+FINAL_VIDEO_PRESET = "medium"
+FINAL_VIDEO_BITRATE = "1300k"
+FINAL_VIDEO_MAXRATE = "1600k"
+FINAL_VIDEO_BUFSIZE = "3200k"
+FINAL_VIDEO_TAG = "hvc1"
+FINAL_VIDEO_X265_PARAMS = "keyint=30:min-keyint=30:scenecut=0:open-gop=0:repeat-headers=1"
 PREVIEW_VIDEO_CODEC = "libx264"
 PREVIEW_VIDEO_PRESET = "slow"
 PREVIEW_VIDEO_CRF = "23"
@@ -671,26 +676,32 @@ def _encode_profile() -> dict[str, str | list[str]]:
         return {
             "video_codec": FINAL_VIDEO_CODEC,
             "preset": FINAL_VIDEO_PRESET,
-            "crf": FINAL_VIDEO_CRF,
             "audio_bitrate": AUDIO_BITRATE,
+            "audio_sample_rate": AUDIO_SAMPLE_RATE,
+            "video_args": [
+                "-b:v",
+                FINAL_VIDEO_BITRATE,
+                "-maxrate",
+                FINAL_VIDEO_MAXRATE,
+                "-bufsize",
+                FINAL_VIDEO_BUFSIZE,
+            ],
             "extra_args": [
-                "-g",
-                str(FPS),
-                "-keyint_min",
-                str(FPS),
-                "-sc_threshold",
-                "0",
-                "-profile:v",
-                "high",
-                "-level:v",
-                "4.1",
+                "-tag:v",
+                FINAL_VIDEO_TAG,
+                "-x265-params",
+                FINAL_VIDEO_X265_PARAMS,
             ],
         }
     return {
         "video_codec": PREVIEW_VIDEO_CODEC,
         "preset": PREVIEW_VIDEO_PRESET,
-        "crf": PREVIEW_VIDEO_CRF,
         "audio_bitrate": AUDIO_BITRATE,
+        "audio_sample_rate": AUDIO_SAMPLE_RATE,
+        "video_args": [
+            "-crf",
+            PREVIEW_VIDEO_CRF,
+        ],
         "extra_args": [],
     }
 
@@ -712,7 +723,7 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
         audio = audio.set_duration(video_duration)
     audio = _scale_audio_volume(audio, 0.45)
     tmp_audio = FRAMES_DIR / "_audio_tmp.wav"
-    audio.write_audiofile(str(tmp_audio), fps=44100, logger=None)
+    audio.write_audiofile(str(tmp_audio), fps=int(AUDIO_SAMPLE_RATE), logger=None)
     audio.close()
 
     # --- 2. Encode video + audio with ffmpeg directly --------------------
@@ -734,8 +745,7 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
         str(profile["video_codec"]),
         "-preset",
         str(profile["preset"]),
-        "-crf",
-        str(profile["crf"]),
+        *list(profile["video_args"]),
         "-pix_fmt",
         "yuv420p",
         *list(profile["extra_args"]),
@@ -743,6 +753,10 @@ def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
         "aac",
         "-b:a",
         str(profile["audio_bitrate"]),
+        "-ac",
+        "2",
+        "-ar",
+        str(profile["audio_sample_rate"]),
         "-shortest",
         "-movflags",
         "+faststart",

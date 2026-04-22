@@ -1166,7 +1166,7 @@ class VideoAnnounceScenario:
 
         await self.bot.send_message(
             self.chat_id,
-            f"Сессия #{obj.id}: выбрано {len(result.default_ready_ids)} событий, запускаю Kaggle…",
+            f"Сессия #{obj.id}: выбрано {len(result.default_ready_ids)} событий, готовлю рендер…",
         )
         msg = await self.start_render(
             obj.id,
@@ -1364,6 +1364,7 @@ class VideoAnnounceScenario:
             "allow_empty_ocr": False,
             "story_publish_enabled": True,
             "story_publish_mode": "video",
+            "story_upload_profile": "telegram_story_native_hevc_720p_v1",
             "story_targets_override": [
                 {
                     "peer": "@kenigevents",
@@ -1372,6 +1373,11 @@ class VideoAnnounceScenario:
                 },
                 {
                     "peer": "@lovekenig",
+                    "delay_seconds": 600,
+                    "mode": "repost_previous",
+                },
+                {
+                    "peer": "@loving_guide39",
                     "delay_seconds": 600,
                     "mode": "repost_previous",
                 },

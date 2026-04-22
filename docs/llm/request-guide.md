@@ -15,6 +15,12 @@ Deterministic code is allowed as *supporting plumbing*:
 - guardrails (skip non-events, region filters, safety checks);
 - hints passed *to the LLM input* to steer it (without rewriting the resulting text).
 
+Guide-specific hard rule:
+- for `guide excursions monitoring`, semantic decisions in `trail_scout.screen.*`,
+  `trail_scout.*extract*`, and adjacent stage routing must stay LLM-owned;
+  regex/keyword shortcuts are not an acceptable replacement for post meaning
+  classification, region-fit judgment, or announce-vs-reportage decisions.
+
 Avoid deterministic “editorial” rewrites (e.g. renaming, adding semantic prefixes,
 rewriting sentences) unless it’s a narrowly scoped safety invariant and it’s
 explicitly documented as an exception.

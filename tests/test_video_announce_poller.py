@@ -1,54 +1,92 @@
 from __future__ import annotations
 
-import numpy as np
 from pathlib import Path
 
-from video_announce import poller
+import pytest
+
+from db import Database
+from models import User, VideoAnnounceSession, VideoAnnounceSessionStatus
+import video_announce.poller as poller_module
 
 
-def test_video_thumbnail_input_builds_jpeg_from_first_frame(monkeypatch):
-    frame = np.zeros((4, 4, 3), dtype=np.uint8)
+class _DummyBot:
+    def __init__(self) -> None:
+        self.messages: list[tuple[int, str]] = []
 
-    class _Cap:
-        def isOpened(self) -> bool:
-            return True
-
-        def read(self):
-            return True, frame
-
-        def release(self) -> None:
-            return None
-
-    class _Cv2:
-        IMWRITE_JPEG_QUALITY = 1
-
-        @staticmethod
-        def VideoCapture(path):  # noqa: ANN001
-            return _Cap()
-
-        @staticmethod
-        def imencode(ext, img, params):  # noqa: ANN001
-            assert ext == ".jpg"
-            assert img is frame
-            assert params == [1, 95]
-            return True, np.frombuffer(b"jpeg-data", dtype=np.uint8)
-
-    monkeypatch.setattr(poller, "cv2", _Cv2)
-
-    thumb = poller._video_thumbnail_input("/tmp/cherryflash.mp4")
-
-    assert thumb is not None
-    assert thumb.filename == "cherryflash_thumb.jpg"
-    assert thumb.data == b"jpeg-data"
+    async def send_message(self, chat_id: int, text: str, **kwargs) -> None:  # noqa: ARG002
+        self.messages.append((chat_id, text))
 
 
-def test_video_thumbnail_input_prefers_sibling_preview_file(tmp_path: Path) -> None:
-    video_path = tmp_path / "cherryflash.mp4"
-    preview_path = tmp_path / "telegram_preview.jpg"
-    video_path.write_bytes(b"mp4")
-    preview_path.write_bytes(b"jpg")
+@pytest.mark.asyncio
+async def test_resume_rendering_sessions_fails_local_kernel_refs(monkeypatch, tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
 
-    thumb = poller._video_thumbnail_input(video_path)
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="local:CrumpleVideo",
+            test_chat_id=123,
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
 
-    assert isinstance(thumb, poller.FSInputFile)
-    assert thumb.path == preview_path
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("local kernel ref must not start Kaggle poller on resume")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.error == "runtime restart before Kaggle handoff; rerun required"
+    assert bot.messages == [
+        (
+            123,
+            "⚠️ Сессия #1: рантайм перезапустился до подтверждённого запуска Kaggle.\n"
+            "Сессия переведена в FAILED; нужен повторный запуск.",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypatch, tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_dataset="zigomaro/video-announce-session-1",
+            test_chat_id=123,
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    started: list[tuple[int, str | None]] = []
+
+    def _fake_start_poller(db, client, session_obj, **kwargs):  # noqa: ANN001
+        del db, client, kwargs
+        started.append((session_obj.id, session_obj.kaggle_dataset))
+        return None
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _fake_start_poller)
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 1
+    assert started == [(session_id, "zigomaro/video-announce-session-1")]
+    assert bot.messages == []
