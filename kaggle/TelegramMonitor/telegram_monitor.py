@@ -4,6 +4,7 @@ import asyncio
 import base64
 import hashlib
 import io
+import importlib.util
 import json
 import logging
 import os
@@ -22,6 +23,45 @@ import requests
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger('telegram_monitor')
+
+SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py')).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+
+def bootstrap_google_ai_bundle() -> None:
+    try:
+        if importlib.util.find_spec('google_ai') is not None:
+            return
+    except Exception:
+        pass
+
+    candidate_roots = [SCRIPT_DIR, Path.cwd(), Path('/kaggle/working')]
+    seen: set[str] = set()
+    for root in candidate_roots:
+        root_str = str(root)
+        if root_str in seen:
+            continue
+        seen.add(root_str)
+        if (root / 'google_ai' / '__init__.py').exists():
+            sys.path.insert(0, root_str)
+            logger.info('tg_monitor.google_ai bootstrap root=%s', root_str)
+            return
+
+    kaggle_input = Path('/kaggle/input')
+    if kaggle_input.exists():
+        for init_path in kaggle_input.rglob('__init__.py'):
+            if init_path.parent.name != 'google_ai':
+                continue
+            bundle_root = init_path.parent.parent
+            bundle_root_str = str(bundle_root)
+            if bundle_root_str not in sys.path:
+                sys.path.insert(0, bundle_root_str)
+            logger.info('tg_monitor.google_ai bootstrap input_root=%s', bundle_root_str)
+            return
+
+
+bootstrap_google_ai_bundle()
 
 
 def ensure_libs() -> None:

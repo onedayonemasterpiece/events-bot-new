@@ -34,6 +34,15 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Do not invent end_date for single-date events." in source
 
 
+def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "bootstrap_google_ai_bundle" in source
+    assert "importlib.util.find_spec('google_ai')" in source
+    assert "Path('/kaggle/input')" in source
+    assert "tg_monitor.google_ai bootstrap" in source
+
+
 def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() -> None:
     source = Path("source_parsing/telegram/service.py").read_text(encoding="utf-8")
 
