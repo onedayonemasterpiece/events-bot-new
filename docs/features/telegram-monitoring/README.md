@@ -64,7 +64,7 @@
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
-- Kaggle notebook bootstrap теперь ищет staged `google_ai` bundle в kernel root, `/kaggle/working` и `/kaggle/input` до первого импорта, чтобы `Gemma 4` notebook не падал с `ModuleNotFoundError`.
+- Kaggle notebook теперь embed-ит `google_ai` sources прямо в generated `.ipynb`, а runner дополнительно ищет bundled package в kernel root, `/kaggle/working` и `/kaggle/input`; это нужно, потому что plain extra files рядом с notebook не гарантированно попадают в Kaggle runtime.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 

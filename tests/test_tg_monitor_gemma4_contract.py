@@ -46,8 +46,12 @@ def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> 
 def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() -> None:
     source = Path("source_parsing/telegram/service.py").read_text(encoding="utf-8")
 
+    assert "_embedded_google_ai_sources" in source
     assert "_build_notebook_payload_from_script" in source
     assert "_sync_notebook_entrypoint" in source
     assert "_stage_google_ai_bundle(prepared)" in source
     assert "_sync_notebook_entrypoint(prepared)" in source
+    assert "_TG_EMBEDDED_GOOGLE_AI" in source
+    assert "_TG_EMBEDDED_ROOT" in source
+    assert "__file__ = str((_TG_NOTEBOOK_ROOT / 'telegram_monitor.py').resolve())" in source
     assert "key.startswith(\"GOOGLE_API_LOCALNAME\")" in source

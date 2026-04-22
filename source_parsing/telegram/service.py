@@ -681,9 +681,21 @@ def _stage_google_ai_bundle(output_root: Path) -> Path:
     return output_root
 
 
+def _embedded_google_ai_sources() -> dict[str, str]:
+    files = ("__init__.py", "client.py", "exceptions.py", "secrets.py")
+    payload: dict[str, str] = {}
+    for name in files:
+        path = GOOGLE_AI_PACKAGE_PATH / name
+        if not path.exists():
+            raise FileNotFoundError(f"Missing google_ai source for notebook embed: {path}")
+        payload[name] = path.read_text(encoding="utf-8")
+    return payload
+
+
 def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
     script_source = script_path.read_text(encoding="utf-8")
     script_lines = script_source.splitlines(keepends=True)
+    embedded_google_ai = json.dumps(_embedded_google_ai_sources(), ensure_ascii=False)
     future_import_lines: list[str] = []
     while script_lines and script_lines[0].startswith("from __future__ import "):
         future_import_lines.append(script_lines.pop(0))
@@ -694,9 +706,18 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
         [
             "from pathlib import Path as _TgNotebookPath\n",
             "import sys as _TgNotebookSys\n",
+            "_TG_EMBEDDED_GOOGLE_AI = " + embedded_google_ai + "\n",
+            "_TG_EMBEDDED_ROOT = (_TgNotebookPath.cwd() / 'embedded_repo_bundle').resolve()\n",
+            "_TG_EMBEDDED_PACKAGE = _TG_EMBEDDED_ROOT / 'google_ai'\n",
+            "_TG_EMBEDDED_PACKAGE.mkdir(parents=True, exist_ok=True)\n",
+            "for _tg_name, _tg_body in _TG_EMBEDDED_GOOGLE_AI.items():\n",
+            "    (_TG_EMBEDDED_PACKAGE / _tg_name).write_text(_tg_body, encoding='utf-8')\n",
+            "if str(_TG_EMBEDDED_ROOT) not in _TgNotebookSys.path:\n",
+            "    _TgNotebookSys.path.insert(0, str(_TG_EMBEDDED_ROOT))\n",
             "_TG_NOTEBOOK_ROOT = _TgNotebookPath.cwd().resolve()\n",
             "if str(_TG_NOTEBOOK_ROOT) not in _TgNotebookSys.path:\n",
             "    _TgNotebookSys.path.insert(0, str(_TG_NOTEBOOK_ROOT))\n",
+            "__file__ = str((_TG_NOTEBOOK_ROOT / 'telegram_monitor.py').resolve())\n",
             "\n",
         ]
     )
