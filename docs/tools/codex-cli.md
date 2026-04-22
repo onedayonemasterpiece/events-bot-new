@@ -95,3 +95,9 @@ codex exec --output-schema ./schema.json -o artifacts/codex/reports/report.json 
 2. Всегда проверяй `git diff` перед коммитом.
 3. Всегда делай коммиты в облачный репозиторий (и `git push` в `origin`) перед завершением задачи, если пользователь явно не попросил этого не делать.
 4. Live E2E: запуск локального бота и чеклист — `docs/operations/e2e-testing.md`.
+
+## Project-local Skills
+
+- Gemma 4 migration playbook: `.codex/skills/gemma-4-migration-playbook/SKILL.md`
+  - использовать, когда нужно мигрировать stage-oriented pipeline в этом репозитории с `Gemma 3` на `Gemma 4` или проверить rollout по образцу `guide-excursions`;
+  - skill не заменяет канонические docs: он маршрутизирует к ним и собирает в одном месте proven migration contract, anti-patterns и regression checks.
