@@ -8,7 +8,7 @@
 
 Текущая каноническая граница совпадает с backlog-доками:
 
-- `Kaggle notebook` делает Telegram fetch, grouped albums, deterministic prefilter и `Tier 1` extraction;
+- `Kaggle notebook` делает Telegram fetch, grouped albums, OCR/vision pass по candidate images, deterministic prefilter и `Tier 1` extraction;
 - multi-announce posts inside Kaggle сначала режутся на `occurrence_blocks`, после чего Gemma extraction обязана вернуть несколько отдельных occurrences по разным датам/маршрутам, а uncovered schedule blocks добираются block-level rescue pass'ом;
 - `trail_scout.screen.v1` оценивает пост целиком и не получает `occurrence_blocks` как вход; block split используется только на extraction stage, чтобы screen не подхватывал детерминированное мнение сплиттера;
 - guide extraction идёт Opus/lollipop-style семействами, а не одним тяжёлым универсальным prompt'ом: `trail_scout.announce_extract_tier1.v1` вытаскивает только occurrence skeleton, `trail_scout.status_claim_extract.v1` обрабатывает update-посты, `trail_scout.template_extract.v1` собирает template-only сигналы, а `route_weaver.enrich.v1` отдельным коротким запросом дозаполняет семантические поля по уже найденному occurrence;
@@ -38,6 +38,10 @@
 - first-pass `base_region_fit` теперь относится к screen/extraction LLM layer, а не к смысловым regex в local fallback.
 - `base_region_fit` считается полностью Gemma-owned semantic decision: Kaggle runtime больше не держит deterministic keyword fallback по городам; если LLM не заполнил поле, результат остаётся `unknown` и post не отбрасывается по regex, а обрабатывается server-side enrichment стадиями с LLM-first ownership.
 - `Gemma 4` structured stages в guide path должны использовать native `response_schema` / `response_mime_type`, а не только prompt-level "верни JSON" contract.
+- guide Kaggle runtime теперь использует тот же `GoogleAIClient` не только для text-only stages, но и для multimodal OCR/vision calls:
+  - poster/image OCR идёт через `guide_scout_ocr` consumer на том же guide key/runtime;
+  - `ocr_chunks` подмешиваются в `trail_scout.screen.v1`, `trail_scout.*extract*` и `route_weaver.enrich.v1`, чтобы operational facts могли приходить не только из caption/body, но и из карточек/афиш;
+  - OCR остаётся fail-open: если image pass не удался, post всё равно может пройти по text-only path, а ошибка должна оставаться видимой в result payload;
 - runtime обязан фильтровать `parts[].thought = true` до JSON parsing и materialization, чтобы guide fact-pack и admin surfaces не протаскивали hidden reasoning text.
 - guide migration остаётся строго `LLM-first`: semantic screen/extract decisions не должны переезжать в regex/keyword shortcuts даже если конкретный `Gemma 4` stage ведёт себя хуже baseline; в таких случаях исправляется prompt/stage contract, а не вводится deterministic bypass по смыслу текста.
 
@@ -74,7 +78,7 @@
 
 ## Что ещё остаётся MVP-ограничением
 
-- OCR в guide Kaggle runtime пока не доведён до backlog-parity;
+- OCR теперь закрывает основной MVP gap: candidate posts с image media проходят Gemma vision/OCR pass, а extracted `ocr_chunks` участвуют в screen/extract/enrich. До backlog-parity всё ещё остаются follow-up зоны вроде richer media fingerprinting, cross-image assignment и более глубокого OCR-debug/operator UX;
 - `status_bind / reschedule / same-occurrence` merge уже fact-first, но ещё не полный `Route Weaver v1`;
 - profile enrichment теперь отдельно materialize-ится Gemma-pass'ом из `guide_source.about_text` + sample occurrence titles/hooks, чтобы `guide_profile` копил публичное имя, регалии и области экспертизы;
 - template rollup по-прежнему строится в основном из occurrence-linked hints/facts; отдельного template-only harvesting pipeline пока нет;

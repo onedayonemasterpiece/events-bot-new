@@ -91,6 +91,7 @@ class GoogleAIClient:
     # Default values
     DEFAULT_MAX_OUTPUT_TOKENS = 8192
     DEFAULT_TPM_RESERVE_EXTRA = 1000
+    DEFAULT_MULTIMODAL_IMAGE_TOKENS = 1600
     # Heuristic budget for prompt token estimation. We intentionally overestimate
     # to avoid passing Supabase reserve checks and then hitting provider 429
     # on input-token-per-minute quotas.
@@ -287,10 +288,14 @@ class GoogleAIClient:
         if not raw:
             return []
         names = [raw]
-        if raw == "GOOGLE_API_KEY2":
-            names.append("GOOGLE_API_KEY_2")
-        elif raw == "GOOGLE_API_KEY_2":
-            names.append("GOOGLE_API_KEY2")
+        match = re.match(r"^(GOOGLE_API_KEY)_?(\d+)$", raw)
+        if match:
+            prefix, suffix = match.groups()
+            compact = f"{prefix}{suffix}"
+            underscored = f"{prefix}_{suffix}"
+            for alias in (compact, underscored):
+                if alias not in names:
+                    names.append(alias)
         return names
 
     def _resolve_default_env_candidate_key_ids(
@@ -514,7 +519,7 @@ class GoogleAIClient:
     async def generate_content_async(
         self,
         model: str,
-        prompt: str,
+        prompt: Any,
         generation_config: Optional[dict] = None,
         safety_settings: Optional[list] = None,
         max_output_tokens: Optional[int] = None,
@@ -524,7 +529,7 @@ class GoogleAIClient:
         
         Args:
             model: Model name (e.g., "gemma-3-27b")
-            prompt: Input prompt
+            prompt: Input prompt or multimodal content parts
             generation_config: Optional generation config
             safety_settings: Optional safety settings
             max_output_tokens: Max output tokens (for TPM reservation)
@@ -650,7 +655,7 @@ class GoogleAIClient:
         self,
         ctx: RequestContext,
         attempt_no: int,
-        prompt: str,
+        prompt: Any,
         generation_config: Optional[dict],
         safety_settings: Optional[list],
         max_output_tokens: Optional[int],
@@ -694,7 +699,8 @@ class GoogleAIClient:
         try:
             if self.dry_run:
                 # Dry run mode for testing
-                response_text = f"[DRY RUN] Response for: {prompt[:50]}..."
+                prompt_preview = self._prompt_text_for_estimate(prompt)[:50]
+                response_text = f"[DRY RUN] Response for: {prompt_preview}..."
                 usage = UsageInfo(input_tokens=100, output_tokens=50, total_tokens=150)
             else:
                 response_text, usage = await self._call_provider(
@@ -1317,7 +1323,7 @@ class GoogleAIClient:
         self,
         api_key: str,
         model: str,
-        prompt: str,
+        prompt: Any,
         generation_config: Optional[dict],
         safety_settings: Optional[list],
         max_output_tokens: Optional[int],
@@ -1452,13 +1458,66 @@ class GoogleAIClient:
     def _get_api_key(self, env_var_name: Optional[str]) -> Optional[str]:
         """Get API key from environment or secrets provider."""
         name = env_var_name or self.default_env_var_name or "GOOGLE_API_KEY"
-        
+
+        aliases = self._default_env_aliases(name) or [name]
         if self.secrets_provider:
-            return self.secrets_provider.get_secret(name)
-        
-        return os.getenv(name)
-    
-    def _estimate_prompt_tokens(self, prompt: str) -> int:
+            for alias in aliases:
+                value = self.secrets_provider.get_secret(alias)
+                if value:
+                    return value
+
+        for alias in aliases:
+            value = os.getenv(alias)
+            if value:
+                return value
+        return None
+
+    def _prompt_estimate_components(self, prompt: Any) -> tuple[str, int]:
+        if isinstance(prompt, str):
+            return prompt, 0
+        if isinstance(prompt, (list, tuple)):
+            text_parts: list[str] = []
+            blob_count = 0
+            for item in prompt:
+                extracted, item_blob_count = self._prompt_estimate_components(item)
+                if extracted:
+                    text_parts.append(extracted)
+                blob_count += item_blob_count
+            return "\n".join(text_parts), blob_count
+        if isinstance(prompt, dict):
+            text_parts: list[str] = []
+            blob_count = 0
+            parts_value = prompt.get("parts")
+            if isinstance(parts_value, (list, tuple)):
+                extracted, nested_blob_count = self._prompt_estimate_components(parts_value)
+                if extracted:
+                    text_parts.append(extracted)
+                blob_count += nested_blob_count
+            for key in ("text", "prompt", "content"):
+                value = prompt.get(key)
+                if isinstance(value, str):
+                    if value.strip():
+                        text_parts.append(value.strip())
+                    continue
+                if isinstance(value, (list, tuple)):
+                    extracted, nested_blob_count = self._prompt_estimate_components(value)
+                    if extracted:
+                        text_parts.append(extracted)
+                    blob_count += nested_blob_count
+            if "inline_data" in prompt or (
+                isinstance(prompt.get("mime_type"), str) and prompt.get("data") is not None
+            ):
+                blob_count += 1
+            if text_parts:
+                return "\n".join(text_parts), blob_count
+            return "", blob_count
+        return str(prompt or ""), 0
+
+    def _prompt_text_for_estimate(self, prompt: Any) -> str:
+        text, _blob_count = self._prompt_estimate_components(prompt)
+        return text
+
+    def _estimate_prompt_tokens(self, prompt: Any) -> int:
         """Best-effort token estimate for prompts.
 
         We can't depend on provider-side countTokens here (it would also require
@@ -1466,14 +1525,15 @@ class GoogleAIClient:
         Cyrillic/OCR prompts can tokenize much denser than a simple bytes/4
         estimate and otherwise slip past reserve() only to hit provider 429.
         """
-        if not prompt:
+        prompt_text, blob_count = self._prompt_estimate_components(prompt)
+        if not prompt_text and blob_count <= 0:
             return 1
         try:
-            size = len(prompt.encode("utf-8", errors="ignore"))
+            size = len(prompt_text.encode("utf-8", errors="ignore"))
         except Exception:
-            size = len(prompt)
-        chars = len(prompt)
-        non_ascii = sum(1 for ch in prompt if ord(ch) > 127)
+            size = len(prompt_text)
+        chars = len(prompt_text)
+        non_ascii = sum(1 for ch in prompt_text if ord(ch) > 127)
         non_ascii_ratio = (non_ascii / chars) if chars > 0 else 0.0
 
         bytes_est = size / float(self._BYTES_PER_TOKEN_ESTIMATE)
@@ -1486,9 +1546,11 @@ class GoogleAIClient:
         est = int(max(bytes_est, chars_est))
         # Add overhead for JSON, escaping, and tokenization variance.
         est = int(est * 1.15) + 50
+        if blob_count > 0:
+            est += blob_count * int(self.DEFAULT_MULTIMODAL_IMAGE_TOKENS)
         return max(1, est)
 
-    def _calculate_reserved_tpm(self, *, prompt: str, max_output_tokens: int) -> int:
+    def _calculate_reserved_tpm(self, *, prompt: Any, max_output_tokens: int) -> int:
         """Calculate tokens to reserve for TPM check.
 
         Supabase reservation must cover BOTH prompt (input) and output tokens.

@@ -146,6 +146,10 @@ GOOGLE_ACCOUNT_FALLBACK_ENV = "GOOGLE_API_LOCALNAME"
 LLM_TIMEOUT_SECONDS = 120
 LLM_TIMEOUT_RETRY_ATTEMPTS = 1
 LLM_PROVIDER_5XX_RETRY_ATTEMPTS = 1
+GUIDE_OCR_ENABLED = True
+GUIDE_OCR_IMAGE_LIMIT_PER_POST = 2
+GUIDE_OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
+GUIDE_OCR_TEXT_LIMIT = 1200
 _GEMMA_CLIENTS: dict[str, Any] = {}
 _SUPABASE_CLIENT: Any | None = None
 _LLM_GATEWAY_LOGGED = False
@@ -199,6 +203,7 @@ def _provider_5xx_status(exc: Exception) -> int | None:
 def refresh_runtime_settings() -> None:
     global MODEL, SCREEN_MODEL, EXTRACT_MODEL, GOOGLE_KEY_ENV, GOOGLE_ACCOUNT_ENV, LLM_TIMEOUT_SECONDS
     global LLM_TIMEOUT_RETRY_ATTEMPTS, LLM_PROVIDER_5XX_RETRY_ATTEMPTS
+    global GUIDE_OCR_ENABLED, GUIDE_OCR_IMAGE_LIMIT_PER_POST, GUIDE_OCR_MAX_IMAGE_BYTES, GUIDE_OCR_TEXT_LIMIT
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
     SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
@@ -223,6 +228,33 @@ def refresh_runtime_settings() -> None:
         )
     except Exception:
         LLM_PROVIDER_5XX_RETRY_ATTEMPTS = 1
+    GUIDE_OCR_ENABLED = (os.getenv("GUIDE_MONITORING_OCR_ENABLED") or "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    try:
+        GUIDE_OCR_IMAGE_LIMIT_PER_POST = max(
+            1,
+            min(int(float((os.getenv("GUIDE_MONITORING_OCR_IMAGE_LIMIT") or "2").strip() or 2)), 4),
+        )
+    except Exception:
+        GUIDE_OCR_IMAGE_LIMIT_PER_POST = 2
+    try:
+        GUIDE_OCR_MAX_IMAGE_BYTES = max(
+            512 * 1024,
+            min(int(float((os.getenv("GUIDE_MONITORING_OCR_MAX_IMAGE_BYTES") or str(6 * 1024 * 1024)).strip() or (6 * 1024 * 1024))), 12 * 1024 * 1024),
+        )
+    except Exception:
+        GUIDE_OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
+    try:
+        GUIDE_OCR_TEXT_LIMIT = max(
+            300,
+            min(int(float((os.getenv("GUIDE_MONITORING_OCR_TEXT_LIMIT") or "1200").strip() or 1200)), 3000),
+        )
+    except Exception:
+        GUIDE_OCR_TEXT_LIMIT = 1200
     _GEMMA_CLIENTS = {}
     _SUPABASE_CLIENT = None
     _LLM_GATEWAY_LOGGED = False
@@ -646,26 +678,231 @@ async def scan_source_posts(client: TelegramClient, *, username: str, limit: int
     return {"source_title": source_title, "about_text": about_text or None, "about_links": about_links}, posts
 
 
-def prefilter_flags(post: ScannedPost) -> dict[str, Any]:
-    text = collapse_ws(post.text).lower()
+def _detect_image_mime(data: bytes) -> str:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+        return "image/gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+def _ocr_chunk_text(chunk: Mapping[str, Any]) -> str:
+    parts = [collapse_ws(chunk.get("title")), collapse_ws(chunk.get("text"))]
+    return "\n".join(part for part in parts if part).strip()
+
+
+def _post_has_photo_media(post: ScannedPost) -> bool:
+    for item in post.media_refs or []:
+        kind = collapse_ws(item.get("kind")).lower()
+        if kind == "photo":
+            return True
+    return False
+
+
+def _should_run_post_ocr(post: ScannedPost, source_kind: str, flags: dict[str, Any], *, base_pass: bool) -> bool:
+    if not GUIDE_OCR_ENABLED or not _post_has_photo_media(post):
+        return False
+    if base_pass:
+        return True
+    text_len = len(collapse_ws(post.text))
+    if text_len <= 220:
+        return True
+    if bool(flags.get("grouped_album_present")):
+        return True
+    if any(bool(flags.get(key)) for key in ("has_date_signal", "has_booking_signal", "has_status_signal")):
+        return True
+    return source_kind in {"guide_personal", "guide_project", "organization_with_tours", "excursion_operator"}
+
+
+async def _collect_post_ocr_inputs(
+    client: TelegramClient,
+    *,
+    username: str,
+    post: ScannedPost,
+) -> list[dict[str, Any]]:
+    if not _post_has_photo_media(post):
+        return []
+    entity = await client.get_entity(username)
+    out: list[dict[str, Any]] = []
+    for media_ref in post.media_refs:
+        if len(out) >= GUIDE_OCR_IMAGE_LIMIT_PER_POST:
+            break
+        if collapse_ws(media_ref.get("kind")).lower() != "photo":
+            continue
+        message_id = int(media_ref.get("message_id") or 0)
+        if message_id <= 0:
+            continue
+        try:
+            message = await client.get_messages(entity, ids=message_id)
+        except Exception:
+            continue
+        if not message:
+            continue
+        try:
+            downloaded = await client.download_media(message, file=bytes)
+        except Exception:
+            continue
+        if not downloaded:
+            continue
+        payload = bytes(downloaded)
+        if not payload or len(payload) > GUIDE_OCR_MAX_IMAGE_BYTES:
+            continue
+        out.append(
+            {
+                "message_id": message_id,
+                "mime_type": _detect_image_mime(payload),
+                "data": payload,
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        )
+    return out
+
+
+async def _ocr_post_image(
+    image_payload: Mapping[str, Any],
+    *,
+    consumer: str,
+    model: str,
+    post: ScannedPost,
+) -> dict[str, Any] | None:
+    mime_type = collapse_ws(image_payload.get("mime_type")) or "image/jpeg"
+    image_bytes = image_payload.get("data")
+    if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
+        return None
+    schema = {
+        "type": "object",
+        "properties": {
+            "ocr_text": {"type": "string"},
+            "ocr_title": {"type": "string"},
+            "excursion_signal": {"type": "boolean"},
+            "schedule_signal": {"type": "boolean"},
+            "booking_signal": {"type": "boolean"},
+        },
+        "required": [
+            "ocr_text",
+            "ocr_title",
+            "excursion_signal",
+            "schedule_signal",
+            "booking_signal",
+        ],
+    }
+    prompt = [
+        {
+            "text": (
+                "You read one Telegram image related to guide excursions. Return only JSON.\n"
+                "Fields:\n"
+                "- ocr_text: all readable Russian/English text from the image, preserving dates, times, prices, handles, phones and links.\n"
+                "- ocr_title: dominant route/excursion title from the image, or empty string if there is no reliable title.\n"
+                "- excursion_signal: true only if the image itself shows a concrete excursion/walk/tour/route signal.\n"
+                "- schedule_signal: true only if the image contains an explicit date/time or same-day relative schedule marker.\n"
+                "- booking_signal: true only if the image contains explicit booking/contact/link/phone/DM signal.\n"
+                "Do not invent unreadable text. Ignore decorative slogans unless they carry excursion facts.\n"
+                f"Post context: url={post.source_url} post_date_utc={post.post_date.isoformat()}."
+            )
+        },
+        {
+            "inline_data": {
+                "mime_type": mime_type,
+                "data": bytes(image_bytes),
+            }
+        },
+    ]
+    data = await ask_gemma(
+        model,
+        prompt,
+        consumer=consumer,
+        max_output_tokens=420,
+        response_schema=schema,
+    )
+    if not isinstance(data, dict):
+        return None
+    text = collapse_ws(data.get("ocr_text"))
+    title = collapse_ws(data.get("ocr_title"))
+    if not text and not title:
+        return None
     return {
-        "has_date_signal": bool(DATE_RE.search(text) or "завтра" in text or "сегодня" in text),
+        "title": title or None,
+        "text": text[:GUIDE_OCR_TEXT_LIMIT] if text else "",
+        "excursion_signal": bool(data.get("excursion_signal")),
+        "schedule_signal": bool(data.get("schedule_signal")),
+        "booking_signal": bool(data.get("booking_signal")),
+    }
+
+
+async def collect_post_ocr_chunks(
+    client: TelegramClient,
+    *,
+    username: str,
+    post: ScannedPost,
+    model: str,
+) -> list[dict[str, Any]]:
+    image_inputs = await _collect_post_ocr_inputs(client, username=username, post=post)
+    if not image_inputs:
+        return []
+    chunks: list[dict[str, Any]] = []
+    for idx, image_payload in enumerate(image_inputs, start=1):
+        try:
+            chunk = await _ocr_post_image(
+                image_payload,
+                consumer="guide_scout_ocr",
+                model=model,
+                post=post,
+            )
+        except Exception as exc:
+            print(
+                (
+                    "[guide:ocr:error] "
+                    f"message_id={post.message_id} image_message_id={int(image_payload.get('message_id') or 0)} "
+                    f"error={type(exc).__name__}: {exc}"
+                ),
+                flush=True,
+            )
+            continue
+        if not chunk:
+            continue
+        chunks.append(
+            {
+                "id": f"O{idx}",
+                "message_id": int(image_payload.get("message_id") or 0) or None,
+                "sha256": collapse_ws(image_payload.get("sha256")) or None,
+                **chunk,
+            }
+        )
+    return chunks
+
+
+def prefilter_flags(post: ScannedPost, *, ocr_chunks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    ocr_chunks = [item for item in (ocr_chunks or []) if isinstance(item, dict)]
+    ocr_text = "\n".join(_ocr_chunk_text(item) for item in ocr_chunks if _ocr_chunk_text(item))
+    text = collapse_ws("\n".join(part for part in (post.text, ocr_text) if collapse_ws(part))).lower()
+    has_ocr_excursion_signal = any(bool(item.get("excursion_signal")) for item in ocr_chunks)
+    has_ocr_schedule_signal = any(bool(item.get("schedule_signal")) for item in ocr_chunks)
+    has_ocr_booking_signal = any(bool(item.get("booking_signal")) for item in ocr_chunks)
+    return {
+        "has_date_signal": bool(DATE_RE.search(text) or "завтра" in text or "сегодня" in text or has_ocr_schedule_signal),
         "has_time_signal": bool(TIME_RE.search(text)),
         "has_price_signal": any(token in text for token in ("стоимость", "цена", "руб", "₽")),
-        "has_booking_signal": bool(URL_RE.search(text) or USERNAME_RE.search(text) or PHONE_RE.search(text) or "запись" in text or "бронир" in text),
+        "has_booking_signal": bool(URL_RE.search(text) or USERNAME_RE.search(text) or PHONE_RE.search(text) or "запись" in text or "бронир" in text or has_ocr_booking_signal),
         "has_status_signal": any(token in text for token in ("мест нет", "лист ожидания", "sold out", "перенос", "отмена", "осталось", "последние места")),
         "has_group_signal": any(token in text for token in ("по запросу", "организованные группы", "для групп", "школьн", "семь")),
-        "has_excursion_keywords": any(token in text for token in ("экскурс", "прогул", "маршрут", "путешеств", "тур ")),
+        "has_excursion_keywords": any(token in text for token in ("экскурс", "прогул", "маршрут", "путешеств", "тур ")) or has_ocr_excursion_signal,
+        "has_ocr_excursion_signal": has_ocr_excursion_signal,
         "grouped_album_present": bool(post.grouped_id),
         "message_url": post.source_url,
     }
 
 
-def prefilter_pass(post: ScannedPost, source_kind: str) -> bool:
-    flags = prefilter_flags(post)
-    if not flags["has_excursion_keywords"]:
+def prefilter_pass(post: ScannedPost, source_kind: str, flags: dict[str, Any]) -> bool:
+    if not (flags["has_excursion_keywords"] or flags.get("has_ocr_excursion_signal")):
         return False
-    if source_kind == "aggregator" and not any(token in collapse_ws(post.text).lower() for token in ("авторская", "приглашаем", "пешеходная")):
+    if source_kind == "aggregator" and not (
+        flags.get("has_ocr_excursion_signal")
+        or any(token in collapse_ws(post.text).lower() for token in ("авторская", "приглашаем", "пешеходная"))
+    ):
         return False
     return any(flags[key] for key in ("has_date_signal", "has_booking_signal", "has_status_signal", "grouped_album_present"))
 
@@ -816,7 +1053,13 @@ def _compact_screen_payload(screen: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _compact_post_payload(post: ScannedPost, *, flags: dict[str, Any], for_extract: bool = False) -> dict[str, Any]:
+def _compact_post_payload(
+    post: ScannedPost,
+    *,
+    flags: dict[str, Any],
+    for_extract: bool = False,
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     excerpt_limit = 1500 if for_extract else 700
     chunk_limit = 3 if for_extract else 2
     chunk_text_limit = 420 if for_extract else 220
@@ -838,15 +1081,39 @@ def _compact_post_payload(post: ScannedPost, *, flags: dict[str, Any], for_extra
             "has_status_signal",
             "has_group_signal",
             "has_excursion_keywords",
+            "has_ocr_excursion_signal",
             "grouped_album_present",
         )
     }
+    compact_ocr_chunks: list[dict[str, Any]] = []
+    for item in ocr_chunks or []:
+        text = collapse_ws(item.get("text"))[:chunk_text_limit]
+        title = collapse_ws(item.get("title"))[:120]
+        if not text and not title:
+            continue
+        compact_ocr_chunks.append(
+            {
+                "id": item.get("id"),
+                "title": title or None,
+                "text": text or "",
+                "excursion_signal": bool(item.get("excursion_signal")),
+                "schedule_signal": bool(item.get("schedule_signal")),
+                "booking_signal": bool(item.get("booking_signal")),
+            }
+        )
+        if len(compact_ocr_chunks) >= 3:
+            break
     return {
         "message_id": post.message_id,
         "post_date_utc": post.post_date.isoformat(),
         "message_url": post.source_url,
         "text_excerpt": collapse_ws(post.text)[:excerpt_limit],
         "text_chunks": chunks,
+        "ocr_chunks": compact_ocr_chunks,
+        "media_hints": {
+            "photo_count": sum(1 for item in post.media_refs if collapse_ws(item.get("kind")).lower() == "photo"),
+            "video_count": sum(1 for item in post.media_refs if collapse_ws(item.get("kind")).lower() == "video"),
+        },
         "prefilter_flags": compact_flags,
     }
 
@@ -986,7 +1253,7 @@ def _single_occurrence_wrapper_schema(*keys: str) -> dict[str, Any]:
 
 async def ask_gemma(
     model: str,
-    prompt: str,
+    prompt: Any,
     *,
     consumer: str,
     max_output_tokens: int = 2200,
@@ -1215,9 +1482,15 @@ def _semantic_focus_excerpt(post: ScannedPost, *, source_block_id: str | None = 
     return collapse_ws(post.text)[:900]
 
 
-async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: dict[str, Any]) -> dict[str, Any]:
+async def screen_post(
+    source_payload: dict[str, Any],
+    post: ScannedPost,
+    flags: dict[str, Any],
+    *,
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     compact_source = _compact_source_payload(source_payload)
-    compact_post = _compact_post_payload(post, flags=flags, for_extract=False)
+    compact_post = _compact_post_payload(post, flags=flags, for_extract=False, ocr_chunks=ocr_chunks)
     schema = {
         "type": "object",
         "properties": {
@@ -1264,7 +1537,7 @@ async def screen_post(source_payload: dict[str, Any], post: ScannedPost, flags: 
         "- base_region_fit: inside | outside | ambiguous | unknown\n"
         "- confidence: low | medium | high\n"
         "Rules:\n"
-        "- announce/status_update only if the post contains a real excursion signal grounded in the input\n"
+        "- announce/status_update only if the post text or OCR contains a real excursion signal grounded in the input\n"
         "- if there is a concrete future walk/excursion with date/time/meeting point, prefer announce or status_update over reportage\n"
         "- if the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine\n"
         "- generic calendars, inspiration, bloom/lifestyle, or travel-wishlist posts without a concrete excursion -> ignore\n"
@@ -1355,10 +1628,11 @@ async def _extract_announce_post_tier1(
     post: ScannedPost,
     flags: dict[str, Any],
     screen: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
-    compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    compact_post = _compact_post_payload(post, flags=flags, for_extract=True, ocr_chunks=ocr_chunks)
     schema = _occurrences_wrapper_schema(
         "source_block_id",
         "canonical_title",
@@ -1395,6 +1669,7 @@ async def _extract_announce_post_tier1(
         "- extract only real excursion occurrences or direct public updates about a specific occurrence\n"
         "- ignore past occurrences for MVP\n"
         "- if the post contains several different dated excursions, return several occurrences\n"
+        "- use OCR facts when the poster carries operational details missing from the text, but only if they are explicit on the poster\n"
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- if an occurrence clearly takes place outside source.base_region, set base_region_fit=outside; do not silently drop it, let the server filter\n"
         "- do not invent details; if a field is unclear, leave it empty\n"
@@ -1417,10 +1692,11 @@ async def _extract_status_post(
     post: ScannedPost,
     flags: dict[str, Any],
     screen: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
-    compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    compact_post = _compact_post_payload(post, flags=flags, for_extract=True, ocr_chunks=ocr_chunks)
     schema = _occurrences_wrapper_schema(
         "source_block_id",
         "canonical_title",
@@ -1452,6 +1728,7 @@ async def _extract_status_post(
         "Return only JSON with key occurrences.\n"
         "Rules:\n"
         "- focus on status deltas such as last_call, seats left, moved time, changed meeting point, cancellation, or clarified booking\n"
+        "- use OCR only for explicit grounded deltas visible on the poster/image\n"
         "- do not invent missing fields\n"
         "- fact_claims should use only claim_role anchor or status_delta\n"
         "- no extra commentary or hidden thinking traces\n\n"
@@ -1473,10 +1750,11 @@ async def _extract_template_post(
     post: ScannedPost,
     flags: dict[str, Any],
     screen: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
-    compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    compact_post = _compact_post_payload(post, flags=flags, for_extract=True, ocr_chunks=ocr_chunks)
     schema = _occurrences_wrapper_schema(
         "source_block_id",
         "canonical_title",
@@ -1506,6 +1784,7 @@ async def _extract_template_post(
         "Rules:\n"
         "- no future date means digest_eligible must stay false\n"
         "- use template_hint for reusable route/topic information\n"
+        "- OCR may contribute reusable route/topic facts only when they are explicit on the poster/image\n"
         "- do not invent schedule facts\n"
         "- no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
@@ -1608,10 +1887,11 @@ async def _extract_occurrence_block(
     flags: dict[str, Any],
     screen: dict[str, Any],
     block: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
-    compact_post = _compact_post_payload(post, flags=flags, for_extract=True)
+    compact_post = _compact_post_payload(post, flags=flags, for_extract=True, ocr_chunks=ocr_chunks)
     schema = _single_occurrence_wrapper_schema(
         "source_block_id",
         "canonical_title",
@@ -1648,6 +1928,7 @@ async def _extract_occurrence_block(
         "Rules:\n"
         "- treat the block as one primary excursion candidate\n"
         "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
+        "- OCR may rescue missing title/date/time facts only when they are explicit on the poster/image\n"
         "- ignore unrelated side notes inside the same block\n"
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- do not invent details; keep source_block_id equal to the input block id\n"
@@ -1674,6 +1955,7 @@ async def _extract_occurrence_block(
         screen=screen,
         occurrence_seed=item,
         focus_excerpt=_semantic_focus_excerpt(post, source_block_id=block.get("id")),
+        ocr_chunks=ocr_chunks,
     )
     return _clean_occurrence_payload(
         _merge_occurrence_layers(item, semantic_patch),
@@ -1691,6 +1973,7 @@ async def _extract_occurrence_semantics(
     screen: dict[str, Any],
     occurrence_seed: dict[str, Any],
     focus_excerpt: str,
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
@@ -1699,6 +1982,18 @@ async def _extract_occurrence_semantics(
         "message_url": post.source_url,
         "post_date_utc": post.post_date.isoformat(),
         "focus_excerpt": collapse_ws(focus_excerpt)[:900],
+        "ocr_chunks": [
+            {
+                "id": item.get("id"),
+                "title": collapse_ws(item.get("title"))[:120] or None,
+                "text": collapse_ws(item.get("text"))[:280],
+                "excursion_signal": bool(item.get("excursion_signal")),
+                "schedule_signal": bool(item.get("schedule_signal")),
+                "booking_signal": bool(item.get("booking_signal")),
+            }
+            for item in (ocr_chunks or [])
+            if collapse_ws(item.get("text")) or collapse_ws(item.get("title"))
+        ][:3],
     }
     seed = {
         "source_block_id": collapse_ws(occurrence_seed.get("source_block_id")),
@@ -1747,7 +2042,7 @@ async def _extract_occurrence_semantics(
         "Return only JSON with key occurrence.\n"
         "Rules:\n"
         "- do not rename or replace canonical_title/date/time/source_block_id from the seed\n"
-        "- fill only facts supported by the focus excerpt\n"
+        "- fill only facts supported by the focus excerpt or OCR chunks from the same post\n"
         "- preserve the dominant term family from the source: прогулка stays прогулка, экскурсия stays экскурсия\n"
         "- base_region_fit is your own semantic judgement versus source.base_region; do not weaken seed.base_region_fit unless the focus excerpt explicitly contradicts it\n"
         "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak\n"
@@ -1767,7 +2062,14 @@ async def _extract_occurrence_semantics(
     return item if isinstance(item, dict) else {}
 
 
-async def extract_post(source_payload: dict[str, Any], post: ScannedPost, flags: dict[str, Any], screen: dict[str, Any]) -> list[dict[str, Any]]:
+async def extract_post(
+    source_payload: dict[str, Any],
+    post: ScannedPost,
+    flags: dict[str, Any],
+    screen: dict[str, Any],
+    *,
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     occurrence_blocks = build_occurrence_blocks(post.text, limit=6)
     is_multi = str(screen.get("post_kind") or "") == "announce_multi"
     extract_mode = str(screen.get("extract_mode") or "none")
@@ -1783,6 +2085,7 @@ async def extract_post(source_payload: dict[str, Any], post: ScannedPost, flags:
                 flags=flags,
                 screen=screen,
                 block=block,
+                ocr_chunks=ocr_chunks,
             )
             if not rescued:
                 continue
@@ -1795,11 +2098,11 @@ async def extract_post(source_payload: dict[str, Any], post: ScannedPost, flags:
         return cleaned
 
     if extract_mode == "status":
-        items = await _extract_status_post(source_payload, post=post, flags=flags, screen=screen)
+        items = await _extract_status_post(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     elif extract_mode == "template":
-        items = await _extract_template_post(source_payload, post=post, flags=flags, screen=screen)
+        items = await _extract_template_post(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     else:
-        items = await _extract_announce_post_tier1(source_payload, post=post, flags=flags, screen=screen)
+        items = await _extract_announce_post_tier1(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     cleaned: list[dict[str, Any]] = []
     seen_fingerprints: set[str] = set()
     if isinstance(items, list):
@@ -1815,6 +2118,7 @@ async def extract_post(source_payload: dict[str, Any], post: ScannedPost, flags:
                     screen=screen,
                     occurrence_seed=item,
                     focus_excerpt=_semantic_focus_excerpt(post, source_block_id=item.get("source_block_id")),
+                    ocr_chunks=ocr_chunks,
                 )
                 merged_item = _merge_occurrence_layers(item, semantic_patch)
             occurrence = _clean_occurrence_payload(merged_item, post=post, source_payload=source_payload, screen=screen)
@@ -1841,6 +2145,7 @@ async def extract_post(source_payload: dict[str, Any], post: ScannedPost, flags:
                 flags=flags,
                 screen=screen,
                 block=block,
+                ocr_chunks=ocr_chunks,
             )
             if not rescued:
                 continue
@@ -1929,8 +2234,27 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
     out_posts: list[dict[str, Any]] = []
     errors: list[str] = []
     for post in posts:
-        flags = prefilter_flags(post)
-        passes = prefilter_pass(post, source_kind)
+        ocr_chunks: list[dict[str, Any]] = []
+        ocr_status = "skipped"
+        base_flags = prefilter_flags(post)
+        base_pass = prefilter_pass(post, source_kind, base_flags)
+        if _should_run_post_ocr(post, source_kind, base_flags, base_pass=base_pass):
+            try:
+                ocr_chunks = await collect_post_ocr_chunks(
+                    client,
+                    username=username,
+                    post=post,
+                    model=EXTRACT_MODEL,
+                )
+                ocr_status = "ok" if ocr_chunks else "empty"
+            except Exception as exc:
+                ocr_status = f"error:{type(exc).__name__}"
+                print(
+                    f"[guide:ocr:error] source=@{username} message_id={post.message_id} error={type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+        flags = prefilter_flags(post, ocr_chunks=ocr_chunks)
+        passes = prefilter_pass(post, source_kind, flags)
         media_assets = await materialize_post_media_assets(client, username=username, post=post) if passes else []
         payload: dict[str, Any] = {
             "message_id": post.message_id,
@@ -1944,6 +2268,8 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
             "reactions_json": post.reactions_json,
             "media_refs": post.media_refs,
             "media_assets": media_assets,
+            "ocr_chunks": ocr_chunks,
+            "ocr_status": ocr_status,
             "prefilter_passed": passes,
             "prefilter_flags": flags,
             "llm_status": "skipped_prefilter",
@@ -1974,6 +2300,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
                     },
                     post,
                     flags,
+                    ocr_chunks=ocr_chunks,
                 )
                 payload["screen"] = screen
                 if screen.get("extract_mode") != "none" and screen.get("decision") != "ignore":
@@ -1991,6 +2318,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
                         post,
                         flags,
                         screen,
+                        ocr_chunks=ocr_chunks,
                     )
                 payload["llm_status"] = "ok"
             except Exception as exc:

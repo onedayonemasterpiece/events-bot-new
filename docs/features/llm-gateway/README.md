@@ -107,6 +107,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 
 *   `Gemma 3` / старые Gemma-path по-прежнему fail-open работают через prompt-only JSON contract: `response_mime_type` / `response_schema` снимаются на клиенте, потому что эти модели часто отвергали native JSON knobs.
 *   `Gemma 4` (`gemma-4-31b`, `gemma-4-26b-a4b`) теперь сохраняет native `response_mime_type=application/json` и `response_schema`, если вызывающий stage их передал. Это нужно для structured extract / classify / dedup stages, где `lollipop g4` уже показал реальный practical uplift именно от native schema discipline.
+*   `generate_content_async()` теперь принимает не только plain string, но и multimodal prompt parts (`text` + `inline_data` blobs). Это позволяет guide/Telegram Kaggle runtimes использовать общий gateway и для image+text OCR/vision paths, а не обходить лимитер отдельным direct SDK-вызовом.
 
 Дополнительное правило transport hygiene:
 
@@ -115,6 +116,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 ### 2.2. Алгоритм работы
 1.  **Reserve**: Клиент запрашивает резерв (примерно `max_output_tokens + 1000`).
     *   Для длинных текстовых prompt’ов используется консервативная оценка по байтам **и** символам; это особенно важно для русскоязычных/OCR-heavy запросов, где простой `bytes/4` может занизить реальный input TPM.
+    *   Для multimodal prompt parts текст оценивается отдельно от binary blobs, а каждый image/blob получает дополнительный safety reserve, чтобы raw bytes не раздували estimate строковым `repr`, но image-heavy OCR calls всё равно не уходили в систематическое under-reserve.
     *   *Успех:* Получает `api_key` и разрешение.
     *   *Отказ:* Получает `RateLimitError` (Fail Fast, NO_WAIT).
 2.  **Execute**: Вызов API провайдера (Google AI Studio).
