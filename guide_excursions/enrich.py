@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from .llm_support import GuideSecretsProviderAdapter, guide_account_name, resolve_candidate_key_ids
+from .llm_support import GuideSecretsProviderAdapter, env_int_clamped, guide_account_name, resolve_candidate_key_ids
 from .parser import collapse_ws
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,12 @@ GUIDE_OCCURRENCE_ENRICH_GOOGLE_ACCOUNT_ENV = (
 GUIDE_OCCURRENCE_ENRICH_GOOGLE_ACCOUNT_FALLBACK_ENV = (
     os.getenv("GUIDE_OCCURRENCE_ENRICH_GOOGLE_ACCOUNT_FALLBACK_ENV") or "GOOGLE_API_LOCALNAME"
 ).strip() or "GOOGLE_API_LOCALNAME"
+GUIDE_OCCURRENCE_ENRICH_LLM_TIMEOUT_SECONDS = env_int_clamped(
+    "GUIDE_OCCURRENCE_ENRICH_LLM_TIMEOUT_SEC",
+    120,
+    minimum=30,
+    maximum=600,
+)
 
 _URLISH_RE = re.compile(r"https?://|t\.me/|tel:", re.I)
 _USERNAME_RE = re.compile(r"(?<!\w)@[A-Za-z0-9_]{4,64}")
@@ -269,22 +275,25 @@ async def _ask_batch(
 ) -> dict[str, Any] | None:
     for attempt in range(3):
         try:
-            raw, _usage = await client.generate_content_async(
-                model=GUIDE_OCCURRENCE_ENRICH_MODEL,
-                prompt=prompt,
-                generation_config={
-                    "temperature": 0,
-                    **(
-                        {
-                            "response_mime_type": "application/json",
-                            "response_schema": dict(response_schema),
-                        }
-                        if response_schema is not None
-                        else {}
-                    ),
-                },
-                max_output_tokens=2400,
-                candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
+            raw, _usage = await asyncio.wait_for(
+                client.generate_content_async(
+                    model=GUIDE_OCCURRENCE_ENRICH_MODEL,
+                    prompt=prompt,
+                    generation_config={
+                        "temperature": 0,
+                        **(
+                            {
+                                "response_mime_type": "application/json",
+                                "response_schema": dict(response_schema),
+                            }
+                            if response_schema is not None
+                            else {}
+                        ),
+                    },
+                    max_output_tokens=2400,
+                    candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
+                ),
+                timeout=float(GUIDE_OCCURRENCE_ENRICH_LLM_TIMEOUT_SECONDS),
             )
             return _extract_json(raw or "")
         except Exception as exc:

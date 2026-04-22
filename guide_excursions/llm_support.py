@@ -29,6 +29,15 @@ def guide_account_name(*, primary_account_env: str, fallback_account_env: str) -
     ).strip() or None
 
 
+def env_int_clamped(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        value = int(float(raw)) if raw else int(default)
+    except Exception:
+        value = int(default)
+    return max(int(minimum), min(int(value), int(maximum)))
+
+
 def _key_env_aliases(name: str | None) -> list[str]:
     raw = (name or "").strip()
     if not raw:

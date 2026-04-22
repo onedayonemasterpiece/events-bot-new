@@ -115,6 +115,7 @@ Timeouts were not limited to huge posts: observed timed-out post text lengths ra
 - Implemented: guide scheduled digest can publish eligible fresh material even if the scan result is `partial` due to unrelated post-level LLM errors; those partials are recorded as warnings instead of blocking `result.errors`.
 - Implemented: run completion, `/guide_report`, and `/guide_runs` keep warning/`llm_error` visibility.
 - Implemented: bounded retry around guide Gemma timeouts/provider 5xx at the Kaggle wrapper layer, with per-attempt diagnostics.
+- Implemented: local Gemma 4 digest-preview stages (`enrich`, `dedup`, `digest_writer`) have bounded per-call timeouts and fall back to existing deterministic content/heuristics, so catch-up cannot hang before `guide_digest_issue` creation.
 
 ## Follow-up Actions
 
