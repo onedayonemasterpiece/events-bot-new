@@ -3173,6 +3173,13 @@ class VideoAnnounceScenario:
             
             payload = await self._build_render_payload(sess, ranked)
             payload_json = payload_as_json(payload, timezone.utc)
+            params = (
+                dict(sess.selection_params)
+                if isinstance(sess.selection_params, dict)
+                else {}
+            )
+            params["notify_chat_id"] = self.chat_id
+            sess.selection_params = params
             sess.status = VideoAnnounceSessionStatus.RENDERING
             sess.started_at = datetime.now(timezone.utc)
             session.add(sess)

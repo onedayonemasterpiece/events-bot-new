@@ -50,6 +50,7 @@
   - the readiness poll must inspect the full paginated dataset file list, not only the first `20` names returned by Kaggle: live session `#162` uploaded the correct CherryFlash bundle, but the first page contained only early asset names and omitted `payload.json`, so a first-page-only check falsely declared the dataset “not ready” and aborted the run before `kernels_push`.
   - once `kernels_push` returns the actual Kaggle slug (for CherryFlash: `zigomaro/cherryflash`), the session must persist that real slug immediately, before the dataset-bind wait finishes; otherwise recovery/poller paths fall back to the repo-local pseudo-ref `local:CherryFlash`, which cannot be queried via Kaggle `kernels_status`.
   - startup recovery must not resume Kaggle status polling for still-local refs like `local:CherryFlash`; if the runtime restarted before the real slug was persisted, the session should fail closed as rerun-required instead of hanging in `RENDERING`.
+  - that fail-close path must keep a short handoff grace window for fresh CherryFlash runs: if recovery sees `local:CherryFlash` almost immediately after session start, it should allow the in-flight handoff to settle before declaring the run dead, because the April 22, 2026 incident showed that Kaggle can already continue and publish stories while sqlite still momentarily reflects the pre-handoff local ref.
   - the post-push `dataset_sources` bind check for CherryFlash is telemetry, not a pre-start fatal gate: live session `#163` proved that Kaggle may successfully deploy and start `zigomaro/cherryflash` while `GetKernel` still reports only the static secret datasets in metadata, so CherryFlash must continue into normal kernel status/output polling after a successful `kernels_push` instead of marking the whole run failed at that intermediate metadata state.
   - the launcher must treat Kaggle `SaveKernel` response fields as authoritative launch state, not just the absence of an HTTP exception:
     - a non-empty `error` in `ApiSaveKernelResponse` means the push failed, even if the Python API call returned normally;
@@ -548,6 +549,12 @@ This section captures the latest intro-direction request as an explicit delta to
 - The anti-repeat rule is mode-specific:
   - regular `/v tomorrow` history must not silently block this mode forever;
   - this mode must not rely on the current global "seen in any `/v` session" behavior without an explicit time window.
+- CherryFlash cooldown must be publication-based, not failure-based:
+  - a failed-only run that never reached a published CherryFlash output must not start the `7`-day cooldown by itself;
+  - published CherryFlash outputs must still start cooldown even for legacy rows where `published_at` was missing and only `created_at` survived.
+- Cooldown is a hard exclusion, not a filler preference:
+  - once an event is inside the active CherryFlash cooldown window, selection must skip it entirely;
+  - the selector must not re-add cooldowned events via any `repeat_fill` / "not enough fresh picks" fallback.
 
 ### 4. Ranking
 
@@ -688,6 +695,15 @@ This section captures the latest intro-direction request as an explicit delta to
   - winning window;
   - cooldown skip reason if excluded.
 - Anti-repeat queries must become time-aware and mode-aware.
+- Anti-repeat evidence should stay inspectable from session rows:
+  - `PUBLISHED_TEST` / `PUBLISHED_MAIN` sessions should carry a publication timestamp usable by CherryFlash cooldown queries;
+  - selection traces should continue to show whether a chosen event was `fresh` rather than a hidden fallback repeat.
+- Viewer-facing success and local session status must not drift silently:
+  - a CherryFlash run that already reached successful Kaggle/story completion must not stay locally marked as pre-handoff `FAILED`;
+  - incident triage on this surface must use both prod sqlite and Kaggle output evidence, because the remote render may outlive a brief runtime recovery race.
+- Service diagnostics must stay off the publish channel:
+  - `test_chat_id` / `main_chat_id` are viewer-facing delivery targets, not a fallback for recovery alerts;
+  - CherryFlash restart/service notifications must go only to the explicit operator/admin notify chat (`selection_params.notify_chat_id`) or, if that context is absent, to the resolved superadmin DM.
 
 ## Acceptance checklist
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 from datetime import datetime, timedelta, timezone
@@ -170,6 +171,99 @@ async def test_run_tomorrow_pipeline_test_mode_limits_scenes(monkeypatch, tmp_pa
     await scenario.run_tomorrow_pipeline(test_mode=True)
 
     assert started["limit_scenes"] == TOMORROW_TEST_MIN_POSTERS
+
+
+@pytest.mark.asyncio
+async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    tomorrow = (datetime.now(LOCAL_TZ) + timedelta(days=1)).date()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        ev = Event(
+            title="Event",
+            description="d",
+            source_text="s",
+            date=tomorrow.isoformat(),
+            time="19:00",
+            location_name="Loc",
+            city="City",
+            photo_urls=["https://example.com/1.jpg"],
+            photo_count=1,
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="default",
+            selection_params={"mode": "default"},
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            test_chat_id=-1002210431821,
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+        session.add(
+            VideoAnnounceItem(
+                session_id=session_id,
+                event_id=ev.id,
+                position=1,
+                score=1.0,
+                status=VideoAnnounceItemStatus.READY,
+            )
+        )
+        await session.commit()
+
+    async def _fake_fill_missing_about(*args, **kwargs):  # noqa: ANN002,ANN003
+        return {}
+
+    async def _fake_build_render_payload(self, session_obj, ranked):  # noqa: ANN001,ARG002
+        return {"session_id": session_obj.id}
+
+    async def _fake_enrich_payload_with_poster_overlays(db_obj, payload_json):  # noqa: ANN001
+        del db_obj
+        return payload_json
+
+    async def _fake_update_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def _fake_send_payload_file(self, session_obj, payload_json, *, caption=None):  # noqa: ANN001,ARG002
+        return None
+
+    async def _fake_render_and_notify(self, session_obj, ranked, **kwargs):  # noqa: ANN001,ARG002
+        return None
+
+    monkeypatch.setattr(scenario_module, "fill_missing_about", _fake_fill_missing_about)
+    monkeypatch.setattr(VideoAnnounceScenario, "_build_render_payload", _fake_build_render_payload)
+    monkeypatch.setattr(
+        scenario_module,
+        "enrich_payload_with_poster_overlays",
+        _fake_enrich_payload_with_poster_overlays,
+    )
+    monkeypatch.setattr(scenario_module, "update_status_message", _fake_update_status_message)
+    monkeypatch.setattr(VideoAnnounceScenario, "_send_payload_file", _fake_send_payload_file)
+    monkeypatch.setattr(VideoAnnounceScenario, "_render_and_notify", _fake_render_and_notify)
+    monkeypatch.setattr(scenario_module, "payload_as_json", lambda payload, tz: '{"ok": true}')
+
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db, bot, chat_id=555, user_id=1)
+
+    result = await scenario.start_render(session_id)
+    await asyncio.sleep(0)
+
+    assert result == "Рендеринг запущен"
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+        assert isinstance(refreshed.selection_params, dict)
+        assert refreshed.selection_params["notify_chat_id"] == 555
 
 
 @pytest.mark.asyncio

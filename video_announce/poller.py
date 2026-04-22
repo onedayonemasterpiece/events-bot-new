@@ -19,6 +19,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile
 from sqlalchemy import select
 
+from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from main import format_day_pretty
 from models import (
@@ -59,16 +60,33 @@ def _read_positive_int(env_key: str, default: int) -> int:
 
 VIDEO_MAX_MB = _read_positive_int("VIDEO_MAX_MB", 50)
 VIDEO_KAGGLE_TIMEOUT_MINUTES = _read_positive_int("VIDEO_KAGGLE_TIMEOUT_MINUTES", 225)
+VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES",
+    10,
+)
 
 logger.info(
-    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s",
+    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s",
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
+    VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES,
 )
 
 
 def _is_local_kernel_ref(kernel_ref: str | None) -> bool:
     return str(kernel_ref or "").strip().startswith(LOCAL_KERNEL_PREFIX)
+
+
+def _local_handoff_grace_deadline(session_obj: VideoAnnounceSession) -> datetime | None:
+    reference = (
+        session_obj.started_at
+        or session_obj.created_at
+    )
+    if not isinstance(reference, datetime):
+        return None
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    return reference + timedelta(minutes=VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES)
 
 
 def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
@@ -248,6 +266,20 @@ def _resolve_notify_chat_id(session_obj: VideoAnnounceSession) -> int | None:
         return int(raw) if raw is not None else None
     except (TypeError, ValueError):
         return None
+
+
+async def _resolve_recovery_notify_chat_id(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+    *,
+    chat_id: int | None = None,
+) -> int | None:
+    if chat_id is not None:
+        return int(chat_id)
+    explicit = _resolve_notify_chat_id(session_obj)
+    if explicit is not None:
+        return explicit
+    return await resolve_superadmin_chat_id(db)
 
 
 def _fallback_target_date_label(session_obj: VideoAnnounceSession) -> str | None:
@@ -474,6 +506,8 @@ async def _update_status(
         obj.status = status
         if status in {VideoAnnounceSessionStatus.DONE, VideoAnnounceSessionStatus.FAILED}:
             obj.finished_at = datetime.now(timezone.utc)
+        if status == VideoAnnounceSessionStatus.PUBLISHED_TEST and obj.published_at is None:
+            obj.published_at = datetime.now(timezone.utc)
         if video_url:
             obj.video_url = video_url
         obj.error = error
@@ -1082,23 +1116,30 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
     if not sessions:
         return 0
     recovered = 0
-    admin_chat_id = None
-    if chat_id is None:
-        raw_admin = os.getenv("ADMIN_CHAT_ID")
-        if raw_admin:
-            try:
-                admin_chat_id = int(raw_admin)
-            except (TypeError, ValueError):
-                admin_chat_id = None
     client = KaggleClient()
     for sess in sessions:
         kernel_ref = str(sess.kaggle_kernel_ref or "").strip()
         if not kernel_ref:
             continue
-        notify_chat_id = _resolve_notify_chat_id(sess) or chat_id or admin_chat_id or sess.test_chat_id or sess.main_chat_id
+        notify_chat_id = await _resolve_recovery_notify_chat_id(
+            db,
+            sess,
+            chat_id=chat_id,
+        )
         if not notify_chat_id:
             continue
         if _is_local_kernel_ref(kernel_ref):
+            grace_deadline = _local_handoff_grace_deadline(sess)
+            now_utc = datetime.now(timezone.utc)
+            if grace_deadline is not None and now_utc < grace_deadline:
+                logger.warning(
+                    "video_announce: skipping immediate fail for fresh local handoff session_id=%s kernel_ref=%s "
+                    "grace_until=%s",
+                    sess.id,
+                    kernel_ref,
+                    grace_deadline.isoformat(),
+                )
+                continue
             logger.error(
                 "video_announce: refusing to resume session_id=%s with local kernel ref=%s",
                 sess.id,

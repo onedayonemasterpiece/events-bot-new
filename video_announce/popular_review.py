@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from handlers.popular_posts_cmd import _load_top_items, _resolve_telegraph_map
 from models import Event, VideoAnnounceItem, VideoAnnounceSession, VideoAnnounceSessionStatus
@@ -26,8 +26,7 @@ POPULAR_REVIEW_WINDOW_CHAIN: tuple[tuple[int, int, str], ...] = (
     (3, 2, "3d"),
     (7, 6, "7d"),
 )
-SUCCESSFUL_VIDEO_SESSION_STATUSES = {
-    VideoAnnounceSessionStatus.DONE,
+RECENT_PUBLISHED_VIDEO_SESSION_STATUSES = {
     VideoAnnounceSessionStatus.PUBLISHED_TEST,
     VideoAnnounceSessionStatus.PUBLISHED_MAIN,
 }
@@ -255,27 +254,17 @@ async def _load_recent_popular_review_hits(
                 VideoAnnounceItem.session_id == VideoAnnounceSession.id,
             )
             .where(VideoAnnounceSession.profile_key == POPULAR_REVIEW_PROFILE)
-            .where(VideoAnnounceSession.status.in_(SUCCESSFUL_VIDEO_SESSION_STATUSES))
+            .where(VideoAnnounceSession.status.in_(RECENT_PUBLISHED_VIDEO_SESSION_STATUSES))
             .where(VideoAnnounceItem.event_id.is_not(None))
             .where(
-                VideoAnnounceSession.published_at.is_not(None),
-                VideoAnnounceSession.published_at >= threshold,
+                func.coalesce(
+                    VideoAnnounceSession.published_at,
+                    VideoAnnounceSession.finished_at,
+                    VideoAnnounceSession.started_at,
+                    VideoAnnounceSession.created_at,
+                )
+                >= threshold,
             )
-        )
-        published = {int(event_id) for event_id in result.scalars().all() if event_id is not None}
-        if published:
-            return published
-
-        result = await session.execute(
-            select(VideoAnnounceItem.event_id)
-            .join(
-                VideoAnnounceSession,
-                VideoAnnounceItem.session_id == VideoAnnounceSession.id,
-            )
-            .where(VideoAnnounceSession.profile_key == POPULAR_REVIEW_PROFILE)
-            .where(VideoAnnounceSession.status.in_(SUCCESSFUL_VIDEO_SESSION_STATUSES))
-            .where(VideoAnnounceItem.event_id.is_not(None))
-            .where(VideoAnnounceSession.created_at >= threshold)
         )
         return {int(event_id) for event_id in result.scalars().all() if event_id is not None}
 
@@ -360,11 +349,18 @@ async def build_popular_review_selection(
     )
 
     fresh: list[PopularReviewPick] = []
-    repeat_fill: list[PopularReviewPick] = []
     for hit in ordered_hits:
         event_id = int(hit["event_id"])
         event = events_map.get(event_id)
         if event is None:
+            continue
+        if event_id in recent_hits:
+            logger.info(
+                "video_announce.popular_review: skipped event due to cooldown "
+                "event_id=%s anti_repeat_days=%s",
+                event_id,
+                anti_repeat_days,
+            )
             continue
         if not _starts_today_or_in_future(event, today=today):
             continue
@@ -382,16 +378,13 @@ async def build_popular_review_selection(
             source_window=str(hit["source_window"]),
             source_post_url=str(hit["source_post_url"]),
             source_label=str(hit["source_label"]),
-            anti_repeat_status="repeat_fill" if event_id in recent_hits else "fresh",
+            anti_repeat_status="fresh",
             description=preferred_scene_description(event),
         )
-        if event_id in recent_hits:
-            repeat_fill.append(pick)
-        else:
-            fresh.append(pick)
+        fresh.append(pick)
 
     selected: list[PopularReviewPick] = []
-    for candidate in [*fresh, *repeat_fill]:
+    for candidate in fresh:
         if len(selected) >= max_events:
             break
         selected.append(candidate)
