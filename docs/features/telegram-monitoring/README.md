@@ -76,6 +76,7 @@ Live validation (`2026-04-22`):
 - Server import/recovery по этому output зафиксирован в `ops_run`: `id=797`, `trigger=recovery_import`, `status=success`, `errors_count=0`; повторный import-only `id=798` тоже завершился `success`, `errors_count=0`.
 - Scheduled full run `48fa98294333486d94dd0e14785d774f` после key-pool hardening прошёл через Kaggle на 45 источниках: `messages_scanned=177`, `messages_with_events=69`, `events_extracted=84`; server recovery import `ops_run id=803` завершился `success`, `errors_count=0`, `events_imported=14`.
 - Full-run log подтвердил `GOOGLE_API_KEY3`, отсутствие `GOOGLE_API_KEY2`, отсутствие `gemma-3`, `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`, но также показал, что старый `180s` provider timeout слишком длинный для scheduled window; default снижен до `45s`.
+- Post-timeout smoke `tg_g4_45s_smoke_20260423a` завершился без recovery через primary `ops_run id=807` (`status=success`, `sources_scanned=3`, `messages_processed=3`, `messages_with_events=2`, `errors_count=0`, `duration_sec=279.22`). Log evidence: `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2=0`, `gemma-3=0`, `Traceback=0`, `AuthKeyDuplicatedError=0`; два `45s` timeout на source metadata fail-open и не сорвали run.
 
 ## Multi-event посты (несколько событий в одном сообщении)
 

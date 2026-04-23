@@ -103,10 +103,11 @@ Live evidence (`2026-04-22`):
 - Kaggle log confirms `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`; no Gemma 3 model fallback was observed;
 - server recovery import `ops_run id=797` finished `success`, `errors_count=0`; repeat import-only `id=798` also finished `success`, `errors_count=0`.
 - scheduled full run `48fa98294333486d94dd0e14785d774f` produced full Kaggle output on 45 sources (`messages_scanned=177`, `messages_with_events=69`, `events_extracted=84`) and recovery import `ops_run id=803` finished `success`, `errors_count=0`, `events_imported=14`; log evidence shows `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2=0`, `gemma-3=0`, and `models/gemma-4-31b-it` for requested/provider/invoked model.
+- post-`45s` smoke `tg_g4_45s_smoke_20260423a` finished through primary `ops_run id=807` as `success` without recovery (`sources_scanned=3`, `messages_processed=3`, `messages_with_events=2`, `errors_count=0`, `duration_sec=279.22`) and confirmed fast fail-open `45s` source-metadata timeouts with `GOOGLE_API_KEY2=0`, `gemma-3=0`, `Traceback=0`.
 
 Оставшийся caveat:
 
-- full scheduled run succeeded through recovery, but the original scheduled `ops_run` still marked `crashed` because the previous `180s` provider timeout let stalled calls consume the poll window. Closure gate is one post-`45s` scheduled/manual run where the primary `ops_run` itself reaches `success` without relying on recovery.
+- full scheduled run succeeded through recovery, and the post-`45s` manual smoke proves the primary `ops_run` can finish `success` without recovery. Remaining production watch item: the next natural scheduled all-source run should be observed once with the `45s` default to confirm the full schedule also stays inside the primary poll window.
 
 ## Что ещё не сделано
 
