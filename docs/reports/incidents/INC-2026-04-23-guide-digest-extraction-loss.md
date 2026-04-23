@@ -1,6 +1,6 @@
 # INC-2026-04-23 Guide Digest Extraction Loss
 
-Status: active
+Status: closed
 Severity: sev1
 Service: guide excursions monitoring / scheduled guide digest
 Opened: 2026-04-23
@@ -44,6 +44,7 @@ The April 22 guide digest published only one excursion after a three-day publica
 - 2026-04-23 12:04 UTC: deployed `11645b57`, adding bounded full-post timeout for multi-announce extraction, OCR post/media context logs, and the disqualifying-reason eligibility guardrail.
 - 2026-04-23 12:20 UTC: post-compensation audit found that `@vkaliningrade` had extracted `9` occurrence payloads, but they mapped to already published occurrences (`#35`, `#120`, `#129`, `#61`) rather than new unpublished cards. The same audit found residual future `eligible + unpublished` rows from `@gid_zelenogradsk/2796`: `#140` was a duplicate of the already published `Огонь Брюстерорта`, while `#141` looked like a still-unpublished future Зеленоградск walk.
 - 2026-04-23 12:30 UTC: follow-up fix added digest-time comparison against already published future occurrences through the existing guide dedup stage, ISO-only date filtering for candidate queries, shared post context for block-level Gemma rescue, and timeouts around public identity, dedup, and digest-writer polish.
+- 2026-04-23 13:01 UTC: final compensating digest issue `#43` was published with occurrence `#141`; occurrence `#140` was remediated as `duplicate_published_occurrence_114`.
 
 ## Root Cause
 
@@ -145,6 +146,12 @@ The April 22 guide digest published only one excursion after a three-day publica
 - fixed production catch-up: `run_id=326250d4aaf9`, full `days_back=8`, `limit=80`, `sources=12`, `posts=72`, `prefilter_true=46`, `llm_ok=46`, `llm_deferred=0`, `llm_error=0`, `occurrences_total=21`, `partial=false`; `@katimartihobby` extracted `6` occurrences.
 - compensation publication completed: guide digest issue `#42`, `status=published`, `items_json=[142,143,144,145,147]`, `published_at=2026-04-23 12:03:02`, `@wheretogo39` message ids `[48,49]`, `@youwillsee39` message ids `[66,67]`.
 - eligibility remediation: `guide_occurrence #146` from `@katimartihobby/1940` kept unpublished with `digest_eligible=0`, `digest_eligibility_reason=tentative_or_free_date`; published occurrences `#142`, `#143`, `#144`, `#145`, and `#147` have `published_new_digest_issue_id=42`.
+- follow-up deployed SHA: `9e0c9732 fix(guide): bound digest writer polish`, reachable from `origin/main`; includes `8a4a29d2 fix(guide): suppress published digest duplicates` and `acf67bcb fix(guide): bound digest dedup budget`.
+- follow-up deploy path: manual Fly deploy from clean hotfix worktree; image `events-bot-new-wngqia:deployment-01KPX67P21ADXMVGJ1M4CX40AS`, machine `48e42d5b714228`, version `995`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+- follow-up regression checks: `python -m pytest tests/test_guide_gemma4_prompt_contract.py tests/test_guide_kaggle_schema_contract.py tests/test_scheduling_guide_digest.py tests/test_guide_local_llm_timeout_contract.py tests/test_guide_digest_candidate_filter.py -q` passed (`17 passed`); `python -m py_compile kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py guide_excursions/service.py guide_excursions/public_identity.py guide_excursions/dedup.py guide_excursions/digest_writer.py`; `git diff --check`.
+- final compensation publication completed: guide digest issue `#43`, `status=published`, `items_json=[141]`, `published_at=2026-04-23 13:01:05`, `@wheretogo39` message id `[50]`, `@youwillsee39` message id `[68]`.
+- final data remediation: `guide_occurrence #140` set to `status=duplicate`, `digest_eligible=0`, `digest_eligibility_reason=duplicate_published_occurrence_114`; `guide_occurrence #141` has `published_new_digest_issue_id=43`.
+- final candidate audit: query for future ISO-date `digest_eligible=1 AND published_new_digest_issue_id IS NULL` in the 45-day digest window returned no rows.
 
 ## Prevention
 
