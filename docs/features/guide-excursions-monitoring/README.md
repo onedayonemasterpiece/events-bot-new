@@ -288,6 +288,7 @@ Guide digest не должен произвольно смешивать `про
 - после публикации карточка считается уже покрытой в family `new_occurrences` и на следующий день туда повторно не попадёт;
   При этом published-mark можно ставить только тем occurrences, которые реально вошли в опубликованный digest, плюс их dedup-cluster siblings, схлопнутым в ту же canonical card;
 - перед финальным выбором `new_occurrences` свежие candidates сравниваются тем же LLM-first dedup слоем с уже опубликованными future occurrences из окна digest. Если новый пост/агрегаторный репост оказывается той же экскурсией, что уже была в выпуске, такая строка не занимает место в новом digest и не вытесняет действительно новую карточку;
+- dedup-проход имеет общий time budget `GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SEC`: LLM-first сравнение остаётся включённым, но серия pair-judge запросов не должна блокировать весь digest/catch-up;
 - candidate date должен быть ISO-днём `YYYY-MM-DD`; текстовые recurring-значения вроде `every Thursday` не участвуют в daily digest candidate query, пока не материализованы в конкретную дату;
 - occurrences, которые были выкинуты editorial fallback'ом и не дошли до финального digest text/caption, не считаются опубликованными и должны оставаться кандидатами для следующего `full` run;
 - `last_call` — отдельная family: туда попадают только occurrences с `is_last_call=1`, у которых ещё нет `published_last_call_digest_issue_id`;

@@ -14,6 +14,9 @@ def test_guide_digest_preview_gemma_stages_are_timeout_bounded() -> None:
         assert env_name in source
         assert "asyncio.wait_for(" in source
         assert "generate_content_async(" in source
+    dedup_source = Path("guide_excursions/dedup.py").read_text(encoding="utf-8")
+    assert "GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SEC" in dedup_source
+    assert "total budget exhausted" in dedup_source
 
 
 def test_guide_public_identity_resolution_is_timeout_bounded() -> None:

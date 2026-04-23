@@ -43,7 +43,7 @@ The April 22 guide digest published only one excursion after a three-day publica
 - 2026-04-23 12:03 UTC: compensating guide digest issue `#42` was published with occurrence ids `[142, 143, 144, 145, 147]`; occurrence `#146` remained unpublished because Gemma marked it `tentative_or_free_date`.
 - 2026-04-23 12:04 UTC: deployed `11645b57`, adding bounded full-post timeout for multi-announce extraction, OCR post/media context logs, and the disqualifying-reason eligibility guardrail.
 - 2026-04-23 12:20 UTC: post-compensation audit found that `@vkaliningrade` had extracted `9` occurrence payloads, but they mapped to already published occurrences (`#35`, `#120`, `#129`, `#61`) rather than new unpublished cards. The same audit found residual future `eligible + unpublished` rows from `@gid_zelenogradsk/2796`: `#140` was a duplicate of the already published `Огонь Брюстерорта`, while `#141` looked like a still-unpublished future Зеленоградск walk.
-- 2026-04-23 12:30 UTC: follow-up fix added digest-time comparison against already published future occurrences through the existing guide dedup stage, ISO-only date filtering for candidate queries, shared post context for block-level Gemma rescue, and a timeout around public identity resolution.
+- 2026-04-23 12:30 UTC: follow-up fix added digest-time comparison against already published future occurrences through the existing guide dedup stage, ISO-only date filtering for candidate queries, shared post context for block-level Gemma rescue, and timeouts around public identity and dedup resolution.
 
 ## Root Cause
 
@@ -117,7 +117,7 @@ The April 22 guide digest published only one excursion after a three-day publica
 - Added digest-time comparison between fresh candidates and already published future occurrences through the existing LLM-first dedup stage, preventing reposted duplicates from crowding out real new cards.
 - Added ISO-date filtering to digest candidate queries so recurring/free-text dates cannot enter daily `new_occurrences` until materialized as concrete dates.
 - Added shared post context to block-level Gemma rescue prompts so common booking/contact/price facts can be applied by the LLM to each dated block without deterministic semantic extraction.
-- Added a timeout around public identity resolution so a Telethon username lookup cannot stall digest preview/publication.
+- Added timeouts around public identity and dedup resolution so Telethon username lookup or a series of pair-judge LLM calls cannot stall digest preview/publication.
 
 ## Follow-up Actions
 

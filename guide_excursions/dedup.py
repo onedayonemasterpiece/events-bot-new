@@ -44,6 +44,12 @@ GUIDE_EXCURSIONS_DEDUP_LLM_TIMEOUT_SECONDS = env_int_clamped(
     minimum=30,
     maximum=600,
 )
+GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SECONDS = env_int_clamped(
+    "GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SEC",
+    45,
+    minimum=10,
+    maximum=600,
+)
 
 _PAIR_DECISION_CACHE: dict[str, dict[str, Any]] = {}
 _STOPWORDS = {
@@ -653,12 +659,36 @@ async def deduplicate_occurrence_rows(
     pair_decisions: list[dict[str, Any]] = []
     uf = _UnionFind(list(row_by_id.keys()))
     canonical_votes: dict[int, float] = {}
+    started_at = asyncio.get_running_loop().time()
     for pair in pairs:
+        elapsed = asyncio.get_running_loop().time() - started_at
+        remaining = float(GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SECONDS) - elapsed
+        if remaining <= 0:
+            logger.warning(
+                "guide_dedup: total budget exhausted family=%s pairs_done=%s pairs_total=%s",
+                family,
+                len(pair_decisions),
+                len(pairs),
+            )
+            break
         left = row_by_id.get(pair.left_id)
         right = row_by_id.get(pair.right_id)
         if not left or not right:
             continue
-        decision = await _decide_pair(left, right, pair.features)
+        try:
+            decision = await asyncio.wait_for(
+                _decide_pair(left, right, pair.features),
+                timeout=max(1.0, min(float(GUIDE_EXCURSIONS_DEDUP_LLM_TIMEOUT_SECONDS), remaining)),
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "guide_dedup: pair budget exhausted family=%s left=%s right=%s pairs_done=%s",
+                family,
+                pair.left_id,
+                pair.right_id,
+                len(pair_decisions),
+            )
+            break
         entry = {
             "left_id": pair.left_id,
             "right_id": pair.right_id,
