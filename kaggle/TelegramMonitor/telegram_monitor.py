@@ -1157,8 +1157,11 @@ def _get_gemma_client() -> GoogleAIClient:
     return _GEMMA_CLIENT
 
 
-def _string_schema() -> dict:
-    return {'type': 'string'}
+def _string_schema(description: str | None = None) -> dict:
+    schema: dict = {'type': 'string'}
+    if description:
+        schema['description'] = description
+    return schema
 
 
 EVENT_ARRAY_SCHEMA = {
@@ -1166,19 +1169,40 @@ EVENT_ARRAY_SCHEMA = {
     'items': {
         'type': 'object',
         'properties': {
-            'title': _string_schema(),
-            'date': _string_schema(),
-            'time': _string_schema(),
-            'end_date': _string_schema(),
-            'location_name': _string_schema(),
-            'location_address': _string_schema(),
-            'city': _string_schema(),
-            'ticket_link': _string_schema(),
+            'title': _string_schema(
+                'Human-readable event name. Never include inline comments (//, #), '
+                "meta-commentary, reasoning, or markdown markers (**, __, ```)."
+            ),
+            'date': _string_schema('YYYY-MM-DD or empty string; never a placeholder literal.'),
+            'time': _string_schema('HH:MM (24h) or empty string; never a date.'),
+            'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
+            'location_name': _string_schema(
+                'Venue name where the event takes place; empty string if unknown. '
+                'Never the literal string "unknown".'
+            ),
+            'location_address': _string_schema(
+                'Street address of the venue; empty string if unknown. '
+                'Never the literal string "unknown".'
+            ),
+            'city': _string_schema(
+                'City where the event is held; empty string if unknown. '
+                'Never copy a city that appears only in parenthetical origin/collection notes '
+                '(e.g. "(Санкт-Петербург)" inside a description of an exhibit collection). '
+                'Never the literal string "unknown".'
+            ),
+            'ticket_link': _string_schema('Registration or ticket URL; empty string if none.'),
             'ticket_price_min': {'type': 'number'},
             'ticket_price_max': {'type': 'number'},
             'ticket_status': _string_schema(),
-            'raw_excerpt': _string_schema(),
-            'event_type': _string_schema(),
+            'raw_excerpt': _string_schema(
+                'Short (1-3 sentences) excerpt from the message without adding new facts. '
+                'Never include inline comments or markdown markers.'
+            ),
+            'event_type': _string_schema(
+                'Single lowercase Russian noun (концерт, выставка, лекция, спектакль, встреча, '
+                'ярмарка, фестиваль, мастер-класс, кинопоказ, стендап, экскурсия, ...); '
+                'never English tokens like "exhibition" or "meetup"; empty string if unsure.'
+            ),
             'emoji': _string_schema(),
             'is_free': {'type': 'boolean'},
             'pushkin_card': {'type': 'boolean'},
@@ -1504,7 +1528,7 @@ async def _suggest_source_metadata(payload: dict) -> dict | None:
     if data is None:
         fix_prompt = (
             "Fix and return valid JSON only. "
-            "Do not include any extra text.\n"
+            "Do not include any extra text, inline comments (//, #), meta-commentary, or markdown markers (**, __).\n"
             "Input:\n" + text
         )
         try:
@@ -1930,6 +1954,77 @@ async def _extract_bridge_events_rescue(
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
 
+_EVENT_STRING_FIELDS: tuple[str, ...] = (
+    'title',
+    'date',
+    'time',
+    'end_date',
+    'location_name',
+    'location_address',
+    'city',
+    'ticket_link',
+    'ticket_status',
+    'raw_excerpt',
+    'event_type',
+    'emoji',
+    'search_digest',
+    'festival',
+)
+_UNKNOWN_LITERALS: frozenset[str] = frozenset({'unknown', 'n/a', 'none', 'null', '-'})
+_LEAKED_COMMENT_TAIL_RE = re.compile(
+    r"(?:\s+[(\[]?\s*(?://|#)\s.*$|[(\[]\s*(?://|#)\s.*$)",
+    re.DOTALL,
+)
+_MARKDOWN_STRIP_RE = re.compile(r"(?:\*\*|__|~~|```|`)+")
+
+
+def _clean_event_string_value(value) -> str:
+    """Sanitize a free-form LLM string value.
+
+    Drops inline code-style comments (`// ...`, `# ...`) that Gemma 4 occasionally leaks
+    mid-value, strips markdown emphasis markers, and collapses the literals we never want
+    to trust downstream ("unknown", "n/a", ...).
+    """
+    if value is None:
+        return ''
+    if not isinstance(value, str):
+        return ''
+    cleaned = _LEAKED_COMMENT_TAIL_RE.sub('', value)
+    cleaned = _MARKDOWN_STRIP_RE.sub('', cleaned)
+    cleaned = cleaned.strip().strip('*_~`').strip()
+    if cleaned.casefold() in _UNKNOWN_LITERALS:
+        return ''
+    return cleaned
+
+
+def _sanitize_extracted_events(events) -> list[dict]:
+    """Final safety-net over LLM-extracted events.
+
+    This does not replace the LLM (extract_events continues to be LLM-first). It only
+    cleans up well-known Gemma 4 failure modes that slip through the prompt contract:
+      - inline `// ...` / `# ...` commentary leaked into JSON string values;
+      - stray markdown markers (``**``, ``__``, ``` ``` ```) wrapping titles/excerpts;
+      - literal placeholders like ``"unknown"`` / ``"n/a"`` where the prompt asks for "";
+      - fully empty ghost rows (no title AND no date), which Gemma 4 emits once per
+        venue mention in multi-event posts.
+    """
+    cleaned: list[dict] = []
+    if not isinstance(events, list):
+        return cleaned
+    for evt in events:
+        if not isinstance(evt, dict):
+            continue
+        for field in _EVENT_STRING_FIELDS:
+            if field in evt:
+                evt[field] = _clean_event_string_value(evt.get(field))
+        title = str(evt.get('title') or '').strip()
+        date_val = str(evt.get('date') or '').strip()
+        if not title and not date_val:
+            continue
+        cleaned.append(evt)
+    return cleaned
+
+
 async def extract_events(
     text: str,
     ocr_text: str | None = None,
@@ -2126,6 +2221,11 @@ async def extract_events(
         'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
         'Never return whitespace-only strings. '
+        'Never output the literal string "unknown" (or "n/a", "none") in any text field; use empty string instead. '
+        'Never include inline comments ("//", "#", "TODO"), meta-commentary, reasoning, or markdown markers '
+        '(**, __, ```, ~~) inside any field value; JSON values must be plain text only. '
+        'Do not emit placeholder events that have empty title and empty date; if you cannot anchor an event to '
+        'at least a real title or a real date from the text/OCR, do not include it at all. '
         'Use evidence from both message text and OCR. If OCR contains venue, hall/floor, city, exact date, exact time, '
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
@@ -2139,6 +2239,10 @@ async def extract_events(
         'even when the purpose is mobility planning rather than entertainment. '
         'For @klgdcity bridge-lifting notices, use title like "Развод мостов" plus grounded bridge names if present; '
         'use relative words such as "сегодня" only against the message date, and split multiple nights into multiple events. '
+        'Pure retrospective reports of completed events ("прошло мероприятие", "ленту развернули", "приняли участие") '
+        'are NOT new events to attend unless the same post also explicitly invites attendance at a future dated event. '
+        'Fundraising-only posts ("сбор средств", "помогите собрать"), standalone video/blog/content pieces without a real invite, '
+        'and book reviews/sales are NOT events to attend. Return [] for such posts. '
         'Date is REQUIRED: never invent a date from the message date. '
         'For exhibitions/fairs: allow missing time, but require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
         'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
@@ -2147,6 +2251,12 @@ async def extract_events(
         'If OCR contains an explicit date or time, prefer it over the message date. '
         'If a date is missing a year, infer it from the message date and choose '
         'the nearest upcoming date relative to that message date. '
+        'city must be where the event is held. Ignore cities that appear only in parenthetical origin/collection notes '
+        '(e.g. "(Санкт-Петербург)" describing where a museum collection comes from does not make the event happen there). '
+        'event_type must be a single lowercase Russian noun: концерт, выставка, лекция, спектакль, встреча, '
+        'ярмарка, фестиваль, мастер-класс, кинопоказ, стендап, экскурсия, акция, экспозиция. '
+        'Never emit English event_type tokens like "exhibition", "meetup", "party", "stand-up"; '
+        'use "" if unsure rather than guessing. '
         + date_context + source_context + '\n'
         'Message text:\n' + content
     )
@@ -2159,7 +2269,7 @@ async def extract_events(
     if data is None:
         fix_prompt = (
             'Fix and return valid JSON only. '
-            'Do not include any extra text. '
+            'Do not include any extra text, inline comments (//, #), meta-commentary, or markdown markers (**, __). '
             'Input:\n' + text
         )
         try:
@@ -2181,11 +2291,15 @@ async def extract_events(
         msg_date_iso = msg_date.isoformat() if msg_date else None
     except Exception:
         msg_date_iso = None
-    open_call_re = re.compile(r"(?iu)\\b(open\\s*call|опен\\s*колл|опенколл|конкурсн\\w*\\s+отбор|при[её]м\\s+заявок|подать\\s+заявк\\w*|заявк\\w*\\s+принима\\w*)\\b")
+    open_call_re = re.compile(
+        r"\b(open\s*call|опен\s*колл|опенколл|конкурсн\w*\s+отбор|при[её]м\s+заявок|подать\s+заявк\w*|заявк\w*\s+принима\w*)\b",
+        re.IGNORECASE | re.UNICODE,
+    )
     anchor_re = re.compile(
-        r"(?iu)\\b(сегодня|завтра|послезавтра)\\b"
-        r"|\\b\\d{1,2}[./]\\d{1,2}(?:[./](?:19|20)\\d{2})?\\b"
-        r"|\\b\\d{1,2}\\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\b"
+        r"\b(сегодня|завтра|послезавтра)\b"
+        r"|\b\d{1,2}[./]\d{1,2}(?:[./](?:19|20)\d{2})?\b"
+        r"|\b\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
+        re.IGNORECASE | re.UNICODE,
     )
     has_anchor = bool(anchor_re.search(content) or (ocr_text and anchor_re.search(ocr_text)))
     if open_call_re.search(content) or (ocr_text and open_call_re.search(ocr_text)):
@@ -2226,10 +2340,15 @@ async def extract_events(
             'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
-            'Set event_type to "выставка" (or "ярмарка" where appropriate). '
+            'Use empty string for unknown text fields. Never output the literal "unknown" in any field. '
+            'Never include inline comments ("//", "#"), meta-commentary, reasoning, or markdown markers '
+            '(**, __, ```) inside any field value. '
+            'Do not emit placeholder events with empty title and empty date. '
+            'Set event_type to "выставка" (or "ярмарка" where appropriate); never English tokens like "exhibition". '
             'Open calls / конкурсный отбор / приём заявок are NOT events to attend. Return [] for such posts. '
             'Require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
             'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
+            'city must be where the exhibition is held; ignore parenthetical origin/collection notes. '
             'Do not include hashtags in any text fields. '
             + date_context + '\n'
             'Message text:\n' + content
@@ -2243,6 +2362,7 @@ async def extract_events(
                 out = data_exh
         except Exception as exc:
             logger.warning('extract_events exhibition fallback failed: %s', exc)
+    out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
 
@@ -2269,7 +2389,7 @@ async def ocr_image(image_bytes: bytes, message_date: str | None = None):
     if data is None:
         fix_prompt = (
             'Fix and return valid JSON only. '
-            'Do not include any extra text. '
+            'Do not include any extra text, inline comments (//, #), meta-commentary, or markdown markers (**, __). '
             'Input:\n' + text
         )
         try:
