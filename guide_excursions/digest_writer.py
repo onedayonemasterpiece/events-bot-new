@@ -51,6 +51,12 @@ GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS = env_int_clamped(
     minimum=30,
     maximum=600,
 )
+GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS = env_int_clamped(
+    "GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SEC",
+    45,
+    minimum=10,
+    maximum=600,
+)
 _BANNED_HYPE_STEMS = [
     "уникаль",
     "невероят",
@@ -686,7 +692,15 @@ async def apply_digest_batch_copy(
                 "post_excerpt": collapse_ws(str(item.get("dedup_source_text") or ""))[:520],
             }
         )
-    llm_out = await _ask_digest_batch_llm(payload_rows) if payload_rows else None
+    llm_out = None
+    if payload_rows:
+        try:
+            llm_out = await asyncio.wait_for(
+                _ask_digest_batch_llm(payload_rows),
+                timeout=float(GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS),
+            )
+        except Exception as exc:
+            logger.warning("guide_digest_writer: total budget failed open: %s", exc)
     out: list[dict[str, Any]] = []
     for item in prepared:
         occurrence_id = int(item.get("id") or 0)

@@ -17,6 +17,9 @@ def test_guide_digest_preview_gemma_stages_are_timeout_bounded() -> None:
     dedup_source = Path("guide_excursions/dedup.py").read_text(encoding="utf-8")
     assert "GUIDE_EXCURSIONS_DEDUP_TOTAL_TIMEOUT_SEC" in dedup_source
     assert "total budget exhausted" in dedup_source
+    writer_source = Path("guide_excursions/digest_writer.py").read_text(encoding="utf-8")
+    assert "GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SEC" in writer_source
+    assert "total budget failed open" in writer_source
 
 
 def test_guide_public_identity_resolution_is_timeout_bounded() -> None:
