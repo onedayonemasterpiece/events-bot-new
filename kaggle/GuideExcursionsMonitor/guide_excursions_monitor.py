@@ -784,7 +784,9 @@ async def _ocr_post_image(
     *,
     consumer: str,
     model: str,
+    source_username: str,
     post: ScannedPost,
+    image_index: int,
 ) -> dict[str, Any] | None:
     mime_type = collapse_ws(image_payload.get("mime_type")) or "image/jpeg"
     image_bytes = image_payload.get("data")
@@ -834,6 +836,11 @@ async def _ocr_post_image(
         consumer=consumer,
         max_output_tokens=420,
         response_schema=schema,
+        log_context=(
+            f"source=@{source_username} message_id={post.message_id} "
+            f"media_message_id={int(image_payload.get('message_id') or 0)} "
+            f"image_index={image_index} sha={collapse_ws(image_payload.get('sha256'))[:12] or '-'}"
+        ),
     )
     if not isinstance(data, dict):
         return None
@@ -867,20 +874,47 @@ async def collect_post_ocr_chunks(
                 image_payload,
                 consumer="guide_scout_ocr",
                 model=model,
+                source_username=username,
                 post=post,
+                image_index=idx,
             )
         except Exception as exc:
             print(
                 (
                     "[guide:ocr:error] "
-                    f"message_id={post.message_id} image_message_id={int(image_payload.get('message_id') or 0)} "
+                    f"source=@{username} message_id={post.message_id} "
+                    f"media_message_id={int(image_payload.get('message_id') or 0)} "
+                    f"image_index={idx} sha={collapse_ws(image_payload.get('sha256'))[:12] or '-'} "
                     f"error={type(exc).__name__}: {exc}"
                 ),
                 flush=True,
             )
             continue
         if not chunk:
+            print(
+                (
+                    "[guide:ocr:empty] "
+                    f"source=@{username} message_id={post.message_id} "
+                    f"media_message_id={int(image_payload.get('message_id') or 0)} "
+                    f"image_index={idx} sha={collapse_ws(image_payload.get('sha256'))[:12] or '-'}"
+                ),
+                flush=True,
+            )
             continue
+        print(
+            (
+                "[guide:ocr:ok] "
+                f"source=@{username} message_id={post.message_id} "
+                f"media_message_id={int(image_payload.get('message_id') or 0)} "
+                f"image_index={idx} sha={collapse_ws(image_payload.get('sha256'))[:12] or '-'} "
+                f"text_chars={len(collapse_ws(chunk.get('text')))} "
+                f"title={'yes' if collapse_ws(chunk.get('title')) else 'no'} "
+                f"signals=excursion:{int(bool(chunk.get('excursion_signal')))},"
+                f"schedule:{int(bool(chunk.get('schedule_signal')))},"
+                f"booking:{int(bool(chunk.get('booking_signal')))}"
+            ),
+            flush=True,
+        )
         chunks.append(
             {
                 "id": f"O{idx}",
@@ -1291,6 +1325,7 @@ async def ask_gemma(
     timeout_seconds: int | None = None,
     timeout_retries: int | None = None,
     provider_5xx_retries: int | None = None,
+    log_context: str | None = None,
 ) -> Any | None:
     if not (os.getenv(GOOGLE_KEY_ENV) or os.getenv(GOOGLE_FALLBACK_KEY_ENV) or "").strip():
         raise RuntimeError(f"{GOOGLE_KEY_ENV} is missing in Kaggle runtime")
@@ -1302,6 +1337,7 @@ async def ask_gemma(
     )
     timeout_retries_used = 0
     provider_5xx_retries_used = 0
+    context_suffix = f" {collapse_ws(log_context)}" if collapse_ws(log_context) else ""
     for attempt in range(4):
         try:
             raw, _usage = await asyncio.wait_for(
@@ -1338,6 +1374,7 @@ async def ask_gemma(
                         f"consumer={consumer} model={model} reason=timeout "
                         f"attempt={attempt + 1} retry={timeout_retries_used}/{call_timeout_retries} "
                         f"delay={delay:.1f}s"
+                        f"{context_suffix}"
                     ),
                     flush=True,
                 )
@@ -1353,6 +1390,7 @@ async def ask_gemma(
                         f"consumer={consumer} model={model} reason=provider_{status_5xx} "
                         f"attempt={attempt + 1} retry={provider_5xx_retries_used}/{call_provider_5xx_retries} "
                         f"delay={delay:.1f}s"
+                        f"{context_suffix}"
                     ),
                     flush=True,
                 )
@@ -1400,13 +1438,16 @@ def _normalize_digest_eligibility(
     digest_eligible: bool,
     digest_reason: str | None,
 ) -> tuple[bool, str | None]:
+    reason = collapse_ws(digest_reason)
+    if reason in {"tentative_or_free_date", "sold_out", "cancelled", "missing_date", "not_scheduled_public", "non_target"}:
+        return False, reason
     if not collapse_ws(date_iso):
-        return False, collapse_ws(digest_reason) or "missing_date"
+        return False, reason or "missing_date"
     if collapse_ws(availability_mode) and collapse_ws(availability_mode) != "scheduled_public":
-        return False, collapse_ws(digest_reason) or "not_scheduled_public"
+        return False, reason or "not_scheduled_public"
     if collapse_ws(status) == "cancelled":
-        return False, collapse_ws(digest_reason) or "cancelled"
-    return bool(digest_eligible), collapse_ws(digest_reason) or None
+        return False, reason or "cancelled"
+    return bool(digest_eligible), reason or None
 
 
 def _coerce_occurrence_items(data: Any) -> list[dict[str, Any]]:

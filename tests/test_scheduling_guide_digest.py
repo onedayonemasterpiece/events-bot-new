@@ -5,6 +5,22 @@ from types import SimpleNamespace
 import pytest
 
 import scheduling
+from guide_excursions.service import _normalize_digest_eligibility
+
+
+def test_guide_digest_disqualifying_reason_wins_over_positive_flag() -> None:
+    eligible, reason = _normalize_digest_eligibility(
+        date_iso="2026-05-17",
+        availability_mode="scheduled_public",
+        status="available",
+        route_summary="new excursion details are pending",
+        booking_text="booking via DM",
+        digest_eligible=True,
+        digest_reason="tentative_or_free_date",
+    )
+
+    assert eligible is False
+    assert reason == "tentative_or_free_date"
 
 
 @pytest.mark.asyncio

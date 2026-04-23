@@ -446,15 +446,18 @@ def _normalize_digest_eligibility(
     digest_eligible: bool,
     digest_reason: str | None,
 ) -> tuple[bool, str | None]:
+    reason = collapse_ws(digest_reason)
+    if reason in {"tentative_or_free_date", "sold_out", "cancelled", "missing_date", "not_scheduled_public", "non_target"}:
+        return False, reason
     if not collapse_ws(date_iso):
-        return False, collapse_ws(digest_reason) or "missing_date"
+        return False, reason or "missing_date"
     mode = collapse_ws(availability_mode)
     if mode in {"on_request_private", "private"}:
-        return False, collapse_ws(digest_reason) or "not_scheduled_public"
+        return False, reason or "not_scheduled_public"
     if collapse_ws(status) == "cancelled":
-        return False, collapse_ws(digest_reason) or "cancelled"
+        return False, reason or "cancelled"
     if digest_eligible:
-        return True, collapse_ws(digest_reason) or None
+        return True, reason or None
     evidence_count = sum(
         1
         for value in (
@@ -471,8 +474,8 @@ def _normalize_digest_eligibility(
         if collapse_ws(value)
     )
     if mode in {"", "scheduled_public", "limited"} and evidence_count >= 2:
-        return True, collapse_ws(digest_reason) or "fact_policy_promoted"
-    return bool(digest_eligible), collapse_ws(digest_reason) or None
+        return True, reason or "fact_policy_promoted"
+    return bool(digest_eligible), reason or None
 
 
 def _is_tg_post_url(url: str | None) -> bool:

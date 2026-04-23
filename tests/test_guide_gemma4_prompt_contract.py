@@ -92,3 +92,13 @@ def test_guide_ocr_media_hashing_has_runtime_import() -> None:
     imports = source[: source.index("INPUT_ROOT =")]
     assert "import hashlib" in imports
     assert '"sha256": hashlib.sha256(payload).hexdigest()' in source
+
+
+def test_guide_ocr_logs_source_post_and_media_context() -> None:
+    source = _source()
+    assert "log_context=(" in source
+    assert "[guide:ocr:ok]" in source
+    assert "[guide:ocr:empty]" in source
+    assert "source=@{username}" in source
+    assert "media_message_id=" in source
+    assert "image_index=" in source
