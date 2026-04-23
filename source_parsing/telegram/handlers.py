@@ -1035,7 +1035,11 @@ _ESOTERICA_RE = re.compile(
     r"чакр(а|ы)|энерг(ия|етик)|рейки|регресси(я|и)|родов(ая|ые)\\s+программ)\\b",
     re.IGNORECASE,
 )
-_BRIDGE_RE = re.compile(r"\bразвод(ка)?\\s+мост(ов|ы)\\b", re.IGNORECASE)
+_BRIDGE_RE = re.compile(
+    r"\b(?:развод(?:ка|ки|ке|ку)?\s+мост(?:ов|ы|а)?|разводк[аеуи]\s+мостов|"
+    r"развест[и]\s+мосты|разведут\s+мосты|мосты\s+разведут)\b",
+    re.IGNORECASE,
+)
 
 
 def _date_tokens_from_iso(iso_date: str | None) -> list[str]:

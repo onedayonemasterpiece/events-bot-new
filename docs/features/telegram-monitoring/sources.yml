@@ -11,7 +11,7 @@ version: 1
 #   - skip_recurring_excursions: drops "ежедневные/каждый день" экскурсии
 #   - skip_esoterica: drops эзотерика/таро/астрология/etc
 #   - skip_ads: drops posts with явной маркировкой рекламы (#реклама)
-#   - bridge_notice_daily: for @klgdcity развод мостов -> post notice to /daily channels
+#   - bridge_notice_daily: for @klgdcity развод/разводка мостов -> extract event + post notice to /daily channels
 # - notes: optional free text (not used by code)
 
 sources:
@@ -105,7 +105,7 @@ sources:
   - username: klgdcity
     trust_level: high
     filters: {bridge_notice_daily: true}
-    notes: "официальный; «развод мостов» -> notice в /daily каналы"
+    notes: "официальный; «развод/разводка мостов» -> событие + notice в /daily каналы"
 
   - username: ambermuseum
     trust_level: high

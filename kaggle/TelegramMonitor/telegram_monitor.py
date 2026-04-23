@@ -1590,6 +1590,32 @@ TIME_START_HINT_RE = re.compile(
     r"\b(начал[ао]|старт|сбор|вход)\D{0,20}([01]?\d|2[0-3])[:.](\d{2})\b",
     re.IGNORECASE,
 )
+BRIDGE_NOTICE_RE = re.compile(
+    r"\b(?:развод(?:ка|ки|ке|ку)?\s+мост(?:ов|ы|а)?|разводк[аеуи]\s+мостов|"
+    r"развест[и]\s+мосты|разведут\s+мосты|мосты\s+разведут)\b",
+    re.IGNORECASE,
+)
+BRIDGE_NAME_RE = re.compile(r"[«\"“]([^»\"”]*(?:Юбилейн|Высок)[^»\"”]*)[»\"”]", re.IGNORECASE)
+BRIDGE_NIGHT_ON_RE = re.compile(
+    r"\bв\s+ночь\s+на\s+(\d{1,2})\s+"
+    r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
+    re.IGNORECASE,
+)
+BRIDGE_NIGHT_RANGE_RE = re.compile(
+    r"\bв\s+ночь\s+с\s+(\d{1,2})\s+на\s+(\d{1,2})\s+"
+    r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
+    re.IGNORECASE,
+)
+BRIDGE_RELATIVE_TODAY_RE = re.compile(r"\bсегодня\s+в\s+ночь\b|\bразводк[аеуи]\s+мостов\s+сегодня\b", re.IGNORECASE)
+BRIDGE_HOUR_RANGE_RE = re.compile(
+    r"\b(?:с|с\s+)?(\d{1,2})(?::00)?\s*(?:час(?:ов|а)?\s*)?"
+    r"(?:до|-|–|—)\s*(\d{1,2})(?::00)?\s*(?:час(?:ов|а)?|утра|вечера)?\b",
+    re.IGNORECASE,
+)
+BRIDGE_EVENING_MORNING_RE = re.compile(
+    r"\bс\s+(\d{1,2})\s+вечера\s+до\s+(\d{1,2})\s+утра\b",
+    re.IGNORECASE,
+)
 
 
 def _parse_message_date(message_date: str | None):
@@ -1716,7 +1742,201 @@ def _extract_ocr_datetime(ocr_text: str | None, message_date: str | None = None)
     return date_val, best
 
 
-async def extract_events(text: str, ocr_text: str | None = None, message_date: str | None = None):
+def _bridge_date_from_parts(day: int, month_name: str, msg_date) -> str | None:
+    month = MONTHS_MAP.get((month_name or '').strip().lower())
+    if not month:
+        return None
+    candidate = _infer_ocr_date(int(day), month, None, msg_date)
+    return candidate.isoformat() if candidate else None
+
+
+def _extract_bridge_time(text: str | None) -> str:
+    raw = str(text or '')
+    m = BRIDGE_EVENING_MORNING_RE.search(raw)
+    if m:
+        try:
+            start = int(m.group(1))
+            if start < 12:
+                start += 12
+            end = int(m.group(2))
+            return f"{start:02d}:00-{end:02d}:00"
+        except Exception:
+            pass
+    m = BRIDGE_HOUR_RANGE_RE.search(raw)
+    if m:
+        try:
+            start = int(m.group(1))
+            end = int(m.group(2))
+            return f"{start:02d}:00-{end:02d}:00"
+        except Exception:
+            pass
+    explicit = _extract_ocr_datetime(raw, None)[1]
+    return str(explicit or '').strip()
+
+
+def _extract_bridge_names(text: str | None) -> list[str]:
+    raw = str(text or '')
+    names: list[str] = []
+    seen: set[str] = set()
+    for match in BRIDGE_NAME_RE.findall(raw):
+        name = re.sub(r'\s+', ' ', str(match or '').strip(' «»"“”'))
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+    low = raw.casefold()
+    for name in ('Юбилейный', 'Высокий'):
+        if name.casefold() in low and name.casefold() not in seen:
+            seen.add(name.casefold())
+            names.append(name)
+    return names
+
+
+def _bridge_event_fallback(
+    text: str | None,
+    *,
+    message_date: str | None,
+    source_username: str | None = None,
+) -> list[dict]:
+    """Final structural guardrail for grounded official @klgdcity bridge notices."""
+    username = (source_username or '').strip().lstrip('@').lower()
+    if username != 'klgdcity':
+        return []
+    raw = str(text or '').strip()
+    if not raw or not BRIDGE_NOTICE_RE.search(raw):
+        return []
+
+    msg_date = _parse_message_date(message_date)
+    event_dates: list[str] = []
+
+    for day, month_name in BRIDGE_NIGHT_ON_RE.findall(raw):
+        iso = _bridge_date_from_parts(int(day), month_name, msg_date)
+        if iso:
+            event_dates.append(iso)
+
+    for start_day, _end_day, month_name in BRIDGE_NIGHT_RANGE_RE.findall(raw):
+        iso = _bridge_date_from_parts(int(start_day), month_name, msg_date)
+        if iso:
+            event_dates.append(iso)
+
+    if BRIDGE_RELATIVE_TODAY_RE.search(raw) and msg_date:
+        event_dates.append(msg_date.isoformat())
+
+    event_dates = sorted(dict.fromkeys(event_dates))
+    if not event_dates:
+        return []
+
+    bridge_names = _extract_bridge_names(raw)
+    bridge_label = ' и '.join(bridge_names) if bridge_names else 'мостов'
+    title = f"Развод мостов {bridge_label}" if bridge_names else "Развод мостов"
+    time_val = _extract_bridge_time(raw)
+    location = 'Остров Октябрьский, Калининград' if re.search(r'Октябрьск|Остров', raw, re.IGNORECASE) else 'Калининград'
+    excerpt = raw[:500]
+
+    events: list[dict] = []
+    for event_date in event_dates:
+        events.append({
+            'title': title,
+            'date': event_date,
+            'time': time_val,
+            'end_date': '',
+            'location_name': location,
+            'location_address': '',
+            'city': 'Калининград',
+            'ticket_link': '',
+            'ticket_price_min': None,
+            'ticket_price_max': None,
+            'ticket_status': '',
+            'raw_excerpt': excerpt,
+            'source_text': raw[:2500],
+            'event_type': 'городское событие',
+            'emoji': '🌉',
+            'is_free': True,
+            'pushkin_card': None,
+            'search_digest': 'Развод мостов в Калининграде',
+            'festival': None,
+        })
+    return events[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
+
+
+def _bridge_llm_output_is_usable(events: list, *, expected_count: int) -> bool:
+    if not isinstance(events, list) or len(events) < max(1, int(expected_count or 1)):
+        return False
+    time_re = re.compile(r"^\d{2}:\d{2}(?:-\d{2}:\d{2})?$")
+    for item in events[:expected_count]:
+        if not isinstance(item, dict):
+            return False
+        title = str(item.get('title') or '').casefold()
+        if not ('развод' in title and 'мост' in title):
+            return False
+        try:
+            date.fromisoformat(str(item.get('date') or '').strip())
+        except Exception:
+            return False
+        time_value = str(item.get('time') or '').strip()
+        if time_value and not time_re.match(time_value):
+            return False
+    return True
+
+
+async def _extract_bridge_events_rescue(
+    content: str,
+    *,
+    message_date: str | None,
+    source_username: str | None,
+    source_title: str | None,
+) -> list[dict]:
+    username = (source_username or '').strip().lstrip('@').lower()
+    if username != 'klgdcity' or not BRIDGE_NOTICE_RE.search(content or ''):
+        return []
+    date_context = f"Message date (ISO, UTC): {message_date}" if message_date else 'Message date: unknown'
+    source_context = f"Source username: @{username}"
+    if source_title:
+        source_context += f"\nSource title: {str(source_title).strip()[:120]}"
+    prompt = (
+        'You are a narrow rescue extractor for official @klgdcity bridge-lifting notices. '
+        'Return strict JSON array of event objects only. '
+        'Extract ONLY notices about развод/разводка/разведение мостов. '
+        'These notices are public city events. If the text has no bridge-lifting notice, return []. '
+        'Resolve "сегодня" from Message date. Resolve "в ночь на D month" to D month. '
+        'Resolve "в ночь с A на B month" as the start date A month. '
+        'If the notice names two nights, return two events. '
+        'Use HH:MM-HH:MM for explicit ranges like "с 23 до 05" or "с 11 вечера до 5 утра"; '
+        'use empty time if no explicit range. '
+        'Use title "Развод мостов" plus bridge names if grounded. Do not invent bridge names. '
+        'Use city "Калининград"; use location_name "Остров Октябрьский, Калининград" when the text mentions Остров/Октябрьский. '
+        'Fields per event: title, date (YYYY-MM-DD), time (HH:MM-HH:MM or empty), '
+        'end_date, location_name, location_address, city, ticket_link, ticket_price_min, '
+        'ticket_price_max, ticket_status, raw_excerpt, event_type, emoji, is_free, '
+        'pushkin_card, search_digest, festival. '
+        f'{date_context}\n{source_context}\n'
+        'Message text:\n' + content
+    )
+    try:
+        text = await _call_model('text', prompt, response_schema=EVENT_ARRAY_SCHEMA)
+        data = _safe_json(text)
+    except Exception as exc:
+        logger.warning('extract_events bridge_rescue failed: %s', exc)
+        return []
+    if isinstance(data, dict) and isinstance(data.get('events'), list):
+        out = data['events']
+    elif isinstance(data, list):
+        out = data
+    else:
+        out = []
+    return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
+
+
+async def extract_events(
+    text: str,
+    ocr_text: str | None = None,
+    message_date: str | None = None,
+    source_username: str | None = None,
+    source_title: str | None = None,
+):
     content = (text or '').strip()
     if not content or len(content) < 10:
         return []
@@ -1889,6 +2109,12 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
     if not content or len(content) < 10:
         return []
     date_context = f"Message date (ISO, UTC): {message_date}" if message_date else 'Message date: unknown'
+    source_context_parts = []
+    if source_username:
+        source_context_parts.append(f"Source username: @{str(source_username).strip().lstrip('@')}")
+    if source_title:
+        source_context_parts.append(f"Source title: {str(source_title).strip()[:120]}")
+    source_context = ("\n" + "\n".join(source_context_parts)) if source_context_parts else ""
     prompt = (
         'You extract events from a Telegram message. A single message may contain MULTIPLE events, '
         'including repertoire/schedule lines like "DD.MM | Title". '
@@ -1909,6 +2135,10 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
         'Title must not start with punctuation like commas. '
         'raw_excerpt should be a short (1-3 sentences) excerpt from the message without adding new facts. '
         'Open calls / конкурсный отбор / приём заявок / набор участников are NOT events to attend. Return [] for such posts. '
+        'Official city notices about развод мостов / разводка мостов ARE events: extract them as public city events, '
+        'even when the purpose is mobility planning rather than entertainment. '
+        'For @klgdcity bridge-lifting notices, use title like "Развод мостов" plus grounded bridge names if present; '
+        'use relative words such as "сегодня" only against the message date, and split multiple nights into multiple events. '
         'Date is REQUIRED: never invent a date from the message date. '
         'For exhibitions/fairs: allow missing time, but require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
         'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
@@ -1917,7 +2147,7 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
         'If OCR contains an explicit date or time, prefer it over the message date. '
         'If a date is missing a year, infer it from the message date and choose '
         'the nearest upcoming date relative to that message date. '
-        + date_context + '\n'
+        + date_context + source_context + '\n'
         'Message text:\n' + content
     )
     try:
@@ -1970,6 +2200,22 @@ async def extract_events(text: str, ocr_text: str | None = None, message_date: s
                 and not str(e.get('end_date') or '').strip()
             )
         ]
+    bridge_fallback = _bridge_event_fallback(
+        content,
+        message_date=message_date,
+        source_username=source_username,
+    )
+    if bridge_fallback and not _bridge_llm_output_is_usable(out, expected_count=len(bridge_fallback)):
+        bridge_rescue = await _extract_bridge_events_rescue(
+            content,
+            message_date=message_date,
+            source_username=source_username,
+            source_title=source_title,
+        )
+        if _bridge_llm_output_is_usable(bridge_rescue, expected_count=len(bridge_fallback)):
+            out = bridge_rescue
+        else:
+            out = bridge_fallback
     # Fallback for ongoing exhibition posts where generic extraction may return []
     # due to missing explicit start date/time.
     if not out and re.search(r'\b(выставк\w*|экспозици\w*|ярмарк\w*)\b', content, re.IGNORECASE):
@@ -2423,7 +2669,13 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                         continue
                 if linked_texts:
                     text_for_extract = (text + "\\n\\n" + "\\n\\n".join(linked_texts)).strip()
-            events = await extract_events(text_for_extract, ocr_text, message_date=msg_date)
+            events = await extract_events(
+                text_for_extract,
+                ocr_text,
+                message_date=msg_date,
+                source_username=username,
+                source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
+            )
             ocr_date_hint, ocr_time_hint = _extract_ocr_datetime(ocr_text, msg_date)
 
         cleaned_events = []
