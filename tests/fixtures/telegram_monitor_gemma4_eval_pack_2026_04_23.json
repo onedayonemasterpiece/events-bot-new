@@ -1,0 +1,267 @@
+{
+  "pack_id": "tg_monitor_gemma4_eval_2026_04_23",
+  "source_run_id": "48fa98294333486d94dd0e14785d774f",
+  "source_artifact": "artifacts/codex/tg-g4-kaggle-output-full-48fa/telegram_results.json",
+  "purpose": "Curated real-post eval pack for the second Telegram Monitoring Gemma 4 prompt-quality pass. Each case points to the full saved artifact by source_username/message_id and keeps a compact excerpt plus the observed bad output.",
+  "cases": [
+    {
+      "case_id": "TG-G4-EVAL-01",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "barn_kaliningrad",
+      "message_id": 971,
+      "source_link": "https://t.me/barn_kaliningrad/971",
+      "message_date": "2026-04-22T15:15:23+00:00",
+      "observed_problem_tags": ["thought_leak", "ghost_row", "mixed_language_city"],
+      "text_excerpt": "Аудиопутешествие «Четверть длиннее восьмой» 24 и 26 апреля. Начать прогулку можно в любой промежуток с 16:00 до 20:00 в пятницу и воскресенье. Полную инструкцию и карту вы получите в «Баре Советов», проспект Мира, 118.",
+      "ocr_text": "24 И 26 АПРЕЛЯ, 16:00-20:00\nАУДИОПУТЕШЕСТВИЕ\n\"ЧЕТВЕРТЬ ДЛИННЕЕ ВОСЬМОЙ\"\nКАШТАНОВАЯ АЛЛЕЯ, 1А",
+      "observed_events": [
+        {
+          "title": "Аудиопутешествие «Четверть длиннее восьмой» (день 1/2) (// a single event with multiple dates is usually split into multiple objects if the same event happens on different dates, but the's no specific instruction to set a specific format for example ",
+          "date": "2026-04-24",
+          "time": "16:00",
+          "city": "Kaliningrad",
+          "location_name": "Барн, Каштановая аллея 1а, Калининград"
+        },
+        {
+          "city": "// a single event with 여러 dates dates is usually split into multiple own objects if the same",
+          "location_name": "Барн, Каштановая аллея 1а, Калининград"
+        }
+      ],
+      "expected_contract": [
+        "Return only real event rows, not placeholder venue rows.",
+        "Do not leak reasoning, inline comments, or mixed-language garbage into title or city.",
+        "Keep the venue grounded in the real Kaliningrad location from post text and OCR."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-02",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "kaliningradartmuseum",
+      "message_id": 7902,
+      "source_link": "https://t.me/kaliningradartmuseum/7902",
+      "message_date": "2026-04-10T16:04:32+00:00",
+      "observed_problem_tags": ["unknown_literal", "placeholder_location"],
+      "text_excerpt": "В разделе «Красны девицы, добры молодцы» на выставке «Космос красного» можно увидеть произведения русского народного промысла: жостовские подносы, каргопольская и дымковская игрушки.",
+      "ocr_text": null,
+      "observed_events": [
+        {
+          "title": "Космос красного",
+          "date": "2026-04-10",
+          "time": "",
+          "event_type": "выставка",
+          "city": "unknown",
+          "location_name": "unknown",
+          "location_address": "unknown",
+          "ticket_link": ""
+        }
+      ],
+      "expected_contract": [
+        "Never emit the literal string \"unknown\" in any field.",
+        "If venue details are unavailable, use empty strings rather than placeholders.",
+        "Keep the exhibition event itself if it is otherwise supported by the post."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-03",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "ambermuseum",
+      "message_id": 5600,
+      "source_link": "https://t.me/ambermuseum/5600",
+      "message_date": "2026-04-22T08:04:28+00:00",
+      "observed_problem_tags": ["city_drift", "parenthetical_origin_note"],
+      "text_excerpt": "Приглашаем на лекцию о быте и нравах регулярного военного флота Петра Великого. Лектор — Борис Мегорский, заведующий отделом Российской национальной библиотеки. Билеты продаются на сайте и в кассе музея.",
+      "ocr_text": "24.04 в 16:00",
+      "observed_events": [
+        {
+          "title": "Лекция о быте и нравах регулярного военного флота Петра Великого",
+          "date": "2026-04-24",
+          "time": "16:00",
+          "city": "Saint Petersburg",
+          "location_name": "Музей Янтаря, пл. Василевского 1, Калининград",
+          "ticket_link": "https://clck.ru/3TD7H8"
+        }
+      ],
+      "expected_contract": [
+        "City must describe the venue city, not a parenthetical origin or affiliation note.",
+        "Keep the lecture as an event because the post carries explicit date, time, venue, and ticket intent."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-04",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "kaliningradartmuseum",
+      "message_id": 7898,
+      "source_link": "https://t.me/kaliningradartmuseum/7898",
+      "message_date": "2026-04-06T07:02:13+00:00",
+      "observed_problem_tags": ["english_event_type"],
+      "text_excerpt": "Трудовые будни калининградцев были основной темой творчества художников. Михаил Пясковский работал в реалистической советской традиции. Более подробно — в ВК.",
+      "ocr_text": "M. Pykovsky . 43",
+      "observed_events": [
+        {
+          "title": "Михаил Пясковский: Трудовые будни калининградцев",
+          "event_type": "exhibition",
+          "city": "Калининград",
+          "location_name": "музей",
+          "ticket_link": "https://vk.com/kaliningradartmuseum"
+        }
+      ],
+      "expected_contract": [
+        "event_type should be a lowercase Russian noun such as \"выставка\".",
+        "Do not degrade the event into generic museum/location placeholders."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-05",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "castleneuhausen",
+      "message_id": 3258,
+      "source_link": "https://t.me/castleneuhausen/3258",
+      "message_date": "2026-04-16T05:55:26+00:00",
+      "observed_problem_tags": ["markdown_tail", "commerce_or_non_event_boundary"],
+      "text_excerpt": "История замка Нойхаузен. Другие интересные подробности вы найдете в книге Ирины Белинцевой «Замок Нойхаузен». Купить книгу можно в кассе замка или онлайн по ссылке.",
+      "ocr_text": null,
+      "observed_events": [
+        {
+          "title": "Книга «Замок Нойхаузен» Ирины Белинцевой (продажа/покупка)**",
+          "location_name": "Замок Нойхаузен, Заречная 2А, Гурьевск",
+          "ticket_link": "https://tekh-kopiya-zamok-noykhau.timepad.ru/event/3892517/"
+        }
+      ],
+      "expected_contract": [
+        "Never leak markdown markers into title text.",
+        "If the post is kept as a commerce/event row, keep the title clean.",
+        "It is also acceptable to skip the post entirely if the model can justify it as non-event content."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-06",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "kaliningradlibrary",
+      "message_id": 2199,
+      "source_link": "https://t.me/kaliningradlibrary/2199",
+      "message_date": "2026-04-21T14:31:39+00:00",
+      "observed_problem_tags": ["retrospective_non_event", "ghost_row"],
+      "text_excerpt": "Больше 2000 читателей приняли участие в «Библионочи» в научной библиотеке! Благодарим за выбор нашей площадки! Фотографии добавляем в альбом группы ВКонтакте.",
+      "ocr_text": null,
+      "observed_events": [
+        {
+          "location_name": "Научная библиотека, Мира 9, Калининград",
+          "ticket_link": "https://vk.com/album-30777579_311127293"
+        }
+      ],
+      "expected_contract": [
+        "Return no event rows for retrospective thank-you/report posts.",
+        "Do not keep a venue-only placeholder row."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-07",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "domkitoboya",
+      "message_id": 3170,
+      "source_link": "https://t.me/domkitoboya/3170",
+      "message_date": "2026-04-22T13:51:38+00:00",
+      "observed_problem_tags": ["city_drift", "ghost_row", "same_day_anchor"],
+      "text_excerpt": "Завтра, 23 апреля, в Доме китобоя стартует цикл лекций от религиоведа Алексея Зыгмонта «В поисках абсолютно инакового». Начало в 18.30. Вход — 300 р. Билеты — на сайте музея. Дом китобоя, пр-т Мира 9.",
+      "ocr_text": "краткая история сакрального\nлекторий\nАлексей Зыгмонт\nСАКРАЛЬНОЕ В ТЕОРИИ И В ИСТОРИИ\n23.04\n18:30\nДОМ Китобая\n16+",
+      "observed_events": [
+        {
+          "title": "В поисках \"абсолютно инакового\": краткая история сакрального (лекция Алексея Зыгмонта) ⚡️",
+          "date": "2026-04-23",
+          "time": "18:30",
+          "city": "Владивосток",
+          "location_name": "Дом китобоя, Мира 9, Калининград",
+          "ticket_link": "https://domkitoboya.ru/v-poiskah-absolyutno-inakovogo-kratkaya-istoriya-sakralnogo/"
+        },
+        {
+          "city": "",
+          "location_name": "Дом китобоя, Мира 9, Калининград"
+        }
+      ],
+      "expected_contract": [
+        "Preserve the real lecture event because the post has explicit date, time, location, price, and ticket intent.",
+        "Do not add a second venue-only row.",
+        "City should remain grounded in Kaliningrad, not an unrelated city."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-08",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "kldzoo",
+      "message_id": 7089,
+      "source_link": "https://t.me/kldzoo/7089",
+      "message_date": "2026-04-17T13:44:50+00:00",
+      "observed_problem_tags": ["schedule_post", "ghost_row", "garbage_city"],
+      "text_excerpt": "В ВЫХОДНЫЕ — В ЗООПАРК! 18 апреля: авторская экскурсия «Приматы», кормления животных. 19 апреля: авторская экскурсия «Я работаю в зоопарке!» и кормления животных.",
+      "ocr_text": null,
+      "observed_events": [
+        {"title": "Авторская экскурсия «Приматы: секреты их повседневной жизни»", "date": "2026-04-18", "time": "11:00", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление колобусов в Тропическом доме", "date": "2026-04-18", "time": "11:30", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление бурого медведя Фимы", "date": "2026-04-18", "time": "13:30", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление рыб в Тропическом доме", "date": "2026-04-18", "time": "14:00", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"city": " idea: ", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление дикобразов", "date": "2026-04-18", "time": "14:30", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление ленивца в Доме тропических птиц", "date": "2026-04-18", "time": "15:00", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"},
+        {"title": "Кормление трубкозуба в Доме тропических птиц", "date": "2026-04-18", "time": "15:30", "city": "Калининград", "location_name": "Калининградский зоопарк, пр-т Мира 26, Калининград"}
+      ],
+      "expected_contract": [
+        "Keep the valid schedule items with their explicit dates and times.",
+        "Do not emit any placeholder row with garbage city text such as \" idea: \".",
+        "All returned rows should be real event items."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-09",
+      "kind": "negative",
+      "prompt_family": "extract_events",
+      "source_username": "festkantata",
+      "message_id": 1433,
+      "source_link": "https://t.me/festkantata/1433",
+      "message_date": "2026-04-15T15:15:11+00:00",
+      "observed_problem_tags": ["non_event_media_post", "empty_object_row"],
+      "text_excerpt": "Майя Плисецкая танцует «Умирающего лебедя». 1975 год. Описание исторического балетного номера без приглашения на будущее мероприятие.",
+      "ocr_text": null,
+      "observed_events": [{}],
+      "expected_contract": [
+        "Return no event rows for media/history posts without a future invite or attendance intent.",
+        "Never emit empty JSON objects in the event array."
+      ]
+    },
+    {
+      "case_id": "TG-G4-EVAL-10",
+      "kind": "positive",
+      "prompt_family": "extract_events",
+      "source_username": "koihm",
+      "message_id": 5505,
+      "source_link": "https://t.me/koihm/5505",
+      "message_date": "2026-04-22T12:16:18+00:00",
+      "observed_problem_tags": ["positive_control"],
+      "text_excerpt": "МИР УВЛЕЧЕНИЙ || выставка ко Дню Земли. 23 апреля в 16:00 в Калининградском историко-художественном музее состоится открытие персональной выставки Геннадия Медера «Мир увлечений». Выставка будет работать до 22 мая 2026 года.",
+      "ocr_text": null,
+      "observed_events": [
+        {
+          "title": "Мир увлечений",
+          "date": "2026-04-23",
+          "time": "16:00",
+          "event_type": "выставка",
+          "city": "Калининград",
+          "location_name": "Калининградский историко-художественный музей",
+          "location_address": "",
+          "ticket_link": ""
+        }
+      ],
+      "expected_contract": [
+        "Keep this as a clean exhibition extraction.",
+        "Do not regress title, date, time, city, or venue quality while fixing the negative cases."
+      ]
+    }
+  ]
+}
