@@ -22,6 +22,7 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "return list(_CANDIDATE_KEY_IDS)" in source
     assert "GOOGLE_AI_PROVIDER_TIMEOUT_SEC" in source
     assert "TG_MONITORING_LLM_TIMEOUT_SECONDS" in source
+    assert "or '45'" in source
 
 
 def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:

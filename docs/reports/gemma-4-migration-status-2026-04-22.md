@@ -95,18 +95,18 @@
 - extract prompt явно требует мерджить OCR/date/time/venue facts, не возвращать whitespace-only strings и не придумывать `end_date` для single-date events;
 - generated Kaggle notebook embed-ит `google_ai` sources и запускает `main()` через `nest_asyncio`, что исправило два live-failure класса: `ModuleNotFoundError: google_ai` и `telegram_monitor.py should not be imported while an event loop is already running`;
 - key isolation tightened: если `GOOGLE_API_KEY3` отсутствует в Supabase quota registry, gateway uses process-local limiter with `GOOGLE_API_KEY3` instead of silently falling through to the shared key pool;
-- post-canary hardening added: Telegram Monitoring Kaggle secrets no longer ship unrelated `GOOGLE_API_KEY*` pools, empty scoped-key cache no longer widens to unscoped reserve on later calls, and Gemma 4 provider calls are bounded by `TG_MONITORING_LLM_TIMEOUT_SECONDS` / `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`.
+- post-canary hardening added: Telegram Monitoring Kaggle secrets no longer ship unrelated `GOOGLE_API_KEY*` pools, empty scoped-key cache no longer widens to unscoped reserve on later calls, and Gemma 4 provider calls are bounded by `TG_MONITORING_LLM_TIMEOUT_SECONDS` / `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` (default `45s` after full-run evidence showed successful calls stay below ~34s while stalled calls waste the schedule window).
 
 Live evidence (`2026-04-22`):
 
 - Kaggle run `tg_g4_live_smoke_subset_20260422g` produced `telegram_results.json` with `schema_version=2`, `sources_total=3`, `messages_scanned=2`, `messages_with_events=1`, `events_extracted=4`;
 - Kaggle log confirms `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`; no Gemma 3 model fallback was observed;
 - server recovery import `ops_run id=797` finished `success`, `errors_count=0`; repeat import-only `id=798` also finished `success`, `errors_count=0`.
+- scheduled full run `48fa98294333486d94dd0e14785d774f` produced full Kaggle output on 45 sources (`messages_scanned=177`, `messages_with_events=69`, `events_extracted=84`) and recovery import `ops_run id=803` finished `success`, `errors_count=0`, `events_imported=14`; log evidence shows `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2=0`, `gemma-3=0`, and `models/gemma-4-31b-it` for requested/provider/invoked model.
 
 Оставшийся caveat:
 
-- это subset-canary, а не full scheduled all-source run. Для closure всего surface следующим gate остаётся один full scheduled/manual prod run после key registry sync for `GOOGLE_API_KEY3`.
-- follow-up subset canary after timeout/key-pool hardening is required before calling the Telegram Monitoring surface fully closed.
+- full scheduled run succeeded through recovery, but the original scheduled `ops_run` still marked `crashed` because the previous `180s` provider timeout let stalled calls consume the poll window. Closure gate is one post-`45s` scheduled/manual run where the primary `ops_run` itself reaches `success` without relying on recovery.
 
 ## Что ещё не сделано
 

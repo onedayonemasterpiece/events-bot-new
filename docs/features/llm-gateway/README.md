@@ -37,7 +37,7 @@
     * transient RPC errors на `google_ai_mark_sent` / `google_ai_finalize` теперь имеют короткие retry (тот же backoff-профиль, что и reserve RPC);
 *   **Provider timeout guard:**
     * `GOOGLE_AI_PROVIDER_TIMEOUT_SEC` (default `0`, disabled unless set by a caller) wraps the underlying Google AI provider call with `asyncio.wait_for`;
-    * timed-out calls are classified as retryable provider errors and finalized as failed attempts, so feature-level code can fail-open or retry without waiting for provider-side 10-minute deadlines.
+    * timed-out calls are finalized as failed attempts and surfaced as `TimeoutError`, so feature-level code can fail-open or opt into its own retry policy without waiting for provider-side 10-minute deadlines.
     * для уже накопившихся записей доступен RPC `google_ai_sweep_stale(p_older_than_minutes, p_limit)`, который компенсирует counters только для безопасного окна `status='reserved' AND sent_at IS NULL`, затем помечает записи как `stale`;
     * ручной запуск из репозитория: `python scripts/inspect/sweep_google_ai_stale.py --use-service --older-than-minutes 30 --limit 500`.
 
