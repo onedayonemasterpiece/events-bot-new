@@ -32,8 +32,12 @@ def test_guide_extract_prompt_preserves_multi_date_public_schedule() -> None:
     assert "status=available" in prompt_source
     assert "availability_mode=scheduled_public" in prompt_source
     assert "digest_eligible=true" in prompt_source
+    assert "use post.schedule_blocks as the complete schedule index" in prompt_source
+    assert "tentative_or_free_date" in prompt_source
     assert "do not output an extra template/no-date occurrence" in prompt_source
     assert "title_normalized must be a short stable route identity core" in prompt_source
+    assert "3️⃣ мая means 3 мая" in prompt_source
+    assert "1️⃣3️⃣ мая means 13 мая" in prompt_source
 
 
 def test_guide_block_and_enrich_prompts_do_not_downgrade_grounded_future_dates() -> None:
@@ -46,3 +50,32 @@ def test_guide_block_and_enrich_prompts_do_not_downgrade_grounded_future_dates()
     assert "do not materialize volunteer cleanups" in prompt_source
     assert "do not downgrade a seed with concrete future date/time/booking/meeting facts" in prompt_source
     assert "set status=available, availability_mode=scheduled_public, digest_eligible=true" in prompt_source
+    assert "tentative_or_free_date" in prompt_source
+    assert "schedule_anchor_text" in prompt_source
+
+
+def test_guide_block_splitter_recognizes_keycap_emoji_dates_as_schedule_anchors() -> None:
+    source = _source()
+    assert "KEYCAP_DIGIT_RE" in source
+    assert "def _normalize_keycap_digit_dates" in source
+    assert "def _looks_decorative_line" in source
+    assert "schedule_text = _normalize_keycap_digit_dates(text)" in source
+    assert "scan_line = _normalize_keycap_digit_dates(line)" in source
+    assert 'block_payload["schedule_anchor_text"]' in source
+    assert 'payload["schedule_blocks"] = _compact_occurrence_blocks(post.text, limit=8)' in source
+
+
+def test_guide_multi_block_extraction_fails_open_per_block() -> None:
+    source = _source()
+    assert "async def _extract_occurrence_block_failopen" in source
+    assert "[guide:block_extract:warning]" in source
+    assert "rescued = await _extract_occurrence_block_failopen" in source
+    assert "return cleaned\n\n    if extract_mode == \"status\":" not in source
+
+
+def test_guide_enrichment_fails_open_after_tier1_seed() -> None:
+    source = _source()
+    assert "async def _extract_occurrence_semantics_failopen" in source
+    assert "[guide:enrich:warning]" in source
+    assert "return {}" in source
+    assert "semantic_patch = await _extract_occurrence_semantics_failopen" in source

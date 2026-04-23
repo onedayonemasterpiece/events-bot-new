@@ -162,6 +162,7 @@ DATE_RE = re.compile(
     re.I,
 )
 TIME_RE = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+KEYCAP_DIGIT_RE = re.compile(r"([0-9])\ufe0f?\u20e3")
 
 
 def _normalize_model_name(model: str) -> str:
@@ -169,6 +170,11 @@ def _normalize_model_name(model: str) -> str:
     if raw.startswith("models/"):
         return raw
     return f"models/{raw}"
+
+
+def _normalize_keycap_digit_dates(text: str | None) -> str:
+    """Turn emoji keycap digits into normal digits for schedule anchoring only."""
+    return KEYCAP_DIGIT_RE.sub(r"\1", str(text or ""))
 
 
 def _retry_after_seconds(message: str) -> float | None:
@@ -879,11 +885,12 @@ def prefilter_flags(post: ScannedPost, *, ocr_chunks: list[dict[str, Any]] | Non
     ocr_chunks = [item for item in (ocr_chunks or []) if isinstance(item, dict)]
     ocr_text = "\n".join(_ocr_chunk_text(item) for item in ocr_chunks if _ocr_chunk_text(item))
     text = collapse_ws("\n".join(part for part in (post.text, ocr_text) if collapse_ws(part))).lower()
+    schedule_text = _normalize_keycap_digit_dates(text)
     has_ocr_excursion_signal = any(bool(item.get("excursion_signal")) for item in ocr_chunks)
     has_ocr_schedule_signal = any(bool(item.get("schedule_signal")) for item in ocr_chunks)
     has_ocr_booking_signal = any(bool(item.get("booking_signal")) for item in ocr_chunks)
     return {
-        "has_date_signal": bool(DATE_RE.search(text) or "завтра" in text or "сегодня" in text or has_ocr_schedule_signal),
+        "has_date_signal": bool(DATE_RE.search(schedule_text) or "завтра" in text or "сегодня" in text or has_ocr_schedule_signal),
         "has_time_signal": bool(TIME_RE.search(text)),
         "has_price_signal": any(token in text for token in ("стоимость", "цена", "руб", "₽")),
         "has_booking_signal": bool(URL_RE.search(text) or USERNAME_RE.search(text) or PHONE_RE.search(text) or "запись" in text or "бронир" in text or has_ocr_booking_signal),
@@ -913,6 +920,11 @@ def _line_cleanup(line: str) -> str:
     return line.strip()
 
 
+def _looks_decorative_line(line: str) -> bool:
+    scan_line = _normalize_keycap_digit_dates(line)
+    return bool(scan_line) and not bool(re.search(r"[0-9A-Za-zА-Яа-яЁё]", scan_line))
+
+
 def _looks_generic_preamble(line: str) -> bool:
     low = collapse_ws(line).lower()
     return any(
@@ -927,10 +939,11 @@ def _looks_generic_preamble(line: str) -> bool:
 
 
 def _has_schedule_anchor(line: str) -> bool:
-    low = collapse_ws(line).lower()
+    scan_line = _normalize_keycap_digit_dates(line)
+    low = collapse_ws(scan_line).lower()
     if any(token in low for token in ("мест нет", "лист ожидания", "уже набрана")):
         return False
-    return bool(DATE_RE.search(line) or "завтра" in low or "сегодня" in low)
+    return bool(DATE_RE.search(scan_line) or "завтра" in low or "сегодня" in low)
 
 
 def _is_section_break(line: str) -> bool:
@@ -947,7 +960,7 @@ def _is_section_break(line: str) -> bool:
 
 def split_occurrence_blocks(text: str) -> list[str]:
     lines = [_line_cleanup(line) for line in str(text or "").splitlines()]
-    lines = [line for line in lines if line]
+    lines = [line for line in lines if line and not _looks_decorative_line(line)]
     if not lines:
         return []
 
@@ -993,24 +1006,26 @@ def build_occurrence_blocks(text: str, *, limit: int = 8) -> list[dict[str, Any]
         cleaned = collapse_ws(block)
         if not cleaned:
             continue
+        schedule_anchor_text = collapse_ws(_normalize_keycap_digit_dates(cleaned))
         low = cleaned.lower()
-        blocks.append(
-            {
-                "id": f"B{idx}",
-                "text": cleaned[:1200],
-                "has_schedule_anchor": _has_schedule_anchor(cleaned),
-                "has_time_signal": bool(TIME_RE.search(cleaned)),
-                "looks_detail_pending": any(
-                    token in low
-                    for token in (
-                        "подробности позже",
-                        "подробности будут позже",
-                        "детали позже",
-                        "детали будут позже",
-                    )
-                ),
-            }
-        )
+        block_payload = {
+            "id": f"B{idx}",
+            "text": cleaned[:1200],
+            "has_schedule_anchor": _has_schedule_anchor(cleaned),
+            "has_time_signal": bool(TIME_RE.search(cleaned)),
+            "looks_detail_pending": any(
+                token in low
+                for token in (
+                    "подробности позже",
+                    "подробности будут позже",
+                    "детали позже",
+                    "детали будут позже",
+                )
+            ),
+        }
+        if schedule_anchor_text and schedule_anchor_text != cleaned:
+            block_payload["schedule_anchor_text"] = schedule_anchor_text[:1200]
+        blocks.append(block_payload)
         if len(blocks) >= limit:
             break
     return blocks
@@ -1103,7 +1118,7 @@ def _compact_post_payload(
         )
         if len(compact_ocr_chunks) >= 3:
             break
-    return {
+    payload = {
         "message_id": post.message_id,
         "post_date_utc": post.post_date.isoformat(),
         "message_url": post.source_url,
@@ -1116,20 +1131,24 @@ def _compact_post_payload(
         },
         "prefilter_flags": compact_flags,
     }
+    if for_extract:
+        payload["schedule_blocks"] = _compact_occurrence_blocks(post.text, limit=8)
+    return payload
 
 
 def _compact_occurrence_blocks(text: str, *, limit: int = 5) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for block in build_occurrence_blocks(text, limit=limit):
-        blocks.append(
-            {
-                "id": block.get("id"),
-                "text": collapse_ws(block.get("text"))[:420],
-                "has_schedule_anchor": bool(block.get("has_schedule_anchor")),
-                "has_time_signal": bool(block.get("has_time_signal")),
-                "looks_detail_pending": bool(block.get("looks_detail_pending")),
-            }
-        )
+        payload = {
+            "id": block.get("id"),
+            "text": collapse_ws(block.get("text"))[:420],
+            "has_schedule_anchor": bool(block.get("has_schedule_anchor")),
+            "has_time_signal": bool(block.get("has_time_signal")),
+            "looks_detail_pending": bool(block.get("looks_detail_pending")),
+        }
+        if collapse_ws(block.get("schedule_anchor_text")):
+            payload["schedule_anchor_text"] = collapse_ws(block.get("schedule_anchor_text"))[:420]
+        blocks.append(payload)
     return blocks
 
 
@@ -1672,7 +1691,10 @@ async def _extract_announce_post_tier1(
         "- extract only real excursion occurrences or direct public updates about a specific occurrence\n"
         "- ignore past occurrences for MVP\n"
         "- if the post contains several dated schedule lines, return one occurrence per dated line even when they share one booking/contact block\n"
+        "- use post.schedule_blocks as the complete schedule index when text_excerpt is shortened; keep source_block_id equal to the block id when a block id is available\n"
+        "- numeric emoji keycaps in dates are normal digits: 3️⃣ мая means 3 мая; 1️⃣3️⃣ мая means 13 мая\n"
         "- if a dated line has no explicit closed/sold-out/cancelled marker and the post has shared booking/contact/meeting facts, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- if a dated line is explicitly tentative/preliminary/only hoped-for or says it is just a free date to move another walk into, do not mark it digest-ready; use digest_eligible=false with digest_eligibility_reason=tentative_or_free_date\n"
         "- when a dated line says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"
         "- do not output an extra template/no-date occurrence for a route already covered by concrete dated occurrences in this same post\n"
         "- title_normalized must be a short stable route identity core; do not include guide names, organizer/source labels, parentheses, dates, times, marketing suffixes, or availability words there\n"
@@ -1948,7 +1970,9 @@ async def _extract_occurrence_block(
         "- materialize only if the block is primarily a guided public excursion/walk/tour/route or direct update about one\n"
         "- do not materialize volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, or generic meetups unless a guided excursion/walk/tour is the primary public offer\n"
         "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
+        "- numeric emoji keycaps in dates are normal digits: 3️⃣ мая means 3 мая; 1️⃣3️⃣ мая means 13 мая; use occurrence_block.schedule_anchor_text only as a normalized reading aid\n"
         "- if the block has a future date/time and no closed/sold-out/cancelled marker, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- if the block is explicitly tentative/preliminary/only hoped-for or says it is just a free date to move another walk into, do not mark it digest-ready; use digest_eligible=false with digest_eligibility_reason=tentative_or_free_date\n"
         "- if the block says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"
         "- title_normalized must be a short stable route identity core; do not include guide names, organizer/source labels, parentheses, dates, times, marketing suffixes, or availability words there\n"
         "- OCR may rescue missing title/date/time facts only when they are explicit on the poster/image\n"
@@ -1956,7 +1980,7 @@ async def _extract_occurrence_block(
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- do not invent details; keep source_block_id equal to the input block id\n"
         "- no extra commentary or hidden thinking traces\n\n"
-        f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post_for_block, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:900], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
+        f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post_for_block, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:900], 'schedule_anchor_text': collapse_ws(block.get('schedule_anchor_text'))[:900], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
@@ -1971,7 +1995,7 @@ async def _extract_occurrence_block(
         return None
     if not collapse_ws(item.get("source_block_id")):
         item["source_block_id"] = block.get("id")
-    semantic_patch = await _extract_occurrence_semantics(
+    semantic_patch = await _extract_occurrence_semantics_failopen(
         source_payload,
         post=post,
         flags=flags,
@@ -1986,6 +2010,36 @@ async def _extract_occurrence_block(
         source_payload=source_payload,
         screen=screen,
     )
+
+
+async def _extract_occurrence_block_failopen(
+    source_payload: dict[str, Any],
+    *,
+    post: ScannedPost,
+    flags: dict[str, Any],
+    screen: dict[str, Any],
+    block: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    try:
+        return await _extract_occurrence_block(
+            source_payload,
+            post=post,
+            flags=flags,
+            screen=screen,
+            block=block,
+            ocr_chunks=ocr_chunks,
+        )
+    except Exception as exc:
+        print(
+            (
+                "[guide:block_extract:warning] "
+                f"message_id={post.message_id} block_id={collapse_ws(block.get('id')) or '-'} "
+                f"error={type(exc).__name__}: {exc}"
+            ),
+            flush=True,
+        )
+        return None
 
 
 async def _extract_occurrence_semantics(
@@ -2088,6 +2142,38 @@ async def _extract_occurrence_semantics(
     return item if isinstance(item, dict) else {}
 
 
+async def _extract_occurrence_semantics_failopen(
+    source_payload: dict[str, Any],
+    *,
+    post: ScannedPost,
+    flags: dict[str, Any],
+    screen: dict[str, Any],
+    occurrence_seed: dict[str, Any],
+    focus_excerpt: str,
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    try:
+        return await _extract_occurrence_semantics(
+            source_payload,
+            post=post,
+            flags=flags,
+            screen=screen,
+            occurrence_seed=occurrence_seed,
+            focus_excerpt=focus_excerpt,
+            ocr_chunks=ocr_chunks,
+        )
+    except Exception as exc:
+        print(
+            (
+                "[guide:enrich:warning] "
+                f"message_id={post.message_id} block_id={collapse_ws(occurrence_seed.get('source_block_id')) or '-'} "
+                f"error={type(exc).__name__}: {exc}"
+            ),
+            flush=True,
+        )
+        return {}
+
+
 async def extract_post(
     source_payload: dict[str, Any],
     post: ScannedPost,
@@ -2099,30 +2185,6 @@ async def extract_post(
     occurrence_blocks = build_occurrence_blocks(post.text, limit=6)
     is_multi = str(screen.get("post_kind") or "") == "announce_multi"
     extract_mode = str(screen.get("extract_mode") or "none")
-    if is_multi and occurrence_blocks:
-        cleaned: list[dict[str, Any]] = []
-        seen_fingerprints: set[str] = set()
-        for block in occurrence_blocks:
-            if not bool(block.get("has_schedule_anchor")):
-                continue
-            rescued = await _extract_occurrence_block(
-                source_payload,
-                post=post,
-                flags=flags,
-                screen=screen,
-                block=block,
-                ocr_chunks=ocr_chunks,
-            )
-            if not rescued:
-                continue
-            fingerprint = str(rescued.get("source_fingerprint") or "")
-            if fingerprint and fingerprint in seen_fingerprints:
-                continue
-            if fingerprint:
-                seen_fingerprints.add(fingerprint)
-            cleaned.append(rescued)
-        return cleaned
-
     if extract_mode == "status":
         items = await _extract_status_post(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     elif extract_mode == "template":
@@ -2137,7 +2199,7 @@ async def extract_post(
                 continue
             merged_item = item
             if extract_mode == "announce":
-                semantic_patch = await _extract_occurrence_semantics(
+                semantic_patch = await _extract_occurrence_semantics_failopen(
                     source_payload,
                     post=post,
                     flags=flags,
@@ -2165,7 +2227,7 @@ async def extract_post(
             block_id = collapse_ws(block.get("id"))
             if not block_id or block_id in covered_block_ids or not bool(block.get("has_schedule_anchor")):
                 continue
-            rescued = await _extract_occurrence_block(
+            rescued = await _extract_occurrence_block_failopen(
                 source_payload,
                 post=post,
                 flags=flags,
