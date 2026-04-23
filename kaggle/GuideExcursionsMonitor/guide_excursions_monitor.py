@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -1716,6 +1717,34 @@ async def _extract_announce_post_tier1(
     return _coerce_occurrence_items(data)
 
 
+async def _extract_announce_post_tier1_failopen_for_block_rescue(
+    source_payload: dict[str, Any],
+    *,
+    post: ScannedPost,
+    flags: dict[str, Any],
+    screen: dict[str, Any],
+    ocr_chunks: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        return await _extract_announce_post_tier1(
+            source_payload,
+            post=post,
+            flags=flags,
+            screen=screen,
+            ocr_chunks=ocr_chunks,
+        )
+    except Exception as exc:
+        print(
+            (
+                "[guide:announce_extract:warning] "
+                f"message_id={post.message_id} mode=block_rescue "
+                f"error={type(exc).__name__}: {exc}"
+            ),
+            flush=True,
+        )
+        return []
+
+
 async def _extract_status_post(
     source_payload: dict[str, Any],
     *,
@@ -2189,6 +2218,14 @@ async def extract_post(
         items = await _extract_status_post(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     elif extract_mode == "template":
         items = await _extract_template_post(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
+    elif is_multi and occurrence_blocks:
+        items = await _extract_announce_post_tier1_failopen_for_block_rescue(
+            source_payload,
+            post=post,
+            flags=flags,
+            screen=screen,
+            ocr_chunks=ocr_chunks,
+        )
     else:
         items = await _extract_announce_post_tier1(source_payload, post=post, flags=flags, screen=screen, ocr_chunks=ocr_chunks)
     cleaned: list[dict[str, Any]] = []

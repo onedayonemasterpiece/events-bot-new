@@ -69,6 +69,9 @@ def test_guide_multi_block_extraction_fails_open_per_block() -> None:
     source = _source()
     assert "async def _extract_occurrence_block_failopen" in source
     assert "[guide:block_extract:warning]" in source
+    assert "async def _extract_announce_post_tier1_failopen_for_block_rescue" in source
+    assert "[guide:announce_extract:warning]" in source
+    assert "items = await _extract_announce_post_tier1_failopen_for_block_rescue" in source
     assert "rescued = await _extract_occurrence_block_failopen" in source
     assert "return cleaned\n\n    if extract_mode == \"status\":" not in source
 
@@ -79,3 +82,10 @@ def test_guide_enrichment_fails_open_after_tier1_seed() -> None:
     assert "[guide:enrich:warning]" in source
     assert "return {}" in source
     assert "semantic_patch = await _extract_occurrence_semantics_failopen" in source
+
+
+def test_guide_ocr_media_hashing_has_runtime_import() -> None:
+    source = _source()
+    imports = source[: source.index("INPUT_ROOT =")]
+    assert "import hashlib" in imports
+    assert '"sha256": hashlib.sha256(payload).hexdigest()' in source
