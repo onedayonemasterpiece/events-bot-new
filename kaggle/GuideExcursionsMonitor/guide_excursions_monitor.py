@@ -1537,9 +1537,12 @@ async def screen_post(
         "- base_region_fit: inside | outside | ambiguous | unknown\n"
         "- confidence: low | medium | high\n"
         "Rules:\n"
-        "- announce/status_update only if the post text or OCR contains a real excursion signal grounded in the input\n"
+        "- announce/status_update only if the post text or OCR contains a real guided public excursion/walk/tour/route signal grounded in the input\n"
+        "- do not treat a dated event as an excursion just because it is posted by a guide source; the public product must be a guided walk/excursion/tour/route/storytelling visit\n"
+        "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups are mixed_or_non_target/ignore unless the post explicitly announces a guided excursion or walk as the primary public offer\n"
         "- if there is a concrete future walk/excursion with date/time/meeting point, prefer announce or status_update over reportage\n"
         "- if the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine\n"
+        "- on-demand offers or posts saying only that dates remain without naming the dates may be announce/template_only, but digest_eligible_default must be no or mixed until a concrete future date is grounded\n"
         "- generic calendars, inspiration, bloom/lifestyle, or travel-wishlist posts without a concrete excursion -> ignore\n"
         "- if one post clearly contains several different excursions led by the source's own guide, use announce_multi\n"
         "- a post that enumerates multiple festivals/events across different cities or regions as a round-up/travel calendar is template_only or ignore, even when one entry falls inside source.base_region; individual enumerated entries are not per-guide excursions and must not be materialized as announce\n"
@@ -1668,7 +1671,12 @@ async def _extract_announce_post_tier1(
         "Rules:\n"
         "- extract only real excursion occurrences or direct public updates about a specific occurrence\n"
         "- ignore past occurrences for MVP\n"
-        "- if the post contains several different dated excursions, return several occurrences\n"
+        "- if the post contains several dated schedule lines, return one occurrence per dated line even when they share one booking/contact block\n"
+        "- if a dated line has no explicit closed/sold-out/cancelled marker and the post has shared booking/contact/meeting facts, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- when a dated line says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"
+        "- do not output an extra template/no-date occurrence for a route already covered by concrete dated occurrences in this same post\n"
+        "- title_normalized must be a short stable route identity core; do not include guide names, organizer/source labels, parentheses, dates, times, marketing suffixes, or availability words there\n"
+        "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups are not excursion occurrences unless the block explicitly makes a guided excursion/walk/tour the primary public offer\n"
         "- use OCR facts when the poster carries operational details missing from the text, but only if they are explicit on the poster\n"
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- if an occurrence clearly takes place outside source.base_region, set base_region_fit=outside; do not silently drop it, let the server filter\n"
@@ -1783,6 +1791,8 @@ async def _extract_template_post(
         "Return only JSON with key occurrences.\n"
         "Rules:\n"
         "- no future date means digest_eligible must stay false\n"
+        "- if the same post also contains concrete dated occurrence blocks for this route, do not create a duplicate template occurrence\n"
+        "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups are not template excursions unless a guided route/walk/tour is the primary reusable offer\n"
         "- use template_hint for reusable route/topic information\n"
         "- OCR may contribute reusable route/topic facts only when they are explicit on the poster/image\n"
         "- do not invent schedule facts\n"
@@ -1892,6 +1902,14 @@ async def _extract_occurrence_block(
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
     compact_post = _compact_post_payload(post, flags=flags, for_extract=True, ocr_chunks=ocr_chunks)
+    compact_post_for_block = {
+        "message_id": compact_post.get("message_id"),
+        "post_date_utc": compact_post.get("post_date_utc"),
+        "message_url": compact_post.get("message_url"),
+        "ocr_chunks": compact_post.get("ocr_chunks") or [],
+        "media_hints": compact_post.get("media_hints") or {},
+        "prefilter_flags": compact_post.get("prefilter_flags") or {},
+    }
     schema = _single_occurrence_wrapper_schema(
         "source_block_id",
         "canonical_title",
@@ -1927,13 +1945,18 @@ async def _extract_occurrence_block(
         "If the block is not a real public or template-like excursion signal inside the base region, return {\"occurrence\": {}}.\n"
         "Rules:\n"
         "- treat the block as one primary excursion candidate\n"
+        "- materialize only if the block is primarily a guided public excursion/walk/tour/route or direct update about one\n"
+        "- do not materialize volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, or generic meetups unless a guided excursion/walk/tour is the primary public offer\n"
         "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
+        "- if the block has a future date/time and no closed/sold-out/cancelled marker, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- if the block says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"
+        "- title_normalized must be a short stable route identity core; do not include guide names, organizer/source labels, parentheses, dates, times, marketing suffixes, or availability words there\n"
         "- OCR may rescue missing title/date/time facts only when they are explicit on the poster/image\n"
         "- ignore unrelated side notes inside the same block\n"
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- do not invent details; keep source_block_id equal to the input block id\n"
         "- no extra commentary or hidden thinking traces\n\n"
-        f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:700], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
+        f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post_for_block, 'occurrence_block': {'id': block.get('id'), 'text': collapse_ws(block.get('text'))[:900], 'has_schedule_anchor': bool(block.get('has_schedule_anchor')), 'has_time_signal': bool(block.get('has_time_signal')), 'looks_detail_pending': bool(block.get('looks_detail_pending'))}}, ensure_ascii=False)}"
     )
     data = await ask_gemma(
         EXTRACT_MODEL,
@@ -2044,6 +2067,9 @@ async def _extract_occurrence_semantics(
         "- do not rename or replace canonical_title/date/time/source_block_id from the seed\n"
         "- fill only facts supported by the focus excerpt or OCR chunks from the same post\n"
         "- preserve the dominant term family from the source: прогулка stays прогулка, экскурсия stays экскурсия\n"
+        "- do not downgrade a seed with concrete future date/time/booking/meeting facts to status unknown or digest_eligible=false unless the focus excerpt explicitly says sold out/full/cancelled/past/private\n"
+        "- for a concrete future public schedule with no disqualifying status, keep or set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups stay digest_eligible=false unless the guided excursion/walk/tour is the primary public offer\n"
         "- base_region_fit is your own semantic judgement versus source.base_region; do not weaken seed.base_region_fit unless the focus excerpt explicitly contradicts it\n"
         "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak\n"
         "- fact_claims may use only claim_role: anchor, support, status_delta, template_hint, guide_profile_hint\n"

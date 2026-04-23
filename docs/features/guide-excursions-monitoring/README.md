@@ -44,6 +44,9 @@
   - OCR остаётся fail-open: если image pass не удался, post всё равно может пройти по text-only path, а ошибка должна оставаться видимой в result payload;
 - runtime обязан фильтровать `parts[].thought = true` до JSON parsing и materialization, чтобы guide fact-pack и admin surfaces не протаскивали hidden reasoning text.
 - guide migration остаётся строго `LLM-first`: semantic screen/extract decisions не должны переезжать в regex/keyword shortcuts даже если конкретный `Gemma 4` stage ведёт себя хуже baseline; в таких случаях исправляется prompt/stage contract, а не вводится deterministic bypass по смыслу текста.
+- после `INC-2026-04-23-guide-digest-extraction-loss` prompt-contract для `Gemma 4` дополнительно закрепляет multi-date расписания как отдельные occurrence на каждую датированную строку: доступная будущая строка с общим контактом/записью и без явного `sold out/full/cancelled` должна оставаться `status=available`, `availability_mode=scheduled_public`, `digest_eligible=true`; sold-out строки остаются `digest_eligible=false`; no-date/on-demand офферы не становятся digest-ready без конкретной даты; волонтёрские субботники/cleanup/work-day события не считаются экскурсиями, пока guided walk/tour/route не является основным публичным предложением.
+- `title_normalized` в extraction prompt считается stable route identity core: без имён гидов, source labels, дат, времени, маркетинговых суффиксов и availability-слов, чтобы один source post не создавал дубли одной и той же экскурсии под разными идентичностями.
+- regression evidence для guide digest completeness должен включать не только run-level `Новых выходов`, а occurrence-level проверку: какие raw outputs были digest-ready, какие были исключены как sold-out/no-date/non-target/duplicate, и какие still-future missed cards были компенсирующе опубликованы.
 
 ## Что уже мигрировано
 
