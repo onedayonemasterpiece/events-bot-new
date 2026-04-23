@@ -285,7 +285,20 @@ async def _run_scheduled_popular_review(
             chat_id=int(target_chat_id),
             user_id=int(target_chat_id),
         )
-        await scenario.run_popular_review_pipeline()
+        session_id = await scenario.run_popular_review_pipeline(wait_for_handoff=True)
+        if session_id is not None:
+            ops_details["session_id"] = int(session_id)
+            launch_state = await _video_session_launch_state(db, int(session_id))
+            ops_details.update(launch_state)
+            if not _video_session_has_remote_handoff(launch_state):
+                reason = (
+                    "CherryFlash did not reach confirmed Kaggle handoff: "
+                    f"status={launch_state.get('session_status') or '-'} "
+                    f"dataset={launch_state.get('kaggle_dataset') or '-'} "
+                    f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
+                )
+                ops_details["error"] = reason
+                raise RuntimeError(reason)
     except Exception as exc:
         ops_details["error"] = str(exc) or type(exc).__name__
         await finish_ops_run(
@@ -428,6 +441,15 @@ def _popular_review_schedule_settings() -> tuple[bool, str, str]:
     return enabled, tz_name, time_raw
 
 
+def _popular_review_watchdog_grace_seconds() -> int:
+    raw = (os.getenv("V_POPULAR_REVIEW_WATCHDOG_GRACE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 900
+    except ValueError:
+        value = 900
+    return max(60, value)
+
+
 def video_tomorrow_watchdog_enabled() -> bool:
     enabled, _, _, _, _ = _video_tomorrow_schedule_settings()
     return enabled
@@ -456,6 +478,39 @@ def _utc_sql_text(dt: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _video_session_has_remote_handoff(state: dict[str, Any]) -> bool:
+    kernel_ref = str(state.get("kaggle_kernel_ref") or "").strip()
+    dataset = str(state.get("kaggle_dataset") or "").strip()
+    if dataset and kernel_ref and not kernel_ref.startswith("local:"):
+        return True
+    status = str(state.get("session_status") or "").strip()
+    return status in {"DONE", "PUBLISHED_TEST", "PUBLISHED_MAIN"} and not kernel_ref.startswith("local:")
+
+
+async def _video_session_launch_state(db: Any, session_id: int) -> dict[str, Any]:
+    if db is None or not hasattr(db, "raw_conn"):
+        return {}
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, kaggle_dataset, kaggle_kernel_ref
+            FROM videoannounce_session
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (int(session_id),),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return {}
+    status, dataset, kernel_ref = row
+    return {
+        "session_status": status,
+        "kaggle_dataset": dataset,
+        "kaggle_kernel_ref": kernel_ref,
+    }
 
 
 async def _video_tomorrow_dispatch_exists_today(
@@ -526,6 +581,52 @@ async def _video_tomorrow_session_exists_today(
     return False
 
 
+async def _popular_review_session_exists_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    target_date: str,
+) -> bool:
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = 'popular_review'
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    for status, dataset, kernel_ref, selection_params_raw in rows:
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() != target_date:
+            continue
+        if _video_session_has_remote_handoff(
+            {
+                "session_status": status,
+                "kaggle_dataset": dataset,
+                "kaggle_kernel_ref": kernel_ref,
+            }
+        ):
+            return True
+    return False
+
+
 async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     enabled, video_tz_name, video_time_raw, profile_key, video_test_mode = _video_tomorrow_schedule_settings()
     if not enabled:
@@ -591,6 +692,51 @@ async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     return True
 
 
+async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
+    enabled, tz_name, time_raw = _popular_review_schedule_settings()
+    if not enabled:
+        return False
+    review_tz = _safe_zoneinfo(tz_name, label="V_POPULAR_REVIEW_TZ")
+    hour_local, minute_local = _parse_hhmm(
+        time_raw,
+        default_hour=10,
+        default_minute=15,
+        label="V_POPULAR_REVIEW_TIME_LOCAL",
+    )
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(review_tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local,
+        minute=minute_local,
+        second=0,
+        microsecond=0,
+    )
+    if now_local <= scheduled_local + timedelta(seconds=30):
+        return False
+
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    target_date = now_local.date().isoformat()
+    if await _popular_review_session_exists_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+    ):
+        logging.info(
+            "SCHED startup catchup skip video_popular_review: confirmed Kaggle handoff already exists today"
+        )
+        return False
+
+    logging.warning(
+        "SCHED startup catchup dispatching missed video_popular_review slot scheduled_local=%s now_local=%s",
+        scheduled_local.isoformat(),
+        now_local.isoformat(),
+    )
+    await _run_scheduled_popular_review(db, bot, startup_catchup=True)
+    return True
+
+
 async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
     enabled, video_tz_name, video_time_raw, profile_key, video_test_mode = (
         _video_tomorrow_schedule_settings()
@@ -653,6 +799,48 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
         test_mode=video_test_mode,
         startup_catchup=False,
     )
+    return True
+
+
+async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
+    enabled, tz_name, time_raw = _popular_review_schedule_settings()
+    if not enabled:
+        return False
+    review_tz = _safe_zoneinfo(tz_name, label="V_POPULAR_REVIEW_TZ")
+    hour_local, minute_local = _parse_hhmm(
+        time_raw,
+        default_hour=10,
+        default_minute=15,
+        label="V_POPULAR_REVIEW_TIME_LOCAL",
+    )
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(review_tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local,
+        minute=minute_local,
+        second=0,
+        microsecond=0,
+    )
+    if now_local <= scheduled_local + timedelta(seconds=_popular_review_watchdog_grace_seconds()):
+        return False
+
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    target_date = now_local.date().isoformat()
+    if await _popular_review_session_exists_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+    ):
+        return False
+
+    logging.error(
+        "SCHED watchdog dispatching missing live video_popular_review slot scheduled_local=%s now_local=%s",
+        scheduled_local.isoformat(),
+        now_local.isoformat(),
+    )
+    await _run_scheduled_popular_review(db, bot, startup_catchup=False)
     return True
 
 
@@ -841,9 +1029,9 @@ async def _maybe_force_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
 
 async def _run_video_tomorrow_startup_checks(db: Any, bot: Any) -> None:
     forced = await _maybe_force_video_tomorrow_on_startup(db, bot)
-    if forced:
-        return
-    await _maybe_catch_up_video_tomorrow_on_startup(db, bot)
+    if not forced:
+        await _maybe_catch_up_video_tomorrow_on_startup(db, bot)
+    await _maybe_catch_up_popular_review_on_startup(db, bot)
 
 
 class BatchProgress:
@@ -1978,6 +2166,14 @@ def startup(
                 bot_obj,
             )
 
+        async def popular_review_watchdog_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await maybe_dispatch_popular_review_watchdog(db_obj, bot_obj)
+
         popular_review_hour, popular_review_minute = _cron_from_local(
             popular_review_time_raw,
             popular_review_tz_name,
@@ -1997,6 +2193,22 @@ def startup(
             max_instances=1,
             coalesce=True,
             misfire_grace_time=600,
+        )
+        _register_job(
+            "video_popular_review_watchdog",
+            _job_wrapper(
+                "video_popular_review_watchdog",
+                popular_review_watchdog_scheduler,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="video_popular_review_watchdog",
+            minutes=10,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
         )
     else:
         logging.info("SCHED skipping video_popular_review (ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1)")

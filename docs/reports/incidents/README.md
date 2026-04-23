@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-23-cherryflash-pre-handoff-loss.md`
+  - Scope: `video_announce/scenario.py`, `scheduling.py`, `video_announce/poller.py`, CherryFlash scheduled `popular_review`, prod sqlite `ops_run`/`videoannounce_session`, Kaggle CherryFlash handoff evidence.
+  - Must not regress: scheduled CherryFlash must not mark `ops_run` success before a real non-local Kaggle dataset/kernel handoff is persisted, local-only failed sessions for today's slot must trigger same-day catch-up, and existing remote handoffs must suppress duplicate reruns even if local status is misleading.
 - `INC-2026-04-23-guide-digest-extraction-loss.md`
   - Scope: `kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py`, guide Gemma 4 screen/extract/enrich prompts, multi-date occurrence extraction, guide digest eligibility/catch-up.
   - Must not regress: multi-date posts must preserve each available dated excursion as digest-ready, sold-out/no-date/non-excursion controls must not become subscriber-visible digest cards, and a missed daily guide window must be repaired with production-equivalent monitor/catch-up evidence.

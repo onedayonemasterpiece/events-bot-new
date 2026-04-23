@@ -71,6 +71,11 @@
   - `--no-wait` is not a valid CherryFlash live-run mode: `start_render()` hands the real Kaggle push to a background asyncio task, so exiting the runner immediately after session creation kills the render before any visible Kaggle kernel run can appear.
   - for stale local prod snapshots, the runner may reset an already stuck `RENDERING` video session only through its explicit `--force-reset-rendering` flag before the new CherryFlash start.
   - Kaggle dataset/kernel API failures on this path must surface the raw Kaggle response body in logs instead of a bare `400/403`, so auth and dataset-contract incidents are diagnosable without a second repro pass.
+- scheduled CherryFlash launch contract:
+  - manual/operator launch may still use a background render task so the Telegram UI stays responsive;
+  - scheduled `popular_review` must wait through the pre-Kaggle phase until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug such as `zigomaro/cherryflash`;
+  - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`);
+  - same-day startup/watchdog catch-up must retry a missed CherryFlash slot when today's matching session failed before handoff, but must skip duplicate reruns when a remote dataset/kernel handoff already exists for today's slot, even if the local session status later became misleading.
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;
   - CherryFlash selection is `future-start-only`: events whose `start date` is already before the current local day must not appear in the ribbon/date strip even if they still have a later `end_date`;

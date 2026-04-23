@@ -159,9 +159,17 @@ async def test_run_tomorrow_pipeline_test_mode_limits_scenes(monkeypatch, tmp_pa
 
     started: dict[str, int] = {}
 
-    async def _fake_start_render(self, session_id: int, message=None, *, limit_scenes=None) -> str:  # noqa: ANN001,ARG002
+    async def _fake_start_render(  # noqa: ANN001,ARG002
+        self,
+        session_id: int,
+        message=None,
+        *,
+        limit_scenes=None,
+        background: bool = True,
+    ) -> str:
         started["session_id"] = session_id
         started["limit_scenes"] = limit_scenes
+        started["background"] = background
         return "Рендеринг запущен"
 
     monkeypatch.setattr(VideoAnnounceScenario, "start_render", _fake_start_render)
@@ -370,9 +378,17 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
 
     started: dict[str, int] = {}
 
-    async def _fake_start_render(self, session_id: int, message=None, *, limit_scenes=None) -> str:  # noqa: ANN001,ARG002
+    async def _fake_start_render(  # noqa: ANN001,ARG002
+        self,
+        session_id: int,
+        message=None,
+        *,
+        limit_scenes=None,
+        background: bool = True,
+    ) -> str:
         started["session_id"] = session_id
         started["limit_scenes"] = limit_scenes
+        started["background"] = background
         return "Рендеринг запущен"
 
     monkeypatch.setattr(
@@ -386,6 +402,7 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
     await scenario.run_popular_review_pipeline()
 
     assert started["limit_scenes"] == 2
+    assert started["background"] is True
 
     async with db.get_session() as session:
         result = await session.execute(select(VideoAnnounceSession))

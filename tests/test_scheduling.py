@@ -190,6 +190,17 @@ class _FixedVideoTomorrowDatetime(datetime):
         return value.replace(tzinfo=None)
 
 
+class _FixedPopularReviewDatetime(datetime):
+    fixed_now = datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        value = cls.fixed_now
+        if tz is not None:
+            return value.astimezone(tz)
+        return value.replace(tzinfo=None)
+
+
 async def _insert_video_tomorrow_session(
     db: Database,
     *,
@@ -216,12 +227,51 @@ async def _insert_video_tomorrow_session(
         await conn.commit()
 
 
+async def _insert_popular_review_session(
+    db: Database,
+    *,
+    status: str,
+    target_date: str,
+    created_at: str,
+    kaggle_dataset: str | None = None,
+    kaggle_kernel_ref: str | None = None,
+    error: str | None = None,
+) -> int:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            INSERT INTO videoannounce_session(
+                status, profile_key, selection_params, created_at,
+                kaggle_dataset, kaggle_kernel_ref, error
+            )
+            VALUES(?, 'popular_review', ?, ?, ?, ?, ?)
+            """,
+            (
+                status,
+                json.dumps({"target_date": target_date, "mode": "popular_review"}),
+                created_at,
+                kaggle_dataset,
+                kaggle_kernel_ref,
+                error,
+            ),
+        )
+        await conn.commit()
+        return int(cur.lastrowid)
+
+
 def _configure_video_tomorrow_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_V_TOMORROW_SCHEDULED", "1")
     monkeypatch.setenv("V_TOMORROW_TZ", "Europe/Kaliningrad")
     monkeypatch.setenv("V_TOMORROW_TIME_LOCAL", "16:45")
     monkeypatch.delenv("ENABLE_V_TEST_TOMORROW_SCHEDULED", raising=False)
     monkeypatch.setattr(scheduling, "datetime", _FixedVideoTomorrowDatetime)
+
+
+def _configure_popular_review_env(monkeypatch) -> None:
+    monkeypatch.setenv("ENABLE_V_POPULAR_REVIEW_SCHEDULED", "1")
+    monkeypatch.setenv("V_POPULAR_REVIEW_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("V_POPULAR_REVIEW_TIME_LOCAL", "10:15")
+    monkeypatch.setattr(scheduling, "datetime", _FixedPopularReviewDatetime)
 
 
 class _FixedCriticalSchedulerDatetime(datetime):
@@ -365,6 +415,156 @@ async def test_video_tomorrow_startup_catchup_skips_second_recoverable_retry_sam
     monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
 
     dispatched = await scheduling._maybe_catch_up_video_tomorrow_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_scheduled_popular_review_waits_for_confirmed_kaggle_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ADMIN_CHAT_ID", "123")
+
+    class FakeScenario:
+        def __init__(self, db_obj, bot_obj, *, chat_id: int, user_id: int):
+            self.db = db_obj
+            self.chat_id = chat_id
+            self.user_id = user_id
+
+        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+            assert wait_for_handoff is True
+            return await _insert_popular_review_session(
+                self.db,
+                status="RENDERING",
+                target_date="2026-04-12",
+                created_at="2026-04-12 07:44:00",
+                kaggle_dataset="zigomaro/cherryflash-session-200",
+                kaggle_kernel_ref="zigomaro/cherryflash",
+            )
+
+    monkeypatch.setattr("video_announce.scenario.VideoAnnounceScenario", FakeScenario)
+
+    await scheduling._run_scheduled_popular_review(db, bot=object())
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_popular_review'"
+        )
+        row = await cur.fetchone()
+
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "success"
+    assert details["session_status"] == "RENDERING"
+    assert details["kaggle_dataset"] == "zigomaro/cherryflash-session-200"
+    assert details["kaggle_kernel_ref"] == "zigomaro/cherryflash"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_popular_review_fails_ops_run_without_kaggle_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ADMIN_CHAT_ID", "123")
+
+    class FakeScenario:
+        def __init__(self, db_obj, bot_obj, *, chat_id: int, user_id: int):
+            self.db = db_obj
+
+        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+            assert wait_for_handoff is True
+            return await _insert_popular_review_session(
+                self.db,
+                status="FAILED",
+                target_date="2026-04-12",
+                created_at="2026-04-12 07:44:00",
+                kaggle_kernel_ref="local:CherryFlash",
+                error="runtime restart before Kaggle handoff; rerun required",
+            )
+
+    monkeypatch.setattr("video_announce.scenario.VideoAnnounceScenario", FakeScenario)
+
+    with pytest.raises(RuntimeError, match="did not reach confirmed Kaggle handoff"):
+        await scheduling._run_scheduled_popular_review(db, bot=object())
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_popular_review'"
+        )
+        row = await cur.fetchone()
+
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "failed"
+    assert details["session_status"] == "FAILED"
+    assert details["kaggle_kernel_ref"] == "local:CherryFlash"
+    assert "confirmed Kaggle handoff" in details["error"]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_startup_catchup_retries_failed_local_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_kernel_ref="local:CherryFlash",
+        error="runtime restart before Kaggle handoff; rerun required",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_popular_review_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is True
+    assert calls == [{"startup_catchup": True}]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_existing_remote_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-181",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        error="runtime restart before Kaggle handoff; rerun required",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
         db, bot=object()
     )
 

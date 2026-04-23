@@ -100,6 +100,10 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - `CrumpleVideo` keeps its main render at `1080x1572`, but story upload must use a story-safe `1080x1920` derivative with padding instead of sending the raw non-`9:16` mp4;
   - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
   - recommended default window: `16:45 Europe/Kaliningrad`, which centers the historical GPU render window (`~1:45..2:40`) near `19:00` while still keeping buffer before the `20:10` guide full scan.
+- **CherryFlash `popular_review`** – optional scheduled daily popularity story when `ENABLE_V_POPULAR_REVIEW_SCHEDULED=1`.
+  - the scheduled path uses `VideoAnnounceScenario.run_popular_review_pipeline(wait_for_handoff=True)` and must not mark `ops_run(kind='video_popular_review')` as `success` until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug, not `local:CherryFlash`;
+  - startup catch-up and the live watchdog retry the same local-day slot when the only matching CherryFlash session failed before Kaggle handoff;
+  - duplicate prevention is based on remote handoff evidence: a matching session with a non-local kernel ref plus `cherryflash-session-*` dataset suppresses catch-up even if local status later drifts.
 - **kaggle recovery** – resumes in-flight Kaggle jobs after restarts, including `tg_monitoring` and `guide_monitoring`.
   - `guide_monitoring` now keeps a persisted copy of the downloaded results bundle under `GUIDE_MONITORING_RESULTS_STORE_ROOT` (default `/data/guide_monitoring_results`), so a restart during server import or scheduled digest publish can resume from the saved `results_path` instead of depending on a second Kaggle download.
   - for scheduled `full` guide runs with `ENABLE_GUIDE_DIGEST_SCHEDULED=1`, recovery is responsible for finishing both the import and the same-job digest auto-publish if the process died in between.
@@ -149,6 +153,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `V_TOMORROW_MISFIRE_GRACE_SECONDS` – per-job APScheduler misfire window for `video_tomorrow` (default: `600`), so short loop stalls near the slot do not silently drop the run.
 - `V_TOMORROW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the slot before the independent watchdog dispatches a missing `video_tomorrow` run (default: `720`).
 - `V_TOMORROW_WATCHDOG_INTERVAL_SECONDS` – polling interval for the independent `video_tomorrow` watchdog task (default: `60`).
+- `ENABLE_V_POPULAR_REVIEW_SCHEDULED` – enable scheduled CherryFlash `popular_review`.
+- `V_POPULAR_REVIEW_TIME_LOCAL` / `V_POPULAR_REVIEW_TZ` – local schedule for CherryFlash `popular_review` (default: `10:15 Europe/Kaliningrad`).
+- `V_POPULAR_REVIEW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the CherryFlash slot before the independent watchdog dispatches a missing local-only pre-handoff run (default: `900`).
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_REQUIRED` – optional prod guard: when enabled, `/healthz` fails if `/v` story publish is disabled or obviously misconfigured.

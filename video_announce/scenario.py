@@ -1424,16 +1424,16 @@ class VideoAnnounceScenario:
             valid=True,
         )
 
-    async def run_popular_review_pipeline(self) -> None:
+    async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False) -> int | None:
         if not await self.ensure_access():
-            return
+            return None
         existing = await self.has_rendering()
         if existing:
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
             )
-            return
+            return None
 
         try:
             selection = await build_popular_review_selection(
@@ -1450,12 +1450,12 @@ class VideoAnnounceScenario:
                     f"для публикации ({type(exc).__name__}: {exc})"
                 ),
             )
-            return
+            return None
 
         kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
         if not kernel_ref:
             await self.bot.send_message(self.chat_id, "Не удалось подобрать CherryFlash kernel для Kaggle")
-            return
+            return None
 
         configured_test_chat_id, _configured_main_chat_id = await self._get_profile_channels(
             POPULAR_REVIEW_PROFILE
@@ -1507,9 +1507,12 @@ class VideoAnnounceScenario:
             obj.id,
             message=None,
             limit_scenes=len(selection.event_ids),
+            background=not wait_for_handoff,
         )
         if msg and msg != "Рендеринг запущен":
             await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
+            return None
+        return int(obj.id)
 
     def _dataset_audio_name_for_kernel(
         self,
@@ -3110,6 +3113,7 @@ class VideoAnnounceScenario:
         message: types.Message | None = None,
         *,
         limit_scenes: int | None = None,
+        background: bool = True,
     ) -> str:
         if not await self._has_access():
             return "Not authorized"
@@ -3212,15 +3216,17 @@ class VideoAnnounceScenario:
             allow_send=True,
             note="Готовим Kaggle",
         )
-        asyncio.create_task(
-            self._render_and_notify(
-                sess,
-                ranked,
-                status_message=status_message,
-                payload=payload,
-                payload_json=payload_json,
-            )
+        render_coro = self._render_and_notify(
+            sess,
+            ranked,
+            status_message=status_message,
+            payload=payload,
+            payload_json=payload_json,
         )
+        if background:
+            asyncio.create_task(render_coro)
+        else:
+            await render_coro
         return "Рендеринг запущен"
 
     async def restart_session(self, session_id: int) -> None:
