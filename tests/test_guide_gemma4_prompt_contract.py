@@ -52,6 +52,9 @@ def test_guide_block_and_enrich_prompts_do_not_downgrade_grounded_future_dates()
     assert "set status=available, availability_mode=scheduled_public, digest_eligible=true" in prompt_source
     assert "tentative_or_free_date" in prompt_source
     assert "schedule_anchor_text" in prompt_source
+    assert "post_context_excerpt" in prompt_source
+    assert "shared facts that clearly apply to all schedule blocks" in prompt_source
+    assert "do not borrow title/date/time/route facts from a different dated block" in prompt_source
 
 
 def test_guide_block_splitter_recognizes_keycap_emoji_dates_as_schedule_anchors() -> None:

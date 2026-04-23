@@ -14,3 +14,12 @@ def test_guide_digest_preview_gemma_stages_are_timeout_bounded() -> None:
         assert env_name in source
         assert "asyncio.wait_for(" in source
         assert "generate_content_async(" in source
+
+
+def test_guide_public_identity_resolution_is_timeout_bounded() -> None:
+    source = Path("guide_excursions/public_identity.py").read_text(encoding="utf-8")
+
+    assert "GUIDE_PUBLIC_IDENTITY_TIMEOUT_SEC" in source
+    assert "asyncio.wait_for(" in source
+    assert "create_telethon_runtime_client()" in source
+    assert "client.get_entity(username)" in source

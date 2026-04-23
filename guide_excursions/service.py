@@ -3322,19 +3322,28 @@ async def _fetch_digest_candidates(
     *,
     family: str,
     limit: int = 24,
+    published_state: str = "unpublished",
 ) -> list[dict[str, Any]]:
     where = [
         "go.digest_eligible = 1",
         "go.date IS NOT NULL",
+        "go.date GLOB '????-??-??'",
         "go.date >= ?",
         "go.date <= ?",
     ]
     params: list[Any] = [_today_iso(), _future_cutoff_iso()]
     if family == "new_occurrences":
-        where.append("go.published_new_digest_issue_id IS NULL")
+        column = "go.published_new_digest_issue_id"
     elif family == "last_call":
+        column = "go.published_last_call_digest_issue_id"
         where.append("go.is_last_call = 1")
-        where.append("go.published_last_call_digest_issue_id IS NULL")
+    else:
+        column = None
+    if column:
+        if published_state == "published":
+            where.append(f"{column} IS NOT NULL")
+        else:
+            where.append(f"{column} IS NULL")
     cur = await conn.execute(
         f"""
         SELECT
@@ -3420,6 +3429,35 @@ async def _fetch_digest_candidates(
     return out
 
 
+def _display_rows_excluding_published_reference_clusters(
+    display_rows: Sequence[Mapping[str, Any]],
+    *,
+    coverage_by_display_id: Mapping[int, Sequence[int]],
+    published_reference_ids: set[int],
+    limit: int,
+) -> tuple[list[dict[str, Any]], list[int]]:
+    if not published_reference_ids:
+        return [dict(row) for row in list(display_rows)[: int(limit)]], []
+    out: list[dict[str, Any]] = []
+    suppressed_candidate_ids: list[int] = []
+    for row in display_rows:
+        row_id = int(row.get("id") or 0)
+        cluster_ids = [
+            int(item)
+            for item in coverage_by_display_id.get(row_id, [row_id])
+            if int(item or 0) > 0
+        ]
+        if row_id in published_reference_ids or any(item in published_reference_ids for item in cluster_ids):
+            suppressed_candidate_ids.extend(
+                item for item in cluster_ids if item not in published_reference_ids
+            )
+            continue
+        out.append(dict(row))
+        if len(out) >= int(limit):
+            break
+    return out, list(dict.fromkeys(suppressed_candidate_ids))
+
+
 async def _load_source_medians(conn: aiosqlite.Connection, source_id: int) -> tuple[int | None, int | None]:
     cur = await conn.execute(
         """
@@ -3446,7 +3484,14 @@ async def build_guide_digest_preview(
         await _enable_row_factory(conn)
         raw_limit = max(int(limit) * 3, 48)
         rows = await _fetch_digest_candidates(conn, family=family, limit=raw_limit)
+        published_reference_rows = await _fetch_digest_candidates(
+            conn,
+            family=family,
+            limit=max(raw_limit * 2, 96),
+            published_state="published",
+        )
         prepared: list[dict[str, Any]] = []
+        published_prepared: list[dict[str, Any]] = []
         for row in rows:
             median_views, median_likes = await _load_source_medians(conn, int(row["primary_source_id"] or 0))
             row["popularity_mark"] = _popularity_mark(
@@ -3463,6 +3508,7 @@ async def build_guide_digest_preview(
             if family == "last_call":
                 score += 1.5 if int(row.get("is_last_call") or 0) else 0.0
             row["_score"] = score
+            row["_published_digest_reference"] = False
             prepared.append(row)
         prepared.sort(
             key=lambda item: (
@@ -3472,8 +3518,41 @@ async def build_guide_digest_preview(
                 int(item.get("id") or 0),
             )
         )
-        dedup = await deduplicate_occurrence_rows(prepared, family=family, limit=limit)
-        display_rows = list(dedup.display_rows)
+        for row in published_reference_rows:
+            median_views, median_likes = await _load_source_medians(conn, int(row["primary_source_id"] or 0))
+            row["popularity_mark"] = _popularity_mark(
+                views=row.get("views"),
+                likes=row.get("likes"),
+                median_views=median_views,
+                median_likes=median_likes,
+            )
+            score = float(row.get("priority_weight") or 1.0)
+            if row.get("popularity_mark"):
+                score += 0.4
+            if int(row.get("aggregator_only") or 0):
+                score -= 0.5
+            if family == "last_call":
+                score += 1.5 if int(row.get("is_last_call") or 0) else 0.0
+            row["_score"] = score
+            row["_published_digest_reference"] = True
+            published_prepared.append(row)
+        published_reference_ids = {
+            int(row.get("id") or 0)
+            for row in published_prepared
+            if int(row.get("id") or 0) > 0
+        }
+        dedup_input = [*prepared, *published_prepared]
+        dedup = await deduplicate_occurrence_rows(
+            dedup_input,
+            family=family,
+            limit=max(len(dedup_input), int(limit)),
+        )
+        display_rows, published_duplicate_suppressed_ids = _display_rows_excluding_published_reference_clusters(
+            dedup.display_rows,
+            coverage_by_display_id=dedup.coverage_by_display_id,
+            published_reference_ids=published_reference_ids,
+            limit=limit,
+        )
         display_rows, editorial_suppressed_ids, _editorial_reasons = await refine_digest_rows(
             display_rows,
             family=family,
@@ -3557,7 +3636,15 @@ async def build_guide_digest_preview(
         "items": display_rows,
         "media_items": media_items,
         "covered_occurrence_ids": occurrence_ids,
-        "suppressed_occurrence_ids": list(dict.fromkeys([*dedup.suppressed_occurrence_ids, *editorial_suppressed_ids])),
+        "suppressed_occurrence_ids": list(
+            dict.fromkeys(
+                [
+                    *dedup.suppressed_occurrence_ids,
+                    *published_duplicate_suppressed_ids,
+                    *editorial_suppressed_ids,
+                ]
+            )
+        ),
         "pair_decisions": list(dedup.pair_decisions),
     }
 

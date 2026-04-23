@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import re
 from typing import Any, Mapping, Sequence
 
@@ -12,6 +14,10 @@ from .telethon_client import create_telethon_runtime_client
 logger = logging.getLogger(__name__)
 
 USERNAME_RE = re.compile(r"(?<!\\w)@([A-Za-z0-9_]{4,64})")
+GUIDE_PUBLIC_IDENTITY_TIMEOUT_SECONDS = max(
+    1,
+    min(int((os.getenv("GUIDE_PUBLIC_IDENTITY_TIMEOUT_SEC") or "8") or 8), 60),
+)
 GUIDE_CONTEXT_RE = re.compile(
     r"(?:\bмы\s+с\b|\bвместе\s+с\b|\bгид(?:ы|ом|а)?\b|\bэкскурсовод(?:ы|ом|а)?\b|"
     r"\bпровед[её]\w*\b|\bвед[её]\w*\b|\bавтор(?:ы|ом)?\s+маршрута\b)",
@@ -154,10 +160,16 @@ async def resolve_public_guide_names(rows: Sequence[Mapping[str, Any]]) -> list[
     if usernames:
         client = None
         try:
-            client = await create_telethon_runtime_client()
+            client = await asyncio.wait_for(
+                create_telethon_runtime_client(),
+                timeout=float(GUIDE_PUBLIC_IDENTITY_TIMEOUT_SECONDS),
+            )
             for username in usernames:
                 try:
-                    entity = await client.get_entity(username)
+                    entity = await asyncio.wait_for(
+                        client.get_entity(username),
+                        timeout=float(GUIDE_PUBLIC_IDENTITY_TIMEOUT_SECONDS),
+                    )
                 except Exception:
                     logger.info("guide_public_identity: failed to resolve @%s", username, exc_info=True)
                     continue

@@ -2024,6 +2024,7 @@ async def _extract_occurrence_block(
         "message_id": compact_post.get("message_id"),
         "post_date_utc": compact_post.get("post_date_utc"),
         "message_url": compact_post.get("message_url"),
+        "post_context_excerpt": collapse_ws(compact_post.get("text_excerpt"))[:1400],
         "ocr_chunks": compact_post.get("ocr_chunks") or [],
         "media_hints": compact_post.get("media_hints") or {},
         "prefilter_flags": compact_post.get("prefilter_flags") or {},
@@ -2067,6 +2068,8 @@ async def _extract_occurrence_block(
         "- do not materialize volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, or generic meetups unless a guided excursion/walk/tour is the primary public offer\n"
         "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
         "- numeric emoji keycaps in dates are normal digits: 3️⃣ мая means 3 мая; 1️⃣3️⃣ мая means 13 мая; use occurrence_block.schedule_anchor_text only as a normalized reading aid\n"
+        "- use post.post_context_excerpt only for shared facts that clearly apply to all schedule blocks, such as common booking/contact, organizer, price policy, or meeting context\n"
+        "- do not borrow title/date/time/route facts from a different dated block in post.post_context_excerpt\n"
         "- if the block has a future date/time and no closed/sold-out/cancelled marker, set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
         "- if the block is explicitly tentative/preliminary/only hoped-for or says it is just a free date to move another walk into, do not mark it digest-ready; use digest_eligible=false with digest_eligibility_reason=tentative_or_free_date\n"
         "- if the block says places are gone/sold out/full/cancelled, set the matching unavailable status and digest_eligible=false\n"

@@ -1,6 +1,6 @@
 # INC-2026-04-23 Guide Digest Extraction Loss
 
-Status: closed
+Status: active
 Severity: sev1
 Service: guide excursions monitoring / scheduled guide digest
 Opened: 2026-04-23
@@ -11,7 +11,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/llm/r
 
 ## Summary
 
-The April 22 guide digest published only one excursion after a three-day publication gap, while monitoring runs on April 21-22 had reported at least five new occurrence outputs. Production evidence showed that some outputs were correctly ineligible, but one concrete future excursion was lost because Gemma 4 extraction marked a dated, bookable occurrence as `status=unknown`, `availability_mode=unknown`, and `digest_eligible=false`.
+The April 22 guide digest published only one excursion after a three-day publication gap, while monitoring runs on April 21-22 had reported at least five new occurrence outputs. Production evidence showed that some outputs were correctly ineligible, but concrete future excursions were lost or delayed because Gemma 4 extraction and digest selection did not fully preserve multi-block schedule facts and did not compare fresh candidates against already published future occurrences.
 
 ## User / Business Impact
 
@@ -42,6 +42,8 @@ The April 22 guide digest published only one excursion after a three-day publica
 - 2026-04-23 11:46 UTC: recovery import for `run_id=326250d4aaf9` succeeded after freeing `/data` artifact space and retrying with a longer SQLite timeout.
 - 2026-04-23 12:03 UTC: compensating guide digest issue `#42` was published with occurrence ids `[142, 143, 144, 145, 147]`; occurrence `#146` remained unpublished because Gemma marked it `tentative_or_free_date`.
 - 2026-04-23 12:04 UTC: deployed `11645b57`, adding bounded full-post timeout for multi-announce extraction, OCR post/media context logs, and the disqualifying-reason eligibility guardrail.
+- 2026-04-23 12:20 UTC: post-compensation audit found that `@vkaliningrade` had extracted `9` occurrence payloads, but they mapped to already published occurrences (`#35`, `#120`, `#129`, `#61`) rather than new unpublished cards. The same audit found residual future `eligible + unpublished` rows from `@gid_zelenogradsk/2796`: `#140` was a duplicate of the already published `Огонь Брюстерорта`, while `#141` looked like a still-unpublished future Зеленоградск walk.
+- 2026-04-23 12:30 UTC: follow-up fix added digest-time comparison against already published future occurrences through the existing guide dedup stage, ISO-only date filtering for candidate queries, shared post context for block-level Gemma rescue, and a timeout around public identity resolution.
 
 ## Root Cause
 
@@ -52,6 +54,8 @@ The April 22 guide digest published only one excursion after a three-day publica
 5. OCR media hashing used `hashlib` without a top-level import, so image OCR failed open with `NameError` on poster/photo posts until the runtime import was fixed.
 6. Long `announce_multi` full-post extraction retried the same broad prompt before block rescue, causing avoidable latency even when `schedule_blocks` were already available for smaller per-block LLM calls.
 7. The eligibility normalizer did not treat LLM-provided disqualifying reasons as authoritative when the boolean field contradicted the reason.
+8. Digest selection deduped only the currently unpublished candidate set. A repost/update of an already published future excursion could remain as a fresh unpublished row and compete with truly new rows unless it was manually remediated.
+9. Block-level rescue received the isolated schedule block but not enough shared post context, so common booking/contact/price facts could be absent from cards materialized from compact multi-date schedules.
 
 ## Contributing Factors
 
@@ -110,6 +114,10 @@ The April 22 guide digest published only one excursion after a three-day publica
 - Added fail-open block rescue after bounded `announce_multi` full-post extraction so a slow broad prompt cannot erase all dated blocks.
 - Fixed OCR media hashing import and added post/media-level OCR success/empty/error/retry context logs.
 - Added an eligibility consistency guardrail: disqualifying LLM reasons such as `tentative_or_free_date` override an inconsistent positive boolean.
+- Added digest-time comparison between fresh candidates and already published future occurrences through the existing LLM-first dedup stage, preventing reposted duplicates from crowding out real new cards.
+- Added ISO-date filtering to digest candidate queries so recurring/free-text dates cannot enter daily `new_occurrences` until materialized as concrete dates.
+- Added shared post context to block-level Gemma rescue prompts so common booking/contact/price facts can be applied by the LLM to each dated block without deterministic semantic extraction.
+- Added a timeout around public identity resolution so a Telethon username lookup cannot stall digest preview/publication.
 
 ## Follow-up Actions
 
@@ -118,6 +126,7 @@ The April 22 guide digest published only one excursion after a three-day publica
 - [ ] Add a scheduler/catch-up smoke that proves a missed daily/full slot either publishes same-day fresh material or records explicit no-candidates evidence.
 - [ ] Add retention policy for `/data/guide_monitoring_results` so old 50+ MB Kaggle bundles cannot block recovery import with `Errno 28`.
 - [ ] Reduce or bound server-side guide digest writer/enrichment retries on repeated provider `500` so compensating publication is not delayed by non-critical copy polish.
+- [ ] Add a persisted duplicate-remediation pass so candidates suppressed against already published reference rows are also marked as duplicate/no-digest in storage, not only suppressed at publish time.
 
 ## Release And Closure Evidence
 
