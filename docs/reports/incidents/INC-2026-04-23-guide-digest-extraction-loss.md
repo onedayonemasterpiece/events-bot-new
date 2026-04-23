@@ -1,10 +1,10 @@
 # INC-2026-04-23 Guide Digest Extraction Loss
 
-Status: open
+Status: closed
 Severity: sev1
 Service: guide excursions monitoring / scheduled guide digest
 Opened: 2026-04-23
-Closed: -
+Closed: 2026-04-23
 Owners: bot operations / guide excursions
 Related incidents: `INC-2026-04-21-guide-gemma4-partial-monitoring`
 Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/llm/request-guide.md`, `docs/operations/cron.md`
@@ -33,6 +33,9 @@ The April 22 guide digest published only one excursion after a three-day publica
 - 2026-04-22 08:18 UTC: compensating digest issue `#37` published only occurrence `#134`.
 - 2026-04-22 11:20 UTC: `ops_run_id=787`, `run_id=677cf5eeb887`, reported `created=3`, `updated=3`.
 - 2026-04-23: audit found `guide_occurrence #130` from `@amber_fringilla/5988` had a concrete future date/time (`2026-05-08 09:00`) and booking context, but Gemma extraction persisted it as not digest-eligible.
+- 2026-04-23 08:53 UTC: deployed prompt hotfix `c73de47e` was followed by production catch-up `ops_run_id=810`, `run_id=a82ef5045439`, with `partial=false`, `errors=0`, `warnings=0`.
+- 2026-04-23 09:07 UTC: extended production catch-up `ops_run_id=811`, `run_id=5aa425525c6b`, scanned `days_back=8`, imported current source state with `llm_ok=45`, `llm_error=0`, `partial=false`, `errors=0`, `warnings=0`.
+- 2026-04-23 09:35 UTC: final digest preview `#40` contained no items (`items=[]`, `covered=[]`), so no subscriber-visible compensating publication was required.
 
 ## Root Cause
 
@@ -82,15 +85,16 @@ The April 22 guide digest published only one excursion after a three-day publica
 
 ## Immediate Mitigation
 
-- Prompt tuning was started against live Gemma 4 cases with OCR disabled to isolate text extraction behavior.
-- No deterministic semantic regex bypass was added; the incident is being corrected at the LLM prompt/stage-contract layer.
+- Prompt tuning was completed against live Gemma 4 cases with OCR disabled to isolate text extraction behavior.
+- No deterministic semantic regex bypass was added; the incident was corrected at the LLM prompt/stage-contract layer.
+- Production rows created by the faulty extraction window were remediated after the fixed extended catch-up: `#130` is `sold_out`, `#136` is `non_target`, and `#137` is `duplicate`.
 
 ## Corrective Actions
 
-- Tighten `trail_scout.screen.v1` so dated non-excursion events, volunteer cleanups/subbotniks, generic meetups, and no-date on-demand offers are not marked digest-ready by default.
-- Tighten `trail_scout.announce_extract_tier1.v1` and block-level rescue so multi-date schedule lines become separate occurrences and available future lines remain digest-eligible.
-- Tighten `route_weaver.enrich.v1` so it cannot downgrade grounded future public schedules without an explicit sold-out/cancelled/past/private claim.
-- Add prompt-contract regression tests for the above LLM-first rules.
+- Tightened `trail_scout.screen.v1` so dated non-excursion events, volunteer cleanups/subbotniks, generic meetups, and no-date on-demand offers are not marked digest-ready by default.
+- Tightened `trail_scout.announce_extract_tier1.v1` and block-level rescue so multi-date schedule lines become separate occurrences and available future lines remain digest-eligible.
+- Tightened `route_weaver.enrich.v1` so it cannot downgrade grounded future public schedules without an explicit sold-out/cancelled/past/private claim.
+- Added prompt-contract regression tests for the above LLM-first rules.
 
 ## Follow-up Actions
 
@@ -100,11 +104,15 @@ The April 22 guide digest published only one excursion after a three-day publica
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- post-deploy verification:
-- compensating catch-up:
+- deployed SHA: `c73de47e fix(guide): tune gemma digest extraction prompts`, reachable from `origin/main` at deploy time.
+- deploy path: manual Fly deploy from clean hotfix worktree; image `events-bot-new-wngqia:deployment-01KPWRC3PA2G4GXBAQD51NDGBJ`, machine `48e42d5b714228`, version `988`.
+- regression checks: `python -m pytest tests/test_guide_gemma4_prompt_contract.py tests/test_guide_kaggle_schema_contract.py tests/test_scheduling_guide_digest.py tests/test_guide_local_llm_timeout_contract.py -q` passed (`8 passed`); `python -m py_compile kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py`; `git diff --check`.
+- live Gemma 4 eval: artifact-only run under `artifacts/codex/guide-gemma4-incident-eval/`; verified `@amber_fringilla/5988`, `@ruin_keepers/5221`, `@ruin_keepers/5222`, `@excursions_profitour/918`, and `@excursions_profitour/908` against the prompt contract without adding deterministic semantic extraction.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues after deploy and again after returning Fly memory from temporary `2048` MB to standard `1024` MB.
+- production catch-up: `ops_run_id=810`, `run_id=a82ef5045439`, full `days_back=5`, `sources=12`, `posts=42`, `prefilter=24`, `llm_ok=24`, `llm_deferred=0`, `llm_error=0`, `created=0`, `updated=3`, `partial=false`, `errors=0`, `warnings=0`.
+- extended production catch-up: `ops_run_id=811`, `run_id=5aa425525c6b`, full `days_back=8`, `limit=80`, `sources=12`, `posts=72`, `prefilter=45`, `llm_ok=45`, `llm_deferred=0`, `llm_error=0`, `created=0`, `updated=7`, `partial=false`, `errors=0`, `warnings=0`.
+- data remediation: `guide_occurrence #130` set to `status=sold_out`, `digest_eligible=0`, `digest_eligibility_reason=sold_out`; `#136` set to `status=non_target`, `digest_eligible=0`, `digest_eligibility_reason=non_target_volunteer_cleanup`; `#137` set to `status=duplicate`, `digest_eligible=0`, `digest_eligibility_reason=duplicate_published_occurrence_134`.
+- compensating publication: not performed because final preview `#40` had `items=[]`, `covered=[]`; earlier preview-only issues `#38` and `#39` remained `status=preview`, `published_at=NULL`, with no published message IDs.
 
 ## Prevention
 
