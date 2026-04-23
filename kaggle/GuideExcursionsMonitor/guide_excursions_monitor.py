@@ -147,6 +147,7 @@ GOOGLE_ACCOUNT_FALLBACK_ENV = "GOOGLE_API_LOCALNAME"
 LLM_TIMEOUT_SECONDS = 120
 LLM_TIMEOUT_RETRY_ATTEMPTS = 1
 LLM_PROVIDER_5XX_RETRY_ATTEMPTS = 1
+ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS = 45
 GUIDE_OCR_ENABLED = True
 GUIDE_OCR_IMAGE_LIMIT_PER_POST = 2
 GUIDE_OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
@@ -210,6 +211,7 @@ def _provider_5xx_status(exc: Exception) -> int | None:
 def refresh_runtime_settings() -> None:
     global MODEL, SCREEN_MODEL, EXTRACT_MODEL, GOOGLE_KEY_ENV, GOOGLE_ACCOUNT_ENV, LLM_TIMEOUT_SECONDS
     global LLM_TIMEOUT_RETRY_ATTEMPTS, LLM_PROVIDER_5XX_RETRY_ATTEMPTS
+    global ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS
     global GUIDE_OCR_ENABLED, GUIDE_OCR_IMAGE_LIMIT_PER_POST, GUIDE_OCR_MAX_IMAGE_BYTES, GUIDE_OCR_TEXT_LIMIT
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
@@ -228,6 +230,13 @@ def refresh_runtime_settings() -> None:
         )
     except Exception:
         LLM_TIMEOUT_RETRY_ATTEMPTS = 1
+    try:
+        ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS = max(
+            20,
+            min(int(float((os.getenv("GUIDE_MONITORING_ANNOUNCE_MULTI_FULL_TIMEOUT_SEC") or "45").strip() or 45)), LLM_TIMEOUT_SECONDS),
+        )
+    except Exception:
+        ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS = min(45, LLM_TIMEOUT_SECONDS)
     try:
         LLM_PROVIDER_5XX_RETRY_ATTEMPTS = max(
             0,
@@ -328,6 +337,7 @@ def _log_llm_gateway_once() -> None:
             f"supabase={'yes' if _get_supabase_client() is not None else 'no'} "
             f"timeout={LLM_TIMEOUT_SECONDS}s "
             f"timeout_retries={LLM_TIMEOUT_RETRY_ATTEMPTS} "
+            f"announce_multi_full_timeout={ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS}s "
             f"provider_5xx_retries={LLM_PROVIDER_5XX_RETRY_ATTEMPTS} "
             f"reserve_fallback={os.getenv('GOOGLE_AI_ALLOW_RESERVE_FALLBACK', '1')} "
             f"local_fallback={os.getenv('GOOGLE_AI_LOCAL_LIMITER_FALLBACK', '1')}"
@@ -1278,10 +1288,18 @@ async def ask_gemma(
     consumer: str,
     max_output_tokens: int = 2200,
     response_schema: dict[str, Any] | None = None,
+    timeout_seconds: int | None = None,
+    timeout_retries: int | None = None,
+    provider_5xx_retries: int | None = None,
 ) -> Any | None:
     if not (os.getenv(GOOGLE_KEY_ENV) or os.getenv(GOOGLE_FALLBACK_KEY_ENV) or "").strip():
         raise RuntimeError(f"{GOOGLE_KEY_ENV} is missing in Kaggle runtime")
     client = _get_gemma_client(consumer)
+    call_timeout = max(1, int(timeout_seconds or LLM_TIMEOUT_SECONDS))
+    call_timeout_retries = LLM_TIMEOUT_RETRY_ATTEMPTS if timeout_retries is None else max(0, int(timeout_retries))
+    call_provider_5xx_retries = (
+        LLM_PROVIDER_5XX_RETRY_ATTEMPTS if provider_5xx_retries is None else max(0, int(provider_5xx_retries))
+    )
     timeout_retries_used = 0
     provider_5xx_retries_used = 0
     for attempt in range(4):
@@ -1303,7 +1321,7 @@ async def ask_gemma(
                     },
                     max_output_tokens=max_output_tokens,
                 ),
-                timeout=LLM_TIMEOUT_SECONDS,
+                timeout=call_timeout,
             )
             return _extract_json(raw or "")
         except Exception as exc:
@@ -1311,14 +1329,14 @@ async def ask_gemma(
             if retry_after is not None and attempt < 3:
                 await asyncio.sleep(min(90.0, retry_after + 1.0))
                 continue
-            if isinstance(exc, asyncio.TimeoutError) and attempt < 3 and timeout_retries_used < LLM_TIMEOUT_RETRY_ATTEMPTS:
+            if isinstance(exc, asyncio.TimeoutError) and attempt < 3 and timeout_retries_used < call_timeout_retries:
                 timeout_retries_used += 1
                 delay = min(12.0, 2.0 * timeout_retries_used)
                 print(
                     (
                         "[gemma:retry] "
                         f"consumer={consumer} model={model} reason=timeout "
-                        f"attempt={attempt + 1} retry={timeout_retries_used}/{LLM_TIMEOUT_RETRY_ATTEMPTS} "
+                        f"attempt={attempt + 1} retry={timeout_retries_used}/{call_timeout_retries} "
                         f"delay={delay:.1f}s"
                     ),
                     flush=True,
@@ -1326,14 +1344,14 @@ async def ask_gemma(
                 await asyncio.sleep(delay)
                 continue
             status_5xx = _provider_5xx_status(exc)
-            if status_5xx is not None and attempt < 3 and provider_5xx_retries_used < LLM_PROVIDER_5XX_RETRY_ATTEMPTS:
+            if status_5xx is not None and attempt < 3 and provider_5xx_retries_used < call_provider_5xx_retries:
                 provider_5xx_retries_used += 1
                 delay = min(15.0, 3.0 * provider_5xx_retries_used)
                 print(
                     (
                         "[gemma:retry] "
                         f"consumer={consumer} model={model} reason=provider_{status_5xx} "
-                        f"attempt={attempt + 1} retry={provider_5xx_retries_used}/{LLM_PROVIDER_5XX_RETRY_ATTEMPTS} "
+                        f"attempt={attempt + 1} retry={provider_5xx_retries_used}/{call_provider_5xx_retries} "
                         f"delay={delay:.1f}s"
                     ),
                     flush=True,
@@ -1652,6 +1670,9 @@ async def _extract_announce_post_tier1(
     flags: dict[str, Any],
     screen: dict[str, Any],
     ocr_chunks: list[dict[str, Any]] | None = None,
+    timeout_seconds: int | None = None,
+    timeout_retries: int | None = None,
+    provider_5xx_retries: int | None = None,
 ) -> list[dict[str, Any]]:
     compact_source = _compact_source_payload(source_payload)
     compact_screen = _compact_screen_payload(screen)
@@ -1713,6 +1734,9 @@ async def _extract_announce_post_tier1(
         consumer="guide_scout_announce_tier1_extract",
         max_output_tokens=520,
         response_schema=schema,
+        timeout_seconds=timeout_seconds,
+        timeout_retries=timeout_retries,
+        provider_5xx_retries=provider_5xx_retries,
     )
     return _coerce_occurrence_items(data)
 
@@ -1732,6 +1756,8 @@ async def _extract_announce_post_tier1_failopen_for_block_rescue(
             flags=flags,
             screen=screen,
             ocr_chunks=ocr_chunks,
+            timeout_seconds=ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS,
+            timeout_retries=0,
         )
     except Exception as exc:
         print(

@@ -70,6 +70,9 @@ def test_guide_multi_block_extraction_fails_open_per_block() -> None:
     assert "async def _extract_occurrence_block_failopen" in source
     assert "[guide:block_extract:warning]" in source
     assert "async def _extract_announce_post_tier1_failopen_for_block_rescue" in source
+    assert "ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS" in source
+    assert "GUIDE_MONITORING_ANNOUNCE_MULTI_FULL_TIMEOUT_SEC" in source
+    assert "timeout_retries=0" in source
     assert "[guide:announce_extract:warning]" in source
     assert "items = await _extract_announce_post_tier1_failopen_for_block_rescue" in source
     assert "rescued = await _extract_occurrence_block_failopen" in source
