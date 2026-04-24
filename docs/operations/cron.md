@@ -77,7 +77,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - canonical mode is production: it uses `VideoAnnounceScenario.run_tomorrow_pipeline(... test_mode=False)`;
   - `V_TOMORROW_TEST_MODE=1` can temporarily switch the same slot back to the legacy test-render path;
   - when `VIDEO_ANNOUNCE_STORY_ENABLED=1`, the same Kaggle notebook can also publish the finished `/v` video to Telegram stories from inside Kaggle and attach `story_publish_report.json` to the kernel output;
-  - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
+  - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; production keeps `me` as the blocking upload target and channel reposts as best-effort fanout because Telegram can require boosts for channel stories; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
   - recommended default window: `16:00 Europe/Kaliningrad`, so even the worst-case `225` minute runtime plus a `10` minute second-target story delay still finishes before the `21:00` audience window.
 - **Telegram monitoring** – scheduled daily import from Telegram sources (channels/groups) via Kaggle when enabled.
 - перед `push` мониторинг проверяет shared remote Telegram session guard по `kaggle_registry`; если другой Telegram-based Kaggle job ещё жив или его status lookup не дал надёжного ответа, текущий run фиксируется как `skipped` вместо запуска второй удалённой Telethon session.
@@ -98,7 +98,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - when production also sets `VIDEO_ANNOUNCE_STORY_REQUIRED=1`, `/healthz` must fail closed if story publish is unexpectedly disabled or the required auth/target env path is broken, so stale deploy branches cannot silently downgrade `/v` to mp4-only delivery;
   - story-enabled exact reruns and regular cron runs must share the same dataset/story path: if `VIDEO_ANNOUNCE_STORY_ENABLED=1`, both paths should generate `story_publish.json` and the encrypted auth datasets;
   - `CrumpleVideo` keeps its main render at `1080x1572`, but story upload must use a story-safe `1080x1920` derivative with padding instead of sending the raw non-`9:16` mp4;
-  - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
+  - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; production keeps `me` as the blocking upload target and channel reposts as best-effort fanout because Telegram can require boosts for channel stories; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
   - recommended default window: `16:45 Europe/Kaliningrad`, which centers the historical GPU render window (`~1:45..2:40`) near `19:00` while still keeping buffer before the `20:10` guide full scan.
 - **CherryFlash `popular_review`** – optional scheduled daily popularity story when `ENABLE_V_POPULAR_REVIEW_SCHEDULED=1`.
   - the scheduled path uses `VideoAnnounceScenario.run_popular_review_pipeline(wait_for_handoff=True)` and must not mark `ops_run(kind='video_popular_review')` as `success` until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug, not `local:CherryFlash`;
@@ -160,8 +160,8 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_REQUIRED` – optional prod guard: when enabled, `/healthz` fails if `/v` story publish is disabled or obviously misconfigured.
 - `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish; the same encrypted auth runtime is also reused by notebook-side Telegram poster-cache rescue when direct poster URLs are dead.
+- `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`. Production should keep the first blocking target as `me` and put channel reposts after it, so downstream `BOOSTS_REQUIRED` channel failures stay visible but do not prevent render delivery.
 - `SOURCE_CHANNEL_ID` – optional Telegram channel id embedded into the encrypted story auth payload so Kaggle can search that channel by filename for poster rescue instead of defaulting to Saved Messages.
-- `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`.
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.
 - `VIDEO_ANNOUNCE_STORY_PERIOD_SECONDS` – story TTL passed to Telegram (default `86400`).
@@ -179,7 +179,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish.
-- `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`.
+- `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`. Production should keep the first blocking target as `me` and put channel reposts after it, so downstream `BOOSTS_REQUIRED` channel failures stay visible but do not prevent render delivery.
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.
 - `VIDEO_ANNOUNCE_STORY_PERIOD_SECONDS` – story TTL passed to Telegram (default `86400`).

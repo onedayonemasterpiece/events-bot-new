@@ -101,3 +101,45 @@ async def test_build_story_publish_config_keeps_native_upload_profile(monkeypatc
 
     assert config is not None
     assert config["upload_profile"] == "telegram_story_native_hevc_720p_v1"
+
+
+@pytest.mark.asyncio
+async def test_build_story_publish_config_preserves_self_blocking_target(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
+        (
+            '[{"peer":"me","delay_seconds":0,"mode":"upload"},'
+            '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous"},'
+            '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous"}]'
+        ),
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        selected_event_dates=["2026-04-25"],
+    )
+
+    assert config is not None
+    assert config["targets"] == [
+        {
+            "peer": "me",
+            "label": "me",
+            "delay_seconds": 0,
+            "mode": "upload",
+        },
+        {
+            "peer": "@kenigevents",
+            "label": "@kenigevents",
+            "delay_seconds": 0,
+            "mode": "repost_previous",
+        },
+        {
+            "peer": "@lovekenig",
+            "label": "@lovekenig",
+            "delay_seconds": 600,
+            "mode": "repost_previous",
+        },
+    ]

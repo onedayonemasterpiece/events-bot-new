@@ -397,12 +397,13 @@ color: #100E0E;
 - Если `VIDEO_ANNOUNCE_STORY_ENABLED=1`, story publish выполняется внутри `Kaggle` notebook, а не после локального скачивания:
   - notebook читает `story_publish.json` из session-dataset;
   - auth для Telethon передаётся в Kaggle через encrypted split-datasets (`story_publish.enc` + `story_publish.key`);
-  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (например `@kenigevents`, затем `@lovekenig` через `600` секунд);
+  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем best-effort `@kenigevents` и `@lovekenig` через `repost_previous`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - `main`-канал профиля + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` остаются только как legacy fallback, если explicit ordered list не задан;
   - exact scheduled rerun через `_run_scheduled_video_tomorrow` должен наследовать тот же story-config, что и обычный cron-slot; если `story_publish.json` отсутствует в таком rerun, это считается prod-config defect, а не отдельным режимом работы;
   - перед долгим video-render notebook делает `CanSendStoryRequest` preflight и трактует первый target в ordered fanout как blocking publish gate;
-  - если blocking target не принимает stories (например, user account без `Telegram Premium` или канал требует дополнительные boosts), run останавливается до рендера и пишет понятный `story_publish_report.json`;
+  - в production первым target должен оставаться self-account (`me`) на Premium-сессии, чтобы новые Telegram channel-story требования (`BOOSTS_REQUIRED`) на downstream каналах не блокировали ежедневный render;
+  - если blocking target не принимает stories (например, user account без `Telegram Premium`), run останавливается до рендера и пишет понятный `story_publish_report.json`;
   - downstream fanout targets после первого считаются best-effort по умолчанию: их preflight/publish ошибки попадают в `story_publish_report.json`, но не должны отменять render, если первый target уже прошёл;
   - `story_publish_report.json` записывается в JSON-safe виде даже если Telethon возвращает `datetime`/TL-object поля в `result`;
   - repo-local kernel refs (`local:CrumpleVideo`) считаются только pre-handoff состоянием: если рантайм перезапустился до сохранения реального Kaggle slug, recovery не должен возобновлять `kernels_status` polling по `local:*`, а должен перевести сессию в rerun-required `FAILED`;
@@ -416,7 +417,7 @@ color: #100E0E;
   - notebook пишет `story_publish_report.json` в output и считает run failed, если story publish был включён, но blocking target завершился ошибкой; partial fanout failures после первого target остаются visible в report как non-blocking.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
 - Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path.
-- Live preflight on `2026-04-07` уже проходил для обоих production targets `@kenigevents` и `@lovekenig` на premium-сессии, поэтому актуальный rollout-risk для stories лежит в code/config path, а не в старом `BOOSTS_REQUIRED`.
+- Live preflight on `2026-04-24` showed `@kenigevents` and `@lovekenig` can now return `BOOSTS_REQUIRED`, so production keeps the Premium self-account as the blocking target and treats those channel reposts as best-effort fanout until channel boost/capability status changes.
 
 ## Продовый rollout
 
