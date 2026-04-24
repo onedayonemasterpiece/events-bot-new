@@ -45,6 +45,8 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Use evidence from both message text and OCR." in source
     assert "Prefer filling location_name and location_address" in source
     assert "Do not invent end_date for single-date events." in source
+    assert "Message date is only context for resolving explicit relative anchors" in source
+    assert "return [] rather than using message_date as the event date" in source
     assert 'If a post says "в разделе X на выставке Y"' in source
     assert 'usually return ONE event object for that exhibition' in source
     assert "do NOT return [] only because some venue, city, or ticket fields remain unresolved" in source
@@ -111,6 +113,10 @@ def test_tg_monitor_single_lecture_rescue_pass_is_llm_first() -> None:
     assert r'приглашаем\s+на\s+(?:лекци|встреч|экскурс|показ)' in source
     assert 'that is enough to keep one best-effort event row even if venue fields stay empty' in source
     assert "Prefer one row over [] for such a clearly invited single event." in source
+    assert "Do not use message_date itself as the event date unless the text/OCR contains an explicit relative date anchor" in source
+    assert "neither text nor OCR gives a date or relative date anchor" in source
+    assert "_lacks_supported_non_exhibition_date" in source
+    assert "Single lectures/talks/excursions need a supported date." in source
     assert "extract_events lecture rescue failed" in source
 
 
@@ -178,6 +184,7 @@ def test_tg_monitor_event_schema_carries_gemma4_descriptions() -> None:
     assert "parenthetical origin/collection note" in source
     assert "biographical/affiliation mention of a speaker" in source
     assert "Human-readable event name. Never include inline comments" in source
+    assert "Message date is context for resolving explicit relative anchors, not a default event date." in source
     assert "Never include uncertainty markers like \"or something similar\"" in source
     assert "return one attendee-facing lecture title, not two rows" in source
     assert 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка"' in source

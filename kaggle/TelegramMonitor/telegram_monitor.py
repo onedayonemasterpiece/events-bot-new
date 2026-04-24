@@ -1183,7 +1183,10 @@ EVENT_ARRAY_SCHEMA = {
                 'If a post announces the opening of an exhibition and the same exhibition run, '
                 'prefer one canonical exhibition title unless the post clearly advertises two separate attendable events.'
             ),
-            'date': _string_schema('YYYY-MM-DD or empty string; never a placeholder literal.'),
+            'date': _string_schema(
+                'YYYY-MM-DD or empty string; never a placeholder literal. '
+                'Message date is context for resolving explicit relative anchors, not a default event date.'
+            ),
             'time': _string_schema('HH:MM (24h) or empty string; never a date.'),
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
             'location_name': _string_schema(
@@ -2104,7 +2107,11 @@ async def extract_events(
         'are NOT new events to attend unless the same post also explicitly invites attendance at a future dated event. '
         'Fundraising-only posts ("сбор средств", "помогите собрать"), standalone video/blog/content pieces without a real invite, '
         'and book reviews/sales are NOT events to attend. Return [] for such posts. '
-        'Date is REQUIRED: never invent a date from the message date. '
+        'Date is REQUIRED for dated events: never invent a date from the message date. '
+        'For non-exhibition single events (lecture/talk/meetup/excursion/etc.), if neither message text nor OCR '
+        'contains an explicit event date or a relative date anchor like "сегодня", "завтра", or "послезавтра", '
+        'return [] rather than using message_date as the event date. '
+        'Message date is only context for resolving explicit relative anchors; it is not the event date by default. '
         'For exhibitions/fairs: allow missing time, but require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
         'For museum/exhibition posts about currently displayed works, artists, or sections, prefer one ongoing exhibition card over [] or {} '
         'when the post clearly refers to a real exhibition/display in the present tense, even if this particular post does not restate the full range. '
@@ -2177,17 +2184,30 @@ async def extract_events(
         re.IGNORECASE | re.UNICODE,
     )
     has_anchor = bool(anchor_re.search(content) or (ocr_text and anchor_re.search(ocr_text)))
+    def _lacks_supported_non_exhibition_date(ev: dict) -> bool:
+        if not msg_date_iso or has_anchor or not isinstance(ev, dict):
+            return False
+        if str(ev.get('end_date') or '').strip():
+            return False
+        event_type = str(ev.get('event_type') or '').strip().casefold()
+        # Exhibition/display cards are the only prompt-approved "as-of"
+        # message-date use. Single lectures/talks/excursions need a supported date.
+        if event_type in {'выставка', 'экспозиция', 'ярмарка', 'фестиваль'}:
+            return False
+        date_value = str(ev.get('date') or '').strip()
+        if not date_value:
+            return True
+        if date_value != msg_date_iso:
+            return False
+        return True
+
     if open_call_re.search(content) or (ocr_text and open_call_re.search(ocr_text)):
         return []
     if msg_date_iso and not has_anchor:
         out = [
             e
             for e in out
-            if not (
-                isinstance(e, dict)
-                and str(e.get('date') or '') == msg_date_iso
-                and not str(e.get('end_date') or '').strip()
-            )
+            if not _lacks_supported_non_exhibition_date(e)
         ]
     if not out and schedule_like:
         schedule_header_re = re.compile(
@@ -2260,6 +2280,10 @@ async def extract_events(
             'that is enough to keep one best-effort event row even if venue fields stay empty. '
             'Prefer one row over [] for such a clearly invited single event. '
             'Merge OCR date/time into that row; infer the year from message date when needed. '
+            'Do not use message_date itself as the event date unless the text/OCR contains an explicit relative date anchor '
+            'such as "сегодня", "завтра", or "послезавтра". '
+            'If text invites a lecture/talk but neither text nor OCR gives a date or relative date anchor, return [] '
+            'rather than a row dated by message_date. '
             'Never emit empty JSON objects ({}) or venue-only rows as list items. '
             'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
             'Use source context only as weak hosting context; do not copy it verbatim into title, raw_excerpt, or venue fields. '
@@ -2421,6 +2445,8 @@ async def extract_events(
                     out = data_museum_fix
             except Exception as exc:
                 logger.warning('extract_events museum spotlight repair failed: %s', exc)
+    if msg_date_iso and not has_anchor:
+        out = [e for e in out if not _lacks_supported_non_exhibition_date(e)]
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
