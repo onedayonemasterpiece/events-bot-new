@@ -100,6 +100,7 @@
 - latent post-migration regex bug closed: the `open_call_re` and `anchor_re` guardrails in `extract_events` were shipped as double-escaped raw strings (`r"\\b..."`) in the first Gemma 4 migration commit, so they never matched real text. This silently broke both the open-call skip (leaked open-call/`конкурсный отбор` posts through to server-side guards) and the "require an anchor before accepting date == message_date" rule (caused valid events whose anchor was a real word like `сегодня`/`23 апреля` to be indistinguishable from invented dates and silently dropped). Patterns now use correct single-escape raw strings and are covered by behavioral regression tests.
 - prompt-parity baseline: a full Gemma 3 A/B did not exist in repo artifacts at the time of this wave. The audit is therefore anchored to Gemma 4 outputs (`run_id=48fa98294333486d94dd0e14785d774f`, 84 events across 69 messages) compared against the Telegram Monitoring contract documented in `docs/features/telegram-monitoring/README.md`; all fixes target concrete failure modes visible in that evidence.
 - curated eval pack now exists at [tests/fixtures/telegram_monitor_gemma4_eval_pack_2026_04_23.json](/workspaces/events-bot-new-tg-g4-sU9xCP/tests/fixtures/telegram_monitor_gemma4_eval_pack_2026_04_23.json): 10 representative real posts from the same full run, including negative cases (thought leak, `unknown`, city drift, English `event_type`, retrospective/non-event, schedule garbage row) and one positive control. This closes the biggest “Opus had too little data” gap for the next tuning pass even before a full Gemma 3 vs Gemma 4 A/B exists.
+- local-only LLM-first tuning on that eval pack now uses staged Gemma prompts instead of semantic regex/fallback extraction: single invited lecture rescue, named ongoing exhibition rescue, museum spotlight rescue/repair, and chunked schedule rescue. Full-path local checks with `GOOGLE_API_KEY2` (not production-equivalent) now produce clean rows for `TG-G4-EVAL-02`, `-03`, `-04`, `-07`, and `-10`; `TG-G4-EVAL-08` no longer emits the previous garbage placeholder row and extracts real zoo schedule rows, but individual schedule chunks can still fail with provider `500`/timeout, so recall on long timetables remains a production-smoke watch item.
 
 Live evidence (`2026-04-22`):
 
@@ -112,6 +113,7 @@ Live evidence (`2026-04-22`):
 Оставшийся caveat:
 
 - full scheduled run succeeded through recovery, and the post-`45s` manual smoke proves the primary `ops_run` can finish `success` without recovery. Remaining production watch item: the next natural scheduled all-source run should be observed once with the `45s` default to confirm the full schedule also stays inside the primary poll window.
+- quality parity is still not proven by a Gemma 3 A/B. The current evidence is local-only Gemma 4 tuning on a real 10-case pack plus existing Kaggle full-run artifacts; production-equivalent validation must still run through `GOOGLE_API_KEY3`.
 
 ## Что ещё не сделано
 
@@ -142,8 +144,8 @@ Live evidence (`2026-04-22`):
 Факты:
 
 - subset live canary passed (см. раздел выше);
-- full scheduled run на всех источниках после hardening ещё нужно прогнать и сравнить с recent Gemma 3 baseline по import volume/ошибкам;
-- prompt-quality follow-up теперь должен опираться не на разрозненные логи, а на curated eval pack `TG-G4-EVAL-01..10`; следующий Opus-pass стоит просить о diffs только после прогона этого набора и явной фиксации, какие кейсы улучшились, какие остались без прогресса, и где появились регрессии по positive control;
+- full scheduled run на всех источниках после prompt tuning ещё нужно прогнать и сравнить с recent Gemma 3 baseline по import volume/ошибкам;
+- prompt-quality follow-up теперь опирается на curated eval pack `TG-G4-EVAL-01..10`; локально закрыты `02/03/04/07/10`, `08` улучшен до реальных schedule rows без garbage placeholder, но остаётся риск частичного recall из-за provider failures на отдельных chunks;
 - Supabase quota registry нужно синхронизировать с `GOOGLE_API_KEY3`, чтобы межсервисный лимитер видел primary key row; код уже защищён от silent shared-pool fallback, но registry sync вернёт централизованный accounting.
 
 ### 5. Universal Festival Parser не переведён
