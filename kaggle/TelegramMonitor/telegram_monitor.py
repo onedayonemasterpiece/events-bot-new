@@ -1171,13 +1171,25 @@ EVENT_ARRAY_SCHEMA = {
         'properties': {
             'title': _string_schema(
                 'Human-readable event name. Never include inline comments (//, #), '
-                "meta-commentary, reasoning, or markdown markers (**, __, ```)."
+                "meta-commentary, reasoning, or markdown markers (**, __, ```). "
+                'Never include uncertainty markers like "or something similar", alternative title candidates, '
+                'or instruction-like text. '
+                'Prefer a concise canonical attendee-facing title over a subsection label or long paraphrase. '
+                'When one lecture/talk is presented with both a cycle/series label and a concrete lecture title, '
+                'return one attendee-facing lecture title, not two rows. '
+                'If a post describes a section/part inside a larger exhibition '
+                '(for example "в разделе X на выставке Y"), use the main exhibition title Y '
+                'unless X is explicitly announced as its own separate attendable event. '
+                'If a post announces the opening of an exhibition and the same exhibition run, '
+                'prefer one canonical exhibition title unless the post clearly advertises two separate attendable events.'
             ),
             'date': _string_schema('YYYY-MM-DD or empty string; never a placeholder literal.'),
             'time': _string_schema('HH:MM (24h) or empty string; never a date.'),
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
             'location_name': _string_schema(
                 'Venue name where the event takes place; empty string if unknown. '
+                'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
+                'unless that exact full venue name is explicitly stated. '
                 'Never the literal string "unknown".'
             ),
             'location_address': _string_schema(
@@ -1185,9 +1197,13 @@ EVENT_ARRAY_SCHEMA = {
                 'Never the literal string "unknown".'
             ),
             'city': _string_schema(
-                'City where the event is held; empty string if unknown. '
-                'Never copy a city that appears only in parenthetical origin/collection notes '
-                '(e.g. "(Санкт-Петербург)" inside a description of an exhibit collection). '
+                'City of the venue where attendees physically go; empty string if not grounded in the text/OCR. '
+                'Never copy a city that appears only as (a) a parenthetical origin/collection note, or '
+                '(b) a biographical/affiliation mention of a speaker/author/curator/institution '
+                '(e.g. "лектор — X, сотрудник Российской национальной библиотеки" does not put the event in '
+                'Saint Petersburg). If the venue/address string itself contains a city like Калининград, '
+                'that grounded venue city wins over every other city mention. '
+                'The venue address wins; if no venue city is supported, leave empty. '
                 'Never the literal string "unknown".'
             ),
             'ticket_link': _string_schema('Registration or ticket URL; empty string if none.'),
@@ -1196,7 +1212,7 @@ EVENT_ARRAY_SCHEMA = {
             'ticket_status': _string_schema(),
             'raw_excerpt': _string_schema(
                 'Short (1-3 sentences) excerpt from the message without adding new facts. '
-                'Never include inline comments or markdown markers.'
+                'Never include inline comments, instruction-like text, or markdown markers.'
             ),
             'event_type': _string_schema(
                 'Single lowercase Russian noun (концерт, выставка, лекция, спектакль, встреча, '
@@ -1209,6 +1225,22 @@ EVENT_ARRAY_SCHEMA = {
             'search_digest': _string_schema(),
             'festival': _string_schema(),
         },
+        'required': [
+            'title',
+            'date',
+            'time',
+            'end_date',
+            'location_name',
+            'location_address',
+            'city',
+            'ticket_link',
+            'ticket_status',
+            'raw_excerpt',
+            'event_type',
+            'emoji',
+            'search_digest',
+            'festival',
+        ],
     },
 }
 
@@ -1970,27 +2002,39 @@ _EVENT_STRING_FIELDS: tuple[str, ...] = (
     'search_digest',
     'festival',
 )
-_UNKNOWN_LITERALS: frozenset[str] = frozenset({'unknown', 'n/a', 'none', 'null', '-'})
+_UNKNOWN_LITERALS: frozenset[str] = frozenset({'unknown', 'n/a', 'none', 'null', '-', 'title'})
 _LEAKED_COMMENT_TAIL_RE = re.compile(
-    r"(?:\s+[(\[]?\s*(?://|#)\s.*$|[(\[]\s*(?://|#)\s.*$)",
+    r"(?:\s+[(\[{]?\s*(?://|#)\s.*$|[(\[{]\s*(?://|#)\s.*$)",
     re.DOTALL,
 )
 _MARKDOWN_STRIP_RE = re.compile(r"(?:\*\*|__|~~|```|`)+")
+# Gemma 4 structured-output leakage: model occasionally emits HTML-like tags
+# (``</strong>``, ``<br>``, ...) and trailing meta-commentary like
+# ``own title:`` / ``own id:`` inside JSON string fields. These never belong
+# in event strings — strip them deterministically.
+_HTML_TAG_RE = re.compile(r"</?[a-zA-Z][^<>]*>")
+_TRAILING_META_TAIL_RE = re.compile(
+    r"\s+(?:own\s+(?:title|id|type|event|field)|own)\s*[:=]?\s*$",
+    re.IGNORECASE,
+)
 
 
 def _clean_event_string_value(value) -> str:
     """Sanitize a free-form LLM string value.
 
     Drops inline code-style comments (`// ...`, `# ...`) that Gemma 4 occasionally leaks
-    mid-value, strips markdown emphasis markers, and collapses the literals we never want
-    to trust downstream ("unknown", "n/a", ...).
+    mid-value, strips markdown emphasis markers, strips HTML-style tags and trailing
+    meta-commentary tails, and collapses the literals we never want to trust downstream
+    ("unknown", "n/a", ...).
     """
     if value is None:
         return ''
     if not isinstance(value, str):
         return ''
     cleaned = _LEAKED_COMMENT_TAIL_RE.sub('', value)
+    cleaned = _HTML_TAG_RE.sub('', cleaned)
     cleaned = _MARKDOWN_STRIP_RE.sub('', cleaned)
+    cleaned = _TRAILING_META_TAIL_RE.sub('', cleaned)
     cleaned = cleaned.strip().strip('*_~`').strip()
     if cleaned.casefold() in _UNKNOWN_LITERALS:
         return ''
@@ -2003,6 +2047,8 @@ def _sanitize_extracted_events(events) -> list[dict]:
     This does not replace the LLM (extract_events continues to be LLM-first). It only
     cleans up well-known Gemma 4 failure modes that slip through the prompt contract:
       - inline `// ...` / `# ...` commentary leaked into JSON string values;
+      - HTML-style tags (``</strong>``, ``<br>``, ...) leaking into event strings;
+      - trailing meta-commentary tails like ``own title:`` / ``own id:``;
       - stray markdown markers (``**``, ``__``, ``` ``` ```) wrapping titles/excerpts;
       - literal placeholders like ``"unknown"`` / ``"n/a"`` where the prompt asks for "";
       - fully empty ghost rows (no title AND no date), which Gemma 4 emits once per
@@ -2019,6 +2065,8 @@ def _sanitize_extracted_events(events) -> list[dict]:
                 evt[field] = _clean_event_string_value(evt.get(field))
         title = str(evt.get('title') or '').strip()
         date_val = str(evt.get('date') or '').strip()
+        if not title:
+            continue
         if not title and not date_val:
             continue
         cleaned.append(evt)
@@ -2203,13 +2251,25 @@ async def extract_events(
         content = (content + '\n\nOCR:\n' + ocr_text).strip()
     if not content or len(content) < 10:
         return []
+    message_date_ymd = msg_date.isoformat() if msg_date else ''
     date_context = f"Message date (ISO, UTC): {message_date}" if message_date else 'Message date: unknown'
+    if message_date_ymd:
+        date_context += f"\nMessage date date part (YYYY-MM-DD): {message_date_ymd}"
     source_context_parts = []
     if source_username:
         source_context_parts.append(f"Source username: @{str(source_username).strip().lstrip('@')}")
     if source_title:
         source_context_parts.append(f"Source title: {str(source_title).strip()[:120]}")
     source_context = ("\n" + "\n".join(source_context_parts)) if source_context_parts else ""
+    source_context_line = "Source context: " + "; ".join(source_context_parts) if source_context_parts else ""
+    schedule_like = bool(
+        re.search(
+            r'\b\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b',
+            content,
+            re.IGNORECASE,
+        )
+        and len(re.findall(r'\b\d{1,2}[.:]\d{2}\b', content)) >= 2
+    )
     prompt = (
         'You extract events from a Telegram message. A single message may contain MULTIPLE events, '
         'including repertoire/schedule lines like "DD.MM | Title". '
@@ -2224,13 +2284,39 @@ async def extract_events(
         'Never output the literal string "unknown" (or "n/a", "none") in any text field; use empty string instead. '
         'Never include inline comments ("//", "#", "TODO"), meta-commentary, reasoning, or markdown markers '
         '(**, __, ```, ~~) inside any field value; JSON values must be plain text only. '
+        'Never include uncertainty markers like "or something similar", alternative title candidates, '
+        'or instruction-like phrases such as "return one event object" or "second row" inside any field value. '
+        'Choose the final title silently. '
         'Do not emit placeholder events that have empty title and empty date; if you cannot anchor an event to '
         'at least a real title or a real date from the text/OCR, do not include it at all. '
+        'Never emit empty JSON objects ({}) or venue-only rows as list items. '
         'Use evidence from both message text and OCR. If OCR contains venue, hall/floor, city, exact date, exact time, '
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
+        'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка" '
+        'unless that exact full venue name is explicitly stated in text or OCR. '
+        'If a post clearly invites attendance to one lecture/talk/meetup/excursion/event and text or OCR gives an exact date/time, '
+        'do NOT return [] only because some venue, city, or ticket fields remain unresolved; return one best-effort event object and leave unresolved text fields empty. '
+        'For such a clearly invited single lecture/talk, prefer filling date/time from text or OCR rather than leaving them empty. '
+        'If only the title is reliable at extraction time, still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it. '
+        'For a clearly invited single lecture/talk with one supported start datetime, return exactly one event row '
+        'and merge the concrete lecture title, OCR date/time, and any supported venue/hosting/ticket facts into that row. '
+        'A museum-hosted lecture invitation remains an event even when the venue is only implicit from phrases like '
+        '"билеты продаются на сайте и в кассе музея"; keep the lecture and leave unresolved venue fields empty if needed. '
+        'Use source context only as weak hosting context for such museum/library/venue-hosted posts; '
+        'do not copy source context verbatim into title, raw_excerpt, or venue fields. '
+        'Do not split one real event into an extra title-only row just because OCR or a poster repeats a subtitle, slogan, series label, or heading. '
+        'Every additional event must have its own distinct date/time or clearly separate attendance intent; otherwise omit the duplicate row. '
+        'If one lecture/talk has both a cycle/series label and a concrete lecture title, return exactly one row for the attendable lecture; '
+        'keep the cycle/series label in raw_excerpt/search_digest, not as a second event row. '
+        'Do not create a second row that contains only venue/location fields for the same lecture. '
         'Title must be the event name (not just a date, weekday, or time). '
         'Prefer concise human event titles; for talks/lectures/meetups keep project or series context in raw_excerpt/search_digest, not inside an overlong title. '
+        'If a post says "в разделе X на выставке Y", title should usually be the main exhibition Y, not the subsection X, '
+        'unless X is explicitly announced as its own separate attendable event. '
+        'If a post announces the opening of an exhibition and also says the same exhibition will run until a later end_date, '
+        'usually return ONE event object for that exhibition: keep the opening datetime as date/time and the exhibition run in end_date, '
+        'instead of splitting "opening" and "exhibition" into two separate events, unless the post clearly advertises two separately attendable events. '
         'If the message begins with a date marker like "19.02, четверг" treat it as a date, not a title. '
         'Title must not start with punctuation like commas. '
         'raw_excerpt should be a short (1-3 sentences) excerpt from the message without adding new facts. '
@@ -2245,14 +2331,24 @@ async def extract_events(
         'and book reviews/sales are NOT events to attend. Return [] for such posts. '
         'Date is REQUIRED: never invent a date from the message date. '
         'For exhibitions/fairs: allow missing time, but require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
+        'For museum/exhibition posts about currently displayed works, artists, or sections, prefer one ongoing exhibition card over [] or {} '
+        'when the post clearly refers to a real exhibition/display in the present tense, even if this particular post does not restate the full range. '
+        'In that case you MAY use message_date as an "as-of" merge date and keep unresolved venue fields empty. '
+        'For museum posts spotlighting one artist or one body of work currently shown in the museum, prefer one exhibition card with event_type="выставка" '
+        'and the best attendee-facing title instead of returning [] or {}. '
         'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
         'Do not invent end_date for single-date events. '
         'Do not include hashtags in title, raw_excerpt, or search_digest. '
         'If OCR contains an explicit date or time, prefer it over the message date. '
         'If a date is missing a year, infer it from the message date and choose '
         'the nearest upcoming date relative to that message date. '
-        'city must be where the event is held. Ignore cities that appear only in parenthetical origin/collection notes '
-        '(e.g. "(Санкт-Петербург)" describing where a museum collection comes from does not make the event happen there). '
+        'city must be the city of the venue where attendees physically go, grounded in the venue address from text or OCR. '
+        'Do NOT copy a city that appears only as (a) a parenthetical origin/collection note '
+        '(e.g. "(Санкт-Петербург)" describing a museum collection origin), or '
+        '(b) a biographical/affiliation mention of a speaker, author, curator, organizer, or institution '
+        '(e.g. "лектор — Борис Мегорский, заведующий отделом Российской национальной библиотеки" does not put the event in Saint Petersburg). '
+        'If the supported venue/address string itself already contains "Калининград" or another explicit city, that venue city wins over every other city mention. '
+        'If the venue line ends with a city like "Калининград", use that city; if no venue city is supported, leave city empty rather than guess. '
         'event_type must be a single lowercase Russian noun: концерт, выставка, лекция, спектакль, встреча, '
         'ярмарка, фестиваль, мастер-класс, кинопоказ, стендап, экскурсия, акция, экспозиция. '
         'Never emit English event_type tokens like "exhibition", "meetup", "party", "stand-up"; '
@@ -2260,11 +2356,14 @@ async def extract_events(
         + date_context + source_context + '\n'
         'Message text:\n' + content
     )
-    try:
-        text = await _call_model('text', prompt, response_schema=EVENT_ARRAY_SCHEMA)
-    except Exception as exc:
-        logger.warning('extract_events failed: %s', exc)
-        return []
+    if schedule_like:
+        text = '[]'
+    else:
+        try:
+            text = await _call_model('text', prompt, response_schema=EVENT_ARRAY_SCHEMA)
+        except Exception as exc:
+            logger.warning('extract_events failed: %s', exc)
+            text = '[]'
     data = _safe_json(text)
     if data is None:
         fix_prompt = (
@@ -2330,6 +2429,126 @@ async def extract_events(
             out = bridge_rescue
         else:
             out = bridge_fallback
+
+    if not out and schedule_like:
+        schedule_header_re = re.compile(
+            r'(?im)^\s*\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b[^\n]*$'
+        )
+        headers = list(schedule_header_re.finditer(content))
+        schedule_blocks: list[str] = []
+        for idx, match in enumerate(headers):
+            end = headers[idx + 1].start() if idx + 1 < len(headers) else len(content)
+            block = content[match.start():end].strip()
+            block = re.split(r'\n\s*(?:Рассказывать о событиях|#|📸|Присылайте\s+ваши\s+фото)', block, maxsplit=1)[0].strip()
+            if len(re.findall(r'\b\d{1,2}[.:]\d{2}\b', block)) >= 1:
+                block_lines = [line.strip() for line in block.splitlines() if line.strip()]
+                header_line = block_lines[0] if block_lines else block[:120]
+                timed_lines = [line for line in block_lines[1:] if re.search(r'\b\d{1,2}[.:]\d{2}\b', line)]
+                if timed_lines:
+                    for chunk_start in range(0, len(timed_lines), 3):
+                        schedule_blocks.append((header_line + '\n' + '\n'.join(timed_lines[chunk_start:chunk_start + 3])).strip())
+                else:
+                    schedule_blocks.append(block[:1200])
+        if not schedule_blocks:
+            schedule_blocks = [content[:1800]]
+        schedule_events: list[dict] = []
+        for schedule_block in schedule_blocks[:8]:
+            schedule_prompt = (
+                'Extract attendable schedule items from one small Telegram timetable chunk as strict JSON array. '
+                'The chunk starts with one date header like "18 АПРЕЛЯ" followed by up to three time lines. '
+                'Each returned event must correspond to one real schedule line with its own time under this date header. '
+                'Fields per event: title, date (YYYY-MM-DD), time (HH:MM or empty), '
+                'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
+                'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
+                'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+                'Infer the year from message date and choose the nearest upcoming date for the day/month header. '
+                'Keep excursions, feedings, public talks, and other visitor-facing timetable items. '
+                'Ignore photo-rubric text, hashtags, channel promotion, and generic ticket-sales boilerplate. '
+                'Never use placeholder literals like "title" as a title; copy the attendee-facing name from the time line. '
+                'Never emit empty JSON objects ({}) or venue-only rows. '
+                'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
+                'Use source context only as weak venue context; do not copy it verbatim into title or raw_excerpt. '
+                + date_context + '\n'
+                + (source_context_line + '\n' if source_context_line else '')
+                + 'Schedule day-block:\n' + schedule_block
+            )
+            try:
+                text_schedule = await _call_model('text', schedule_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+                data_schedule = _safe_json(text_schedule)
+                if isinstance(data_schedule, dict) and isinstance(data_schedule.get('events'), list):
+                    schedule_events.extend(data_schedule['events'])
+                elif isinstance(data_schedule, list):
+                    schedule_events.extend(data_schedule)
+            except Exception as exc:
+                logger.warning('extract_events schedule rescue failed: %s', exc)
+        out = schedule_events
+    # Narrow LLM rescue-pass for single invited lecture/talk posts where the
+    # general extractor returned [] despite OCR carrying the date/time anchor.
+    if not out and ocr_text and re.search(
+        r'\b(приглашаем\s+на\s+(?:лекци|встреч|экскурс|показ)|лекци[яюи]|лектор[а-яё]*|встреч[ауе]|экскурси[яюи]|кинопоказ\w*)\b',
+        content,
+        re.IGNORECASE,
+    ):
+        lecture_prompt = (
+            'Extract a single attendable lecture/talk/meetup/excursion event from Telegram text as strict JSON array. '
+            'Return [] only if there is clearly no real attendable single event. '
+            'Fields per event: title, date (YYYY-MM-DD), time (HH:MM or empty), '
+            'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
+            'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
+            'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+            'Use empty string for unknown text fields. '
+            'If text says "Приглашаем на лекцию/встречу/экскурсию/показ" and OCR gives one explicit date/time, '
+            'that is enough to keep one best-effort event row even if venue fields stay empty. '
+            'Prefer one row over [] for such a clearly invited single event. '
+            'Merge OCR date/time into that row; infer the year from message date when needed. '
+            'Never emit empty JSON objects ({}) or venue-only rows as list items. '
+            'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
+            'Use source context only as weak hosting context; do not copy it verbatim into title, raw_excerpt, or venue fields. '
+            'event_type must be a single lowercase Russian noun like лекция, встреча, экскурсия, кинопоказ. '
+            'If the post is not a single attendable lecture/talk/meetup/excursion event, return []. '
+            + date_context + '\n'
+            + (source_context_line + '\n' if source_context_line else '')
+            + 'Message text:\n' + content
+        )
+        try:
+            text_lecture = await _call_model('text', lecture_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+            data_lecture = _safe_json(text_lecture)
+            if isinstance(data_lecture, dict) and isinstance(data_lecture.get('events'), list):
+                out = data_lecture['events']
+            elif isinstance(data_lecture, list):
+                out = data_lecture
+        except Exception as exc:
+            logger.warning('extract_events lecture rescue failed: %s', exc)
+    if not out and re.search(r'\b(?:на\s+выставке|выставк[аеуы]?)\s+[«"].+?[»"]', content, re.IGNORECASE | re.DOTALL):
+        named_exhibition_prompt = (
+            'Extract one named ongoing exhibition event from Telegram text as strict JSON array. '
+            'Return [] only if the quoted name is clearly not an exhibition title. '
+            'Fields per event: title, date (YYYY-MM-DD), time (HH:MM or empty), '
+            'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
+            'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
+            'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+            'If the post says "в разделе X на выставке Y", title must be the main exhibition Y, not the section X. '
+            'Do not require the post to restate the exhibition date range; this rescue path is specifically for current named exhibition posts without full dates. '
+            'Phrases like "на выставке Y можно увидеть ..." are sufficient evidence of a current display. '
+            'For a kept ongoing named exhibition, set date to the Message date date part as an as-of merge date '
+            'and set event_type exactly to "выставка". '
+            'Use empty string for unknown venue/address/city fields; never output "unknown". '
+            'Never emit empty JSON objects ({}) or venue-only rows. '
+            'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
+            + date_context + '\n'
+            + (source_context_line + '\n' if source_context_line else '')
+            + 'Message text:\n' + content
+        )
+        try:
+            text_named_exhibition = await _call_model('text', named_exhibition_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+            data_named_exhibition = _safe_json(text_named_exhibition)
+            if isinstance(data_named_exhibition, dict) and isinstance(data_named_exhibition.get('events'), list):
+                out = data_named_exhibition['events']
+            elif isinstance(data_named_exhibition, list):
+                out = data_named_exhibition
+        except Exception as exc:
+            logger.warning('extract_events named exhibition rescue failed: %s', exc)
+
     # Fallback for ongoing exhibition posts where generic extraction may return []
     # due to missing explicit start date/time.
     if not out and re.search(r'\b(выставк\w*|экспозици\w*|ярмарк\w*)\b', content, re.IGNORECASE):
@@ -2343,15 +2562,36 @@ async def extract_events(
             'Use empty string for unknown text fields. Never output the literal "unknown" in any field. '
             'Never include inline comments ("//", "#"), meta-commentary, reasoning, or markdown markers '
             '(**, __, ```) inside any field value. '
+            'Never include uncertainty markers like "or something similar", alternative title candidates, or instruction-like text inside any field value. '
             'Do not emit placeholder events with empty title and empty date. '
+            'Never emit empty JSON objects ({}) or venue-only rows as list items. '
+            'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка" '
+            'unless that exact full venue name is explicitly stated in text or OCR. '
             'Set event_type to "выставка" (or "ярмарка" where appropriate); never English tokens like "exhibition". '
             'Open calls / конкурсный отбор / приём заявок are NOT events to attend. Return [] for such posts. '
             'Require an explicit date range or an explicit end_date ("до ..." / "по ..."). '
+            'Exception for ongoing named exhibitions: if the post clearly refers to a specific exhibition by its explicit title '
+            '(for example "на выставке «Y»" or "выставка «Y»") but discusses a section/update inside that same exhibition, '
+            'you MAY still return one exhibition object for Y with date=message_date as an "as-of" merge date, '
+            'even when this post does not restate the full date range. '
+            'More generally, for museum/exhibition posts about currently displayed works, artists, or sections, prefer one ongoing exhibition card over [] or {} '
+            'when the post clearly refers to a real exhibition/display in the present tense, even if this particular post does not restate the full range. '
+            'This includes museum artist/work spotlight posts even when the word "выставка" is not repeated in that specific post. '
+            'For museum posts spotlighting one artist or one body of work currently shown in the museum, prefer one exhibition card with event_type="выставка" '
+            'and the best attendee-facing title instead of returning [] or {}. '
+            'Do not return [] solely because the post is written as a museum editorial spotlight instead of a formal exhibition announcement. '
+            'Use source context only as weak museum-host context; do not copy it verbatim into title, raw_excerpt, or location fields. '
+            'For such museum spotlight posts, leave location_name empty rather than inventing a generic placeholder like "музей" if the full venue name is not stated. '
             'If explicit start date is missing but end_date exists, you MAY set date to message date as an "as-of" date for merging. '
-            'city must be where the exhibition is held; ignore parenthetical origin/collection notes. '
+            'city must be the city of the exhibition venue, grounded in the venue address; '
+            'ignore parenthetical origin/collection notes and biographical/affiliation mentions of curators, authors, '
+            'or the institution that owns the collection (the venue address wins). '
+            'If the supported venue/address string itself already contains "Калининград" or another explicit city, that venue city wins over every other city mention. '
+            'If no venue city is supported, leave city empty rather than guess. '
             'Do not include hashtags in any text fields. '
             + date_context + '\n'
-            'Message text:\n' + content
+            + (source_context_line + '\n' if source_context_line else '')
+            + 'Message text:\n' + content
         )
         try:
             text_exh = await _call_model('text', exhibition_prompt, response_schema=EVENT_ARRAY_SCHEMA)
@@ -2362,6 +2602,67 @@ async def extract_events(
                 out = data_exh
         except Exception as exc:
             logger.warning('extract_events exhibition fallback failed: %s', exc)
+    if not out and re.search(r'\b(музе\w*|художник\w*|картин\w*|полотно|натюрморт|пейзаж\w*|архиве\s+музея|архив\s+музея)\b', content, re.IGNORECASE):
+        museum_prompt = (
+            'Extract a single ongoing museum exhibition/display card from Telegram text as strict JSON array. '
+            'Return [] only if the post is clearly not about a current museum display/exhibition. '
+            'Fields per event: title, date (YYYY-MM-DD), time (HH:MM or empty), '
+            'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
+            'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
+            'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+            'Use empty string for unknown text fields. '
+            'For museum spotlight posts about one artist, artwork, or body of work, prefer one attendee-facing exhibition card '
+            'with event_type="выставка" and date=message_date as an "as-of" merge date rather than []. '
+            'If you return an event in this rescue path, do not leave date or event_type empty: '
+            'set date=message_date as the as-of merge date and set event_type="выставка". '
+            'Use source context only as weak museum-host context; do not copy it verbatim into title, raw_excerpt, or location fields. '
+            'If the full venue name is not stated, leave location_name empty rather than generic placeholders like "музей". '
+            'Do not emit empty JSON objects ({}) or venue-only rows. '
+            'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
+            'If the text is clearly only archival/background and does not describe a current museum display, return []. '
+            + date_context + '\n'
+            + (source_context_line + '\n' if source_context_line else '')
+            + 'Message text:\n' + content
+        )
+        try:
+            text_museum = await _call_model('text', museum_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+            data_museum = _safe_json(text_museum)
+            if isinstance(data_museum, dict) and isinstance(data_museum.get('events'), list):
+                out = data_museum['events']
+            elif isinstance(data_museum, list):
+                out = data_museum
+        except Exception as exc:
+            logger.warning('extract_events museum spotlight rescue failed: %s', exc)
+        if out and any(
+            isinstance(ev, dict)
+            and str(ev.get('title') or '').strip()
+            and not str(ev.get('date') or '').strip()
+            and not str(ev.get('event_type') or '').strip()
+            for ev in out
+        ):
+            museum_fix_prompt = (
+                'Repair a museum spotlight extraction as strict JSON array. '
+                'If the post supports a current museum display/exhibition, keep one attendee-facing exhibition card '
+                'with date set exactly to the Message date date part (YYYY-MM-DD) as the as-of merge date '
+                'and event_type set exactly to "выставка". '
+                'If the post does not support a current display, return [] instead of partial placeholder rows. '
+                'Do not leave date or event_type empty on a kept museum exhibition card. '
+                'A kept card with an empty date or empty event_type is invalid JSON for this task; repair those fields or return []. '
+                'Never emit empty JSON objects ({}) or venue-only rows. '
+                + date_context + '\n'
+                + (source_context_line + '\n' if source_context_line else '')
+                + 'Original message text:\n' + content + '\n\n'
+                + 'Current extracted JSON:\n' + json.dumps(out, ensure_ascii=False)
+            )
+            try:
+                text_museum_fix = await _call_model('text', museum_fix_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+                data_museum_fix = _safe_json(text_museum_fix)
+                if isinstance(data_museum_fix, dict) and isinstance(data_museum_fix.get('events'), list):
+                    out = data_museum_fix['events']
+                elif isinstance(data_museum_fix, list):
+                    out = data_museum_fix
+            except Exception as exc:
+                logger.warning('extract_events museum spotlight repair failed: %s', exc)
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 

@@ -46,6 +46,18 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Use evidence from both message text and OCR." in source
     assert "Prefer filling location_name and location_address" in source
     assert "Do not invent end_date for single-date events." in source
+    assert 'If a post says "в разделе X на выставке Y"' in source
+    assert 'usually return ONE event object for that exhibition' in source
+    assert "do NOT return [] only because some venue, city, or ticket fields remain unresolved" in source
+    assert "still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it" in source
+    assert 'Choose the final title silently.' in source
+    assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
+    assert 'Use source context only as weak hosting context' in source
+    assert "prefer one ongoing exhibition card over [] or {}" in source
+    assert "Do not split one real event into an extra title-only row" in source
+    assert "keep the cycle/series label in raw_excerpt/search_digest, not as a second event row" in source
+    assert 'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка"' in source
+    assert 'For museum posts spotlighting one artist or one body of work currently shown in the museum' in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:
@@ -141,25 +153,94 @@ def test_tg_monitor_extract_prompt_blocks_gemma4_known_leaks() -> None:
     """Regression guard against the leakage modes observed in run_id=48fa... artifacts.
 
     Gemma 4 was producing (a) title/city strings containing `// ...` meta-commentary,
-    (b) English `event_type` tokens, (c) cities copied from parenthetical origin notes,
-    (d) ghost rows with no title and no date, and (e) the literal string "unknown".
+    (b) English `event_type` tokens, (c) cities copied from parenthetical origin notes
+    and from speaker/author affiliation mentions, (d) ghost rows with no title and no
+    date, (e) the literal string "unknown", and (f) empty `{}` objects as list items.
     """
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
 
     assert 'Never output the literal string "unknown"' in source
     assert "Never include inline comments" in source
     assert "Do not emit placeholder events that have empty title and empty date" in source
-    assert "parenthetical origin/collection notes" in source
+    assert "Never emit empty JSON objects ({}) or venue-only rows" in source
+    assert "parenthetical origin/collection note" in source
+    assert "biographical/affiliation mention" in source
+    assert "that venue city wins over every other city mention" in source
+    assert 'Never include uncertainty markers like "or something similar"' in source
     assert 'Never emit English event_type tokens like "exhibition"' in source
     assert "Fundraising-only posts" in source
     assert "Pure retrospective reports of completed events" in source
+
+
+def test_tg_monitor_general_extract_failure_falls_through_to_rescue_prompts() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "logger.warning('extract_events failed: %s', exc)\n            text = '[]'" in source
+    assert "extract_events schedule rescue failed" in source
+    assert "extract_events named exhibition rescue failed" in source
 
 
 def test_tg_monitor_exhibition_fallback_shares_gemma4_hardening() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     assert 'Never output the literal "unknown" in any field.' in source
     assert "Do not emit placeholder events with empty title and empty date." in source
+    assert "Never emit empty JSON objects ({}) or venue-only rows" in source
     assert 'never English tokens like "exhibition"' in source
+    assert "biographical/affiliation mentions of curators, authors" in source
+    assert 'Exception for ongoing named exhibitions' in source
+    assert "More generally, for museum/exhibition posts about currently displayed works" in source
+    assert 'This includes museum artist/work spotlight posts even when the word "выставка" is not repeated' in source
+    assert 'For museum posts spotlighting one artist or one body of work currently shown in the museum' in source
+    assert 'Do not return [] solely because the post is written as a museum editorial spotlight' in source
+    assert 'Use source context only as weak museum-host context' in source
+    assert 'leave location_name empty rather than inventing a generic placeholder like "музей"' in source
+
+
+def test_tg_monitor_single_lecture_rescue_pass_is_llm_first() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "Extract a single attendable lecture/talk/meetup/excursion event" in source
+    assert r'приглашаем\s+на\s+(?:лекци|встреч|экскурс|показ)' in source
+    assert 'that is enough to keep one best-effort event row even if venue fields stay empty' in source
+    assert "Prefer one row over [] for such a clearly invited single event." in source
+    assert "extract_events lecture rescue failed" in source
+
+
+def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "schedule_like = bool(" in source
+    assert "if schedule_like:\n        text = '[]'" in source
+    assert "Extract attendable schedule items from one small Telegram timetable chunk as strict JSON array." in source
+    assert 'one date header like "18 АПРЕЛЯ" followed by up to three time lines' in source
+    assert "range(0, len(timed_lines), 3)" in source
+    assert "Each returned event must correspond to one real schedule line" in source
+    assert 'Never use placeholder literals like "title" as a title' in source
+    assert "schedule_blocks" in source
+    assert "extract_events schedule rescue failed" in source
+
+
+def test_tg_monitor_named_exhibition_rescue_pass_is_llm_first() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "Extract one named ongoing exhibition event from Telegram text as strict JSON array." in source
+    assert 'If the post says "в разделе X на выставке Y", title must be the main exhibition Y' in source
+    assert 'Do not require the post to restate the exhibition date range' in source
+    assert 'Phrases like "на выставке Y можно увидеть ..." are sufficient evidence of a current display' in source
+    assert 'set date to the Message date date part as an as-of merge date' in source
+    assert 'set event_type exactly to "выставка"' in source
+    assert "extract_events named exhibition rescue failed" in source
+
+
+def test_tg_monitor_museum_spotlight_rescue_pass_is_llm_first() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "Extract a single ongoing museum exhibition/display card" in source
+    assert 'For museum spotlight posts about one artist, artwork, or body of work, prefer one attendee-facing exhibition card' in source
+    assert 'with event_type="выставка" and date=message_date as an "as-of" merge date rather than []' in source
+    assert 'If you return an event in this rescue path, do not leave date or event_type empty' in source
+    assert "Message date date part (YYYY-MM-DD)" in source
+    assert "Repair a museum spotlight extraction as strict JSON array." in source
+    assert 'with date set exactly to the Message date date part (YYYY-MM-DD)' in source
+    assert 'A kept card with an empty date or empty event_type is invalid JSON for this task' in source
+    assert "extract_events museum spotlight repair failed" in source
+    assert 'If the full venue name is not stated, leave location_name empty rather than generic placeholders like "музей"' in source
+    assert "extract_events museum spotlight rescue failed" in source
 
 
 def test_tg_monitor_json_fix_prompts_reject_meta_commentary() -> None:
@@ -184,8 +265,13 @@ def test_tg_monitor_guardrail_regexes_are_not_double_escaped() -> None:
 def test_tg_monitor_event_schema_carries_gemma4_descriptions() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     assert "Single lowercase Russian noun" in source
-    assert "parenthetical origin/collection notes" in source
+    assert "parenthetical origin/collection note" in source
+    assert "biographical/affiliation mention of a speaker" in source
     assert "Human-readable event name. Never include inline comments" in source
+    assert "Never include uncertainty markers like \"or something similar\"" in source
+    assert "return one attendee-facing lecture title, not two rows" in source
+    assert 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка"' in source
+    assert "'required': [" in source
 
 
 def _load_sanitizer_in_isolation():
@@ -205,6 +291,8 @@ def _load_sanitizer_in_isolation():
         "_UNKNOWN_LITERALS",
         "_LEAKED_COMMENT_TAIL_RE",
         "_MARKDOWN_STRIP_RE",
+        "_HTML_TAG_RE",
+        "_TRAILING_META_TAIL_RE",
         "_clean_event_string_value",
         "_sanitize_extracted_events",
     }
@@ -266,6 +354,13 @@ def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None
             "location_name": "Замок Нойхаузен",
         },
         {
+            # Placeholder field-name literal — must be treated as missing title and dropped.
+            "title": "title",
+            "date": "2026-04-18",
+            "time": "15:00",
+            "location_name": "Калининградский зоопарк",
+        },
+        {
             # Well-formed event — must pass unchanged.
             "title": "Лекция Алексея Зыгмонта",
             "date": "2026-04-23",
@@ -277,7 +372,7 @@ def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None
         },
     ]
     cleaned = sanitize(events)
-    # Ghost row dropped: 5 -> 4.
+    # Ghost row and placeholder-title row dropped: 6 -> 4.
     assert len(cleaned) == 4
 
     # Leak trimmed.
@@ -306,6 +401,27 @@ def test_tg_monitor_sanitizer_keeps_urls_when_stripping_comment_tails() -> None:
     assert clean_value("Билеты: https://example.com/tickets") == "Билеты: https://example.com/tickets"
     assert clean_value("Название (// leaked reasoning)") == "Название"
     assert clean_value("Название # leaked reasoning") == "Название"
+    assert clean_value("Название {// leaked reasoning") == "Название"
+
+
+def test_tg_monitor_sanitizer_strips_html_tags_and_own_title_meta_leaks() -> None:
+    """Regression guard for iter2 leak families observed in local-only Gemma 4 eval.
+
+    Gemma 4 occasionally emits ``</strong>`` HTML tags or trailing ``own title:``
+    meta-commentary into structured JSON string values. Those must not reach
+    Smart Update / Telegraph.
+    """
+    ns = _load_sanitizer_in_isolation()
+    clean_value = ns["_clean_event_string_value"]
+
+    assert (
+        clean_value("Аудиопутешествие «Четверть длиннее восьмой» (24 апреля)</strong> own title:")
+        == "Аудиопутешествие «Четверть длиннее восьмой» (24 апреля)"
+    )
+    assert clean_value("<strong>Концерт</strong>") == "Концерт"
+    assert clean_value("Лекция <br> own id:") == "Лекция"
+    # Benign title with a colon must not be truncated by the meta-tail regex.
+    assert clean_value("Книга: путь к мастерству") == "Книга: путь к мастерству"
 
 
 def test_tg_monitor_eval_pack_tracks_real_gemma4_failure_families() -> None:
