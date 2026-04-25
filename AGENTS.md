@@ -85,6 +85,14 @@
 - Отчёты/черновики Codex CLI по умолчанию складывай в `artifacts/codex/` (см. `docs/tools/codex-cli.md`).
 - Не коммить артефакты. Если нужно сохранить пример — клади **минимальный** fixture в `tests/fixtures/` (если такой паттерн уже есть).
 
+## Runtime Logs (critical)
+
+- Для production/scheduled/Kaggle расследований сразу открывай `docs/operations/runtime-logs.md`.
+- Перед заявлением, что логи отсутствуют или потеряны, агент обязан проверить production file mirror на volume: фактические env `ENABLE_RUNTIME_FILE_LOGGING` / `RUNTIME_LOG_DIR`, директорию `/data/runtime_logs`, активный файл и rotated файлы.
+- Ищи не одним grep: используй `run_id`, `ops_run` id, job kind, Kaggle kernel ref, source username, временное окно и класс ошибки.
+- Если file mirror выключен или retention уже удалил нужный период, явно напиши это как найденный факт и переходи к fallback evidence: `fly logs`, Kaggle output/logs, `ops_run.details_json`, production DB rows и `artifacts/codex/`.
+- Для длинных расследований сохраняй минимальные релевантные выдержки логов и JSON в `artifacts/codex/<task-or-run-id>/`; не коммить артефакты.
+
 ## Git / Push Policy
 
 - Канонический workflow для branch/worktree и безопасной изоляции параллельной разработки: `docs/operations/repository-workflow.md`.
