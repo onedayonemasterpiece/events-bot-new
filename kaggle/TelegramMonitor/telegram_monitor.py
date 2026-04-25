@@ -1175,6 +1175,11 @@ EVENT_ARRAY_SCHEMA = {
                 'Never include uncertainty markers like "or something similar", alternative title candidates, '
                 'or instruction-like text. '
                 'Prefer a concise canonical attendee-facing title over a subsection label or long paraphrase. '
+                'When message text contains a named event and OCR contains poster headings like a date, weekday, '
+                'time, "НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ", or venue labels, keep the named event from '
+                'message text as title and use OCR only for date/time/venue details. '
+                'A title made only of schedule/service words (for example "НАЧАЛО В 19:00") is invalid when '
+                'the caption contains a named event headline. '
                 'When one lecture/talk is presented with both a cycle/series label and a concrete lecture title, '
                 'return one attendee-facing lecture title, not two rows. '
                 'If a post describes a section/part inside a larger exhibition '
@@ -1256,6 +1261,24 @@ SOURCE_METADATA_SCHEMA = {
         'aliases': {'type': 'array', 'items': _string_schema()},
         'confidence': {'type': 'number'},
         'rationale_short': _string_schema(),
+    },
+}
+
+TITLE_REVIEW_SCHEMA = {
+    'type': 'array',
+    'items': {
+        'type': 'object',
+        'properties': {
+            'title': _string_schema(
+                'Replacement attendee-facing event title chosen from message caption/text. '
+                'Never a poster service heading like "НАЧАЛО В 19:00", date, price, age limit, or venue label.'
+            ),
+            'event_type': _string_schema(
+                'Optional lowercase Russian noun if obvious from caption/text; empty string otherwise.'
+            ),
+            'search_digest': _string_schema('Optional short search phrase; empty string if unsure.'),
+        },
+        'required': ['title', 'event_type', 'search_digest'],
     },
 }
 
@@ -2020,6 +2043,15 @@ _TRAILING_META_TAIL_RE = re.compile(
     r"\s+(?:own\s+(?:title|id|type|event|field)|own)\s*[:=]?\s*$",
     re.IGNORECASE,
 )
+_SERVICE_HEADING_TITLE_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))"
+    r"|(?:\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)"
+    r"|(?:начало\s+в\s+\d{1,2}[:.]\d{2})"
+    r"|(?:билеты|регистрация|стоимость|цена|вход|место|адрес)"
+    r")\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def _clean_event_string_value(value) -> str:
@@ -2074,6 +2106,78 @@ def _sanitize_extracted_events(events) -> list[dict]:
             continue
         cleaned.append(evt)
     return cleaned
+
+
+async def _repair_service_heading_titles(
+    *,
+    message_text: str,
+    ocr_text: str | None,
+    date_context: str,
+    source_context_line: str,
+    events: list,
+) -> list:
+    """Ask the LLM to repair title-only OCR service-heading regressions.
+
+    The deterministic part only detects the syntactic failure shape. The event
+    title choice remains LLM-owned and is reviewed against the original caption.
+    """
+    if not events or not isinstance(events, list):
+        return events
+    suspect = False
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        title = str(ev.get('title') or '').strip()
+        if title and _SERVICE_HEADING_TITLE_RE.search(title):
+            suspect = True
+            break
+    if not suspect:
+        return events
+
+    prompt = (
+        'Review extracted Telegram events and choose replacement titles for suspicious poster-service-heading titles. '
+        'Return strict JSON array with exactly one object per input event, same order. '
+        'Each output object has title, event_type, search_digest only. '
+        'Do not add events. Do not drop events. '
+        'A title made only of date/time/service text such as "НАЧАЛО В 19:00", "24 АПРЕЛЯ", "БИЛЕТЫ", '
+        '"РЕГИСТРАЦИЯ", price, age limit, or venue/address label is invalid if the message caption contains a named event. '
+        'In that case, output the named attendee-facing event from the caption as title. '
+        'Example: caption "Второй Большой киноквиз!" and OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" '
+        'must output title "Второй Большой киноквиз". '
+        'If an input title is already a real attendee-facing event name, repeat it unchanged. '
+        'Never output service headings as titles. Never include comments, markdown, alternatives, or reasoning in JSON values. '
+        + date_context + '\n'
+        + (source_context_line + '\n' if source_context_line else '')
+        + 'Message caption/text:\n' + (message_text or '')[:6000] + '\n\n'
+        + ('OCR text:\n' + (ocr_text or '')[:3000] + '\n\n' if ocr_text else '')
+        + 'Extracted events JSON:\n' + json.dumps(events, ensure_ascii=False)
+    )
+    try:
+        repaired_text = await _call_model('text', prompt, response_schema=TITLE_REVIEW_SCHEMA)
+        repaired = _safe_json(repaired_text)
+    except Exception as exc:
+        logger.warning('extract_events title_review failed: %s', exc)
+        return events
+    if isinstance(repaired, dict) and isinstance(repaired.get('titles'), list):
+        repaired = repaired['titles']
+    if isinstance(repaired, list) and len(repaired) == len(events):
+        out = []
+        for old, new in zip(events, repaired):
+            if not isinstance(old, dict):
+                out.append(old)
+                continue
+            merged = dict(old)
+            if isinstance(new, dict):
+                title = _clean_event_string_value(new.get('title'))
+                if title and not _SERVICE_HEADING_TITLE_RE.search(title):
+                    merged['title'] = title
+                for field in ('event_type', 'search_digest'):
+                    value = _clean_event_string_value(new.get(field))
+                    if value:
+                        merged[field] = value
+            out.append(merged)
+        return out
+    return events
 
 
 async def extract_events(
@@ -2250,6 +2354,7 @@ async def extract_events(
         return (ru_sched_events or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 
     # LLM path
+    message_text_only = content
     if ocr_text:
         content = (content + '\n\nOCR:\n' + ocr_text).strip()
     if not content or len(content) < 10:
@@ -2290,6 +2395,13 @@ async def extract_events(
         'Never include uncertainty markers like "or something similar", alternative title candidates, '
         'or instruction-like phrases such as "return one event object" or "second row" inside any field value. '
         'Choose the final title silently. '
+        'Title must be the attendee-facing event name, not a poster service heading. '
+        'If message text/caption contains a named event and OCR contains only schedule/service headings '
+        'like a date, weekday, time, "НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ", price, age limit, or venue label, '
+        'keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields. '
+        'Before returning, audit every title: if it is only a schedule/service heading and the caption has a named '
+        'headline, replace the title with that named headline. Example: caption "Второй Большой киноквиз!" plus '
+        'OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00". '
         'Do not emit placeholder events that have empty title and empty date; if you cannot anchor an event to '
         'at least a real title or a real date from the text/OCR, do not include it at all. '
         'Never emit empty JSON objects ({}) or venue-only rows as list items. '
@@ -2391,6 +2503,13 @@ async def extract_events(
         out = []
     if not isinstance(out, list):
         out = []
+    out = await _repair_service_heading_titles(
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        date_context=date_context,
+        source_context_line=source_context_line,
+        events=out,
+    )
     # Guardrails: prevent pseudo-events from open calls/applications, and avoid
     # inventing event start dates from message date unless there's an explicit anchor.
     try:
@@ -2689,6 +2808,13 @@ async def extract_events(
                 logger.warning('extract_events museum spotlight repair failed: %s', exc)
     if msg_date_iso and not has_anchor:
         out = [e for e in out if not _lacks_supported_non_exhibition_date(e)]
+    out = await _repair_service_heading_titles(
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        date_context=date_context,
+        source_context_line=source_context_line,
+        events=out,
+    )
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
 

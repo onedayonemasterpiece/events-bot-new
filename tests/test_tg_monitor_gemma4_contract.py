@@ -53,6 +53,11 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "do NOT return [] only because some venue, city, or ticket fields remain unresolved" in source
     assert "still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it" in source
     assert 'Choose the final title silently.' in source
+    assert "Title must be the attendee-facing event name, not a poster service heading." in source
+    assert '"НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ"' in source
+    assert "keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields" in source
+    assert 'caption "Второй Большой киноквиз!" plus' in source
+    assert 'must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00"' in source
     assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
     assert 'Use source context only as weak hosting context' in source
     assert "prefer one ongoing exhibition card over [] or {}" in source
@@ -150,6 +155,20 @@ def test_tg_monitor_bridge_fallback_covers_known_klgdcity_shapes() -> None:
         expected_count=1,
     )
     assert not output_is_usable([], expected_count=1)
+
+
+def test_tg_monitor_title_review_stage_keeps_caption_event_title_over_ocr_heading() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+
+    assert "TITLE_REVIEW_SCHEMA" in source
+    assert "_repair_service_heading_titles" in source
+    assert "_SERVICE_HEADING_TITLE_RE" in source
+    assert 'choose replacement titles for suspicious poster-service-heading titles' in source
+    assert 'A title made only of date/time/service text such as "НАЧАЛО В 19:00"' in source
+    assert 'output the named attendee-facing event from the caption as title' in source
+    assert "response_schema=TITLE_REVIEW_SCHEMA" in source
+    assert "The event\n    title choice remains LLM-owned" in source
+
 
 def test_tg_monitor_extract_prompt_blocks_gemma4_known_leaks() -> None:
     """Regression guard against the leakage modes observed in run_id=48fa... artifacts.
