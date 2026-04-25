@@ -12,6 +12,7 @@
 ## Incident Mode (critical)
 
 - Упоминание конкретного incident ID (`INC-*`) само по себе достаточно, чтобы агент перешёл в incident workflow.
+- Production недоступность или user-visible деградация тоже автоматически включает incident workflow даже без готового `INC-*`: `/healthz` timeout/not ready, Fly proxy `/webhook` errors, бот не отвечает на `/start` или другие базовые команды, critical scheduled slot сорван/завис.
 - В incident workflow агент обязан:
   - открыть канонический incident record;
   - трактовать его как regression contract;

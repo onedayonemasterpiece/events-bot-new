@@ -110,7 +110,8 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 
 ## Health Checks
 
-- Fly probes `GET /healthz` every 15 seconds.
+- Fly service-level health checks must be visible in `flyctl config show` as `services.http_checks` for `GET /healthz`; legacy-looking `services.checks` entries in local `fly.toml` are not enough if the deployed config omits them.
+- Fly probes `GET /healthz` every 15 seconds after startup grace.
 - `/healthz` no longer returns a blind static `ok`: it verifies that startup completed, the runtime heartbeat is fresh, required background tasks (`daily_scheduler`, `add_event_watch`, and `job_outbox_worker` when enabled) are alive, the bot session is open, and SQLite answers `SELECT 1`.
 - The same applies to scheduler watchdog hooks: if `video_tomorrow` or critical scheduler watchdog support is enabled in runtime, `create_app()` must import the matching `scheduler_*_watchdog_*` callables from `scheduling.py`; a missing import is a production defect because it turns `/healthz` into `500` and silently disables watchdog ticks instead of degrading to a normal `503` health report.
 - `add_event_watch` is allowed to restart a stalled add-event worker in place; the watchdog now updates the shared dequeue timestamp correctly instead of tripping an `UnboundLocalError` during stall recovery and poisoning `/healthz`.
@@ -196,6 +197,6 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES` – how long `tg_monitoring` recovery should keep rechecking Kaggle jobs that temporarily report `failed/error/cancelled` before dropping them as irrecoverable (default: `360`).
 - `RUNTIME_HEALTH_HEARTBEAT_SEC` – how often the in-process runtime heartbeat updates (default: `15` seconds).
 - `RUNTIME_HEALTH_STALE_SEC` – max allowed heartbeat age before `/healthz` turns unhealthy (default: `45` seconds, minimum `2x` heartbeat interval).
-- `RUNTIME_HEALTH_STARTUP_GRACE_SEC` – startup grace window before “not ready yet” becomes a failing `/healthz` condition (default: `120` seconds).
+- `RUNTIME_HEALTH_STARTUP_GRACE_SEC` – startup grace window before “not ready yet” becomes a failing `/healthz` condition (default: `120` seconds). Fly service-level check grace is `60s` in production because Fly caps longer service check grace periods to one minute; if cold boot grows beyond that, treat it as a startup-performance/serving-readiness incident instead of hiding it behind a longer Fly grace.
 
 To monitor real job durations, use the daily `/general_stats` report: it prints per-run `took=...` for `vk_auto_import` and `tg_monitoring` (and other ops-run instrumented jobs).

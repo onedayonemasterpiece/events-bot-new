@@ -5,6 +5,7 @@
 ## Автоматический запуск incident workflow
 
 - Достаточно указать конкретный incident ID (`INC-*`), чтобы агент автоматически перешёл в incident workflow.
+- Даже без готового `INC-*`, production-недоступность или user-visible деградация автоматически запускает incident workflow: `/healthz` timeout/not ready, Fly proxy `/webhook` errors, бот не отвечает на `/start` или другие базовые команды, critical scheduled slot сорван/завис.
 - При таком упоминании агент обязан открыть:
   - `docs/reports/incidents/README.md`
   - канонический incident record по ID

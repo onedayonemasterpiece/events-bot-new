@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-25-prod-bot-unresponsive-after-tg-monitoring-smoke.md`
+  - Scope: Fly production runtime, Telegram webhook and `/start`, Telegram Monitoring post-deploy smoke/recovery/import path, scheduler heavy jobs, runtime health, and runtime evidence collection.
+  - Must not regress: production smoke/validation must not make the serving bot unresponsive; `/healthz` and `/webhook` failures must trigger incident workflow immediately; runtime log mirror/rotated files must be checked before falling back to Fly logs/Kaggle/DB evidence.
 - `INC-2026-04-24-crumple-story-channel-boosts-required.md`
   - Scope: `fly.toml`, CrumpleVideo story target order, `video_announce/story_publish.py`, `kaggle/CrumpleVideo/story_publish.py`, scheduled `video_tomorrow` catch-up, Telegram channel story boosts.
   - Must not regress: production CrumpleVideo must keep a Premium self-account story target (`me`) as the first blocking upload target, channel `BOOSTS_REQUIRED` must remain a visible best-effort fanout failure rather than blocking render delivery, and a missed same-day scheduled slot must be repaired with a compensating rerun.
