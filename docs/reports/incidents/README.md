@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-26-daily-location-fragments.md`
+  - Scope: `source_parsing/telegram/handlers.py`, `location_reference.py`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `main_part2.py::build_daily_posts`, Telegram Monitoring Gemma 4 location extraction/import, `/daily` publication.
+  - Must not regress: prose/schedule/bio fragments must not survive as public `location_name`, known venues must recover address/city from the reference layer, and one `/daily` event card must not be split between two Telegram posts.
 - `INC-2026-04-25-prod-bot-unresponsive-after-tg-monitoring-smoke.md`
   - Scope: Fly production runtime, Telegram webhook and `/start`, Telegram Monitoring post-deploy smoke/recovery/import path, scheduler heavy jobs, runtime health, and runtime evidence collection.
   - Must not regress: production smoke/validation must not make the serving bot unresponsive; `/healthz` and `/webhook` failures must trigger incident workflow immediately; runtime log mirror/rotated files must be checked before falling back to Fly logs/Kaggle/DB evidence.

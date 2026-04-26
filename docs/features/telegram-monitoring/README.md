@@ -46,7 +46,9 @@
   - если в fallback сломалась загрузка poster media в Catbox/Supabase, импорт не обнуляет иллюстрации: используется прямой CDN URL целевого Telegram media (`cdn*.telesco.pe`) как последний аварийный fallback.
   - `linked_source_urls` теперь обогащают медиа события: сервер пытается подтянуть афиши из linked Telegram постов (сначала из того же `telegram_results.json`, затем через `t.me/s/...` fallback) и добавляет их в candidate до Smart Update.
 - `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам.
-- Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши: если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue.
+- Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
+  - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
+  - если extractor отдал в `location_name` фрагмент прозы/описания/расписания вместо названия площадки, сервер отбрасывает этот фрагмент и восстанавливает площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback.
 - если афиша явно содержит несколько дат/времён одного и того же события (например «12 июня 19:00» и «13 июня 15:00»), а extractor их схлопнул в одну дату, сервер (best-effort) расширяет карточку до нескольких событий по OCR афиши.
   - сохраняет `source_title`/`sources_meta[].title` в `telegram_source.title` (человекочитаемое название канала/группы).
   - сохраняет метаданные источника из `sources_meta[]`: `about`, `about_links_json`, `meta_hash`, `meta_fetched_at`.

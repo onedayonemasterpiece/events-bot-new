@@ -351,6 +351,59 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
     return None
 
 
+def _contains_normalized_phrase(haystack: str, needle: str) -> bool:
+    if not haystack or not needle:
+        return False
+    return re.search(rf"(^|\s){re.escape(needle)}(\s|$)", haystack) is not None
+
+
+def find_known_venue_in_text(text: str | None, *, city: str | None = None) -> KnownVenue | None:
+    """Find a single known venue explicitly mentioned in free text.
+
+    This is intentionally conservative: it returns a venue only when one
+    canonical name, alias, or address is the strongest unique match.
+    """
+    text_key = normalize_venue_key(text)
+    address_text_key = normalize_address_key(text, city=city)
+    if not text_key and not address_text_key:
+        return None
+
+    venues = _filter_venues_by_city(read_known_venues(), city)
+    if not venues:
+        return None
+
+    alias_by_key = read_known_venue_aliases()
+    matches: list[tuple[int, KnownVenue]] = []
+
+    for alias_key, canonical_key in alias_by_key.items():
+        if not alias_key or len(alias_key) < 4:
+            continue
+        if not _contains_normalized_phrase(text_key, alias_key):
+            continue
+        for venue in venues:
+            if canonical_key in {venue.line_key, venue.name_key}:
+                matches.append((len(alias_key), venue))
+                break
+
+    for venue in venues:
+        if venue.name_key and len(venue.name_key) >= 4:
+            if _contains_normalized_phrase(text_key, venue.name_key):
+                matches.append((len(venue.name_key), venue))
+        if venue.address:
+            address_key = normalize_address_key(venue.address, city=venue.city or city)
+            if address_key and len(address_key) >= 4 and _contains_normalized_phrase(address_text_key, address_key):
+                matches.append((len(address_key), venue))
+
+    if not matches:
+        return None
+
+    best_score = max(score for score, _venue in matches)
+    best = {venue for score, venue in matches if score == best_score}
+    if len(best) == 1:
+        return next(iter(best))
+    return None
+
+
 def normalise_event_location_from_reference(
     event_obj: dict[str, Any],
 ) -> KnownVenue | None:

@@ -1,0 +1,117 @@
+# INC-2026-04-26 Daily Location Fragments In Announcement
+
+Status: mitigated
+Severity: sev1
+Service: Telegram Monitoring + Smart Event Update + Daily announcements
+Opened: 2026-04-26
+Closed: —
+Owners: events-bot runtime / import pipeline owner
+Related incidents: `INC-2026-04-15-gate-location-and-linked-facts-drift`
+Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/digests/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/release-governance.md`
+
+## Summary
+
+The 2026-04-26 08:00 production daily announcement published multiple events with broken public location lines. Some events had missing city/address for known venues, while several Telegram-imported events used arbitrary prose fragments as `location_name`. The same daily surface also had a long-standing split behavior where one event card could be cut between two Telegram posts when `/daily` exceeded the message limit.
+
+## User / Business Impact
+
+- Subscribers saw misleading or unusable venue data in the public daily announcement.
+- Venue/address mistakes directly affect attendance and navigation.
+- Duplicate imports with different noisy locations reduced merge quality and made the public list look less trustworthy.
+- When a daily announcement split inside an event card, readers could see the title/description in one post and the date/location in another.
+
+## Detection
+
+- The incident was reported by the operator from the 2026-04-26 08:00 daily announcement.
+- Local production snapshot evidence showed the same failure class: rows for `Виниссимо: Под солнцем Италии`, `Ходячий замок`, `Саша, привет!`, `Учителя и ученики`, and Tretyakov schedule posts had `location_name` populated with prose or schedule fragments.
+- Observability gap: the existing Telegram import guard only checked whether an extracted location was present in the post text/OCR. That allowed a prose fragment copied from the post to pass as "grounded".
+
+## Timeline
+
+- 2026-04-26 08:00 Europe/Kaliningrad: scheduled daily announcement was posted with broken venue lines.
+- 2026-04-26 UTC: operator reported 13 affected examples and suspected Gemma 4 migration fallout.
+- 2026-04-26 UTC: investigation linked the symptoms to Telegram Monitoring extraction/import plus `/daily` line-based splitting.
+- 2026-04-26 UTC: hotfix branch `hotfix/INC-2026-04-26-daily-location-fragments` added prose-location guards, known-venue recovery, missing venue references, and atomic daily splitting.
+
+## Root Cause
+
+1. Gemma 4 Telegram extraction sometimes copied a nearby sentence, schedule header, speaker bio, film metadata, or promo fragment into `location_name`.
+2. Server-side grounding accepted those values because the fragment existed in source text/OCR; it did not verify that the value looked like a venue rather than prose.
+3. Missing reference entries and aliases prevented address/name normalization for known venues such as `Паб London`, `Виниссимо`, the KSO concert hall, and the Svetlogorsk military sanatorium club.
+4. `/daily` split overlong announcements with a generic line splitter, so event cards were not treated as atomic blocks.
+
+## Contributing Factors
+
+- The Gemma 4 rollout hardened title/date/city/output-shape failures but did not yet cover `location_name` prose leakage as a separate smell class.
+- Several affected venues were known in past imports but absent from `docs/reference/locations.md`.
+- Daily announcement splitting had a length-only test but no regression that an event card remains whole.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- changes touch `kaggle/TelegramMonitor/telegram_monitor.py` extraction prompts or schema;
+- changes touch `source_parsing/telegram/handlers.py` candidate building, location grounding, or Telegram import;
+- changes touch `location_reference.py`, `docs/reference/locations.md`, or `docs/reference/location-aliases.md`;
+- changes touch `/daily` rendering/splitting in `main_part2.py` or `format_event_daily`.
+
+### Affected surfaces
+
+- `source_parsing/telegram/handlers.py`
+- `location_reference.py`
+- `docs/reference/locations.md`
+- `docs/reference/location-aliases.md`
+- `main_part2.py::build_daily_posts`
+- Telegram scheduled daily publication and manual `/daily` test send
+- Telegraph event rebuild path for already affected rows
+
+### Mandatory checks before closure or deploy
+
+- Targeted tests for prose-like `location_name` being dropped and recovered from known venue/address/text.
+- Existing Telegram Monitoring Gemma 4 contract tests.
+- Targeted test that daily splitting keeps one event card inside one Telegram post and respects the 4096 marker budget.
+- Release-governance checks: branch based on current `origin/main`, clean deploy worktree, changelog/docs synced.
+- Post-deploy verification that a 2026-04-26 daily rebuild/rerun no longer renders prose fragments as locations and does not split event cards across posts.
+- If the 2026-04-26 production daily slot has already been seen by subscribers, perform compensating rerun/catch-up after deploy and verify the corrected current-day publication/data.
+
+### Required evidence
+
+- Hotfix commit SHA and confirmation it is reachable from `origin/main`.
+- Test output for `tests/test_tg_candidate_location_grounding.py`, `tests/test_daily_format.py`, and `tests/test_tg_monitor_gemma4_contract.py`.
+- Location reference sources for newly added venues.
+- Post-deploy daily rerun/catch-up evidence or explicit reason why rerun was not performed.
+
+## Immediate Mitigation
+
+- Added a server-side Telegram import guard that treats long/prose-like/schedule-like `location_name` values as invalid venue strings.
+- Added known venue recovery from `docs/reference/locations.md` and `docs/reference/location-aliases.md` when location is missing or prose-like.
+- Added missing venue references and aliases for the affected daily examples.
+- Changed `/daily` splitting to split on blank-line event-card boundaries before falling back to line splitting for an individually oversized block.
+
+## Corrective Actions
+
+- `location_reference.find_known_venue_in_text` now finds a single explicit known venue in free text by canonical name, alias, or address.
+- Telegram candidate build drops prose-like venue fragments and recovers from `default_location`, known venue text/address, OCR, or source text.
+- `/daily` now accounts for the invisible marker in the Telegram length budget and keeps event cards whole across split posts.
+
+## Follow-up Actions
+
+- [ ] After deploy, rebuild/fix the affected 2026-04-26 event rows and Telegraph pages, then publish a corrected daily/catch-up if still relevant for the current day.
+- [ ] Add a production-equivalent Telegram Monitoring eval case pack for `location_name` prose leakage from the 2026-04-26 examples.
+- [ ] Consider operator-facing import warnings when a candidate location was dropped as prose and recovered from a weaker reference/text signal.
+
+## Release And Closure Evidence
+
+- deployed SHA:
+- deploy path:
+- regression checks:
+  - `pytest -q tests/test_tg_candidate_location_grounding.py tests/test_daily_format.py`
+  - `pytest -q tests/test_tg_monitor_gemma4_contract.py`
+  - `python -m py_compile location_reference.py source_parsing/telegram/handlers.py main_part2.py`
+- post-deploy verification:
+
+## Prevention
+
+- `location_name` grounding now distinguishes "present in source text" from "venue-shaped".
+- Known venue reference coverage includes the venues implicated in the report.
+- `/daily` has a regression contract for atomic event-card splitting.

@@ -17,7 +17,7 @@ from sqlalchemy.exc import OperationalError
 
 from db import Database
 from event_utils import strip_city_from_address
-from location_reference import normalise_event_location_from_reference
+from location_reference import find_known_venue_in_text, normalise_event_location_from_reference
 from models import (
     Channel,
     EventMediaAsset,
@@ -2336,6 +2336,18 @@ _BAD_TITLE_RE = re.compile(r"^\s*[\W_]*\(?\s*\d*\s*(?:мест[ао]?)?\s*\)?\s*
 _ADDRESS_HINT_RE = re.compile(
     r"(?i)\b(ул\.|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
 )
+_LOCATION_PROSE_VERB_RE = re.compile(
+    r"(?iu)\b("
+    r"анонсирован\w*|представ\w*|расскаж\w*|покаж\w*|приглаша\w*|"
+    r"пройд[её]т|состоится|переносится|запланирован\w*|нужда[ею]тся|"
+    r"выигра\w*|созда\w*|дарим|открыва\w*|пиш\w*|можно|будут|"
+    r"известн\w*|телерадиоведущ\w*|концертмейстер\w*"
+    r")\b"
+)
+_LOCATION_PROSE_START_RE = re.compile(
+    r"(?iu)^\s*(?:которые|известн\w*|дарим|вместо|по\s+решению|это|аниме|мультфильм|"
+    r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не)\b"
+)
 _CITY_PREFIX_RE = re.compile(
     r"(?i)^\s*(?:г\.?|город|пос\.?|посёлок|поселок|пгт|село|деревня)\s+"
 )
@@ -2550,6 +2562,38 @@ def _infer_location_from_poster_payloads(payload: list[dict[str, Any]] | None) -
             if inferred_name:
                 return inferred_name, inferred_addr
     return None, None
+
+
+def _looks_like_location_prose_fragment(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    if "\n" in raw:
+        return True
+    compact = re.sub(r"\s+", " ", raw)
+    words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+    if len(compact) > 90:
+        return True
+    if "|" in compact or re.search(r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b", compact):
+        return True
+    if re.fullmatch(r"\d{4}\s*\([^)]{3,40}\)", compact):
+        return True
+    if _LOCATION_PROSE_START_RE.search(compact):
+        return True
+    if len(words) >= 8 and not _ADDRESS_HINT_RE.search(compact):
+        return True
+    if len(words) >= 4 and _LOCATION_PROSE_VERB_RE.search(compact):
+        return True
+    if len(words) >= 4 and re.search(r"[.!?]\s*$", compact):
+        return True
+    return False
+
+
+def _known_venue_payload_from_text(text: str | None, *, city: str | None = None) -> tuple[str | None, str | None, str | None]:
+    venue = find_known_venue_in_text(text, city=city)
+    if venue is None:
+        return None, None, None
+    return venue.canonical_line, venue.address or None, venue.city or None
 
 
 _BOOKING_HANDLE_RE = re.compile(
@@ -3266,13 +3310,45 @@ def _build_candidate(
     poster_loc, poster_addr = _infer_location_from_poster_payloads(
         assigned_posters_payload or posters_payload or message_posters_payload
     )
+    probe_for_known_location = "\n".join(
+        str(part)
+        for part in (
+            message_text_s,
+            event_source_text,
+            event_source_text_raw,
+            raw_excerpt,
+        )
+        if str(part or "").strip()
+    )
+    known_loc, known_addr, known_city = _known_venue_payload_from_text(
+        probe_for_known_location,
+        city=str(extracted_city or "").strip() or None,
+    )
+    if location_name and _looks_like_location_prose_fragment(location_name):
+        logger.warning(
+            "telegram: dropped prose-like extracted location source=%s message_id=%s title=%r location=%r",
+            username,
+            message_id,
+            title,
+            location_name,
+        )
+        location_name = source.default_location or known_loc
+        if known_addr and not location_address:
+            location_address = known_addr
+        if known_city and not extracted_city:
+            extracted_city = known_city
+        if extracted_location and _looks_like_location_prose_fragment(extracted_location):
+            extracted_location = None
+
     if not location_name:
-        fallback_loc = inferred_loc or poster_loc
-        fallback_addr = inferred_addr or poster_addr
+        fallback_loc = inferred_loc or poster_loc or known_loc
+        fallback_addr = inferred_addr or poster_addr or known_addr
         if fallback_loc:
             location_name = fallback_loc
             if fallback_addr and not location_address:
                 location_address = fallback_addr
+            if known_city and not extracted_city:
+                extracted_city = known_city
             logger.info(
                 "telegram: inferred missing location source=%s message_id=%s title=%r location=%r",
                 username,

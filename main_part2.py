@@ -2992,6 +2992,35 @@ async def send_festival_poll(
 
 
 
+DAILY_MARKER = "\u200b"
+
+
+def split_daily_text_atomic(text: str, limit: int = 4096) -> list[str]:
+    """Split daily text without breaking event cards separated by blank lines."""
+    if len(text) <= limit:
+        return [text] if text else []
+    blocks = re.split(r"\n{2,}", text)
+    parts: list[str] = []
+    current = ""
+    for block in blocks:
+        if not block:
+            continue
+        candidate = f"{current}\n\n{block}" if current else block
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+        if current:
+            parts.append(current)
+            current = ""
+        if len(block) > limit:
+            parts.extend(split_text(block, limit=limit))
+        else:
+            current = block
+    if current:
+        parts.append(current)
+    return parts
+
+
 async def build_daily_posts(
     db: Database,
     tz: timezone,
@@ -3292,12 +3321,9 @@ async def build_daily_posts(
         markup = types.InlineKeyboardMarkup(inline_keyboard=[[b] for b in buttons])
 
     combined = section1 + "\n\n\n" + section2
-    combined += "\u200b" # DAILY_MARKER
+    combined += DAILY_MARKER
     if len(combined) <= 4096:
         return [(combined, markup)]
-
-    # Marker to identify daily posts (for channel_nav filtering)
-    DAILY_MARKER = "\u200b"
 
     posts: list[tuple[str, types.InlineKeyboardMarkup | None]] = []
     
@@ -3305,12 +3331,17 @@ async def build_daily_posts(
     def _mark(t: str) -> str:
         return t + DAILY_MARKER
 
-    for part in split_text(section1):
+    text_limit = 4096 - len(DAILY_MARKER)
+    for part in split_daily_text_atomic(section1, limit=text_limit):
         posts.append((_mark(part), None))
-    section2_parts = split_text(section2)
+    section2_parts = split_daily_text_atomic(section2, limit=text_limit)
     for part in section2_parts[:-1]:
         posts.append((_mark(part), None))
-    posts.append((_mark(section2_parts[-1]), markup))
+    if section2_parts:
+        posts.append((_mark(section2_parts[-1]), markup))
+    elif posts:
+        last_text, _last_markup = posts[-1]
+        posts[-1] = (last_text, markup)
     return posts
 
 
