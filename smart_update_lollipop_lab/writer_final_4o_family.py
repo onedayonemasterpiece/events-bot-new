@@ -115,6 +115,7 @@ def _build_prompt(pack: dict[str, Any]) -> str:
         if profile.get("rich_case"):
             profile_lines.append("- Rich case: prefer 2-4 real paragraphs/sections with editorial flow. Do not collapse the event into a mini-card.")
             profile_lines.append("- If named-role sections are present, write enough narrative before the first people/credits heading so the event does not read like only a cast sheet.")
+            profile_lines.append("- Hard shape for rich people-heavy cases: before the first `###` heading, write at least two separate narrative paragraphs. Paragraph 1 = hook/format; paragraph 2 = plot/atmosphere/material. Do not solve this as one long paragraph.")
         if profile.get("has_rarity"):
             profile_lines.append("- Rarity is present: use it as a lead or early support hook unless format clarity would suffer.")
             profile_lines.append("- For rarity leads, the first sentence should start with `Раз в сезон` or `Редкий концерт/спектакль/показ`, then continue through event action. Do not start with `Концерт «...» — это`.")
@@ -224,6 +225,7 @@ def _build_prompt(pack: dict[str, Any]) -> str:
         Возрастные ограничения и прочие admin/access notes не должны попадать в public narrative prose.
         Если fact text содержит явный список имён или ролей, сохрани все явно названные имена и роли.
         Если в pack есть 3+ non-people narrative facts и затем people/credits sections, перед первым heading должно быть не менее двух содержательных narrative paragraphs или один lead плюс отдельный body paragraph.
+        Для fast rich_case с people sections это жёсткое требование: два отдельных абзаца до первого `###`, не один длинный абзац.
         Не теряй plot/character premise ради списков участников: сначала объясни, что происходит в событии и почему это живо, затем переходи к ролям.
         Non-people fact coverage важнее компактности: если факт не logistics/admin и не duplicate, он должен быть явно использован в narrative prose.
         Не сокращай grounded named lists до `и другие`, если исходный fact не помечен как partial list.
@@ -388,6 +390,40 @@ def _validate_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> Val
     ]
     if len(lead_sentences) > 2:
         warnings.append("lead.too_long")
+    profile = meta.get("writer_profile") if isinstance(meta.get("writer_profile"), dict) else {}
+    people_headings = [
+        str(section.get("heading") or "").strip()
+        for section in list(pack.get("sections") or [])
+        if any(
+            isinstance(fact, dict)
+            and str(fact.get("fact_id") or "").startswith("PR")
+            for fact in list(section.get("facts") or [])
+        )
+    ]
+    first_declared_heading = next(
+        (
+            str(section.get("heading") or "").strip()
+            for section in list(pack.get("sections") or [])
+            if str(section.get("heading") or "").strip()
+        ),
+        "",
+    )
+    if (
+        meta.get("variant") == "lollipop_g4_fast"
+        and profile.get("rich_case")
+        and people_headings
+        and first_declared_heading in set(people_headings)
+    ):
+        first_people_heading = next((heading for heading in people_headings if heading), "")
+        marker = f"\n### {first_people_heading}" if first_people_heading else "\n### "
+        before_heading = description_md.split(marker, 1)[0].strip() if marker in description_md else description_md.split("\n### ", 1)[0].strip()
+        narrative_paragraphs = [
+            item.strip()
+            for item in re.split(r"\n\s*\n", before_heading)
+            if item.strip() and not item.strip().startswith("#")
+        ]
+        if len(narrative_paragraphs) < 2:
+            errors.append("body.missing_narrative_before_people")
     if _lead_needs_format_bridge(pack):
         event_type = str(pack["event_type"] or "").strip().lower()
         if event_type not in lead_paragraph.lower():

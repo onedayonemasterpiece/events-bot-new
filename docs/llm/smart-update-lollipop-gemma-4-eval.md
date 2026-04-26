@@ -293,6 +293,7 @@ Current implementation after the `lollipop_g4_fast.v2` reset:
 - `fast.merge_pack.v1`: optional compact Gemma 4 merge/dedup fallback behind `LOLLIPOP_G4_FAST_LLM_MERGE=1`; live KALMANIA/VIVAT showed that making this stage mandatory breaks the speed target without enough quality gain;
 - `literal_items` are safety-constrained against extractor-owned `literal_items/text/evidence` and source-local excerpt substring gate; this is not regex extraction from raw source and not repair, but refusal to publish provider-noise literals;
 - `fast.layout_assemble`: deterministic assembly из уже размеченных LLM fields, без удаления event-core facts ради compactness;
+- for people-heavy stage cases with no program section, `fast.layout_assemble` may add the generic narrative heading `### О событии` before people/credits so writer.final_4o has an explicit body slot instead of collapsing plot/local facts into one lead;
 - source-local extraction runs in parallel by default, потому что источники независимы по смыслу и latency не должна оплачиваться потерей фактов;
 - source mismatch is handled inside the extractor prompt: if a source is primarily about another event, it may emit only a `drop` mismatch fact, not facts about the other event;
 - `fast.layout_planner.v1`: optional fallback только при `LOLLIPOP_G4_FAST_PLANNER=1`, default off;
@@ -323,7 +324,23 @@ Acceptance evidence для fast должно включать:
 - `literal.title_mutation` отсутствует: fast pack/optional merge не может выдавать literal title, которого не было в extractor `literal_items` или extractor-owned text/evidence;
 - reviewer pairwise vote против baseline по 7 измерениям: fact coverage, event clarity, rarity/atmosphere, literal fidelity, named roles, natural voice, no promo/report leakage. Итог `FAST_WINS` или `TIE` обязателен; `BASELINE_WINS` по fact coverage или event clarity блокирует rollout.
 
-Fast-вариант пока не является rollout evidence сам по себе: `KALMANIA` и `VIVAT-MUNCHHAUSEN` now pass validation and the `<=1.5x` target on the current code, but mixed-phase case, opaque-title screening/presentation case, sparse single-source case and reviewer pairwise votes are still required before any production default.
+Fast-вариант пока не является rollout evidence сам по себе: latest paired live runs for `KALMANIA` and `VIVAT-MUNCHHAUSEN` pass writer validation and stay under the temporary `<=2.5x` hard cap, but the primary `<=1.5x` latency target is not stable yet. Mixed-phase case, opaque-title screening/presentation case, sparse single-source case and reviewer pairwise votes are still required before any production default.
+
+Latest KALMANIA evidence (`2026-04-26T19:53Z`, after quality/body-contract pass):
+
+- artifact: `artifacts/codex/lollipop_g4_benchmark_20260426T195324Z.json` / `.md`;
+- calls: baseline `4 Gemma / 0 4o`; fast `3 Gemma / 1 4o`;
+- latency: baseline `29.623s`, fast `46.688s`, ratio `1.5760`; hard cap passed, primary `1.5x` target missed slightly;
+- validation: `errors=[]`, `warnings=[]`;
+- quality note: fast keeps rarity (`раз в сезоне`), two-night intensity, atmosphere, literal program bullets and full named people lists; baseline still hits `program_consists`, collapses participant lists to `и другие`, and leaks stage-smoke/admin material into narrative.
+
+Latest VIVAT-MUNCHHAUSEN evidence (`2026-04-26T20:01Z`, after explicit `О событии` body layout):
+
+- artifact: `artifacts/codex/lollipop_g4_benchmark_20260426T200142Z.json` / `.md`;
+- calls: baseline `3 Gemma / 0 4o`; fast `2 Gemma / 1 4o`;
+- latency: baseline `25.314s`, fast `47.469s`, ratio `1.8752`; hard cap passed, primary `1.5x` target missed;
+- validation: `errors=[]`, `warnings=["lead.too_long"]`;
+- quality note: fast no longer contaminates the event with the unrelated `Кальмания` Telegram source; it keeps local/historical hook, protagonist character premise, production credits and named cast. Baseline still includes unrelated `Кальмания`/smoke material and drops part of the named role detail. Remaining polish issue: lead can be split tighter, but the previous false-green "one long lead + role sheet" failure is now guarded by `body.missing_narrative_before_people`.
 
 Live KALMANIA evidence (`2026-04-26T15:25Z`, default no-LLM-merge path with `dedup_key` pass-through grouping):
 
@@ -346,7 +363,7 @@ Live VIVAT-MUNCHHAUSEN evidence (`2026-04-26T15:23Z`, current default path with 
 - fact flow: `8` extracted records -> `6` merged/pass-through records;
 - latency: reused baseline `28.392617s`, fast `39.909695s`, ratio `1.4056`; target `1.5x` passed;
 - validation: `errors=[]`, `warnings=[]`;
-- manual note: grouped cast extraction fixed the previous latency/structure problem while preserving named role coverage; writer kept the local-context hook and avoided baseline's unrelated `Кальмания` contamination plus promo/audience leakage. Remaining quality issue from this artifact: the narrative body is still too thin before the cast/credits sections. The follow-up contract now asks the extractor to preserve protagonist/story-engine facts and makes people-heavy + narrative-rich cases `rich_case`, requiring body prose before role sheets. This needs a fresh live run once a valid `writer.final_4o` token is available.
+- manual note: grouped cast extraction fixed the previous latency/structure problem while preserving named role coverage; writer kept the local-context hook and avoided baseline's unrelated `Кальмания` contamination plus promo/audience leakage. Remaining quality issue from this artifact: the narrative body is still too thin before the cast/credits sections. The follow-up contract now asks the extractor to preserve protagonist/story-engine facts, makes people-heavy + narrative-rich cases `rich_case`, and adds `body.missing_narrative_before_people` as a fast validation error when the writer collapses all narrative into one lead before a role sheet. This needs a fresh live run once a valid `writer.final_4o` token is available.
 
 ## Full-cascade retune iteration (`2026-04-06`, afternoon)
 

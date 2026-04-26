@@ -87,6 +87,10 @@ Source-local extraction is parallel by default for `lollipop_g4_fast`: each sour
 
 `2026-04-26` quality follow-up after VIVAT evidence: fast extractor explicitly keeps protagonist/story-engine facts for musicals and family stage titles (`учёный, предприимчивый и весёлый мечтатель`, `приключения в обычных ситуациях`, `герой для взрослых и детей`) as event-facing narrative material. Writer profile now marks people-heavy cases as `rich_case` when there are at least three non-people narrative facts, so the final 4o prompt asks for real narrative before cast/credits headings instead of turning the description into a short lead plus role sheet.
 
+The same follow-up adds a fast validation gate for this failure mode: if a rich people-heavy fast pack would open directly with cast/credits headings, the final text must have separate narrative paragraphs before that heading. A single overlong lead paragraph plus role sheet fails as `body.missing_narrative_before_people`.
+
+When the fast pack has narrative body facts followed by people sections and no literal program section, `fast.layout_assemble` gives the body block an explicit `### О событии` heading. This is still deterministic layout over already selected LLM-owned facts, not a semantic rescue: the heading exists to stop the final writer from silently merging body material into one lead and jumping straight to cast/credits.
+
 `literal_items` проходят структурный allowlist по extractor-owned `literal_items/text/evidence` и source-local excerpt substring gate: pipeline не извлекает названия regex-ом из raw source и не придумывает замену, а только не пропускает literal value, которого не было в LLM-owned upstream fields / исходном excerpt.
 
 `role_class` — LLM-owned routing label для `people_and_roles`: `production_team`, `cast`, `ensemble`, `none`. Python layout может разделять блоки участников по этому label (`Постановочная группа` vs `Действующие лица и исполнители`), но не определяет эти классы сам.
@@ -103,6 +107,9 @@ Hard gates for `lollipop_g4_fast` benchmark evidence:
 - `literal.title_mutation`: fast pack/optional merge must not emit a literal title that is absent from source-local extractor `literal_items` and extractor-owned text/evidence, and required repertoire/work titles must survive as exact markdown bullets;
 - `fact_loss_vs_baseline`: manual/reviewer gate when baseline covers event-defining facts absent from fast output;
 - existing writer gates: `poster.leak`, `age.leak`, `infoblock.leak`, report-style formulas, promo phrases, missing literal bullets, collapsed named lists.
+- fast-specific body gate: `body.missing_narrative_before_people` when a rich people-heavy pack reaches people/credits headings before enough narrative body.
+
+Current live status (`2026-04-26T20:01Z`): KALMANIA and VIVAT pass validation and temporary `<=2.5x` hard cap on latest paired evidence, but both miss the primary `<=1.5x` latency target. Quality is moving in the right direction, especially on VIVAT fact coverage and source contamination, but this is still lab evidence, not production default.
 
 Implementation surface:
 

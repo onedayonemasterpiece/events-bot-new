@@ -7,6 +7,7 @@ import pytest
 
 from smart_update_lollipop_lab.fast_cascade import _fast_literal_gate_errors, _fast_merge_passthrough_records, run_fast_cascade_variant
 from smart_update_lollipop_lab.fast_extract_family import build_fast_extract_compact_system_prompt, normalize_fast_extract_items, normalize_fast_merge_items
+from smart_update_lollipop_lab.writer_final_4o_family import _validate_writer_output
 
 
 @dataclass(slots=True)
@@ -168,7 +169,8 @@ async def test_lollipop_g4_fast_can_use_llm_merge_when_enabled(monkeypatch: pyte
         return {
             "title": "Кальмания",
             "description_md": (
-                "Концерт «Кальмания» появляется в репертуаре редко, а вечер держится на атмосфере интриги и игры.\n\n"
+                "Концерт «Кальмания» появляется в репертуаре редко.\n\n"
+                "Вечер держится на атмосфере интриги и игры.\n\n"
                 "### Программа\n"
                 "В программе звучат номера из классических оперетт:\n"
                 "- «Баядера»\n"
@@ -395,6 +397,71 @@ def test_lollipop_g4_fast_extractor_prompt_groups_long_cast_lists() -> None:
     assert "plot/character premise" in prompt
     assert "Барон Мюнхгаузен показан учёным" in prompt
     assert "new adventures" in prompt
+
+
+def test_lollipop_g4_fast_validation_requires_body_before_people_sections() -> None:
+    pack = {
+        "event_type": "мюзикл",
+        "title_context": {"original_title": "Виват, Мюнхгаузен!", "strategy": "keep", "is_bare": False},
+        "sections": [
+            {
+                "role": "lead",
+                "style": "narrative",
+                "heading": None,
+                "fact_ids": ["EC01", "SC01"],
+                "facts": [
+                    {"fact_id": "EC01", "text": "Мюзикл рассказывает о новых приключениях потомков барона.", "priority": 3},
+                    {"fact_id": "SC01", "text": "Барон находит необычное в обычных ситуациях.", "priority": 2},
+                ],
+                "coverage_plan": [{"fact_id": "EC01", "mode": "narrative"}, {"fact_id": "SC01", "mode": "narrative"}],
+                "literal_items": [],
+            },
+            {
+                "role": "body",
+                "style": "structured",
+                "heading": "Действующие лица и исполнители",
+                "fact_ids": ["PR01"],
+                "facts": [{"fact_id": "PR01", "text": "В ролях: барон Мюнхгаузен — Антон Арнтгольц.", "priority": 3}],
+                "coverage_plan": [{"fact_id": "PR01", "mode": "narrative"}],
+                "literal_items": [],
+            },
+        ],
+        "infoblock": [],
+        "constraints": {"headings": ["Действующие лица и исполнители"], "must_cover_fact_ids": ["EC01", "SC01", "PR01"]},
+        "meta": {
+            "variant": "lollipop_g4_fast",
+            "writer_profile": {"rich_case": True, "narrative_fact_count": 2, "has_named_roles": True},
+        },
+    }
+
+    validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Виват, Мюнхгаузен!",
+            "description_md": (
+                "Мюзикл выводит на сцену потомков барона, а сам Мюнхгаузен находит необычное в обычных ситуациях.\n\n"
+                "### Действующие лица и исполнители\n"
+                "В ролях: барон Мюнхгаузен — Антон Арнтгольц."
+            ),
+        },
+    )
+
+    assert "body.missing_narrative_before_people" in validation.errors
+
+    ok_validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Виват, Мюнхгаузен!",
+            "description_md": (
+                "Мюзикл выводит на сцену потомков барона.\n\n"
+                "Сам Мюнхгаузен находит необычное в обычных ситуациях, и это держит историю живой.\n\n"
+                "### Действующие лица и исполнители\n"
+                "В ролях: барон Мюнхгаузен — Антон Арнтгольц."
+            ),
+        },
+    )
+
+    assert "body.missing_narrative_before_people" not in ok_validation.errors
 
 
 

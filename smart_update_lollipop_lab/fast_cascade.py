@@ -240,7 +240,10 @@ def _build_fast_layout_payload(weighted_pack: dict[str, Any], lead_payload: dict
     ]
     blocks = [{"role": "lead", "fact_refs": [item for item in [lead_payload.get("lead_fact_id"), lead_payload.get("lead_support_id")] if item], "style": "narrative", "heading": None}]
     if body_ids:
-        blocks.append({"role": "body", "fact_refs": body_ids, "style": "narrative", "heading": None})
+        body_heading = None
+        if precompute.get("allow_semantic_headings") and people_ids and not program_ids:
+            body_heading = "О событии"
+        blocks.append({"role": "body", "fact_refs": body_ids, "style": "narrative", "heading": body_heading})
     if program_ids:
         blocks.append({"role": "program", "fact_refs": program_ids, "style": "list", "heading": "Программа" if precompute.get("allow_semantic_headings") else None})
     if production_people_ids and cast_people_ids:
