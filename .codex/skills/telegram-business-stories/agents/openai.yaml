@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telegram Business Stories"
+  short_description: "Publish Telegram Business stories safely"
+  default_prompt: "Use $telegram-business-stories to publish or debug Telegram Business stories safely."

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Codex / Telegram Business Stories Skill**: added the project-local `.codex/skills/telegram-business-stories` playbook for safe Business Bot API story publishing, webhook/capture recovery, encrypted connection-cache handling, and prod verification.
 - **Telegram Business Stories / Webhook Contract**: production webhook now includes `business_connection`, startup uses a canonical allowed-updates list, and incoming Business connections are cached only as Fernet-encrypted payloads with hash-only logs so story publishing no longer requires a manual capture window after connection changes.
 - **Incident / Prod Slow During VK Daily Catch-Up**: opened `INC-2026-04-26-prod-slow-during-vk-daily-catchup` after a manual full-bot VK daily catch-up attempt on the serving Fly machine slowed `/healthz` and produced `/webhook` proxy errors; recovery now records the safer compensation path and adds a follow-up for a lightweight VK daily catch-up tool/runbook.
 - **Incident / VK Daily Message Limit**: opened `INC-2026-04-26-vk-daily-message-limit` after the scheduled VK daily announcement generated a single oversized `wall.post` payload and VK rejected it with `message_character_limit`; VK daily sections now split into bounded chunks via `VK_DAILY_POST_MAX_CHARS` and only mark the slot sent after every chunk returns a VK post URL.
