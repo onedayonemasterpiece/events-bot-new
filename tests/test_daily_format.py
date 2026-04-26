@@ -64,6 +64,31 @@ def test_format_event_daily_handles_timezone_aware_added_at() -> None:
     assert isinstance(rendered, str)
 
 
+def test_format_event_daily_keeps_city_hashtag_for_adjectival_venue_name() -> None:
+    event = make_event(
+        location_name="Клуб Светлогорского военного санатория",
+        location_address="Октябрьская 28",
+        city="Светлогорск",
+    )
+
+    rendered = main.format_event_daily(event)
+
+    assert "Клуб Светлогорского военного санатория, Октябрьская 28, #Светлогорск" in rendered
+
+
+def test_format_event_daily_drops_city_only_when_city_token_is_present() -> None:
+    event = make_event(
+        location_name="Телеграф, Островского 3, Светлогорск",
+        location_address="Островского 3",
+        city="Светлогорск",
+    )
+
+    rendered = main.format_event_daily(event)
+
+    assert "Телеграф, Островского 3, Светлогорск, Островского 3, #Светлогорск" not in rendered
+    assert "Телеграф, Островского 3, Светлогорск" in rendered
+
+
 def test_split_daily_text_atomic_keeps_event_card_together() -> None:
     first = "\n".join(
         [

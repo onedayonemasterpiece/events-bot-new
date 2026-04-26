@@ -436,7 +436,7 @@ def normalise_event_location_from_reference(
     if venue is None:
         return None
 
-    event_obj["location_name"] = venue.canonical_line
+    event_obj["location_name"] = venue.name
     if venue.address:
         if (not addr_raw) or (
             normalize_address_key(addr_raw, city=raw_city)

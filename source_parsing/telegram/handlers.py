@@ -2593,7 +2593,7 @@ def _known_venue_payload_from_text(text: str | None, *, city: str | None = None)
     venue = find_known_venue_in_text(text, city=city)
     if venue is None:
         return None, None, None
-    return venue.canonical_line, venue.address or None, venue.city or None
+    return venue.name or None, venue.address or None, venue.city or None
 
 
 _BOOKING_HANDLE_RE = re.compile(

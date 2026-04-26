@@ -5675,7 +5675,14 @@ def _compose_event_location(
     drop_city = False
     if city_value:
         if city_norm and len(city_norm) >= 4:
-            drop_city = city_norm in name_norm or city_norm in address_norm
+            city_tokens = city_norm.split()
+            drop_city = (
+                bool(city_tokens)
+                and (
+                    _contains_token_subsequence(name_norm.split(), city_tokens)
+                    or _contains_token_subsequence(address_norm.split(), city_tokens)
+                )
+            )
         if not drop_city and re.search(
             r"(?i)\b(ул\.?|улица|просп\.?|пр-т|проспект|дом|д\.|корп\.?|корпус|кв\.?|\d)\b",
             city_value,

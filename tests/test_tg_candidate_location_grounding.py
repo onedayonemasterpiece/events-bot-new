@@ -71,7 +71,7 @@ async def test_tg_build_candidate_drops_prose_location_and_uses_address_referenc
 
     cand = _build_candidate(src, message, event_data)
 
-    assert cand.location_name == "Виниссимо, Яналова 2, Калининград"
+    assert cand.location_name == "Виниссимо"
     assert cand.location_address == "Яналова 2"
     assert cand.city == "Калининград"
 
@@ -103,6 +103,6 @@ async def test_tg_build_candidate_drops_prose_location_and_finds_known_venue_in_
 
     cand = _build_candidate(src, message, event_data)
 
-    assert cand.location_name == "Филиал Третьяковской галереи, Парадная наб. 3, Калининград"
+    assert cand.location_name == "Филиал Третьяковской галереи"
     assert cand.location_address == "Парадная наб. 3"
     assert cand.city == "Калининград"
