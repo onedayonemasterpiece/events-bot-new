@@ -1,10 +1,10 @@
 # INC-2026-04-26 Daily Location Fragments In Announcement
 
-Status: mitigated
+Status: closed
 Severity: sev1
 Service: Telegram Monitoring + Smart Event Update + Daily announcements
 Opened: 2026-04-26
-Closed: —
+Closed: 2026-04-26
 Owners: events-bot runtime / import pipeline owner
 Related incidents: `INC-2026-04-15-gate-location-and-linked-facts-drift`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/digests/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/release-governance.md`
@@ -96,19 +96,37 @@ The 2026-04-26 08:00 production daily announcement published multiple events wit
 
 ## Follow-up Actions
 
-- [ ] After deploy, rebuild/fix the affected 2026-04-26 event rows and Telegraph pages, then publish a corrected daily/catch-up if still relevant for the current day.
+- [x] After deploy, rebuild/fix the affected 2026-04-26 event rows and Telegraph pages, then publish a corrected daily/catch-up if still relevant for the current day.
 - [ ] Add a production-equivalent Telegram Monitoring eval case pack for `location_name` prose leakage from the 2026-04-26 examples.
 - [ ] Consider operator-facing import warnings when a candidate location was dropped as prose and recovered from a weaker reference/text signal.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
+- deployed SHAs:
+  - `f850113582d0ad51900eaf2a1758055da8e533f2` (`fix daily location fragment incident`)
+  - `a1369d896525982337df2a05ce6c4f90ad07d0c7` (`fix structured venue city hashtags`)
 - deploy path:
+  - both commits pushed to `origin/hotfix/INC-2026-04-26-daily-location-fragments`;
+  - both commits fast-forwarded into `origin/main`;
+  - Fly deploy image `events-bot-new-wngqia:deployment-01KQ4A86HBD2DWYPC4XSYQRE40`, machine version `1002`;
+  - `/healthz` after deploy returned `ok=true`, `ready=true`, DB `ok`, daily scheduler/job worker `ok`.
 - regression checks:
-  - `pytest -q tests/test_tg_candidate_location_grounding.py tests/test_daily_format.py`
-  - `pytest -q tests/test_tg_monitor_gemma4_contract.py`
-  - `python -m py_compile location_reference.py source_parsing/telegram/handlers.py main_part2.py`
+  - `pytest -q tests/test_tg_candidate_location_grounding.py tests/test_daily_format.py tests/test_tg_monitor_gemma4_contract.py tests/test_bot.py::test_build_daily_posts_split` → `36 passed`;
+  - `python -m py_compile location_reference.py source_parsing/telegram/handlers.py main.py main_part2.py`;
+  - `git diff --check`.
+- data repair / rebuild:
+  - updated 20 affected production `event` rows to structured `location_name`/`location_address`/`city`;
+  - requeued 20 `telegraph_build` jobs; all reached `done` after repair.
 - post-deploy verification:
+  - production `/daily` preview for 2026-04-26 returned `BAD_HITS []` for the reported prose fragments;
+  - preview returned `SPLIT_ERRORS []`;
+  - sample repaired lines include `Клуб Светлогорского военного санатория, Октябрьская 28, #Светлогорск`, `Концертный зал Калининградского симфонического оркестра, Бакинская 13, #Калининград`, `Телеграф, Островского 3, #Светлогорск`, `Остров Канта, #Калининград`, `Виниссимо, Яналова 2, #Калининград`.
+- compensating catch-up:
+  - `send_daily_announcement(..., record=False)` sent corrected reruns to `Полюбить Калининград |️ Анонсы` (`-1002331532485`) and `Кёнигсберг GPT` (`-1002210431821`);
+  - evidence: `CATCHUP_SENT channel=-1002331532485 posts=6`, `CATCHUP_SENT channel=-1002210431821 posts=6`.
+- location reference evidence:
+  - production source text/source rows confirmed event-specific venue context;
+  - external address checks: official Kaliningrad tourism page for `Телеграф` (`Светлогорск, ул. Островского, 3`), 2GIS/MTS Live for `Коммуналка` (`Гвардейский проспект, 10`), Restoclub/Chibbis for `Паб London` (`пр-кт Мира 33`), Vinissimo official shop page for `Яналова 2`, 2GIS for `Клуб Светлогорского военного санатория` (`Октябрьская улица, 28`), Tretyakov official contacts page for `Парадная набережная, 3`, YP.RU for KSO concert hall (`Бакинская улица, 13`).
 
 ## Prevention
 
