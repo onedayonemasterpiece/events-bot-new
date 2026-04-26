@@ -17137,6 +17137,15 @@ def create_app() -> web.Application:
     async def ocrtest_wrapper(message: types.Message):
         await handle_ocrtest(message, db, bot)
 
+    async def check_business_wrapper(message: types.Message):
+        await handle_check_business(message, db, bot)
+
+    async def check_business_cb_wrapper(callback: types.CallbackQuery):
+        await handle_check_business_callback(callback, db, bot)
+
+    async def check_business_photo_wrapper(message: types.Message):
+        await handle_check_business_photo(message, db, bot)
+
     async def ocr_detail_wrapper(callback: types.CallbackQuery):
         await vision_test.select_detail(callback, bot)
 
@@ -17652,6 +17661,24 @@ def create_app() -> web.Application:
 
     dp.message.register(help_wrapper, Command("help"))
     dp.message.register(ocrtest_wrapper, Command("ocrtest"))
+    dp.message.register(check_business_wrapper, Command("check_business"))
+    dp.message.register(
+        check_business_photo_wrapper,
+        lambda m: m.from_user is not None
+        and m.from_user.id in check_business_sessions
+        and (
+            bool(m.photo)
+            or (
+                m.document is not None
+                and (m.document.mime_type or "").startswith("image/")
+            )
+            or (m.text or "").strip().lower() == "/cancel"
+        ),
+    )
+    dp.callback_query.register(
+        check_business_cb_wrapper,
+        lambda c: bool(c.data) and c.data.startswith("cbiz:"),
+    )
     dp.message.register(start_wrapper, Command("start"))
     dp.message.register(register_wrapper, Command("register"))
     dp.message.register(requests_wrapper, Command("requests"))

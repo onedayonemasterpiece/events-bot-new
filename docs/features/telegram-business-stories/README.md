@@ -22,6 +22,10 @@
   - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
 
+## Operator commands
+
+- `/check_business` (только админ) — выводит inline-клавиатуру со всеми кэшированными бизнес-подключениями, у которых `is_enabled=True` и `can_manage_stories=True`. Подпись кнопки — `@username` партнёра, fallback `hash:<8>` если username не пришёл от Telegram. Клик переводит админа в session-режим на 10 минут: следующая картинка (photo или document с MIME `image/*`) уходит как тестовая сторис на этого партнёра через Bot API `postStory` с `active_period=21600` (6 ч). `/cancel` отменяет ожидание. Команда нужна для ручной проверки end-to-end без ожидания CherryFlash слота; реальный CherryFlash fanout продолжает использовать тот же encrypted cache и live `business_connection_id`.
+
 ## Operator visibility
 
 - При получении `business_connection` (и при восстановлении через `business_message`/`edited_business_message`) бот шлёт DM суперадмину с `connection_hash`, `user_hash`, `is_enabled`, `can_manage_stories` и пометкой `🆕 NEW` / `🔄 UPDATE`. Уведомление приходит при первом кэшировании подключения, а также при изменении `is_enabled`/`can_manage_stories`. `business_connection` всегда шлёт DM; обычные `business_message` без смены состояния не спамят.
