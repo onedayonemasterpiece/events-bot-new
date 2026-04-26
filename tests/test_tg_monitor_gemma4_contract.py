@@ -45,6 +45,12 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Never return whitespace-only strings." in source
     assert "Use evidence from both message text and OCR." in source
     assert "Prefer filling location_name and location_address" in source
+    assert "location_name must be a venue/place name, not arbitrary nearby text" in source
+    assert "never copy a descriptive sentence" in source
+    assert "speaker biography, schedule commentary, film metadata" in source
+    assert 'hall/room label such as "Кинозал:" or "Атриум:"' in source
+    assert "use the host venue as location_name" in source
+    assert "leave location_name empty rather than filling it with prose" in source
     assert "Do not invent end_date for single-date events." in source
     assert "Message date is only context for resolving explicit relative anchors" in source
     assert "return [] rather than using message_date as the event date" in source
@@ -238,6 +244,10 @@ def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     assert "range(0, len(timed_lines), 3)" in source
     assert "Each returned event must correspond to one real schedule line" in source
     assert 'Never use placeholder literals like "title" as a title' in source
+    assert "location_name must be the shared venue/place for the timetable" in source
+    assert "not descriptive prose from surrounding text" in source
+    assert "Full message context for shared venue/address facts" in source
+    assert 'a trailing "📍Остров Канта" line applies to all schedule rows' in source
     assert "schedule_blocks" in source
     assert "extract_events schedule rescue failed" in source
 

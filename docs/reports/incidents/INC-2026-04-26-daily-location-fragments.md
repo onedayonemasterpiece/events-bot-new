@@ -92,12 +92,14 @@ The 2026-04-26 08:00 production daily announcement published multiple events wit
 
 - `location_reference.find_known_venue_in_text` now finds a single explicit known venue in free text by canonical name, alias, or address.
 - Telegram candidate build drops prose-like venue fragments and recovers from `default_location`, known venue text/address, OCR, or source text.
+- Kaggle Telegram Monitoring producer prompt/schema now makes the `location_name` contract explicit: Gemma 4 must output a venue/place name and must not copy descriptive prose, speaker bios, schedule commentary, film metadata, ticket instructions, or event descriptions into that field.
+- Schedule rescue prompts now include full-message shared venue context for each day-block, so a trailing shared venue line such as `📍Остров Канта` is available to the LLM for all schedule rows.
 - `/daily` now accounts for the invisible marker in the Telegram length budget and keeps event cards whole across split posts.
 
 ## Follow-up Actions
 
 - [x] After deploy, rebuild/fix the affected 2026-04-26 event rows and Telegraph pages, then publish a corrected daily/catch-up if still relevant for the current day.
-- [ ] Add a production-equivalent Telegram Monitoring eval case pack for `location_name` prose leakage from the 2026-04-26 examples.
+- [x] Add a production-equivalent Telegram Monitoring eval case pack for `location_name` prose leakage from the 2026-04-26 examples.
 - [ ] Consider operator-facing import warnings when a candidate location was dropped as prose and recovered from a weaker reference/text signal.
 
 ## Release And Closure Evidence
@@ -127,6 +129,11 @@ The 2026-04-26 08:00 production daily announcement published multiple events wit
 - location reference evidence:
   - production source text/source rows confirmed event-specific venue context;
   - external address checks: official Kaliningrad tourism page for `Телеграф` (`Светлогорск, ул. Островского, 3`), 2GIS/MTS Live for `Коммуналка` (`Гвардейский проспект, 10`), Restoclub/Chibbis for `Паб London` (`пр-кт Мира 33`), Vinissimo official shop page for `Яналова 2`, 2GIS for `Клуб Светлогорского военного санатория` (`Октябрьская улица, 28`), Tretyakov official contacts page for `Парадная набережная, 3`, YP.RU for KSO concert hall (`Бакинская улица, 13`).
+- producer-level follow-up:
+  - confirmed affected rows came from Telegram Monitoring source posts (`terkatalk/4672`, `zaryakinoteatr/849`, `tretyakovka_kaliningrad/2814`, `minkultturism_39/4650`, `meowafisha/7181`, `dramteatr39/4098`, `dramteatr39/4112`, `sobor39/5875`, etc.);
+  - tightened the Gemma 4 producer prompt/schema instead of relying only on server-side guardrails;
+  - local Gemma 4 producer eval using the incident source texts and `models/gemma-4-31b-it` returned `bad_hits=[]`;
+  - after adding shared schedule venue context, `meowafisha/7181` returned all four 2026-04-26 schedule rows with `location_name="Остров Канта"` instead of prose/empty location; `sobor39/5875` returned `location_name="Кафедральный собор"`; `minkultturism_39/4650` no longer copied speaker biography into `location_name` and returned venue-shaped `Третьяковская галерея` values for the relevant rows, with canonicalization left to the reference layer.
 
 ## Prevention
 

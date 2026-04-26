@@ -1196,6 +1196,10 @@ EVENT_ARRAY_SCHEMA = {
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
             'location_name': _string_schema(
                 'Venue name where the event takes place; empty string if unknown. '
+                'Must be a venue/place name or a precise hall/room label. Never copy descriptive prose, '
+                'speaker biographies, schedule commentary, film metadata, ticket instructions, or narrative sentences. '
+                'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
+                'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
                 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
                 'unless that exact full venue name is explicitly stated. '
                 'Never the literal string "unknown".'
@@ -2408,6 +2412,11 @@ async def extract_events(
         'Use evidence from both message text and OCR. If OCR contains venue, hall/floor, city, exact date, exact time, '
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
+        'location_name must be a venue/place name, not arbitrary nearby text: never copy a descriptive sentence, '
+        'speaker biography, schedule commentary, film metadata, ticket instruction, or event description into location_name. '
+        'If a schedule groups items under a hall/room label such as "Кинозал:" or "Атриум:" and source context names '
+        'the museum/theatre/venue, use the host venue as location_name; do not return only the hall label as the venue. '
+        'If the venue is not grounded, leave location_name empty rather than filling it with prose. '
         'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка" '
         'unless that exact full venue name is explicitly stated in text or OCR. '
         'If a post clearly invites attendance to one lecture/talk/meetup/excursion/event and text or OCR gives an exact date/time, '
@@ -2570,6 +2579,9 @@ async def extract_events(
             out = bridge_fallback
 
     if not out and schedule_like:
+        shared_schedule_context = content[:1200]
+        if len(content) > 1200:
+            shared_schedule_context += "\n...\n" + content[-1200:]
         schedule_header_re = re.compile(
             r'(?im)^\s*\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b[^\n]*$'
         )
@@ -2604,11 +2616,17 @@ async def extract_events(
                 'Keep excursions, feedings, public talks, and other visitor-facing timetable items. '
                 'Ignore photo-rubric text, hashtags, channel promotion, and generic ticket-sales boilerplate. '
                 'Never use placeholder literals like "title" as a title; copy the attendee-facing name from the time line. '
+                'location_name must be the shared venue/place for the timetable, not descriptive prose from surrounding text. '
+                'Use the full message context below to recover shared venue/address facts that are outside this small day-block '
+                '(for example a trailing "📍Остров Канта" line applies to all schedule rows in the block). '
+                'If the chunk only has a hall/room label and the full message/source context names the host venue, use the host venue; '
+                'otherwise leave location_name empty. '
                 'Never emit empty JSON objects ({}) or venue-only rows. '
                 'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
                 'Use source context only as weak venue context; do not copy it verbatim into title or raw_excerpt. '
                 + date_context + '\n'
                 + (source_context_line + '\n' if source_context_line else '')
+                + 'Full message context for shared venue/address facts:\n' + shared_schedule_context + '\n'
                 + 'Schedule day-block:\n' + schedule_block
             )
             try:
