@@ -50,6 +50,10 @@ sources:
     default_location: "Калининградский добровольческий центр (ДОБРО39), Профессора Баранова 34, офис 411, Калининград"
     notes: "официальный; указывать default_location если в посте нет адреса"
 
+  - username: ecoklgd
+    trust_level: medium
+    notes: "ЭкоКёниг; эконовости и экологические городские анонсы"
+
   - username: dramteatr39
     trust_level: high
     default_location: "Драматический театр, Мира 4, Калининград"

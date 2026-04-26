@@ -32,8 +32,8 @@ def normalize_tg_username(value: str | None) -> str:
         return ""
     raw = raw.lstrip("@").strip()
     raw = re.sub(r"^https?://", "", raw, flags=re.IGNORECASE)
-    raw = re.sub(r"^tg://resolve\\?domain=", "", raw, flags=re.IGNORECASE)
-    raw = re.sub(r"^(?:www\\.)?(?:t\\.me|telegram\\.me)/", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"^tg://resolve\?domain=", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"^(?:www\.)?(?:t\.me|telegram\.me)/", "", raw, flags=re.IGNORECASE)
     raw = raw.split("?", 1)[0].split("#", 1)[0]
     raw = raw.split("/", 1)[0]
     raw = raw.strip().lstrip("@").strip().lower()
