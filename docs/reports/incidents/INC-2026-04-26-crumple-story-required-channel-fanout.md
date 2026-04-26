@@ -102,10 +102,18 @@ The scheduled production CrumpleVideo run completed render and story publish fro
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `401e9632e0f027f3f035d4bb75b907395951e0f4`
+- deploy path: manual `/home/vscode/.fly/bin/flyctl deploy --app events-bot-new-wngqia --config fly.toml` from clean branch `hotfix/crumple-story-fanout-required-2026-04-26`; the same commit was pushed to `origin/main`.
 - regression checks:
+  - `pytest -q tests/test_kaggle_story_publish.py tests/test_video_announce_story_publish.py tests/test_crumple_build_notebook.py` -> `18 passed`
+  - `python -m py_compile video_announce/story_publish.py kaggle/CrumpleVideo/story_publish.py`
+  - `pytest -q tests/test_video_announce_v_pipeline.py::test_create_cherryflash_dataset_writes_story_publish_config_when_enabled` -> `1 passed`
+  - `python kaggle/CrumpleVideo/build_notebook.py`
 - post-deploy verification:
+  - `flyctl status --app events-bot-new-wngqia` showed machine `48e42d5b714228` on version `1010`, image `deployment-01KQ5E1P3MG7D6P075W76XQXV8`, `1 total, 1 passing` check.
+  - `curl https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "video_tomorrow": "ok", ... "issues": []}`.
+  - startup log showed `SCHED startup catchup skip video_tomorrow: scheduled dispatch already recorded today`.
+  - same-day `@kenigevents` compensation is not restored by code alone: the April 26 Kaggle evidence still has `BOOSTS_REQUIRED` for `@kenigevents`, so a rerun would be expected to miss the same required channel until Telegram channel story capability/boost state is restored.
 
 ## Prevention
 
