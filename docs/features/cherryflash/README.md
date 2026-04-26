@@ -682,7 +682,7 @@ This section captures the latest intro-direction request as an explicit delta to
     - then after `600` seconds repost to `@lovekenig`;
     - then after another `600` seconds repost to `@loving_guide39`;
     - then each configured encrypted Telegram Business target is posted through Bot API `postStory` after its own `600` second delay, without writing account usernames, user ids, or `business_connection_id` into code/docs/config artifacts.
-  - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and enabled for CherryFlash with `VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS`; the production default uses `all` cached story-capable Business connections so adding a new approved account only requires connecting it to the bot.
+  - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
 - Sibling profile rule:
   - `cherryflash_libsvtav1` reuses the same common story path but requests `story_publish_enabled=true` by default in its session params;
   - actual story publication still depends on the shared global story infra (`build_story_publish_config()` and secret datasets) being available for that run.

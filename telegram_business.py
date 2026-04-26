@@ -214,29 +214,44 @@ def _parse_business_target_selector(raw: str | None) -> list[str] | None:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def load_business_story_targets(*, path: Path | None = None) -> list[dict[str, Any]]:
+def _selector_match(item: dict[str, Any], allowed: set[str]) -> bool:
+    username = str(item.get("username") or "").strip().lstrip("@").casefold()
+    candidates = {
+        str(item.get("connection_hash") or "").strip(),
+        str(item.get("user_hash") or "").strip(),
+        str(item.get("username_hash") or "").strip(),
+    }
+    if username:
+        candidates.add(username)
+        candidates.add(f"@{username}")
+    return bool(candidates.intersection(allowed))
+
+
+def load_business_story_targets(
+    *,
+    path: Path | None = None,
+    selector_raw: str | None = None,
+) -> list[dict[str, Any]]:
     """Return decrypted, story-capable Business connections selected for autopublish.
 
     `VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS=all` selects every cached enabled
     connection with story rights. Otherwise the value is a comma-separated or JSON
     list of connection/user/username hashes.
     """
-    selector = _parse_business_target_selector(
+    selector_source = (
         os.getenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS")
+        if selector_raw is None
+        else selector_raw
     )
+    selector = _parse_business_target_selector(selector_source)
     if selector == []:
         return []
-    allowed = set(selector or [])
+    allowed = {item.strip().casefold() for item in (selector or []) if item.strip()}
     targets: list[dict[str, Any]] = []
     for item in load_cached_business_connections(path=path):
         if not bool(item.get("is_enabled")) or not bool(item.get("can_manage_stories")):
             continue
-        hashes = {
-            str(item.get("connection_hash") or "").strip(),
-            str(item.get("user_hash") or "").strip(),
-            str(item.get("username_hash") or "").strip(),
-        }
-        if allowed and not hashes.intersection(allowed):
+        if allowed and not _selector_match(item, allowed):
             continue
         connection_hash = str(item.get("connection_hash") or "").strip()
         if not connection_hash:

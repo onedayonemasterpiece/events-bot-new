@@ -15,8 +15,8 @@
   - если задан `TELEGRAM_BUSINESS_FERNET_KEY`, используется он;
   - иначе ключ детерминированно выводится из `TELEGRAM_BOT_TOKEN`, поэтому файл не содержит пригодных открытых id без bot secret.
 - Автопубликация из CherryFlash выбирает Business targets только из encrypted cache:
-  - `VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS=all` добавляет все активные подключения с `can_manage_stories`;
-  - вместо `all` можно указать comma/JSON list из `connection_hash`, `user_hash` или `username_hash`;
+  - allowlist личных аккаунтов хранится в БД `setting.video_announce_story_business_targets` как comma/JSON list из username, `connection_hash`, `user_hash` или `username_hash`;
+  - реальные username личных аккаунтов не должны попадать в repo env/docs/code;
   - `story_publish.json` содержит только hash-label вида `business:<hash>`, а реальные `business_connection_id` и bot token передаются в Kaggle только внутри encrypted story secrets dataset;
   - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.

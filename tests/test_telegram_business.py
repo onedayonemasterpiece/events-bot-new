@@ -71,3 +71,30 @@ def test_business_story_targets_select_all_story_capable_connections(tmp_path, m
     assert targets[0]["connection_id"] == "biz-connection-secret"
     assert targets[0]["connection_hash"]
     assert "story_owner_fixture" not in json.dumps(targets, ensure_ascii=False)
+
+
+def test_business_story_targets_can_select_by_username_runtime_value(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    monkeypatch.delenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", raising=False)
+    target = tmp_path / "connections.enc.json"
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+        ),
+        path=target,
+    )
+
+    targets = load_business_story_targets(
+        path=target,
+        selector_raw='["@story_owner_fixture"]',
+    )
+
+    assert len(targets) == 1
+    serialized = json.dumps(targets, ensure_ascii=False)
+    assert "story_owner_fixture" not in serialized
+    assert "biz-connection-secret" in serialized

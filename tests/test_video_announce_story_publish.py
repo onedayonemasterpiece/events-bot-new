@@ -116,7 +116,7 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
 ):
     target = tmp_path / "business.enc.json"
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
-    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", "all")
+    monkeypatch.delenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", raising=False)
     monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
     cache_business_connection(
@@ -142,6 +142,7 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
                 {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
                 {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
             ],
+            "story_business_targets": ["@story_owner_fixture"],
         },
         selected_event_dates=["2026-04-16"],
     )
@@ -160,7 +161,7 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
 async def test_business_story_targets_are_cherryflash_scoped(monkeypatch, tmp_path):
     target = tmp_path / "business.enc.json"
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
-    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", "all")
+    monkeypatch.delenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", raising=False)
     monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
     cache_business_connection(
@@ -184,6 +185,7 @@ async def test_business_story_targets_are_cherryflash_scoped(monkeypatch, tmp_pa
             "story_targets_override": [
                 {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
             ],
+            "story_business_targets": ["@story_owner_fixture"],
         },
     )
 

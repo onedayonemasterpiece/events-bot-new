@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from models import Channel
+from models import Channel, Setting
 from source_parsing.telegram.split_secrets import encrypt_secret
 from telegram_business import load_business_story_targets
 from .kaggle_client import KaggleClient
@@ -208,7 +208,7 @@ def _story_session_payload() -> dict[str, Any]:
 
 def build_story_secrets_payload() -> str:
     payload = _story_session_payload()
-    business_targets = _load_business_story_targets()
+    business_targets = _load_business_story_targets(selector_raw="all")
     if business_targets:
         bot_token = _require_env_any("TELEGRAM_BOT_TOKEN")
         payload["business_bot_token"] = bot_token
@@ -442,16 +442,41 @@ def _business_target_delay_seconds() -> int:
     return _read_positive_int_env("VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS", 600)
 
 
-def _load_business_story_targets() -> list[dict[str, Any]]:
-    return load_business_story_targets()
+BUSINESS_TARGETS_SETTING_KEY = "video_announce_story_business_targets"
 
 
-def _business_story_targets(selection_params: dict[str, Any]) -> list[StoryTarget]:
+def _load_business_story_targets(selector_raw: str | None) -> list[dict[str, Any]]:
+    return load_business_story_targets(selector_raw=selector_raw)
+
+
+async def _business_targets_setting_raw(
+    db,
+    selection_params: dict[str, Any],
+) -> str:
+    override = selection_params.get("story_business_targets")
+    if isinstance(override, str):
+        return override
+    if isinstance(override, list):
+        return json.dumps(override, ensure_ascii=False)
+    if db is None:
+        return ""
+    async with db.get_session() as session:
+        setting = await session.get(Setting, BUSINESS_TARGETS_SETTING_KEY)
+        return str(setting.value or "") if setting else ""
+
+
+async def _business_story_targets(
+    db,
+    selection_params: dict[str, Any],
+) -> list[StoryTarget]:
     if not _business_targets_allowed_for_mode(selection_params):
+        return []
+    selector_raw = await _business_targets_setting_raw(db, selection_params)
+    if not selector_raw.strip():
         return []
     delay_seconds = _business_target_delay_seconds()
     targets: list[StoryTarget] = []
-    for item in _load_business_story_targets():
+    for item in _load_business_story_targets(selector_raw=selector_raw):
         connection_hash = str(item.get("connection_hash") or "").strip()
         if not connection_hash:
             continue
@@ -553,7 +578,7 @@ async def build_story_publish_config(
         if main_target:
             targets.append(main_target)
         targets.extend(_parse_extra_targets_json())
-    targets.extend(_business_story_targets(selection_params))
+    targets.extend(await _business_story_targets(db, selection_params))
     targets = _dedupe_targets(targets)
     if not targets:
         logger.info("video_announce.story: enabled but no targets configured")
