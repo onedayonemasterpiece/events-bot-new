@@ -228,6 +228,85 @@ async def test_build_daily_sections_vk_short_link_reuse(tmp_path: Path, monkeypa
     assert "vk.cc/short" in sec1_again
 
 
+def test_split_vk_daily_text_atomic_keeps_chunks_under_limit(monkeypatch):
+    monkeypatch.setenv("VK_DAILY_POST_MAX_CHARS", "1000")
+    block = "👉 " + ("Очень длинное описание события\n" * 18).strip()
+    separator = f"\n{main.VK_EVENT_SEPARATOR}\n"
+    text = separator.join(
+        [
+            "📅 АНОНС\nНЕ ПРОПУСТИТЕ СЕГОДНЯ",
+            block,
+            block.replace("события", "концерта"),
+            "#Афиша_Калининград",
+        ]
+    )
+
+    chunks = main.split_vk_daily_text_atomic(text)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 1000 for chunk in chunks)
+    assert "НЕ ПРОПУСТИТЕ СЕГОДНЯ" in chunks[0]
+    assert "#Афиша_Калининград" in chunks[-1]
+
+
+@pytest.mark.asyncio
+async def test_send_daily_announcement_vk_splits_long_section(monkeypatch):
+    monkeypatch.setenv("VK_DAILY_POST_MAX_CHARS", "1000")
+    block = "👉 " + ("Длинная карточка события\n" * 25).strip()
+    separator = f"\n{main.VK_EVENT_SEPARATOR}\n"
+    long_section = separator.join(
+        [
+            "📅 АНОНС\nНЕ ПРОПУСТИТЕ СЕГОДНЯ",
+            block,
+            block.replace("события", "лекции"),
+            "#Афиша_Калининград",
+        ]
+    )
+    sent: list[str] = []
+
+    async def fake_build_sections(*_args, **_kwargs):
+        return long_section, "+0 ДОБАВИЛИ В АНОНС"
+
+    async def fake_post_to_vk(_group_id, message, *_args, **_kwargs):
+        sent.append(message)
+        return f"https://vk.com/wall-1_{len(sent)}"
+
+    monkeypatch.setattr(main, "build_daily_sections_vk", fake_build_sections)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+
+    await main.send_daily_announcement_vk(
+        db=None,
+        group_id="1",
+        tz=timezone.utc,
+        section="today",
+    )
+
+    assert len(sent) > 1
+    assert all(len(message) <= 1000 for message in sent)
+    assert "НЕ ПРОПУСТИТЕ СЕГОДНЯ" in sent[0]
+    assert "#Афиша_Калининград" in sent[-1]
+
+
+@pytest.mark.asyncio
+async def test_send_daily_announcement_vk_requires_post_url(monkeypatch):
+    async def fake_build_sections(*_args, **_kwargs):
+        return "📅 АНОНС\n#Афиша_Калининград", "+0 ДОБАВИЛИ В АНОНС"
+
+    async def fake_post_to_vk(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(main, "build_daily_sections_vk", fake_build_sections)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+
+    with pytest.raises(RuntimeError, match="vk daily today post failed"):
+        await main.send_daily_announcement_vk(
+            db=None,
+            group_id="1",
+            tz=timezone.utc,
+            section="today",
+        )
+
+
 def test_build_vk_source_header_uses_short_ticket_link():
     event = main.Event(
         title="Concert",

@@ -3021,6 +3021,48 @@ def split_daily_text_atomic(text: str, limit: int = 4096) -> list[str]:
     return parts
 
 
+def _vk_daily_post_max_chars() -> int:
+    raw = os.getenv("VK_DAILY_POST_MAX_CHARS", "12000")
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        value = 12000
+    return max(1000, min(value, 16000))
+
+
+def split_vk_daily_text_atomic(text: str, limit: int | None = None) -> list[str]:
+    """Split VK daily posts without breaking event cards when possible."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    max_len = limit or _vk_daily_post_max_chars()
+    if len(text) <= max_len:
+        return [text]
+
+    separator = f"\n{VK_EVENT_SEPARATOR}\n"
+    blocks = text.split(separator)
+    parts: list[str] = []
+    current = ""
+    for block in blocks:
+        block = block.strip("\n")
+        if not block:
+            continue
+        candidate = f"{current}{separator}{block}" if current else block
+        if len(candidate) <= max_len:
+            current = candidate
+            continue
+        if current:
+            parts.append(current)
+            current = ""
+        if len(block) > max_len:
+            parts.extend(split_text(block, limit=max_len))
+        else:
+            current = block
+    if current:
+        parts.append(current)
+    return parts
+
+
 async def build_daily_posts(
     db: Database,
     tz: timezone,
@@ -4184,17 +4226,35 @@ async def send_daily_announcement_vk(
     # сборка постов/текста — вне семафоров
     async with span("db"):
         section1, section2 = await build_daily_sections_vk(db, tz, now)
+    max_chars = _vk_daily_post_max_chars()
+
+    async def _post_section(text: str, label: str) -> None:
+        chunks = split_vk_daily_text_atomic(text, limit=max_chars)
+        logging.info(
+            "vk daily %s split chunks=%d total_len=%d max_chars=%d",
+            label,
+            len(chunks),
+            len(text or ""),
+            max_chars,
+        )
+        for idx, chunk in enumerate(chunks, start=1):
+            url = await post_to_vk(group_id, chunk, db, bot)
+            if not url:
+                raise RuntimeError(
+                    f"vk daily {label} post failed chunk={idx}/{len(chunks)}"
+                )
+
     if section == "today":
         async with span("vk-send"):
-            await post_to_vk(group_id, section1, db, bot)
+            await _post_section(section1, "today")
     elif section == "added":
         async with span("vk-send"):
-            await post_to_vk(group_id, section2, db, bot)
+            await _post_section(section2, "added")
     else:
         async with span("vk-send"):
-            await post_to_vk(group_id, section1, db, bot)
+            await _post_section(section1, "today")
         async with span("vk-send"):
-            await post_to_vk(group_id, section2, db, bot)
+            await _post_section(section2, "added")
 
 
 async def _daily_try_claim(channel_id: int, day_key: str) -> bool:
