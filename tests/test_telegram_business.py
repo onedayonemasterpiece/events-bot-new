@@ -17,6 +17,8 @@ class Obj:
 def test_webhook_allowed_updates_include_business_connection():
     assert "business_connection" in WEBHOOK_ALLOWED_UPDATES
     assert WEBHOOK_ALLOWED_UPDATES.count("business_connection") == 1
+    assert "business_message" in WEBHOOK_ALLOWED_UPDATES
+    assert "edited_business_message" in WEBHOOK_ALLOWED_UPDATES
 
 
 def test_business_connection_cache_encrypts_sensitive_ids(tmp_path, monkeypatch):

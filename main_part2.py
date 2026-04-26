@@ -18006,6 +18006,10 @@ def create_app() -> web.Application:
     )
     dp.my_chat_member.register(partial(handle_my_chat_member, db=db))
     dp.business_connection.register(handle_business_connection)
+    dp.business_message.register(partial(handle_business_message_connection, bot=bot))
+    dp.edited_business_message.register(
+        partial(handle_business_message_connection, bot=bot)
+    )
 
     app = web.Application()
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")

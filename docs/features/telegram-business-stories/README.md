@@ -5,6 +5,7 @@
 ## Runtime contract
 
 - Production webhook обязан подписываться на update type `business_connection`.
+- Для уже подключённых аккаунтов webhook также подписан на `business_message` и `edited_business_message`: если Telegram больше не присылает старый `business_connection`, бот восстанавливает connection через `business_connection_id` из business-message update и сразу пишет его в encrypted cache.
 - Канонический список webhook updates живёт в `telegram_business.WEBHOOK_ALLOWED_UPDATES`; startup не должен собирать его вручную.
 - При получении `business_connection` бот:
   - проверяет флаги подключения и права `can_manage_stories`;

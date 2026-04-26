@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Telegram Business Stories / Existing Connection Recovery**: webhook updates now include `business_message` / `edited_business_message`, and those updates recover and encrypted-cache `business_connection_id` through `getBusinessConnection`, so already-connected Business accounts can be captured without reconnecting the chatbot.
 - **CherryFlash / Business Story Target Storage**: personal Telegram Business story targets now come from runtime DB setting `video_announce_story_business_targets` instead of repo env/code, while `story_publish.json` still carries only hash labels and encrypted story secrets carry the Bot API connection data.
 - **CherryFlash / Telegram Business Stories Fanout**: scheduled CherryFlash story publish now appends encrypted Telegram Business targets after the existing Telethon channel-story chain, keeps `600s` spacing between all targets, posts Business stories through Bot API `postStory`, and stores only hash labels in config/docs while `business_connection_id` stays inside encrypted story secrets.
 - **Codex / Telegram Business Stories Skill**: added the project-local `.codex/skills/telegram-business-stories` playbook for safe Business Bot API story publishing, webhook/capture recovery, encrypted connection-cache handling, and prod verification.

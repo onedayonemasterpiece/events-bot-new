@@ -20,6 +20,8 @@ WEBHOOK_ALLOWED_UPDATES: tuple[str, ...] = (
     "channel_post",
     "edited_channel_post",
     "business_connection",
+    "business_message",
+    "edited_business_message",
 )
 
 

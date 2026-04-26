@@ -12109,6 +12109,29 @@ async def handle_business_connection(update: types.BusinessConnection):
         )
 
 
+async def handle_business_message_connection(message: types.Message, bot: Bot):
+    connection_id = str(getattr(message, "business_connection_id", "") or "").strip()
+    if not connection_id:
+        return
+    summary = {"connection_hash": secure_short_hash(connection_id)}
+    try:
+        connection = await bot.get_business_connection(business_connection_id=connection_id)
+        summary = cache_business_connection(connection)
+        logging.info(
+            "business_message connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s",
+            summary.get("connection_hash"),
+            summary.get("user_hash"),
+            summary.get("is_enabled"),
+            summary.get("can_manage_stories"),
+            summary.get("path"),
+        )
+    except Exception:
+        logging.exception(
+            "business_message connection cache failed connection=%s",
+            summary.get("connection_hash"),
+        )
+
+
 async def send_channels_list(
     message: types.Message, db: Database, bot: Bot, edit: bool = False
 ):
