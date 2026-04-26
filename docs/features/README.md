@@ -22,6 +22,7 @@
 - `docs/features/telegraph-cache-sanitizer/README.md` — прогрев/проверка Telegram web preview (Instant View) для Telegraph страниц + очередь на пересборку “битых”
 - `docs/features/preview-3d/README.md` — генерация 3D-превью (`/3di`) через Kaggle/Blender с выгрузкой в Supabase Storage
 - `docs/features/guide-excursions-monitoring/README.md` — мониторинг экскурсионных анонсов гидов, отдельный digest track и публикация в тестовый канал
+- `docs/features/telegram-business-stories/README.md` — Telegram Business webhook contract, encrypted connection cache и публикация сторис через Bot API
 
 ## Как добавлять новую фичу
 

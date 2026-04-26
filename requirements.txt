@@ -19,6 +19,7 @@ requests>=2.31.0
 boto3>=1.34.0
 PyYAML>=6.0
 telethon>=1.34.0  # E2E testing with real Telegram accounts
+cryptography>=41.0.0  # encrypted Telegram Business connection cache
 
 
 # Google AI (Gemma) client (used by video /v poster completeness checks, etc.)

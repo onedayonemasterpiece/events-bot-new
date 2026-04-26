@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Telegram Business Stories / Webhook Contract**: production webhook now includes `business_connection`, startup uses a canonical allowed-updates list, and incoming Business connections are cached only as Fernet-encrypted payloads with hash-only logs so story publishing no longer requires a manual capture window after connection changes.
 - **Incident / Prod Slow During VK Daily Catch-Up**: opened `INC-2026-04-26-prod-slow-during-vk-daily-catchup` after a manual full-bot VK daily catch-up attempt on the serving Fly machine slowed `/healthz` and produced `/webhook` proxy errors; recovery now records the safer compensation path and adds a follow-up for a lightweight VK daily catch-up tool/runbook.
 - **Incident / VK Daily Message Limit**: opened `INC-2026-04-26-vk-daily-message-limit` after the scheduled VK daily announcement generated a single oversized `wall.post` payload and VK rejected it with `message_character_limit`; VK daily sections now split into bounded chunks via `VK_DAILY_POST_MAX_CHARS` and only mark the slot sent after every chunk returns a VK post URL.
 - **VK Auto Queue / Gemma 4 Draft Extraction**: scoped scheduled/manual VK auto-import draft parsing to `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL`, defaulting to `models/gemma-4-31b-it`. The override flows through `vk_intake` into the Gemma event parser only for `vk_auto_queue`; global `/parse`, generic `event_parse`, and Smart Update routing remain unchanged.

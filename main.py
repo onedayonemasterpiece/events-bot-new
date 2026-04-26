@@ -165,6 +165,11 @@ import httpx
 import hashlib
 import unicodedata
 from html import escape
+from telegram_business import (
+    WEBHOOK_ALLOWED_UPDATES,
+    cache_business_connection,
+    secure_short_hash,
+)
 import vk_intake
 import vk_review
 import poster_ocr
@@ -12073,6 +12078,35 @@ async def handle_my_chat_member(update: types.ChatMemberUpdated, db: Database):
             channel.username = getattr(update.chat, "username", None)
             channel.is_admin = is_admin
         await session.commit()
+
+
+async def handle_business_connection(update: types.BusinessConnection):
+    summary = {
+        "connection_hash": secure_short_hash(getattr(update, "id", "")),
+        "user_hash": secure_short_hash(getattr(getattr(update, "user", None), "id", "")),
+        "is_enabled": bool(getattr(update, "is_enabled", False)),
+        "can_manage_stories": bool(
+            getattr(getattr(update, "rights", None), "can_manage_stories", False)
+        ),
+    }
+    try:
+        summary = cache_business_connection(update)
+        logging.info(
+            "business_connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s",
+            summary.get("connection_hash"),
+            summary.get("user_hash"),
+            summary.get("is_enabled"),
+            summary.get("can_manage_stories"),
+            summary.get("path"),
+        )
+    except Exception:
+        logging.exception(
+            "business_connection cache failed connection=%s user=%s enabled=%s can_manage_stories=%s",
+            summary.get("connection_hash"),
+            summary.get("user_hash"),
+            summary.get("is_enabled"),
+            summary.get("can_manage_stories"),
+        )
 
 
 async def send_channels_list(

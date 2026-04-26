@@ -162,6 +162,13 @@ features:
       - source_parsing/telegram/handlers.py
       - smart_event_update.py
       - scheduling.py
+  telegram_business_stories:
+    status: implemented
+    docs: docs/features/telegram-business-stories/README.md
+    entrypoints:
+      - telegram_business.py
+      - main.py
+      - main_part2.py
   ticket_sites_queue:
     status: implemented
     docs: docs/features/ticket-sites-queue/README.md

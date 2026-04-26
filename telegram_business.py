@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import base64
+import json
+import hashlib
+import hmac
+import os
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from cryptography.fernet import Fernet
+
+
+WEBHOOK_ALLOWED_UPDATES: tuple[str, ...] = (
+    "message",
+    "callback_query",
+    "my_chat_member",
+    "channel_post",
+    "edited_channel_post",
+    "business_connection",
+)
+
+
+def secure_short_hash(value: object, *, length: int = 12) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    salt = (
+        os.getenv("TELEGRAM_BUSINESS_HASH_SALT")
+        or os.getenv("TELEGRAM_BOT_TOKEN")
+        or "events-bot-new"
+    )
+    digest = hmac.new(salt.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256)
+    return digest.hexdigest()[:length]
+
+
+def business_connection_store_path() -> Path:
+    raw = (os.getenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE") or "").strip()
+    if raw:
+        return Path(raw)
+    data_dir = Path(os.getenv("DATA_DIR") or "/data")
+    if data_dir.exists():
+        return data_dir / "telegram_business_connections.enc.json"
+    return Path("artifacts/run/telegram_business_connections.enc.json")
+
+
+def _fernet_from_env() -> Fernet:
+    raw_key = (os.getenv("TELEGRAM_BUSINESS_FERNET_KEY") or "").strip()
+    if raw_key:
+        return Fernet(raw_key.encode("utf-8"))
+    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN is required to encrypt Telegram Business connection cache"
+        )
+    key = base64.urlsafe_b64encode(hashlib.sha256(token.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def _field(obj: Any, name: str, default: Any = None) -> Any:
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
+def _visible_bool(obj: Any, name: str) -> bool:
+    return bool(_field(obj, name, False))
+
+
+def business_connection_summary(connection: Any) -> dict[str, Any]:
+    user = _field(connection, "user")
+    rights = _field(connection, "rights")
+    connection_id = str(_field(connection, "id") or "").strip()
+    user_id = _field(user, "id")
+    return {
+        "connection_hash": secure_short_hash(connection_id),
+        "user_hash": secure_short_hash(user_id),
+        "is_enabled": bool(_field(connection, "is_enabled", False)),
+        "can_manage_stories": _visible_bool(rights, "can_manage_stories"),
+    }
+
+
+def _load_store(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "connections": []}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"version": 1, "connections": []}
+    if not isinstance(payload, dict):
+        return {"version": 1, "connections": []}
+    if not isinstance(payload.get("connections"), list):
+        payload["connections"] = []
+    payload.setdefault("version", 1)
+    return payload
+
+
+def _write_store(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+        tmp_name = handle.name
+    os.replace(tmp_name, path)
+
+
+def cache_business_connection(connection: Any, *, path: Path | None = None) -> dict[str, Any]:
+    summary = business_connection_summary(connection)
+    connection_id = str(_field(connection, "id") or "").strip()
+    if not connection_id:
+        raise RuntimeError("business connection update has no id")
+
+    user = _field(connection, "user")
+    rights = _field(connection, "rights")
+    encrypted_payload = {
+        "connection_id": connection_id,
+        "user_id": _field(user, "id"),
+        "user_chat_id": _field(connection, "user_chat_id"),
+        "date": _field(connection, "date"),
+        "is_enabled": summary["is_enabled"],
+        "can_manage_stories": summary["can_manage_stories"],
+        "rights": {
+            "can_manage_stories": _visible_bool(rights, "can_manage_stories"),
+            "can_reply": _visible_bool(connection, "can_reply"),
+        },
+    }
+
+    fernet = _fernet_from_env()
+    encrypted = fernet.encrypt(
+        json.dumps(encrypted_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+
+    target = path or business_connection_store_path()
+    store = _load_store(target)
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        **summary,
+        "encrypted_payload": encrypted,
+        "updated_at": now,
+    }
+
+    records = [
+        item
+        for item in store["connections"]
+        if not isinstance(item, dict)
+        or item.get("connection_hash") != summary["connection_hash"]
+    ]
+    records.append(record)
+    store["connections"] = records
+    _write_store(target, store)
+    return {**summary, "path": str(target)}
+
+
+def load_cached_business_connections(*, path: Path | None = None) -> list[dict[str, Any]]:
+    target = path or business_connection_store_path()
+    store = _load_store(target)
+    fernet = _fernet_from_env()
+    connections: list[dict[str, Any]] = []
+    for item in store.get("connections", []):
+        if not isinstance(item, dict):
+            continue
+        encrypted = str(item.get("encrypted_payload") or "").strip()
+        if not encrypted:
+            continue
+        decrypted = json.loads(fernet.decrypt(encrypted.encode("ascii")).decode("utf-8"))
+        if not isinstance(decrypted, dict):
+            continue
+        connections.append(
+            {
+                "connection_hash": item.get("connection_hash"),
+                "user_hash": item.get("user_hash"),
+                "updated_at": item.get("updated_at"),
+                **decrypted,
+            }
+        )
+    return connections

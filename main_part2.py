@@ -5041,7 +5041,7 @@ async def init_db_and_scheduler(
         try:
             await bot.set_webhook(
                 hook,
-                allowed_updates=["message", "callback_query", "my_chat_member", "channel_post", "edited_channel_post"],
+                allowed_updates=list(WEBHOOK_ALLOWED_UPDATES),
             )
         except Exception as e:
             logging.error("Failed to set webhook: %s", e)
@@ -18005,6 +18005,7 @@ def create_app() -> web.Application:
         or "forward_origin" in getattr(m, "model_extra", {}),
     )
     dp.my_chat_member.register(partial(handle_my_chat_member, db=db))
+    dp.business_connection.register(handle_business_connection)
 
     app = web.Application()
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")
