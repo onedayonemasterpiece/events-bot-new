@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-26-prod-slow-during-vk-daily-catchup.md`
+  - Scope: Fly production runtime, `/healthz`, `/webhook`, manual production catch-up/smoke commands, VK daily recovery procedure.
+  - Must not regress: manual production catch-up must not run heavy full-bot workflows in a way that starves the serving machine; health/webhook degradation during validation must stop validation immediately and restore serving before continuing.
 - `INC-2026-04-26-vk-daily-message-limit.md`
   - Scope: `main_part2.py::build_daily_sections_vk`, `send_daily_announcement_vk`, `post_to_vk`, `vk_scheduler`, `fly.toml` / `VK_DAILY_POST_MAX_CHARS`, VK daily publication state.
   - Must not regress: VK daily must split oversized sections before `wall.post`, must preserve event cards when possible, and must not mark the daily VK slot sent unless every chunk returns a VK post URL.

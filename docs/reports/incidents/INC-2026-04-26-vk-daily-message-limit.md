@@ -1,12 +1,12 @@
 # INC-2026-04-26 VK Daily Message Limit
 
-Status: open
+Status: closed
 Severity: sev2
 Service: VK daily announcements
 Opened: 2026-04-26
-Closed: —
+Closed: 2026-04-26
 Owners: Codex
-Related incidents: `INC-2026-04-14-daily-delay-vk-auto-queue-lock-storm`
+Related incidents: `INC-2026-04-14-daily-delay-vk-auto-queue-lock-storm`, `INC-2026-04-26-prod-slow-during-vk-daily-catchup`
 Related docs: `docs/operations/cron.md`, `docs/reports/incidents/README.md`
 
 ## Summary
@@ -31,6 +31,8 @@ On 2026-04-26 the scheduled VK daily announcement attempted to publish one `wall
 - 2026-04-26 08:16 UTC: `wall.post` rejected the 46k-character message with `message_character_limit`.
 - 2026-04-26 08:18 UTC: incident noticed while reviewing post-deploy Fly logs.
 - 2026-04-26 08:20 UTC: incident workflow started and scoped to VK daily announcements.
+- 2026-04-26 08:50 UTC: hotfix `07b31140` deployed.
+- 2026-04-26 09:10 UTC: production catch-up completed via 4 VK posts: `wall-231828790_681`, `_682`, `_683`, `_684`; `vk_last_today=2026-04-26`.
 
 ## Root Cause
 
@@ -94,13 +96,15 @@ On 2026-04-26 the scheduled VK daily announcement attempted to publish one `wall
 
 - [ ] Consider adding a compact VK daily mode if busy days produce too many wall posts even after safe splitting.
 - [ ] Add daily publication metrics for VK chunk count and total generated length.
+- [ ] Move ad-hoc production catch-up for heavy daily builders to a safer runbook/tool that does not import the full bot inside the serving machine.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `07b311409783bfee69865456df7cc7a448e2b48f` (reachable from `origin/main`)
+- deploy path: manual `flyctl deploy --remote-only` from clean hotfix branch `hotfix/INC-2026-04-26-vk-daily-message-limit`
+- regression checks: `python -m py_compile main.py main_part2.py tests/test_vk_daily.py`; `python -m pytest -q tests/test_vk_daily.py` (`11 passed`)
+- post-deploy verification: `/healthz` returned `ok=true`, Fly machine `48e42d5b714228` version `1005` had `1 total, 1 passing` health check, Fly config showed `VK_DAILY_POST_MAX_CHARS=12000`
+- catch-up evidence: generated today's `46395` character VK section into 4 chunks under `12000` chars, posted URLs `https://vk.com/wall-231828790_681`, `https://vk.com/wall-231828790_682`, `https://vk.com/wall-231828790_683`, `https://vk.com/wall-231828790_684`, and set `vk_last_today=2026-04-26`.
 
 ## Prevention
 
