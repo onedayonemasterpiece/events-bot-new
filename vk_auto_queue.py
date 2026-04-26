@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 _vk_auto_import_cancel_requests: set[tuple[int, int]] = set()
 
 
+def _vk_auto_parse_gemma_model() -> str:
+    """Model override for VK auto-import draft extraction only."""
+    value = (os.getenv("VK_AUTO_IMPORT_PARSE_GEMMA_MODEL") or "").strip()
+    return value or "models/gemma-4-31b-it"
+
+
 async def _record_vk_auto_import_scheduler_skip(
     db: Database,
     *,
@@ -1081,6 +1087,7 @@ async def _prefetch_vk_inbox_row(
                 festival_hint=bool(source_is_festival),
                 publish_ts=publish_ts,
                 event_ts_hint=post.event_ts_hint,
+                parse_gemma_model=_vk_auto_parse_gemma_model(),
                 prefilter_obvious_non_events=True,
                 db=db,
             )
@@ -1923,6 +1930,7 @@ async def _process_vk_inbox_row(
                         publish_ts=publish_ts,
                         event_ts_hint=post.event_ts_hint,
                         rate_limit_max_wait_sec=0,
+                        parse_gemma_model=_vk_auto_parse_gemma_model(),
                         prefilter_obvious_non_events=True,
                         db=db,
                     )

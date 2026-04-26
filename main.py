@@ -8918,7 +8918,11 @@ async def _parse_event_via_gemma(
         + "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON.\n\n"
         + user_msg
     )
-    model = (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-3-27b-it") or "").strip() or "gemma-3-27b-it"
+    model = (
+        str(extra.get("gemma_model") or "").strip()
+        or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-3-27b-it") or "").strip()
+        or "gemma-3-27b-it"
+    )
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "2200") or "2200")
     max_tokens = max(400, min(max_tokens, 6000))
 

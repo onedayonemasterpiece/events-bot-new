@@ -39,7 +39,8 @@
 | Guide excursions Kaggle monitor | `kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py` | `models/gemma-4-31b-it` | `GoogleAIClient` | migrated to `Gemma 4` |
 | Guide server enrich/dedup/digest | `guide_excursions/enrich.py`, `dedup.py`, `digest_writer.py` | `gemma-4-31b` | `GoogleAIClient` | migrated to `Gemma 4` |
 | Smart Update core | `smart_event_update.py` | `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
-| Event parse (`/parse`, VK draft extraction, universal parser helper) | `main.py`, `vk_intake.py` | `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
+| Event parse (`/parse`, universal parser helper) | `main.py`, `vk_intake.py` | `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
+| VK auto queue draft extraction | `vk_auto_queue.py`, `vk_intake.py`, `main.py` | `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=models/gemma-4-31b-it` | `GoogleAIClient` | migrated as scoped auto-import stage; Smart Update untouched |
 | Event topics | `main.py` | inherits `TG_MONITORING_TEXT_MODEL`, default `gemma-3-27b-it` | `GoogleAIClient` | not migrated |
 | Admin action assistant | `handlers/admin_assist_cmd.py` | `gemma-3-27b` | `GoogleAIClient` | not migrated |
 | Geo region fallback | `geo_region.py` | `gemma-3-27b` | bot Gemma client | not migrated |
@@ -129,8 +130,10 @@ Live evidence (`2026-04-22`):
 Сюда входят:
 
 - `/parse` и универсальный event parse path в `main.py`: `EVENT_PARSE_GEMMA_MODEL=gemma-3-27b-it` по умолчанию: [main.py](/workspaces/events-bot-new/main.py:8914);
-- `vk_intake.build_event_drafts()` использует тот же parser/backend и потому остаётся в том же migration bucket;
+- `vk_intake.build_event_drafts()` по умолчанию использует тот же parser/backend и потому остаётся в том же migration bucket;
 - source parsing docs описывают Gemma-path и fallback, но не содержат отдельного Gemma 4 rollout plan для этого surface.
+
+Исключение: `vk_auto_queue` теперь передаёт scoped override `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` в `vk_intake.build_event_drafts()` и по умолчанию использует `models/gemma-4-31b-it` только для auto-import draft extraction. Это оставляет глобальный `/parse`, универсальный helper и Smart Update без неявной миграции.
 
 ### 3. Event topics не переведён
 

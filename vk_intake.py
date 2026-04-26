@@ -1455,6 +1455,7 @@ async def vk_intake_parse_llm(
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_media: Sequence[PosterMedia] | None = None,
     rate_limit_max_wait_sec: float | int | str | None = None,
+    parse_gemma_model: str | None = None,
 ) -> Any:
     """Parse a VK post text into structured events using the universal LLM parser.
 
@@ -1482,6 +1483,8 @@ async def vk_intake_parse_llm(
         parse_kwargs["festival_alias_pairs"] = festival_alias_pairs
     if rate_limit_max_wait_sec is not None:
         parse_kwargs["rate_limit_max_wait_sec"] = str(rate_limit_max_wait_sec)
+    if parse_gemma_model:
+        parse_kwargs["gemma_model"] = str(parse_gemma_model).strip()
 
     return await parse_event_via_llm(
         prompt_text,
@@ -1508,6 +1511,7 @@ async def build_event_drafts_from_vk(
     ocr_tokens_spent: int = 0,
     ocr_tokens_remaining: int | None = None,
     rate_limit_max_wait_sec: float | int | str | None = None,
+    parse_gemma_model: str | None = None,
     prefilter_obvious_non_events: bool = False,
 ) -> tuple[list[EventDraft], dict[str, Any] | None]:
     """Return normalised event drafts extracted from a VK post.
@@ -1624,6 +1628,7 @@ async def build_event_drafts_from_vk(
         festival_alias_pairs=festival_alias_pairs,
         poster_media=poster_media,
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
+        parse_gemma_model=parse_gemma_model,
     )
     if timings_on:
         try:
@@ -2385,6 +2390,7 @@ async def build_event_drafts(
     festival_alias_pairs: list[tuple[str, int]] | None = None,
     festival_hint: bool = False,
     rate_limit_max_wait_sec: float | int | str | None = None,
+    parse_gemma_model: str | None = None,
     prefilter_obvious_non_events: bool = False,
     db: Database,
 ) -> tuple[list[EventDraft], dict[str, Any] | None]:
@@ -2492,6 +2498,7 @@ async def build_event_drafts(
         ocr_tokens_spent=ocr_tokens_spent,
         ocr_tokens_remaining=ocr_tokens_remaining,
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
+        parse_gemma_model=parse_gemma_model,
         prefilter_obvious_non_events=prefilter_obvious_non_events,
     )
     _tmark("build_drafts_from_vk_total", time.monotonic() - t_all)
