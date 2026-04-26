@@ -18005,10 +18005,14 @@ def create_app() -> web.Application:
         or "forward_origin" in getattr(m, "model_extra", {}),
     )
     dp.my_chat_member.register(partial(handle_my_chat_member, db=db))
-    dp.business_connection.register(handle_business_connection)
-    dp.business_message.register(partial(handle_business_message_connection, bot=bot))
+    dp.business_connection.register(
+        partial(handle_business_connection, db=db, bot=bot)
+    )
+    dp.business_message.register(
+        partial(handle_business_message_connection, db=db, bot=bot)
+    )
     dp.edited_business_message.register(
-        partial(handle_business_message_connection, bot=bot)
+        partial(handle_business_message_connection, db=db, bot=bot)
     )
 
     app = web.Application()

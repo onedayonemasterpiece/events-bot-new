@@ -126,12 +126,21 @@ def cache_business_connection(connection: Any, *, path: Path | None = None) -> d
 
     user = _field(connection, "user")
     rights = _field(connection, "rights")
+    raw_date = _field(connection, "date")
+    if isinstance(raw_date, datetime):
+        date_value: Any = int(raw_date.timestamp())
+    elif isinstance(raw_date, (int, float)):
+        date_value = int(raw_date)
+    elif raw_date is None:
+        date_value = None
+    else:
+        date_value = str(raw_date)
     encrypted_payload = {
         "connection_id": connection_id,
         "user_id": _field(user, "id"),
         "username": str(_field(user, "username") or "").strip().lstrip("@") or None,
         "user_chat_id": _field(connection, "user_chat_id"),
-        "date": _field(connection, "date"),
+        "date": date_value,
         "is_enabled": summary["is_enabled"],
         "can_manage_stories": summary["can_manage_stories"],
         "rights": {
@@ -154,16 +163,31 @@ def cache_business_connection(connection: Any, *, path: Path | None = None) -> d
         "updated_at": now,
     }
 
-    records = [
-        item
-        for item in store["connections"]
-        if not isinstance(item, dict)
-        or item.get("connection_hash") != summary["connection_hash"]
-    ]
+    previous: dict[str, Any] | None = None
+    records: list[Any] = []
+    for item in store["connections"]:
+        if (
+            isinstance(item, dict)
+            and item.get("connection_hash") == summary["connection_hash"]
+        ):
+            previous = item
+            continue
+        records.append(item)
     records.append(record)
     store["connections"] = records
     _write_store(target, store)
-    return {**summary, "path": str(target)}
+
+    is_new = previous is None
+    state_changed = is_new or any(
+        bool(previous.get(field)) != bool(summary.get(field))
+        for field in ("is_enabled", "can_manage_stories")
+    )
+    return {
+        **summary,
+        "path": str(target),
+        "is_new": is_new,
+        "state_changed": state_changed,
+    }
 
 
 def load_cached_business_connections(*, path: Path | None = None) -> list[dict[str, Any]]:
@@ -177,7 +201,18 @@ def load_cached_business_connections(*, path: Path | None = None) -> list[dict[s
         encrypted = str(item.get("encrypted_payload") or "").strip()
         if not encrypted:
             continue
-        decrypted = json.loads(fernet.decrypt(encrypted.encode("ascii")).decode("utf-8"))
+        try:
+            decrypted = json.loads(fernet.decrypt(encrypted.encode("ascii")).decode("utf-8"))
+        except Exception:
+            import logging
+
+            logging.exception(
+                "business connection decrypt failed connection_hash=%s — skipping; "
+                "likely TELEGRAM_BOT_TOKEN/TELEGRAM_BUSINESS_FERNET_KEY changed; "
+                "ask the user to reconnect the Business bot",
+                item.get("connection_hash"),
+            )
+            continue
         if not isinstance(decrypted, dict):
             continue
         username = str(decrypted.get("username") or "").strip().lstrip("@")

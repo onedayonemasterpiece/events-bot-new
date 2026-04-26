@@ -12080,7 +12080,33 @@ async def handle_my_chat_member(update: types.ChatMemberUpdated, db: Database):
         await session.commit()
 
 
-async def handle_business_connection(update: types.BusinessConnection):
+def _format_business_connection_dm(summary: dict, *, source: str) -> str:
+    state = "включено" if summary.get("is_enabled") else "выключено"
+    stories = "✅" if summary.get("can_manage_stories") else "❌"
+    flag = "🆕 NEW" if summary.get("is_new") else "🔄 UPDATE"
+    return (
+        f"{flag} Telegram Business connection ({source})\n"
+        f"connection_hash: {summary.get('connection_hash')}\n"
+        f"user_hash: {summary.get('user_hash')}\n"
+        f"is_enabled: {state}\n"
+        f"can_manage_stories: {stories}"
+    )
+
+
+async def _notify_business_connection_change(
+    db: Database, bot: Bot, summary: dict, *, source: str, force: bool = False
+) -> None:
+    if not (force or summary.get("is_new") or summary.get("state_changed")):
+        return
+    try:
+        await notify_superadmin(db, bot, _format_business_connection_dm(summary, source=source))
+    except Exception:
+        logging.exception("business_connection DM notify failed")
+
+
+async def handle_business_connection(
+    update: types.BusinessConnection, db: Database, bot: Bot
+):
     summary = {
         "connection_hash": secure_short_hash(getattr(update, "id", "")),
         "user_hash": secure_short_hash(getattr(getattr(update, "user", None), "id", "")),
@@ -12092,12 +12118,16 @@ async def handle_business_connection(update: types.BusinessConnection):
     try:
         summary = cache_business_connection(update)
         logging.info(
-            "business_connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s",
+            "business_connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s is_new=%s",
             summary.get("connection_hash"),
             summary.get("user_hash"),
             summary.get("is_enabled"),
             summary.get("can_manage_stories"),
             summary.get("path"),
+            summary.get("is_new"),
+        )
+        await _notify_business_connection_change(
+            db, bot, summary, source="business_connection", force=True
         )
     except Exception:
         logging.exception(
@@ -12109,7 +12139,9 @@ async def handle_business_connection(update: types.BusinessConnection):
         )
 
 
-async def handle_business_message_connection(message: types.Message, bot: Bot):
+async def handle_business_message_connection(
+    message: types.Message, db: Database, bot: Bot
+):
     connection_id = str(getattr(message, "business_connection_id", "") or "").strip()
     if not connection_id:
         return
@@ -12118,12 +12150,16 @@ async def handle_business_message_connection(message: types.Message, bot: Bot):
         connection = await bot.get_business_connection(business_connection_id=connection_id)
         summary = cache_business_connection(connection)
         logging.info(
-            "business_message connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s",
+            "business_message connection cached connection=%s user=%s enabled=%s can_manage_stories=%s path=%s is_new=%s",
             summary.get("connection_hash"),
             summary.get("user_hash"),
             summary.get("is_enabled"),
             summary.get("can_manage_stories"),
             summary.get("path"),
+            summary.get("is_new"),
+        )
+        await _notify_business_connection_change(
+            db, bot, summary, source="business_message"
         )
     except Exception:
         logging.exception(

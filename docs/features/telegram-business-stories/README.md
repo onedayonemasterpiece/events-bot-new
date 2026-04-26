@@ -22,6 +22,12 @@
   - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
 
+## Operator visibility
+
+- При получении `business_connection` (и при восстановлении через `business_message`/`edited_business_message`) бот шлёт DM суперадмину с `connection_hash`, `user_hash`, `is_enabled`, `can_manage_stories` и пометкой `🆕 NEW` / `🔄 UPDATE`. Уведомление приходит при первом кэшировании подключения, а также при изменении `is_enabled`/`can_manage_stories`. `business_connection` всегда шлёт DM; обычные `business_message` без смены состояния не спамят.
+- `BusinessConnection.date` приходит из aiogram как `datetime`; перед `json.dumps` он конвертируется в unix timestamp. Сборки до этого фикса падали на каждом апдейте с `TypeError: Object of type datetime is not JSON serializable` и не создавали файл кэша вообще.
+- `load_cached_business_connections` пропускает записи, которые не расшифровываются текущим Fernet-ключом (после ротации `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BUSINESS_FERNET_KEY`), пишет в лог `business connection decrypt failed connection_hash=...` и просит владельца подключения переконнектить бот.
+
 ## Story publish requirements
 
 Для `postStory` нужны:

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from telegram_business import (
     WEBHOOK_ALLOWED_UPDATES,
@@ -73,6 +74,53 @@ def test_business_story_targets_select_all_story_capable_connections(tmp_path, m
     assert targets[0]["connection_id"] == "biz-connection-secret"
     assert targets[0]["connection_hash"]
     assert "story_owner_fixture" not in json.dumps(targets, ensure_ascii=False)
+
+
+def test_business_connection_cache_handles_datetime_date(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    aware = datetime(2026, 4, 26, 17, 42, 8, tzinfo=timezone.utc)
+    connection = Obj(
+        id="biz-connection-secret",
+        user=Obj(id=123456789, username="story_owner_fixture"),
+        user_chat_id=987654321,
+        date=aware,
+        is_enabled=True,
+        rights=Obj(can_manage_stories=True),
+        can_reply=True,
+    )
+
+    target = tmp_path / "connections.enc.json"
+    record = cache_business_connection(connection, path=target)
+
+    assert record["is_new"] is True
+    assert record["state_changed"] is True
+    restored = load_cached_business_connections(path=target)
+    assert restored[0]["date"] == int(aware.timestamp())
+
+
+def test_business_connection_cache_marks_existing_record_not_new(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    target = tmp_path / "connections.enc.json"
+    base_kwargs = dict(
+        id="biz-connection-secret",
+        user=Obj(id=123456789, username="story_owner_fixture"),
+        user_chat_id=987654321,
+        date=1777194243,
+        rights=Obj(can_manage_stories=True),
+        can_reply=True,
+    )
+
+    first = cache_business_connection(Obj(is_enabled=True, **base_kwargs), path=target)
+    assert first["is_new"] is True
+    assert first["state_changed"] is True
+
+    second = cache_business_connection(Obj(is_enabled=True, **base_kwargs), path=target)
+    assert second["is_new"] is False
+    assert second["state_changed"] is False
+
+    third = cache_business_connection(Obj(is_enabled=False, **base_kwargs), path=target)
+    assert third["is_new"] is False
+    assert third["state_changed"] is True
 
 
 def test_business_story_targets_can_select_by_username_runtime_value(tmp_path, monkeypatch):
