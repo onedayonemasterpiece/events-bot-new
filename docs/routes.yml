@@ -89,6 +89,7 @@ sections:
     incident_daily_location_fragments: docs/reports/incidents/INC-2026-04-26-daily-location-fragments.md
     incident_crumple_story_prod_drift: docs/reports/incidents/INC-2026-04-10-crumple-story-prod-drift.md
     incident_crumple_story_channel_boosts_required: docs/reports/incidents/INC-2026-04-24-crumple-story-channel-boosts-required.md
+    incident_crumple_story_required_channel_fanout: docs/reports/incidents/INC-2026-04-26-crumple-story-required-channel-fanout.md
     incident_crumple_audio_source_drift: docs/reports/incidents/INC-2026-04-10-crumple-audio-source-drift.md
     incident_tg_monitoring_festival_bool: docs/reports/incidents/INC-2026-04-10-tg-monitoring-festival-bool.md
     incident_guide_gemma4_partial_monitoring: docs/reports/incidents/INC-2026-04-21-guide-gemma4-partial-monitoring.md

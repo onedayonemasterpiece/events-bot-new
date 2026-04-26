@@ -35,6 +35,8 @@ class StoryTarget:
     label: str
     delay_seconds: int = 0
     mode: str = "upload"
+    blocking: bool | None = None
+    required: bool = False
     transport: str = "telethon"
     business_connection_hash: str = ""
     user_hash: str = ""
@@ -46,6 +48,10 @@ class StoryTarget:
             "delay_seconds": self.delay_seconds,
             "mode": self.mode,
         }
+        if self.blocking is not None:
+            payload["blocking"] = bool(self.blocking)
+        if self.required:
+            payload["required"] = True
         if self.transport != "telethon":
             payload["transport"] = self.transport
         if self.business_connection_hash:
@@ -346,6 +352,8 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
 
     targets: list[StoryTarget] = []
     for idx, item in enumerate(payload):
+        blocking: bool | None = None
+        required = False
         if isinstance(item, str):
             peer = _normalize_peer(item)
             label = peer or f"extra-{idx + 1}"
@@ -362,6 +370,16 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 ) from exc
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
+            raw_blocking = item.get("blocking")
+            if isinstance(raw_blocking, bool):
+                blocking = raw_blocking
+            elif raw_blocking is not None:
+                raise RuntimeError(f"{env_key}[{idx}].blocking must be bool")
+            raw_required = item.get("required")
+            if isinstance(raw_required, bool):
+                required = raw_required
+            elif raw_required is not None:
+                raise RuntimeError(f"{env_key}[{idx}].required must be bool")
         else:
             raise RuntimeError(f"{env_key} items must be strings or objects")
         if not peer:
@@ -372,6 +390,8 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 label=label.strip() or peer,
                 delay_seconds=delay_seconds,
                 mode=mode,
+                blocking=blocking,
+                required=required,
             )
         )
     return targets
@@ -395,6 +415,8 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
 
     targets: list[StoryTarget] = []
     for idx, item in enumerate(payload):
+        blocking: bool | None = None
+        required = False
         if isinstance(item, str):
             peer = _normalize_peer(item)
             label = peer or f"override-{idx + 1}"
@@ -411,6 +433,16 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 ) from exc
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
+            raw_blocking = item.get("blocking")
+            if isinstance(raw_blocking, bool):
+                blocking = raw_blocking
+            elif raw_blocking is not None:
+                raise RuntimeError(f"{env_key}[{idx}].blocking must be bool")
+            raw_required = item.get("required")
+            if isinstance(raw_required, bool):
+                required = raw_required
+            elif raw_required is not None:
+                raise RuntimeError(f"{env_key}[{idx}].required must be bool")
         else:
             raise RuntimeError(f"{env_key}[{idx}] items must be strings or objects")
         if not peer:
@@ -421,6 +453,8 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 label=label.strip() or peer,
                 delay_seconds=delay_seconds,
                 mode=mode,
+                blocking=blocking,
+                required=required,
             )
         )
     return targets

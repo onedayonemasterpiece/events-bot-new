@@ -582,6 +582,7 @@ def _build_story_report(
         "account": account,
         "targets": [],
         "blocking_ok": False,
+        "required_ok": False,
         "fanout_ok": False,
         "partial_ok": False,
     }
@@ -596,6 +597,13 @@ def _story_target_is_blocking(target_cfg: dict[str, Any], *, index: int) -> bool
     if isinstance(blocking, bool):
         return blocking
     return index == 0
+
+
+def _story_target_is_required(target_cfg: dict[str, Any], *, blocking: bool) -> bool:
+    required = target_cfg.get("required")
+    if isinstance(required, bool):
+        return required
+    return blocking
 
 
 def _business_connection_for_target(
@@ -719,6 +727,7 @@ async def _story_targets_report(
         publish_mode = str(target_cfg.get("mode") or "upload").strip().lower()
         transport = str(target_cfg.get("transport") or "telethon").strip().lower()
         blocking = _story_target_is_blocking(target_cfg, index=idx)
+        required = _story_target_is_required(target_cfg, blocking=blocking)
         if publish_mode not in {"upload", "repost_previous"}:
             publish_mode = "upload"
         if honor_delays and delay_seconds:
@@ -733,6 +742,7 @@ async def _story_targets_report(
             "mode": publish_mode,
             "transport": transport,
             "blocking": blocking,
+            "required": required,
             "period_seconds": int(config.get("period_seconds") or 24 * 60 * 60),
             "pinned": bool(config.get("pinned")),
             "ok": False,
@@ -841,12 +851,21 @@ async def _story_targets_report(
         report["targets"].append(target_report)
     targets = report["targets"]
     blocking_targets = [item for item in targets if item.get("blocking")]
+    required_targets = [
+        item for item in targets if item.get("blocking") or item.get("required")
+    ]
     report["fanout_ok"] = bool(targets) and all(bool(item.get("ok")) for item in targets)
     report["blocking_ok"] = bool(blocking_targets) and all(
         bool(item.get("ok")) for item in blocking_targets
     )
+    report["required_ok"] = bool(required_targets) and all(
+        bool(item.get("ok")) for item in required_targets
+    )
     report["partial_ok"] = bool(report["blocking_ok"]) and not bool(report["fanout_ok"])
-    report["ok"] = bool(report["blocking_ok"])
+    if phase == "preflight":
+        report["ok"] = bool(report["blocking_ok"])
+    else:
+        report["ok"] = bool(report["required_ok"])
     if report["partial_ok"]:
         failed_labels = [
             str(item.get("label") or item.get("peer") or "?")
@@ -854,10 +873,26 @@ async def _story_targets_report(
             if not item.get("ok")
         ]
         phase_label = phase.capitalize()
-        log(
-            f"⚠️ {phase_label} primary target passed; "
-            f"continuing despite best-effort fanout failures: {', '.join(failed_labels)}"
-        )
+        failed_required_labels = [
+            str(item.get("label") or item.get("peer") or "?")
+            for item in targets
+            if not item.get("ok") and item.get("required")
+        ]
+        if failed_required_labels and phase == "preflight":
+            log(
+                f"⚠️ {phase_label} render gate passed; "
+                f"required fanout currently unavailable: {', '.join(failed_required_labels)}"
+            )
+        elif failed_required_labels:
+            log(
+                f"❌ {phase_label} required fanout failed: "
+                f"{', '.join(failed_required_labels)}"
+            )
+        else:
+            log(
+                f"⚠️ {phase_label} primary target passed; "
+                f"continuing despite best-effort fanout failures: {', '.join(failed_labels)}"
+            )
     return report
 
 

@@ -200,8 +200,8 @@ async def test_build_story_publish_config_preserves_self_blocking_target(monkeyp
         "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
         (
             '[{"peer":"me","delay_seconds":0,"mode":"upload"},'
-            '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous"},'
-            '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous"}]'
+            '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous","required":true},'
+            '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous","required":true}]'
         ),
     )
 
@@ -225,11 +225,13 @@ async def test_build_story_publish_config_preserves_self_blocking_target(monkeyp
             "label": "@kenigevents",
             "delay_seconds": 0,
             "mode": "repost_previous",
+            "required": True,
         },
         {
             "peer": "@lovekenig",
             "label": "@lovekenig",
             "delay_seconds": 600,
             "mode": "repost_previous",
+            "required": True,
         },
     ]

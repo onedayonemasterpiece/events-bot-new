@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Incident / CrumpleVideo Required Story Fanout**: opened `INC-2026-04-26-crumple-story-required-channel-fanout` after the scheduled CrumpleVideo story published only to `@lovekenig` while `@kenigevents` returned `BOOSTS_REQUIRED`; story targets now distinguish the self-account render gate from required channel fanout, so `me` can keep the render alive while missing required channels make final story publish fail instead of ending green.
 - **Telegram Business Stories / Existing Connection Recovery**: webhook updates now include `business_message` / `edited_business_message`, and those updates recover and encrypted-cache `business_connection_id` through `getBusinessConnection`, so already-connected Business accounts can be captured without reconnecting the chatbot.
 - **CherryFlash / Business Story Target Storage**: personal Telegram Business story targets now come from runtime DB setting `video_announce_story_business_targets` instead of repo env/code, while `story_publish.json` still carries only hash labels and encrypted story secrets carry the Bot API connection data.
 - **CherryFlash / Telegram Business Stories Fanout**: scheduled CherryFlash story publish now appends encrypted Telegram Business targets after the existing Telethon channel-story chain, keeps `600s` spacing between all targets, posts Business stories through Bot API `postStory`, and stores only hash labels in config/docs while `business_connection_id` stays inside encrypted story secrets.

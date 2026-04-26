@@ -322,6 +322,76 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
 
 
 @pytest.mark.asyncio
+async def test_story_publish_marks_required_fanout_failure_after_render(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    preflight = await helper._story_targets_report(
+        _FakeStoryClient(
+            boost_fail_peers={"peer:@kenigevents"},
+            story_ids={},
+        ),
+        auth={},
+        config={
+            "targets": [
+                {"peer": "me", "mode": "upload"},
+                {"peer": "@kenigevents", "mode": "repost_previous", "required": True},
+                {"peer": "@lovekenig", "mode": "repost_previous", "required": True},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="preflight",
+        media_path=None,
+        honor_delays=False,
+    )
+
+    assert preflight["ok"] is True
+    assert preflight["blocking_ok"] is True
+    assert preflight["required_ok"] is False
+
+    publish = await helper._story_targets_report(
+        _FakeStoryClient(
+            boost_fail_peers={"peer:@kenigevents"},
+            story_ids={
+                "peer:me": 100,
+                "peer:@lovekenig": 202,
+            },
+        ),
+        auth={},
+        config={
+            "targets": [
+                {"peer": "me", "mode": "upload"},
+                {"peer": "@kenigevents", "mode": "repost_previous", "required": True},
+                {"peer": "@lovekenig", "mode": "repost_previous", "required": True},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert publish["ok"] is False
+    assert publish["blocking_ok"] is True
+    assert publish["required_ok"] is False
+    assert publish["fanout_ok"] is False
+    assert [item["required"] for item in publish["targets"]] == [True, True, True]
+    assert [item["ok"] for item in publish["targets"]] == [True, False, True]
+    assert [item.get("story_id") for item in publish["targets"]] == [100, None, 202]
+
+
+@pytest.mark.asyncio
 async def test_story_publish_posts_business_target_via_bot_api(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

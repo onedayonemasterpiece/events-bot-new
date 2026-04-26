@@ -13,7 +13,7 @@
   - после успешного рендера notebook сам вызывает Telegram stories API через Telethon;
   - auth доставляется через encrypted split-datasets, а target config приходит отдельным `story_publish.json`;
   - перед тяжёлым рендером notebook делает story preflight и падает сразу, только если blocking primary target не может принять story;
-  - downstream fanout targets считаются best-effort: их `BOOSTS_REQUIRED`/repost ошибки должны попасть в report, но не отменять render и не останавливать попытку публикации в следующий target;
+  - downstream fanout targets считаются best-effort, если не помечены `required=true`: их `BOOSTS_REQUIRED`/repost ошибки должны попасть в report, не отменять render и не останавливать попытку публикации в следующий target, но required target failure должен красить итоговый publish status;
   - production target-order нужно фиксировать через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, а не через скрытый `main`-канал профиля;
   - для story-video preview frame жёстко привязан к первому кадру CrumpleVideo;
   - для быстрых проверок без полного рендера есть `kaggle/execute_crumple_story_smoke.py`.
@@ -41,7 +41,7 @@
 - Если у профиля настроен `main`-канал, готовое видео автоматически уходит не только в test, но и в main. Для ручного продового контроля это риск.
 - Тестовый режим сейчас выставляет `allow_empty_ocr=True`, поэтому тестовый прогон не полностью повторяет продовое качество отбора.
 - Story-safe `1080x1920` upload path требует отдельного ручного подтверждения после следующего live prod run: внутренние тесты могут подтвердить только подготовку canvas, но не финальный Telegram-side visual result.
-- После live preflight `2026-04-07` текущий риск для prod-stories лежит уже не в старом `BOOSTS_REQUIRED`, а в branch/config drift: неправильный deploy может снова тихо выключить story-path даже при живом render.
+- После live evidence `2026-04-26` `BOOSTS_REQUIRED` остаётся реальным риском для channel fanout: неправильный deploy может либо снова тихо выключить story-path, либо снова сделать пропущенный required channel зелёным partial success.
 - Вручную можно посмотреть итоговый список и JSON, но нет отдельного UI-отчёта по схлопнутым дублям: dedupe сейчас сводит похожие события по `title + location_name + city`, агрегируя расписание, и оператор не видит состав группы явно.
 - Сигнал популярности постов уже существует как отдельная feature/data layer, но текущий `/v` ещё не использует его в собственном ranking/order pipeline.
 
@@ -68,8 +68,9 @@
   - legacy `ENABLE_V_TEST_TOMORROW_SCHEDULED` / `V_TEST_TOMORROW_*` оставить как совместимость, но не как канонический naming.
 - Целевая витрина для аудитории: к `21:00 Europe/Kaliningrad` уже увидеть опубликованные stories в обоих target-каналах.
 - Канонический story-order для prod:
-  - сначала `@kenigevents`;
-  - затем `@lovekenig` через `10` минут (`600` секунд).
+  - сначала self-account `me` как render-gate upload target;
+  - затем `@kenigevents` как required repost target;
+  - затем `@lovekenig` через `10` минут (`600` секунд) как required repost target.
 - Рекомендованное production окно запуска: `16:00 Europe/Kaliningrad`.
 - Обоснование:
   - при `VIDEO_KAGGLE_TIMEOUT_MINUTES=225` worst-case completion приходится на `19:45`;
@@ -78,7 +79,7 @@
 - Временный legacy-флаг:
   - `V_TOMORROW_TEST_MODE=1` возвращает этот же slot в test-render path, если нужно короткое диагностическое окно без production rollout.
 - Для prod story fanout порядок не должен зависеть от скрытого `main`-канала профиля:
-  - использовать explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`;
+  - использовать explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` с `required=true` на production channel targets;
   - `main` + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` считать только fallback-механикой.
 - Продовая защита от silent downgrade:
   - `VIDEO_ANNOUNCE_STORY_REQUIRED=1`;

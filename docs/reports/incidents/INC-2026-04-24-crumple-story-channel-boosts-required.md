@@ -6,7 +6,7 @@ Service: production bot / scheduled `video_tomorrow` CrumpleVideo story publish
 Opened: 2026-04-24
 Closed: —
 Owners: video announce / production runtime / operations
-Related incidents: `INC-2026-04-10-crumple-story-prod-drift.md`, `INC-2026-04-20-video-tomorrow-stuck-rendering.md`
+Related incidents: `INC-2026-04-10-crumple-story-prod-drift.md`, `INC-2026-04-20-video-tomorrow-stuck-rendering.md`, `INC-2026-04-26-crumple-story-required-channel-fanout.md`
 Related docs: `docs/features/crumple-video/README.md`, `docs/operations/cron.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -67,7 +67,8 @@ The scheduled production CrumpleVideo run for April 24, 2026 started session `#1
 ### Mandatory checks before closure or deploy
 
 - verify production story config keeps a Premium self-account target (`me`) as the first blocking upload target;
-- verify channel targets are downstream `repost_previous` fanout targets and remain non-blocking when Telegram returns `BOOSTS_REQUIRED`;
+- verify channel targets are downstream `repost_previous` fanout targets and remain non-blocking for render preflight when Telegram returns `BOOSTS_REQUIRED`;
+- verify production-required channel target misses do not finish as green story publish;
 - run targeted unit tests for story config and Kaggle story helper partial fanout behavior;
 - verify `/healthz` still treats story publish as required and does not silently downgrade to mp4-only;
 - perform release-governance checks and confirm the fix is reachable from `origin/main`;
@@ -84,7 +85,7 @@ The scheduled production CrumpleVideo run for April 24, 2026 started session `#1
 ## Immediate Mitigation
 
 - identified the failure as story preflight `BOOSTS_REQUIRED`, not poster availability or Blender render failure;
-- changed production default story target order so `me` is the blocking upload target and channel reposts are best-effort downstream fanout.
+- changed production default story target order so `me` is the blocking upload target and channel reposts are downstream fanout; on 2026-04-26 this was tightened so channel reposts remain render-non-blocking but are required for final publish status.
 
 ## Corrective Actions
 
@@ -94,7 +95,7 @@ The scheduled production CrumpleVideo run for April 24, 2026 started session `#1
 
 ## Follow-up Actions
 
-- [ ] Decide whether `@kenigevents` / `@lovekenig` should keep channel stories via boosts, stay best-effort repost targets, or be removed from the CrumpleVideo fanout.
+- [x] Decide whether `@kenigevents` / `@lovekenig` should keep channel stories via boosts, stay best-effort repost targets, or be removed from the CrumpleVideo fanout. Decision on 2026-04-26: keep them in fanout and mark them required for final publish status; see `INC-2026-04-26-crumple-story-required-channel-fanout.md`.
 - [ ] Improve operator status/error copy so `missing video output` caused by pre-render story preflight includes the blocking target error summary.
 
 ## Release And Closure Evidence
@@ -107,5 +108,5 @@ The scheduled production CrumpleVideo run for April 24, 2026 started session `#1
 ## Prevention
 
 - keep `me` as the blocking target for scheduled CrumpleVideo while channel story capability depends on Telegram boosts;
-- treat downstream channel story failures as visible fanout warnings rather than blockers for daily render delivery;
+- treat downstream channel story failures as visible render-non-blocking warnings during preflight, but as final publish failures when the target is production-required;
 - use this incident as the regression contract for future story target ordering changes.

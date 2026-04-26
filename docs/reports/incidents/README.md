@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-26-crumple-story-required-channel-fanout.md`
+  - Scope: `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, `fly.toml`, `.env.example`, `video_announce/story_publish.py`, `kaggle/CrumpleVideo/story_publish.py`, embedded `crumple_video.ipynb`, scheduled `video_tomorrow` story status.
+  - Must not regress: `me` remains the first blocking render-gate target, but production channel fanout (`@kenigevents`, `@lovekenig`) must be marked required so a missing channel story cannot finish as green `Story publish status: OK`.
 - `INC-2026-04-26-prod-slow-during-vk-daily-catchup.md`
   - Scope: Fly production runtime, `/healthz`, `/webhook`, manual production catch-up/smoke commands, VK daily recovery procedure.
   - Must not regress: manual production catch-up must not run heavy full-bot workflows in a way that starves the serving machine; health/webhook degradation during validation must stop validation immediately and restore serving before continuing.
@@ -32,7 +35,7 @@
   - Must not regress: production smoke/validation must not make the serving bot unresponsive; `/healthz` and `/webhook` failures must trigger incident workflow immediately; runtime log mirror/rotated files must be checked before falling back to Fly logs/Kaggle/DB evidence.
 - `INC-2026-04-24-crumple-story-channel-boosts-required.md`
   - Scope: `fly.toml`, CrumpleVideo story target order, `video_announce/story_publish.py`, `kaggle/CrumpleVideo/story_publish.py`, scheduled `video_tomorrow` catch-up, Telegram channel story boosts.
-  - Must not regress: production CrumpleVideo must keep a Premium self-account story target (`me`) as the first blocking upload target, channel `BOOSTS_REQUIRED` must remain a visible best-effort fanout failure rather than blocking render delivery, and a missed same-day scheduled slot must be repaired with a compensating rerun.
+  - Must not regress: production CrumpleVideo must keep a Premium self-account story target (`me`) as the first blocking upload target, channel `BOOSTS_REQUIRED` must remain visible without blocking render delivery, required channel fanout must not finish green when missed, and a missed same-day scheduled slot must be repaired or explicitly blocked by Telegram capability evidence.
 - `INC-2026-04-23-cherryflash-pre-handoff-loss.md`
   - Scope: `video_announce/scenario.py`, `scheduling.py`, `video_announce/poller.py`, CherryFlash scheduled `popular_review`, prod sqlite `ops_run`/`videoannounce_session`, Kaggle CherryFlash handoff evidence.
   - Must not regress: scheduled CherryFlash must not mark `ops_run` success before a real non-local Kaggle dataset/kernel handoff is persisted, local-only failed sessions for today's slot must trigger same-day catch-up, and existing remote handoffs must suppress duplicate reruns even if local status is misleading.
