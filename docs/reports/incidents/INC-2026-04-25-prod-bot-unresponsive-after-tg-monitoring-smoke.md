@@ -36,6 +36,9 @@ During the Telegram Monitoring Gemma 4 post-deploy validation on April 25, 2026,
 - 2026-04-25 20:51-20:54 UTC: Fly proxy reported `instance refused connection` and `/webhook` delivery failures while the app was not yet listening.
 - 2026-04-25 20:55 UTC: app logged `BOOT_OK`; `/healthz` returned `ok=true`, `ready=true`, and webhook updates resumed.
 - 2026-04-25 20:55 UTC: user-visible update handling resumed; Fly logs show an update handled in 638 ms.
+- 2026-04-25 22:59 UTC: compensating Telegram Monitoring recovery import `ops_run id=858` finished successfully with `events_imported=36`, `errors_count=0`.
+- 2026-04-26 06:35 UTC: deployed config fix SHA `ffe4a9a1646d7b053a118e8ce5ebe67fe4c984e4` as Fly image `deployment-01KQ47ZEEDF48YKSKARAR9DHTA`; Fly machine version `1000` reported `1 total, 1 passing` health check.
+- 2026-04-26 06:36 UTC: post-deploy `/healthz` returned `ok=true`, `ready=true`, `issues=[]`; Fly Consul health check logged `GET /healthz` HTTP 200.
 
 ## Root Cause
 
@@ -93,6 +96,7 @@ One concrete infrastructure gap was confirmed: local `fly.toml` used `[[services
 - Verified `/healthz` returned ready after restart.
 - Verified Fly logs showed webhook delivery resumed and at least one update was handled.
 - Corrected production health-check config from non-applied `services.checks` syntax to `services.http_checks`.
+- Verified Telegram webhook state after the config deploy: webhook URL is `https://events-bot-new-wngqia.fly.dev/webhook`, `pending_update_count=0`; the last Telegram-reported webhook error is the incident-window `502 Bad Gateway` at `2026-04-25T20:54:57Z`.
 
 ## Corrective Actions
 
@@ -109,10 +113,18 @@ One concrete infrastructure gap was confirmed: local `fly.toml` used `[[services
 
 ## Release And Closure Evidence
 
-- deployed SHA: `36d43e412b2c4205fb16f24211987c02364e725f` at incident record creation; Telegram Monitoring code deploy SHA was `4ec6017fc0606150b254fedb7face8be5ef2e275`.
-- deploy path: Fly manual deploy before incident; docs-only push to `origin/main` after mitigation.
-- regression checks: pending final `ops_run` verification, deployed health-check config verification, and post-recovery health stability check.
-- post-deploy verification: `/healthz` ready after restart; webhook handling resumed.
+- deployed SHA: `ffe4a9a1646d7b053a118e8ce5ebe67fe4c984e4` from `origin/main`.
+- Fly image: `events-bot-new-wngqia:deployment-01KQ47ZEEDF48YKSKARAR9DHTA`.
+- Fly machine: `48e42d5b714228`, version `1000`, state `started`, checks `1 total, 1 passing`.
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia` from clean worktree after `git fetch origin --prune`; `origin/main` matched the deployed SHA at deploy time.
+- applied health check: `flyctl config show --app events-bot-new-wngqia` now contains `services.http_checks` with `method=get`, `path=/healthz`, `interval=15s`, `timeout=5s`, `grace_period=1m0s`.
+- post-deploy `/healthz`: `ok=true`, `ready=true`, `db=ok`, `bot_session_closed=false`, `issues=[]`.
+- Fly log evidence: scheduler started after deploy; `daily_scheduler` ran; Consul health check logged `GET /healthz` HTTP 200 after deploy.
+- Telegram webhook evidence: `getWebhookInfo` returned `ok=true`, webhook URL `https://events-bot-new-wngqia.fly.dev/webhook`, `pending_update_count=0`; `last_error_date=2026-04-25T20:54:57Z` and `last_error_message="Wrong response from the webhook: 502 Bad Gateway"` match the incident window.
+- Telegram Monitoring post-deploy producer evidence: `prod_g4_postdeploy_20260425b` produced `telegram_results.json` with `sources_total=45`, `messages_scanned=118`, `messages_with_events=39`, `events_extracted=61`; producer log had `models/gemma-4-31b-it`, `gemma-3=0`, `Traceback=0`, `ERROR=0`.
+- compensating import evidence: `ops_run id=857` is terminal `crashed` for the interrupted `postdeploy_smoke`; `ops_run id=858` is `success` for `recovery_import` with `messages_processed=118`, `events_imported=36`, `events_created=26`, `events_merged=10`, `errors_count=0`; no `ops_run.status='running'` rows remained.
+- runtime log evidence: production has `ENABLE_RUNTIME_FILE_LOGGING=0`, `RUNTIME_LOG_DIR=/data/runtime_logs`, and the runtime log directory had no files, so Fly logs, Telegram webhook state, Kaggle artifacts, and production SQLite rows were used as fallback evidence.
+- user-visible `/start` evidence: not re-run from local live E2E in this pass because the local `.env` did not contain `TELEGRAM_BOT_TOKEN` or `TELEGRAM_AUTH_BUNDLE_E2E`; do not treat this incident as fully closed until `/start` is confirmed by live E2E or operator UI after the deploy.
 
 ## Prevention
 
