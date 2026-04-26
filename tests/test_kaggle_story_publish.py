@@ -250,6 +250,7 @@ async def test_story_preflight_only_requires_primary_target(monkeypatch: pytest.
 
     report = await helper._story_targets_report(
         client,
+        auth={},
         config={
             "targets": [
                 {"peer": "@kenigevents", "mode": "upload"},
@@ -296,6 +297,7 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
 
     report = await helper._story_targets_report(
         client,
+        auth={},
         config={
             "targets": [
                 {"peer": "@kenigevents", "mode": "upload"},
@@ -317,3 +319,76 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
     assert len(client.sent_requests) == 2
     assert client.sent_requests[1]["fwd_from_story"] == 101
     assert client.sent_requests[1]["fwd_from_id"] == "peer:@kenigevents"
+
+
+@pytest.mark.asyncio
+async def test_story_publish_posts_business_target_via_bot_api(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(boost_fail_peers=set(), story_ids={})
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+    calls: list[dict[str, object]] = []
+
+    class _Response:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict[str, object]:
+            return {"ok": True, "result": {"id": 777}}
+
+    def fake_post(url, data=None, files=None, timeout=None):  # noqa: ANN001
+        calls.append(
+            {
+                "url": url,
+                "data": dict(data or {}),
+                "file_name": files["story"][0],
+                "timeout": timeout,
+            }
+        )
+        return _Response()
+
+    monkeypatch.setattr(helper.requests, "post", fake_post)
+
+    report = await helper._story_targets_report(
+        client,
+        auth={
+            "business_bot_token": "123:test",
+            "business_connections": [
+                {
+                    "connection_hash": "hash-1",
+                    "connection_id": "biz-secret",
+                    "is_enabled": True,
+                    "can_manage_stories": True,
+                }
+            ],
+        },
+        config={
+            "period_seconds": 43200,
+            "targets": [
+                {
+                    "peer": "business:hash-1",
+                    "label": "business:hash-1",
+                    "transport": "telegram_business",
+                    "business_connection_hash": "hash-1",
+                    "delay_seconds": 600,
+                },
+            ],
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][0]["transport"] == "telegram_business"
+    assert report["targets"][0]["story_id"] == 777
+    assert calls
+    assert calls[0]["url"] == "https://api.telegram.org/bot123:test/postStory"
+    data = calls[0]["data"]
+    assert data["business_connection_id"] == "biz-secret"
+    assert data["active_period"] == "43200"
+    assert "biz-secret" not in str(report)

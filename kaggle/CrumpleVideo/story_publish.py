@@ -10,6 +10,7 @@ import subprocess
 from typing import Any
 
 import cv2
+import requests
 from cryptography.fernet import Fernet
 from telethon import TelegramClient, functions, types
 from telethon.sessions import StringSession
@@ -597,9 +598,102 @@ def _story_target_is_blocking(target_cfg: dict[str, Any], *, index: int) -> bool
     return index == 0
 
 
+def _business_connection_for_target(
+    auth: dict[str, Any],
+    target_cfg: dict[str, Any],
+) -> dict[str, Any] | None:
+    target_hash = str(target_cfg.get("business_connection_hash") or "").strip()
+    for item in auth.get("business_connections") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("connection_hash") or "").strip() == target_hash:
+            return item
+    return None
+
+
+def _business_story_result_id(result: dict[str, Any]) -> int | None:
+    payload = result.get("result")
+    if not isinstance(payload, dict):
+        return None
+    story_id = payload.get("id")
+    try:
+        return int(story_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _post_business_story(
+    *,
+    auth: dict[str, Any],
+    target_cfg: dict[str, Any],
+    media_path: Path,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    connection = _business_connection_for_target(auth, target_cfg)
+    if not connection:
+        raise RuntimeError("business connection secret is missing")
+    if not bool(connection.get("is_enabled")):
+        raise RuntimeError("business connection is disabled")
+    if not bool(connection.get("can_manage_stories")):
+        raise RuntimeError("business connection lacks can_manage_stories")
+    bot_token = str(auth.get("business_bot_token") or "").strip()
+    if not bot_token:
+        raise RuntimeError("business Bot API token is missing")
+    connection_id = str(connection.get("connection_id") or "").strip()
+    if not connection_id:
+        raise RuntimeError("business connection id is missing")
+
+    suffix = media_path.suffix.lower()
+    attach_name = "story"
+    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+        content = {"type": "photo", "photo": f"attach://{attach_name}"}
+    elif suffix in {".mp4", ".mov"}:
+        content = {
+            "type": "video",
+            "video": f"attach://{attach_name}",
+            "cover_frame_timestamp": 0.0,
+        }
+    else:
+        raise RuntimeError(f"Unsupported business story media type: {media_path.name}")
+
+    data: dict[str, Any] = {
+        "business_connection_id": connection_id,
+        "content": json.dumps(content, ensure_ascii=False),
+        "active_period": str(int(config.get("period_seconds") or 24 * 60 * 60)),
+    }
+    caption = str(config.get("caption") or "").strip()
+    if caption:
+        data["caption"] = caption
+    files = {
+        attach_name: (
+            media_path.name,
+            media_path.open("rb"),
+            mimetypes.guess_type(str(media_path))[0] or "application/octet-stream",
+        )
+    }
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/postStory",
+            data=data,
+            files=files,
+            timeout=180,
+        )
+    finally:
+        files[attach_name][1].close()
+    try:
+        result = response.json()
+    except Exception:
+        result = {"ok": False, "description": response.text}
+    if response.status_code >= 400 or not bool(result.get("ok")):
+        description = str(result.get("description") or response.text or response.status_code)
+        raise RuntimeError(f"Bot API postStory failed: {description}")
+    return result
+
+
 async def _story_targets_report(
     client: TelegramClient,
     *,
+    auth: dict[str, Any],
     config: dict[str, Any],
     log,
     phase: str,
@@ -623,6 +717,7 @@ async def _story_targets_report(
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
         delay_seconds = max(0, int(target_cfg.get("delay_seconds") or 0))
         publish_mode = str(target_cfg.get("mode") or "upload").strip().lower()
+        transport = str(target_cfg.get("transport") or "telethon").strip().lower()
         blocking = _story_target_is_blocking(target_cfg, index=idx)
         if publish_mode not in {"upload", "repost_previous"}:
             publish_mode = "upload"
@@ -636,12 +731,46 @@ async def _story_targets_report(
             "label": label,
             "delay_seconds": delay_seconds,
             "mode": publish_mode,
+            "transport": transport,
             "blocking": blocking,
             "period_seconds": int(config.get("period_seconds") or 24 * 60 * 60),
             "pinned": bool(config.get("pinned")),
             "ok": False,
         }
         try:
+            if transport == "telegram_business":
+                connection = _business_connection_for_target(auth, target_cfg)
+                if not connection:
+                    raise RuntimeError("business connection secret is missing")
+                if not bool(connection.get("is_enabled")):
+                    raise RuntimeError("business connection is disabled")
+                if not bool(connection.get("can_manage_stories")):
+                    raise RuntimeError("business connection lacks can_manage_stories")
+                target_report["connection_hash"] = str(
+                    target_cfg.get("business_connection_hash") or ""
+                ).strip()
+                if media_path is not None:
+                    result = _post_business_story(
+                        auth=auth,
+                        target_cfg=target_cfg,
+                        media_path=media_path,
+                        config=config,
+                    )
+                    target_report["story_id"] = _business_story_result_id(result)
+                    target_report["result"] = result.get("result")
+                    log(
+                        f"✅ Business story published to {label}"
+                        + (
+                            f" (story_id={target_report['story_id']})"
+                            if target_report.get("story_id") is not None
+                            else ""
+                        )
+                    )
+                else:
+                    log(f"✅ Business story preflight passed for {label}")
+                target_report["ok"] = True
+                report["targets"].append(target_report)
+                continue
             peer = await client.get_input_entity(peer_ref)
             can_send = await client(functions.stories.CanSendStoryRequest(peer=peer))
             target_report["can_send"] = (
@@ -748,6 +877,7 @@ async def preflight_story_publish_from_kaggle(
     try:
         report = await _story_targets_report(
             client,
+            auth=auth,
             config=config,
             log=log,
             phase="preflight",
@@ -799,6 +929,7 @@ async def publish_story_from_kaggle(
     try:
         report = await _story_targets_report(
             client,
+            auth=auth,
             config=config,
             log=log,
             phase="publish",

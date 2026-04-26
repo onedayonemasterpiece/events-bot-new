@@ -4,6 +4,12 @@ import pytest
 
 from video_announce.scenario import VideoAnnounceScenario
 from video_announce import story_publish
+from telegram_business import cache_business_connection
+
+
+class Obj:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
 
 
 def test_story_session_payload_includes_optional_source_channel_id(monkeypatch):
@@ -101,6 +107,88 @@ async def test_build_story_publish_config_keeps_native_upload_profile(monkeypatc
 
     assert config is not None
     assert config["upload_profile"] == "telegram_story_native_hevc_720p_v1"
+
+
+@pytest.mark.asyncio
+async def test_build_story_publish_config_appends_encrypted_business_targets(
+    monkeypatch,
+    tmp_path,
+):
+    target = tmp_path / "business.enc.json"
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", "all")
+    monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+            can_reply=True,
+        )
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "mode": "popular_review",
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_targets_override": [
+                {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
+                {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
+            ],
+        },
+        selected_event_dates=["2026-04-16"],
+    )
+
+    assert config is not None
+    business_target = config["targets"][-1]
+    assert business_target["transport"] == "telegram_business"
+    assert business_target["delay_seconds"] == 600
+    assert business_target["label"].startswith("business:")
+    serialized = str(config)
+    assert "biz-connection-secret" not in serialized
+    assert "story_owner_fixture" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_business_story_targets_are_cherryflash_scoped(monkeypatch, tmp_path):
+    target = tmp_path / "business.enc.json"
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", "all")
+    monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+        )
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "mode": "default",
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_targets_override": [
+                {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
+            ],
+        },
+    )
+
+    assert config is not None
+    assert all(target.get("transport") != "telegram_business" for target in config["targets"])
 
 
 @pytest.mark.asyncio

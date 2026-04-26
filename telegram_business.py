@@ -76,9 +76,11 @@ def business_connection_summary(connection: Any) -> dict[str, Any]:
     rights = _field(connection, "rights")
     connection_id = str(_field(connection, "id") or "").strip()
     user_id = _field(user, "id")
+    username = str(_field(user, "username") or "").strip().lstrip("@")
     return {
         "connection_hash": secure_short_hash(connection_id),
         "user_hash": secure_short_hash(user_id),
+        "username_hash": secure_short_hash(username.casefold()) if username else "",
         "is_enabled": bool(_field(connection, "is_enabled", False)),
         "can_manage_stories": _visible_bool(rights, "can_manage_stories"),
     }
@@ -125,6 +127,7 @@ def cache_business_connection(connection: Any, *, path: Path | None = None) -> d
     encrypted_payload = {
         "connection_id": connection_id,
         "user_id": _field(user, "id"),
+        "username": str(_field(user, "username") or "").strip().lstrip("@") or None,
         "user_chat_id": _field(connection, "user_chat_id"),
         "date": _field(connection, "date"),
         "is_enabled": summary["is_enabled"],
@@ -175,12 +178,79 @@ def load_cached_business_connections(*, path: Path | None = None) -> list[dict[s
         decrypted = json.loads(fernet.decrypt(encrypted.encode("ascii")).decode("utf-8"))
         if not isinstance(decrypted, dict):
             continue
+        username = str(decrypted.get("username") or "").strip().lstrip("@")
         connections.append(
             {
                 "connection_hash": item.get("connection_hash"),
                 "user_hash": item.get("user_hash"),
+                "username_hash": item.get("username_hash")
+                or (secure_short_hash(username.casefold()) if username else ""),
                 "updated_at": item.get("updated_at"),
                 **decrypted,
             }
         )
     return connections
+
+
+def _parse_business_target_selector(raw: str | None) -> list[str] | None:
+    value = str(raw or "").strip()
+    if not value:
+        return []
+    if value.casefold() == "all":
+        return None
+    if value.startswith("["):
+        try:
+            payload = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS must be JSON "
+                "or comma-separated hashes"
+            ) from exc
+        if not isinstance(payload, list):
+            raise RuntimeError(
+                "VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS JSON value must be a list"
+            )
+        return [str(item or "").strip() for item in payload if str(item or "").strip()]
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def load_business_story_targets(*, path: Path | None = None) -> list[dict[str, Any]]:
+    """Return decrypted, story-capable Business connections selected for autopublish.
+
+    `VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS=all` selects every cached enabled
+    connection with story rights. Otherwise the value is a comma-separated or JSON
+    list of connection/user/username hashes.
+    """
+    selector = _parse_business_target_selector(
+        os.getenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS")
+    )
+    if selector == []:
+        return []
+    allowed = set(selector or [])
+    targets: list[dict[str, Any]] = []
+    for item in load_cached_business_connections(path=path):
+        if not bool(item.get("is_enabled")) or not bool(item.get("can_manage_stories")):
+            continue
+        hashes = {
+            str(item.get("connection_hash") or "").strip(),
+            str(item.get("user_hash") or "").strip(),
+            str(item.get("username_hash") or "").strip(),
+        }
+        if allowed and not hashes.intersection(allowed):
+            continue
+        connection_hash = str(item.get("connection_hash") or "").strip()
+        if not connection_hash:
+            continue
+        targets.append(
+            {
+                "connection_hash": connection_hash,
+                "user_hash": str(item.get("user_hash") or "").strip(),
+                "username_hash": str(item.get("username_hash") or "").strip(),
+                "connection_id": str(item.get("connection_id") or "").strip(),
+                "user_chat_id": item.get("user_chat_id"),
+                "updated_at": item.get("updated_at"),
+                "is_enabled": bool(item.get("is_enabled")),
+                "can_manage_stories": bool(item.get("can_manage_stories")),
+            }
+        )
+    return targets
