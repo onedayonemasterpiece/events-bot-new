@@ -77,6 +77,28 @@
 - `Gemma 4` без дополнительной настройки легко уходит в dry/compact structured prose;
 - transport-aware thought filtering обязателен.
 
+## `lollipop_g4_fast` quality reset (`2026-04-26`)
+
+Live KALMANIA benchmark artifact:
+[lollipop_g4_benchmark_20260426T121919Z.md](/workspaces/events-bot-new/artifacts/codex/lollipop_g4_benchmark_20260426T121919Z.md)
+
+Verdict по этому artifact: `lollipop_g4_fast` в прежнем contract был быстрее полного `lollipop_g4`, но quality-failed относительно baseline. Главная причина не в финальном `4o`, а в upstream/pack contract:
+
+- extractor был фактически summary-mode (`3-6 facts/source`);
+- merge был summary-mode (`5-9 final facts`);
+- deterministic pack дополнительно мог отбрасывать второй `event_core` с тем же `hook_type`;
+- final writer prompt принудительно сжимал output в фиксированную форму `lead -> Программа -> Участники`.
+
+Этот результат не считается rollout evidence. Он зафиксирован как regression fixture для следующего fast-контракта.
+
+Next contract: `lollipop_g4_fast.v2`.
+
+- `fast.extract_per_source.v1`: coverage-first, no fixed fact cap, all distinct event-facing facts from each source.
+- `fast.merge_pack.v1`: coverage-first semantic dedup, no fixed final-fact cap.
+- deterministic plumbing: no semantic fact deletion for compactness; only ordering/layout/guardrails.
+- `writer.final_4o.v1`: prompt additions are dynamically assembled from `meta.writer_profile` (`rich_case`, rarity, atmosphere, quote candidate, literal program, named roles, must-cover count).
+- quality gate is fact coverage first: “не хуже baseline” means no meaningful fact loss versus baseline, then stronger hook/liveness/anti-cliche voice.
+
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 
 ### Summary table
@@ -257,6 +279,74 @@ Unified artifact:
 - в literal list есть подозрительное `Баядерка` vs canonical `Баядера` и это нужно отдельно проверить по source packet;
 - baseline в этом unified canary всё ещё сильнее по плотности и мотивации к посещению;
 - single-canary evidence недостаточно для rollout gate.
+
+## Fast variant design (`2026-04-26`)
+
+После обсуждения полного `lollipop_g4` cost profile добавлен отдельный lab-вариант `lollipop_g4_fast`.
+
+Ключевая гипотеза не считается доказанной заранее: Opus-рекомендация `source-local fast Gemma 4 extractor -> deterministic pack/merge/layout -> writer.final_4o` принята как сильный candidate design, но с явными ограничениями. Её плюс — call-count порядка `N source Gemma calls + 1 final 4o` вместо десятков Gemma stages в full cascade. Её слабое место — риск, что Python layout начнёт принимать смысловые решения. Поэтому fast-вариант оценивается только при соблюдении LLM-first contract: смысловые поля `bucket`, `salience`, `hook_type`, `literal_items`, `dedup_key` выставляет Gemma, а deterministic layer не делает regex-semantic rescue.
+
+Current implementation after the `lollipop_g4_fast.v2` reset:
+
+- `fast.extract_per_source.v1`: один coverage-first source-local Gemma 4 call на источник, native provider-compatible `response_schema`, capped at `max_tokens=2000`; extractor owns `role_class` for people blocks (`production_team/cast/ensemble/none`), groups long cast lists into dense facts instead of one record per role, and preserves plot/character premise for stage titles as narrative facts rather than letting credits dominate;
+- default merge/pack: Python pass-through of relevant LLM-owned records plus exact grouping by LLM-owned `dedup_key`. It drops only `drop/infoblock_only/suppress` and does not own semantic dedup, summarization, or fact rescue;
+- `fast.merge_pack.v1`: optional compact Gemma 4 merge/dedup fallback behind `LOLLIPOP_G4_FAST_LLM_MERGE=1`; live KALMANIA/VIVAT showed that making this stage mandatory breaks the speed target without enough quality gain;
+- `literal_items` are safety-constrained against extractor-owned `literal_items/text/evidence` and source-local excerpt substring gate; this is not regex extraction from raw source and not repair, but refusal to publish provider-noise literals;
+- `fast.layout_assemble`: deterministic assembly из уже размеченных LLM fields, без удаления event-core facts ради compactness;
+- source-local extraction runs in parallel by default, потому что источники независимы по смыслу и latency не должна оплачиваться потерей фактов;
+- source mismatch is handled inside the extractor prompt: if a source is primarily about another event, it may emit only a `drop` mismatch fact, not facts about the other event;
+- `fast.layout_planner.v1`: optional fallback только при `LOLLIPOP_G4_FAST_PLANNER=1`, default off;
+- `writer.final_4o.v1`: тот же final writer, с fast-specific prompt additions через `meta.writer_profile`; `narrative_fact_count` now influences `rich_case`, so people-heavy outputs with enough non-people facts must keep narrative body before cast/credits; fast path не имеет deterministic repair/rescue и не дожимается отдельным correction loop.
+
+Benchmark command shape:
+
+```bash
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --fixtures kalmania,vivat \
+  --variants baseline,lollipop_g4_fast
+```
+
+Если локальный `.env` намеренно содержит только `GOOGLE_API_KEY2` как isolated local benchmark key, baseline path можно запустить с явным opt-in, не меняя глобальную key policy:
+
+```bash
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --fixtures kalmania \
+  --variants baseline,lollipop_g4_fast \
+  --allow-google-key2-for-baseline
+```
+
+Acceptance evidence для fast должно включать:
+
+- `speed_ratio_vs_baseline.target_pass = true` (`<= 1.5x`) как основной latency target или `speed_ratio_vs_baseline.pass = true` (`<= 2.5x`) как временный quality-first hard cap;
+- default `gemma_calls` равно числу источников fixture; optional LLM merge/planner calls are allowed only with explicit flags and count against latency budget;
+- `validation.errors = []`;
+- `literal.title_mutation` отсутствует: fast pack/optional merge не может выдавать literal title, которого не было в extractor `literal_items` или extractor-owned text/evidence;
+- reviewer pairwise vote против baseline по 7 измерениям: fact coverage, event clarity, rarity/atmosphere, literal fidelity, named roles, natural voice, no promo/report leakage. Итог `FAST_WINS` или `TIE` обязателен; `BASELINE_WINS` по fact coverage или event clarity блокирует rollout.
+
+Fast-вариант пока не является rollout evidence сам по себе: `KALMANIA` и `VIVAT-MUNCHHAUSEN` now pass validation and the `<=1.5x` target on the current code, but mixed-phase case, opaque-title screening/presentation case, sparse single-source case and reviewer pairwise votes are still required before any production default.
+
+Live KALMANIA evidence (`2026-04-26T15:25Z`, default no-LLM-merge path with `dedup_key` pass-through grouping):
+
+- artifact: `artifacts/codex/lollipop_g4_benchmark_20260426T152508Z.json` / `.md`;
+- models: fast upstream on `gemma-4-31b-it`; no `26b` use in fast path;
+- calls: baseline `4 Gemma / 0 4o`; fast `3 Gemma / 1 4o` (`N=3` source-local extract calls + `writer.final_4o`), with source-local extract calls parallelized;
+- merge owner: `default_no_llm_merge_passthrough`;
+- fact flow: `13` extracted records -> `12` merged/pass-through records;
+- latency: reused baseline `47.879492s`, fast `52.036041s`, ratio `1.0868`; target `1.5x` passed;
+- validation: `errors=[]`, `warnings=[]`;
+- manual note: fast keeps rarity (`раз в сезоне`), `два вечера подряд`, atmosphere/program, exact literal bullets from source excerpt, named soloists and ballet roles, while avoiding report/promo/audience-template validation hits. Remaining quality risk: source typo `«Фиалки Монматра»` is preserved as source-local literal, so cross-source canonicalization remains a reviewer decision, not a deterministic fix.
+
+Live VIVAT-MUNCHHAUSEN evidence (`2026-04-26T15:23Z`, current default path with grouped cast and `role_class` layout split):
+
+- artifact: `artifacts/codex/lollipop_g4_benchmark_20260426T152348Z.json` / `.md`;
+- models: fast upstream on `gemma-4-31b-it`; no `26b` use in fast path;
+- calls: baseline `3 Gemma / 0 4o`; fast `2 Gemma / 1 4o` (`N=2` source-local extract calls + `writer.final_4o`);
+- merge owner: `single_relevant_source_passthrough`;
+- source-scope note: Telegram source was primarily about `Кальмания`, so extractor emitted a `drop` mismatch instead of contaminating `Виват, Мюнхгаузен!`;
+- fact flow: `8` extracted records -> `6` merged/pass-through records;
+- latency: reused baseline `28.392617s`, fast `39.909695s`, ratio `1.4056`; target `1.5x` passed;
+- validation: `errors=[]`, `warnings=[]`;
+- manual note: grouped cast extraction fixed the previous latency/structure problem while preserving named role coverage; writer kept the local-context hook and avoided baseline's unrelated `Кальмания` contamination plus promo/audience leakage. Remaining quality issue from this artifact: the narrative body is still too thin before the cast/credits sections. The follow-up contract now asks the extractor to preserve protagonist/story-engine facts and makes people-heavy + narrative-rich cases `rich_case`, requiring body prose before role sheets. This needs a fresh live run once a valid `writer.final_4o` token is available.
 
 ## Full-cascade retune iteration (`2026-04-06`, afternoon)
 

@@ -23,12 +23,16 @@ REPORT_PATTERNS: dict[str, str] = {
 PROMO_PATTERNS: dict[str, str] = {
     "cta": r"(?iu)не\s+упустите",
     "invites_you": r"(?iu)приглаш(?:ает|аем)\s+вас",
+    "invites_viewers": r"(?iu)приглаш\w+\s+зрител",
+    "invites": r"(?iu)\bприглаша\w*",
     "unique_opportunity": r"(?iu)уникальн\w+\s+возможност",
     "for_connoisseurs": r"(?iu)для\s+(?:всех\s+)?ценител",
     "wont_leave_indifferent": r"(?iu)не\s+оставит\s+равнодуш",
     "true_celebration": r"(?iu)настоящ\w+\s+праздник",
     "unforgettable": r"(?iu)незабыва\w+",
     "promises_to_be": r"(?iu)обеща\w+\s+стать",
+    "promises": r"(?iu)\bобеща\w*",
+    "offers_viewers": r"(?iu)\bпредлага\w+\s+зрител",
 }
 
 LEAD_HOOK_PATTERNS: dict[str, str] = {
@@ -36,6 +40,7 @@ LEAD_HOOK_PATTERNS: dict[str, str] = {
     "atmosphere": r"(?iu)\bатмосфер\w+|\bинтриг\w+|\bигр\w+|\bволшебн\w+|\bромантическ\w+",
     "program": r"(?iu)\bарии?\b|\bдуэт\w*|\bтерцет\w*|\bмарш\w*|\bпесенк\w*|\bмелоди\w+",
     "stage": r"(?iu)\bсценическ\w+\s+дым\b|\bхор\b|\bбалет\b|\bоркестр\b",
+    "local_context": r"(?iu)\bкалининград\w*|\bвнучат\w+\s+мюнхгаузен\w*|\bнаши\s+края\b",
 }
 
 
@@ -90,6 +95,58 @@ def _describe_text_quality(description_md: str) -> dict[str, Any]:
 
 
 def _build_prompt(pack: dict[str, Any]) -> str:
+    meta = pack.get("meta") if isinstance(pack.get("meta"), dict) else {}
+    fast_additions = ""
+    if meta.get("variant") == "lollipop_g4_fast":
+        profile = meta.get("writer_profile") if isinstance(meta.get("writer_profile"), dict) else {}
+        profile_lines = [
+            "FAST RUN CONTRACT:",
+            "- ABSOLUTE FAIL CONDITIONS before returning JSON: no lead `— это`, no `это редкое событие`, no words with root `зрител`, no `смогут насладиться`, no `предлагает зрителям`, no words with root `приглаша`, no words with root `обещ`, no `и другие` when named-role facts are present, no words with root `наполн`, no `состоит из`, no `является`.",
+            "- In fast output, the word root `зрител` is banned. Use event/music/stage as the grammatical subject instead.",
+            "- Before returning JSON, scan description_md yourself. If it contains `зрител`, `обещ`, `приглаша`, `наслад`, `предлагает зрителям`, `погружая зрителей`, `является`, `состоит из`, or root `наполн`, rewrite that sentence before returning.",
+            "- The phrase `погружая зрителей` is forbidden. Use `на сцене разворачивается`, `сюжет ведёт`, `история переносит действие`, or `мир фантазии раскрывается` instead.",
+            "- meta.variant=lollipop_g4_fast means upstream is compact, source-local Gemma 4 extraction plus deterministic packing.",
+            "- This is coverage-first fast, not summary-fast: every fact_id in must_cover_fact_ids must be semantically used unless it is explicitly covered by a literal list.",
+            "- Do not shorten by omission. Compression is allowed only by connecting facts in better sentences.",
+            "- The target is at least baseline fact coverage plus stronger hook, livelier natural voice, grounded quotes/atmosphere when available, and no promo/report cliches.",
+            "- Fast has no semantic repair/rescue layer: returned JSON must already be the main-flow result.",
+            f"- writer_profile: lead_strategy={profile.get('lead_strategy')!r}, rich_case={bool(profile.get('rich_case'))}, must_cover_fact_count={profile.get('must_cover_fact_count')}, narrative_fact_count={profile.get('narrative_fact_count')}, hook_types={profile.get('hook_types') or []}, buckets={profile.get('buckets') or []}.",
+        ]
+        if profile.get("rich_case"):
+            profile_lines.append("- Rich case: prefer 2-4 real paragraphs/sections with editorial flow. Do not collapse the event into a mini-card.")
+            profile_lines.append("- If named-role sections are present, write enough narrative before the first people/credits heading so the event does not read like only a cast sheet.")
+        if profile.get("has_rarity"):
+            profile_lines.append("- Rarity is present: use it as a lead or early support hook unless format clarity would suffer.")
+            profile_lines.append("- For rarity leads, the first sentence should start with `Раз в сезон` or `Редкий концерт/спектакль/показ`, then continue through event action. Do not start with `Концерт «...» — это`.")
+        if profile.get("has_atmosphere"):
+            profile_lines.append("- Atmosphere is present: weave it into the lead or first body opening, not as an afterthought.")
+        if profile.get("has_quote_candidate"):
+            profile_lines.append("- Quote-like grounded wording is present: you may use one short source-shaped phrase if it reads natural; do not invent quotes.")
+        if profile.get("has_local_context"):
+            profile_lines.append("- Local/historical context is present: use it as a distinguishing hook, especially for opaque/family stage titles.")
+            profile_lines.append("- For local-context leads, good shape: `В Калининграде у барона Мюнхгаузена есть собственный след: ...`; bad shape: `Мюзикл приглашает зрителей ...`.")
+            profile_lines.append("- For family/stage titles, open with local fact plus stage action. Preferred Vivat shape: `В Калининграде у барона Мюнхгаузена есть собственный след: мюзикл ... выводит на сцену новые приключения его потомков.`")
+            profile_lines.append("- For local/family stage titles, use the second narrative paragraph for plot or character premise when the pack has it; do not jump straight from local hook to credits.")
+        if profile.get("has_literal_program"):
+            profile_lines.append("- Literal program is present: keep exact markdown bullets in the program section, but also explain what kind of evening those works create.")
+            profile_lines.append("- Anti-repetition: if the lead already names ensemble units (солисты/хор/оркестр/балет) or program forms (дуэты/арии/терцеты/марши), do not restate the same set in the first body paragraph. Body must add a different angle: composer frame, atmosphere, rarity, staging, or local context.")
+        if profile.get("has_named_roles"):
+            profile_lines.append("- Named roles/participants are present: preserve role information instead of replacing it with generic `участники`.")
+            profile_lines.append("- If a people/roles fact contains a comma-separated named list, every full name in that fact is mandatory. Do not write `и другие`, `включая ...` with only a subset, or `среди солистов` if it hides names.")
+            profile_lines.append("- For long casts, use dense role-lines or compact sentences separated by semicolons; never solve length by dropping names.")
+        profile_lines.extend(
+            [
+                "- If a fact came from poster/admin wording such as `афиша`, keep the underlying rarity/attendance meaning but never copy poster language into public prose.",
+                "- Do not put calendar dates, exact times, venue names, ticket/access/age notes into narrative prose.",
+                "- If frequency (`раз в сезон`) and scheduling intensity (`два вечера подряд`) both survived into the pack, treat them as distinct facts and use both naturally when possible.",
+                "- Avoid audience-template phrases: `зрители смогут`, `смогут насладиться`, `зрителей ждут`, `подарит эмоции`. Describe what is on stage instead.",
+                "- ЖЁСТКИЙ ЗАПРЕТ: в итоговом description_md не должно быть слов/подстрок `зрител`, `погружая зрителей`, `приглаш`, `наслад`, `обещ`, `предлагает`, `настоящим праздником`, `для любителей`, `уникаль`, `подарит эмоции`, `масса эмоций`.",
+                "- If named-role facts are present, `и другие` / `и др.` is also banned in description_md.",
+                "- FIRST SENTENCE CONTRACT: open through grounded event action, rarity, programme, atmosphere, quote-like hook, or stage movement. Bad shape: `Концерт «...» — это ...`.",
+                "- Replace any draft phrase `приглашает зрителей` with an event-action construction: `выводит на сцену`, `рассказывает`, `собирает`, `держится на`, `звучит`, `разворачивает историю`.",
+            ]
+        )
+        fast_additions = "\n".join(profile_lines)
     title_context = pack["title_context"]
     section_lines: list[str] = []
     for section in pack["sections"]:
@@ -128,6 +185,8 @@ def _build_prompt(pack: dict[str, Any]) -> str:
           "description_md": "string"
         }}
 
+        {fast_additions}
+
         СТРУКТУРА (соблюдай порядок и exact headings):
         {chr(10).join(section_lines)}
 
@@ -164,6 +223,9 @@ def _build_prompt(pack: dict[str, Any]) -> str:
         Если service/admin note не является главным содержанием события, не делай его финальной сильной нотой текста.
         Возрастные ограничения и прочие admin/access notes не должны попадать в public narrative prose.
         Если fact text содержит явный список имён или ролей, сохрани все явно названные имена и роли.
+        Если в pack есть 3+ non-people narrative facts и затем people/credits sections, перед первым heading должно быть не менее двух содержательных narrative paragraphs или один lead плюс отдельный body paragraph.
+        Не теряй plot/character premise ради списков участников: сначала объясни, что происходит в событии и почему это живо, затем переходи к ролям.
+        Non-people fact coverage важнее компактности: если факт не logistics/admin и не duplicate, он должен быть явно использован в narrative prose.
         Не сокращай grounded named lists до `и другие`, если исходный fact не помечен как partial list.
         Для people-heavy structured section делай плотные role-lines, а не общий пересказ.
         Если section содержит literal_items или coverage mode = literal_list / narrative_plus_literal_list, обязателен реальный markdown bullet list в этой section.
@@ -204,6 +266,7 @@ def _build_retry_prompt(pack: dict[str, Any], validation: ValidationResult) -> s
         lines.append("- Перепиши lead без слов с корнем `посвящ...`; открой текст через формат события, редкость или атмосферу вечера.")
     if "lead.meta_opening" in errors:
         lines.append("- Убери lead-шаблон `X — это ...`; первое предложение начни через редкость, сценическое действие, музыку или устройство вечера.")
+        lines.append("- Запрещён паттерн `Концерт/спектакль/событие «Название» — это ...`; замени его на действие: `Раз в сезон ... собирает/звучит/выходит на сцену ...`.")
     if "poster.leak" in errors:
         lines.append("- Убери любые упоминания `афиша` / `афиши`; замени на более естественное event-facing wording без poster language.")
     if "age.leak" in errors:
@@ -252,6 +315,7 @@ def _apply_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> dict[s
 
 
 def _validate_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> ValidationResult:
+    meta = pack.get("meta") if isinstance(pack.get("meta"), dict) else {}
     title = str(output.get("title") or "").strip()
     description_md = str(output.get("description_md") or "")
     errors: list[str] = []
@@ -342,8 +406,10 @@ def _validate_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> Val
         errors.append(f"style.report_formula:{label}")
     for label in quality_profile["promo_phrase_hits"]:
         errors.append(f"style.promo_phrase:{label}")
-    if re.search(r"(?iu)зрител\w+[^.!?\n]{0,32}смогут\s+наслад", description_md):
+    if re.search(r"(?iu)зрител\w+[^.!?\n]{0,48}(?:смогут\s+)?наслад", description_md):
         errors.append("style.audience_template:will_enjoy")
+    if meta.get("variant") == "lollipop_g4_fast" and re.search(r"(?iu)\bзрител\w*", description_md):
+        errors.append("style.audience_template:viewers_root")
 
     has_explicit_named_people_list = any(
         str(section.get("role") or "").strip() != "program"

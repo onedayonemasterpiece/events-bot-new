@@ -44,6 +44,74 @@ source.scope
   - `gemma_calls / four_o_calls`
   - top slowest stage families, чтобы quality gain можно было сравнивать с latency cost.
 
+## `lollipop_g4_fast`
+
+Статус: `lab variant`, не production default.
+
+Цель: проверить компактный `Gemma 4 upstream + final 4o` путь, который по итоговому Telegraph-тексту должен быть лучше `baseline`. Latency target остаётся `<= 1.5x` от baseline, но на текущей quality-first итерации rollout-gate допускает hard cap `<= 2.5x`; качество важнее попыток ускоряться за счёт более слабой модели.
+
+Критическая оценка выбранной архитектуры после live-прогонов:
+
+- default path: `parallel source-local fast extractor -> deterministic pass-through pack/layout from LLM-owned facts -> writer.final_4o`;
+- сильная сторона: call-count остаётся `N source Gemma calls + 1 final 4o`, поэтому fast может реально приблизиться к baseline latency, не отказываясь от source-local uniqueness для rarity/atmosphere/literal coverage;
+- главный риск: deterministic pack/layout не должен становиться владельцем смысла. Python имеет право только убрать `drop/infoblock_only/suppress`, сохранить LLM-owned `bucket/salience/hook_type/literal_items/dedup_key`, собрать writer pack и применить safety guardrails;
+- LLM merge (`fast.merge_pack.v1`) оставлен только как explicit fallback `LOLLIPOP_G4_FAST_LLM_MERGE=1`: он полезен для сложного semantic dedup, но live KALMANIA/VIVAT показали, что обязательный merge ломает speed target;
+- второй риск: single rich extractor может стать too broad и вернуть сухой baseline-like summary. Prompt contract поэтому явно требует source-local rarity/atmosphere/local context, literal title fidelity, named lists и anti-report/anti-promo voice;
+- optional planner допустим только как fallback за `LOLLIPOP_G4_FAST_PLANNER=1`, default off. Его наличие не отменяет speed-gate и не должно становиться новым обязательным Gemma stage.
+
+Stage contract:
+
+| Stage | Runtime | Owner | Fail policy |
+| --- | --- | --- | --- |
+| `fast.extract_per_source.v1` | `Gemma 4 31b`, один компактный call на источник, native `response_schema`, coverage-first без fixed fact cap, `max_tokens=2000`, parallel by default | source-local facts + `bucket/salience/hook_type/literal_items/dedup_key/role_class`; source mismatch emits only `drop`; long cast lists stay dense instead of one-record-per-role; plot/character premise for stage titles is preserved as narrative material, not collapsed into cast credits | empty source payload allowed, but benchmark flags fact loss |
+| `fast.merge_pack.v1` | optional compact `Gemma 4` call, `LOLLIPOP_G4_FAST_LLM_MERGE=1` only | fallback semantic merge/dedup for hard duplicate cases | default off; any use counts toward latency budget |
+| `fast.layout_assemble` | Python-only default | deterministic pass-through/block assembly from LLM labels | may reserve literal program facts for program block; must not invent, rewrite, summarize, or drop semantic facts for compactness |
+| `fast.layout_planner.v1` | optional `Gemma 4`, `LOLLIPOP_G4_FAST_PLANNER=1` | lead/layout fallback only | default off; any use counts toward latency budget |
+| `writer.final_4o.v1` | one `gpt-4o` final writer call, no fast-specific retry/repair | public Telegraph prose | same validation as lollipop; fast-specific prompt is dynamically assembled from `meta.writer_profile` |
+| `validate` | Python | style, literal coverage, infoblock leak, speed gate | hard gate blocks rollout evidence |
+
+Fast writer не имеет deterministic repair/rescue слоя и не дожимается вторым fast-specific correction pass. Если final output требует восстановления фактов, переписывания lead или удаления рекламного filler после writer stage, это считается провалом основного prompt/stage contract, а не поводом добавлять regex cleanup.
+
+Source-local extraction is parallel by default for `lollipop_g4_fast`: each source is still handled by its own Gemma 4 call and owns its own semantic labels, but independent source calls do not wait on each other. Set `LOLLIPOP_G4_FAST_SERIAL_EXTRACT=1` only for provider debugging or conservative pacing. Default merge is pass-through over relevant LLM-owned facts; the optional LLM merge runs only after all source-local facts are available and only with `LOLLIPOP_G4_FAST_LLM_MERGE=1`.
+
+Чтобы writer не склеивал карточные fragments через `X — это ...`, fast extractor обязан отдавать `event_core` / `rarity` facts как законченные event-facing clauses с действием/глаголом, а не как именные группы.
+
+Текущий контракт `lollipop_g4_fast.v2` после неуспешного KALMANIA-прогона `2026-04-26T12:19Z` больше не трактует fast как summary mode:
+
+- extractor не имеет лимита `3-6 facts/source`; rich source обязан вернуть все distinct event-facing facts, включая формат, редкость, атмосферу, цитатно-точные official phrases, роли и literal program;
+- default pack не имеет лимита `5-9 final facts`; он пропускает relevant LLM-owned facts и может склеивать только exact/near duplicates по LLM-owned `dedup_key`, не выбрасывая event-defining facts ради краткости;
+- deterministic pack не удаляет второй `event_core` только из-за совпавшего `hook_type`;
+- writer получает `meta.writer_profile` (`rich_case`, `lead_strategy`, `has_rarity`, `has_atmosphere`, `has_quote_candidate`, `has_literal_program`, `has_named_roles`, `must_cover_fact_count`, `narrative_fact_count`) и на его основе получает разные prompt-additions для разных типов сильного текста;
+- фиксированный output shape `lead -> Программа -> Участники` запрещён: section order остаётся из writer pack, но текст может разворачиваться настолько, насколько нужно для fact coverage и живого городского анонса.
+- независимые source-local extractor calls выполняются параллельно по wall-clock, чтобы latency не оплачивалась потерей фактов.
+
+`2026-04-26` quality follow-up after VIVAT evidence: fast extractor explicitly keeps protagonist/story-engine facts for musicals and family stage titles (`учёный, предприимчивый и весёлый мечтатель`, `приключения в обычных ситуациях`, `герой для взрослых и детей`) as event-facing narrative material. Writer profile now marks people-heavy cases as `rich_case` when there are at least three non-people narrative facts, so the final 4o prompt asks for real narrative before cast/credits headings instead of turning the description into a short lead plus role sheet.
+
+`literal_items` проходят структурный allowlist по extractor-owned `literal_items/text/evidence` и source-local excerpt substring gate: pipeline не извлекает названия regex-ом из raw source и не придумывает замену, а только не пропускает literal value, которого не было в LLM-owned upstream fields / исходном excerpt.
+
+`role_class` — LLM-owned routing label для `people_and_roles`: `production_team`, `cast`, `ensemble`, `none`. Python layout может разделять блоки участников по этому label (`Постановочная группа` vs `Действующие лица и исполнители`), но не определяет эти классы сам.
+
+Для people-heavy theatre pages fast extractor не должен превращать каждую роль в отдельный record: фактологическая полнота сохраняется плотной строкой cast/team list, а не количеством JSON records. Это снижает latency и не является semantic compression, если все имена/роли остаются внутри LLM-owned fact text.
+
+Все Gemma-backed stages fast family используют quality-first `31b` path. `26b` не используется ни для extraction, ни для merge, ни для planner fallback.
+
+Hard gates for `lollipop_g4_fast` benchmark evidence:
+
+- `latency.target_missed`: `fast.wall_clock_sec / baseline.wall_clock_sec > 1.5`, допустимо только если reviewer vote показывает качество выше baseline;
+- `latency.hard_budget_exceeded`: `fast.wall_clock_sec / baseline.wall_clock_sec > 2.5`, блокирует rollout evidence;
+- `gemma_call_count_overrun`: default fast path should use `N source Gemma calls + 1 final 4o`; optional LLM merge/planner count only when explicitly enabled;
+- `literal.title_mutation`: fast pack/optional merge must not emit a literal title that is absent from source-local extractor `literal_items` and extractor-owned text/evidence, and required repertoire/work titles must survive as exact markdown bullets;
+- `fact_loss_vs_baseline`: manual/reviewer gate when baseline covers event-defining facts absent from fast output;
+- existing writer gates: `poster.leak`, `age.leak`, `infoblock.leak`, report-style formulas, promo phrases, missing literal bullets, collapsed named lists.
+
+Implementation surface:
+
+- [fast_extract_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/fast_extract_family.py) owns extractor/planner prompt text and provider-compatible schemas;
+- [fast_cascade.py](/workspaces/events-bot-new/smart_update_lollipop_lab/fast_cascade.py) owns deterministic fast cascade plumbing;
+- [writer_final_4o_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/writer_final_4o_family.py) has one `meta.variant == "lollipop_g4_fast"` prompt branch;
+- [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) accepts `--variants lollipop_g4_fast` and records speed ratio against baseline.
+- Для локального benchmark допускается explicit opt-in `--allow-google-key2-for-baseline` / `LOLLIPOP_BENCHMARK_ALLOW_GOOGLE_KEY2_BASELINE=1`, если локальный `.env` специально хранит isolated benchmark key в `GOOGLE_API_KEY2`; это process-local alias и не меняет production key routing.
+
 ## Активные families
 
 ### `source.scope`

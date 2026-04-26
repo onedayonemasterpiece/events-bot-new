@@ -68,11 +68,9 @@ def _compose_program_section(block: dict[str, Any], catalog: dict[str, dict[str,
                 if literal not in seen_literal:
                     seen_literal.add(literal)
                     literal_items.append(literal)
-            coverage_plan.append({"fact_id": fact_id, "mode": "literal_list"})
+            facts.append({"fact_id": fact_id, "text": item["text"], "priority": _fact_priority(item["weight"])})
+            coverage_plan.append({"fact_id": fact_id, "mode": "narrative_plus_literal_list"})
             partial = partial or bool(re.search(r"(?iu)\b(и другие|и др\.?|среди которых|в том числе)\b", str(item["text"])))
-            continue
-        if literal_items:
-            coverage_plan.append({"fact_id": fact_id, "mode": "absorbed_by_list"})
             continue
         coverage_plan.append({"fact_id": fact_id, "mode": "narrative"})
         facts.append({"fact_id": fact_id, "text": item["text"], "priority": _fact_priority(item["weight"])})
@@ -173,4 +171,3 @@ def _compose_writer_pack(*, event_id: int, title: str, layout_result: dict[str, 
             },
         },
     }
-

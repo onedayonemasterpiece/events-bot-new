@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import textwrap
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import smart_event_update as su
 from smart_event_update import EventCandidate
+from smart_update_lollipop_lab.fast_cascade import run_fast_cascade_variant
 from smart_update_lollipop_lab.full_cascade import run_full_cascade_variant
 from smart_update_lollipop_lab import writer_final_4o_family as writer_final_family
 
@@ -32,6 +34,7 @@ DEFAULT_G3_MODEL = "gemma-3-27b-it"
 DEFAULT_G4_MODEL = "gemma-4-31b-it"
 DEFAULT_4O_MODEL = "gpt-4o"
 DEFAULT_FIXTURES = "kalmania"
+DEFAULT_VARIANTS = "baseline,lollipop,lollipop_g4,lollipop_g4_fast"
 DEFAULT_GEMMA_CALL_GAP_S = 4.0
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -70,6 +73,36 @@ def _load_env_file() -> None:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def _apply_benchmark_env_aliases() -> None:
+    if not os.getenv("FOUR_O_TOKEN") and os.getenv("OPENAI_API_KEY"):
+        os.environ["FOUR_O_TOKEN"] = os.environ["OPENAI_API_KEY"]
+
+
+def _allow_google_key2_for_baseline(args: argparse.Namespace) -> bool:
+    return bool(args.allow_google_key2_for_baseline) or os.getenv("LOLLIPOP_BENCHMARK_ALLOW_GOOGLE_KEY2_BASELINE", "").strip() == "1"
+
+
+def _preflight_live_env(args: argparse.Namespace, variants: list[str]) -> None:
+    missing: list[str] = []
+    baseline_will_run = "baseline" in variants and not args.reuse_baseline_artifact
+    non_baseline_variants = [variant for variant in variants if variant != "baseline"]
+    if baseline_will_run and not os.getenv("GOOGLE_API_KEY"):
+        if _allow_google_key2_for_baseline(args) and os.getenv("GOOGLE_API_KEY2"):
+            os.environ["GOOGLE_API_KEY"] = os.environ["GOOGLE_API_KEY2"]
+        else:
+            missing.append("GOOGLE_API_KEY (required by baseline smart_event_update path; for local benchmark only, pass --allow-google-key2-for-baseline to use GOOGLE_API_KEY2 in this process)")
+    if non_baseline_variants and not (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2")):
+        missing.append("GOOGLE_API_KEY or GOOGLE_API_KEY2 (required by direct Gemma upstream benchmark calls)")
+    if non_baseline_variants and not (os.getenv("FOUR_O_TOKEN") or os.getenv("OPENAI_API_KEY")):
+        missing.append("FOUR_O_TOKEN or OPENAI_API_KEY (required by writer.final_4o)")
+    if missing:
+        raise RuntimeError(
+            "Live benchmark env preflight failed; missing: "
+            + "; ".join(missing)
+            + ". No model calls were started after preflight."
+        )
 
 
 def _http_get(url: str) -> str:
@@ -171,6 +204,19 @@ def _fixtures_from_cli(raw: str) -> list[BenchmarkFixture]:
     return [_fixture_by_name(name) for name in (names or [DEFAULT_FIXTURES])]
 
 
+def _variants_from_cli(raw: str) -> list[str]:
+    allowed = {"baseline", "lollipop", "lollipop_g4", "lollipop_g4_fast"}
+    variants = [item.strip() for item in (raw or DEFAULT_VARIANTS).split(",") if item.strip()]
+    if not variants:
+        variants = DEFAULT_VARIANTS.split(",")
+    unknown = [item for item in variants if item not in allowed]
+    if unknown:
+        raise ValueError(f"Unsupported variants: {', '.join(unknown)}")
+    if "lollipop_g4_fast" in variants and "baseline" not in variants:
+        variants.insert(0, "baseline")
+    return list(dict.fromkeys(variants))
+
+
 def _fixture_from_artifact_row(row: dict[str, Any]) -> BenchmarkFixture | None:
     fixture = row.get("fixture") if isinstance(row.get("fixture"), dict) else None
     if not fixture:
@@ -267,18 +313,28 @@ async def _run_baseline(
     gemma_call_gap_s: float,
 ) -> dict[str, Any]:
     _set_gemma_model(gemma_model)
+    started_at = time.perf_counter()
+    model_active_sec = 0.0
+    sleep_sec = 0.0
+    gemma_calls = 0
     extracted: list[str] = []
     per_source: dict[str, list[str]] = {}
     for source in fixture.sources:
         candidate = _build_candidate(fixture, source)
+        call_started = time.perf_counter()
         facts = await su._llm_extract_candidate_facts(candidate, text_for_facts=source.text)
+        model_active_sec += time.perf_counter() - call_started
+        gemma_calls += 1
         per_source[source.source_id] = facts
         extracted.extend(facts)
+        sleep_started = time.perf_counter()
         await _gemma_gap_sleep(gemma_call_gap_s)
+        sleep_sec += time.perf_counter() - sleep_started
     anchors = [fixture.date or "", fixture.time or "", fixture.city or "", fixture.location_name or "", fixture.location_address or ""]
     facts_text_clean = su._facts_text_clean_from_facts(extracted, anchors=anchors)
     budget_chars = su._estimate_fact_first_description_budget_chars(facts_text_clean)
     desc_max_tokens = su._estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700)
+    call_started = time.perf_counter()
     description = await su._ask_gemma_text(
         su._fact_first_description_prompt(
             title=fixture.title,
@@ -290,12 +346,22 @@ async def _run_baseline(
         label=re.sub(r"[^a-zA-Z0-9_-]+", "_", f"benchmark_{fixture.fixture_id}_baseline_first_pass").strip("_"),
         temperature=0.0,
     )
+    model_active_sec += time.perf_counter() - call_started
+    gemma_calls += 1
     return {
         "gemma_model": gemma_model,
         "baseline_mode": "prod_style_first_pass_proxy",
         "per_source_facts": per_source,
         "facts_text_clean": facts_text_clean,
         "description_md": description,
+        "timings": {
+            "wall_clock_sec": round(time.perf_counter() - started_at, 6),
+            "model_active_sec": round(model_active_sec, 6),
+            "sleep_sec": round(sleep_sec, 6),
+            "gemma_calls": gemma_calls,
+            "four_o_calls": 0,
+            "stage_family_sec": {"baseline": round(model_active_sec, 6)},
+        },
     }
 
 
@@ -1055,7 +1121,7 @@ def _load_reused_variant_payload(
         raise RuntimeError(f"Unsupported reuse artifact shape in {path}")
     if section == "baseline" and "baseline_mode" in data:
         return data
-    if section in {"lollipop", "lollipop_g4"} and "applied_output" in data:
+    if section in {"lollipop", "lollipop_g4", "lollipop_g4_fast"} and "applied_output" in data:
         payload = dict(data)
         payload.setdefault("metrics", _variant_metrics(payload.get("applied_output", {}).get("description_md")))
         return payload
@@ -1084,6 +1150,60 @@ async def _run_lollipop_variant(
     return result
 
 
+async def _run_lollipop_fast_variant(
+    fixture: BenchmarkFixture,
+    *,
+    gemma_model: str,
+    four_o_model: str,
+    gemma_call_gap_s: float,
+) -> dict[str, Any]:
+    print(f"[benchmark] {fixture.fixture_id} start fast-cascade upstream={gemma_model}", file=sys.stderr, flush=True)
+    result = await run_fast_cascade_variant(
+        fixture=fixture,
+        gemma_model=gemma_model,
+        gemma4="gemma-4" in gemma_model,
+        gemma_json_call=_ask_gemma_json_direct,
+        four_o_json_call=_ask_4o_json,
+        sleep=_gemma_gap_sleep,
+        four_o_model=four_o_model,
+        gemma_call_gap_s=gemma_call_gap_s,
+    )
+    result["metrics"] = _variant_metrics(result["applied_output"].get("description_md"))
+    return result
+
+
+def _variant_body(label: str, payload: dict[str, Any]) -> str:
+    if label == "baseline":
+        return str(payload.get("description_md") or "")
+    return str(payload.get("applied_output", {}).get("description_md") or "")
+
+
+def _speed_ratio_vs_baseline(*, baseline: dict[str, Any] | None, candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not baseline or not candidate:
+        return None
+    baseline_wall = float((baseline.get("timings") or {}).get("wall_clock_sec") or 0)
+    candidate_wall = float((candidate.get("timings") or {}).get("wall_clock_sec") or 0)
+    if baseline_wall <= 0 or candidate_wall <= 0:
+        return None
+    ratio = candidate_wall / baseline_wall
+    target = 1.5
+    hard_budget = 2.5
+    if ratio <= target:
+        gate = "ok"
+    elif ratio <= hard_budget:
+        gate = "latency.target_missed"
+    else:
+        gate = "latency.hard_budget_exceeded"
+    return {
+        "ratio": round(ratio, 4),
+        "target": target,
+        "hard_budget": hard_budget,
+        "pass": ratio <= hard_budget,
+        "target_pass": ratio <= target,
+        "gate": gate,
+    }
+
+
 def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Path) -> str:
     lines = [
         "# Lollipop G4 Benchmark",
@@ -1094,9 +1214,7 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
     ]
     for result in results:
         fixture = result["fixture"]
-        baseline = result["baseline"]
-        lollipop = result["lollipop"]
-        lollipop_g4 = result["lollipop_g4"]
+        variant_labels = [label for label in ("baseline", "lollipop", "lollipop_g4", "lollipop_g4_fast") if isinstance(result.get(label), dict)]
         lines.extend(
             [
                 f"## {fixture['fixture_id']}",
@@ -1110,13 +1228,20 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
         for source in fixture["sources"]:
             lines.append(f"  - `{source['source_id']}`: {source['url']}")
         lines.extend(["", "### Source Excerpts", "", "```text", _source_excerpt([SourcePacket(**source) for source in fixture["sources"]]), "```", ""])
-        for label, payload in [("Baseline", baseline), ("Lollipop", lollipop), ("Lollipop G4", lollipop_g4)]:
-            body = payload.get("description_md") if label == "Baseline" else payload["applied_output"]["description_md"]
+        for label in variant_labels:
+            payload = result[label]
+            display_label = {
+                "baseline": "Baseline",
+                "lollipop": "Lollipop",
+                "lollipop_g4": "Lollipop G4",
+                "lollipop_g4_fast": "Lollipop G4 Fast",
+            }[label]
+            body = _variant_body(label, payload)
             metrics = _variant_metrics(body)
             quality = dict(payload.get("quality_profile") or _quality_profile(body))
             lines.extend(
                 [
-                    f"### {label}",
+                    f"### {display_label}",
                     "",
                     f"- chars: `{metrics['chars']}`",
                     f"- headings: `{metrics['headings']}`",
@@ -1128,12 +1253,16 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
                     f"- age_leak: `{bool(quality.get('age_leak'))}`",
                 ]
             )
-            if label != "Baseline":
+            if label != "baseline":
                 lines.append(f"- selected_sources: `{','.join(payload['scope_select']['selected_source_ids'])}`")
                 lines.append(f"- extract_records: `{len(payload['extract_records'])}`")
                 lines.append(f"- kept_records_after_dedup: `{len([item for item in payload['extract_records'] if item['record_id'] not in {decision['record_id'] for decision in payload['dedup']['decisions'] if decision['keep'] == 'drop'}])}`")
                 lines.append(f"- validation errors: `{len(payload['validation']['errors'])}`")
                 lines.append(f"- validation warnings: `{len(payload['validation']['warnings'])}`")
+                if label == "lollipop_g4_fast" and isinstance(payload.get("speed_ratio_vs_baseline"), dict):
+                    speed = payload["speed_ratio_vs_baseline"]
+                    lines.append(f"- speed_ratio_vs_baseline: `{speed['ratio']}`")
+                    lines.append(f"- speed_gate: `{speed['gate']}`")
                 timing_summary = _timing_summary(payload)
                 if timing_summary is not None:
                     lines.append(f"- wall_clock_sec: `{timing_summary['wall_clock_sec']}`")
@@ -1149,79 +1278,108 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
 
 async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
     _load_env_file()
+    _apply_benchmark_env_aliases()
+    variants = _variants_from_cli(args.variants)
+    _preflight_live_env(args, variants)
     fixtures = _fixtures_from_artifact(args.reuse_fixture_artifact, args.fixtures) if args.reuse_fixture_artifact else _fixtures_from_cli(args.fixtures)
     results: list[dict[str, Any]] = []
     for fixture in fixtures:
-        baseline = _load_reused_variant_payload(
-            args.reuse_baseline_artifact,
-            fixture_id=fixture.fixture_id,
-            section="baseline",
-        )
-        if baseline is None:
-            baseline = await _run_baseline(fixture, gemma_model=args.g3_model, gemma_call_gap_s=args.gemma_call_gap_s)
-            await _gemma_gap_sleep(args.gemma_call_gap_s)
-        baseline["quality_profile"] = _quality_profile(baseline.get("description_md"))
-        baseline["metrics"] = _variant_metrics(baseline.get("description_md"))
+        row: dict[str, Any] = {
+            "fixture": {
+                "fixture_id": fixture.fixture_id,
+                "title": fixture.title,
+                "event_type": fixture.event_type,
+                "date": fixture.date,
+                "time": fixture.time,
+                "location_name": fixture.location_name,
+                "location_address": fixture.location_address,
+                "city": fixture.city,
+                "sources": [asdict(source) for source in fixture.sources],
+            }
+        }
 
-        lollipop = _load_reused_variant_payload(
-            args.reuse_lollipop_artifact,
-            fixture_id=fixture.fixture_id,
-            section="lollipop",
-        )
-        if lollipop is None:
-            lollipop = await _run_lollipop_variant(
+        if "baseline" in variants:
+            baseline = _load_reused_variant_payload(
+                args.reuse_baseline_artifact,
+                fixture_id=fixture.fixture_id,
+                section="baseline",
+            )
+            if baseline is None:
+                baseline = await _run_baseline(fixture, gemma_model=args.g3_model, gemma_call_gap_s=args.gemma_call_gap_s)
+                await _gemma_gap_sleep(args.gemma_call_gap_s)
+            baseline["quality_profile"] = _quality_profile(baseline.get("description_md"))
+            baseline["metrics"] = _variant_metrics(baseline.get("description_md"))
+            row["baseline"] = baseline
+
+        if "lollipop" in variants:
+            lollipop = _load_reused_variant_payload(
+                args.reuse_lollipop_artifact,
+                fixture_id=fixture.fixture_id,
+                section="lollipop",
+            )
+            if lollipop is None:
+                lollipop = await _run_lollipop_variant(
+                    fixture,
+                    gemma_model=args.g3_model,
+                    four_o_model=args.four_o_model,
+                    gemma_call_gap_s=args.gemma_call_gap_s,
+                )
+                await _gemma_gap_sleep(args.gemma_call_gap_s)
+            lollipop["quality_profile"] = _quality_profile(lollipop["applied_output"].get("description_md"))
+            lollipop["metrics"] = _variant_metrics(lollipop["applied_output"].get("description_md"))
+            row["lollipop"] = lollipop
+
+        if "lollipop_g4" in variants:
+            lollipop_g4 = await _run_lollipop_variant(
                 fixture,
-                gemma_model=args.g3_model,
+                gemma_model=args.g4_model,
                 four_o_model=args.four_o_model,
                 gemma_call_gap_s=args.gemma_call_gap_s,
             )
-            await _gemma_gap_sleep(args.gemma_call_gap_s)
-        lollipop["quality_profile"] = _quality_profile(lollipop["applied_output"].get("description_md"))
-        lollipop["metrics"] = _variant_metrics(lollipop["applied_output"].get("description_md"))
+            lollipop_g4["quality_profile"] = _quality_profile(lollipop_g4["applied_output"].get("description_md"))
+            lollipop_g4["metrics"] = _variant_metrics(lollipop_g4["applied_output"].get("description_md"))
+            row["lollipop_g4"] = lollipop_g4
 
-        lollipop_g4 = await _run_lollipop_variant(
-            fixture,
-            gemma_model=args.g4_model,
-            four_o_model=args.four_o_model,
-            gemma_call_gap_s=args.gemma_call_gap_s,
-        )
-        lollipop_g4["quality_profile"] = _quality_profile(lollipop_g4["applied_output"].get("description_md"))
-        results.append(
-            {
-                "fixture": {
-                    "fixture_id": fixture.fixture_id,
-                    "title": fixture.title,
-                    "event_type": fixture.event_type,
-                    "date": fixture.date,
-                    "time": fixture.time,
-                    "location_name": fixture.location_name,
-                    "location_address": fixture.location_address,
-                    "city": fixture.city,
-                    "sources": [asdict(source) for source in fixture.sources],
-                },
-                "baseline": baseline,
-                "lollipop": lollipop,
-                "lollipop_g4": lollipop_g4,
-            }
-        )
+        if "lollipop_g4_fast" in variants:
+            lollipop_g4_fast = await _run_lollipop_fast_variant(
+                fixture,
+                gemma_model=args.g4_model,
+                four_o_model=args.four_o_model,
+                gemma_call_gap_s=args.gemma_call_gap_s,
+            )
+            lollipop_g4_fast["quality_profile"] = _quality_profile(lollipop_g4_fast["applied_output"].get("description_md"))
+            lollipop_g4_fast["metrics"] = _variant_metrics(lollipop_g4_fast["applied_output"].get("description_md"))
+            lollipop_g4_fast["speed_ratio_vs_baseline"] = _speed_ratio_vs_baseline(
+                baseline=row.get("baseline"),
+                candidate=lollipop_g4_fast,
+            )
+            row["lollipop_g4_fast"] = lollipop_g4_fast
+
+        results.append(row)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_slug = f"lollipop_g4_benchmark_{timestamp}"
     ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
     json_path = ARTIFACTS_ROOT / f"{run_slug}.json"
     md_path = ARTIFACTS_ROOT / f"{run_slug}.md"
-    json_path.write_text(json.dumps({"results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
+    json_path.write_text(json.dumps({"variants": variants, "results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(_render_markdown_report(results, json_path), encoding="utf-8")
     return json_path, md_path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run baseline vs lollipop vs lollipop g4 benchmark.")
+    parser = argparse.ArgumentParser(description="Run baseline/lollipop/lollipop g4/lollipop g4 fast benchmark.")
     parser.add_argument("--fixtures", default=DEFAULT_FIXTURES, help="Comma-separated fixture names")
+    parser.add_argument("--variants", default=DEFAULT_VARIANTS, help="Comma-separated variants: baseline,lollipop,lollipop_g4,lollipop_g4_fast")
     parser.add_argument("--g3-model", default=DEFAULT_G3_MODEL, help="Gemma 3 upstream/baseline model")
     parser.add_argument("--g4-model", default=DEFAULT_G4_MODEL, help="Gemma 4 upstream model")
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL, help="Final writer model")
     parser.add_argument("--gemma-call-gap-s", type=float, default=DEFAULT_GEMMA_CALL_GAP_S, help="Sleep between Gemma calls")
+    parser.add_argument(
+        "--allow-google-key2-for-baseline",
+        action="store_true",
+        help="Local benchmark opt-in: use GOOGLE_API_KEY2 as GOOGLE_API_KEY for the baseline smart_event_update path in this process only",
+    )
     parser.add_argument(
         "--reuse-baseline-artifact",
         help="Existing benchmark/debug JSON to reuse baseline for matching fixture_id",
