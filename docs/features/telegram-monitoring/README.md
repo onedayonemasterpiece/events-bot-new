@@ -187,6 +187,7 @@ Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky
 - Статус Kaggle kernel опрашивается с интервалом `TG_MONITORING_POLL_INTERVAL` (по умолчанию 30s) до динамического лимита ожидания (или фиксированного, если включён `fixed` mode).
 - Транзиентные ошибки сети/SSL при опросе Kaggle API (например `UNEXPECTED_EOF_WHILE_READING`) **не валят прогон**: мониторинг продолжает опрос до получения `COMPLETE/FAILED` или таймаута, а в UI этап показывается как «временная ошибка сети».
 - Перед `push` сервер теперь дополнительно проверяет общий `kaggle_registry`: если другой remote Telegram Kaggle job (`guide_monitoring`, `tg_monitoring`, `telegraph_cache_probe`) ещё жив или его status lookup закончился неопределённо, `tg_monitoring` обязан завершиться `skipped` с `remote_telegram_session_busy`, а не запускать вторую удалённую Telethon session поверх той же auth key.
+- Отменённые Kaggle runs со статусом `CANCEL_ACKNOWLEDGED` считаются terminal для shared remote Telegram session guard: такой job не должен блокировать следующий компенсирующий `/tg` catch-up после ручной отмены.
 
 ## Recovery после рестарта бота
 

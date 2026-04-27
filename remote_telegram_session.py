@@ -15,7 +15,16 @@ REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
         "telegraph_cache_probe",
     }
 )
-TERMINAL_KAGGLE_STATES = frozenset({"CANCELLED", "COMPLETE", "ERROR", "FAILED"})
+TERMINAL_KAGGLE_STATES = frozenset(
+    {
+        "CANCEL_ACKNOWLEDGED",
+        "CANCELED",
+        "CANCELLED",
+        "COMPLETE",
+        "ERROR",
+        "FAILED",
+    }
+)
 
 
 @dataclass(slots=True, frozen=True)
