@@ -94,6 +94,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - `video_announce.popular_review._ensure_renderable_photo_urls()` now accepts a database handle and persists rehydrated Telegram/VK poster URLs to the canonical event row.
 - `build_popular_review_selection()` passes the database handle into the poster guard, so any candidate accepted because of source-post poster rehydration remains renderable when the render payload reloads events from SQLite.
+- Scheduled CherryFlash now treats a `None` session id from `run_popular_review_pipeline()` as a failed `ops_run`, so no-op catch-up attempts remain visible and retryable.
 - Added regression coverage for the exact missing durability boundary.
 - Updated the CherryFlash feature doc and incident index with the new contract.
 

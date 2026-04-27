@@ -510,6 +510,41 @@ async def test_scheduled_popular_review_fails_ops_run_without_kaggle_handoff(
 
 
 @pytest.mark.asyncio
+async def test_scheduled_popular_review_fails_ops_run_without_created_session(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ADMIN_CHAT_ID", "123")
+
+    class FakeScenario:
+        def __init__(self, db_obj, bot_obj, *, chat_id: int, user_id: int):
+            self.db = db_obj
+
+        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+            assert wait_for_handoff is True
+            return None
+
+    monkeypatch.setattr("video_announce.scenario.VideoAnnounceScenario", FakeScenario)
+
+    with pytest.raises(RuntimeError, match="did not create a popular_review session"):
+        await scheduling._run_scheduled_popular_review(db, bot=object())
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_popular_review'"
+        )
+        row = await cur.fetchone()
+
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "failed"
+    assert details["error"] == "CherryFlash did not create a popular_review session"
+    assert "session_id" not in details
+
+
+@pytest.mark.asyncio
 async def test_popular_review_startup_catchup_retries_failed_local_handoff(
     tmp_path, monkeypatch
 ):

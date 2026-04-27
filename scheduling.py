@@ -286,19 +286,22 @@ async def _run_scheduled_popular_review(
             user_id=int(target_chat_id),
         )
         session_id = await scenario.run_popular_review_pipeline(wait_for_handoff=True)
-        if session_id is not None:
-            ops_details["session_id"] = int(session_id)
-            launch_state = await _video_session_launch_state(db, int(session_id))
-            ops_details.update(launch_state)
-            if not _video_session_has_remote_handoff(launch_state):
-                reason = (
-                    "CherryFlash did not reach confirmed Kaggle handoff: "
-                    f"status={launch_state.get('session_status') or '-'} "
-                    f"dataset={launch_state.get('kaggle_dataset') or '-'} "
-                    f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
-                )
-                ops_details["error"] = reason
-                raise RuntimeError(reason)
+        if session_id is None:
+            reason = "CherryFlash did not create a popular_review session"
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
+        ops_details["session_id"] = int(session_id)
+        launch_state = await _video_session_launch_state(db, int(session_id))
+        ops_details.update(launch_state)
+        if not _video_session_has_remote_handoff(launch_state):
+            reason = (
+                "CherryFlash did not reach confirmed Kaggle handoff: "
+                f"status={launch_state.get('session_status') or '-'} "
+                f"dataset={launch_state.get('kaggle_dataset') or '-'} "
+                f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
+            )
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
     except Exception as exc:
         ops_details["error"] = str(exc) or type(exc).__name__
         await finish_ops_run(
