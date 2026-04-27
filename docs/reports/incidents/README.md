@@ -24,6 +24,9 @@
 - `INC-2026-04-27-prod-unresponsive-during-cherryflash-recovery.md`
   - Scope: Fly production runtime, `/healthz`, `/webhook`, `/start`, CherryFlash live/catch-up runner, and long-running production validation.
   - Must not regress: CherryFlash recovery must not continue while the serving bot is unhealthy; runtime file mirror or fallback evidence must be checked; `/healthz` and webhook readiness must be restored before same-day catch-up evidence is accepted.
+- `INC-2026-04-27-tg-monitoring-sticky-skipped-post.md`
+  - Scope: `source_parsing/telegram/handlers.py`, `telegram_scanned_message` idempotency, Telegram Monitoring import-only/recovery, Smart Update skipped results, `/daily` recently-added inventory, video announcement input pool.
+  - Must not regress: a Telegram post with `events_extracted > events_imported` must not become permanently metrics-only just because an earlier server import marked it `skipped` without diagnostics; valid future event payloads must be retryable, while intentional/permanent skips must persist a reason/breakdown.
 - `INC-2026-04-26-crumple-story-required-channel-fanout.md`
   - Scope: `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, `fly.toml`, `.env.example`, `video_announce/story_publish.py`, `kaggle/CrumpleVideo/story_publish.py`, embedded `crumple_video.ipynb`, scheduled `video_tomorrow` story status.
   - Must not regress: `me` remains the first blocking render-gate target, but production channel fanout (`@kenigevents`, `@lovekenig`) must be marked required so a missing channel story cannot finish as green `Story publish status: OK`.

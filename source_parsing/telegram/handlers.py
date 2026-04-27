@@ -3084,6 +3084,90 @@ async def _is_message_scanned(
         return await session.get(TelegramScannedMessage, (source_id, message_id))
 
 
+def _parse_event_payload_date(value: Any) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except Exception:
+        return None
+
+
+def _event_payload_can_still_be_imported(event_data: Any, *, today: date | None = None) -> bool:
+    if not isinstance(event_data, dict):
+        return False
+    current = today or date.today()
+    start = _parse_event_payload_date(event_data.get("date"))
+    end = _parse_event_payload_date(event_data.get("end_date"))
+    if end is not None:
+        return end >= current
+    if start is None:
+        return True
+    return start >= current
+
+
+def _has_reprocessable_event_payload(events: Any) -> bool:
+    if not isinstance(events, list):
+        return False
+    return any(_event_payload_can_still_be_imported(event_data) for event_data in events)
+
+
+async def _source_url_already_attached(db: Database, source_url: str | None) -> bool:
+    clean = str(source_url or "").strip()
+    if not clean:
+        return False
+    async with db.get_session() as session:
+        row = (
+            await session.execute(
+                select(EventSource.id)
+                .where(EventSource.source_url == clean)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    return row is not None
+
+
+async def _should_reprocess_incomplete_scan(
+    db: Database,
+    *,
+    existing: TelegramScannedMessage,
+    source_url: str | None,
+    events: Any,
+) -> bool:
+    status = str(getattr(existing, "status", "") or "").strip().lower()
+    if status not in {"skipped", "partial", "error"}:
+        return False
+    if str(getattr(existing, "error", "") or "").strip():
+        return False
+    try:
+        extracted = int(getattr(existing, "events_extracted", 0) or 0)
+        imported = int(getattr(existing, "events_imported", 0) or 0)
+    except Exception:
+        return False
+    if extracted <= 0 or imported >= extracted:
+        return False
+    if not _has_reprocessable_event_payload(events):
+        return False
+    if imported <= 0 and await _source_url_already_attached(db, source_url):
+        return False
+    return True
+
+
+def _scan_error_from_breakdown(
+    status: str,
+    skip_breakdown: dict[str, int] | defaultdict[str, int] | None,
+) -> str | None:
+    if status not in {"skipped", "partial", "error"}:
+        return None
+    if not skip_breakdown:
+        return None
+    payload = {
+        "skip_breakdown": dict(sorted(dict(skip_breakdown).items())),
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
 async def _mark_message_scanned(
     db: Database,
     *,
@@ -3194,6 +3278,8 @@ def _build_candidate(
     event_type = _normalize_event_type(event_data.get("event_type"))
     emoji = event_data.get("emoji")
     is_free = event_data.get("is_free")
+    if ticket_price_min == 0 and ticket_price_max in (0, None):
+        is_free = True
     pushkin_card = event_data.get("pushkin_card")
     search_digest = event_data.get("search_digest") or event_data.get("search_description")
 
@@ -4679,43 +4765,59 @@ async def process_telegram_results(
                 )
 
         if existing and not forced:
-            report.messages_metrics_only += 1
-            report.events_extracted_metrics_only += int(existing.events_extracted or 0)
-            logger.info(
-                "tg_monitor.message metrics_only run_id=%s source=%s message_id=%s",
-                report.run_id,
-                username,
-                message_id,
-            )
-            info = TelegramMonitorSkippedPostInfo(
-                source_username=username,
-                source_title=source_title or None,
-                message_id=message_id,
-                source_link=source_link,
-                status="metrics_only",
-                reason="already_scanned",
-                events_extracted=int(existing.events_extracted or 0),
-                events_imported=int(existing.events_imported or 0),
-                skip_breakdown={"metrics_only": 1},
-                event_titles=[],
-                source_excerpt=_build_excerpt(source_text),
-                metrics=metrics,
-                popularity=popularity,
-            )
-            report.metrics_only_posts.append(info)
-            if popularity:
-                report.popular_posts.append(info)
-            await _update_source_scan_meta(db, int(source.id), int(message_id))
-            await _notify_done(
-                status="metrics_only",
-                reason="already_scanned",
-                events_extracted_override=int(existing.events_extracted or 0),
-                events_imported_override=int(existing.events_imported or 0),
-                metrics_payload=metrics,
-                popularity_payload=popularity,
-                skip_breakdown_payload={"metrics_only": 1},
-            )
-            continue
+            if await _should_reprocess_incomplete_scan(
+                db,
+                existing=existing,
+                source_url=source_link,
+                events=events,
+            ):
+                logger.info(
+                    "tg_monitor.message reprocess_incomplete_scan run_id=%s source=%s message_id=%s status=%s extracted=%s imported=%s",
+                    report.run_id,
+                    username,
+                    message_id,
+                    existing.status,
+                    existing.events_extracted,
+                    existing.events_imported,
+                )
+            else:
+                report.messages_metrics_only += 1
+                report.events_extracted_metrics_only += int(existing.events_extracted or 0)
+                logger.info(
+                    "tg_monitor.message metrics_only run_id=%s source=%s message_id=%s",
+                    report.run_id,
+                    username,
+                    message_id,
+                )
+                info = TelegramMonitorSkippedPostInfo(
+                    source_username=username,
+                    source_title=source_title or None,
+                    message_id=message_id,
+                    source_link=source_link,
+                    status="metrics_only",
+                    reason="already_scanned",
+                    events_extracted=int(existing.events_extracted or 0),
+                    events_imported=int(existing.events_imported or 0),
+                    skip_breakdown={"metrics_only": 1},
+                    event_titles=[],
+                    source_excerpt=_build_excerpt(source_text),
+                    metrics=metrics,
+                    popularity=popularity,
+                )
+                report.metrics_only_posts.append(info)
+                if popularity:
+                    report.popular_posts.append(info)
+                await _update_source_scan_meta(db, int(source.id), int(message_id))
+                await _notify_done(
+                    status="metrics_only",
+                    reason="already_scanned",
+                    events_extracted_override=int(existing.events_extracted or 0),
+                    events_imported_override=int(existing.events_imported or 0),
+                    metrics_payload=metrics,
+                    popularity_payload=popularity,
+                    skip_breakdown_payload={"metrics_only": 1},
+                )
+                continue
         if forced:
             report.messages_forced += 1
         else:
@@ -5296,7 +5398,7 @@ async def process_telegram_results(
             status=final_status,
             events_extracted=events_extracted,
             events_imported=events_imported,
-            error=None,
+            error=_scan_error_from_breakdown(final_status, skip_breakdown),
         )
         if popularity:
             # Keep a short list of posts whose metrics exceed per-channel baselines.

@@ -118,6 +118,19 @@ Live validation (`2026-04-22`):
 Также мониторинг может сканировать сообщения «на несколько дней назад» (для обновления просмотров/лайков).
 Такие сообщения **не прогоняются через Smart Update повторно** (идемпотентность по `message_id`), а учитываются как `Посты только для метрик` в отчёте.
 
+Исключение из этой идемпотентности: legacy/incomplete scan rows, где `telegram_scanned_message.status`
+равен `skipped`/`partial`/`error`, `events_extracted > events_imported`, `error` пустой, в новом payload есть
+будущее/актуальное событие и `event_source` ещё не содержит URL поста. Такие строки считаются
+неполной попыткой импорта и переобрабатываются, чтобы валидный Telegram-пост не залипал навсегда как
+`metrics_only`. Новые неполные пропуски сохраняют компактный `skip_breakdown` в `telegram_scanned_message.error`;
+это делает намеренные/постоянные skip-решения диагностируемыми и не запускает бесконечный retry.
+Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky-skipped-post.md`.
+
+Для Telegram payload с противоречивыми price/free полями сервер трактует `ticket_price_min=0`
+и пустой/нулевой `ticket_price_max` как бесплатный вход даже если extractor ошибочно вернул
+`is_free=false`. Это защищает посты, где Telegram custom emoji `🆓` были удалены при экспорте,
+но LLM всё же сохранил числовой факт нулевой цены.
+
 ## Метрики постов и популярность (⭐/👍)
 
 Цель: собирать динамику `views/likes` у постов и подсвечивать «популярные» анонсы в отчётах Smart Update.

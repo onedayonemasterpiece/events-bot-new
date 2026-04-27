@@ -86,6 +86,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_tg_monitoring_sticky_skipped_post: docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky-skipped-post.md
     incident_daily_location_fragments: docs/reports/incidents/INC-2026-04-26-daily-location-fragments.md
     incident_crumple_story_prod_drift: docs/reports/incidents/INC-2026-04-10-crumple-story-prod-drift.md
     incident_crumple_story_channel_boosts_required: docs/reports/incidents/INC-2026-04-24-crumple-story-channel-boosts-required.md
