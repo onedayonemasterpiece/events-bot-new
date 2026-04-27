@@ -3124,6 +3124,16 @@ _EVENT_ACTION_INVITE_RE = re.compile(
     r"начал(о|а)\s+в\b"
     r")\b"
 )
+_EVENT_REGISTRATION_INVITE_RE = re.compile(
+    r"(?iu)\b("
+    r"(?:продолжа(?:ет)?ся\s+)?регистрац\w*\s+на\s+"
+    r"(?:лекци\w*|встреч\w*|экскурс\w*|мастер[- ]?класс\w*|"
+    r"кинопоказ\w*|показ\w*|концерт\w*|спектакл\w*|квиз\w*)|"
+    r"по\s+регистрац\w*[^\n]{0,120}\b"
+    r"(?:лекци\w*|встреч\w*|экскурс\w*|мастер[- ]?класс\w*|"
+    r"кинопоказ\w*|показ\w*|концерт\w*|спектакл\w*|квиз\w*)"
+    r")\b"
+)
 
 _PRICE_CONTEXT_RE = re.compile(
     r"(?iu)(?:"
@@ -3481,7 +3491,7 @@ def _looks_like_work_schedule_notice(title: str | None, text: str | None) -> boo
     # If the post is clearly announcing a concrete attendable event, keep it.
     # Use action verbs, not generic nouns ("выставка/концерт"), otherwise
     # work-schedule notices with occasional cultural terms slip through.
-    if _EVENT_ACTION_INVITE_RE.search(combined):
+    if _EVENT_ACTION_INVITE_RE.search(combined) or _EVENT_REGISTRATION_INVITE_RE.search(combined):
         return False
     # Explicit timetable-like details are a strong non-event signal.
     if has_schedule_details:
