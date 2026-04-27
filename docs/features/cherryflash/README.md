@@ -705,6 +705,9 @@ This section captures the latest intro-direction request as an explicit delta to
 - Anti-repeat evidence should stay inspectable from session rows:
   - `PUBLISHED_TEST` / `PUBLISHED_MAIN` sessions should carry a publication timestamp usable by CherryFlash cooldown queries;
   - selection traces should continue to show whether a chosen event was `fresh` rather than a hidden fallback repeat.
+- Poster eligibility must be durable before render handoff:
+  - candidates with no renderable `photo_urls` must be skipped before session launch;
+  - if selection rehydrates poster URLs from a Telegram/VK source post, those URLs must be written back to the event row before session items and `payload.json` are built, because the render path reloads events from SQLite.
 - Viewer-facing success and local session status must not drift silently:
   - a CherryFlash run that already reached successful Kaggle/story completion must not stay locally marked as pre-handoff `FAILED`;
   - incident triage on this surface must use both prod sqlite and Kaggle output evidence, because the remote render may outlive a brief runtime recovery race.

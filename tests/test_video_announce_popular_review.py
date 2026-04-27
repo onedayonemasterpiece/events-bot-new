@@ -17,6 +17,7 @@ from models import (
     VideoAnnounceSessionStatus,
 )
 from video_announce.popular_review import build_popular_review_selection
+from video_announce import popular_review as popular_review_module
 
 
 async def _seed_popular_post(
@@ -254,3 +255,119 @@ async def test_popular_review_raises_instead_of_repeat_fill_when_cooldown_leaves
             candidate_limit=10,
             now_utc=now_utc,
         )
+
+
+@pytest.mark.asyncio
+async def test_popular_review_persists_rehydrated_photo_urls(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 4, 27, 7, 0, tzinfo=timezone.utc)
+
+    async def fake_rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
+        if str(source_post_url or "").endswith("/1"):
+            return ["https://example.com/rehydrated.jpg"]
+        return []
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "_rehydrate_public_tg_photo_urls",
+        fake_rehydrate_public_tg_photo_urls,
+    )
+
+    async with db.get_session() as session:
+        source = TelegramSource(username="popular", title="Popular")
+        session.add(source)
+        await session.commit()
+        await session.refresh(source)
+        source_id = int(source.id)
+
+        rehydrated = Event(
+            title="Rehydrated Poster",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-04-30",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=[],
+            photo_count=0,
+            source_post_url="https://t.me/popular/1",
+        )
+        direct = Event(
+            title="Direct Poster",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-04-30",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/direct.jpg"],
+            photo_count=1,
+            source_post_url="https://t.me/popular/2",
+        )
+        missing = Event(
+            title="Missing Poster",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-04-30",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=[],
+            photo_count=0,
+            source_post_url="https://t.me/popular/3",
+        )
+        session.add_all([rehydrated, direct, missing])
+        await session.commit()
+        for event in (rehydrated, direct, missing):
+            await session.refresh(event)
+
+    await _seed_popular_post(
+        db,
+        event=rehydrated,
+        source_id=source_id,
+        message_id=1,
+        views=300,
+        now_utc=now_utc,
+    )
+    await _seed_popular_post(
+        db,
+        event=direct,
+        source_id=source_id,
+        message_id=2,
+        views=250,
+        now_utc=now_utc,
+    )
+    await _seed_popular_post(
+        db,
+        event=missing,
+        source_id=source_id,
+        message_id=3,
+        views=240,
+        now_utc=now_utc,
+    )
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=1,
+        min_events=1,
+        anti_repeat_days=7,
+        candidate_limit=10,
+        now_utc=now_utc,
+    )
+
+    assert selection.event_ids == [int(rehydrated.id)]
+    assert int(missing.id) not in selection.event_ids
+
+    async with db.get_session() as session:
+        persisted = await session.get(Event, int(rehydrated.id))
+
+    assert persisted is not None
+    assert persisted.photo_urls == ["https://example.com/rehydrated.jpg"]
+    assert persisted.photo_count == 1

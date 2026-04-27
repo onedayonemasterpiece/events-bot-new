@@ -192,7 +192,25 @@ async def _rehydrate_vk_photo_urls(source_post_url: str | None) -> list[str]:
     return _renderable_photo_urls([str(url or "").strip() for url in photos])
 
 
-async def _ensure_renderable_photo_urls(ev: Event) -> list[str]:
+async def _persist_rehydrated_photo_urls(
+    db,
+    *,
+    event_id: int | None,
+    photo_urls: list[str],
+) -> None:
+    if event_id is None or not photo_urls:
+        return
+    async with db.get_session() as session:
+        fresh = await session.get(Event, int(event_id))
+        if fresh is None:
+            return
+        fresh.photo_urls = list(photo_urls)
+        fresh.photo_count = len(photo_urls)
+        session.add(fresh)
+        await session.commit()
+
+
+async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
     direct_urls = _renderable_photo_urls(_event_photo_urls(ev))
     if direct_urls:
         return direct_urls
@@ -217,6 +235,12 @@ async def _ensure_renderable_photo_urls(ev: Event) -> list[str]:
         if refreshed:
             ev.photo_urls = list(refreshed)
             ev.photo_count = len(refreshed)
+            if db is not None:
+                await _persist_rehydrated_photo_urls(
+                    db,
+                    event_id=getattr(ev, "id", None),
+                    photo_urls=refreshed,
+                )
             logger.info(
                 "video_announce.popular_review: rehydrated poster urls event_id=%s source=%s count=%s",
                 getattr(ev, "id", None),
@@ -364,7 +388,7 @@ async def build_popular_review_selection(
             continue
         if not _starts_today_or_in_future(event, today=today):
             continue
-        photo_urls = await _ensure_renderable_photo_urls(event)
+        photo_urls = await _ensure_renderable_photo_urls(event, db=db)
         if not photo_urls:
             logger.info(
                 "video_announce.popular_review: skipped event without renderable posters event_id=%s source=%s",
