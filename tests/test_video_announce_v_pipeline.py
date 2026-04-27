@@ -430,7 +430,7 @@ async def test_run_popular_review_pipeline_uses_cherryflash_kernel_and_keniggpt(
 
 
 @pytest.mark.asyncio
-async def test_render_and_notify_cherryflash_continues_after_bind_wait_failure_and_persists_actual_kernel_ref(
+async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confirm_dataset(
     monkeypatch, tmp_path
 ):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -525,10 +525,10 @@ async def test_render_and_notify_cherryflash_continues_after_bind_wait_failure_a
     async with db.get_session() as session:
         refreshed = await session.get(VideoAnnounceSession, session_id)
         assert refreshed is not None
-        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
-        assert refreshed.error in (None, "")
-        assert refreshed.kaggle_dataset == "zigomaro/cherryflash-session-161"
-        assert refreshed.kaggle_kernel_ref == "zigomaro/cherryflash"
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.error == "kaggle push failed"
+        assert refreshed.kaggle_dataset is None
+        assert refreshed.kaggle_kernel_ref == "local:CherryFlash"
 
 
 @pytest.mark.asyncio

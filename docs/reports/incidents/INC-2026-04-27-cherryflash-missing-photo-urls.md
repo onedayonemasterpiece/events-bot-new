@@ -6,7 +6,7 @@ Service: scheduled CherryFlash `popular_review`
 Opened: 2026-04-27
 Closed: —
 Owners: Codex / events bot operator
-Related incidents: `INC-2026-04-23-cherryflash-pre-handoff-loss`, `INC-2026-04-22-cherryflash-false-failed-after-successful-story-publish`
+Related incidents: `INC-2026-04-27-prod-unresponsive-during-cherryflash-recovery`, `INC-2026-04-23-cherryflash-pre-handoff-loss`, `INC-2026-04-22-cherryflash-false-failed-after-successful-story-publish`
 Related docs: `docs/features/cherryflash/README.md`, `docs/operations/incident-management.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -17,7 +17,8 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - The daily CherryFlash story/video was not published in the expected first-half-of-day window.
 - Operator notifications showed repeated failed sessions instead of one recoverable handoff.
-- The story fanout chain for the current day stayed empty until a production fix and same-day catch-up rerun.
+- The story fanout chain for the current day stayed empty until production fixes and a same-day catch-up rerun.
+- A later catch-up appeared green in Kaggle logs but executed an older mounted `cherryflash-session-*` bundle, so it did not prove that the current-day CherryFlash selection or configured Business fanout were actually restored.
 
 ## Detection
 
@@ -39,6 +40,8 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - 2026-04-27: first same-day catch-up after the durability fix exposed a second failure mode: a rehydrated poster write for event `3398` hit transient SQLite `database is locked`, aborting popularity selection before a valid set could be launched.
 - 2026-04-27: a later catch-up created session `#218` and reached remote Kaggle handoff (`zigomaro/cherryflash-session-218-1777292942`, `zigomaro/cherryflash`), while the lock path remained open as a regression risk for future same-day attempts.
 - 2026-04-27: Kaggle `#218` preflight then exposed a story fanout defect: configured Telegram Business targets were present in `story_publish.json`, but the mounted encrypted auth payload did not contain their `business_connection` secrets, so the notebook continued after primary-channel preflight while personal-account stories would be skipped.
+- 2026-04-27: after the Business-secret fix, a later Kaggle run completed but logged `Using mounted CherryFlash bundle at /kaggle/input/cherryflash-session-192-1777189467` instead of the freshly launched session dataset. It published only the three channel targets shown by the stale bundle and did not include the configured Business targets.
+- 2026-04-27: the operator reported that no visible stories appeared despite Kaggle reporting `Story publish status: OK`, so closure evidence must now require both fresh dataset binding and publication fanout evidence for the current session, not only a terminal notebook status.
 
 ## Root Cause
 
@@ -47,6 +50,9 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 3. The rehydrated URLs were not persisted to SQLite.
 4. `start_render()` later rebuilt session items and `payload.json` from freshly loaded event rows, so the same selected event IDs again had empty `photo_urls`.
 5. `_render_and_notify()` correctly failed the pre-Kaggle payload validation, but the scheduler kept retrying the same invalid persisted rows.
+6. A later repair still allowed an older `cherryflash-session-*` dataset to remain attached to the shared `zigomaro/cherryflash` kernel metadata.
+7. The notebook selected the stale mounted session bundle from Kaggle inputs, so it rendered and published according to old session config even though the server-side catch-up was for the current day.
+8. The server persisted handoff metadata before verifying that Kaggle metadata exposed the fresh dataset binding, making stale-bundle execution look like a valid daily run.
 
 ## Contributing Factors
 
@@ -54,6 +60,8 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - The existing no-photo candidate guard proved selection-time intent but did not assert that selected events remain renderable after session persistence.
 - The first durability hotfix made poster rehydrate writes mandatory but did not handle transient SQLite writer contention; a locked write could still crash the entire popularity selection instead of skipping only the non-durable candidate.
 - CherryFlash Business story targets were still delivered through the shared static story-secrets dataset path, so Kaggle could mount a stale auth payload that did not match the freshly generated session `story_publish.json`; those targets were also treated as non-blocking fanout during preflight.
+- The previous CherryFlash contract treated delayed `dataset_sources` metadata as non-fatal telemetry after a successful `kernels_push`; that was too permissive once old per-run datasets could coexist with the fresh session dataset on the same Kaggle kernel.
+- Kaggle notebook logs did not print enough non-secret story runtime matching evidence to show which config and encrypted Business secrets were actually loaded before render/publish.
 - Previous pre-handoff incidents covered local/Kaggle status drift, not this poster durability boundary.
 
 ## Automation Contract
@@ -62,6 +70,8 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - Changing CherryFlash popular-review candidate selection, poster fallback/rehydration, session item persistence, or render payload validation.
 - Changing scheduled CherryFlash catch-up logic for local-only failed sessions.
+- Changing CherryFlash Kaggle kernel deploy, `dataset_sources` merge/prune behavior, handoff persistence, or notebook source-folder resolution.
+- Changing CherryFlash story config/secret bundling or Kaggle-side story preflight/publish logging.
 
 ### Affected surfaces
 
@@ -71,12 +81,15 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - scheduled `popular_review` catch-up/watchdog path
 - prod SQLite `event`, `videoannounce_session`, `videoannounce_item`, and `ops_run` rows
 - Kaggle `cherryflash-session-*` dataset and `zigomaro/cherryflash` kernel handoff
+- Kaggle story runtime config/secret loader and publish fanout logs
 
 ### Mandatory checks before closure or deploy
 
 - Unit coverage proving a selected event with rehydrated poster URLs persists those URLs to the event row before render handoff.
 - Unit coverage proving a rehydrated candidate is skipped, not selected or allowed to crash the run, when its poster repair cannot be persisted after SQLite lock handling.
 - Unit coverage proving CherryFlash Business story targets are blocking/required and a missing Business secret fails preflight before render.
+- Unit coverage proving CherryFlash kernel deploy prunes older `cherryflash-session-*` sources while preserving static inputs.
+- Unit coverage proving CherryFlash fails before persisting Kaggle handoff if the fresh dataset bind wait does not confirm the expected `dataset_sources`.
 - Existing CherryFlash popular-review regression tests.
 - Existing CherryFlash pre-handoff/catch-up regression checks from `INC-2026-04-23-cherryflash-pre-handoff-loss`.
 - `python -m py_compile` for touched video announce/scheduler modules.
@@ -91,7 +104,8 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Test command output for the poster persistence regression.
 - Deployed SHA reachable from `origin/main`.
 - Post-deploy CherryFlash session with non-local Kaggle dataset/kernel evidence.
-- Story publication or terminal story publish report evidence for the 2026-04-27 catch-up.
+- Post-deploy kernel metadata evidence showing the current `cherryflash-session-*` source is attached and older CherryFlash session datasets are absent.
+- Story publication evidence for the 2026-04-27 catch-up that includes the fresh session dataset, channel targets, configured Business target count, matching encrypted Business secret count, and terminal story publish report. A stale `cherryflash-session-192-*` run is not valid closure evidence.
 
 ## Immediate Mitigation
 
@@ -104,6 +118,9 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Rehydrated poster persistence now retries transient SQLite lock errors for a bounded window and treats non-durable repairs as candidate-ineligible, so one locked event write cannot crash the whole CherryFlash popularity set or produce a selected event that reloads without photos.
 - Scheduled CherryFlash now treats a `None` session id from `run_popular_review_pipeline()` as a failed `ops_run`, so no-op catch-up attempts remain visible and retryable.
 - CherryFlash now writes encrypted story secrets into the same per-run `cherryflash-session-*` dataset as `story_publish.json`, and configured Telegram Business targets are generated as `blocking=true` / `required=true`.
+- CherryFlash kernel deploy now removes older `cherryflash-session-*` dataset sources before adding the fresh per-run dataset, while preserving static inputs.
+- CherryFlash now waits for Kaggle metadata to confirm the fresh dataset binding before persisting local handoff metadata; if the bind wait fails, the session fails closed instead of letting a stale mounted bundle masquerade as a successful run.
+- The Kaggle story runtime now logs non-secret config/secret matching diagnostics at startup, including target labels, Business target count, encrypted Business secret count, and missing Business hashes.
 - Added regression coverage for the exact missing durability boundary.
 - Updated the CherryFlash feature doc and incident index with the new contract.
 
@@ -111,6 +128,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - [ ] Confirm whether the scheduler should alert after repeated same-root local-only failures instead of waiting for operator observation.
 - [ ] Consider adding a compact admin report row that shows selected event IDs with persisted poster counts before Kaggle launch.
+- [ ] Add an operator-facing story publication audit that compares configured channel/Business targets with observed publish attempts and terminal per-target results.
 
 ## Release And Closure Evidence
 

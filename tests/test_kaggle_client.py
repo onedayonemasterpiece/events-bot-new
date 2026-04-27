@@ -280,3 +280,69 @@ def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkey
 
     assert result == "zigomaro/cherryflash"
     assert calls["count"] == 2
+
+
+def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CherryFlash"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/cherryflash",
+  "title": "CherryFlash",
+  "code_file": "cherryflash.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/cherryflash-session-192-1777189467",
+    "zigomaro/crumple-video-story-secrets-cipher"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "cherryflash.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_sources: list[str] = []
+
+    class Response:
+        ref = "/code/zigomaro/cherryflash"
+        versionNumber = 77
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            pushed_sources.extend(meta["dataset_sources"])
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "cherryflash", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "zigomaro/cherryflash",
+        ["zigomaro/cherryflash-session-219-1777298000"],
+    )
+
+    assert result == "zigomaro/cherryflash"
+    assert pushed_sources == [
+        "zigomaro/crumple-video-story-secrets-cipher",
+        "zigomaro/cherryflash-session-219-1777298000",
+    ]

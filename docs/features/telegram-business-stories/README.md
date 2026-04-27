@@ -33,6 +33,7 @@
 - При получении `business_connection` (и при восстановлении через `business_message`/`edited_business_message`) бот шлёт DM суперадмину с `connection_hash`, `user_hash`, `is_enabled`, `can_manage_stories` и пометкой `🆕 NEW` / `🔄 UPDATE`. Уведомление приходит при первом кэшировании подключения, а также при изменении `is_enabled`/`can_manage_stories`. `business_connection` всегда шлёт DM; обычные `business_message` без смены состояния не спамят.
 - `BusinessConnection.date` приходит из aiogram как `datetime`; перед `json.dumps` он конвертируется в unix timestamp. Сборки до этого фикса падали на каждом апдейте с `TypeError: Object of type datetime is not JSON serializable` и не создавали файл кэша вообще.
 - `load_cached_business_connections` пропускает записи, которые не расшифровываются текущим Fernet-ключом (после ротации `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BUSINESS_FERNET_KEY`), пишет в лог `business connection decrypt failed connection_hash=...` и просит владельца подключения переконнектить бот.
+- Kaggle story runtime may log only non-secret matching diagnostics for Business story fanout: configured target labels, number of Business targets, number of encrypted Business secrets, and missing `connection_hash` values. It must never print raw `business_connection_id`, Telegram user id, bot token, or personal account handle.
 
 ## Story publish requirements
 

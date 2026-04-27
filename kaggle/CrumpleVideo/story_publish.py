@@ -82,6 +82,31 @@ def load_story_publish_runtime(*, search_roots: list[Path], log) -> dict[str, An
     auth = json.loads(auth_raw.decode("utf-8"))
     if not isinstance(auth, dict):
         raise RuntimeError("Decrypted story auth payload must be an object")
+    target_labels = [
+        str(item.get("label") or item.get("peer") or "?")
+        for item in config.get("targets") or []
+        if isinstance(item, dict)
+    ]
+    config_business_hashes = [
+        str(item.get("business_connection_hash") or "").strip()
+        for item in config.get("targets") or []
+        if isinstance(item, dict)
+        and str(item.get("transport") or "").strip().lower() == "telegram_business"
+    ]
+    auth_business_hashes = [
+        str(item.get("connection_hash") or "").strip()
+        for item in auth.get("business_connections") or []
+        if isinstance(item, dict)
+    ]
+    missing_business_hashes = [
+        item for item in config_business_hashes if item and item not in set(auth_business_hashes)
+    ]
+    log(
+        "Story runtime loaded: "
+        f"config={config_path} cipher={cipher_path} key={key_path} "
+        f"targets={target_labels} business_targets={len(config_business_hashes)} "
+        f"business_secrets={len(auth_business_hashes)} missing_business={missing_business_hashes}"
+    )
     return {"config": config, "auth": auth}
 
 

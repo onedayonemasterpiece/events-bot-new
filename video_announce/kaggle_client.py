@@ -84,6 +84,18 @@ def _extract_save_kernel_response(response: Any) -> dict[str, Any]:
     }
 
 
+def _dataset_slug_tail(dataset_slug: str) -> str:
+    return str(dataset_slug or "").strip().split("/", 1)[-1].casefold()
+
+
+def _is_cherryflash_session_dataset(dataset_slug: str) -> bool:
+    return _dataset_slug_tail(dataset_slug).startswith("cherryflash-session-")
+
+
+def _is_cherryflash_kernel_id(kernel_id: str | None) -> bool:
+    return str(kernel_id or "").strip().casefold().endswith("/cherryflash")
+
+
 def _is_gpu_quota_error(message: str) -> bool:
     lowered = str(message or "").casefold()
     return "gpu quota" in lowered or "weekly gpu quota" in lowered
@@ -747,7 +759,10 @@ class KaggleClient:
                     )
                     meta_data["id"] = new_id
             
-            # Set dataset sources for this session while preserving any static inputs
+            # Set dataset sources for this session while preserving static inputs.
+            # CherryFlash must not keep old per-run session datasets attached:
+            # Kaggle can otherwise execute a stale mounted bundle while the
+            # server records a fresh handoff.
             requested_sources = (
                 [dataset_sources]
                 if isinstance(dataset_sources, str)
@@ -758,6 +773,12 @@ class KaggleClient:
                 for item in (meta_data.get("dataset_sources") or [])
                 if str(item).strip()
             ]
+            if _is_cherryflash_kernel_id(str(meta_data.get("id") or "")):
+                existing_sources = [
+                    item
+                    for item in existing_sources
+                    if not _is_cherryflash_session_dataset(item)
+                ]
             for dataset_slug in requested_sources:
                 dataset_slug = str(dataset_slug).strip()
                 if dataset_slug and dataset_slug not in existing_sources:
