@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -7,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 
 from handlers.popular_posts_cmd import _load_top_items, _resolve_telegraph_map
 from models import Event, VideoAnnounceItem, VideoAnnounceSession, VideoAnnounceSessionStatus
@@ -32,6 +34,14 @@ RECENT_PUBLISHED_VIDEO_SESSION_STATUSES = {
 }
 
 POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT = 3
+REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC: tuple[float, ...] = (
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    3.0,
+    5.0,
+)
 
 
 @dataclass(frozen=True)
@@ -101,6 +111,15 @@ def _renderable_photo_urls(urls: list[str]) -> list[str]:
         for url in urls
         if url and not _is_catbox_url(url)
     ][:POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT]
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return (
+        "database is locked" in text
+        or "database table is locked" in text
+        or "database is busy" in text
+    )
 
 
 async def _rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
@@ -197,17 +216,46 @@ async def _persist_rehydrated_photo_urls(
     *,
     event_id: int | None,
     photo_urls: list[str],
-) -> None:
+) -> bool:
     if event_id is None or not photo_urls:
-        return
-    async with db.get_session() as session:
-        fresh = await session.get(Event, int(event_id))
-        if fresh is None:
-            return
-        fresh.photo_urls = list(photo_urls)
-        fresh.photo_count = len(photo_urls)
-        session.add(fresh)
-        await session.commit()
+        return False
+
+    last_lock_error: OperationalError | None = None
+    for attempt in range(len(REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC) + 1):
+        try:
+            async with db.get_session() as session:
+                fresh = await session.get(Event, int(event_id))
+                if fresh is None:
+                    return False
+                fresh.photo_urls = list(photo_urls)
+                fresh.photo_count = len(photo_urls)
+                session.add(fresh)
+                await session.commit()
+            return True
+        except OperationalError as exc:
+            if not _is_sqlite_lock_error(exc):
+                raise
+            last_lock_error = exc
+            if attempt >= len(REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC):
+                break
+            delay = REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC[attempt]
+            logger.warning(
+                "video_announce.popular_review: sqlite locked while persisting rehydrated poster urls "
+                "event_id=%s attempt=%s retry_in=%.2fs",
+                event_id,
+                attempt + 1,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+    logger.warning(
+        "video_announce.popular_review: skipped rehydrated poster urls after sqlite lock retries "
+        "event_id=%s count=%s error=%s",
+        event_id,
+        len(photo_urls),
+        last_lock_error,
+    )
+    return False
 
 
 async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
@@ -236,11 +284,20 @@ async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
             ev.photo_urls = list(refreshed)
             ev.photo_count = len(refreshed)
             if db is not None:
-                await _persist_rehydrated_photo_urls(
+                persisted = await _persist_rehydrated_photo_urls(
                     db,
                     event_id=getattr(ev, "id", None),
                     photo_urls=refreshed,
                 )
+                if not persisted:
+                    logger.warning(
+                        "video_announce.popular_review: rehydrated poster urls are not durable; "
+                        "skipping event_id=%s source=%s count=%s",
+                        getattr(ev, "id", None),
+                        source_url,
+                        len(refreshed),
+                    )
+                    return []
             logger.info(
                 "video_announce.popular_review: rehydrated poster urls event_id=%s source=%s count=%s",
                 getattr(ev, "id", None),

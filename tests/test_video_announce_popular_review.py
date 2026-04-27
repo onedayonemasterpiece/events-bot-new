@@ -371,3 +371,43 @@ async def test_popular_review_persists_rehydrated_photo_urls(tmp_path, monkeypat
     assert persisted is not None
     assert persisted.photo_urls == ["https://example.com/rehydrated.jpg"]
     assert persisted.photo_count == 1
+
+
+@pytest.mark.asyncio
+async def test_popular_review_skips_rehydrated_event_when_persist_fails(monkeypatch):
+    async def fake_rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
+        return ["https://example.com/rehydrated.jpg"]
+
+    async def fake_persist_rehydrated_photo_urls(*args, **kwargs) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "_rehydrate_public_tg_photo_urls",
+        fake_rehydrate_public_tg_photo_urls,
+    )
+    monkeypatch.setattr(
+        popular_review_module,
+        "_persist_rehydrated_photo_urls",
+        fake_persist_rehydrated_photo_urls,
+    )
+
+    event = Event(
+        title="Locked Persist",
+        description="Description",
+        short_description="Short",
+        search_digest="Digest",
+        source_text="source",
+        date="2026-04-30",
+        time="19:00",
+        location_name="Venue",
+        city="Калининград",
+        photo_urls=[],
+        photo_count=0,
+        source_post_url="https://t.me/popular/1",
+    )
+    event.id = 123
+
+    urls = await popular_review_module._ensure_renderable_photo_urls(event, db=object())
+
+    assert urls == []

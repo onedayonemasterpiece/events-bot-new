@@ -708,6 +708,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - Poster eligibility must be durable before render handoff:
   - candidates with no renderable `photo_urls` must be skipped before session launch;
   - if selection rehydrates poster URLs from a Telegram/VK source post, those URLs must be written back to the event row before session items and `payload.json` are built, because the render path reloads events from SQLite.
+  - if SQLite is temporarily locked while writing rehydrated poster URLs, CherryFlash must retry for a bounded window and then skip only that candidate if the repair still cannot be made durable; the whole popularity run must not crash on one locked poster write.
 - Viewer-facing success and local session status must not drift silently:
   - a CherryFlash run that already reached successful Kaggle/story completion must not stay locally marked as pre-handoff `FAILED`;
   - incident triage on this surface must use both prod sqlite and Kaggle output evidence, because the remote render may outlive a brief runtime recovery race.
@@ -761,6 +762,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - the current Kaggle preproduction entrypoint must remain compatible with Kaggle's bundled `moviepy` layout, because the approval clip assembly happens inside `scripts/render_mobilefeed_intro_scene1_approval.py` in the remote runtime;
   - CherryFlash runtime payloads may carry viewer-facing formatted dates inside the selection manifest, so intro/scene loaders must accept either ISO dates or preformatted date strings and must not crash on already-rendered copies such as `3 мая`;
   - the launcher/runtime path must tolerate mixed ORM + `raw_conn()` access on the same SQLite DB during live popularity selection; if SQLite temporarily refuses `PRAGMA journal_mode=...` with `database is locked`, CherryFlash should continue rather than abort before the session is even created;
+  - rehydrated poster persistence must also tolerate transient SQLite locks: retry, require a durable event-row write before selecting the candidate, and skip the candidate rather than selecting an event that will reload as no-photo in `payload.json`;
   - canonical kernel ref for the current preproduction route: `zigomaro/cherryflash`;
   - the existing `CrumpleVideo` runtime remains separate and must not be used as the CherryFlash render/notebook home.
 - Current working refinement track for approval:
