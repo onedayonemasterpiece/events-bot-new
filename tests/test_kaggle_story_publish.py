@@ -461,6 +461,7 @@ async def test_story_publish_posts_business_target_via_bot_api(
     data = calls[0]["data"]
     assert data["business_connection_id"] == "biz-secret"
     assert data["active_period"] == "43200"
+    assert data["post_to_chat_page"] == "true"
     assert "biz-secret" not in str(report)
 
 

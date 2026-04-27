@@ -693,6 +693,7 @@ def _post_business_story(
         "business_connection_id": connection_id,
         "content": json.dumps(content, ensure_ascii=False),
         "active_period": str(int(config.get("period_seconds") or 24 * 60 * 60)),
+        "post_to_chat_page": "true",
     }
     caption = str(config.get("caption") or "").strip()
     if caption:

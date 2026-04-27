@@ -12306,6 +12306,7 @@ async def _post_business_story_photo(
         json.dumps({"type": "photo", "photo": "attach://photo_attach"}, ensure_ascii=False),
     )
     form.add_field("active_period", str(_CHECK_BUSINESS_ACTIVE_PERIOD))
+    form.add_field("post_to_chat_page", "true")
     form.add_field(
         "photo_attach",
         photo_bytes,

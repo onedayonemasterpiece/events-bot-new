@@ -21,6 +21,7 @@
   - `story_publish.json` содержит только hash-label вида `business:<hash>`, а реальные `business_connection_id` и bot token передаются в Kaggle только внутри encrypted story secrets;
   - для CherryFlash encrypted story secrets должны лежать в том же `cherryflash-session-*` dataset, что и `story_publish.json`, чтобы Kaggle не смонтировал устаревшую статическую версию secrets dataset;
   - выбранные Business targets для CherryFlash являются `blocking=true` и `required=true`: если secret отсутствует или права уже недоступны, notebook должен упасть на preflight до дорогого рендера, а не публиковать неполный fanout;
+  - CherryFlash и `/check_business` обязаны передавать `post_to_chat_page=true` в Bot API `postStory`, чтобы story была видима на странице Business account, а не только как текущая активная сторис;
   - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
 
@@ -45,5 +46,6 @@
 - фото `1080x1920`, до `10 MB`, uploaded as multipart `attach://...`;
 - видео `720x1280`, streamable `H.265` в MPEG4, до `30 MB`, uploaded as multipart `attach://...`;
 - `active_period`: `21600`, `43200`, `86400` или `172800`.
+- `post_to_chat_page=true` для Business story публикаций, чтобы story оставалась доступной на странице аккаунта после публикации/истечения.
 
 Если webhook не был подписан на `business_connection` в момент подключения, Telegram не отдаст старый connection update повторно. Тогда нужно временно ловить update через controlled polling или попросить пользователя пересохранить Business подключение.

@@ -42,6 +42,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - 2026-04-27: Kaggle `#218` preflight then exposed a story fanout defect: configured Telegram Business targets were present in `story_publish.json`, but the mounted encrypted auth payload did not contain their `business_connection` secrets, so the notebook continued after primary-channel preflight while personal-account stories would be skipped.
 - 2026-04-27: after the Business-secret fix, a later Kaggle run completed but logged `Using mounted CherryFlash bundle at /kaggle/input/cherryflash-session-192-1777189467` instead of the freshly launched session dataset. It published only the three channel targets shown by the stale bundle and did not include the configured Business targets.
 - 2026-04-27: the operator reported that no visible stories appeared despite Kaggle reporting `Story publish status: OK`, so closure evidence must now require both fresh dataset binding and publication fanout evidence for the current session, not only a terminal notebook status.
+- 2026-04-27: session `#221` used the fresh `cherryflash-session-221-*` dataset and Kaggle reported successful Business `postStory` responses, but the operator observed that Business stories were visible as active stories while missing from the expected profile/page story list. Investigation found that Business Bot API calls did not pass `post_to_chat_page=true`.
 
 ## Root Cause
 
@@ -62,6 +63,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - CherryFlash Business story targets were still delivered through the shared static story-secrets dataset path, so Kaggle could mount a stale auth payload that did not match the freshly generated session `story_publish.json`; those targets were also treated as non-blocking fanout during preflight.
 - The previous CherryFlash contract treated delayed `dataset_sources` metadata as non-fatal telemetry after a successful `kernels_push`; that was too permissive once old per-run datasets could coexist with the fresh session dataset on the same Kaggle kernel.
 - Kaggle notebook logs did not print enough non-secret story runtime matching evidence to show which config and encrypted Business secrets were actually loaded before render/publish.
+- Business Bot API success was treated as sufficient publication evidence, but the product requirement also needs account page/profile-list visibility; Telegram exposes this through the separate `post_to_chat_page` flag.
 - Previous pre-handoff incidents covered local/Kaggle status drift, not this poster durability boundary.
 
 ## Automation Contract
@@ -72,6 +74,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Changing scheduled CherryFlash catch-up logic for local-only failed sessions.
 - Changing CherryFlash Kaggle kernel deploy, `dataset_sources` merge/prune behavior, handoff persistence, or notebook source-folder resolution.
 - Changing CherryFlash story config/secret bundling or Kaggle-side story preflight/publish logging.
+- Changing Telegram Business story publication, including `postStory` parameters and `/check_business` smoke behavior.
 
 ### Affected surfaces
 
@@ -90,6 +93,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Unit coverage proving CherryFlash Business story targets are blocking/required and a missing Business secret fails preflight before render.
 - Unit coverage proving CherryFlash kernel deploy prunes older `cherryflash-session-*` sources while preserving static inputs.
 - Unit coverage proving CherryFlash fails before persisting Kaggle handoff if the fresh dataset bind wait does not confirm the expected `dataset_sources`.
+- Unit coverage proving Business `postStory` calls include `post_to_chat_page=true`.
 - Existing CherryFlash popular-review regression tests.
 - Existing CherryFlash pre-handoff/catch-up regression checks from `INC-2026-04-23-cherryflash-pre-handoff-loss`.
 - `python -m py_compile` for touched video announce/scheduler modules.
@@ -106,6 +110,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Post-deploy CherryFlash session with non-local Kaggle dataset/kernel evidence.
 - Post-deploy kernel metadata evidence showing the current `cherryflash-session-*` source is attached and older CherryFlash session datasets are absent.
 - Story publication evidence for the 2026-04-27 catch-up that includes the fresh session dataset, channel targets, configured Business target count, matching encrypted Business secret count, and terminal story publish report. A stale `cherryflash-session-192-*` run is not valid closure evidence.
+- Business story visibility evidence must distinguish an active story ring from profile/page story-list visibility.
 
 ## Immediate Mitigation
 
@@ -121,6 +126,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - CherryFlash kernel deploy now removes older `cherryflash-session-*` dataset sources before adding the fresh per-run dataset, while preserving static inputs.
 - CherryFlash now waits for Kaggle metadata to confirm the fresh dataset binding before persisting local handoff metadata; if the bind wait fails, the session fails closed instead of letting a stale mounted bundle masquerade as a successful run.
 - The Kaggle story runtime now logs non-secret config/secret matching diagnostics at startup, including target labels, Business target count, encrypted Business secret count, and missing Business hashes.
+- Business `postStory` calls from CherryFlash and `/check_business` now pass `post_to_chat_page=true` so accepted stories also target account page/profile visibility.
 - Added regression coverage for the exact missing durability boundary.
 - Updated the CherryFlash feature doc and incident index with the new contract.
 
