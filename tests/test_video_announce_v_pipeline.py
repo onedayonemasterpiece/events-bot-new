@@ -806,8 +806,12 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
             "targets": [{"peer": "@keniggpt", "label": "@keniggpt", "delay_seconds": 0}],
         }
 
-    async def _fake_ensure_story_secret_datasets(client):  # noqa: ARG001
-        return ["zigomaro/story-cipher", "zigomaro/story-key"]
+    def _fake_write_story_secret_files(path):  # noqa: ANN001
+        cipher_path = Path(path) / "story_publish.enc"
+        key_path = Path(path) / "story_publish.key"
+        cipher_path.write_bytes(b"cipher")
+        key_path.write_bytes(b"key")
+        return cipher_path, key_path
 
     monkeypatch.setattr(scenario, "_prefetch_scene_images", _fake_prefetch)
     monkeypatch.setattr(scenario, "_selected_event_dates", _fake_selected_event_dates)
@@ -816,8 +820,8 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
         _fake_build_story_publish_config,
     )
     monkeypatch.setattr(
-        "video_announce.scenario.ensure_story_secret_datasets",
-        _fake_ensure_story_secret_datasets,
+        "video_announce.scenario.write_story_secret_files",
+        _fake_write_story_secret_files,
     )
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
 
@@ -857,10 +861,12 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
     )
 
     assert dataset_id.startswith("zigomaro/cherryflash-session-42-")
-    assert story_sources == ["zigomaro/story-cipher", "zigomaro/story-key"]
+    assert story_sources == []
     assert len(calls) == 1
     assert calls[0][0] == "create_dataset"
     assert (snapshot_dir / "story_publish.json").exists()
+    assert (snapshot_dir / "story_publish.enc").exists()
+    assert (snapshot_dir / "story_publish.key").exists()
     assert (snapshot_dir / "kaggle_common" / "story_publish.py").exists()
 
     selection_manifest = json.loads(

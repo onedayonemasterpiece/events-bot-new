@@ -38,6 +38,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - 2026-04-27: production event rows confirmed event `4261` and `4262` had `photo_count=0` and serialized `photo_urls=[]`, while sibling picked events already had one persisted poster each.
 - 2026-04-27: first same-day catch-up after the durability fix exposed a second failure mode: a rehydrated poster write for event `3398` hit transient SQLite `database is locked`, aborting popularity selection before a valid set could be launched.
 - 2026-04-27: a later catch-up created session `#218` and reached remote Kaggle handoff (`zigomaro/cherryflash-session-218-1777292942`, `zigomaro/cherryflash`), while the lock path remained open as a regression risk for future same-day attempts.
+- 2026-04-27: Kaggle `#218` preflight then exposed a story fanout defect: configured Telegram Business targets were present in `story_publish.json`, but the mounted encrypted auth payload did not contain their `business_connection` secrets, so the notebook continued after primary-channel preflight while personal-account stories would be skipped.
 
 ## Root Cause
 
@@ -52,6 +53,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - Selection and render payload creation use separate database reads, so in-memory repairs are not durable across the handoff.
 - The existing no-photo candidate guard proved selection-time intent but did not assert that selected events remain renderable after session persistence.
 - The first durability hotfix made poster rehydrate writes mandatory but did not handle transient SQLite writer contention; a locked write could still crash the entire popularity selection instead of skipping only the non-durable candidate.
+- CherryFlash Business story targets were still delivered through the shared static story-secrets dataset path, so Kaggle could mount a stale auth payload that did not match the freshly generated session `story_publish.json`; those targets were also treated as non-blocking fanout during preflight.
 - Previous pre-handoff incidents covered local/Kaggle status drift, not this poster durability boundary.
 
 ## Automation Contract
@@ -74,6 +76,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - Unit coverage proving a selected event with rehydrated poster URLs persists those URLs to the event row before render handoff.
 - Unit coverage proving a rehydrated candidate is skipped, not selected or allowed to crash the run, when its poster repair cannot be persisted after SQLite lock handling.
+- Unit coverage proving CherryFlash Business story targets are blocking/required and a missing Business secret fails preflight before render.
 - Existing CherryFlash popular-review regression tests.
 - Existing CherryFlash pre-handoff/catch-up regression checks from `INC-2026-04-23-cherryflash-pre-handoff-loss`.
 - `python -m py_compile` for touched video announce/scheduler modules.
@@ -100,6 +103,7 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 - `build_popular_review_selection()` passes the database handle into the poster guard, so any candidate accepted because of source-post poster rehydration remains renderable when the render payload reloads events from SQLite.
 - Rehydrated poster persistence now retries transient SQLite lock errors for a bounded window and treats non-durable repairs as candidate-ineligible, so one locked event write cannot crash the whole CherryFlash popularity set or produce a selected event that reloads without photos.
 - Scheduled CherryFlash now treats a `None` session id from `run_popular_review_pipeline()` as a failed `ops_run`, so no-op catch-up attempts remain visible and retryable.
+- CherryFlash now writes encrypted story secrets into the same per-run `cherryflash-session-*` dataset as `story_publish.json`, and configured Telegram Business targets are generated as `blocking=true` / `required=true`.
 - Added regression coverage for the exact missing durability boundary.
 - Updated the CherryFlash feature doc and incident index with the new contract.
 

@@ -238,6 +238,19 @@ def build_story_secrets_payload() -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+def write_story_secret_files(target_dir: Path) -> tuple[Path, Path]:
+    payload = build_story_secrets_payload()
+    encrypted, key = encrypt_secret(payload)
+    if not encrypted or not key:
+        raise RuntimeError("Failed to encrypt story secrets payload")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    cipher_path = target_dir / STORY_PUBLISH_CIPHER_FILENAME
+    key_path = target_dir / STORY_PUBLISH_KEY_FILENAME
+    cipher_path.write_bytes(encrypted)
+    key_path.write_bytes(key)
+    return cipher_path, key_path
+
+
 def _normalize_dataset_slug(config_key: str, default_slug: str) -> str:
     raw = (_get_env_value(config_key) or "").strip()
     if raw and "/" in raw:
@@ -520,6 +533,8 @@ async def _business_story_targets(
                 label=f"business:{connection_hash}",
                 delay_seconds=delay_seconds,
                 mode="upload",
+                blocking=True,
+                required=True,
                 transport="telegram_business",
                 business_connection_hash=connection_hash,
                 user_hash=str(item.get("user_hash") or "").strip(),

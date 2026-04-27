@@ -59,9 +59,12 @@ from .popular_review import (
     build_popular_review_selection,
 )
 from .story_publish import (
+    STORY_PUBLISH_CIPHER_FILENAME,
     STORY_PUBLISH_CONFIG_FILENAME,
+    STORY_PUBLISH_KEY_FILENAME,
     build_story_publish_config,
     ensure_story_secret_datasets,
+    write_story_secret_files,
 )
 from .poller import (
     VIDEO_MAX_MB,
@@ -3636,7 +3639,7 @@ class VideoAnnounceScenario:
                         json.dumps(story_config, ensure_ascii=False, indent=2),
                         encoding="utf-8",
                     )
-                    story_dataset_sources = await ensure_story_secret_datasets(client)
+                    write_story_secret_files(tmp_path)
                 else:
                     raise RuntimeError(
                         "CherryFlash story publish was requested but story_publish.json was not generated"
@@ -3653,6 +3656,14 @@ class VideoAnnounceScenario:
                 encoding="utf-8",
             )
             bundle_manifest_files = ["payload.json", "assets/cherryflash_selection.json"]
+            if story_publish_requested:
+                bundle_manifest_files.extend(
+                    [
+                        STORY_PUBLISH_CONFIG_FILENAME,
+                        STORY_PUBLISH_CIPHER_FILENAME,
+                        STORY_PUBLISH_KEY_FILENAME,
+                    ]
+                )
             for src, rel in self._iter_cherryflash_bundle_files():
                 if not src.exists():
                     raise RuntimeError(f"Missing CherryFlash runtime asset: {src}")

@@ -462,3 +462,39 @@ async def test_story_publish_posts_business_target_via_bot_api(
     assert data["business_connection_id"] == "biz-secret"
     assert data["active_period"] == "43200"
     assert "biz-secret" not in str(report)
+
+
+@pytest.mark.asyncio
+async def test_business_target_missing_secret_blocks_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(boost_fail_peers=set(), story_ids={})
+
+    report = await helper._story_targets_report(
+        client,
+        auth={"business_bot_token": "123:test", "business_connections": []},
+        config={
+            "period_seconds": 43200,
+            "targets": [
+                {
+                    "peer": "business:hash-1",
+                    "label": "business:hash-1",
+                    "transport": "telegram_business",
+                    "business_connection_hash": "hash-1",
+                    "blocking": True,
+                    "required": True,
+                },
+            ],
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="preflight",
+        media_path=None,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is False
+    assert report["blocking_ok"] is False
+    assert report["required_ok"] is False
+    assert report["targets"][0]["ok"] is False
+    assert "business connection secret is missing" in report["targets"][0]["error"]

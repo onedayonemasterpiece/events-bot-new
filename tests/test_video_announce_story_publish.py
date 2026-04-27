@@ -151,6 +151,8 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
     business_target = config["targets"][-1]
     assert business_target["transport"] == "telegram_business"
     assert business_target["delay_seconds"] == 600
+    assert business_target["blocking"] is True
+    assert business_target["required"] is True
     assert business_target["label"].startswith("business:")
     serialized = str(config)
     assert "biz-connection-secret" not in serialized

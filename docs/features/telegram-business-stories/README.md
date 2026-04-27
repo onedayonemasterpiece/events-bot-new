@@ -18,7 +18,9 @@
 - Автопубликация из CherryFlash выбирает Business targets только из encrypted cache:
   - allowlist личных аккаунтов хранится в БД `setting.video_announce_story_business_targets` как comma/JSON list из username, `connection_hash`, `user_hash` или `username_hash`;
   - реальные username личных аккаунтов не должны попадать в repo env/docs/code;
-  - `story_publish.json` содержит только hash-label вида `business:<hash>`, а реальные `business_connection_id` и bot token передаются в Kaggle только внутри encrypted story secrets dataset;
+  - `story_publish.json` содержит только hash-label вида `business:<hash>`, а реальные `business_connection_id` и bot token передаются в Kaggle только внутри encrypted story secrets;
+  - для CherryFlash encrypted story secrets должны лежать в том же `cherryflash-session-*` dataset, что и `story_publish.json`, чтобы Kaggle не смонтировал устаревшую статическую версию secrets dataset;
+  - выбранные Business targets для CherryFlash являются `blocking=true` и `required=true`: если secret отсутствует или права уже недоступны, notebook должен упасть на preflight до дорогого рендера, а не публиковать неполный fanout;
   - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
 

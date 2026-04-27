@@ -683,6 +683,7 @@ This section captures the latest intro-direction request as an explicit delta to
     - then after another `600` seconds repost to `@loving_guide39`;
     - then each configured encrypted Telegram Business target is posted through Bot API `postStory` after its own `600` second delay, without writing account usernames, user ids, or `business_connection_id` into code/docs/config artifacts.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
+  - Business targets are mandatory for a configured CherryFlash fanout: they must be marked `blocking=true` and `required=true`, and their encrypted Bot API secrets must be co-located with the session `story_publish.json` inside the same `cherryflash-session-*` dataset so Kaggle cannot preflight against stale static story secrets.
 - Sibling profile rule:
   - `cherryflash_libsvtav1` reuses the same common story path but requests `story_publish_enabled=true` by default in its session params;
   - actual story publication still depends on the shared global story infra (`build_story_publish_config()` and secret datasets) being available for that run.
