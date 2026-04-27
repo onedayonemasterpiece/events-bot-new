@@ -228,6 +228,11 @@ def build_fast_extract_compact_system_prompt() -> str:
         - Do not put people, event title, venue, dates, rarity words, or roles into literal_items.
         - If the excerpt is cut mid-name or mid-title, suppress that named fact instead of emitting a partial token.
 
+        Evidence budget:
+        - Keep `evidence` short: <= 120 characters whenever possible.
+        - For long cast/team/program lists, put the full useful list in `text` / `literal_items`; `evidence` may cite the heading or the shortest source span.
+        - Do not spend output tokens copying a full long list into both `text` and `evidence`.
+
         Title declension fidelity:
         - Copy work titles in the exact case/number/declension form they appear in the source.
         - Do not normalize `«Фиалки Монмартра»` to `«Фиалка Монмартра»`; if the source has the plural/genitive form, keep it.
@@ -268,7 +273,7 @@ def build_fast_extract_compact_system_prompt() -> str:
         - A typical theatre page should emit at most one production_team fact, one cast fact, and one ensemble fact unless the source has clearly separate named groups.
 
         Output:
-        {"facts":[{"text":"...","evidence":"short quote","bucket":"...","salience":"...","hook_type":"...","role_class":"none","literal_items":[],"dedup_key":"...","source_refs":["source_id"]}]}
+        {"facts":[{"text":"...","evidence":"short quote <= 120 chars","bucket":"...","salience":"...","hook_type":"...","role_class":"none","literal_items":[],"dedup_key":"...","source_refs":["source_id"]}]}
         """
     ).strip()
 
@@ -531,7 +536,7 @@ def normalize_fast_extract_items(*, payload: dict[str, Any], source_id: str, rec
                 "record_id": f"{record_prefix}{counter:02d}",
                 "stage_id": FAST_EXTRACT_STAGE_ID,
                 "text": text,
-                "evidence": _clean_text(raw.get("evidence")),
+                "evidence": _clip_text(raw.get("evidence"), limit=160),
                 "bucket": bucket,
                 "bucket_hint": bucket,
                 "salience": salience,

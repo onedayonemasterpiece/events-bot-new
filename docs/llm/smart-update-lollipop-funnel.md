@@ -63,7 +63,7 @@ Stage contract:
 
 | Stage | Runtime | Owner | Fail policy |
 | --- | --- | --- | --- |
-| `fast.extract_per_source.v1` | `Gemma 4 31b`, один компактный call на источник, native `response_schema`, coverage-first без fixed fact cap, `max_tokens=2000`, parallel by default | source-local facts + `bucket/salience/hook_type/literal_items/dedup_key/role_class`; source mismatch emits only `drop`; long cast lists stay dense instead of one-record-per-role; plot/character premise for stage titles is preserved as narrative material, not collapsed into cast credits | empty source payload allowed, but benchmark flags fact loss |
+| `fast.extract_per_source.v1` | `Gemma 4 31b`, один компактный call на источник, native `response_schema`, coverage-first без fixed fact cap, `max_tokens=1600`, parallel by default | source-local facts + `bucket/salience/hook_type/literal_items/dedup_key/role_class`; source mismatch emits only `drop`; long cast lists stay dense instead of one-record-per-role; plot/character premise for stage titles is preserved as narrative material, not collapsed into cast credits | empty source payload allowed, but benchmark flags fact loss |
 | `fast.merge_pack.v1` | optional compact `Gemma 4` call, `LOLLIPOP_G4_FAST_LLM_MERGE=1` only | fallback semantic merge/dedup for hard duplicate cases | default off; any use counts toward latency budget |
 | `fast.layout_assemble` | Python-only default | deterministic pass-through/block assembly from LLM labels | may reserve literal program facts for program block; must not invent, rewrite, summarize, or drop semantic facts for compactness |
 | `fast.layout_planner.v1` | optional `Gemma 4`, `LOLLIPOP_G4_FAST_PLANNER=1` | lead/layout fallback only | default off; any use counts toward latency budget |
@@ -91,6 +91,8 @@ The same follow-up adds a fast validation gate for this failure mode: if a rich 
 
 When the fast pack has narrative body facts followed by people sections and no literal program section, `fast.layout_assemble` gives the body block an explicit `### О событии` heading. This is still deterministic layout over already selected LLM-owned facts, not a semantic rescue: the heading exists to stop the final writer from silently merging body material into one lead and jumping straight to cast/credits.
 
+`2026-04-27` writer hardening adds no repair pass: it tightens `writer.final_4o` prompt and validation so a fast result fails instead of silently passing with baseline-like filler. Fast validation now rejects audience-template roots (`зрител`), dangling participles used as weak prose glue (`погружая`, `перенося`, `раскрывая`, `представляя`), `наполн...`, `уникаль...`, `в программе представлены`, and missing surnames from people/role facts. Name coverage allows normal Russian inflection (`Холева` -> `Холеву`) but still fails real omission.
+
 `literal_items` проходят структурный allowlist по extractor-owned `literal_items/text/evidence` и source-local excerpt substring gate: pipeline не извлекает названия regex-ом из raw source и не придумывает замену, а только не пропускает literal value, которого не было в LLM-owned upstream fields / исходном excerpt.
 
 `role_class` — LLM-owned routing label для `people_and_roles`: `production_team`, `cast`, `ensemble`, `none`. Python layout может разделять блоки участников по этому label (`Постановочная группа` vs `Действующие лица и исполнители`), но не определяет эти классы сам.
@@ -108,8 +110,9 @@ Hard gates for `lollipop_g4_fast` benchmark evidence:
 - `fact_loss_vs_baseline`: manual/reviewer gate when baseline covers event-defining facts absent from fast output;
 - existing writer gates: `poster.leak`, `age.leak`, `infoblock.leak`, report-style formulas, promo phrases, missing literal bullets, collapsed named lists.
 - fast-specific body gate: `body.missing_narrative_before_people` when a rich people-heavy pack reaches people/credits headings before enough narrative body.
+- fast-specific prose/fact gates: `style.audience_template:viewers_root`, `style.report_formula:filled_root`, `style.report_formula:dangling_participle`, `style.report_formula:program_presented`, `style.promo_phrase:unique_root`, `named_person.missing:*`.
 
-Current live status (`2026-04-26T20:01Z`): KALMANIA and VIVAT pass validation and temporary `<=2.5x` hard cap on latest paired evidence, but both miss the primary `<=1.5x` latency target. Quality is moving in the right direction, especially on VIVAT fact coverage and source contamination, but this is still lab evidence, not production default.
+Current live status (`2026-04-27T04:28Z`): KALMANIA and VIVAT pass validation and temporary `<=2.5x` hard cap on latest paired evidence, but both miss the primary `<=1.5x` latency target on that run. Quality is moving in the right direction, especially on VIVAT fact coverage and source contamination, but this is still lab evidence, not production default.
 
 Implementation surface:
 

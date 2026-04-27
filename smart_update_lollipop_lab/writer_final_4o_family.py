@@ -16,6 +16,7 @@ REPORT_PATTERNS: dict[str, str] = {
     "характеризуется": r"(?iu)\bхарактериз\w*",
     "event_dedicated": r"(?iu)\bсобыти\w+[^.!?\n]{0,24}\bпосвящ\w*",
     "program_filled": r"(?iu)(?:программ\w+|концерт|вечер)[^.!?\n]{0,40}\bнаполнен\w*",
+    "program_presented": r"(?iu)программ\w+[^.!?\n]{0,32}\bпредставлен\w*",
     "stories_presented": r"(?iu)(?:истори\w+[^.!?\n]{0,24}представлен\w*|представлен\w*[^.!?\n]{0,24}истори\w+)",
     "program_consists": r"(?iu)программ\w+[^.!?\n]{0,32}\bсостоит\s+из\b",
 }
@@ -94,6 +95,28 @@ def _describe_text_quality(description_md: str) -> dict[str, Any]:
     }
 
 
+def _person_surname_covered(name: str, description_md: str) -> bool:
+    parts = [part for part in re.split(r"\s+", str(name or "").strip()) if part]
+    if len(parts) < 2:
+        return True
+    surname = re.sub(r"[^\wЁёА-Яа-я-]", "", parts[-1])
+    if not surname:
+        return True
+    text = str(description_md or "")
+    if surname in text:
+        return True
+    if len(surname) >= 5:
+        stems = [
+            re.sub(r"(?iu)(?:ский|ская|ской|цкий|цкая|ая|яя|ый|ий|ой)$", "", surname),
+            re.sub(r"(?iu)(?:а|я|у|ю|ы|и|е|ой|ою|ей|ею)$", "", surname),
+            re.sub(r"(?iu)(?:ова|ева|ёва|ина|ына)$", "", surname),
+        ]
+        for stem in stems:
+            if len(stem) >= 4 and stem in text:
+                return True
+    return False
+
+
 def _build_prompt(pack: dict[str, Any]) -> str:
     meta = pack.get("meta") if isinstance(pack.get("meta"), dict) else {}
     fast_additions = ""
@@ -101,10 +124,11 @@ def _build_prompt(pack: dict[str, Any]) -> str:
         profile = meta.get("writer_profile") if isinstance(meta.get("writer_profile"), dict) else {}
         profile_lines = [
             "FAST RUN CONTRACT:",
-            "- ABSOLUTE FAIL CONDITIONS before returning JSON: no lead `— это`, no `это редкое событие`, no words with root `зрител`, no `смогут насладиться`, no `предлагает зрителям`, no words with root `приглаша`, no words with root `обещ`, no `и другие` when named-role facts are present, no words with root `наполн`, no `состоит из`, no `является`.",
+            "- ABSOLUTE FAIL CONDITIONS before returning JSON: no lead `— это`, no `это редкое событие`, no words with root `зрител`, no exact forms `зрители`/`зрителей`/`зрителю`/`зрительский`, no `смогут насладиться`, no `предлагает зрителям`, no words with root `приглаша`, no words with root `обещ`, no `и другие` when named-role facts are present, no words with root `наполн`, no `состоит из`, no `является`.",
             "- In fast output, the word root `зрител` is banned. Use event/music/stage as the grammatical subject instead.",
-            "- Before returning JSON, scan description_md yourself. If it contains `зрител`, `обещ`, `приглаша`, `наслад`, `предлагает зрителям`, `погружая зрителей`, `является`, `состоит из`, or root `наполн`, rewrite that sentence before returning.",
-            "- The phrase `погружая зрителей` is forbidden. Use `на сцене разворачивается`, `сюжет ведёт`, `история переносит действие`, or `мир фантазии раскрывается` instead.",
+            "- Before returning JSON, scan description_md yourself. If it contains `зрител`, `зрителей`, `обещ`, `приглаша`, `наслад`, `предлагает зрителям`, `погружая зрителей`, `переносят зрителей`, `является`, `состоит из`, or root `наполн`, rewrite that sentence before returning.",
+            "- The phrases `погружая зрителей`, `переносят зрителей`, and `перед зрителями` are forbidden. Also avoid dangling participles like `погружая`, `перенося`, `раскрывая`, `представляя`. Use finite event-action sentences: `на сцене разворачивается`, `сюжет ведёт`, or `история переносит действие`.",
+            "- Fast lead length: the first paragraph should be 1-2 sentences. If you need a third sentence, move it into the next narrative paragraph before headings.",
             "- meta.variant=lollipop_g4_fast means upstream is compact, source-local Gemma 4 extraction plus deterministic packing.",
             "- This is coverage-first fast, not summary-fast: every fact_id in must_cover_fact_ids must be semantically used unless it is explicitly covered by a literal list.",
             "- Do not shorten by omission. Compression is allowed only by connecting facts in better sentences.",
@@ -141,13 +165,30 @@ def _build_prompt(pack: dict[str, Any]) -> str:
                 "- Do not put calendar dates, exact times, venue names, ticket/access/age notes into narrative prose.",
                 "- If frequency (`раз в сезон`) and scheduling intensity (`два вечера подряд`) both survived into the pack, treat them as distinct facts and use both naturally when possible.",
                 "- Avoid audience-template phrases: `зрители смогут`, `смогут насладиться`, `зрителей ждут`, `подарит эмоции`. Describe what is on stage instead.",
-                "- ЖЁСТКИЙ ЗАПРЕТ: в итоговом description_md не должно быть слов/подстрок `зрител`, `погружая зрителей`, `приглаш`, `наслад`, `обещ`, `предлагает`, `настоящим праздником`, `для любителей`, `уникаль`, `подарит эмоции`, `масса эмоций`.",
+                "- ЖЁСТКИЙ ЗАПРЕТ: в итоговом description_md не должно быть слов/подстрок `зрител`, `зрителей`, `погружая зрителей`, `переносят зрителей`, `приглаш`, `наслад`, `обещ`, `предлагает`, `настоящим праздником`, `для любителей`, `уникаль`, `подарит эмоции`, `масса эмоций`.",
                 "- If named-role facts are present, `и другие` / `и др.` is also banned in description_md.",
                 "- FIRST SENTENCE CONTRACT: open through grounded event action, rarity, programme, atmosphere, quote-like hook, or stage movement. Bad shape: `Концерт «...» — это ...`.",
                 "- Replace any draft phrase `приглашает зрителей` with an event-action construction: `выводит на сцену`, `рассказывает`, `собирает`, `держится на`, `звучит`, `разворачивает историю`.",
             ]
         )
         fast_additions = "\n".join(profile_lines)
+    final_fast_check = ""
+    if meta.get("variant") == "lollipop_g4_fast":
+        final_fast_check = textwrap.dedent(
+            """
+
+            FINAL FAST MACHINE-VALIDATION CHECKLIST:
+            - Before returning JSON, scan the final `description_md` after all writing is done.
+            - If it contains the substring `зрител` anywhere, it is rejected. Rewrite the sentence without an audience noun.
+            - Actual rejected examples: `раскрывая перед зрителями`, `переносят зрителей`, `перед зрителями`, `зрителей ждут`, `зрители смогут`.
+            - Safe rewrites: `на сцене разворачивается мир фантазии`, `сюжет ведёт в мир приключений`, `история переносит действие`.
+            - Do not use dangling participles like `раскрывая`, `перенося`, `погружая`, `представляя`; split into finite sentences with event/stage/plot subjects.
+            - If it contains `уникаль`, `обещ`, `приглаш`, `наслад`, `состоит из`, `является`, or root `наполн`, it is rejected. Rewrite through event action, music, stage, programme, or plot.
+            - If it contains `программа представлена` / `в программе представлены`, it is rejected. Use `в программе звучат`, `концерт собирает`, or put the exact titles only in the bullet list.
+            - Every named person from people/roles facts must remain in `description_md`; compact the role line, but do not drop surnames.
+            - The first paragraph must be 1-2 sentences. Move extra context into the next narrative paragraph before headings.
+            """
+        ).rstrip()
     title_context = pack["title_context"]
     section_lines: list[str] = []
     for section in pack["sections"]:
@@ -208,7 +249,7 @@ def _build_prompt(pack: dict[str, Any]) -> str:
         - `Вечер держится на романтических историях, атмосфере интриги и игры и целой палитре жанров — от арий до маршей.`
         В lead и в начале каждого narrative section выноси самый сильный grounded hook раньше сухой справки.
         Не прячь самый интересный факт в конец абзаца, если он может открыть абзац естественно и честно.
-        Для концертов и list-heavy cases lead должен звучать как обещание вечера, а не как каталогическое `событие посвящено ...`.
+        Для концертов и list-heavy cases lead должен показывать устройство вечера, а не звучать как каталогическое `событие посвящено ...`.
         Избегай неестественных report-style формул вроде `характеризуется`, `представлены истории`, `наполнена`, `посвящен/посвящена`, если ту же мысль можно выразить живее и естественнее без потери фактов.
         Если fact text сам звучит сухо или канцелярски, перепиши его в естественный event-facing русский, сохранив точный смысл и grounding.
         Предпочитай конкретное событие и действие: `в этот вечер звучат ...`, `концерт собирает ...`, `на сцене ...`, `в программе ...`, а не meta-фразы вроде `это уникальная возможность`, `этот вечер обещает стать`, `программа наполнена`, `в концерте представлены истории`.
@@ -252,6 +293,7 @@ def _build_prompt(pack: dict[str, Any]) -> str:
 
         PACK JSON:
         {pack}
+        {final_fast_check}
         """
     ).strip()
 
@@ -446,6 +488,12 @@ def _validate_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> Val
         errors.append("style.audience_template:will_enjoy")
     if meta.get("variant") == "lollipop_g4_fast" and re.search(r"(?iu)\bзрител\w*", description_md):
         errors.append("style.audience_template:viewers_root")
+    if meta.get("variant") == "lollipop_g4_fast" and re.search(r"(?iu)\bуникаль\w*", description_md):
+        errors.append("style.promo_phrase:unique_root")
+    if meta.get("variant") == "lollipop_g4_fast" and re.search(r"(?iu)\bнаполн\w*", description_md):
+        errors.append("style.report_formula:filled_root")
+    if meta.get("variant") == "lollipop_g4_fast" and re.search(r"(?iu)\b(?:погружая|перенося|раскрывая|представляя)\b", description_md):
+        errors.append("style.report_formula:dangling_participle")
 
     has_explicit_named_people_list = any(
         str(section.get("role") or "").strip() != "program"
@@ -459,5 +507,21 @@ def _validate_writer_output(pack: dict[str, Any], output: dict[str, Any]) -> Val
     )
     if has_explicit_named_people_list and re.search(r"(?iu)\bи другие\b|\bи др\.?\b", description_md):
         errors.append("named_list.collapsed_to_and_others")
+    if meta.get("variant") == "lollipop_g4_fast":
+        missing_surnames: list[str] = []
+        for section in pack["sections"]:
+            for fact in list(section.get("facts") or []):
+                if not isinstance(fact, dict):
+                    continue
+                if not str(fact.get("fact_id") or "").startswith("PR"):
+                    continue
+                fact_text = str(fact.get("text") or "")
+                for match in re.finditer(r"(?u)\b[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)+\b", fact_text):
+                    name = match.group(0)
+                    surname = name.split()[-1]
+                    if not _person_surname_covered(name, description_md) and surname not in missing_surnames:
+                        missing_surnames.append(surname)
+        for surname in missing_surnames[:8]:
+            errors.append(f"named_person.missing:{surname}")
 
     return ValidationResult(errors=errors, warnings=warnings)

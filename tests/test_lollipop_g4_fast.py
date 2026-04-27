@@ -107,6 +107,7 @@ async def test_lollipop_g4_fast_can_use_llm_merge_when_enabled(monkeypatch: pyte
             }
         label = kwargs["user_payload"]["source"]["source_id"]
         gemma_stage_labels.append(label)
+        assert kwargs["max_tokens"] == 1600
         if label == "site":
             return {
                 "facts": [
@@ -164,7 +165,11 @@ async def test_lollipop_g4_fast_can_use_llm_merge_when_enabled(monkeypatch: pyte
         assert "coverage-first fast" in prompt
         assert "FAST OUTPUT SHAPE" not in prompt
         assert "writer_profile: lead_strategy='rarity'" in prompt
-        assert "The phrase `погружая зрителей` is forbidden" in prompt
+        assert "The phrases `погружая зрителей`, `переносят зрителей`, and `перед зрителями` are forbidden" in prompt
+        assert "переносят зрителей" in prompt
+        assert "FINAL FAST MACHINE-VALIDATION CHECKLIST" in prompt
+        assert "перед зрителями" in prompt
+        assert "Fast lead length: the first paragraph should be 1-2 sentences" in prompt
         four_o_prompts.append(prompt)
         return {
             "title": "Кальмания",
@@ -397,6 +402,33 @@ def test_lollipop_g4_fast_extractor_prompt_groups_long_cast_lists() -> None:
     assert "plot/character premise" in prompt
     assert "Барон Мюнхгаузен показан учёным" in prompt
     assert "new adventures" in prompt
+    assert "`evidence` short: <= 120 characters" in prompt
+
+
+def test_lollipop_g4_fast_extract_evidence_is_clipped() -> None:
+    records = normalize_fast_extract_items(
+        payload={
+            "facts": [
+                {
+                    "text": "Постановочная группа: режиссёр-постановщик Елизавета Мороз; композитор Егор Шашин.",
+                    "evidence": "x" * 260,
+                    "bucket": "people_and_roles",
+                    "salience": "must_keep",
+                    "hook_type": "people_roles",
+                    "role_class": "production_team",
+                    "literal_items": [],
+                    "dedup_key": "team",
+                    "source_refs": ["site"],
+                }
+            ]
+        },
+        source_id="site",
+        record_prefix="FAS",
+        source_excerpt="",
+    )
+
+    assert len(records) == 1
+    assert len(records[0]["evidence"]) <= 160
 
 
 def test_lollipop_g4_fast_validation_requires_body_before_people_sections() -> None:
@@ -462,6 +494,124 @@ def test_lollipop_g4_fast_validation_requires_body_before_people_sections() -> N
     )
 
     assert "body.missing_narrative_before_people" not in ok_validation.errors
+
+
+def test_lollipop_g4_fast_validation_rejects_unique_root() -> None:
+    pack = {
+        "event_type": "концерт",
+        "title_context": {"original_title": "Кальмания", "strategy": "keep", "is_bare": False},
+        "sections": [],
+        "infoblock": [],
+        "constraints": {"headings": [], "must_cover_fact_ids": []},
+        "meta": {"variant": "lollipop_g4_fast", "writer_profile": {}},
+    }
+
+    validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Кальмания",
+            "description_md": "Концерт раскрывает уникальное музыкальное путешествие.",
+        },
+    )
+
+    assert "style.promo_phrase:unique_root" in validation.errors
+
+
+def test_lollipop_g4_fast_validation_rejects_dangling_participle_and_program_presented() -> None:
+    pack = {
+        "event_type": "концерт",
+        "title_context": {"original_title": "Кальмания", "strategy": "keep", "is_bare": False},
+        "sections": [],
+        "infoblock": [],
+        "constraints": {"headings": [], "must_cover_fact_ids": []},
+        "meta": {"variant": "lollipop_g4_fast", "writer_profile": {}},
+    }
+
+    validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Кальмания",
+            "description_md": "Концерт собирает солистов, представляя лучшие произведения Кальмана. Романтические истории наполнены музыкой. В программе представлены мелодии Кальмана.",
+        },
+    )
+
+    assert "style.report_formula:dangling_participle" in validation.errors
+    assert "style.report_formula:filled_root" in validation.errors
+    assert "style.report_formula:program_presented" in validation.errors
+
+
+def test_lollipop_g4_fast_validation_rejects_missing_people_names() -> None:
+    pack = {
+        "event_type": "мюзикл",
+        "title_context": {"original_title": "Виват, Мюнхгаузен!", "strategy": "keep", "is_bare": False},
+        "sections": [
+            {
+                "role": "body",
+                "style": "structured",
+                "heading": "Постановочная группа",
+                "fact_ids": ["PR01"],
+                "facts": [
+                    {
+                        "fact_id": "PR01",
+                        "text": "Постановочная группа: режиссёр Елизавета Мороз; композитор Егор Шашин; художник по свету Александр Редкозубов.",
+                        "priority": 3,
+                    }
+                ],
+                "coverage_plan": [{"fact_id": "PR01", "mode": "narrative"}],
+                "literal_items": [],
+            }
+        ],
+        "infoblock": [],
+        "constraints": {"headings": ["Постановочная группа"], "must_cover_fact_ids": ["PR01"]},
+        "meta": {"variant": "lollipop_g4_fast", "writer_profile": {}},
+    }
+
+    validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Виват, Мюнхгаузен!",
+            "description_md": "### Постановочная группа\nПостановочная группа включает Елизавету Мороз и Егора Шашина.",
+        },
+    )
+
+    assert "named_person.missing:Редкозубов" in validation.errors
+
+
+def test_lollipop_g4_fast_name_coverage_allows_inflected_surname() -> None:
+    pack = {
+        "event_type": "мюзикл",
+        "title_context": {"original_title": "Виват, Мюнхгаузен!", "strategy": "keep", "is_bare": False},
+        "sections": [
+            {
+                "role": "body",
+                "style": "structured",
+                "heading": "Постановочная группа",
+                "fact_ids": ["PR01"],
+                "facts": [
+                    {
+                        "fact_id": "PR01",
+                        "text": "Постановочная группа: балетмейстер-постановщик Оксана Холева.",
+                        "priority": 3,
+                    }
+                ],
+                "coverage_plan": [{"fact_id": "PR01", "mode": "narrative"}],
+                "literal_items": [],
+            }
+        ],
+        "infoblock": [],
+        "constraints": {"headings": ["Постановочная группа"], "must_cover_fact_ids": ["PR01"]},
+        "meta": {"variant": "lollipop_g4_fast", "writer_profile": {}},
+    }
+
+    validation = _validate_writer_output(
+        pack,
+        {
+            "title": "Виват, Мюнхгаузен!",
+            "description_md": "### Постановочная группа\nБалетмейстером выступает Оксана Холева.",
+        },
+    )
+
+    assert "named_person.missing:Холева" not in validation.errors
 
 
 

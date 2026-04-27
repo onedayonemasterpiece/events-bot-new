@@ -288,7 +288,7 @@ Unified artifact:
 
 Current implementation after the `lollipop_g4_fast.v2` reset:
 
-- `fast.extract_per_source.v1`: один coverage-first source-local Gemma 4 call на источник, native provider-compatible `response_schema`, capped at `max_tokens=2000`; extractor owns `role_class` for people blocks (`production_team/cast/ensemble/none`), groups long cast lists into dense facts instead of one record per role, and preserves plot/character premise for stage titles as narrative facts rather than letting credits dominate;
+- `fast.extract_per_source.v1`: один coverage-first source-local Gemma 4 call на источник, native provider-compatible `response_schema`, capped at `max_tokens=1600`; extractor owns `role_class` for people blocks (`production_team/cast/ensemble/none`), groups long cast lists into dense facts instead of one record per role, keeps short evidence spans, and preserves plot/character premise for stage titles as narrative facts rather than letting credits dominate;
 - default merge/pack: Python pass-through of relevant LLM-owned records plus exact grouping by LLM-owned `dedup_key`. It drops only `drop/infoblock_only/suppress` and does not own semantic dedup, summarization, or fact rescue;
 - `fast.merge_pack.v1`: optional compact Gemma 4 merge/dedup fallback behind `LOLLIPOP_G4_FAST_LLM_MERGE=1`; live KALMANIA/VIVAT showed that making this stage mandatory breaks the speed target without enough quality gain;
 - `literal_items` are safety-constrained against extractor-owned `literal_items/text/evidence` and source-local excerpt substring gate; this is not regex extraction from raw source and not repair, but refusal to publish provider-noise literals;
@@ -297,7 +297,7 @@ Current implementation after the `lollipop_g4_fast.v2` reset:
 - source-local extraction runs in parallel by default, потому что источники независимы по смыслу и latency не должна оплачиваться потерей фактов;
 - source mismatch is handled inside the extractor prompt: if a source is primarily about another event, it may emit only a `drop` mismatch fact, not facts about the other event;
 - `fast.layout_planner.v1`: optional fallback только при `LOLLIPOP_G4_FAST_PLANNER=1`, default off;
-- `writer.final_4o.v1`: тот же final writer, с fast-specific prompt additions через `meta.writer_profile`; `narrative_fact_count` now influences `rich_case`, so people-heavy outputs with enough non-people facts must keep narrative body before cast/credits; fast path не имеет deterministic repair/rescue и не дожимается отдельным correction loop.
+- `writer.final_4o.v1`: тот же final writer, с fast-specific prompt additions через `meta.writer_profile`; `narrative_fact_count` now influences `rich_case`, so people-heavy outputs with enough non-people facts must keep narrative body before cast/credits; fast-specific validation rejects audience-template roots, weak dangling participles, `наполн...`, `уникаль...`, `в программе представлены`, and missing surnames from people/role facts; fast path не имеет deterministic repair/rescue и не дожимается отдельным correction loop.
 
 Benchmark command shape:
 
@@ -325,6 +325,13 @@ Acceptance evidence для fast должно включать:
 - reviewer pairwise vote против baseline по 7 измерениям: fact coverage, event clarity, rarity/atmosphere, literal fidelity, named roles, natural voice, no promo/report leakage. Итог `FAST_WINS` или `TIE` обязателен; `BASELINE_WINS` по fact coverage или event clarity блокирует rollout.
 
 Fast-вариант пока не является rollout evidence сам по себе: latest paired live runs for `KALMANIA` and `VIVAT-MUNCHHAUSEN` pass writer validation and stay under the temporary `<=2.5x` hard cap, but the primary `<=1.5x` latency target is not stable yet. Mixed-phase case, opaque-title screening/presentation case, sparse single-source case and reviewer pairwise votes are still required before any production default.
+
+Latest paired evidence after writer/style/name-coverage hardening (`2026-04-27T04:28Z`):
+
+- artifact: `artifacts/codex/lollipop_g4_benchmark_20260427T042840Z.json` / `.md`;
+- KALMANIA: validation `errors=[]`, `warnings=[]`, speed ratio `1.6629`; hard cap passed, primary `1.5x` target missed on this run; fact flow `14` extracted records -> `14` kept/pass-through records; output keeps rarity, two-night hook, atmosphere, literal program bullets, production team, soloists and ballet artists;
+- VIVAT-MUNCHHAUSEN: validation `errors=[]`, `warnings=[]`, speed ratio `2.4830`; hard cap passed, primary `1.5x` target missed; fact flow `10` extracted records -> `10` kept/pass-through records; output keeps local/historical hook, protagonist/story premise, `Внучата Мюнхгаузена`, production team and named cast, while the unrelated Telegram `Кальмания` source is scoped to `drop`;
+- status: quality pass is substantially better than the failed `2026-04-26T12:19Z` fast artifact and no longer loses the main VIVAT narrative/cast facts, but rollout remains blocked by unstable primary latency and missing broader fixture/reviewer coverage.
 
 Latest KALMANIA evidence (`2026-04-26T19:53Z`, after quality/body-contract pass):
 

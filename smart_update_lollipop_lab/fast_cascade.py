@@ -418,7 +418,7 @@ async def run_fast_cascade_variant(
             model=gemma_model,
             system_prompt=fast_extract_family.build_fast_extract_compact_system_prompt(),
             user_payload=user_payload,
-            max_tokens=2000,
+            max_tokens=1600,
             response_schema=fast_extract_family.fast_extract_response_schema() if gemma4 else None,
         ) or {"facts": []}
         records = fast_extract_family.normalize_fast_extract_items(
