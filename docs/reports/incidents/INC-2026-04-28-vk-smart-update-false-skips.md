@@ -45,7 +45,7 @@ Both posts had concrete future event anchors and should have created or updated 
 ## Root Cause
 
 1. `_ONLINE_EVENT_RE` matched any standalone `онлайн`, including `онлайн-регистрация`, so an offline bicycle ride with a physical route and start location was treated as online-only.
-2. `detect_festival_context()` could keep or create `festival_post` for a single strong event draft when the source/festival payload implied a festival/program context, causing Smart Update to route the source to Festival Queue instead of creating the event.
+2. `detect_festival_context()` could keep or create `festival_post` for a single strong event draft when the source/festival payload implied a festival/program context. A bullet list of materials/conditions (`list_lines >= 3`) also counted as `multi_signal`, so a single masterclass could be mistaken for a whole festival program and routed to Festival Queue instead of creating the event.
 3. The event-parse prompt did not explicitly require `event_with_festival` for a concrete single event inside a cycle/program and did not clarify that online registration is not an online-only event.
 
 ## Contributing Factors
@@ -99,7 +99,7 @@ Both posts had concrete future event anchors and should have created or updated 
 
 - Isolated the hotfix in a linked worktree from `origin/main` because the default checkout had unrelated dirty lollipop/Telegram changes.
 - Narrowed the online-only guard so online registration/sign-up wording does not classify an offline event as online-only.
-- Added festival-context rescue for one strong event draft inside a cycle/program/festival context.
+- Added festival-context rescue for one strong event draft inside a cycle/program/festival context, including the case where `multi_signal` comes only from bullet-listed materials/conditions rather than multiple dates/times.
 
 ## Corrective Actions
 
