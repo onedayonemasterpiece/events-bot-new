@@ -88,6 +88,17 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             flags={},
         ),
         GuideSourceSpec(
+            username="murnikovaT",
+            profile_slug="tatyana-murnikova",
+            profile_kind="person",
+            display_name="Татьяна Мурникова",
+            marketing_name="Татьяна Мурникова",
+            source_kind="guide_personal",
+            trust_level="medium",
+            flags={},
+            notes="Added from operator request on 2026-04-28; guide channel for individual Kaliningrad excursions.",
+        ),
+        GuideSourceSpec(
             username="twometerguide",
             profile_slug="twometerguide",
             profile_kind="project",

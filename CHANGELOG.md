@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Guide Excursions / Source Catalog**: added `@murnikovaT` to the canonical guide monitoring source seed as a personal Kaliningrad guide channel.
 - **Incident / VK Smart Update False Skips**: opened `INC-2026-04-28-vk-smart-update-false-skips` after two normal VK events were rejected as `skipped_festival_post` and `skipped_non_event:online_event`; Smart Update no longer treats `онлайн-регистрация` as online-only, festival routing rescues a single concrete event inside a cycle/program from `festival_post` even when the post has bullet-listed materials/conditions, and the event-parse prompt now distinguishes whole-festival posts from `event_with_festival` single events.
 - **Incident / CherryFlash Missing Rehydrated Posters**: opened `INC-2026-04-27-cherryflash-missing-photo-urls` after the scheduled CherryFlash loop repeatedly failed before Kaggle because selected events had in-memory rehydrated posters but empty persisted `photo_urls`; selection now writes rehydrated Telegram/VK poster URLs back to the event row before session/render payload creation.
 - **CherryFlash / Rehydrated Poster SQLite Lock Guard**: rehydrated poster persistence now retries transient SQLite lock failures and, if the repair still cannot be made durable, skips only that candidate instead of crashing the entire popularity selection or selecting an event that will reload without photos.
