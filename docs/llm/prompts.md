@@ -19,6 +19,7 @@ title             - name of the event
 short_description - **REQUIRED** one-sentence summary of the event (see **short_description** rules below)
 festival          - festival name or empty string
 festival_full     - full festival edition name or empty string
+festival_context  - one of: festival_post, event_with_festival, none. Use event_with_festival for a concrete single event that happens inside a festival/cycle/program; use festival_post only for a post about the whole festival/program without one concrete event to create.
 date              - single date or range (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD)
 time              - start time or time range (HH:MM or HH:MM..HH:MM). When a theatre announcement lists several start times for the same date (e.g. «начало в 12:00 и 17:00»), treat each start time as a separate event with the shared date instead of compressing them into a time range.
 location_name     - venue name; shorten bureaucratic phrases, trim honorifics to surnames/initials, avoid repeating the city
@@ -170,6 +171,12 @@ Guidelines:
   include just those individual events with their own dates and set the
   `festival` field. Do **not** create separate events for each day of the
   festival unless every date is explicitly detailed.
+- If a post describes one concrete masterclass/lecture/ride/show with its own
+  date, time, venue/route and ticket/registration details, keep it as an event
+  even when the text says it is part of a cycle, regional anniversary program,
+  exhibition, festival or holiday. In that case use `festival_context:
+  "event_with_festival"` if a real festival/cycle name is present; do not use
+  `festival_post`.
 - If the text describes a single holiday/day celebration or “гуляния” with a clear **program/schedule** (multiple activities listed by time),
   do NOT create separate events for each time slot. Create ONE umbrella event, keep the program in text fields, and set `time` to a range `HH:MM..HH:MM`
   using the earliest and latest times from the program.
@@ -189,6 +196,11 @@ Guidelines:
   object `{"festival": {...}, "events": []}`. The `festival` object should
   include `name`, `full_name`, `start_date`, `end_date`, `location_name`,
   `location_address` and `city` when available.
+- Online registration, online sign-up, an online form or a registration link
+  does not make an event online-only. Treat it as normal registration when the
+  source has an offline route, venue, meeting point or address. Return no event
+  as online-only only when the event itself is a webinar, stream, Zoom/online
+  meeting or remote broadcast without an offline attendable venue.
 - Respond with **plain JSON only** &mdash; do not wrap the output in code
   fences.
 
@@ -208,6 +220,7 @@ Expected response:
     "short_description": "Сказочный спектакль для всей семьи",
     "festival": "",
     "festival_full": "",
+    "festival_context": "none",
     "date": "2025-05-15",
     "time": "12:00",
     "location_name": "Театр Звезда",
@@ -228,6 +241,7 @@ Expected response:
     "short_description": "Сказочный спектакль для всей семьи",
     "festival": "",
     "festival_full": "",
+    "festival_context": "none",
     "date": "2025-05-15",
     "time": "17:00",
     "location_name": "Театр Звезда",

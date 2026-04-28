@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-28-vk-smart-update-false-skips.md`
+  - Scope: `smart_event_update.py` online-only guard, `festival_queue.py` festival-context routing, `docs/llm/prompts.md`, VK auto-import `persist_skipped` handling, production `vk_inbox`/`ops_run` catch-up evidence.
+  - Must not regress: a concrete offline VK event must not be skipped only because it has online registration, and a single masterclass/lecture/show/ride inside a festival/cycle/program context must create/update an event instead of being routed as a whole `festival_post`.
 - `INC-2026-04-27-cherryflash-missing-photo-urls.md`
   - Scope: `video_announce/popular_review.py`, `video_announce/scenario.py`, scheduled CherryFlash `popular_review`, prod sqlite event/session rows, Kaggle handoff/story publish evidence.
   - Must not regress: CherryFlash must not pick events whose persisted rows still have empty renderable `photo_urls`; source-post poster rehydration must be persisted before session items and render payload are built; older `cherryflash-session-*` datasets must not remain attached to the shared Kaggle kernel; and a missed same-day CherryFlash slot must be repaired with a compensating rerun.

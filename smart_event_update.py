@@ -3210,7 +3210,8 @@ _TOO_SOON_NOTICE_RE = re.compile(
 )
 _ONLINE_EVENT_RE = re.compile(
     r"(?iu)\b("
-    r"онлайн|zoom|вебинар|webinar|телемост|"
+    r"онлайн(?![-\s]*(?:регистрац\w*|запис\w*|форм\w*|анкет\w*))|"
+    r"zoom|вебинар|webinar|телемост|"
     r"стрим|трансляц\w*|youtube|"
     r"подключайтес\w*|ссылка\s+на\s+подключен\w*"
     r")\b"
