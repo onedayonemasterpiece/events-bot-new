@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Reference / Location Audit**: added checked venue references and aliases for `Бар Ельцин`, `Частная школа Дирижабль`, `Стендап клуб Локация`, `Бар Чилинтано`, `ДК Машиностроитель`, `Виштынецкий эколого-исторический музей`, and Зеленоградский ГЦКИ after the 2026-04-28 fresh-event location audit found missing addresses and prose-fragment venue drift in Telegram imports.
 - **Guide Excursions / Source Catalog**: added `@murnikovaT` to the canonical guide monitoring source seed as a personal Kaliningrad guide channel.
 - **Incident / VK Smart Update False Skips**: opened `INC-2026-04-28-vk-smart-update-false-skips` after two normal VK events were rejected as `skipped_festival_post` and `skipped_non_event:online_event`; Smart Update no longer treats `онлайн-регистрация` as online-only, festival routing rescues a single concrete event inside a cycle/program from `festival_post` even when the post has bullet-listed materials/conditions, and the event-parse prompt now distinguishes whole-festival posts from `event_with_festival` single events.
 - **Incident / CherryFlash Missing Rehydrated Posters**: opened `INC-2026-04-27-cherryflash-missing-photo-urls` after the scheduled CherryFlash loop repeatedly failed before Kaggle because selected events had in-memory rehydrated posters but empty persisted `photo_urls`; selection now writes rehydrated Telegram/VK poster URLs back to the event row before session/render payload creation.
