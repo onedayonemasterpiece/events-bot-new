@@ -1,10 +1,10 @@
 # INC-2026-04-28 VK Smart Update False Skips
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: VK auto-import / Smart Update
 Opened: 2026-04-28
-Closed: —
+Closed: 2026-04-28
 Owners: events bot maintainers
 Related incidents: —
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/festivals/README.md`, `docs/llm/prompts.md`, `docs/operations/release-governance.md`, `docs/operations/runtime-logs.md`
@@ -41,6 +41,10 @@ Both posts had concrete future event anchors and should have created or updated 
 - `2026-04-28 10:14/10:15 Europe/Kaliningrad` — operator saw the two skip messages and opened this incident.
 - `2026-04-28` — root cause localized to festival-context over-classification and broad online-only guard.
 - `2026-04-28` — targeted regression tests passed: `pytest -q tests/test_smart_event_update_non_event_guards.py tests/test_festival_context.py tests/test_vk_auto_queue_import.py` (`31 passed`).
+- `2026-04-28 09:51 UTC` — hotfix SHA `30b0575a` deployed to Fly as image `deployment-01KQ9QYK28K0SC8SNC20FYH80E`; machine version `1023`, health check passing.
+- `2026-04-28 09:52-10:23 UTC` — compensating `vk_auto_import` run `ops_run id=933` imported `wall-29891284_13503` into event `3911`; `wall-168966993_22654` hit the row timeout guard.
+- `2026-04-28 10:50-10:51 UTC` — direct incident catch-up `ops_run id=935` imported `wall-168966993_22654` into event `4314`.
+- `2026-04-28` — production `vk_inbox` rows `6286` and `6287` verified as `imported`; `/healthz` returned `ok=true`, `ready=true`, no issues.
 
 ## Root Cause
 
@@ -109,21 +113,31 @@ Both posts had concrete future event anchors and should have created or updated 
 
 ## Follow-up Actions
 
-- [ ] Complete production deploy and make the deployed SHA reachable from `origin/main`.
-- [ ] Perform compensating catch-up for `wall-29891284_13503` and `wall-168966993_22654`.
+- [x] Complete production deploy and make the deployed SHA reachable from `origin/main`.
+- [x] Perform compensating catch-up for `wall-29891284_13503` and `wall-168966993_22654`.
 - [ ] Consider surfacing `persist_skipped` with `events_created=0` as a stronger operator warning when the skipped reason is a known false-skip regression class.
+- [ ] Investigate the slow full-pipeline handling of `wall-168966993_22654`: after the false-skip fix, full VK auto-import no longer rejected it as `online_event`, but the OCR/draft path timed out at 1800 seconds before the direct Smart Update catch-up restored the event.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `30b0575a` (`fix(vk): rescue single-event festival bullets`), reachable from `origin/main`
+- deploy path: `flyctl deploy --app events-bot-new-wngqia`
+- deployed image: `events-bot-new-wngqia:deployment-01KQ9QYK28K0SC8SNC20FYH80E`
+- Fly status: machine `48e42d5b714228`, version `1023`, state `started`, `1 total, 1 passing`
 - regression checks:
   - `pytest -q tests/test_smart_event_update_non_event_guards.py tests/test_festival_context.py` (`4 passed`)
   - local contract check: `wall-29891284_13503` fixture resolves to `event_with_festival`; `wall-168966993_22654` fixture resolves `online_event=False`
   - `pytest -q tests/test_vk_auto_queue_import.py` (`27 passed`)
   - combined targeted run: `pytest -q tests/test_smart_event_update_non_event_guards.py tests/test_festival_context.py tests/test_vk_auto_queue_import.py` (`31 passed`)
   - broader `pytest -q tests/test_vk_auto_queue_import.py tests/test_vkrev_import_flow.py` exposed pre-existing `origin/main` failures in `tests/test_vkrev_import_flow.py` fixtures (missing `location_name` / missing local `GOOGLE_API_KEY`), while `tests/test_vk_auto_queue_import.py` passed; not used as blocking evidence for this hotfix.
-- post-deploy verification: pending
+- post-deploy verification:
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`
+  - original bad run: `ops_run id=931`, `processed=2`, `rejected=2`, errors were `festival_post` and `online_event`
+  - catch-up run: `ops_run id=933`, `processed=2`, `imported=1`, updated event `3911` for `https://vk.com/wall-29891284_13503`
+  - direct catch-up: `ops_run id=935`, `status=success`, `inbox_processed=1`, `inbox_imported=1`, created event `4314` for `https://vk.com/wall-168966993_22654`
+  - `vk_inbox id=6286`: `status=imported`, `imported_event_id=3911`
+  - `vk_inbox id=6287`: `status=imported`, `imported_event_id=4314`
+  - `event_source`: both original VK URLs linked to imported event IDs (`3911`, `4314`)
 
 ## Prevention
 
