@@ -83,10 +83,11 @@
 
 Design:
 
-- baseline run остаётся текущим prod-style Gemma 3 proxy и даёт mandatory fact floor;
+- baseline run остаётся текущим prod-style Gemma 3 proxy и выполняется первым внутри `lollipop_legacy`;
 - `lollipop_legacy` не запускает full `lollipop g4` cascade и не использует final `4o`;
-- Gemma 4 31b используется для compact enhancement + final writer;
-- narrative coverage floor фильтрует logistics/ticket/date/start-point facts, чтобы не превращать public description в инфоблок, но сохраняет event-facing route/program/person/theme facts.
+- Gemma 4 31b используется для одного bounded final-writer pass поверх `baseline_description`, полного baseline fact floor и source excerpt;
+- обязательный coverage floor равен полному baseline fact set, включая logistics/ticket/date/start-point facts;
+- final text должен быть не короче baseline; validation/timeout failures откатываются к baseline text с warning, чтобы legacy не мог ухудшить baseline.
 
 Важный negative result:
 
@@ -94,34 +95,43 @@ Design:
 - на `AUDIO-WALK-QUARTER-971` один короткий G4 extraction call занял около `177s`;
 - поэтому `--legacy-g4-extract` оставлен как explicit experimental opt-in и не входит в default legacy path.
 
+Superseded benchmark:
+
+- `artifacts/codex/lollipop_g4_benchmark_20260429T211304Z.{json,md}` был некорректно интерпретирован: legacy timing не включал baseline prose stage, coverage floor был event-facing вместо полного baseline fact set, а output length мог быть сильно ниже baseline.
+
 Latest five-fixture benchmark:
 
-- json: `artifacts/codex/lollipop_g4_benchmark_20260429T211304Z.json`
-- markdown: `artifacts/codex/lollipop_g4_benchmark_20260429T211304Z.md`
+- json: `artifacts/codex/lollipop_g4_benchmark_20260429T224021Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260429T224021Z.md`
 - command:
 
 ```bash
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=45 LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC=12 \
 python scripts/inspect/benchmark_lollipop_g4.py \
   --variants baseline,lollipop_legacy \
   --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --reuse-baseline-artifact artifacts/codex/lollipop_g4_benchmark_20260429T223829Z.json \
+  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260429T223829Z.json \
   --gemma-call-gap-s 0
 ```
 
 Results:
 
-| Fixture | Baseline chars | Legacy chars | Speed ratio | Validation |
-| --- | ---: | ---: | ---: | --- |
-| `AUDIO-WALK-QUARTER-971` | `554` | `272` | `0.4621` | `errors=0`, detector-only hook warning before hook regex expansion |
-| `PETER-FLEET-LECTURE-5600` | `886` | `536` | `1.1099` | `errors=0`, `warnings=0` |
-| `SACRED-LECTURE-ZYGMONT-3170` | `755` | `352` | `0.9918` | `errors=0`, detector-only hook warning before hook regex expansion |
-| `WORLD-HOBBIES-5505` | `1090` | `394` | `0.7970` | `errors=0`, `warnings=0` |
-| `RED-COSMOS-7902` | `1098` | `387` | `0.8412` | `errors=0`, `warnings=0` |
+| Fixture | Baseline chars | Legacy chars | Fact floor | Speed ratio | Validation |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `AUDIO-WALK-QUARTER-971` | `554` | `590` | `5/5` | `1.5368` | `errors=0`, `warnings=0` |
+| `PETER-FLEET-LECTURE-5600` | `1050` | `1050` | `4/4` | `2.0913` | `errors=0`, fallback warning after duplicate-tail typo |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1156` | `1218` | `7/7` | `2.1593` | `errors=0`, detector-only hook warning |
+| `WORLD-HOBBIES-5505` | `1078` | `1181` | `5/5` | `2.2308` | `errors=0`, `warnings=0` |
+| `RED-COSMOS-7902` | `1060` | `1060` | `6/6` | `2.4086` | `errors=0`, fallback warning after writer timeout |
 
 Interpretation:
 
-- `lollipop_legacy` passes the `<=3x` latency gate on all five fixtures and is usually faster than the baseline proxy because it skips the long baseline prose path after fact extraction;
-- output is substantially shorter than baseline while preserving the event-facing fact floor;
-- style is cleaner than baseline on the checked cases: no report-formula hits, no promo phrase hits, no poster/age leaks;
+- `lollipop_legacy` now passes the stricter `1.0 < speed_ratio <= 3.0` latency gate on all five fixtures while counting the baseline stage;
+- output length is guaranteed non-regressive in this run: min ratio `1.000`, average ratio `1.043`;
+- full baseline fact floor is preserved on every fixture;
+- style detectors report no report-formula hits, no promo phrase hits, and no poster/age leaks;
+- two writer failures were contained by baseline fallback: one duplicate-tail typo (`трудностиности`) and one 12s writer timeout;
 - quality still needs human pairwise review before rollout: the current evidence is a strong lab recovery candidate, not a production default.
 
 ## Non-canonical writer-swap result on `KALMANIA-2885`

@@ -62,7 +62,7 @@ def build_enhancement_system_prompt() -> str:
         """
         You do one bounded step: lollipop_legacy.enhance.v1.
 
-        Goal: preserve the baseline fact floor and add only source-grounded lollipop-style strength.
+        Goal: preserve the full baseline fact floor and add only source-grounded lollipop-style strength.
 
         CONTRACT
         - Input baseline_facts are mandatory factual floor. Do not rewrite or drop them.
@@ -160,18 +160,31 @@ def build_writer_system_prompt() -> str:
 
         HARD CONTRACT
         - You write the final public event description in Russian.
+        - Treat baseline_description as the draft you are improving, not as disposable context.
+          Keep its informational density, useful structure, and specific texture unless a line is
+          unsafe, invented, or violates the style rules below.
         - The baseline_facts list is the factual floor. Semantically cover every baseline fact.
+        - source_excerpt is available only to verify or add grounded texture. It does not override
+          the baseline factual floor.
         - If a fact is awkward but important, rewrite it naturally without changing meaning.
         - Use extra_facts only when they strengthen the text without crowding out baseline facts.
         - Do not invent facts, dates, venues, prices, ticket conditions, names, or quotes.
         - Do not put date/time/location/address/ticket logistics in narrative prose.
-        - Aim to be shorter than baseline_description_chars, but never drop a fact to save length.
-        - If coverage requires comparable length, choose coverage over brevity.
+        - Keep the result at least as detailed as baseline_description_chars.
+        - Required length window is in the user payload: min_description_chars..max_description_chars.
+          Stay inside it unless a hard fact-floor constraint makes that impossible.
+        - Do not compress the baseline into a short summary. The legacy path is additive:
+          baseline first, lollipop polish second.
+        - If coverage requires comparable length, choose coverage and texture over brevity.
+        - If baseline facts contain logistics/date/time/tickets, keep them compact and natural,
+          but do not invent any extra service details.
         - The first paragraph should use the strongest grounded hook early: rarity, format,
           quote-like phrase, atmosphere, named programme, local context, or stage action.
         - Avoid report/card/promotional formulas: "посвящено", "характеризуется",
           "программа состоит из", "наполнен", "уникальная возможность", "не упустите",
           "зрители смогут насладиться", "X — это ...".
+        - Never open with an em-dash definition like `Название — это ...`; write through action,
+          atmosphere, object, or format instead.
         - Keep the register: vivid cultural digest, not a dry card and not ad copy.
         - If a baseline fact contains an explicit named list, preserve the names; do not collapse to
           "и другие".
@@ -191,12 +204,23 @@ def build_writer_payload(
     baseline_description: str,
     baseline_facts: list[str],
     enhancement: dict[str, Any],
+    source_excerpt: str = "",
 ) -> dict[str, Any]:
     return {
         "title": title,
         "event_type": event_type,
         "baseline_description_chars": len(str(baseline_description or "")),
+        "min_description_chars": len(str(baseline_description or "")),
+        "max_description_chars": int(len(str(baseline_description or "")) * 1.2),
+        "hard_validation_gates": {
+            "cover_all_baseline_fact_indexes": True,
+            "minimum_description_chars": len(str(baseline_description or "")),
+            "speed_profile": "benchmark counts baseline stage plus lollipop stages",
+            "forbidden_lead_pattern": "title — это",
+            "forbidden_register": ["dry report", "promo CTA", "short summary"],
+        },
         "baseline_description": baseline_description,
+        "source_excerpt": str(source_excerpt or "")[:5000],
         "baseline_facts": [
             {"index": idx, "text": fact}
             for idx, fact in enumerate(baseline_facts)
@@ -236,7 +260,8 @@ def validate_writer_output(
     baseline_description: str,
     enhancement: dict[str, Any],
     output: dict[str, Any],
-    max_length_ratio: float = 1.15,
+    min_length_ratio: float = 1.00,
+    max_length_ratio: float = 1.25,
 ) -> LegacyValidationResult:
     description = str(output.get("description_md") or "")
     errors: list[str] = []
@@ -256,8 +281,23 @@ def validate_writer_output(
         errors.append("description.empty")
     if re.search(r"(?iu)\b(?:6|12|16|18)\+\b|возрастн", description):
         errors.append("age.leak")
-    if re.search(r"(?iu)\b(?:http|www\.|билет\w*|руб(?:\.|л|лей)?|₽)\b", description):
-        warnings.append("logistics_or_ticket_language")
+    duplicate_word = re.search(r"(?iu)\b([а-яёa-z]{4,})\b[\s,;:—-]+\1\b", description)
+    if duplicate_word:
+        errors.append(f"text.duplicate_word:{duplicate_word.group(1).lower()}")
+    duplicate_tail = re.search(r"(?iu)\b[а-яё]*([а-яё]{3,})\1[а-яё]*\b", description)
+    if duplicate_tail:
+        errors.append(f"text.duplicate_tail:{duplicate_tail.group(1).lower()}")
+    baseline_has_ticket_or_price = any(
+        re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", str(fact or ""))
+        for fact in baseline_facts
+    )
+    if re.search(r"(?iu)\b(?:http|www\.)\b", description):
+        warnings.append("url.leak")
+    if (
+        not baseline_has_ticket_or_price
+        and re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", description)
+    ):
+        errors.append("ticket_or_price.invented_or_unexpected")
 
     quality = writer_final_4o_family._describe_text_quality(description)
     for label in quality["report_formula_hits"]:
@@ -270,6 +310,8 @@ def validate_writer_output(
         errors.append("style.audience_template:will_enjoy")
 
     baseline_len = len(str(baseline_description or ""))
+    if baseline_len and len(description) < int(baseline_len * min_length_ratio):
+        errors.append(f"length.below_baseline_ratio:{len(description)}/{baseline_len}")
     if baseline_len and len(description) > int(baseline_len * max_length_ratio):
         warnings.append(f"length.above_baseline_ratio:{len(description)}/{baseline_len}")
     if not quality["lead_hook_signals"]:

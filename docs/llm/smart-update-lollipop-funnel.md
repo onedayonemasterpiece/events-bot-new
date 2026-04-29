@@ -52,11 +52,12 @@ source.scope
 
 Контракт `lollipop_legacy.v1`:
 
-- baseline Gemma 3 fact extractor остаётся mandatory fact floor для benchmark-сравнения;
-- в обязательный narrative coverage floor входят только event-facing facts; date/time/ticket/price/start-point logistics считаются deterministic/non-narrative facts и не должны заставлять writer тащить сервисные строки в public prose;
-- Gemma 4 31b делает два компактных JSON stage: `lollipop_legacy.enhance.v1` и финальный `lollipop_legacy.v1 writer`;
-- финальный writer обязан покрыть все baseline floor facts, может использовать source-grounded extra facts/quote candidates из enhancement pass, но не имеет deterministic semantic repair слоя;
-- speed gate: `lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`;
+- baseline Gemma 3 fact extraction + baseline prose path выполняется первым и считается частью `lollipop_legacy` timing;
+- mandatory fact floor равен полному baseline fact set, включая logistics/date/time/ticket/start-point facts; event-facing/logistics split остаётся только диагностикой в отчёте;
+- Gemma 4 31b делает один bounded final-writer pass поверх `baseline_description`, `baseline_facts` и `source_excerpt`;
+- финальный writer обязан покрыть все baseline floor facts и вернуть текст не короче baseline; если writer нарушает validation или не отвечает за `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC`, benchmark откатывает public text к baseline и пишет warning `writer.fallback_to_baseline:*`;
+- speed gate: `1.0 < lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`;
+- direct Gemma JSON calls ограничены `LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC` (`75s` default), writer pass отдельно ограничен `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC` (`12s` default);
 - optional `--legacy-g4-extract` оставлен только как экспериментальный флаг. Live check `2026-04-29` показал, что baseline-style extraction на `gemma-4-31b-it` через текущий Smart Update extractor path может занимать около `177s` на одном коротком fixture и не проходит latency gate.
 
 Benchmark command:
@@ -72,7 +73,7 @@ Implementation surface:
 
 - [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation;
 - [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) owns variant routing, five real-post fixtures, timing, and markdown report rendering;
-- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers floor filtering, coverage validation, bad-register validation, and benchmark routing.
+- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers full baseline floor preservation, coverage validation, bad-register validation, duplicate-word/tail validation, baseline-volume validation, and benchmark routing.
 
 ## Активные families
 
