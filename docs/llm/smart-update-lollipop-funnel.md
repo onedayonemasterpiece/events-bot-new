@@ -44,6 +44,36 @@ source.scope
   - `gemma_calls / four_o_calls`
   - top slowest stage families, чтобы quality gain можно было сравнивать с latency cost.
 
+## `lollipop_legacy`
+
+Статус: `lab variant`, не production default.
+
+Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work, не рискуя потерять факты относительно текущего baseline.
+
+Контракт `lollipop_legacy.v1`:
+
+- baseline Gemma 3 fact extractor остаётся mandatory fact floor для benchmark-сравнения;
+- в обязательный narrative coverage floor входят только event-facing facts; date/time/ticket/price/start-point logistics считаются deterministic/non-narrative facts и не должны заставлять writer тащить сервисные строки в public prose;
+- Gemma 4 31b делает два компактных JSON stage: `lollipop_legacy.enhance.v1` и финальный `lollipop_legacy.v1 writer`;
+- финальный writer обязан покрыть все baseline floor facts, может использовать source-grounded extra facts/quote candidates из enhancement pass, но не имеет deterministic semantic repair слоя;
+- speed gate: `lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`;
+- optional `--legacy-g4-extract` оставлен только как экспериментальный флаг. Live check `2026-04-29` показал, что baseline-style extraction на `gemma-4-31b-it` через текущий Smart Update extractor path может занимать около `177s` на одном коротком fixture и не проходит latency gate.
+
+Benchmark command:
+
+```bash
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --gemma-call-gap-s 0
+```
+
+Implementation surface:
+
+- [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation;
+- [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) owns variant routing, five real-post fixtures, timing, and markdown report rendering;
+- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers floor filtering, coverage validation, bad-register validation, and benchmark routing.
+
 ## Активные families
 
 ### `source.scope`

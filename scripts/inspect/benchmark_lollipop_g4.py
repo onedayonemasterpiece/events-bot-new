@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import textwrap
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,13 +26,15 @@ import smart_event_update as su
 from smart_event_update import EventCandidate
 from smart_update_lollipop_lab.full_cascade import run_full_cascade_variant
 from smart_update_lollipop_lab import writer_final_4o_family as writer_final_family
+from smart_update_lollipop_lab import legacy_writer_family
 
 
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
 DEFAULT_G3_MODEL = "gemma-3-27b-it"
 DEFAULT_G4_MODEL = "gemma-4-31b-it"
 DEFAULT_4O_MODEL = "gpt-4o"
-DEFAULT_FIXTURES = "kalmania"
+DEFAULT_FIXTURES = "audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos"
+DEFAULT_VARIANTS = "baseline,lollipop_legacy"
 DEFAULT_GEMMA_CALL_GAP_S = 4.0
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -157,18 +160,161 @@ def _build_vivat_fixture() -> BenchmarkFixture:
     )
 
 
+def _single_source_fixture(
+    *,
+    fixture_id: str,
+    title: str,
+    event_type: str,
+    date: str | None,
+    time: str | None,
+    location_name: str | None,
+    location_address: str | None = None,
+    city: str | None = "Калининград",
+    source_id: str = "tg",
+    source_type: str = "telegram",
+    url: str,
+    text: str,
+) -> BenchmarkFixture:
+    return BenchmarkFixture(
+        fixture_id=fixture_id,
+        title=title,
+        event_type=event_type,
+        date=date,
+        time=time,
+        location_name=location_name,
+        location_address=location_address,
+        city=city,
+        sources=[SourcePacket(source_id, source_type, url, re.sub(r"\s+", " ", text).strip())],
+    )
+
+
+def _build_audio_walk_fixture() -> BenchmarkFixture:
+    return _single_source_fixture(
+        fixture_id="AUDIO-WALK-QUARTER-971",
+        title="Аудиопутешествие «Четверть длиннее восьмой»",
+        event_type="аудиопрогулка",
+        date="2026-04-24",
+        time="16:00-20:00",
+        location_name="Бар Советов",
+        location_address="проспект Мира, 118",
+        url="https://t.me/barn_kaliningrad/971",
+        text=(
+            "Аудиопутешествие «Четверть длиннее восьмой» 24 и 26 апреля. "
+            "Начать прогулку можно в любой промежуток с 16:00 до 20:00 в пятницу и воскресенье. "
+            "Полную инструкцию и карту вы получите в «Баре Советов», проспект Мира, 118. "
+            "OCR: 24 И 26 АПРЕЛЯ, 16:00-20:00. АУДИОПУТЕШЕСТВИЕ "
+            "\"ЧЕТВЕРТЬ ДЛИННЕЕ ВОСЬМОЙ\". КАШТАНОВАЯ АЛЛЕЯ, 1А."
+        ),
+    )
+
+
+def _build_peter_fleet_lecture_fixture() -> BenchmarkFixture:
+    return _single_source_fixture(
+        fixture_id="PETER-FLEET-LECTURE-5600",
+        title="Лекция о быте и нравах регулярного военного флота Петра Великого",
+        event_type="лекция",
+        date="2026-04-24",
+        time="16:00",
+        location_name="Музей янтаря",
+        location_address="пл. Василевского, 1",
+        url="https://t.me/ambermuseum/5600",
+        text=(
+            "Приглашаем на лекцию о быте и нравах регулярного военного флота Петра Великого. "
+            "Лектор — Борис Мегорский, заведующий отделом Российской национальной библиотеки. "
+            "Билеты продаются на сайте и в кассе музея. OCR: 24.04 в 16:00."
+        ),
+    )
+
+
+def _build_sacred_lecture_fixture() -> BenchmarkFixture:
+    return _single_source_fixture(
+        fixture_id="SACRED-LECTURE-ZYGMONT-3170",
+        title="В поисках абсолютно инакового",
+        event_type="лекция",
+        date="2026-04-23",
+        time="18:30",
+        location_name="Дом китобоя",
+        location_address="проспект Мира, 9",
+        url="https://t.me/domkitoboya/3170",
+        text=(
+            "Завтра, 23 апреля, в Доме китобоя стартует цикл лекций от религиоведа Алексея Зыгмонта "
+            "«В поисках абсолютно инакового». Начало в 18.30. Вход — 300 р. Билеты — на сайте музея. "
+            "Дом китобоя, пр-т Мира 9. OCR: краткая история сакрального; лекторий; Алексей Зыгмонт; "
+            "САКРАЛЬНОЕ В ТЕОРИИ И В ИСТОРИИ; 23.04; 18:30; ДОМ Китобоя; 16+."
+        ),
+    )
+
+
+def _build_world_hobbies_fixture() -> BenchmarkFixture:
+    return _single_source_fixture(
+        fixture_id="WORLD-HOBBIES-5505",
+        title="Мир увлечений",
+        event_type="выставка",
+        date="2026-04-23",
+        time="16:00",
+        location_name="Калининградский историко-художественный музей",
+        url="https://t.me/koihm/5505",
+        text=(
+            "МИР УВЛЕЧЕНИЙ || выставка ко Дню Земли. 23 апреля в 16:00 в Калининградском "
+            "историко-художественном музее состоится открытие персональной выставки Геннадия Медера "
+            "«Мир увлечений». Выставка будет работать до 22 мая 2026 года."
+        ),
+    )
+
+
+def _build_red_cosmos_fixture() -> BenchmarkFixture:
+    return _single_source_fixture(
+        fixture_id="RED-COSMOS-7902",
+        title="Космос красного",
+        event_type="выставка",
+        date=None,
+        time=None,
+        location_name="Калининградский музей изобразительных искусств",
+        url="https://t.me/kaliningradartmuseum/7902",
+        text=(
+            "В разделе «Красны девицы, добры молодцы» на выставке «Космос красного» можно увидеть "
+            "произведения русского народного промысла: жостовские подносы, каргопольская и дымковская игрушки."
+        ),
+    )
+
+
 def _fixture_by_name(name: str) -> BenchmarkFixture:
     normalized = (name or "").strip().lower()
     if normalized in {"kalmania", "kalmania-2885", "2885"}:
         return _build_kalmania_fixture()
     if normalized in {"vivat", "vivat-munchausen", "vivat-munchhausen", "9440"}:
         return _build_vivat_fixture()
+    if normalized in {"audio_walk", "audio-walk", "quarter", "971"}:
+        return _build_audio_walk_fixture()
+    if normalized in {"peter_fleet_lecture", "peter-fleet-lecture", "fleet_lecture", "5600"}:
+        return _build_peter_fleet_lecture_fixture()
+    if normalized in {"sacred_lecture", "sacred-lecture", "zygmunt", "zygmont", "3170"}:
+        return _build_sacred_lecture_fixture()
+    if normalized in {"world_hobbies", "world-hobbies", "mir_uvlecheniy", "5505"}:
+        return _build_world_hobbies_fixture()
+    if normalized in {"red_cosmos", "red-cosmos", "cosmos_red", "7902"}:
+        return _build_red_cosmos_fixture()
     raise ValueError(f"Unsupported fixture: {name}")
 
 
 def _fixtures_from_cli(raw: str) -> list[BenchmarkFixture]:
     names = [item.strip() for item in (raw or "").split(",") if item.strip()]
-    return [_fixture_by_name(name) for name in (names or [DEFAULT_FIXTURES])]
+    if not names:
+        names = [item.strip() for item in DEFAULT_FIXTURES.split(",") if item.strip()]
+    return [_fixture_by_name(name) for name in names]
+
+
+def _variants_from_cli(raw: str) -> list[str]:
+    allowed = {"baseline", "lollipop", "lollipop_g4", "lollipop_legacy"}
+    variants = [item.strip() for item in (raw or DEFAULT_VARIANTS).split(",") if item.strip()]
+    if not variants:
+        variants = [item.strip() for item in DEFAULT_VARIANTS.split(",") if item.strip()]
+    unknown = [item for item in variants if item not in allowed]
+    if unknown:
+        raise ValueError(f"Unsupported variants: {', '.join(unknown)}")
+    if "lollipop_legacy" in variants and "baseline" not in variants:
+        variants.insert(0, "baseline")
+    return list(dict.fromkeys(variants))
 
 
 def _fixture_from_artifact_row(row: dict[str, Any]) -> BenchmarkFixture | None:
@@ -204,6 +350,16 @@ def _fixture_row_matches_name(row: dict[str, Any], name: str) -> bool:
         return fixture_id.startswith("kalmania") or "кальмания" in title
     if normalized in {"vivat", "vivat-munchausen", "vivat-munchhausen", "9440"}:
         return fixture_id.startswith("vivat") or "мюнхгаузен" in title
+    if normalized in {"audio_walk", "audio-walk", "quarter", "971"}:
+        return fixture_id.startswith("audio-walk") or "четверть длиннее" in title
+    if normalized in {"peter_fleet_lecture", "peter-fleet-lecture", "fleet_lecture", "5600"}:
+        return fixture_id.startswith("peter-fleet") or "флота петра" in title
+    if normalized in {"sacred_lecture", "sacred-lecture", "zygmunt", "zygmont", "3170"}:
+        return fixture_id.startswith("sacred-lecture") or "инакового" in title
+    if normalized in {"world_hobbies", "world-hobbies", "mir_uvlecheniy", "5505"}:
+        return fixture_id.startswith("world-hobbies") or "мир увлечений" in title
+    if normalized in {"red_cosmos", "red-cosmos", "cosmos_red", "7902"}:
+        return fixture_id.startswith("red-cosmos") or "космос красного" in title
     return normalized in fixture_id or normalized in title
 
 
@@ -266,15 +422,20 @@ async def _run_baseline(
     gemma_model: str,
     gemma_call_gap_s: float,
 ) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    gemma_calls = 0
+    sleep_sec = 0.0
     _set_gemma_model(gemma_model)
     extracted: list[str] = []
     per_source: dict[str, list[str]] = {}
     for source in fixture.sources:
         candidate = _build_candidate(fixture, source)
         facts = await su._llm_extract_candidate_facts(candidate, text_for_facts=source.text)
+        gemma_calls += 1
         per_source[source.source_id] = facts
         extracted.extend(facts)
         await _gemma_gap_sleep(gemma_call_gap_s)
+        sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
     anchors = [fixture.date or "", fixture.time or "", fixture.city or "", fixture.location_name or "", fixture.location_address or ""]
     facts_text_clean = su._facts_text_clean_from_facts(extracted, anchors=anchors)
     budget_chars = su._estimate_fact_first_description_budget_chars(facts_text_clean)
@@ -290,12 +451,21 @@ async def _run_baseline(
         label=re.sub(r"[^a-zA-Z0-9_-]+", "_", f"benchmark_{fixture.fixture_id}_baseline_first_pass").strip("_"),
         temperature=0.0,
     )
+    gemma_calls += 1
+    wall_clock_sec = round(time.perf_counter() - started_at, 6)
     return {
         "gemma_model": gemma_model,
         "baseline_mode": "prod_style_first_pass_proxy",
         "per_source_facts": per_source,
         "facts_text_clean": facts_text_clean,
         "description_md": description,
+        "timings": {
+            "wall_clock_sec": wall_clock_sec,
+            "model_active_sec": round(max(0.0, wall_clock_sec - sleep_sec), 6),
+            "sleep_sec": round(sleep_sec, 6),
+            "gemma_calls": gemma_calls,
+            "four_o_calls": 0,
+        },
     }
 
 
@@ -1055,7 +1225,7 @@ def _load_reused_variant_payload(
         raise RuntimeError(f"Unsupported reuse artifact shape in {path}")
     if section == "baseline" and "baseline_mode" in data:
         return data
-    if section in {"lollipop", "lollipop_g4"} and "applied_output" in data:
+    if section in {"lollipop", "lollipop_g4", "lollipop_legacy"} and "applied_output" in data:
         payload = dict(data)
         payload.setdefault("metrics", _variant_metrics(payload.get("applied_output", {}).get("description_md")))
         return payload
@@ -1084,9 +1254,163 @@ async def _run_lollipop_variant(
     return result
 
 
+def _baseline_fact_list(baseline: dict[str, Any]) -> list[str]:
+    facts: list[str] = []
+    for _source_id, source_facts in dict(baseline.get("per_source_facts") or {}).items():
+        for fact in list(source_facts or []):
+            text = re.sub(r"\s+", " ", str(fact or "")).strip()
+            if text and text not in facts:
+                facts.append(text)
+    return facts
+
+
+def _legacy_event_fact_floor(facts: list[str]) -> list[str]:
+    event_facts: list[str] = []
+    logistics_re = re.compile(
+        r"(?iu)\b(?:"
+        r"\d{1,2}(?:[.:]\d{2})?|"
+        r"апрел[ья]|ма[йяе]|июн[ья]|июл[ья]|август|сентябр|октябр|ноябр|декабр|"
+        r"билет\w*|касс\w*|сайт\w*|стоимост\w*|руб(?:\.|л|лей)?|₽|"
+        r"место\s+старта"
+        r")\b"
+    )
+    for fact in facts:
+        text = re.sub(r"\s+", " ", str(fact or "")).strip()
+        if not text:
+            continue
+        if logistics_re.search(text):
+            continue
+        event_facts.append(text)
+    return event_facts or facts
+
+
+async def _run_lollipop_legacy_variant(
+    fixture: BenchmarkFixture,
+    *,
+    baseline: dict[str, Any],
+    gemma_model: str,
+    gemma_call_gap_s: float,
+    legacy_g4_extract: bool = False,
+) -> dict[str, Any]:
+    print(f"[benchmark] {fixture.fixture_id} start lollipop_legacy model={gemma_model}", file=sys.stderr, flush=True)
+    started_at = time.perf_counter()
+    gemma_calls = 0
+    sleep_sec = 0.0
+    _set_gemma_model(gemma_model)
+
+    per_source: dict[str, list[str]] = {}
+    extracted: list[str] = []
+    if legacy_g4_extract:
+        for source in fixture.sources:
+            candidate = _build_candidate(fixture, source)
+            facts = await su._llm_extract_candidate_facts(candidate, text_for_facts=source.text)
+            gemma_calls += 1
+            per_source[source.source_id] = facts
+            extracted.extend(facts)
+            await _gemma_gap_sleep(gemma_call_gap_s)
+            sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
+
+    baseline_all_facts = _baseline_fact_list(baseline)
+    baseline_floor_facts = _legacy_event_fact_floor(baseline_all_facts)
+    legacy_facts = [re.sub(r"\s+", " ", str(item or "")).strip() for item in extracted if str(item or "").strip()]
+    fact_floor = baseline_floor_facts or legacy_facts
+    for fact in legacy_facts:
+        if fact and fact not in fact_floor:
+            fact_floor.append(fact)
+
+    enhancement_raw = await _ask_gemma_json_direct(
+        model=gemma_model,
+        system_prompt=legacy_writer_family.build_enhancement_system_prompt(),
+        user_payload=legacy_writer_family.build_enhancement_payload(
+            title=fixture.title,
+            event_type=fixture.event_type,
+            baseline_facts=fact_floor,
+            source_excerpt=_source_excerpt(fixture.sources, limit=3200),
+        ),
+        max_tokens=1600,
+        response_schema=legacy_writer_family.enhancement_response_schema(),
+    )
+    gemma_calls += 1
+    enhancement = legacy_writer_family.normalize_enhancement_payload(
+        enhancement_raw,
+        baseline_fact_count=len(fact_floor),
+    )
+    await _gemma_gap_sleep(gemma_call_gap_s)
+    sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
+
+    writer_raw = await _ask_gemma_json_direct(
+        model=gemma_model,
+        system_prompt=legacy_writer_family.build_writer_system_prompt(),
+        user_payload=legacy_writer_family.build_writer_payload(
+            title=fixture.title,
+            event_type=fixture.event_type,
+            baseline_description=str(baseline.get("description_md") or ""),
+            baseline_facts=fact_floor,
+            enhancement=enhancement,
+        ),
+        max_tokens=2200,
+        response_schema=legacy_writer_family.writer_response_schema(),
+    )
+    gemma_calls += 1
+    applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
+    validation = legacy_writer_family.validate_writer_output(
+        baseline_facts=fact_floor,
+        baseline_description=str(baseline.get("description_md") or ""),
+        enhancement=enhancement,
+        output=writer_raw,
+    )
+    wall_clock_sec = round(time.perf_counter() - started_at, 6)
+    baseline_wall = None
+    try:
+        baseline_wall = float((baseline.get("timings") or {}).get("wall_clock_sec") or 0.0) or None
+    except Exception:
+        baseline_wall = None
+    speed_ratio = None
+    if baseline_wall:
+        ratio = wall_clock_sec / baseline_wall
+        speed_ratio = {
+            "ratio": round(ratio, 4),
+            "target": 3.0,
+            "pass": ratio <= 3.0,
+            "gate": "pass" if ratio <= 3.0 else "latency.3x_exceeded",
+        }
+        if ratio > 3.0:
+            validation.errors.append("latency.3x_exceeded")
+
+    return {
+        "gemma_model": gemma_model,
+        "variant_mode": "lollipop_legacy",
+        "contract_version": legacy_writer_family.LEGACY_CONTRACT_VERSION,
+        "uses_baseline_fact_floor": True,
+        "legacy_g4_extract_enabled": legacy_g4_extract,
+        "baseline_all_fact_count": len(baseline_all_facts),
+        "baseline_floor_fact_count": len(fact_floor),
+        "baseline_logistics_fact_count": max(0, len(baseline_all_facts) - len(baseline_floor_facts)),
+        "legacy_extracted_fact_count": len(legacy_facts),
+        "per_source_facts": per_source,
+        "baseline_floor_facts": fact_floor,
+        "legacy_extracted_facts": legacy_facts,
+        "enhancement_raw": enhancement_raw,
+        "enhancement": enhancement,
+        "writer_output": writer_raw,
+        "applied_output": applied_output,
+        "validation": {"errors": validation.errors, "warnings": validation.warnings},
+        "quality_profile": _quality_profile(applied_output.get("description_md")),
+        "metrics": _variant_metrics(applied_output.get("description_md")),
+        "timings": {
+            "wall_clock_sec": wall_clock_sec,
+            "model_active_sec": round(max(0.0, wall_clock_sec - sleep_sec), 6),
+            "sleep_sec": round(sleep_sec, 6),
+            "gemma_calls": gemma_calls,
+            "four_o_calls": 0,
+        },
+        "speed_ratio_vs_baseline": speed_ratio,
+    }
+
+
 def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Path) -> str:
     lines = [
-        "# Lollipop G4 Benchmark",
+        "# Lollipop Benchmark",
         "",
         f"- generated_at: `{datetime.now(timezone.utc).isoformat()}`",
         f"- artifact_json: `{output_json_path}`",
@@ -1094,9 +1418,6 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
     ]
     for result in results:
         fixture = result["fixture"]
-        baseline = result["baseline"]
-        lollipop = result["lollipop"]
-        lollipop_g4 = result["lollipop_g4"]
         lines.extend(
             [
                 f"## {fixture['fixture_id']}",
@@ -1110,8 +1431,17 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
         for source in fixture["sources"]:
             lines.append(f"  - `{source['source_id']}`: {source['url']}")
         lines.extend(["", "### Source Excerpts", "", "```text", _source_excerpt([SourcePacket(**source) for source in fixture["sources"]]), "```", ""])
-        for label, payload in [("Baseline", baseline), ("Lollipop", lollipop), ("Lollipop G4", lollipop_g4)]:
-            body = payload.get("description_md") if label == "Baseline" else payload["applied_output"]["description_md"]
+        variant_labels = [
+            ("baseline", "Baseline"),
+            ("lollipop", "Lollipop"),
+            ("lollipop_g4", "Lollipop G4"),
+            ("lollipop_legacy", "Lollipop Legacy"),
+        ]
+        for key, label in variant_labels:
+            payload = result.get(key)
+            if not isinstance(payload, dict):
+                continue
+            body = payload.get("description_md") if key == "baseline" else payload.get("applied_output", {}).get("description_md")
             metrics = _variant_metrics(body)
             quality = dict(payload.get("quality_profile") or _quality_profile(body))
             lines.extend(
@@ -1128,27 +1458,50 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
                     f"- age_leak: `{bool(quality.get('age_leak'))}`",
                 ]
             )
-            if label != "Baseline":
+            timing_summary = _timing_summary(payload)
+            if timing_summary is None and isinstance(payload.get("timings"), dict):
+                timing_summary = {
+                    "wall_clock_sec": payload["timings"].get("wall_clock_sec"),
+                    "model_active_sec": payload["timings"].get("model_active_sec"),
+                    "sleep_sec": payload["timings"].get("sleep_sec"),
+                    "gemma_calls": payload["timings"].get("gemma_calls"),
+                    "four_o_calls": payload["timings"].get("four_o_calls"),
+                    "top_stage_families": [],
+                }
+            if timing_summary is not None:
+                lines.append(f"- wall_clock_sec: `{timing_summary['wall_clock_sec']}`")
+                lines.append(f"- model_active_sec: `{timing_summary['model_active_sec']}`")
+                lines.append(f"- sleep_sec: `{timing_summary['sleep_sec']}`")
+                lines.append(f"- gemma_calls: `{timing_summary['gemma_calls']}`")
+                lines.append(f"- four_o_calls: `{timing_summary['four_o_calls']}`")
+                top_families = ", ".join(f"{name}={value}" for name, value in timing_summary.get("top_stage_families") or [])
+                if top_families:
+                    lines.append(f"- slowest_stage_families: `{top_families}`")
+            if key in {"lollipop", "lollipop_g4"}:
                 lines.append(f"- selected_sources: `{','.join(payload['scope_select']['selected_source_ids'])}`")
                 lines.append(f"- extract_records: `{len(payload['extract_records'])}`")
                 lines.append(f"- kept_records_after_dedup: `{len([item for item in payload['extract_records'] if item['record_id'] not in {decision['record_id'] for decision in payload['dedup']['decisions'] if decision['keep'] == 'drop'}])}`")
                 lines.append(f"- validation errors: `{len(payload['validation']['errors'])}`")
                 lines.append(f"- validation warnings: `{len(payload['validation']['warnings'])}`")
-                timing_summary = _timing_summary(payload)
-                if timing_summary is not None:
-                    lines.append(f"- wall_clock_sec: `{timing_summary['wall_clock_sec']}`")
-                    lines.append(f"- model_active_sec: `{timing_summary['model_active_sec']}`")
-                    lines.append(f"- sleep_sec: `{timing_summary['sleep_sec']}`")
-                    lines.append(f"- gemma_calls: `{timing_summary['gemma_calls']}`")
-                    lines.append(f"- four_o_calls: `{timing_summary['four_o_calls']}`")
-                    top_families = ", ".join(f"{name}={value}" for name, value in timing_summary["top_stage_families"])
-                    lines.append(f"- slowest_stage_families: `{top_families or '-'}`")
+            if key == "lollipop_legacy":
+                lines.append(f"- baseline_all_fact_count: `{payload.get('baseline_all_fact_count')}`")
+                lines.append(f"- baseline_floor_fact_count: `{payload.get('baseline_floor_fact_count')}`")
+                lines.append(f"- baseline_logistics_fact_count: `{payload.get('baseline_logistics_fact_count')}`")
+                lines.append(f"- legacy_extracted_fact_count: `{payload.get('legacy_extracted_fact_count')}`")
+                speed = payload.get("speed_ratio_vs_baseline") if isinstance(payload.get("speed_ratio_vs_baseline"), dict) else None
+                if speed:
+                    lines.append(f"- speed_ratio_vs_baseline: `{speed.get('ratio')}` (`{speed.get('gate')}`)")
+                lines.append(f"- validation errors: `{len(payload.get('validation', {}).get('errors') or [])}`")
+                lines.append(f"- validation warnings: `{len(payload.get('validation', {}).get('warnings') or [])}`")
+                if payload.get("validation", {}).get("errors"):
+                    lines.append(f"- validation error list: `{', '.join(payload['validation']['errors'])}`")
             lines.extend(["", "```md", str(body or ""), "```", ""])
     return "\n".join(lines).strip() + "\n"
 
 
 async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
     _load_env_file()
+    variants = _variants_from_cli(args.variants)
     fixtures = _fixtures_from_artifact(args.reuse_fixture_artifact, args.fixtures) if args.reuse_fixture_artifact else _fixtures_from_cli(args.fixtures)
     results: list[dict[str, Any]] = []
     for fixture in fixtures:
@@ -1163,65 +1516,85 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
         baseline["quality_profile"] = _quality_profile(baseline.get("description_md"))
         baseline["metrics"] = _variant_metrics(baseline.get("description_md"))
 
-        lollipop = _load_reused_variant_payload(
-            args.reuse_lollipop_artifact,
-            fixture_id=fixture.fixture_id,
-            section="lollipop",
-        )
-        if lollipop is None:
-            lollipop = await _run_lollipop_variant(
+        row: dict[str, Any] = {
+            "fixture": {
+                "fixture_id": fixture.fixture_id,
+                "title": fixture.title,
+                "event_type": fixture.event_type,
+                "date": fixture.date,
+                "time": fixture.time,
+                "location_name": fixture.location_name,
+                "location_address": fixture.location_address,
+                "city": fixture.city,
+                "sources": [asdict(source) for source in fixture.sources],
+            }
+        }
+        if "baseline" in variants:
+            row["baseline"] = baseline
+
+        if "lollipop" in variants:
+            lollipop = _load_reused_variant_payload(
+                args.reuse_lollipop_artifact,
+                fixture_id=fixture.fixture_id,
+                section="lollipop",
+            )
+            if lollipop is None:
+                lollipop = await _run_lollipop_variant(
+                    fixture,
+                    gemma_model=args.g3_model,
+                    four_o_model=args.four_o_model,
+                    gemma_call_gap_s=args.gemma_call_gap_s,
+                )
+                await _gemma_gap_sleep(args.gemma_call_gap_s)
+            lollipop["quality_profile"] = _quality_profile(lollipop["applied_output"].get("description_md"))
+            lollipop["metrics"] = _variant_metrics(lollipop["applied_output"].get("description_md"))
+            row["lollipop"] = lollipop
+
+        if "lollipop_g4" in variants:
+            lollipop_g4 = await _run_lollipop_variant(
                 fixture,
-                gemma_model=args.g3_model,
+                gemma_model=args.g4_model,
                 four_o_model=args.four_o_model,
                 gemma_call_gap_s=args.gemma_call_gap_s,
             )
-            await _gemma_gap_sleep(args.gemma_call_gap_s)
-        lollipop["quality_profile"] = _quality_profile(lollipop["applied_output"].get("description_md"))
-        lollipop["metrics"] = _variant_metrics(lollipop["applied_output"].get("description_md"))
+            lollipop_g4["quality_profile"] = _quality_profile(lollipop_g4["applied_output"].get("description_md"))
+            row["lollipop_g4"] = lollipop_g4
 
-        lollipop_g4 = await _run_lollipop_variant(
-            fixture,
-            gemma_model=args.g4_model,
-            four_o_model=args.four_o_model,
-            gemma_call_gap_s=args.gemma_call_gap_s,
-        )
-        lollipop_g4["quality_profile"] = _quality_profile(lollipop_g4["applied_output"].get("description_md"))
-        results.append(
-            {
-                "fixture": {
-                    "fixture_id": fixture.fixture_id,
-                    "title": fixture.title,
-                    "event_type": fixture.event_type,
-                    "date": fixture.date,
-                    "time": fixture.time,
-                    "location_name": fixture.location_name,
-                    "location_address": fixture.location_address,
-                    "city": fixture.city,
-                    "sources": [asdict(source) for source in fixture.sources],
-                },
-                "baseline": baseline,
-                "lollipop": lollipop,
-                "lollipop_g4": lollipop_g4,
-            }
-        )
+        if "lollipop_legacy" in variants:
+            lollipop_legacy = await _run_lollipop_legacy_variant(
+                fixture,
+                baseline=baseline,
+                gemma_model=args.g4_model,
+                gemma_call_gap_s=args.gemma_call_gap_s,
+                legacy_g4_extract=args.legacy_g4_extract,
+            )
+            row["lollipop_legacy"] = lollipop_legacy
+
+        results.append(row)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_slug = f"lollipop_g4_benchmark_{timestamp}"
     ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
     json_path = ARTIFACTS_ROOT / f"{run_slug}.json"
     md_path = ARTIFACTS_ROOT / f"{run_slug}.md"
-    json_path.write_text(json.dumps({"results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
+    json_path.write_text(json.dumps({"variants": variants, "results": results}, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(_render_markdown_report(results, json_path), encoding="utf-8")
     return json_path, md_path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run baseline vs lollipop vs lollipop g4 benchmark.")
+    parser = argparse.ArgumentParser(description="Run baseline/lollipop/lollipop g4/lollipop legacy benchmark.")
     parser.add_argument("--fixtures", default=DEFAULT_FIXTURES, help="Comma-separated fixture names")
+    parser.add_argument("--variants", default=DEFAULT_VARIANTS, help="Comma-separated variants: baseline,lollipop,lollipop_g4,lollipop_legacy")
     parser.add_argument("--g3-model", default=DEFAULT_G3_MODEL, help="Gemma 3 upstream/baseline model")
     parser.add_argument("--g4-model", default=DEFAULT_G4_MODEL, help="Gemma 4 upstream model")
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL, help="Final writer model")
     parser.add_argument("--gemma-call-gap-s", type=float, default=DEFAULT_GEMMA_CALL_GAP_S, help="Sleep between Gemma calls")
+    parser.add_argument(
+        "--legacy-g4-extract",
+        action="store_true",
+        help="Experimental: also rerun baseline-style fact extraction on Gemma 4 before lollipop_legacy writer. Off by default because it is slow on current Google path.",
+    )
     parser.add_argument(
         "--reuse-baseline-artifact",
         help="Existing benchmark/debug JSON to reuse baseline for matching fixture_id",

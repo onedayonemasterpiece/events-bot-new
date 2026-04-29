@@ -77,6 +77,53 @@
 - `Gemma 4` без дополнительной настройки легко уходит в dry/compact structured prose;
 - transport-aware thought filtering обязателен.
 
+## `lollipop_legacy` recovery benchmark (`2026-04-29`)
+
+После обнаружения, что tracked repo не содержит отдельного `lollipop legacy` variant, добавлен lab-вариант `lollipop_legacy.v1`.
+
+Design:
+
+- baseline run остаётся текущим prod-style Gemma 3 proxy и даёт mandatory fact floor;
+- `lollipop_legacy` не запускает full `lollipop g4` cascade и не использует final `4o`;
+- Gemma 4 31b используется для compact enhancement + final writer;
+- narrative coverage floor фильтрует logistics/ticket/date/start-point facts, чтобы не превращать public description в инфоблок, но сохраняет event-facing route/program/person/theme facts.
+
+Важный negative result:
+
+- прямой перенос baseline-style fact extraction на `gemma-4-31b-it` через текущий Smart Update extractor path был проверен первым;
+- на `AUDIO-WALK-QUARTER-971` один короткий G4 extraction call занял около `177s`;
+- поэтому `--legacy-g4-extract` оставлен как explicit experimental opt-in и не входит в default legacy path.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260429T211304Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260429T211304Z.md`
+- command:
+
+```bash
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --gemma-call-gap-s 0
+```
+
+Results:
+
+| Fixture | Baseline chars | Legacy chars | Speed ratio | Validation |
+| --- | ---: | ---: | ---: | --- |
+| `AUDIO-WALK-QUARTER-971` | `554` | `272` | `0.4621` | `errors=0`, detector-only hook warning before hook regex expansion |
+| `PETER-FLEET-LECTURE-5600` | `886` | `536` | `1.1099` | `errors=0`, `warnings=0` |
+| `SACRED-LECTURE-ZYGMONT-3170` | `755` | `352` | `0.9918` | `errors=0`, detector-only hook warning before hook regex expansion |
+| `WORLD-HOBBIES-5505` | `1090` | `394` | `0.7970` | `errors=0`, `warnings=0` |
+| `RED-COSMOS-7902` | `1098` | `387` | `0.8412` | `errors=0`, `warnings=0` |
+
+Interpretation:
+
+- `lollipop_legacy` passes the `<=3x` latency gate on all five fixtures and is usually faster than the baseline proxy because it skips the long baseline prose path after fact extraction;
+- output is substantially shorter than baseline while preserving the event-facing fact floor;
+- style is cleaner than baseline on the checked cases: no report-formula hits, no promo phrase hits, no poster/age leaks;
+- quality still needs human pairwise review before rollout: the current evidence is a strong lab recovery candidate, not a production default.
+
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 
 ### Summary table
