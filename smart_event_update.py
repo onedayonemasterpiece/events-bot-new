@@ -3111,6 +3111,22 @@ _WORK_SCHEDULE_DETAIL_RE = re.compile(
     r"\d{1,2}[./]\d{1,2}"
     r")\b"
 )
+_WORK_SCHEDULE_INSTITUTION_RE = re.compile(
+    r"(?iu)\b("
+    r"музе[йя]|музеи|музеев|музеем|музею|"
+    r"библиотек[аиуы]|библиотеки|библиотекой|библиотекою"
+    r")\b"
+)
+_WORK_SCHEDULE_TABLE_RE = re.compile(
+    r"(?iu)\b("
+    r"(?:понедельник|вторник|среда|четверг|пятниц[ауы]|суббот[ауы]|воскресень[ея]|пн|вт|ср|чт|пт|сб|вс)"
+    r"[^.\n]{0,80}?"
+    r"(?:выходн\w*|санитарн\w*|не\s+работа(?:ет|ют)|закрыт\w*|"
+    r"с\s*\d{1,2}[:.]\d{2}\s*до\s*\d{1,2}[:.]\d{2}|"
+    r"\d{1,2}[:.]\d{2}\s*[–—-]\s*\d{1,2}[:.]\d{2})"
+    r"|(?:выходн\w*|санитарн\w*)\s+день"
+    r")\b"
+)
 
 _EVENT_ACTION_INVITE_RE = re.compile(
     r"(?iu)\b("
@@ -3477,15 +3493,24 @@ def _looks_like_work_schedule_notice(title: str | None, text: str | None) -> boo
     low = combined.casefold()
     has_schedule_headline = bool(_WORK_SCHEDULE_RE.search(low))
     has_schedule_details = bool(_WORK_SCHEDULE_DETAIL_RE.search(combined))
-    if not (has_schedule_headline or (("музей" in low or "библиотек" in low) and has_schedule_details)):
+    has_institution = bool(_WORK_SCHEDULE_INSTITUTION_RE.search(low))
+    has_schedule_table = bool(_WORK_SCHEDULE_TABLE_RE.search(combined))
+    if not (has_schedule_headline or (has_institution and has_schedule_table)):
         return False
     # If the post is clearly announcing a concrete attendable event, keep it.
     # Use action verbs, not generic nouns ("выставка/концерт"), otherwise
     # work-schedule notices with occasional cultural terms slip through.
     if _EVENT_ACTION_INVITE_RE.search(combined):
         return False
+    # Without an explicit work-schedule headline, keep normal event announcements
+    # at museums/libraries. A venue line like "вторник, 18:30, Библиотека..."
+    # or an address like "Музейная аллея" is not a work schedule by itself.
+    if not has_schedule_headline and _EVENT_INVITE_RE.search(combined):
+        return False
     # Explicit timetable-like details are a strong non-event signal.
-    if has_schedule_details:
+    if has_schedule_headline and has_schedule_details:
+        return True
+    if has_institution and has_schedule_table:
         return True
     return True
 
