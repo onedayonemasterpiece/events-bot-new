@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
 from smart_update_lollipop_lab import legacy_writer_family
 from smart_update_lollipop_lab import writer_final_4o_family
 
@@ -86,6 +88,43 @@ def test_lollipop_legacy_writer_payload_requires_baseline_volume() -> None:
     assert payload["hard_validation_gates"]["minimum_description_chars"] == 6
 
 
+def test_lollipop_legacy_v3_contract_is_gemma4_only() -> None:
+    assert legacy_writer_family.LEGACY_CONTRACT_VERSION == "lollipop_legacy.v3"
+    prompt = legacy_writer_family.build_source_fact_system_prompt()
+
+    assert "Gemma-4-only" in prompt
+    assert "there is no Gemma 3 baseline draft or fact floor" in prompt
+
+
+def test_lollipop_legacy_source_fact_normalization_splits_logistics() -> None:
+    payload = {
+        "public_facts": [
+            {"text": "Лекция разбирает повседневную дисциплину на флоте.", "source_refs": ["site", "site"]},
+            {"text": "Билеты стоят 300 руб.", "source_refs": ["site"]},
+            {"text": "В программе: жостовские подносы, каргопольская и дымковская игрушки.", "source_refs": ["vk"]},
+        ],
+        "logistics_facts": [
+            {"text": "Билеты стоят 300 руб.", "source_refs": ["site"]},
+            {"text": "Начало в 19:00.", "source_refs": ["site"]},
+        ],
+        "lead_hooks": ["  Морская дисциплина и суровые указы  "],
+        "structure_hints": ["разделить тему и формат"],
+        "warnings": [],
+    }
+
+    normalized = legacy_writer_family.normalize_source_fact_payload(payload)
+
+    assert [item["text"] for item in normalized["public_facts"]] == [
+        "Лекция разбирает повседневную дисциплину на флоте.",
+        "В программе: жостовские подносы, каргопольская и дымковская игрушки.",
+    ]
+    assert [item["text"] for item in normalized["logistics_facts"]] == [
+        "Билеты стоят 300 руб.",
+        "Начало в 19:00.",
+    ]
+    assert normalized["lead_hooks"] == ["Морская дисциплина и суровые указы"]
+
+
 def test_benchmark_accepts_lollipop_legacy_variant_and_static_fixtures() -> None:
     benchmark = _load_benchmark_module()
 
@@ -100,6 +139,88 @@ def test_benchmark_accepts_lollipop_legacy_variant_and_static_fixtures() -> None
         "SACRED-LECTURE-ZYGMONT-3170",
         "WORLD-HOBBIES-5505",
         "RED-COSMOS-7902",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_lollipop_legacy_v3_does_not_send_baseline_to_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    benchmark = _load_benchmark_module()
+    calls: list[dict[str, object]] = []
+
+    async def fake_ask_gemma_json_direct(**kwargs):
+        payload = kwargs["user_payload"]
+        calls.append(payload)
+        if "source_excerpt" in payload and "baseline_facts" not in payload:
+            return {
+                "public_facts": [
+                    {"text": "Лектор Борис Мегорский рассказывает о быте моряков.", "source_refs": ["site"]},
+                    {"text": "В фокусе — дисциплина и морские традиции.", "source_refs": ["site"]},
+                ],
+                "logistics_facts": [{"text": "Начало в 19:00.", "source_refs": ["site"]}],
+                "lead_hooks": ["Морская дисциплина и традиции"],
+                "structure_hints": [],
+                "warnings": [],
+            }
+        assert payload["baseline_description"] == ""
+        assert payload["reference_description_chars"] == len("Gemma 3 baseline draft.")
+        sent_facts = [item["text"] for item in payload["baseline_facts"]]
+        assert sent_facts == [
+            "Лектор Борис Мегорский рассказывает о быте моряков.",
+            "В фокусе — дисциплина и морские традиции.",
+        ]
+        assert "Gemma 3 baseline fact" not in " ".join(sent_facts)
+        return {
+            "title": "Флот Петра",
+            "description_md": (
+                "Морская дисциплина и традиции становятся главным нервом лекции. "
+                "Борис Мегорский расскажет о быте моряков и о том, как была устроена жизнь на борту."
+            ),
+            "covered_baseline_fact_indexes": [0, 1],
+            "used_extra_fact_indexes": [],
+        }
+
+    async def fake_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(benchmark, "_ask_gemma_json_direct", fake_ask_gemma_json_direct)
+    monkeypatch.setattr(benchmark, "_gemma_gap_sleep", fake_sleep)
+
+    result = await benchmark._run_lollipop_legacy_variant(
+        benchmark.BenchmarkFixture(
+            fixture_id="TEST",
+            title="Флот Петра",
+            event_type="лекция",
+            date=None,
+            time=None,
+            location_name=None,
+            location_address=None,
+            city="Калининград",
+            sources=[
+                benchmark.SourcePacket(
+                    source_id="site",
+                    source_type="site",
+                    url="https://example.test",
+                    text="Борис Мегорский рассказывает о быте моряков, дисциплине и традициях.",
+                )
+            ],
+        ),
+        baseline={
+            "description_md": "Gemma 3 baseline draft.",
+            "per_source_facts": {"site": ["Gemma 3 baseline fact"]},
+            "timings": {"wall_clock_sec": 10.0},
+        },
+        gemma_model="gemma-4-31b-it",
+        gemma_call_gap_s=0,
+    )
+
+    assert len(calls) == 2
+    assert result["generation_uses_baseline"] is False
+    assert result["uses_baseline_fact_floor"] is False
+    assert result["includes_baseline_stage"] is False
+    assert result["writer_fallback_to_baseline"] is False
+    assert result["legacy_public_facts"] == [
+        "Лектор Борис Мегорский рассказывает о быте моряков.",
+        "В фокусе — дисциплина и морские традиции.",
     ]
 
 

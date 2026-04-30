@@ -8,7 +8,7 @@ from typing import Any
 from . import writer_final_4o_family
 
 
-LEGACY_CONTRACT_VERSION = "lollipop_legacy.v2"
+LEGACY_CONTRACT_VERSION = "lollipop_legacy.v3"
 
 
 @dataclass(slots=True)
@@ -91,6 +91,144 @@ def enhancement_response_schema() -> dict[str, Any]:
             "writer_notes": {"type": "ARRAY", "items": {"type": "STRING"}},
         },
         "required": ["lead_hook_fact_indexes", "quote_candidates", "extra_facts", "writer_notes"],
+    }
+
+
+def source_fact_response_schema() -> dict[str, Any]:
+    fact_item = {
+        "type": "OBJECT",
+        "properties": {
+            "text": {"type": "STRING"},
+            "source_refs": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["text", "source_refs"],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "public_facts": {"type": "ARRAY", "items": fact_item},
+            "logistics_facts": {"type": "ARRAY", "items": fact_item},
+            "lead_hooks": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "structure_hints": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "draft_description_md": {"type": "STRING"},
+            "draft_covered_public_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": [
+            "public_facts",
+            "logistics_facts",
+            "lead_hooks",
+            "structure_hints",
+            "draft_description_md",
+            "draft_covered_public_fact_indexes",
+            "warnings",
+        ],
+    }
+
+
+def build_source_fact_system_prompt() -> str:
+    return textwrap.dedent(
+        """
+        You do one bounded step: lollipop_legacy.source_facts.v3.
+
+        Extract source-grounded facts for a public event description in Russian.
+        This is a Gemma-4-only legacy path: there is no Gemma 3 baseline draft or fact floor.
+
+        CONTRACT
+        - Extract every meaningful public fact needed for a no-worse event text:
+          event format, named title/programme, named people and roles, topic/theme,
+          explicit object/work/item lists, format texture, route/programme shape,
+          curator/artist/lecturer details, and distinctive atmosphere/context.
+        - Prefer recall over brevity. For a rich source, return 5-12 public_facts; do not stop
+          after title + one generic theme. Capture the concrete "what exactly happens / what is
+          shown / what will be discussed" layer.
+        - If the source has a programme, named sections, named works, named objects, or lecturer
+          agenda points, preserve them as separate facts.
+        - Put date, time, address, ticket, price, URL, age limit, and pure service details
+          into logistics_facts, not public_facts.
+        - Do not invent facts beyond source_excerpt.
+        - Preserve explicit named lists; do not collapse names/items to "и другие".
+        - Keep facts short, natural Russian, and source-local.
+        - lead_hooks are short grounded lead options, not slogans.
+        - structure_hints may suggest headings or paragraph clusters only when the facts are rich enough.
+        - Also write draft_description_md: a source-grounded emergency draft for the same public
+          description. It must be vivid but factual, avoid ad/report formulas, and use logistics
+          only in one compact natural sentence when helpful. If reference_description_chars is
+          present, aim for roughly 70-95% of it without padding or invention.
+        - draft_covered_public_fact_indexes must list every public_facts index covered by that draft.
+        - Return one JSON object only. No markdown. No commentary.
+        """
+    ).strip()
+
+
+def build_source_fact_payload(
+    *,
+    title: str,
+    event_type: str,
+    source_excerpt: str,
+    reference_description_chars: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "title": title,
+        "event_type": event_type,
+        "reference_description_chars": reference_description_chars,
+        "source_excerpt": str(source_excerpt or "")[:9000],
+    }
+
+
+def normalize_source_fact_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    def _items(key: str, *, logistics: bool = False) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for raw in list(payload.get(key) or []):
+            if not isinstance(raw, dict):
+                continue
+            text = _clean_text(raw.get("text"))
+            if not text:
+                continue
+            if not logistics and re.search(
+                r"(?iu)\b(?:билет\w*|цен[аы]|руб(?:\.|л|лей)?|₽|https?://|www\.|\d{1,2}:\d{2}|(?:6|12|16|18)\+)\b",
+                text,
+            ):
+                continue
+            refs: list[str] = []
+            for item in list(raw.get("source_refs") or []):
+                ref = _clean_text(item)
+                if ref and ref not in refs:
+                    refs.append(ref)
+            if not any(item["text"] == text for item in result):
+                result.append({"text": text[:420], "source_refs": refs[:4]})
+        return result
+
+    lead_hooks: list[str] = []
+    for raw in list(payload.get("lead_hooks") or []):
+        text = _clean_text(raw)
+        if text and text not in lead_hooks:
+            lead_hooks.append(text[:220])
+
+    structure_hints: list[str] = []
+    for raw in list(payload.get("structure_hints") or []):
+        text = _clean_text(raw)
+        if text and text not in structure_hints:
+            structure_hints.append(text[:180])
+
+    warnings: list[str] = []
+    for raw in list(payload.get("warnings") or []):
+        text = _clean_text(raw)
+        if text and text not in warnings:
+            warnings.append(text[:180])
+
+    return {
+        "public_facts": _items("public_facts"),
+        "logistics_facts": _items("logistics_facts", logistics=True),
+        "lead_hooks": lead_hooks[:6],
+        "structure_hints": structure_hints[:6],
+        "draft_description_md": str(payload.get("draft_description_md") or "").strip(),
+        "draft_covered_public_fact_indexes": [
+            idx
+            for idx in _indexes(payload.get("draft_covered_public_fact_indexes"))
+            if 0 <= idx < len(_items("public_facts"))
+        ],
+        "warnings": warnings[:6],
     }
 
 
@@ -310,9 +448,15 @@ def build_writer_system_prompt() -> str:
 
         HARD CONTRACT
         - You write the final public event description in Russian.
-        - Treat baseline_description as the draft you are editing, not as disposable context.
-          Keep every concrete meaningful claim, named object/person/place/programme, explicit list,
-          and useful texture unless it is unsafe, unsupported, repetitive, or violates the style rules.
+        - In the v3 benchmark path baseline_description must be empty. Do not ask for, infer, or
+          reconstruct a hidden Gemma 3 draft.
+        - If baseline_description is present only for old v2 artifact repair, treat it as the draft
+          you are editing, not as disposable context. Keep every concrete meaningful claim,
+          named object/person/place/programme, explicit list, and useful texture unless it is unsafe,
+          unsupported, repetitive, or violates the style rules.
+        - If baseline_description is empty, this is the Gemma-4-only path: write from baseline_facts,
+          logistics_context, lead hooks, structure hints, and source_excerpt only. Do not assume or
+          reconstruct any hidden baseline draft.
         - The baseline_facts list is the mandatory public factual floor. Semantically cover every
           baseline fact, but rewrite dry extractor phrasing into natural event-facing Russian.
         - logistics_context contains service facts. Use them only when they are already part of
@@ -326,9 +470,11 @@ def build_writer_system_prompt() -> str:
           If logistics are needed, keep them in one compact natural sentence.
         - Keep the result at least as detailed as baseline_description in meaningful event substance,
           not necessarily in raw character count.
+        - In the Gemma-4-only path, use source_excerpt to restore grounded public texture when
+          baseline_facts are sparse. Do not invent decorative claims to satisfy length.
         - Required length window is in the user payload: min_description_chars..max_description_chars.
-          Stay inside it unless a hard fact-floor constraint makes that impossible. Prefer the lower
-          half of the window when all meaningful facts still fit naturally.
+          Treat min_description_chars as a hard floor. Prefer the lower half of the window when all
+          meaningful facts still fit naturally, but do not return a visibly thin summary.
         - Do not compress the baseline into a short summary. Aim for a sharper edited version:
           fewer weak phrases, same or better factual substance.
         - If coverage requires comparable length, choose coverage and texture over arbitrary brevity.
@@ -364,7 +510,7 @@ def build_writer_system_prompt() -> str:
         - Mark used_extra_fact_indexes honestly.
 
         QUALITY TARGET
-        - The candidate should be objectively no worse than baseline_description:
+        - The candidate should be objectively no worse than the benchmark reference:
           stronger or equal hook, no extra report/promotional formulas, no meta lead, and no factual loss.
         - Best outcome: 70-100% of baseline length with all meaningful facts preserved and a cleaner lead.
         - Acceptable outcome: comparable length but clearly cleaner prose.
@@ -381,19 +527,22 @@ def build_writer_payload(
     baseline_facts: list[str],
     enhancement: dict[str, Any],
     source_excerpt: str = "",
+    reference_description_chars: int | None = None,
 ) -> dict[str, Any]:
+    reference_len = int(reference_description_chars if reference_description_chars is not None else len(str(baseline_description or "")))
     return {
         "title": title,
         "event_type": event_type,
         "baseline_description_chars": len(str(baseline_description or "")),
-        "min_description_chars": int(len(str(baseline_description or "")) * 0.70),
-        "target_description_chars": int(len(str(baseline_description or "")) * 0.86),
-        "max_description_chars": int(len(str(baseline_description or "")) * 1.05),
+        "reference_description_chars": reference_len,
+        "min_description_chars": int(reference_len * 0.70),
+        "target_description_chars": int(reference_len * 0.86),
+        "max_description_chars": int(reference_len * 1.05),
         "hard_validation_gates": {
             "cover_all_baseline_fact_indexes": True,
-            "minimum_description_chars": int(len(str(baseline_description or "")) * 0.68),
-            "objective_quality_status": "must be no_worse or improved versus baseline_description",
-            "speed_profile": "benchmark counts baseline stage plus lollipop stages",
+            "minimum_description_chars": int(reference_len * 0.68),
+            "objective_quality_status": "must be no_worse or improved versus benchmark reference",
+            "speed_profile": "benchmark counts only Gemma-4-only lollipop_legacy stages",
             "forbidden_lead_pattern": "title — это",
             "forbidden_register": ["dry report", "promo CTA", "short summary"],
         },
@@ -427,6 +576,7 @@ def build_writer_repair_payload(
     validation_errors: list[str],
     quality_regressions: list[str],
     source_excerpt: str = "",
+    reference_description_chars: int | None = None,
 ) -> dict[str, Any]:
     payload = build_writer_payload(
         title=title,
@@ -435,6 +585,7 @@ def build_writer_repair_payload(
         baseline_facts=baseline_facts,
         enhancement=enhancement,
         source_excerpt=source_excerpt,
+        reference_description_chars=reference_description_chars,
     )
     payload["repair_instruction"] = {
         "mode": "repair_previous_writer_output",
@@ -504,14 +655,17 @@ def validate_writer_output(
     duplicate_tail = re.search(r"(?iu)\b[а-яё]*([а-яё]{3,})\1[а-яё]*\b", description)
     if duplicate_tail:
         errors.append(f"text.duplicate_tail:{duplicate_tail.group(1).lower()}")
-    baseline_has_ticket_or_price = any(
+    allowed_ticket_or_price = any(
         re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", str(fact or ""))
         for fact in baseline_facts
+    ) or any(
+        re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", str(fact or ""))
+        for fact in list(enhancement.get("logistics_facts") or [])
     )
     if re.search(r"(?iu)\b(?:http|www\.)\b", description):
         warnings.append("url.leak")
     if (
-        not baseline_has_ticket_or_price
+        not allowed_ticket_or_price
         and re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", description)
     ):
         errors.append("ticket_or_price.invented_or_unexpected")

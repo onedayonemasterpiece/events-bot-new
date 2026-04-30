@@ -212,6 +212,35 @@ Interpretation:
 - one observed `text.double_comma` artifact was repaired without falling back to baseline;
 - all outputs remain within the `1.0 < speed_ratio <= 3.0` gate, with max observed ratio `2.8412`.
 
+## `lollipop_legacy.v3` Gemma 4-only correction attempt (`2026-04-30`)
+
+Audit после `v2` показал, что previous "legacy" evidence был baseline-assisted: Gemma 3 baseline facts/description входили в generation path. `v3` исправляет contract boundary:
+
+- baseline остаётся только benchmark reference для length/quality/speed comparison;
+- Gemma 4 `source_facts.v3` извлекает public/logistics facts, lead hooks, structure hints и emergency source draft из source excerpts;
+- Gemma 4 writer/repair получает только source-derived facts/context; `baseline_description` в generation payload пустой;
+- baseline fallback удалён. Timeout/error может использовать только Gemma 4 source draft.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260430T141614Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260430T141614Z.md`
+
+| Fixture | Baseline chars | Legacy chars | Length ratio | Quality delta | Speed ratio | Repair | Source draft | Validation |
+| --- | ---: | ---: | ---: | --- | ---: | ---: | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | `554` | `426` | `0.7690` | `improved` | `2.1190` | `0` | `false` | `errors=0`, `warnings=0` |
+| `PETER-FLEET-LECTURE-5600` | `1050` | `836` | `0.7962` | `improved` | `2.3424` | `1` | `false` | `errors=0`, `warnings=1` (`quality.lost_baseline_headings`) |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1156` | `853` | `0.7379` | `improved` | `4.7624` | `1` | `true` | `errors=1` (`latency.3x_exceeded`), `warnings=2` |
+| `WORLD-HOBBIES-5505` | `1078` | `634` | `0.5881` | `regressed` | `3.3164` | `1` | `false` | `errors=3` (`length.below_baseline_ratio`, `quality.too_short_vs_baseline`, `latency.3x_exceeded`) |
+| `RED-COSMOS-7902` | `1060` | `0` | `0.0000` | `regressed` | `8.5645` | `1` | `false` | `errors=6` (`source_facts.timeout`, writer timeout/empty output, latency) |
+
+Interpretation:
+
+- `v3` fixes the hidden Gemma 3 problem: every row records `generation_uses_baseline=false`, `uses_baseline_fact_floor=false`, `includes_baseline_stage=false`, and `writer_fallback_to_baseline=false`.
+- `v3` is **not accepted** as quality replacement yet: only `3/5` fixtures improve, `2/5` regress, and latency exceeds `3x` on `3/5`.
+- Source-only extraction is fact-sparse on short Telegram posts (`peter_fleet_lecture`, `world_hobbies`) compared with the old Gemma 3 baseline-derived text; this is an actual product constraint, not a benchmark formatting issue.
+- Next iteration should either make the final writer path shorter/more stable on Gemma 4 or use the explicitly allowed final-writer fallback to `4o` while keeping Gemma 4 as the source-facts extractor.
+
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 
 ### Summary table

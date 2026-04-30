@@ -48,28 +48,31 @@ source.scope
 
 Статус: `lab variant`, не production default.
 
-Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work, не рискуя потерять факты относительно текущего baseline.
+Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work. Важное уточнение после audit `2026-04-30`: `lollipop_legacy.v2` был baseline-assisted recovery prototype, а не Gemma 4-only реализация, потому что использовал Gemma 3 baseline facts/description как generation input. Его tag `lollipop-legacy-v2` оставлен только как исторический артефакт и не является accepted Gemma 4-only contract.
 
-Зафиксированная версия: `lollipop_legacy.v2`.
+Текущая рабочая версия в коде: `lollipop_legacy.v3`.
 
-- Git tag: `lollipop-legacy-v2`
 - Version owner: `smart_update_lollipop_lab/legacy_writer_family.py::LEGACY_CONTRACT_VERSION`
-- Acceptance evidence: `artifacts/codex/lollipop_g4_benchmark_20260430T115455Z.{md,json}`
-- Следующие изменения, которые меняют public fact floor, objective quality gate, repair/fallback semantics или latency gate, должны bump-ить contract version до `lollipop_legacy.v3`.
+- Статус: `Gemma 4-only lab candidate`, **не accepted** по quality/latency на five-fixture gate.
+- Latest evidence: `artifacts/codex/lollipop_g4_benchmark_20260430T141614Z.{md,json}`
+- Baseline в benchmark допускается только как comparison reference: длина, quality delta, speed ratio. Baseline text/facts не должны попадать в Gemma 4 extraction, writer, repair или fallback.
 
-Контракт `lollipop_legacy.v2`:
+Контракт `lollipop_legacy.v3`:
 
-- baseline Gemma 3 fact extraction + baseline prose path выполняется первым и считается частью `lollipop_legacy` timing;
-- mandatory public fact floor равен non-logistics baseline facts; date/time/address/ticket/start-point facts сохраняются как `logistics_context` и могут попадать в public prose только компактно и по необходимости;
-- Gemma 4 31b делает bounded baseline-editor pass поверх `baseline_description`, public `baseline_facts`, `logistics_context` и `source_excerpt`;
-- final writer должен сохранить смысловой baseline substance, покрыть public fact floor, не ухудшить hook/register/style metrics и целиться в `70-105%` baseline length, если facts не требуют сопоставимого объёма;
+- Gemma 4 31b выполняет `source_facts.v3`: извлекает public facts, logistics facts, lead hooks, structure hints и emergency source-grounded draft напрямую из `source_excerpt`;
+- Gemma 4 31b final writer получает только source-derived public fact floor, logistics context, lead hooks, structure hints и source excerpt; `baseline_description` в v3 generation payload должен быть пустым;
+- при writer timeout/error можно использовать только Gemma 4 source draft, никогда Gemma 3 baseline draft;
+- `writer_fallback_to_baseline` должен оставаться `false`; `generation_uses_baseline`, `uses_baseline_fact_floor`, `includes_baseline_stage`, `baseline_assisted` должны оставаться `false`;
+- final writer должен покрыть source-derived public fact floor, не ухудшить hook/register/style metrics и целиться в `70-105%` benchmark reference length, если facts не требуют сопоставимого объёма;
 - objective guard `quality_delta_vs_baseline` считает вариант `regressed`, если появляется новый report/promo/meta leak, теряется baseline hook, lead открывается stock narrator-frame шаблоном (`Погружение в ...`, `Знакомство с ...`, `Путешествие в мир ...`, `Прогулка по миру ...`, `Окунитесь в ...`, `Откройте для себя ...`, `Добро пожаловать в ...`, `Приготовьтесь ...`) которого не было в baseline, текст становится слишком коротким или ломает validation. Тот же guard поощряет уход от narrator-frame и помечает мягкими warnings потерю ≥2 baseline `### ` headings или baseline `>` epigraph, не блокируя rollout;
 - writer prompt напрямую запрещает narrator-frame openings и подаёт positive lead exemplars (object/actor/format-texture/event-action/named-quote), чтобы lead открывался конкретной приметой события, а не позой нарратора;
 - deterministic validator ловит Gemma 4 `,, ` double-comma artifact как `text.double_comma`, чтобы repair pass переписал такой пассаж до публикации;
-- при validation/quality regression запускается один bounded Gemma repair pass; baseline fallback остаётся последней защитой после repair failure или writer timeout;
-- speed gate: `1.0 < lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`;
+- при validation/quality regression запускается один bounded Gemma repair pass;
+- speed gate: `lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`, где numerator считает только Gemma 4-only legacy stages, без baseline stage;
 - direct Gemma JSON calls ограничены `LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC` (`75s` default), writer pass отдельно ограничен `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC` (`12s` default; benchmark recovery run used `16s`);
-- optional `--legacy-g4-extract` оставлен только как экспериментальный флаг. Live check `2026-04-29` показал, что baseline-style extraction на `gemma-4-31b-it` через текущий Smart Update extractor path может занимать около `177s` на одном коротком fixture и не проходит latency gate.
+- optional `--legacy-g4-extract` теперь deprecated no-op: v3 всегда использует собственный Gemma 4 `source_facts.v3` stage.
+
+Текущее состояние `v3` по latest benchmark: generation path честно Gemma 4-only, но acceptance не пройден. На `20260430T141614Z` только `3/5` fixtures имеют `quality_delta_status=improved`; `2/5` имеют regressions, `3/5` не проходят latency/validation. Следующий шаг — сокращать/стабилизировать Gemma 4 writer path или менять final writer на разрешённый fallback `4o`, если Gemma 4 final writer продолжит срывать качество/таймауты.
 
 Benchmark command:
 
@@ -84,7 +87,7 @@ Implementation surface:
 
 - [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation/objective quality delta;
 - [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) owns variant routing, five real-post fixtures, timing, and markdown report rendering;
-- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers public/full baseline floor handling, coverage validation, bad-register validation, duplicate-word/tail validation, objective quality delta, baseline-volume validation, and benchmark routing.
+- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers v3 Gemma 4-only routing, source fact normalization, coverage validation, bad-register validation, duplicate-word/tail validation, objective quality delta, reference-volume validation, and benchmark routing.
 
 ## Активные families
 

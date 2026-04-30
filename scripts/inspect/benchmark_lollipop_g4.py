@@ -629,6 +629,12 @@ async def _ask_gemma_json_direct(
                     use_system_instruction = False
                     continue
                 retry_delay = _quota_retry_delay_seconds(str(exc))
+                if retry_delay is None and (
+                    "internal error encountered" in lower
+                    or "statuscode.internal" in lower
+                    or "500 internal" in lower
+                ):
+                    retry_delay = 5.0
                 if retry_delay is not None:
                     await asyncio.sleep(retry_delay)
                     continue
@@ -1309,10 +1315,10 @@ def _legacy_event_fact_floor(facts: list[str]) -> list[str]:
 
 
 def _legacy_required_fact_floor(facts: list[str]) -> list[str]:
-    """Full baseline fact floor required by lollipop_legacy.
+    """Full baseline fact floor used by old lollipop_legacy v2 artifacts.
 
-    The legacy recovery contract is additive: it starts from the same baseline
-    extracted facts, then runs lollipop enhancement/writer stages on top.
+    v3 does not call this helper for generation; it is kept so old benchmark
+    reports/tests remain readable.
     """
     required: list[str] = []
     for fact in facts:
@@ -1331,58 +1337,86 @@ async def _run_lollipop_legacy_variant(
     legacy_g4_extract: bool = False,
 ) -> dict[str, Any]:
     print(f"[benchmark] {fixture.fixture_id} start lollipop_legacy model={gemma_model}", file=sys.stderr, flush=True)
-    additional_started_at = time.perf_counter()
+    started_at = time.perf_counter()
     gemma_calls = 0
     sleep_sec = 0.0
     _set_gemma_model(gemma_model)
 
-    per_source: dict[str, list[str]] = {}
-    extracted: list[str] = []
-    if legacy_g4_extract:
-        for source in fixture.sources:
-            candidate = _build_candidate(fixture, source)
-            facts = await su._llm_extract_candidate_facts(candidate, text_for_facts=source.text)
-            gemma_calls += 1
-            per_source[source.source_id] = facts
-            extracted.extend(facts)
-            await _gemma_gap_sleep(gemma_call_gap_s)
-            sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
+    source_excerpt = _source_excerpt(fixture.sources, limit=5000)
+    baseline_description = str(baseline.get("description_md") or "")
+    reference_description_chars = len(baseline_description)
+    source_fact_raw: dict[str, Any] = {}
+    source_fact_warnings: list[str] = []
+    try:
+        source_fact_raw = await _ask_gemma_json_direct(
+            model=gemma_model,
+            system_prompt=legacy_writer_family.build_source_fact_system_prompt(),
+            user_payload=legacy_writer_family.build_source_fact_payload(
+                title=fixture.title,
+                event_type=fixture.event_type,
+                source_excerpt=source_excerpt,
+                reference_description_chars=reference_description_chars,
+            ),
+            max_tokens=2200,
+            response_schema=legacy_writer_family.source_fact_response_schema(),
+            timeout_sec=_gemma_direct_timeout_sec(),
+        )
+        gemma_calls += 1
+        await _gemma_gap_sleep(gemma_call_gap_s)
+        sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
+    except asyncio.TimeoutError:
+        gemma_calls += 1
+        source_fact_warnings.append("source_facts.timeout")
+    except Exception as exc:
+        gemma_calls += 1
+        source_fact_warnings.append(f"source_facts.error:{type(exc).__name__}")
 
-    baseline_all_facts = _baseline_fact_list(baseline)
-    baseline_event_facts = _legacy_event_fact_floor(baseline_all_facts)
-    baseline_floor_facts = _legacy_required_fact_floor(baseline_all_facts)
-    baseline_logistics_facts = [fact for fact in baseline_floor_facts if fact not in baseline_event_facts]
-    legacy_facts = [re.sub(r"\s+", " ", str(item or "")).strip() for item in extracted if str(item or "").strip()]
-    fact_floor = baseline_event_facts or baseline_floor_facts or legacy_facts
-    for fact in legacy_facts:
-        if fact and fact not in fact_floor and fact not in baseline_logistics_facts:
-            fact_floor.append(fact)
+    source_facts = legacy_writer_family.normalize_source_fact_payload(source_fact_raw)
+    fact_floor = [item["text"] for item in source_facts["public_facts"] if str(item.get("text") or "").strip()]
+    logistics_facts = [item["text"] for item in source_facts["logistics_facts"] if str(item.get("text") or "").strip()]
+    if not fact_floor:
+        fallback_fact = re.sub(r"\s+", " ", f"{fixture.event_type or 'Событие'}: {fixture.title}".strip()).strip()
+        if fallback_fact:
+            fact_floor = [fallback_fact]
+        source_fact_warnings.append("source_facts.empty_public_floor")
 
-    source_excerpt = _source_excerpt(fixture.sources, limit=3200)
-    enhancement_raw: dict[str, Any] = {"mode": "single_writer_pass", "extra_facts": []}
+    quote_candidates = list(source_facts.get("lead_hooks") or [])[:5]
+    writer_notes = [
+        "Gemma-4-only legacy v3: write from source-extracted public_facts, not from baseline text.",
+    ]
+    writer_notes.extend(list(source_facts.get("structure_hints") or [])[:5])
     enhancement = {
         "lead_hook_fact_indexes": [],
-        "quote_candidates": [],
+        "quote_candidates": quote_candidates,
         "extra_facts": [],
-        "writer_notes": [
-            "Single bounded lollipop editor pass: preserve the baseline draft's concrete substance, improve hook/register, and do not paste logistics unless public prose needs them."
-        ],
-        "logistics_facts": baseline_logistics_facts,
+        "writer_notes": writer_notes,
+        "logistics_facts": logistics_facts,
+    }
+    enhancement_raw: dict[str, Any] = {
+        "mode": "gemma4_source_facts_to_writer",
+        "source_facts": source_fact_raw,
+    }
+    source_draft_raw = {
+        "title": fixture.title,
+        "description_md": str(source_facts.get("draft_description_md") or "").strip(),
+        "covered_baseline_fact_indexes": list(source_facts.get("draft_covered_public_fact_indexes") or []),
+        "used_extra_fact_indexes": [],
     }
 
     fallback_to_baseline = False
+    fallback_to_source_draft = False
     fallback_reasons: list[str] = []
     quality_delta: dict[str, Any] | None = None
     writer_retry_count = 0
-    baseline_description = str(baseline.get("description_md") or "")
     try:
         writer_payload = legacy_writer_family.build_writer_payload(
             title=fixture.title,
             event_type=fixture.event_type,
-            baseline_description=baseline_description,
+            baseline_description="",
             baseline_facts=fact_floor,
             enhancement=enhancement,
             source_excerpt=source_excerpt,
+            reference_description_chars=reference_description_chars,
         )
         writer_raw = await _ask_gemma_json_direct(
             model=gemma_model,
@@ -1407,10 +1441,13 @@ async def _run_lollipop_legacy_variant(
         validation.warnings.extend(quality_delta.get("warnings") or [])
     except asyncio.TimeoutError:
         gemma_calls += 1
-        writer_raw = {
+        fallback_to_baseline = False
+        fallback_to_source_draft = bool(source_draft_raw["description_md"])
+        fallback_reasons = ["writer.timeout_source_draft" if fallback_to_source_draft else "writer.timeout"]
+        writer_raw = source_draft_raw if fallback_to_source_draft else {
             "title": fixture.title,
-            "description_md": baseline_description,
-            "covered_baseline_fact_indexes": list(range(len(fact_floor))),
+            "description_md": "",
+            "covered_baseline_fact_indexes": [],
             "used_extra_fact_indexes": [],
         }
         applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
@@ -1424,9 +1461,36 @@ async def _run_lollipop_legacy_variant(
             baseline_description=baseline_description,
             candidate_description=str(applied_output.get("description_md") or ""),
         )
-        fallback_to_baseline = True
-        fallback_reasons = ["writer.timeout"]
-        validation.warnings.append("writer.fallback_to_baseline:writer.timeout")
+        if not fallback_to_source_draft:
+            validation.errors.append("writer.timeout")
+        else:
+            validation.warnings.append("writer.timeout_used_source_draft")
+    except Exception as exc:
+        fallback_to_source_draft = bool(source_draft_raw["description_md"])
+        writer_raw = source_draft_raw if fallback_to_source_draft else {
+            "title": fixture.title,
+            "description_md": "",
+            "covered_baseline_fact_indexes": [],
+            "used_extra_fact_indexes": [],
+        }
+        applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
+        validation = legacy_writer_family.validate_writer_output(
+            baseline_facts=fact_floor,
+            baseline_description=baseline_description,
+            enhancement=enhancement,
+            output=writer_raw,
+        )
+        quality_delta = legacy_writer_family.compare_to_baseline(
+            baseline_description=baseline_description,
+            candidate_description=str(applied_output.get("description_md") or ""),
+        )
+        fallback_reasons = [
+            f"writer.error_source_draft:{type(exc).__name__}" if fallback_to_source_draft else f"writer.error:{type(exc).__name__}"
+        ]
+        if fallback_to_source_draft:
+            validation.warnings.extend(fallback_reasons)
+        else:
+            validation.errors.extend(fallback_reasons)
     if quality_delta is not None and quality_delta.get("regressions"):
         validation.errors.extend(str(item) for item in quality_delta.get("regressions") or [])
     if validation.errors:
@@ -1438,13 +1502,14 @@ async def _run_lollipop_legacy_variant(
                 user_payload=legacy_writer_family.build_writer_repair_payload(
                     title=fixture.title,
                     event_type=fixture.event_type,
-                    baseline_description=baseline_description,
+                    baseline_description="",
                     baseline_facts=fact_floor,
                     enhancement=enhancement,
                     previous_output=writer_raw,
                     validation_errors=retry_reasons,
                     quality_regressions=list((quality_delta or {}).get("regressions") or []),
                     source_excerpt=source_excerpt,
+                    reference_description_chars=reference_description_chars,
                 ),
                 max_tokens=2200,
                 response_schema=legacy_writer_family.writer_response_schema(),
@@ -1472,6 +1537,8 @@ async def _run_lollipop_legacy_variant(
                 validation = retry_validation
                 quality_delta = retry_quality_delta
             else:
+                writer_raw = retry_raw
+                applied_output = retry_output
                 fallback_reasons = list(retry_validation.errors)
                 validation = retry_validation
                 quality_delta = retry_quality_delta
@@ -1479,63 +1546,22 @@ async def _run_lollipop_legacy_variant(
             writer_retry_count = 1
             gemma_calls += 1
             fallback_reasons = retry_reasons + ["writer.retry_timeout"]
+        except Exception as exc:
+            writer_retry_count = 1
+            gemma_calls += 1
+            fallback_reasons = retry_reasons + [f"writer.retry_error:{type(exc).__name__}"]
+            validation.errors.append(f"writer.retry_error:{type(exc).__name__}")
+
+    if legacy_g4_extract:
+        validation.warnings.append("legacy_g4_extract_flag.ignored:v3_always_uses_source_facts")
+    validation.warnings.extend(source_fact_warnings)
 
     if validation.errors:
-        fallback_to_baseline = True
+        fallback_to_baseline = False
         if not fallback_reasons:
             fallback_reasons = list(validation.errors)
-        writer_raw = {
-            "title": fixture.title,
-            "description_md": baseline_description,
-            "covered_baseline_fact_indexes": list(range(len(fact_floor))),
-            "used_extra_fact_indexes": [],
-        }
-        applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
-        validation = legacy_writer_family.validate_writer_output(
-            baseline_facts=fact_floor,
-            baseline_description=baseline_description,
-            enhancement=enhancement,
-            output=writer_raw,
-        )
-        quality_delta = legacy_writer_family.compare_to_baseline(
-            baseline_description=baseline_description,
-            candidate_description=str(applied_output.get("description_md") or ""),
-        )
-        validation.warnings.append("writer.fallback_to_baseline:" + ",".join(fallback_reasons))
-    additional_wall_clock_sec = round(time.perf_counter() - additional_started_at, 6)
-    baseline_timings = dict(baseline.get("timings") or {})
-    baseline_wall = None
-    baseline_active = 0.0
-    baseline_sleep = 0.0
-    baseline_gemma_calls = 0
-    baseline_four_o_calls = 0
-    try:
-        baseline_wall = float(baseline_timings.get("wall_clock_sec") or 0.0) or None
-    except Exception:
-        baseline_wall = None
-    try:
-        baseline_active = float(baseline_timings.get("model_active_sec") or 0.0)
-    except Exception:
-        baseline_active = 0.0
-    try:
-        baseline_sleep = float(baseline_timings.get("sleep_sec") or 0.0)
-    except Exception:
-        baseline_sleep = 0.0
-    try:
-        baseline_gemma_calls = int(baseline_timings.get("gemma_calls") or 0)
-    except Exception:
-        baseline_gemma_calls = 0
-    try:
-        baseline_four_o_calls = int(baseline_timings.get("four_o_calls") or 0)
-    except Exception:
-        baseline_four_o_calls = 0
-
-    additional_active_sec = round(max(0.0, additional_wall_clock_sec - sleep_sec), 6)
-    wall_clock_sec = round((baseline_wall or 0.0) + additional_wall_clock_sec, 6)
-    model_active_sec = round(baseline_active + additional_active_sec, 6)
-    total_sleep_sec = round(baseline_sleep + sleep_sec, 6)
-    total_gemma_calls = baseline_gemma_calls + gemma_calls
-    total_four_o_calls = baseline_four_o_calls
+    wall_clock_sec = round(time.perf_counter() - started_at, 6)
+    model_active_sec = round(max(0.0, wall_clock_sec - sleep_sec), 6)
     baseline_wall = None
     try:
         baseline_wall = float((baseline.get("timings") or {}).get("wall_clock_sec") or 0.0) or None
@@ -1547,12 +1573,9 @@ async def _run_lollipop_legacy_variant(
         speed_ratio = {
             "ratio": round(ratio, 4),
             "target": 3.0,
-            "min": 1.0,
-            "pass": 1.0 < ratio <= 3.0,
-            "gate": "pass" if 1.0 < ratio <= 3.0 else ("latency.baseline_stage_not_counted" if ratio <= 1.0 else "latency.3x_exceeded"),
+            "pass": ratio <= 3.0,
+            "gate": "pass" if ratio <= 3.0 else "latency.3x_exceeded",
         }
-        if ratio <= 1.0:
-            validation.errors.append("latency.baseline_stage_not_counted")
         if ratio > 3.0:
             validation.errors.append("latency.3x_exceeded")
 
@@ -1560,26 +1583,27 @@ async def _run_lollipop_legacy_variant(
         "gemma_model": gemma_model,
         "variant_mode": "lollipop_legacy",
         "contract_version": legacy_writer_family.LEGACY_CONTRACT_VERSION,
-        "uses_baseline_fact_floor": True,
-        "includes_baseline_stage": True,
-        "legacy_g4_extract_enabled": legacy_g4_extract,
-        "baseline_all_fact_count": len(baseline_all_facts),
-        "baseline_floor_fact_count": len(fact_floor),
-        "baseline_event_fact_count": len(baseline_event_facts),
-        "baseline_full_fact_count": len(baseline_floor_facts),
-        "baseline_public_fact_count": len(fact_floor),
-        "baseline_logistics_fact_count": len(baseline_logistics_facts),
-        "legacy_extracted_fact_count": len(legacy_facts),
-        "per_source_facts": per_source,
-        "baseline_floor_facts": fact_floor,
-        "baseline_full_facts": baseline_floor_facts,
-        "baseline_logistics_facts": baseline_logistics_facts,
-        "legacy_extracted_facts": legacy_facts,
+        "generation_uses_baseline": False,
+        "uses_baseline_fact_floor": False,
+        "includes_baseline_stage": False,
+        "baseline_assisted": False,
+        "legacy_g4_extract_enabled": True,
+        "legacy_g4_extract_mode": "source_facts.v3",
+        "legacy_g4_extract_flag_ignored": bool(legacy_g4_extract),
+        "baseline_reference_chars": reference_description_chars,
+        "legacy_public_fact_count": len(fact_floor),
+        "legacy_logistics_fact_count": len(logistics_facts),
+        "legacy_lead_hook_count": len(quote_candidates),
+        "legacy_source_fact_warnings": source_fact_warnings,
+        "source_fact_raw": source_fact_raw,
+        "legacy_public_facts": fact_floor,
+        "legacy_logistics_facts": logistics_facts,
         "enhancement_raw": enhancement_raw,
         "enhancement": enhancement,
         "writer_output": writer_raw,
         "writer_retry_count": writer_retry_count,
         "writer_fallback_to_baseline": fallback_to_baseline,
+        "writer_fallback_to_source_draft": fallback_to_source_draft,
         "writer_fallback_reasons": fallback_reasons,
         "applied_output": applied_output,
         "validation": {"errors": validation.errors, "warnings": validation.warnings},
@@ -1589,12 +1613,12 @@ async def _run_lollipop_legacy_variant(
         "timings": {
             "wall_clock_sec": wall_clock_sec,
             "model_active_sec": model_active_sec,
-            "sleep_sec": total_sleep_sec,
-            "gemma_calls": total_gemma_calls,
-            "four_o_calls": total_four_o_calls,
+            "sleep_sec": round(sleep_sec, 6),
+            "gemma_calls": gemma_calls,
+            "four_o_calls": 0,
             "baseline_stage_sec": baseline_wall,
-            "lollipop_additional_sec": additional_wall_clock_sec,
-            "lollipop_additional_gemma_calls": gemma_calls,
+            "lollipop_legacy_only_sec": wall_clock_sec,
+            "lollipop_legacy_only_gemma_calls": gemma_calls,
         },
         "speed_ratio_vs_baseline": speed_ratio,
     }
@@ -1676,14 +1700,17 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
                 lines.append(f"- validation errors: `{len(payload['validation']['errors'])}`")
                 lines.append(f"- validation warnings: `{len(payload['validation']['warnings'])}`")
             if key == "lollipop_legacy":
-                lines.append(f"- baseline_all_fact_count: `{payload.get('baseline_all_fact_count')}`")
-                lines.append(f"- baseline_floor_fact_count: `{payload.get('baseline_floor_fact_count')}`")
-                lines.append(f"- baseline_full_fact_count: `{payload.get('baseline_full_fact_count')}`")
-                lines.append(f"- baseline_public_fact_count: `{payload.get('baseline_public_fact_count')}`")
-                lines.append(f"- baseline_logistics_fact_count: `{payload.get('baseline_logistics_fact_count')}`")
-                lines.append(f"- legacy_extracted_fact_count: `{payload.get('legacy_extracted_fact_count')}`")
+                lines.append(f"- contract_version: `{payload.get('contract_version')}`")
+                lines.append(f"- generation_uses_baseline: `{bool(payload.get('generation_uses_baseline'))}`")
+                lines.append(f"- includes_baseline_stage: `{bool(payload.get('includes_baseline_stage'))}`")
+                lines.append(f"- uses_baseline_fact_floor: `{bool(payload.get('uses_baseline_fact_floor'))}`")
+                lines.append(f"- legacy_g4_extract_mode: `{payload.get('legacy_g4_extract_mode')}`")
+                lines.append(f"- legacy_public_fact_count: `{payload.get('legacy_public_fact_count')}`")
+                lines.append(f"- legacy_logistics_fact_count: `{payload.get('legacy_logistics_fact_count')}`")
+                lines.append(f"- legacy_lead_hook_count: `{payload.get('legacy_lead_hook_count')}`")
                 lines.append(f"- writer_retry_count: `{payload.get('writer_retry_count') or 0}`")
                 lines.append(f"- writer_fallback_to_baseline: `{bool(payload.get('writer_fallback_to_baseline'))}`")
+                lines.append(f"- writer_fallback_to_source_draft: `{bool(payload.get('writer_fallback_to_source_draft'))}`")
                 quality_delta = payload.get("quality_delta_vs_baseline") if isinstance(payload.get("quality_delta_vs_baseline"), dict) else None
                 if quality_delta:
                     lines.append(f"- quality_delta_status: `{quality_delta.get('status')}`")
@@ -1798,7 +1825,7 @@ def main() -> int:
     parser.add_argument(
         "--legacy-g4-extract",
         action="store_true",
-        help="Experimental: also rerun baseline-style fact extraction on Gemma 4 before lollipop_legacy writer. Off by default because it is slow on current Google path.",
+        help="Deprecated no-op for v3: lollipop_legacy now always uses Gemma 4 source_facts extraction and never baseline facts.",
     )
     parser.add_argument(
         "--reuse-baseline-artifact",
