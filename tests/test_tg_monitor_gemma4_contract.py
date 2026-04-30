@@ -66,6 +66,10 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert 'must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00"' in source
     assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
     assert 'Use source context only as weak hosting context' in source
+    assert "Institution work-hours notices are NOT events" in source
+    assert "do NOT classify a post as a work-hours notice merely because it mentions a museum/library venue" in source
+    assert 'a street/address such as "Музейная аллея"' in source
+    assert "extract those events even when they happen at a museum or library" in source
     assert "prefer one ongoing exhibition card over [] or {}" in source
     assert "Do not split one real event into an extra title-only row" in source
     assert "keep the cycle/series label in raw_excerpt/search_digest, not as a second event row" in source

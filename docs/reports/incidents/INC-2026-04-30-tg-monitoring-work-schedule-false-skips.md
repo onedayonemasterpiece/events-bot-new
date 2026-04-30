@@ -80,6 +80,9 @@ Both posts describe concrete future events and should create or update event car
   - `@kenigatom/496` style festival program at `Музейная аллея` must not match `work_schedule`.
   - `@kraftmarket39/199` style library lecture with weekday/time must not match `work_schedule`.
   - A real museum work-hours notice must still match `work_schedule`.
+- Prompt contract:
+  - Gemma extract prompt must say that explicit work-hours/closure notices return `[]`;
+  - Gemma extract prompt must keep lectures/shows/workshops/excursions/festival slots importable when the post has concrete date/time, even at museum/library venues or addresses like `Музейная аллея`.
 - Production evidence:
   - runtime log mirror state checked; fallback evidence captured if disabled/empty;
   - Fly health remains passing before and after deploy;
@@ -103,6 +106,7 @@ Both posts describe concrete future events and should create or update event car
 
 ## Corrective Actions
 
+- Added a Gemma extract prompt rule that keeps museum/library lectures, shows, workshops, excursions, and festival program slots as events while returning `[]` for explicit work-hours/closure notices.
 - Added regression tests for the two false-skip shapes and for a real museum work-hours notice.
 - Documented that `work_schedule` is limited to explicit work-hours notices and must not cut normal events at museum/library venues.
 

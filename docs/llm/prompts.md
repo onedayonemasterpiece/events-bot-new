@@ -149,10 +149,12 @@ Guidelines:
 - Do NOT create events out of course/program advertisements ("старт курса", "набор", multi-session training programs)
   unless it's explicitly a single attendable session (e.g. one-day masterclass) with a concrete date+venue (and ideally time).
 - Do NOT create events out of institution working-hours notices (e.g. "график/режим/часы работы",
-  "праздничные/выходные дни", "санитарный день", "расширенный график").
+  "санитарный день", "не работает/закрыто", "расширенный график").
   Dates/times in such posts describe opening hours, not event schedule.
-  Return no events unless the post explicitly announces an attendable activity with action wording
-  (e.g. "состоится", "пройдет", "приглашаем") and concrete event details.
+  Do NOT classify a post as a working-hours notice merely because it mentions a museum/library venue,
+  an address like "Музейная аллея", weekdays, dates, or times. If it announces attendee-facing
+  lectures, shows, talks, workshops, excursions, or festival program slots with concrete dates/times,
+  extract those events even when they happen at a museum or library.
 - Do NOT create events out of post-event reports / recaps. If the text mainly describes what already happened
   (past-tense narrative like "мы провели/исследовали/работали", after-the-fact summary like "было здорово",
   gratitude/wrap-up like "спасибо ...", "скоро увидимся вновь") and there is no concrete attendable future anchor,
