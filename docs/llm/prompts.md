@@ -30,7 +30,7 @@ city              - city name only; do not duplicate it in `location_address`
 ticket_price_min  - minimum ticket price as integer or null
 ticket_price_max  - maximum ticket price as integer or null
 ticket_link       - URL for purchasing tickets **or** registration form if present; ignore map service links such as https://yandex.ru/maps/
-is_free           - true if explicitly stated the event is free. Exception: blood donation actions (“День донора”, “донорская акция”, “сдача крови”, “станция переливания крови”) are free-to-attend — set `is_free=true` even if “бесплатно” is not written.
+is_free           - true only if the source explicitly states free attendance/free entry/free registration/no fee. Missing price is unknown, not free. If the source has a ticket link, ticket sale/status, or paid venue entry and no explicit free-attendance evidence, set `is_free=false`. Exception: blood donation actions (“День донора”, “донорская акция”, “сдача крови”, “станция переливания крови”) are free-to-attend — set `is_free=true` even if “бесплатно” is not written.
 pushkin_card     - true if the event accepts the Пушкинская карта
 event_type       - one of: спектакль, выставка, концерт, ярмарка, лекция, встреча, мастер-класс, кинопоказ, спорт
 emoji            - an optional emoji representing the event
@@ -41,6 +41,10 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 
 **Money / ticket price rules (important):**
 - `ticket_price_min/max` must describe the **cost to attend** (tickets/entry/participation fee).
+- Absence of a visible price does not make the event free. Use `is_free=true`
+  only for explicit free-attendance evidence. Ticket links, phrases like
+  “билеты”, “продажа”, “купить билет”, or a ticket status without explicit
+  free-entry wording mean the event is not free.
 - Do NOT treat money paid **to participants** as a ticket price: `компенсация`, `вознаграждение`, `выплата`, `гонорар`, `приз`, `подарок`, cashback/кэшбэк.
 - For blood donation actions, donor compensation amounts (e.g. “компенсация 1063 руб.”) are NOT tickets: keep `ticket_price_min/max=null` and set `is_free=true`.
 

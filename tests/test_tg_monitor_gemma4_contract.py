@@ -70,6 +70,11 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "do NOT classify a post as a work-hours notice merely because it mentions a museum/library venue" in source
     assert 'a street/address such as "Музейная аллея"' in source
     assert "extract those events even when they happen at a museum or library" in source
+    assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
+    assert "Missing price is unknown, not free." in source
+    assert "Do not mark zoo/museum/theatre events free merely because" in source
+    assert 'Return raw JSON only: the first character must be "[" and the last character must be "]"' in source
+    assert "do not wrap the array in markdown/code fences" in source
     assert "prefer one ongoing exhibition card over [] or {}" in source
     assert "Do not split one real event into an extra title-only row" in source
     assert "keep the cycle/series label in raw_excerpt/search_digest, not as a second event row" in source
@@ -247,7 +252,11 @@ def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     assert 'one date header like "18 АПРЕЛЯ" followed by up to three time lines' in source
     assert "range(0, len(timed_lines), 3)" in source
     assert "Each returned event must correspond to one real schedule line" in source
+    assert "If the chunk/full message is only an institution work-hours or holiday-opening notice" in source
+    assert "return [] and do not convert those days/hours into events" in source
     assert 'Never use placeholder literals like "title" as a title' in source
+    assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
+    assert "Ticket links, ticket sale/status, paid registration, or venue" in source
     assert "location_name must be the shared venue/place for the timetable" in source
     assert "not descriptive prose from surrounding text" in source
     assert "Full message context for shared venue/address facts" in source
@@ -311,6 +320,8 @@ def test_tg_monitor_event_schema_carries_gemma4_descriptions() -> None:
     assert "Never include uncertainty markers like \"or something similar\"" in source
     assert "return one attendee-facing lecture title, not two rows" in source
     assert 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка"' in source
+    assert "evidence that the event is free" in source
+    assert "True only when the source explicitly states free attendance" in source
     assert "'required': [" in source
 
 

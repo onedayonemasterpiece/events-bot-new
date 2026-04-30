@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-04-30-tg-monitoring-event-quality-regressions.md`
+  - Scope: Telegram Monitoring Gemma extraction prompts/schema, schedule-rescue prompt, free/ticket semantics, Smart Update duplicate matching, production cleanup for false-free/work-hours/duplicate event rows from the 2026-04-30 batch.
+  - Must not regress: missing ticket price must not mean free; ticket links/status/sale wording must not produce `is_free=true` without explicit free-entry evidence; institution work-hours/holiday-opening notices must not be imported as events by schedule rescue; same real event must not survive as multiple public cards because title/location wording drifted.
 - `INC-2026-04-30-tg-monitoring-work-schedule-false-skips.md`
   - Scope: `smart_event_update.py` deterministic non-event guard `work_schedule`, Telegram Monitoring server import, `telegram_scanned_message` skip diagnostics, `/daily` recently-added inventory, production catch-up for `@kenigatom/496` and `@kraftmarket39/199`.
   - Must not regress: concrete future Telegram events at a museum/library venue or an address containing `Музейная` must not be skipped as `skipped_non_event:work_schedule` unless the source is actually a work-hours notice.

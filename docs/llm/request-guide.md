@@ -4,16 +4,27 @@ This document describes how the bot communicates with model **4o**.
 
 ## LLM-first policy (applies to all LLM providers)
 
-If a change affects the *meaning* or perceived quality of event text (`title`,
-`description`, `search_digest`), prefer doing it **inside the LLM** (prompt rules
-in `docs/llm/prompts.md`, or Smart Update LLM passes).
+If a change affects the *meaning* or perceived quality of event data, prefer
+doing it **inside the LLM** (prompt rules in `docs/llm/prompts.md`, provider
+prompts such as `kaggle/TelegramMonitor/telegram_monitor.py`, or Smart Update
+LLM passes). This includes not only text fields (`title`, `description`,
+`search_digest`), but also semantic extraction/classification choices such as
+`is_free`, ticket availability/status, work-hours-vs-event decisions, venue/title
+meaning, and duplicate/match judgments.
 
 Deterministic code is allowed as *supporting plumbing*:
 
 - sanitizers / escaping (HTML/Markdown safety, whitespace, URL cleanup);
 - canonicalization / normalization (venues, dates, phone masking);
-- guardrails (skip non-events, region filters, safety checks);
+- narrow output-consistency guardrails (region filters, safety checks, JSON
+  cleanup, contradiction checks that do not decide event meaning on their own);
 - hints passed *to the LLM input* to steer it (without rewriting the resulting text).
+
+Deterministic code must not replace an LLM-owned semantic decision with broad
+keyword logic. For example, do not decide that an event is free merely because no
+price was found, do not convert library/museum date lists into work-hours skips
+without prompt-owned classification, and do not merge/split events by a title
+regex when the user-visible meaning is ambiguous.
 
 Guide-specific hard rule:
 - for `guide excursions monitoring`, semantic decisions in `trail_scout.screen.*`,
