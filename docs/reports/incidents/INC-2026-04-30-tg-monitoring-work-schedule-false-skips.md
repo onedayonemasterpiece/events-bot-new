@@ -1,10 +1,10 @@
 # INC-2026-04-30 Telegram Monitoring Work Schedule False Skips
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring import / Smart Update non-event guards
 Opened: 2026-04-30
-Closed: —
+Closed: 2026-04-30
 Owners: Codex
 Related incidents: `INC-2026-04-27-tg-monitoring-sticky-skipped-post`, `INC-2026-04-28-vk-smart-update-false-skips`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -41,6 +41,8 @@ Both posts describe concrete future events and should create or update event car
 - 2026-04-29 23:28 UTC — production stored both messages as skipped with `skipped_non_event:work_schedule`.
 - 2026-04-30 01:53 UTC — `ops_run id=957` finished `success` with no run-level errors.
 - 2026-04-30 06:11 UTC — root cause localized to Smart Update's deterministic `work_schedule` guard.
+- 2026-04-30 06:19 UTC — prompt/guard fix deployed from SHA `c2a746fd`; Fly image `events-bot-new-wngqia:deployment-01KQEGMQQDPW73CA1KGE1YNMHX`, machine `48e42d5b714228` version `1027`.
+- 2026-04-30 06:34 UTC — compensating import `ops_run id=963` restored both reported Telegram posts: `events_imported=5`, `events_created=5`, `events_skipped=0`.
 
 ## Root Cause
 
@@ -112,19 +114,28 @@ Both posts describe concrete future events and should create or update event car
 
 ## Follow-up Actions
 
-- [ ] Deploy the fix from a clean branch and make the SHA reachable from `origin/main`.
-- [ ] Run compensating Telegram import/catch-up for `@kenigatom/496` and `@kraftmarket39/199`.
-- [ ] Verify `event_source` rows and public inventory after catch-up.
+- [x] Deploy the fix from a clean branch and make the SHA reachable from `origin/main`.
+- [x] Run compensating Telegram import/catch-up for `@kenigatom/496` and `@kraftmarket39/199`.
+- [x] Verify `event_source` rows and public inventory after catch-up.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `c2a746fd` (`origin/main`, `origin/hotfix/INC-2026-04-30-work-schedule-false-skips`)
+- deploy path: `flyctl deploy --app events-bot-new-wngqia --remote-only`
+- deployed image: `events-bot-new-wngqia:deployment-01KQEGMQQDPW73CA1KGE1YNMHX`
+- Fly status after deploy/catch-up: machine `48e42d5b714228` version `1027`, state `started`, checks `1 total, 1 passing`.
 - regression checks:
-  - `pytest -q tests/test_smart_event_update_non_event_guards.py` (`5 passed`)
-  - `pytest -q tests/test_tg_monitor_gemma4_contract.py` (`23 passed`)
+  - `pytest -q tests/test_smart_event_update_non_event_guards.py tests/test_tg_monitor_gemma4_contract.py` (`29 passed`)
+  - `python -m py_compile smart_event_update.py kaggle/TelegramMonitor/telegram_monitor.py`
   - `pytest -q tests/test_tg_monitor_reprocess_incomplete_scan.py` printed `4 passed`, but the process did not terminate cleanly and was stopped; not used as blocking release evidence.
-- post-deploy verification: pending
+- post-deploy health: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`.
+- catch-up run: `ops_run id=963`, trigger `incident_catchup`, status `success`, metrics `{"messages_processed":2,"messages_with_events":2,"events_imported":5,"events_created":5,"events_merged":0,"events_skipped":0}`.
+- production `telegram_scanned_message` after catch-up:
+  - `@kenigatom/496`: `status=done`, `events_extracted=4`, `events_imported=4`, `error=null`.
+  - `@kraftmarket39/199`: `status=done`, `events_extracted=1`, `events_imported=1`, `error=null`.
+- production `event_source` after catch-up:
+  - `https://t.me/kenigatom/496` -> events `4413` `Научная лужайка ИЦАЭ на ФИШтивале`, `4414` `Химическое шоу «Сумасшедшая наука»`, `4415` `Наука морских путешествий на ФИШтивале`, `4416` `Ток-шоу «Научный холодильник: рыба»`.
+  - `https://t.me/kraftmarket39/199` -> event `4417` `Калининградский морской торговый порт: история и современность`.
 
 ## Prevention
 
