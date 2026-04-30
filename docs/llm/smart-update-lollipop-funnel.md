@@ -50,6 +50,13 @@ source.scope
 
 Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work, не рискуя потерять факты относительно текущего baseline.
 
+Зафиксированная версия: `lollipop_legacy.v2`.
+
+- Git tag: `lollipop-legacy-v2`
+- Version owner: `smart_update_lollipop_lab/legacy_writer_family.py::LEGACY_CONTRACT_VERSION`
+- Acceptance evidence: `artifacts/codex/lollipop_g4_benchmark_20260430T115455Z.{md,json}`
+- Следующие изменения, которые меняют public fact floor, objective quality gate, repair/fallback semantics или latency gate, должны bump-ить contract version до `lollipop_legacy.v3`.
+
 Контракт `lollipop_legacy.v2`:
 
 - baseline Gemma 3 fact extraction + baseline prose path выполняется первым и считается частью `lollipop_legacy` timing;
