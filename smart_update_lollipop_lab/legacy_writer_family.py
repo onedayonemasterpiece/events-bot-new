@@ -8,7 +8,7 @@ from typing import Any
 from . import writer_final_4o_family
 
 
-LEGACY_CONTRACT_VERSION = "lollipop_legacy.v1"
+LEGACY_CONTRACT_VERSION = "lollipop_legacy.v2"
 
 
 @dataclass(slots=True)
@@ -54,6 +54,89 @@ def writer_response_schema() -> dict[str, Any]:
             "used_extra_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
         },
         "required": ["title", "description_md", "covered_baseline_fact_indexes", "used_extra_fact_indexes"],
+    }
+
+
+def _text_quality_score(description: str) -> int:
+    quality = writer_final_4o_family._describe_text_quality(description)
+    score = 0
+    if quality["lead_hook_signals"]:
+        score += 3
+    score -= 4 * len(quality["report_formula_hits"])
+    score -= 5 * len(quality["promo_phrase_hits"])
+    if quality["lead_meta_opening"]:
+        score -= 6
+    if quality["poster_leak"]:
+        score -= 4
+    if quality["age_leak"]:
+        score -= 4
+    return score
+
+
+def compare_to_baseline(
+    *,
+    baseline_description: str,
+    candidate_description: str,
+) -> dict[str, Any]:
+    """Deterministic quality guard for the benchmark contract.
+
+    It is intentionally narrow: semantic/factual coverage remains LLM-owned via
+    the writer schema, while this guard catches measurable public-text regressions.
+    """
+
+    baseline = str(baseline_description or "")
+    candidate = str(candidate_description or "")
+    baseline_quality = writer_final_4o_family._describe_text_quality(baseline)
+    candidate_quality = writer_final_4o_family._describe_text_quality(candidate)
+    baseline_score = _text_quality_score(baseline)
+    candidate_score = _text_quality_score(candidate)
+    baseline_len = len(baseline)
+    candidate_len = len(candidate)
+    length_ratio = round(candidate_len / baseline_len, 4) if baseline_len else None
+
+    regressions: list[str] = []
+    improvements: list[str] = []
+    warnings: list[str] = []
+
+    if len(candidate_quality["report_formula_hits"]) > len(baseline_quality["report_formula_hits"]):
+        regressions.append("quality.report_formula_regression")
+    if len(candidate_quality["promo_phrase_hits"]) > len(baseline_quality["promo_phrase_hits"]):
+        regressions.append("quality.promo_phrase_regression")
+    if candidate_quality["lead_meta_opening"] and not baseline_quality["lead_meta_opening"]:
+        regressions.append("quality.lead_meta_regression")
+    if candidate_quality["poster_leak"] and not baseline_quality["poster_leak"]:
+        regressions.append("quality.poster_leak_regression")
+    if candidate_quality["age_leak"] and not baseline_quality["age_leak"]:
+        regressions.append("quality.age_leak_regression")
+    if baseline_quality["lead_hook_signals"] and not candidate_quality["lead_hook_signals"]:
+        regressions.append("quality.lost_lead_hook")
+    if baseline_len and candidate_len < int(baseline_len * 0.68):
+        regressions.append(f"quality.too_short_vs_baseline:{candidate_len}/{baseline_len}")
+    if baseline_len and candidate_len > int(baseline_len * 1.12):
+        warnings.append(f"quality.longer_than_baseline:{candidate_len}/{baseline_len}")
+
+    if candidate_score > baseline_score:
+        improvements.append("quality.score_improved")
+    if len(candidate_quality["lead_hook_signals"]) > len(baseline_quality["lead_hook_signals"]):
+        improvements.append("quality.lead_hook_improved")
+    if baseline_len and candidate_len < baseline_len and candidate_len >= int(baseline_len * 0.68):
+        improvements.append("quality.more_compact")
+    if len(candidate_quality["report_formula_hits"]) < len(baseline_quality["report_formula_hits"]):
+        improvements.append("quality.report_formula_reduced")
+    if len(candidate_quality["promo_phrase_hits"]) < len(baseline_quality["promo_phrase_hits"]):
+        improvements.append("quality.promo_phrase_reduced")
+
+    status = "regressed" if regressions else ("improved" if improvements else "no_worse")
+    return {
+        "status": status,
+        "baseline_score": baseline_score,
+        "candidate_score": candidate_score,
+        "length_ratio": length_ratio,
+        "regressions": regressions,
+        "improvements": improvements,
+        "warnings": warnings,
+        "baseline_quality": baseline_quality,
+        "candidate_quality": candidate_quality,
     }
 
 
@@ -148,7 +231,7 @@ def normalize_enhancement_payload(payload: dict[str, Any], *, baseline_fact_coun
 def build_writer_system_prompt() -> str:
     return textwrap.dedent(
         f"""
-        You do one bounded step: {LEGACY_CONTRACT_VERSION} final writer.
+        You do one bounded step: {LEGACY_CONTRACT_VERSION} final public-text editor.
 
         Return one JSON object only:
         {{
@@ -160,24 +243,28 @@ def build_writer_system_prompt() -> str:
 
         HARD CONTRACT
         - You write the final public event description in Russian.
-        - Treat baseline_description as the draft you are improving, not as disposable context.
-          Keep its informational density, useful structure, and specific texture unless a line is
-          unsafe, invented, or violates the style rules below.
-        - The baseline_facts list is the factual floor. Semantically cover every baseline fact.
+        - Treat baseline_description as the draft you are editing, not as disposable context.
+          Keep every concrete meaningful claim, named object/person/place/programme, explicit list,
+          and useful texture unless it is unsafe, unsupported, repetitive, or violates the style rules.
+        - The baseline_facts list is the mandatory public factual floor. Semantically cover every
+          baseline fact, but rewrite dry extractor phrasing into natural event-facing Russian.
+        - logistics_context contains service facts. Use them only when they are already part of
+          baseline_description or when omitting them would make the public text misleading.
         - source_excerpt is available only to verify or add grounded texture. It does not override
-          the baseline factual floor.
+          the public factual floor.
         - If a fact is awkward but important, rewrite it naturally without changing meaning.
         - Use extra_facts only when they strengthen the text without crowding out baseline facts.
         - Do not invent facts, dates, venues, prices, ticket conditions, names, or quotes.
-        - Do not put date/time/location/address/ticket logistics in narrative prose.
-        - Keep the result at least as detailed as baseline_description_chars.
+        - Do not stuff date/time/address/ticket logistics into narrative prose just to prove coverage.
+          If logistics are needed, keep them in one compact natural sentence.
+        - Keep the result at least as detailed as baseline_description in meaningful event substance,
+          not necessarily in raw character count.
         - Required length window is in the user payload: min_description_chars..max_description_chars.
-          Stay inside it unless a hard fact-floor constraint makes that impossible.
-        - Do not compress the baseline into a short summary. The legacy path is additive:
-          baseline first, lollipop polish second.
-        - If coverage requires comparable length, choose coverage and texture over brevity.
-        - If baseline facts contain logistics/date/time/tickets, keep them compact and natural,
-          but do not invent any extra service details.
+          Stay inside it unless a hard fact-floor constraint makes that impossible. Prefer the lower
+          half of the window when all meaningful facts still fit naturally.
+        - Do not compress the baseline into a short summary. Aim for a sharper edited version:
+          fewer weak phrases, same or better factual substance.
+        - If coverage requires comparable length, choose coverage and texture over arbitrary brevity.
         - The first paragraph should use the strongest grounded hook early: rarity, format,
           quote-like phrase, atmosphere, named programme, local context, or stage action.
         - Avoid report/card/promotional formulas: "посвящено", "характеризуется",
@@ -193,6 +280,13 @@ def build_writer_system_prompt() -> str:
         - Mark covered_baseline_fact_indexes honestly. Include an index only if the output text
           semantically covers that fact.
         - Mark used_extra_fact_indexes honestly.
+
+        QUALITY TARGET
+        - The candidate should be objectively no worse than baseline_description:
+          stronger or equal hook, no extra report/promotional formulas, no meta lead, and no factual loss.
+        - Best outcome: 70-100% of baseline length with all meaningful facts preserved and a cleaner lead.
+        - Acceptable outcome: comparable length but clearly cleaner prose.
+        - Bad outcome: shorter by dropping concrete facts, or longer because logistics were pasted in.
         """
     ).strip()
 
@@ -210,11 +304,13 @@ def build_writer_payload(
         "title": title,
         "event_type": event_type,
         "baseline_description_chars": len(str(baseline_description or "")),
-        "min_description_chars": len(str(baseline_description or "")),
-        "max_description_chars": int(len(str(baseline_description or "")) * 1.2),
+        "min_description_chars": int(len(str(baseline_description or "")) * 0.70),
+        "target_description_chars": int(len(str(baseline_description or "")) * 0.86),
+        "max_description_chars": int(len(str(baseline_description or "")) * 1.05),
         "hard_validation_gates": {
             "cover_all_baseline_fact_indexes": True,
-            "minimum_description_chars": len(str(baseline_description or "")),
+            "minimum_description_chars": int(len(str(baseline_description or "")) * 0.68),
+            "objective_quality_status": "must be no_worse or improved versus baseline_description",
             "speed_profile": "benchmark counts baseline stage plus lollipop stages",
             "forbidden_lead_pattern": "title — это",
             "forbidden_register": ["dry report", "promo CTA", "short summary"],
@@ -226,6 +322,7 @@ def build_writer_payload(
             for idx, fact in enumerate(baseline_facts)
             if _clean_text(fact)
         ],
+        "logistics_context": list(enhancement.get("logistics_facts") or []),
         "lead_hook_fact_indexes": list(enhancement.get("lead_hook_fact_indexes") or []),
         "quote_candidates": list(enhancement.get("quote_candidates") or []),
         "extra_facts": [
@@ -235,6 +332,42 @@ def build_writer_payload(
         ],
         "writer_notes": list(enhancement.get("writer_notes") or []),
     }
+
+
+def build_writer_repair_payload(
+    *,
+    title: str,
+    event_type: str,
+    baseline_description: str,
+    baseline_facts: list[str],
+    enhancement: dict[str, Any],
+    previous_output: dict[str, Any],
+    validation_errors: list[str],
+    quality_regressions: list[str],
+    source_excerpt: str = "",
+) -> dict[str, Any]:
+    payload = build_writer_payload(
+        title=title,
+        event_type=event_type,
+        baseline_description=baseline_description,
+        baseline_facts=baseline_facts,
+        enhancement=enhancement,
+        source_excerpt=source_excerpt,
+    )
+    payload["repair_instruction"] = {
+        "mode": "repair_previous_writer_output",
+        "previous_description_md": str(previous_output.get("description_md") or ""),
+        "previous_covered_baseline_fact_indexes": list(previous_output.get("covered_baseline_fact_indexes") or []),
+        "validation_errors": list(validation_errors or []),
+        "quality_regressions": list(quality_regressions or []),
+        "rules": [
+            "Fix the listed errors without falling back to a dry card.",
+            "If length is too short, restore the concrete baseline texture and programme/list details.",
+            "If a hook is missing, rewrite the first paragraph through grounded format, atmosphere, action, or object.",
+            "Return a fresh complete JSON object, not a patch.",
+        ],
+    }
+    return payload
 
 
 def apply_writer_output(*, title: str, output: dict[str, Any]) -> dict[str, Any]:
@@ -260,8 +393,8 @@ def validate_writer_output(
     baseline_description: str,
     enhancement: dict[str, Any],
     output: dict[str, Any],
-    min_length_ratio: float = 1.00,
-    max_length_ratio: float = 1.25,
+    min_length_ratio: float = 0.68,
+    max_length_ratio: float = 1.12,
 ) -> LegacyValidationResult:
     description = str(output.get("description_md") or "")
     errors: list[str] = []

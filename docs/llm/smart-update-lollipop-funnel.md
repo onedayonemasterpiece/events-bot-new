@@ -50,14 +50,16 @@ source.scope
 
 Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work, не рискуя потерять факты относительно текущего baseline.
 
-Контракт `lollipop_legacy.v1`:
+Контракт `lollipop_legacy.v2`:
 
 - baseline Gemma 3 fact extraction + baseline prose path выполняется первым и считается частью `lollipop_legacy` timing;
-- mandatory fact floor равен полному baseline fact set, включая logistics/date/time/ticket/start-point facts; event-facing/logistics split остаётся только диагностикой в отчёте;
-- Gemma 4 31b делает один bounded final-writer pass поверх `baseline_description`, `baseline_facts` и `source_excerpt`;
-- финальный writer обязан покрыть все baseline floor facts и вернуть текст не короче baseline; если writer нарушает validation или не отвечает за `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC`, benchmark откатывает public text к baseline и пишет warning `writer.fallback_to_baseline:*`;
+- mandatory public fact floor равен non-logistics baseline facts; date/time/address/ticket/start-point facts сохраняются как `logistics_context` и могут попадать в public prose только компактно и по необходимости;
+- Gemma 4 31b делает bounded baseline-editor pass поверх `baseline_description`, public `baseline_facts`, `logistics_context` и `source_excerpt`;
+- final writer должен сохранить смысловой baseline substance, покрыть public fact floor, не ухудшить hook/register/style metrics и целиться в `70-105%` baseline length, если facts не требуют сопоставимого объёма;
+- objective guard `quality_delta_vs_baseline` считает вариант `regressed`, если появляется новый report/promo/meta leak, теряется baseline hook, текст становится слишком коротким или ломает validation;
+- при validation/quality regression запускается один bounded Gemma repair pass; baseline fallback остаётся последней защитой после repair failure или writer timeout;
 - speed gate: `1.0 < lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`;
-- direct Gemma JSON calls ограничены `LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC` (`75s` default), writer pass отдельно ограничен `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC` (`12s` default);
+- direct Gemma JSON calls ограничены `LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC` (`75s` default), writer pass отдельно ограничен `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC` (`12s` default; benchmark recovery run used `16s`);
 - optional `--legacy-g4-extract` оставлен только как экспериментальный флаг. Live check `2026-04-29` показал, что baseline-style extraction на `gemma-4-31b-it` через текущий Smart Update extractor path может занимать около `177s` на одном коротком fixture и не проходит latency gate.
 
 Benchmark command:
@@ -71,9 +73,9 @@ python scripts/inspect/benchmark_lollipop_g4.py \
 
 Implementation surface:
 
-- [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation;
+- [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation/objective quality delta;
 - [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) owns variant routing, five real-post fixtures, timing, and markdown report rendering;
-- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers full baseline floor preservation, coverage validation, bad-register validation, duplicate-word/tail validation, baseline-volume validation, and benchmark routing.
+- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers public/full baseline floor handling, coverage validation, bad-register validation, duplicate-word/tail validation, objective quality delta, baseline-volume validation, and benchmark routing.
 
 ## Активные families
 

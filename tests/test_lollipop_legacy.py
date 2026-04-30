@@ -80,8 +80,10 @@ def test_lollipop_legacy_writer_payload_requires_baseline_volume() -> None:
         enhancement={"extra_facts": []},
     )
 
-    assert payload["min_description_chars"] == 10
-    assert payload["hard_validation_gates"]["minimum_description_chars"] == 10
+    assert payload["min_description_chars"] == 7
+    assert payload["target_description_chars"] == 8
+    assert payload["max_description_chars"] == 10
+    assert payload["hard_validation_gates"]["minimum_description_chars"] == 6
 
 
 def test_benchmark_accepts_lollipop_legacy_variant_and_static_fixtures() -> None:
@@ -135,6 +137,36 @@ def test_lollipop_legacy_required_floor_keeps_full_baseline_facts() -> None:
         "Билеты доступны на сайте музея.",
         "Лектор — Борис Мегорский.",
     ]
+
+
+def test_lollipop_legacy_quality_delta_rewards_compact_no_worse_rewrite() -> None:
+    delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=(
+            "Событие посвящено истории флота. Лекция расскажет о быте моряков "
+            "и о повседневной дисциплине на кораблях."
+        ),
+        candidate_description=(
+            "Лекция разбирает историю флота через быт моряков и повседневную "
+            "дисциплину на кораблях."
+        ),
+    )
+
+    assert delta["status"] == "improved"
+    assert "quality.more_compact" in delta["improvements"]
+    assert not delta["regressions"]
+
+
+def test_lollipop_legacy_quality_delta_rejects_too_short_summary() -> None:
+    delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=(
+            "На выставке представлены жостовские подносы, каргопольская игрушка "
+            "и дымковская игрушка в разделе «Красны девицы, добры молодцы»."
+        ),
+        candidate_description="На выставке покажут народные промыслы.",
+    )
+
+    assert delta["status"] == "regressed"
+    assert any(item.startswith("quality.too_short_vs_baseline:") for item in delta["regressions"])
 
 
 def test_lollipop_quality_detector_does_not_flag_predstavleniy_false_positive() -> None:

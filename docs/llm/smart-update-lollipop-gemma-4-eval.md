@@ -134,6 +134,50 @@ Interpretation:
 - two writer failures were contained by baseline fallback: one duplicate-tail typo (`трудностиности`) and one 12s writer timeout;
 - quality still needs human pairwise review before rollout: the current evidence is a strong lab recovery candidate, not a production default.
 
+## `lollipop_legacy.v2` public-quality recovery pass (`2026-04-30`)
+
+После human review стало ясно, что `v1` был слишком буквальным: full baseline fact floor заставлял writer тащить logistics/date/ticket facts в public narrative, а требование `>= baseline length` превращало legacy в baseline-copy или раздувало текст. `v2` меняет acceptance contract:
+
+- non-logistics baseline facts стали mandatory public floor;
+- date/time/address/ticket/start-point facts остаются `logistics_context` и используются только компактно и по необходимости;
+- Gemma 4 31b работает как baseline editor: сохранить concrete baseline substance, улучшить hook/register, не делать short summary;
+- objective guard `quality_delta_vs_baseline` ловит measurable regressions: new report/promo/meta leaks, lost baseline hook, too-short output, validation failures;
+- при regression запускается один bounded repair pass; baseline fallback остаётся последним no-worse guard.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260430T060900Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260430T060900Z.md`
+- command:
+
+```bash
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=45 LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC=16 \
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --reuse-baseline-artifact artifacts/codex/lollipop_g4_benchmark_20260429T224021Z.json \
+  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260429T224021Z.json \
+  --gemma-call-gap-s 0
+```
+
+Results:
+
+| Fixture | Baseline chars | Legacy chars | Length ratio | Quality delta | Speed ratio | Fallback | Validation |
+| --- | ---: | ---: | ---: | --- | ---: | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | `554` | `488` | `0.8809` | `improved` | `1.4127` | `false` | `errors=0`, `warnings=0` |
+| `PETER-FLEET-LECTURE-5600` | `1050` | `954` | `0.9086` | `improved` | `1.8390` | `false` | `errors=0`, `warnings=0` |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1156` | `828` | `0.7163` | `improved` | `1.8086` | `false` | `errors=0`, `warnings=0` |
+| `WORLD-HOBBIES-5505` | `1078` | `1089` | `1.0102` | `improved` | `2.1928` | `false` | `errors=0`, `warnings=0` |
+| `RED-COSMOS-7902` | `1060` | `985` | `0.9292` | `improved` | `2.1427` | `false` | `errors=0`, `warnings=0` |
+
+Interpretation:
+
+- `5/5` fixtures pass objective no-worse gate as `improved`;
+- `4/5` fixtures are shorter than baseline while preserving public fact floor;
+- `0` writer fallback and `0` repair-pass usage in this stable run; repair remains a guard for non-deterministic short/invalid outputs observed during iteration;
+- `0` validation errors/warnings, `0` report/promo/poster/age leaks;
+- latency remains within the requested `<=3x` envelope while counting the baseline stage.
+
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 
 ### Summary table

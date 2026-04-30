@@ -1351,10 +1351,11 @@ async def _run_lollipop_legacy_variant(
     baseline_all_facts = _baseline_fact_list(baseline)
     baseline_event_facts = _legacy_event_fact_floor(baseline_all_facts)
     baseline_floor_facts = _legacy_required_fact_floor(baseline_all_facts)
+    baseline_logistics_facts = [fact for fact in baseline_floor_facts if fact not in baseline_event_facts]
     legacy_facts = [re.sub(r"\s+", " ", str(item or "")).strip() for item in extracted if str(item or "").strip()]
-    fact_floor = baseline_floor_facts or legacy_facts
+    fact_floor = baseline_event_facts or baseline_floor_facts or legacy_facts
     for fact in legacy_facts:
-        if fact and fact not in fact_floor:
+        if fact and fact not in fact_floor and fact not in baseline_logistics_facts:
             fact_floor.append(fact)
 
     source_excerpt = _source_excerpt(fixture.sources, limit=3200)
@@ -1364,24 +1365,29 @@ async def _run_lollipop_legacy_variant(
         "quote_candidates": [],
         "extra_facts": [],
         "writer_notes": [
-            "Single bounded lollipop pass: preserve the baseline draft first, then improve only with grounded source texture."
+            "Single bounded lollipop editor pass: preserve the baseline draft's concrete substance, improve hook/register, and do not paste logistics unless public prose needs them."
         ],
+        "logistics_facts": baseline_logistics_facts,
     }
 
     fallback_to_baseline = False
     fallback_reasons: list[str] = []
+    quality_delta: dict[str, Any] | None = None
+    writer_retry_count = 0
+    baseline_description = str(baseline.get("description_md") or "")
     try:
+        writer_payload = legacy_writer_family.build_writer_payload(
+            title=fixture.title,
+            event_type=fixture.event_type,
+            baseline_description=baseline_description,
+            baseline_facts=fact_floor,
+            enhancement=enhancement,
+            source_excerpt=source_excerpt,
+        )
         writer_raw = await _ask_gemma_json_direct(
             model=gemma_model,
             system_prompt=legacy_writer_family.build_writer_system_prompt(),
-            user_payload=legacy_writer_family.build_writer_payload(
-                title=fixture.title,
-                event_type=fixture.event_type,
-                baseline_description=str(baseline.get("description_md") or ""),
-                baseline_facts=fact_floor,
-                enhancement=enhancement,
-                source_excerpt=source_excerpt,
-            ),
+            user_payload=writer_payload,
             max_tokens=2200,
             response_schema=legacy_writer_family.writer_response_schema(),
             timeout_sec=_gemma_writer_timeout_sec(),
@@ -1390,43 +1396,110 @@ async def _run_lollipop_legacy_variant(
         applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
         validation = legacy_writer_family.validate_writer_output(
             baseline_facts=fact_floor,
-            baseline_description=str(baseline.get("description_md") or ""),
+            baseline_description=baseline_description,
             enhancement=enhancement,
             output=writer_raw,
         )
+        quality_delta = legacy_writer_family.compare_to_baseline(
+            baseline_description=baseline_description,
+            candidate_description=str(applied_output.get("description_md") or ""),
+        )
+        validation.warnings.extend(quality_delta.get("warnings") or [])
     except asyncio.TimeoutError:
         gemma_calls += 1
         writer_raw = {
             "title": fixture.title,
-            "description_md": str(baseline.get("description_md") or ""),
+            "description_md": baseline_description,
             "covered_baseline_fact_indexes": list(range(len(fact_floor))),
             "used_extra_fact_indexes": [],
         }
         applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
         validation = legacy_writer_family.validate_writer_output(
             baseline_facts=fact_floor,
-            baseline_description=str(baseline.get("description_md") or ""),
+            baseline_description=baseline_description,
             enhancement=enhancement,
             output=writer_raw,
+        )
+        quality_delta = legacy_writer_family.compare_to_baseline(
+            baseline_description=baseline_description,
+            candidate_description=str(applied_output.get("description_md") or ""),
         )
         fallback_to_baseline = True
         fallback_reasons = ["writer.timeout"]
         validation.warnings.append("writer.fallback_to_baseline:writer.timeout")
+    if quality_delta is not None and quality_delta.get("regressions"):
+        validation.errors.extend(str(item) for item in quality_delta.get("regressions") or [])
+    if validation.errors:
+        retry_reasons = list(validation.errors)
+        try:
+            retry_raw = await _ask_gemma_json_direct(
+                model=gemma_model,
+                system_prompt=legacy_writer_family.build_writer_system_prompt(),
+                user_payload=legacy_writer_family.build_writer_repair_payload(
+                    title=fixture.title,
+                    event_type=fixture.event_type,
+                    baseline_description=baseline_description,
+                    baseline_facts=fact_floor,
+                    enhancement=enhancement,
+                    previous_output=writer_raw,
+                    validation_errors=retry_reasons,
+                    quality_regressions=list((quality_delta or {}).get("regressions") or []),
+                    source_excerpt=source_excerpt,
+                ),
+                max_tokens=2200,
+                response_schema=legacy_writer_family.writer_response_schema(),
+                timeout_sec=max(8.0, min(_gemma_writer_timeout_sec(), 12.0)),
+            )
+            writer_retry_count = 1
+            gemma_calls += 1
+            retry_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=retry_raw)
+            retry_validation = legacy_writer_family.validate_writer_output(
+                baseline_facts=fact_floor,
+                baseline_description=baseline_description,
+                enhancement=enhancement,
+                output=retry_raw,
+            )
+            retry_quality_delta = legacy_writer_family.compare_to_baseline(
+                baseline_description=baseline_description,
+                candidate_description=str(retry_output.get("description_md") or ""),
+            )
+            retry_validation.warnings.extend(retry_quality_delta.get("warnings") or [])
+            if retry_quality_delta.get("regressions"):
+                retry_validation.errors.extend(str(item) for item in retry_quality_delta.get("regressions") or [])
+            if not retry_validation.errors:
+                writer_raw = retry_raw
+                applied_output = retry_output
+                validation = retry_validation
+                quality_delta = retry_quality_delta
+            else:
+                fallback_reasons = list(retry_validation.errors)
+                validation = retry_validation
+                quality_delta = retry_quality_delta
+        except asyncio.TimeoutError:
+            writer_retry_count = 1
+            gemma_calls += 1
+            fallback_reasons = retry_reasons + ["writer.retry_timeout"]
+
     if validation.errors:
         fallback_to_baseline = True
-        fallback_reasons = list(validation.errors)
+        if not fallback_reasons:
+            fallback_reasons = list(validation.errors)
         writer_raw = {
             "title": fixture.title,
-            "description_md": str(baseline.get("description_md") or ""),
+            "description_md": baseline_description,
             "covered_baseline_fact_indexes": list(range(len(fact_floor))),
             "used_extra_fact_indexes": [],
         }
         applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
         validation = legacy_writer_family.validate_writer_output(
             baseline_facts=fact_floor,
-            baseline_description=str(baseline.get("description_md") or ""),
+            baseline_description=baseline_description,
             enhancement=enhancement,
             output=writer_raw,
+        )
+        quality_delta = legacy_writer_family.compare_to_baseline(
+            baseline_description=baseline_description,
+            candidate_description=str(applied_output.get("description_md") or ""),
         )
         validation.warnings.append("writer.fallback_to_baseline:" + ",".join(fallback_reasons))
     additional_wall_clock_sec = round(time.perf_counter() - additional_started_at, 6)
@@ -1493,19 +1566,24 @@ async def _run_lollipop_legacy_variant(
         "baseline_all_fact_count": len(baseline_all_facts),
         "baseline_floor_fact_count": len(fact_floor),
         "baseline_event_fact_count": len(baseline_event_facts),
-        "baseline_logistics_fact_count": max(0, len(baseline_all_facts) - len(baseline_event_facts)),
+        "baseline_full_fact_count": len(baseline_floor_facts),
+        "baseline_public_fact_count": len(fact_floor),
+        "baseline_logistics_fact_count": len(baseline_logistics_facts),
         "legacy_extracted_fact_count": len(legacy_facts),
         "per_source_facts": per_source,
         "baseline_floor_facts": fact_floor,
+        "baseline_full_facts": baseline_floor_facts,
+        "baseline_logistics_facts": baseline_logistics_facts,
         "legacy_extracted_facts": legacy_facts,
         "enhancement_raw": enhancement_raw,
         "enhancement": enhancement,
         "writer_output": writer_raw,
-        "writer_retry_count": 0,
+        "writer_retry_count": writer_retry_count,
         "writer_fallback_to_baseline": fallback_to_baseline,
         "writer_fallback_reasons": fallback_reasons,
         "applied_output": applied_output,
         "validation": {"errors": validation.errors, "warnings": validation.warnings},
+        "quality_delta_vs_baseline": quality_delta,
         "quality_profile": _quality_profile(applied_output.get("description_md")),
         "metrics": _variant_metrics(applied_output.get("description_md")),
         "timings": {
@@ -1600,10 +1678,21 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
             if key == "lollipop_legacy":
                 lines.append(f"- baseline_all_fact_count: `{payload.get('baseline_all_fact_count')}`")
                 lines.append(f"- baseline_floor_fact_count: `{payload.get('baseline_floor_fact_count')}`")
+                lines.append(f"- baseline_full_fact_count: `{payload.get('baseline_full_fact_count')}`")
+                lines.append(f"- baseline_public_fact_count: `{payload.get('baseline_public_fact_count')}`")
                 lines.append(f"- baseline_logistics_fact_count: `{payload.get('baseline_logistics_fact_count')}`")
                 lines.append(f"- legacy_extracted_fact_count: `{payload.get('legacy_extracted_fact_count')}`")
                 lines.append(f"- writer_retry_count: `{payload.get('writer_retry_count') or 0}`")
                 lines.append(f"- writer_fallback_to_baseline: `{bool(payload.get('writer_fallback_to_baseline'))}`")
+                quality_delta = payload.get("quality_delta_vs_baseline") if isinstance(payload.get("quality_delta_vs_baseline"), dict) else None
+                if quality_delta:
+                    lines.append(f"- quality_delta_status: `{quality_delta.get('status')}`")
+                    lines.append(f"- quality_score: `{quality_delta.get('baseline_score')} -> {quality_delta.get('candidate_score')}`")
+                    lines.append(f"- length_ratio_vs_baseline: `{quality_delta.get('length_ratio')}`")
+                    improvements = ", ".join(quality_delta.get("improvements") or [])
+                    regressions = ", ".join(quality_delta.get("regressions") or [])
+                    lines.append(f"- quality_improvements: `{improvements or '-'}`")
+                    lines.append(f"- quality_regressions: `{regressions or '-'}`")
                 speed = payload.get("speed_ratio_vs_baseline") if isinstance(payload.get("speed_ratio_vs_baseline"), dict) else None
                 if speed:
                     lines.append(f"- speed_ratio_vs_baseline: `{speed.get('ratio')}` (`{speed.get('gate')}`)")
