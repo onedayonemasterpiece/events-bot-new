@@ -63,3 +63,13 @@ def test_museum_work_hours_still_skip_as_work_schedule() -> None:
     )
 
     assert su._looks_like_work_schedule_notice("График работы музея", text) is True
+
+
+def test_weekend_wording_without_work_hours_headline_stays_llm_owned() -> None:
+    text = (
+        "В выходные дни в библиотеке пройдут лекции и мастер-классы.\n"
+        "Суббота, 18:30 — лекция о море.\n"
+        "Воскресенье, 12:00 — семейный мастер-класс."
+    )
+
+    assert su._looks_like_work_schedule_notice("Лекции в библиотеке", text) is False

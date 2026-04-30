@@ -51,7 +51,7 @@ Both posts describe concrete future events and should create or update event car
 ## Contributing Factors
 
 - `work_schedule` was a deterministic safety-net and did not consult the LLM after extractor had already produced concrete event candidates.
-- The guard used broad substring matching and generic date/time details instead of requiring an explicit work-hours headline or a real timetable row.
+- The guard used broad substring matching and generic date/time details instead of limiting deterministic skips to explicit work-hours/closure wording and leaving borderline meaning to the LLM/extractor path.
 - `tg_monitoring` surfaced the per-post breakdown but still finished the whole run as `success`, so the failure required operator review.
 
 ## Automation Contract
@@ -99,12 +99,12 @@ Both posts describe concrete future events and should create or update event car
 ## Immediate Mitigation
 
 - Isolated the hotfix in a linked worktree from current `origin/main` because the default checkout had unrelated local state.
-- Narrowed `work_schedule` so museum/library fallback requires a true timetable row, and normal event announcements with lecture/show/exhibition/invite signals are not skipped only because the venue/address mentions a museum or library.
+- Narrowed `work_schedule` to explicit work-hours/closure wording only. The server no longer infers a work schedule from museum/library venue words plus dates; normal event announcements stay in the LLM/extractor path.
 
 ## Corrective Actions
 
 - Added regression tests for the two false-skip shapes and for a real museum work-hours notice.
-- Documented that `work_schedule` is limited to actual work-hours notices and must not cut normal events at museum/library venues.
+- Documented that `work_schedule` is limited to explicit work-hours notices and must not cut normal events at museum/library venues.
 
 ## Follow-up Actions
 
