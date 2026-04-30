@@ -21,6 +21,56 @@ def _clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
+# Narrator-frame openers: stock copywriter leads that frame the event from
+# the narrator's pose ("X plunges you into / introduces you to ...") instead
+# of opening with a concrete object, named actor, quote, or event action.
+# Anchored to the very start of the lead paragraph.
+NARRATOR_FRAME_LEAD_PATTERNS: tuple[str, ...] = (
+    r"(?iu)^[\s>«\"`*_-]*Погружение\s+в\b",
+    r"(?iu)^[\s>«\"`*_-]*Знакомство\s+с\b",
+    r"(?iu)^[\s>«\"`*_-]*Путешестви[ея]\s+в\s+мир\b",
+    r"(?iu)^[\s>«\"`*_-]*Прогулк[аи]\s+по\s+миру\b",
+    r"(?iu)^[\s>«\"`*_-]*Окуни(?:тесь|сь)\s+в\b",
+    r"(?iu)^[\s>«\"`*_-]*Откройте\s+для\s+себя\b",
+    r"(?iu)^[\s>«\"`*_-]*Добро\s+пожаловать\s+в\b",
+    r"(?iu)^[\s>«\"`*_-]*Приготовьтесь\s+(?:к|погрузиться)\b",
+)
+
+
+def _lead_paragraph(text: str) -> str:
+    body = str(text or "").strip()
+    if not body:
+        return ""
+    # Skip a leading blockquote epigraph if it sits as its own paragraph.
+    paragraphs = [part for part in re.split(r"\n\s*\n", body) if part.strip()]
+    for part in paragraphs:
+        stripped = part.strip()
+        if stripped.startswith(">"):
+            continue
+        return stripped
+    return paragraphs[0].strip() if paragraphs else ""
+
+
+def _has_narrator_frame_opening(text: str) -> bool:
+    lead = _lead_paragraph(text)
+    if not lead:
+        return False
+    first_line = lead.split("\n", 1)[0]
+    return any(re.search(pattern, first_line) for pattern in NARRATOR_FRAME_LEAD_PATTERNS)
+
+
+def _heading_count(text: str) -> int:
+    return len(re.findall(r"(?m)^###\s+\S", str(text or "")))
+
+
+def _has_blockquote_epigraph(text: str) -> bool:
+    body = str(text or "").lstrip()
+    if not body:
+        return False
+    first_line = body.split("\n", 1)[0].strip()
+    return first_line.startswith(">")
+
+
 def enhancement_response_schema() -> dict[str, Any]:
     return {
         "type": "OBJECT",
@@ -70,6 +120,8 @@ def _text_quality_score(description: str) -> int:
         score -= 4
     if quality["age_leak"]:
         score -= 4
+    if _has_narrator_frame_opening(description):
+        score -= 3
     return score
 
 
@@ -98,6 +150,13 @@ def compare_to_baseline(
     improvements: list[str] = []
     warnings: list[str] = []
 
+    baseline_narrator_frame = _has_narrator_frame_opening(baseline)
+    candidate_narrator_frame = _has_narrator_frame_opening(candidate)
+    baseline_headings = _heading_count(baseline)
+    candidate_headings = _heading_count(candidate)
+    baseline_epigraph = _has_blockquote_epigraph(baseline)
+    candidate_epigraph = _has_blockquote_epigraph(candidate)
+
     if len(candidate_quality["report_formula_hits"]) > len(baseline_quality["report_formula_hits"]):
         regressions.append("quality.report_formula_regression")
     if len(candidate_quality["promo_phrase_hits"]) > len(baseline_quality["promo_phrase_hits"]):
@@ -110,10 +169,16 @@ def compare_to_baseline(
         regressions.append("quality.age_leak_regression")
     if baseline_quality["lead_hook_signals"] and not candidate_quality["lead_hook_signals"]:
         regressions.append("quality.lost_lead_hook")
+    if candidate_narrator_frame and not baseline_narrator_frame:
+        regressions.append("quality.narrator_frame_opening")
     if baseline_len and candidate_len < int(baseline_len * 0.68):
         regressions.append(f"quality.too_short_vs_baseline:{candidate_len}/{baseline_len}")
     if baseline_len and candidate_len > int(baseline_len * 1.12):
         warnings.append(f"quality.longer_than_baseline:{candidate_len}/{baseline_len}")
+    if baseline_headings >= 2 and candidate_headings == 0:
+        warnings.append(f"quality.lost_baseline_headings:{baseline_headings}")
+    if baseline_epigraph and not candidate_epigraph:
+        warnings.append("quality.lost_baseline_epigraph")
 
     if candidate_score > baseline_score:
         improvements.append("quality.score_improved")
@@ -125,6 +190,8 @@ def compare_to_baseline(
         improvements.append("quality.report_formula_reduced")
     if len(candidate_quality["promo_phrase_hits"]) < len(baseline_quality["promo_phrase_hits"]):
         improvements.append("quality.promo_phrase_reduced")
+    if baseline_narrator_frame and not candidate_narrator_frame:
+        improvements.append("quality.narrator_frame_avoided")
 
     status = "regressed" if regressions else ("improved" if improvements else "no_worse")
     return {
@@ -272,7 +339,22 @@ def build_writer_system_prompt() -> str:
           "зрители смогут насладиться", "X — это ...".
         - Never open with an em-dash definition like `Название — это ...`; write through action,
           atmosphere, object, or format instead.
+        - Never open the lead with a stock narrator-frame: "Погружение в ...",
+          "Знакомство с ...", "Путешествие в мир ...", "Прогулка по миру ...",
+          "Окунитесь в ...", "Откройте для себя ...", "Добро пожаловать в ...",
+          "Приготовьтесь к ...". Open with a concrete object, named actor, exact phrase
+          from the source, format texture word, or event action instead.
+        - Positive lead patterns to imitate (pick the kind that already exists in the facts):
+          - object: "Жостовские подносы, каргопольская и дымковская игрушки..."
+          - actor: "Религиовед Алексей Зыгмонт предлагает взглянуть на сакральное..."
+          - format texture: "Звуки старого города, где каждый камень хранит отголоски..."
+          - event action: "В преддверии Дня Земли откроется персональная выставка..."
+          - named programme/quote: "«Космос красного» собирает русские народные промыслы..."
         - Keep the register: vivid cultural digest, not a dry card and not ad copy.
+        - If baseline_description already used `### Heading` blocks for distinct thematic
+          clusters and the fact floor is rich (4+ public facts), prefer either keeping the
+          same heading structure or producing equivalently scannable paragraph breaks.
+          Do not collapse a clearly structured baseline into one undifferentiated blob.
         - If a baseline fact contains an explicit named list, preserve the names; do not collapse to
           "и другие".
         - For programme/title lists, use markdown bullets only when the facts genuinely contain a
@@ -417,6 +499,8 @@ def validate_writer_output(
     duplicate_word = re.search(r"(?iu)\b([а-яёa-z]{4,})\b[\s,;:—-]+\1\b", description)
     if duplicate_word:
         errors.append(f"text.duplicate_word:{duplicate_word.group(1).lower()}")
+    if re.search(r",[\s ]*,", description):
+        errors.append("text.double_comma")
     duplicate_tail = re.search(r"(?iu)\b[а-яё]*([а-яё]{3,})\1[а-яё]*\b", description)
     if duplicate_tail:
         errors.append(f"text.duplicate_tail:{duplicate_tail.group(1).lower()}")

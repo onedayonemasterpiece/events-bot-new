@@ -178,6 +178,40 @@ Interpretation:
 - `0` validation errors/warnings, `0` report/promo/poster/age leaks;
 - latency remains within the requested `<=3x` envelope while counting the baseline stage.
 
+## `lollipop_legacy.v2` prompt + guard tuning (`2026-04-30`)
+
+Follow-up human review targeted two text-quality issues that the first `v2` guard did not model well enough:
+
+- stock narrator-frame leads such as `Погружение в ...`, `Знакомство с ...`, `Путешествие в мир ...`;
+- lost scannability when a structured baseline with `###` thematic blocks was collapsed into plain paragraphs.
+
+Changes:
+
+- writer prompt now bans narrator-frame openings and gives positive lead patterns for object / actor / format-texture / event-action / named-quote leads;
+- `compare_to_baseline` treats a new narrator-frame opening as a regression, rewards narrator-frame avoidance, and emits soft warnings for dropped baseline `###` structure or leading `>` epigraphs;
+- validator rejects the recurring Gemma 4 double-comma artifact as `text.double_comma`, allowing the repair pass to fix it before fallback.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260430T115455Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260430T115455Z.md`
+
+| Fixture | Baseline chars | Legacy chars | Length ratio | Quality delta | Speed ratio | Repair | Fallback | Validation |
+| --- | ---: | ---: | ---: | --- | ---: | ---: | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | `554` | `521` | `0.9404` | `improved` | `1.4630` | `0` | `false` | `errors=0`, `warnings=0` |
+| `PETER-FLEET-LECTURE-5600` | `1050` | `1019` | `0.9705` | `improved` | `2.8412` | `1` | `false` | `errors=0`, `warnings=0` |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1156` | `938` | `0.8114` | `improved` | `1.9114` | `0` | `false` | `errors=0`, `warnings=1` (`quality.lost_baseline_epigraph`) |
+| `WORLD-HOBBIES-5505` | `1078` | `1063` | `0.9861` | `improved` | `2.1839` | `0` | `false` | `errors=0`, `warnings=1` (`quality.lost_baseline_epigraph`) |
+| `RED-COSMOS-7902` | `1060` | `987` | `0.9311` | `improved` | `2.1291` | `0` | `false` | `errors=0`, `warnings=1` (`quality.lost_baseline_epigraph`) |
+
+Interpretation:
+
+- `5/5` fixtures remain `quality_delta_status=improved`;
+- narrator-frame openings are removed from the Peter Fleet and Red Cosmos outputs;
+- dropped heading structure is restored on `audio_walk`, `peter_fleet_lecture`, and `sacred_lecture`;
+- one observed `text.double_comma` artifact was repaired without falling back to baseline;
+- all outputs remain within the `1.0 < speed_ratio <= 3.0` gate, with max observed ratio `2.8412`.
+
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 
 ### Summary table

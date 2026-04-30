@@ -192,6 +192,74 @@ def test_lollipop_legacy_validation_rejects_duplicate_words() -> None:
     assert "text.duplicate_word:передает" in result.errors
 
 
+def test_lollipop_legacy_validation_rejects_double_comma_artifact() -> None:
+    result = legacy_writer_family.validate_writer_output(
+        baseline_facts=["Лекция о флоте."],
+        baseline_description="Лекция о флоте.",
+        enhancement={"extra_facts": []},
+        output={
+            "description_md": "В центре внимания — состав моряков и то,, как была устроена жизнь на борту.",
+            "covered_baseline_fact_indexes": [0],
+            "used_extra_fact_indexes": [],
+        },
+    )
+
+    assert "text.double_comma" in result.errors
+
+
+def test_lollipop_legacy_quality_delta_flags_narrator_frame_regression() -> None:
+    delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=(
+            "В разделе «Красны девицы, добры молодцы» на выставке «Космос красного» "
+            "собраны жостовские подносы, каргопольская и дымковская игрушки."
+        ),
+        candidate_description=(
+            "Погружение в мир русского народного искусства через призму «космического» "
+            "видения. Выставка «Космос красного» предлагает взглянуть на знакомые образы."
+        ),
+    )
+
+    assert "quality.narrator_frame_opening" in delta["regressions"]
+    assert delta["status"] == "regressed"
+
+
+def test_lollipop_legacy_quality_delta_rewards_narrator_frame_avoidance() -> None:
+    delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=(
+            "Погружение в мир русского народного искусства через призму «космического» "
+            "видения. Выставка «Космос красного» предлагает взглянуть на знакомые образы."
+        ),
+        candidate_description=(
+            "«Космос красного» собирает жостовские подносы, каргопольскую и дымковскую "
+            "игрушки в разделе «Красны девицы, добры молодцы»."
+        ),
+    )
+
+    assert "quality.narrator_frame_avoided" in delta["improvements"]
+    assert "quality.narrator_frame_opening" not in delta["regressions"]
+
+
+def test_lollipop_legacy_quality_delta_warns_on_lost_baseline_headings() -> None:
+    baseline = (
+        "Атмосфера лекции. Лектор расскажет о флоте Петра Великого.\n\n"
+        "### Лектор и тема\nБорис Мегорский — заведующий отделом библиотеки.\n\n"
+        "### Что будет на лекции\nПовседневная жизнь моряков, дисциплина, традиции.\n\n"
+        "### Формат и детали\nОбстоятельный рассказ по архивным документам."
+    )
+    candidate = (
+        "Атмосфера лекции. Борис Мегорский расскажет о флоте Петра Великого. "
+        "Лектор разберёт повседневную жизнь моряков, дисциплину и традиции "
+        "по архивным документам петровской эпохи."
+    )
+
+    delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=baseline,
+        candidate_description=candidate,
+    )
+
+    assert any(item.startswith("quality.lost_baseline_headings:") for item in delta["warnings"])
+
+
 def test_lollipop_legacy_validation_rejects_duplicate_tail_typos() -> None:
     result = legacy_writer_family.validate_writer_output(
         baseline_facts=["Лекция расскажет о быте моряков."],
