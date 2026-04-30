@@ -17,6 +17,7 @@ On 2026-04-30 the public inventory contained several Telegram-imported quality r
 - work-hours notices imported as public event cards;
 - duplicate cards for the same real event;
 - many paid or unknown-price events marked as free.
+- A later full production audit of active future `is_free=1` rows found the free-label issue was broader than the initially reported controls: 69 additional future public rows had no explicit free-attendance evidence or had paid/ticket signals without free evidence.
 
 The fix for this incident must remain LLM-first: prompt/schema contracts own the semantic decisions (`is_free`, work-hours-vs-event, venue/title meaning, duplicate semantics). Deterministic code is allowed only as narrow output consistency/safety plumbing.
 
@@ -32,6 +33,7 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
 - Detected by operator report in the Codex session on 2026-04-30 after the first work-schedule incident was closed.
 - Production file log mirror was checked: `ENABLE_RUNTIME_FILE_LOGGING=0`, `RUNTIME_LOG_DIR=/data/runtime_logs`, directory existed but had no active or rotated logs. Fallback evidence came from production SQLite and Fly status/health.
 - Fly health at investigation start: app `events-bot-new-wngqia`, machine `48e42d5b714228`, version `1027`, checks `1 total, 1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`.
+- Follow-up mass audit snapshot on 2026-04-30 12:46 UTC found 120 active future public rows still marked `is_free=1`; 51 had explicit free evidence or explicit free+registration evidence, while 69 lacked explicit free evidence under the incident contract.
 
 ## Timeline
 
@@ -42,6 +44,8 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
 - 2026-04-30 01:xx UTC — multiple paid/unknown-price events were imported with `is_free=1`.
 - 2026-04-30 06:19 UTC — earlier incident `INC-2026-04-30-tg-monitoring-work-schedule-false-skips` was deployed; it fixed false skips of real museum/library events but did not remediate these already-imported event-quality rows.
 - 2026-04-30 — this incident was opened to handle the remaining event-quality regressions and prompt-first remediation.
+- 2026-04-30 12:46 UTC — operator requested a full production audit of all future free-labeled events; audit found 69 additional future rows where the free marker did not meet the explicit-evidence contract.
+- 2026-04-30 12:55 UTC — production data remediation cleared `is_free` on those 69 rows and enqueued individual Telegraph/page rebuild jobs.
 
 ## Root Cause
 
@@ -125,6 +129,13 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
   - false-free controls `4347`, `4349`, `4350`, `4351`, `4379`, `4392`, `4397`, `4407` set `is_free=0`;
   - explicit free positive control `4367` remained `is_free=1`.
 - Individual Telegraph event pages rebuilt through `joboutbox`.
+- Follow-up production future-free audit/remediation:
+  - raw audit artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/future_free_audit_20260430T124605Z.raw`;
+  - summary artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/future_free_audit_20260430T124605Z.summary.json`;
+  - 120 active future public rows were marked `is_free=1` before the follow-up cleanup;
+  - 69 rows without explicit free-attendance evidence had `is_free` cleared to `0`;
+  - after cleanup, 51 active future public rows remained `is_free=1`: 38 explicit-free rows and 13 explicit-free-with-registration/link rows;
+  - before/after remediation artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/inc_future_free_remediation_20260430.json`.
 - Residual blocker: full May 2026 month-page rebuild hits pre-existing `CONTENT_TOO_BIG` even in force/split path. The production DB and active-list filters are corrected, but the stale month aggregate page needs a separate page-splitting fix before this incident can be marked `closed`.
 
 ## Follow-up Actions
@@ -148,6 +159,12 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
   - `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`.
   - Production remediation artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/inc_event_quality_remediation_20260430.json`.
   - Confirmed production rows after remediation: work-hours and duplicate rows are cancelled/silent; false-free rows are no longer `is_free=1`; explicit `Вход свободный` control remains free.
+  - Full future-free audit/remediation artifacts:
+    - `artifacts/codex/INC-2026-04-30-event-quality-regressions/future_free_audit_20260430T124605Z.summary.json`;
+    - `artifacts/codex/INC-2026-04-30-event-quality-regressions/inc_future_free_remediation_20260430.json`;
+    - `artifacts/codex/INC-2026-04-30-event-quality-regressions/future_free_audit_after_20260430T124605Z.summary.json`.
+  - Future-free post-check: before cleanup `120` future rows had `is_free=1`; after cleanup `51` remained, with `0` rows in the `paid signal/no free evidence` or `no free evidence` risk classes.
+  - Post-cleanup `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`; Fly status remained machine `48e42d5b714228`, version `1028`, checks `1 total, 1 passing`.
   - Month-page caveat: outbox `month_pages:2026-05` and manual force rebuild both hit `CONTENT_TOO_BIG`; the stuck running job was marked `error` after interruption so it no longer blocks the worker.
 
 ## Prevention
