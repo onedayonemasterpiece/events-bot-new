@@ -1,6 +1,6 @@
 # INC-2026-04-30 Telegram Monitoring Event Quality Regressions
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Telegram Monitoring extraction / Smart Update matching / public event inventory
 Opened: 2026-04-30
@@ -118,22 +118,37 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
   - standup, museum-night, and wine-tasting paid/unknown-price controls did not return `is_free=true`;
   - explicit `Вход свободный` positive control returned `is_free=true`.
 - Pending: deploy and clean up already-imported production rows.
+- Deployed the prompt/doc/test fix from `origin/main` and remediated production rows:
+  - work-hours cards `4398`-`4401` set `lifecycle_status=cancelled`, `silent=1`;
+  - duplicate `4396` linked into kept event `4350`, and duplicate `4344` linked into kept event `4342`;
+  - duplicate `event_source` rows were preserved on the kept events and removed from cancelled duplicate rows;
+  - false-free controls `4347`, `4349`, `4350`, `4351`, `4379`, `4392`, `4397`, `4407` set `is_free=0`;
+  - explicit free positive control `4367` remained `is_free=1`.
+- Individual Telegraph event pages rebuilt through `joboutbox`.
+- Residual blocker: full May 2026 month-page rebuild hits pre-existing `CONTENT_TOO_BIG` even in force/split path. The production DB and active-list filters are corrected, but the stale month aggregate page needs a separate page-splitting fix before this incident can be marked `closed`.
 
 ## Follow-up Actions
 
 - [x] Run prompt eval with production-equivalent `GOOGLE_API_KEY3` if available.
-- [ ] Deploy prompt/doc/test fix from a clean branch and make it reachable from `origin/main`.
-- [ ] Remediate production rows and preserve source evidence.
+- [x] Deploy prompt/doc/test fix from a clean branch and make it reachable from `origin/main`.
+- [x] Remediate production rows and preserve source evidence.
+- [ ] Fix/repair May 2026 month-page force split path so the aggregate page rebuild no longer fails with `CONTENT_TOO_BIG`.
 - [ ] Clean up merged hotfix branches/worktrees after closure.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `e0c39ea5c8fd21bd6e9584ff8b595afbd8b30aa8` (`origin/main`)
+- deploy path: `flyctl deploy --app events-bot-new-wngqia --remote-only`
+- deployed image: `events-bot-new-wngqia:deployment-01KQF57DQPCMDQPY8XAQN50Y89`
 - regression checks:
   - `artifacts/codex/INC-2026-04-30-event-quality-regressions/.venv/bin/python -m pytest -q tests/test_tg_monitor_gemma4_contract.py` (`23 passed`)
   - Fly production `GOOGLE_API_KEY3` prompt eval artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/prompt_eval_gemma4_free_workhours_20260430_passed.json` (`5/5` cases passed)
-- post-deploy verification: pending
+- post-deploy verification:
+  - Fly status: machine `48e42d5b714228`, version `1028`, checks `1 total, 1 passing`.
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`.
+  - Production remediation artifact: `artifacts/codex/INC-2026-04-30-event-quality-regressions/inc_event_quality_remediation_20260430.json`.
+  - Confirmed production rows after remediation: work-hours and duplicate rows are cancelled/silent; false-free rows are no longer `is_free=1`; explicit `Вход свободный` control remains free.
+  - Month-page caveat: outbox `month_pages:2026-05` and manual force rebuild both hit `CONTENT_TOO_BIG`; the stuck running job was marked `error` after interruption so it no longer blocks the worker.
 
 ## Prevention
 
