@@ -165,7 +165,7 @@ The fix for this incident must remain LLM-first: prompt/schema contracts own the
     - `artifacts/codex/INC-2026-04-30-event-quality-regressions/future_free_audit_after_20260430T124605Z.summary.json`.
   - Future-free post-check: before cleanup `120` future rows had `is_free=1`; after cleanup `51` remained, with `0` rows in the `paid signal/no free evidence` or `no free evidence` risk classes.
   - Post-cleanup `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`; Fly status remained machine `48e42d5b714228`, version `1028`, checks `1 total, 1 passing`.
-  - Month-page caveat: outbox `month_pages:2026-05` and manual force rebuild both hit `CONTENT_TOO_BIG`; the stuck running job was marked `error` after interruption so it no longer blocks the worker.
+  - Month-page caveat: outbox `month_pages:2026-05` and manual force rebuild both hit `CONTENT_TOO_BIG`; stuck running month jobs were marked `error` after interruption / follow-up cleanup so they no longer block the worker. Individual Telegraph pages and week/weekend pages from the future-free cleanup were processed; aggregate month page splitting remains the open blocker.
 
 ## Prevention
 
