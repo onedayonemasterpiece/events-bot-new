@@ -284,20 +284,39 @@ def build_extraction_system_prompt() -> str:
         Rules:
         - Use only the source text and event metadata. Do not invent venues, dates,
           prices, programme items, names, or interpretations.
-        - Preserve named entities exactly. Do not transliterate or paraphrase names.
-        - Each fact text is one short Russian phrase. source_span is the shortest
+        - Preserve named entities exactly. Do not transliterate, translate, or
+          paraphrase names/source phrases into English. If you cannot rephrase a
+          source phrase cleanly in Russian, copy the exact Russian source phrase.
+        - Each fact text is one atomic Russian phrase. source_span is the shortest
           supporting source phrase. kind is a short lowercase label such as format,
           title, topic, person, route, object, texture, date, time, venue, address,
           tickets, price, age, url, service.
-        - Prefer recall over brevity: emit 4-10 public_facts when source supports.
+        - Prefer recall over brevity: emit 6-16 public_facts when source supports.
+          Do not collapse a dense post into a generic summary. Keep separate facts
+          for named people/roles, route mechanics, participant instructions, named
+          objects, historical dates, techniques, source/methodology, and programme
+          subtopics when those facts are present.
         - For sparse sources (1-2 source sentences) still split format, route/place,
           instruction/map, OCR location, and start mode when present, so the writer
           has enough public substance.
+        - For exhibition/object posts, preserve object-level facts separately: named
+          craft/object, origin/date, visual signature, material/technique, and topic
+          grouping are different facts. Keep source-local qualitative details too
+          when they explain an artist or craft: preferred technique/material,
+          self-description, pride/attitude toward the material, diversity/uniqueness,
+          free execution style, secret composition, and plot grouping.
+        - For lecture posts, preserve the speaker role, method/source basis, main
+          question set, historical span, and named thinkers as separate facts.
+        - For route/audio posts, preserve authors, sound materials, route endpoints,
+          stop mechanics, participant equipment, map/instruction handoff, participant
+          control facts (chooses time/speed, may repeat tracks, recommended solo
+          mode), and final connected event as separate facts.
         - Do not put field labels ("text:", "kind:", JSON keys) inside fact text.
         - A street + house number attached to a named venue is logistics/address; a
           separate OCR street that the source presents as the route/object goes to
           public_facts as kind=route.
-        - Russian only. No English helper words inside fact texts.
+        - Russian only. No English helper words inside fact texts. Latin-script
+          tokens are allowed only for URLs or exact names copied from source_text.
         """
     ).strip()
 

@@ -244,6 +244,29 @@ def test_benchmark_accepts_lollipop_legacy_variant_and_static_fixtures() -> None
     assert "реконструированные предметы обмундирования" in source_text
 
 
+def test_benchmark_extracts_exact_telegram_post_by_data_post() -> None:
+    benchmark = _load_benchmark_module()
+    html = """
+    <div class="tgme_widget_message js-widget_message" data-post="demo/100">
+      <div class="tgme_widget_message_text js-message_text">Соседний пост</div>
+    </div>
+    <div class="tgme_widget_message js-widget_message" data-post="demo/101">
+      <div class="tgme_widget_message_text js-message_text">Нужный<br>полный пост</div>
+    </div>
+    """
+    assert benchmark._extract_tg_post_text(html, "demo", 101) == "Нужный полный пост"
+    assert benchmark._telegram_embed_url("https://t.me/s/demo/101") == "https://t.me/demo/101?embed=1&mode=tme"
+
+
+def test_static_fact_fixtures_keep_full_source_snapshots() -> None:
+    benchmark = _load_benchmark_module()
+    fixtures = {fixture.fixture_id: fixture for fixture in benchmark._fixtures_from_cli("")}
+    assert "Арт-группа «Нежные бабы»" in fixtures["AUDIO-WALK-QUARTER-971"].sources[0].text
+    assert "Шарля де Бросса" in fixtures["SACRED-LECTURE-ZYGMONT-3170"].sources[0].text
+    assert "художественные работы из металла" in fixtures["WORLD-HOBBIES-5505"].sources[0].text
+    assert "Жостовская роспись существует с 1825 года" in fixtures["RED-COSMOS-7902"].sources[0].text
+
+
 def test_lollipop_legacy_variant_does_not_send_baseline_to_generation(monkeypatch: pytest.MonkeyPatch) -> None:
     benchmark = _load_benchmark_module()
     captured_payloads: list[dict[str, object]] = []

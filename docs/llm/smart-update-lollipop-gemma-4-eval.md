@@ -394,12 +394,12 @@ After `v13` made the variant stable (5/5 non-empty, 0 baseline leakage) but eval
   - `build_fact_coverage_payload()` — Gemma-4 user payload that flattens public + logistics with category labels and indexes; baseline facts are explicitly carried (reviewer-only).
   - `normalize_fact_coverage_payload()` — clamps invalid indexes, normalizes enum values (loss_severity, grounded_in_source, *_status, overall_verdict).
   - `summarize_fact_coverage()` — computes counts, `lost_baseline_facts[]`, `added_g4_facts[]`, `suspicious_g4_facts[]`, and a deterministic verdict floor that takes the more conservative of (LLM verdict, deterministic floor); a single critical loss of a grounded baseline fact, or three+ ungrounded G4 facts, force `rejected`.
-- `scripts/inspect/benchmark_lollipop_g4.py` runs a separate Gemma 4 reviewer call inside `_run_lollipop_legacy_variant` after the writer. Reviewer timeout is `max(_gemma_direct_timeout_sec(), 75.0)` because the structured output across 5+ baseline and 8+ G4 facts is heavier than extraction. The result is exposed as `result["fact_coverage"]` and rendered in the markdown report under `### Fact Extraction Coverage`. `_baseline_fact_list_for_review()` flattens Gemma 3 `per_source_facts` into the reviewer payload only. The report also renders raw baseline `per_source_facts`, baseline `facts_text_clean`, filtered-before-writer facts, metadata anchors, and exact Gemma 4 public/logistics facts so manual fact audit does not depend on reviewer echo text.
+- `scripts/inspect/benchmark_lollipop_g4.py` runs a separate Gemma 4 reviewer call inside `_run_lollipop_legacy_variant` after the writer. Reviewer timeout is now `max(_gemma_direct_timeout_sec(), 180.0)` because full-source structured comparison can exceed the extraction budget. If the read-only Gemma 4 reviewer times out/errors, the benchmark may use a 4o reviewer fallback and records that as reviewer warning/timing; this never changes the generation payload. The result is exposed as `result["fact_coverage"]` and rendered in the markdown report under `### Fact Extraction Coverage`. `_baseline_fact_list_for_review()` flattens Gemma 3 `per_source_facts` into the reviewer payload only. The report also renders raw baseline `per_source_facts`, baseline `facts_text_clean`, filtered-before-writer facts, metadata anchors, and exact Gemma 4 public/logistics facts so manual fact audit does not depend on reviewer echo text.
 - `tests/test_lollipop_legacy.py` covers schema shape, payload assembly (baseline facts allowed only in reviewer), normalization clamping, deterministic verdict floor (`critical_loss → rejected`, `useful_added → tracked`, `ungrounded_g4 → suspicious + partial floor`), full `PETER-FLEET` source snapshot, exact input texts preserved over reviewer echo, rendered raw fact surfaces, and end-to-end reviewer routing (no baseline leakage in extractor + writer, baseline facts present in reviewer payload, fact_coverage with verdict in the variant result).
 
-### Latest fact-extraction evidence (`artifacts/codex/lollipop_g4_benchmark_20260501T105522Z.{md,json}`)
+### Latest full-source fact-extraction evidence (`artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.{md,json}`)
 
-The earlier `T095915Z` artifact is superseded for fact-layer acceptance because `PETER-FLEET-LECTURE-5600` used a shortened manual Telegram excerpt while still displaying the real `t.me/ambermuseum/5600` URL. `T105522Z` replaces that fixture with the full post snapshot and renders every fact surface needed for manual comparison.
+The earlier `T095915Z` / `T105522Z` artifacts are superseded for fact-layer acceptance because multiple fixtures used shortened manual excerpts while displaying real Telegram URLs. The static five-fixture pack now carries full Telegram post snapshots (`AUDIO` 1274 chars, `PETER` 855, `SACRED` 1374, `WORLD` 1628, `RED` 932), and public Telegram extraction selects the exact `data-post` via `?embed=1&mode=tme` rather than the first message on `t.me/s/...`.
 
 Run command:
 
@@ -412,20 +412,20 @@ Run command:
 
 | Fixture | baseline raw | baseline writer | grounded covered | g4 public/logistics | suspicious | verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| `AUDIO-WALK-QUARTER-971` | 5 | 3 | 5 / 5 | 5 / 6 | 0 | accepted |
-| `PETER-FLEET-LECTURE-5600` | 10 | 9 | 9 / 10 | 8 / 6 | 0 | partial |
-| `SACRED-LECTURE-ZYGMONT-3170` | 7 | 5 | 7 / 7 | 6 / 7 | 0 | accepted |
-| `WORLD-HOBBIES-5505` | 5 | 4 | 5 / 5 | 4 / 4 | 1 | accepted |
-| `RED-COSMOS-7902` | 6 | 6 | 6 / 6 | 7 / 2 | 0 | accepted |
+| `AUDIO-WALK-QUARTER-971` | 14 | 11 | 14 / 14 | 15 / 10 | 5 | partial |
+| `PETER-FLEET-LECTURE-5600` | 10 | 9 | 10 / 10 | 11 / 6 | 1 | accepted |
+| `SACRED-LECTURE-ZYGMONT-3170` | 12 | 10 | 12 / 12 | 16 / 7 | 4 | accepted |
+| `WORLD-HOBBIES-5505` | 8 | 8 | 8 / 8 | 17 / 4 | 0 | accepted |
+| `RED-COSMOS-7902` | 12 | 12 | 11 / 12 | 15 / 2 | 0 | partial |
 
-Verdict: **partial** for the fact layer after correcting the source evidence.
+Verdict: **partial but substantially recovered** for the fact layer after correcting the source evidence.
 
-- `PETER-FLEET-LECTURE-5600` is now the useful blocker: Gemma 3 baseline extracted 10 raw facts from the full source and passed 9 into `facts_text_clean`; Gemma 4 covered 9/10 grounded baseline facts but missed the major grounded fact `Доклад основан на служебных документах и источниках личного происхождения.`
-- The corrected report shows the full source snapshot with `отделом эстампов и фотографий`, `Лейб-гвардии Преображенский полк, 1709`, `первая треть XVIII века`, and `реконструированные предметы обмундирования петровских матросов`.
-- The previous reviewer echo artifacts (`sБилеты...`, `gМузей...`) are no longer used as the displayed fact text; the report preserves exact input facts by index.
-- Writer prompt was deliberately not tuned in this iteration. Latest writer evidence remains the v13 run (`T201038Z`).
+- `55/56` grounded Gemma 3 baseline facts are covered by Gemma 4 extraction. There are `0` critical and `0` major lost facts.
+- Remaining fact loss is one minor RED detail: `Жостовские подносы отличаются разнообразием и уникальностью.` Gemma 4 still covers Жостово, подносы, 1825, букет, лак, Каргопольскую and Дымковскую игрушки, but drops that qualitative subfact.
+- `AUDIO` covers `14/14` baseline facts but is `partial` because the reviewer marks several G4 facts as suspicious/fragmentary; manual inspection is required there because some suspicious marks are over-strict service facts, while one English/foreign-word drift (`text`-like helper output in the extractor family during iteration) remains a prompt smell to keep watching.
+- Writer prompt was deliberately not tuned in this iteration. The benchmark still records text metrics and latency, but acceptance here is fact-layer only. Latency is not accepted (`8.7x..11.4x` vs reused Gemma 3 baseline) after raising extraction/reviewer budgets for full-source reliability.
 
-Next step: tune Gemma 4 extraction for the missing `source basis / documents` fact on rich lecture sources, then rerun the fact benchmark before returning to writer-side layout and heading work.
+Next step: keep the full-source fixtures as the regression pack, tighten extractor prompt against suspicious/fragmentary fact surfaces, and then optimize latency separately without reducing fact recall.
 
 ## `lollipop_legacy.v13` simplification: extract+write+4o fallback (`2026-04-30`)
 

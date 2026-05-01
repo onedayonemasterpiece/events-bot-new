@@ -113,6 +113,53 @@ def _extract_tg_text(html_text: str) -> str:
     return _strip_html(text)
 
 
+def _telegram_post_ref(url: str) -> tuple[str, str] | None:
+    match = re.search(r"(?i)https?://t\.me/(?:s/)?([^/?#]+)/(\d+)", url or "")
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
+def _telegram_embed_url(url: str) -> str | None:
+    ref = _telegram_post_ref(url)
+    if not ref:
+        return None
+    channel, post_id = ref
+    return f"https://t.me/{channel}/{post_id}?embed=1&mode=tme"
+
+
+def _extract_tg_post_text(html_text: str, channel: str, post_id: str | int) -> str:
+    target = f"{channel}/{post_id}".lower()
+    message_open = re.compile(
+        r'(?is)<div\b(?=[^>]*class="[^"]*\btgme_widget_message\b[^"]*")(?=[^>]*data-post="([^"]+)")[^>]*>'
+    )
+    matches = list(message_open.finditer(html_text or ""))
+    selected: re.Match[str] | None = None
+    for match in matches:
+        if match.group(1).lower() == target:
+            selected = match
+            break
+    if selected is None and len(matches) == 1:
+        selected = matches[0]
+    if selected is None:
+        return ""
+    next_match = next((item for item in matches if item.start() > selected.start()), None)
+    chunk = html_text[selected.start() : next_match.start() if next_match else len(html_text)]
+    return _extract_tg_text(chunk)
+
+
+def _fetch_tg_text(url: str) -> str:
+    embed_url = _telegram_embed_url(url)
+    if not embed_url:
+        return _extract_tg_text(_http_get(url))
+    channel, post_id = _telegram_post_ref(url) or ("", "")
+    exact_text = _extract_tg_post_text(_http_get(embed_url), channel, post_id)
+    if exact_text:
+        return exact_text
+    page_html = _http_get(url)
+    return _extract_tg_post_text(page_html, channel, post_id) or _extract_tg_text(page_html)
+
+
 def _extract_vk_text(html_text: str) -> str:
     match = re.search(r'property="og:description"\s+content="([^"]+)"', html_text, re.I)
     if not match:
@@ -136,7 +183,7 @@ def _build_kalmania_fixture() -> BenchmarkFixture:
         city="Калининград",
         sources=[
             SourcePacket("site", "parser", site_url, _extract_site_text(_http_get(site_url), title)),
-            SourcePacket("tg", "telegram", tg_url, _extract_tg_text(_http_get(tg_url))),
+            SourcePacket("tg", "telegram", tg_url, _fetch_tg_text(tg_url)),
             SourcePacket("vk", "vk", vk_url, _extract_vk_text(_http_get(vk_url))),
         ],
     )
@@ -157,7 +204,7 @@ def _build_vivat_fixture() -> BenchmarkFixture:
         city="Калининград",
         sources=[
             SourcePacket("site", "parser", site_url, _extract_site_text(_http_get(site_url), title)),
-            SourcePacket("tg", "telegram", tg_url, _extract_tg_text(_http_get(tg_url))),
+            SourcePacket("tg", "telegram", tg_url, _fetch_tg_text(tg_url)),
         ],
     )
 
@@ -202,8 +249,19 @@ def _build_audio_walk_fixture() -> BenchmarkFixture:
         url="https://t.me/barn_kaliningrad/971",
         text=(
             "Аудиопутешествие «Четверть длиннее восьмой» 24 и 26 апреля. "
-            "Начать прогулку можно в любой промежуток с 16:00 до 20:00 в пятницу и воскресенье. "
-            "Полную инструкцию и карту вы получите в «Баре Советов», проспект Мира, 118. "
+            "Не самый короткий маршрут от «Бара Советов» до «Барна», во время которого будут звучать "
+            "проза, поэзия и экспериментальная музыка. Арт-группа «Нежные бабы» и саунд-художник "
+            "Денис Баенко придумали звуковой комментарий к непарадному пространству исторического района "
+            "и предлагают останавливаться у заборов, фонарных столбов, опор теплотрасс, присаживаться "
+            "на лавочки и заглядывать во дворы. Каждая точка — композиция, созданная художниками. "
+            "Не торопитесь! Начать прогулку можно в любой промежуток с 16:00 до 20:00 в пятницу и "
+            "воскресенье. Время и скорость движения вы выбираете сами. А понравившиеся треки не "
+            "запрещается ставить на повтор. Возможно, для полного погружения стоит отправиться в это "
+            "путешествие в одиночку. Как принять участие: записаться бесплатно по ссылке; с собой "
+            "обязательно взять наушники и заряженный смартфон; полную инструкцию и карту вы получите "
+            "в «Баре Советов» по адресу: проспект Мира, 118; нужно будет найти наклейки с QR-кодом "
+            "и перейти на аудио. В финале ждём вас на видеоинсталляции «Доля огня. Хор» группы "
+            "«Нежные Бабы». Билеты можно приобрести на месте и на сайте barnkaliningrad.ru. "
             "OCR: 24 И 26 АПРЕЛЯ, 16:00-20:00. АУДИОПУТЕШЕСТВИЕ "
             "\"ЧЕТВЕРТЬ ДЛИННЕЕ ВОСЬМОЙ\". КАШТАНОВАЯ АЛЛЕЯ, 1А."
         ),
@@ -250,9 +308,22 @@ def _build_sacred_lecture_fixture() -> BenchmarkFixture:
         location_address="проспект Мира, 9",
         url="https://t.me/domkitoboya/3170",
         text=(
-            "Завтра, 23 апреля, в Доме китобоя стартует цикл лекций от религиоведа Алексея Зыгмонта "
-            "«В поисках абсолютно инакового». Начало в 18.30. Вход — 300 р. Билеты — на сайте музея. "
-            "Дом китобоя, пр-т Мира 9. OCR: краткая история сакрального; лекторий; Алексей Зыгмонт; "
+            "Завтра, 23 апреля, в Доме китобоя стартует цикл лекций от религиоведа и историка "
+            "философии Алексея Зыгмонта «В поисках \"абсолютно инакового\": краткая история "
+            "сакрального». Что такое «сакральное»: туманное понятие архаичных религий, концепция "
+            "в современной науке и философии, объективный вневременной феномен — или всё разом? "
+            "Почему его так часто связывают с ужасом, безумием и насилием? Почему мы описываем "
+            "«религиозное во все времена» при помощи термина, привезённого в Европу с островов "
+            "Тонги в 1770-е годы? Наконец, как вышло, что «сакральное» столь полюбилось политикам — "
+            "и что это говорит нам о современности? Трактовок у этого понятия множество. Объединяют "
+            "их разве что известная мрачность — и убеждение, что бездны «сакрального» неким образом "
+            "хранят ответы о глубочайшей сути человека, общества, жизни и смерти. На первой лекции "
+            "разговор пойдёт об истоках понятия сакрального и в целом его интеллектуальных судьбах, "
+            "пройдя путь от Древнего Рима до идеологов Французской революции, Шарля де Бросса и "
+            "Фридриха Шлейермахера, а затем — до теоретиков XIX-XX веков. Автор — Алексей Зыгмонт, "
+            "кандидат философских наук, религиовед, историк философии и переводчик. Начало в 18.30. "
+            "16+. Вход — 300 р. Билеты — на сайте музея. Дом китобоя, пр-т Мира 9. "
+            "OCR: краткая история сакрального; лекторий; Алексей Зыгмонт; "
             "САКРАЛЬНОЕ В ТЕОРИИ И В ИСТОРИИ; 23.04; 18:30; ДОМ Китобоя; 16+."
         ),
     )
@@ -269,8 +340,24 @@ def _build_world_hobbies_fixture() -> BenchmarkFixture:
         url="https://t.me/koihm/5505",
         text=(
             "МИР УВЛЕЧЕНИЙ || выставка ко Дню Земли. 23 апреля в 16:00 в Калининградском "
-            "историко-художественном музее состоится открытие персональной выставки Геннадия Медера "
-            "«Мир увлечений». Выставка будет работать до 22 мая 2026 года."
+            "историко-художественном музее состоится открытие персональной выставки анималистической "
+            "скульптуры художника по металлу, члена Союза художников России и Союза художников "
+            "Советского Союза Геннадия Медера «Мир увлечений». Экспозиция посвящается празднованию "
+            "международного Дня Земли. На выставке будут представлены художественные работы из металла, "
+            "созданные в технике ковки и металлопластики. Об авторе: своё призвание Геннадий Борисович "
+            "Медер нашёл в работе с металлом. Из всех видов художественной обработки он отдаёт "
+            "предпочтение ковке. Диапазон работ Геннадия Медера широк — это и творческие композиции, "
+            "достойные уровня музейной коллекции, и кованые ограды, решётки, балконы, которые прекрасно "
+            "вписываются в любой дизайн, придавая ему неповторимый колорит. Есть у художника удивительные "
+            "произведения, выполненные в технике металлопластики. В его произведениях воплотились "
+            "художественные образы, созданные фантазией писателей. В творческой коллекции Геннадия "
+            "Медера есть и живописные произведения, но металл — это самое главное и любимое. Мастер "
+            "называет себя художником-кузнецом и гордится этим, так как имеет власть над металлом. "
+            "22 апреля — Международный День Земли. В России его отмечают с 1990-х гг. Это день "
+            "экологических акций, просветительских мероприятий и субботников, направленных на защиту "
+            "окружающей среды. Часто мероприятия проходят в рамках «Дней защиты от экологической "
+            "опасности». Самый массовый формат — уборка парков, дворов, берегов рек и озёр, а также "
+            "высадка деревьев и кустарников. Выставка будет работать до 22 мая 2026 года."
         ),
     )
 
@@ -286,7 +373,16 @@ def _build_red_cosmos_fixture() -> BenchmarkFixture:
         url="https://t.me/kaliningradartmuseum/7902",
         text=(
             "В разделе «Красны девицы, добры молодцы» на выставке «Космос красного» можно увидеть "
-            "произведения русского народного промысла: жостовские подносы, каргопольская и дымковская игрушки."
+            "произведения русского народного промысла, которые имеют свои неповторимые особенности. "
+            "Здесь представлены жостовские подносы, каргопольская и дымковская игрушки. Жостовская "
+            "роспись существует с 1825 года и отличается разнообразием и уникальностью: среди работ "
+            "практически невозможно найти две одинаковые. Визитная карточка жостовских подносов — "
+            "букет, а главный секрет — лак. Состав до сих пор держат в тайне. Каргопольскую игрушку "
+            "можно назвать действительно народной, потому что её исполнение достаточно свободное. "
+            "Сюжеты условно делятся на две категории: это архаичные типы и сюжетная игрушка, "
+            "демонстрирующая сцены деревенской жизни. Дымковская игрушка связана с весенним праздником "
+            "вятской свистуньи. Промысел возник среди женского населения слободы Дымково. Лепились "
+            "свистульки из глины в виде коней, баранов, козлов, уток и других животных."
         ),
     )
 
@@ -2089,6 +2185,9 @@ async def _run_fact_coverage_reviewer(
         }
 
     raw: dict[str, Any] = {}
+    reviewer_model = gemma_model
+    reviewer_four_o_calls = 0
+    reviewer_notes: list[str] = []
     try:
         raw = await _ask_gemma_json_direct(
             model=gemma_model,
@@ -2096,7 +2195,7 @@ async def _run_fact_coverage_reviewer(
             user_payload=review_payload_user,
             max_tokens=2400,
             response_schema=legacy_writer_family.fact_coverage_response_schema(),
-            timeout_sec=max(_gemma_direct_timeout_sec(), 75.0),
+            timeout_sec=max(_gemma_direct_timeout_sec(), 180.0),
             allow_json_repair=False,
         )
         gemma_calls += 1
@@ -2106,6 +2205,24 @@ async def _run_fact_coverage_reviewer(
     except Exception as exc:
         gemma_calls += 1
         errors.append(f"reviewer.error:{type(exc).__name__}")
+
+    if errors and not raw:
+        previous_errors = list(errors)
+        try:
+            raw = await _ask_4o_json(
+                prompt=json.dumps(review_payload_user, ensure_ascii=False, indent=2),
+                schema=legacy_writer_family.fact_coverage_response_schema(),
+                model="gpt-4o",
+                system_prompt=legacy_writer_family.build_fact_coverage_system_prompt(),
+                max_tokens=3200,
+            )
+            reviewer_four_o_calls += 1
+            reviewer_model = f"{gemma_model}->gpt-4o"
+            reviewer_notes.extend(f"{item}:fallback_4o_ok" for item in previous_errors)
+            errors = []
+        except Exception as exc:
+            reviewer_four_o_calls += 1
+            errors.append(f"reviewer.fallback_4o_error:{type(exc).__name__}")
 
     normalized = legacy_writer_family.normalize_fact_coverage_payload(
         raw or {},
@@ -2125,6 +2242,18 @@ async def _run_fact_coverage_reviewer(
             "g4_logistics_fact_count": len(logistics_facts),
         }
     )
+    if errors and not normalized.get("baseline_facts_review") and not normalized.get("g4_facts_review"):
+        summary.update(
+            {
+                "baseline_fact_count": baseline_count,
+                "g4_fact_count": g4_count,
+                "grounded_baseline_fact_count": 0,
+                "covered_grounded_baseline_fact_count": 0,
+                "grounded_g4_fact_count": 0,
+                "deterministic_verdict_floor": "unknown",
+                "verdict": "unknown",
+            }
+        )
     if errors and summary.get("verdict") == "accepted":
         # Reviewer never returned a real answer — do not let the deterministic
         # floor over-promise an "accepted" verdict.
@@ -2135,8 +2264,10 @@ async def _run_fact_coverage_reviewer(
         "review": normalized,
         "summary": summary,
         "errors": errors,
+        "warnings": reviewer_notes,
         "gemma_calls": gemma_calls,
-        "model": gemma_model if not errors else f"{gemma_model}+errors",
+        "four_o_calls": reviewer_four_o_calls,
+        "model": reviewer_model if not errors else f"{reviewer_model}+errors",
         "verdict": summary.get("verdict") or "unknown",
     }
 
@@ -2230,9 +2361,9 @@ async def _run_lollipop_legacy_variant(
                     "source_type": source.source_type,
                     "source_text": source.text[:5000],
                 },
-                max_tokens=900,
+                max_tokens=1400,
                 response_schema=extraction_schema,
-                timeout_sec=min(_gemma_direct_timeout_sec(), 35.0),
+                timeout_sec=max(_gemma_direct_timeout_sec(), 75.0),
                 allow_json_repair=False,
             )
             gemma_calls += 1
@@ -2385,6 +2516,7 @@ async def _run_lollipop_legacy_variant(
         if ratio > 3.0:
             validation.warnings.append(f"latency.3x_exceeded:{ratio:.2f}")
     fact_calls = int(fact_coverage.get("gemma_calls") or 0)
+    fact_four_o_calls = int(fact_coverage.get("four_o_calls") or 0)
 
     return {
         "gemma_model": gemma_model,
@@ -2426,11 +2558,12 @@ async def _run_lollipop_legacy_variant(
             "model_active_sec": model_active_sec,
             "sleep_sec": round(sleep_sec, 6),
             "gemma_calls": gemma_calls + fact_calls,
-            "four_o_calls": four_o_calls,
+            "four_o_calls": four_o_calls + fact_four_o_calls,
             "baseline_stage_sec": baseline_wall,
             "lollipop_legacy_only_sec": wall_clock_sec,
             "lollipop_legacy_only_gemma_calls": gemma_calls + fact_calls,
             "fact_coverage_gemma_calls": fact_calls,
+            "fact_coverage_four_o_calls": fact_four_o_calls,
         },
         "speed_ratio_vs_baseline": speed_ratio,
     }
@@ -2446,6 +2579,7 @@ def _render_fact_coverage_section(fact_coverage: dict[str, Any]) -> list[str]:
     review = dict(fact_coverage.get("review") or {})
     coverage_summary = dict(summary.get("coverage_summary") or {})
     errors = list(fact_coverage.get("errors") or [])
+    warnings = list(fact_coverage.get("warnings") or [])
     lines: list[str] = ["", "### Fact Extraction Coverage", ""]
     lines.append(f"- verdict: `{summary.get('verdict') or 'unknown'}`")
     lines.append(f"- llm_overall_verdict: `{summary.get('llm_overall_verdict') or 'unknown'}`")
@@ -2487,6 +2621,8 @@ def _render_fact_coverage_section(fact_coverage: dict[str, Any]) -> list[str]:
         lines.append(f"- verdict_reason: `{coverage_summary['verdict_reason']}`")
     if errors:
         lines.append(f"- reviewer_errors: `{', '.join(errors)}`")
+    if warnings:
+        lines.append(f"- reviewer_warnings: `{', '.join(warnings)}`")
 
     def _render_input_list(title: str, items: list[object], *, field: str = "text") -> None:
         lines.extend(["", title])
@@ -2634,7 +2770,17 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
         )
         for source in fixture["sources"]:
             lines.append(f"  - `{source['source_id']}`: {source['url']}")
-        lines.extend(["", "### Source Excerpts", "", "```text", _source_excerpt([SourcePacket(**source) for source in fixture["sources"]]), "```", ""])
+        lines.extend(
+            [
+                "",
+                "### Source Excerpts",
+                "",
+                "```text",
+                _source_excerpt([SourcePacket(**source) for source in fixture["sources"]], limit=9000),
+                "```",
+                "",
+            ]
+        )
         variant_labels = [
             ("baseline", "Baseline"),
             ("baseline_g4", "Baseline G4"),
