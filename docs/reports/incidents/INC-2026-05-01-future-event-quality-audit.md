@@ -1,10 +1,10 @@
 # INC-2026-05-01 Future Event Quality Audit
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / VK auto-import / Smart Event Update event quality
 Opened: 2026-05-01
-Closed: `—`
+Closed: 2026-05-01
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-04-26-daily-location-fragments`, `INC-2026-04-20-club-znakomstv-duplicate-event-cards`, `INC-2026-04-29-bar-bastion-city-jazz-location`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/runtime-logs.md`
@@ -40,6 +40,8 @@ This is a production incident because the affected rows are active future public
 - 2026-05-01 08:17 UTC — production verification completed: `PRAGMA quick_check=ok`, all 18 canonical survivor rows present, all 7 duplicate rows absent, and `/tmp` repair scripts removed. Production `/data` remained at 78% used; no full DB snapshot was left on the Fly volume.
 - 2026-05-01 UTC — code corrective work added targeted guards for prose-like Telegram `location_address`, confirmed venue references/aliases, permanent-exhibition compact rendering/limit, and month splitter exhibition-tail splitting.
 - 2026-05-01 UTC — production May month rebuild exposed a second month-page mechanism bug: nav-refresh fallback rebuilds could recursively trigger another full nav refresh when the updated nav block was too large. The run was stopped after the 7-part month page had already been written, and the recursion guard was added before closure.
+- 2026-05-01 08:44 UTC — final corrective SHA `072d8ea666c15f7b0cf3107ca6d9c94da76d2614` was deployed to Fly machine version `1031`.
+- 2026-05-01 UTC — production verification confirmed `/healthz` ready, May 2026 month page has 7 Telegraph pages total (main page + parts 2-7), no daily joboutbox tasks were created, and `PRAGMA quick_check=ok`.
 
 ## Confirmed Candidates
 
@@ -165,8 +167,8 @@ Root cause was a compound regression across import grounding, reference coverage
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
+- deployed SHA: `072d8ea666c15f7b0cf3107ca6d9c94da76d2614` (reachable from `origin/main`)
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia`
 - regression checks:
   - fresh snapshot downloaded and verified: `artifacts/db/future_quality_audit_20260501T074825Z.sqlite`
   - pre-repair local snapshot verified: `artifacts/db/future_quality_repair_pre_20260501T080326Z.sqlite`
@@ -180,7 +182,12 @@ Root cause was a compound regression across import grounding, reference coverage
   - local code verification: `python3 -m py_compile main.py main_part2.py source_parsing/telegram/handlers.py`
   - targeted regression tests: `17 passed, 2 skipped` for `tests/test_month_split_regressions.py`, `tests/test_tg_candidate_location_grounding.py`, `tests/test_smart_event_update_duplicate_guards.py`, and `tests/test_vk_default_time.py::test_db_init_repairs_known_vk_source_location_defaults`
   - local May 2026 month render against the repaired DB copy produced 7 parts, all below Telegraph limit (`44618`, `14984`, `39849`, `38405`, `43098`, `42833`, `37079` bytes)
-- post-deploy verification: pending code deploy and production May month-page rebuild
+  - Fly deploy evidence: app `events-bot-new-wngqia`, machine `48e42d5b714228`, version `1031`, image `deployment-01KQHB99A2R5JGB54SM8AQFYT3`, health check passing
+  - post-deploy `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, no issues
+  - production May month-page verification: main page path `Sobytiya-Kaliningrada-v-mae-2026-polnyj-anons-ot-Polyubit-Kaliningrad-Anonsy-01-19`; `monthpagepart` contains parts `2..7` only, all with content hashes and date ranges; obsolete part `8` removed
+  - production future-event verification: 18 repaired survivor rows present, dropped duplicate IDs absent, Bar Bastion row `4358` uses `Бар Бастион`, `Судостроительная 6/1`, `Калининград`
+  - daily announcement still not rerun; `joboutbox` has no `task like '%daily%'` rows from this repair/rebuild path
+  - no lingering manual `sync_month_page` Python process remained after the interrupted pre-guard rebuild run
 
 ## Prevention
 
