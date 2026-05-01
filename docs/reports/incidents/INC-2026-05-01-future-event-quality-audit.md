@@ -38,6 +38,7 @@ This is a production incident because the affected rows are active future public
 - 2026-05-01 08:13 UTC — production data repair applied directly to `/data/db.sqlite`: confirmed duplicate clusters were merged into canonical survivor events, confirmed prose/schedule venue fields were replaced with source-confirmed venue data, and a small row-level backup table `incident_event_quality_repair_backup_20260501` was created for the 25 touched rows.
 - 2026-05-01 08:14-08:15 UTC — affected event Telegraph pages were rebuilt. A forced May month-page rebuild was attempted but failed with Telegraph `CONTENT_TOO_BIG` on part 8; daily announcement publishing was intentionally not run.
 - 2026-05-01 08:17 UTC — production verification completed: `PRAGMA quick_check=ok`, all 18 canonical survivor rows present, all 7 duplicate rows absent, and `/tmp` repair scripts removed. Production `/data` remained at 78% used; no full DB snapshot was left on the Fly volume.
+- 2026-05-01 UTC — code corrective work added targeted guards for prose-like Telegram `location_address`, confirmed venue references/aliases, permanent-exhibition compact rendering/limit, and month splitter exhibition-tail splitting.
 
 ## Confirmed Candidates
 
@@ -68,12 +69,12 @@ This is a production incident because the affected rows are active future public
 
 ## Root Cause
 
-Root cause is still under investigation. Initial evidence points to multiple known failure classes recurring together:
+Root cause was a compound regression across import grounding, reference coverage, duplicate matching, and aggregate Telegraph rendering:
 
-1. Telegram extraction/import still lets prose, schedule, and narrative fragments survive as `location_name` for some future rows.
-2. Venue recovery does not consistently use source/channel defaults or known reference venues when source text has an explicit venue line outside the extracted candidate.
-3. Duplicate guards still miss some cross-source reposts, title variants, and `doors/start` cases after import.
-4. Bar Bastion source handling still allowed new future rows to normalize to `Понарт` rather than the incident-required `Бар Бастион` venue.
+1. Telegram extractor outputs could split one bad prose fragment across `location_name` and `location_address`; server-side recovery dropped prose-like `location_name`, but a non-empty bad `location_address` could block replacement with the known venue address.
+2. The reference layer was missing several venues/aliases seen in the confirmed future posts (`Pure`, `12|55`, `Бар Бастион`, `Soul Garden`, zoo aliases), so candidate grounding had fewer deterministic anchors after LLM review failed open.
+3. Some duplicate clusters were already covered by known Smart Update guards (`copy_post_ticket_same_day`, weak/default time handling, Bar Bastion defaults), but the production rows were created before all guards/reference fixes were present or before the confirmed future audit was repaired.
+4. Month-page splitting assumed all remaining `Постоянные выставки` could be forced onto the final part, and aggregate exhibition rendering used full descriptions; enough long-running exhibitions made the final Telegraph part exceed `CONTENT_TOO_BIG`.
 
 ## Contributing Factors
 
@@ -144,17 +145,19 @@ Root cause is still under investigation. Initial evidence points to multiple kno
 
 - Done: repaired confirmed bad rows in production with a small row-level backup table, not a full production snapshot on `/data`.
 - Done: merged confirmed duplicate clusters into canonical survivor rows and reattached source/fact/poster/queue side rows where applicable.
-- Pending: decide whether this requires code/prompt changes beyond data cleanup; current evidence suggests both import guardrails and duplicate matching need hardening.
-- Pending: investigate May month-page split/rendering failure (`CONTENT_TOO_BIG` while creating part 8) separately from this data repair.
+- Done: Telegram candidate build now drops prose-like `location_address` fragments and lets a source/reference-confirmed venue replace both bad fields.
+- Done: added confirmed venue references/aliases for the future-event repair cases.
+- Done: month/weekend aggregate pages now cap `Постоянные выставки` at 12 items and render compact descriptions instead of full event text.
+- Done: month splitter now splits oversized exhibition tails across continuation pages and can fall back to `no ICS + no details` before Telegraph writes.
 
 ## Follow-up Actions
 
 - [x] Repair confirmed bad-location rows and rebuild affected event Telegraph pages.
 - [x] Merge confirmed duplicate clusters and rebuild affected event public surfaces.
-- [ ] Fix or tune May month-page splitting so forced rebuild does not fail with Telegraph `CONTENT_TOO_BIG`.
+- [x] Fix or tune May month-page splitting so forced rebuild does not fail with Telegraph `CONTENT_TOO_BIG`.
+- [x] Add regression tests for the exact confirmed Telegram venue-recovery shapes and exhibition split/rendering failure.
+- [x] Review Bar Bastion source/default handling and add the confirmed `Бар Бастион` reference/aliases.
 - [ ] Add a reusable future-event quality audit command/report for prose-like venue rows and duplicate clusters.
-- [ ] Add regression tests for the exact confirmed shapes from this incident.
-- [ ] Review whether Bar Bastion source defaults are applied before or after Smart Update venue extraction for new posts.
 
 ## Release And Closure Evidence
 
@@ -170,7 +173,10 @@ Root cause is still under investigation. Initial evidence points to multiple kno
   - affected event Telegraph pages rebuilt; sample public page checks passed for `4358`, `4462`, `4351`, `4449`
   - no daily announcement rerun; `joboutbox` daily task query returned no rows
   - `/tmp` repair/rebuild/verify scripts removed; Fly `/data` remained at 78% used and no full DB snapshot was left on the volume
-- post-deploy verification: no code deploy was performed; data repair is mitigated, but month-page rebuild remains a separate follow-up because Telegraph returned `CONTENT_TOO_BIG`
+  - local code verification: `python3 -m py_compile main.py main_part2.py source_parsing/telegram/handlers.py`
+  - targeted regression tests: `16 passed, 2 skipped` for `tests/test_month_split_regressions.py`, `tests/test_tg_candidate_location_grounding.py`, `tests/test_smart_event_update_duplicate_guards.py`, and `tests/test_vk_default_time.py::test_db_init_repairs_known_vk_source_location_defaults`
+  - local May 2026 month render against the repaired DB copy produced 7 parts, all below Telegraph limit (`44618`, `14984`, `39849`, `38405`, `43098`, `42833`, `37079` bytes)
+- post-deploy verification: pending code deploy and production May month-page rebuild
 
 ## Prevention
 

@@ -26,6 +26,9 @@ from festival_queue import festival_queue_info_text, process_festival_queue
 if "LOCAL_TZ" not in globals():
     LOCAL_TZ = timezone.utc
 
+if "MONTH_PERMANENT_EXHIBITIONS_LIMIT" not in globals():
+    MONTH_PERMANENT_EXHIBITIONS_LIMIT = 12
+
 if "dom_iskusstv_input_sessions" not in globals():
     dom_iskusstv_input_sessions = set()
 
@@ -376,8 +379,8 @@ def exhibition_title_nodes(e: Event) -> list:
     return nodes
 
 
-def exhibition_to_nodes(e: Event) -> list[dict]:
-    md = format_exhibition_md(e)
+def exhibition_to_nodes(e: Event, *, compact: bool = False) -> list[dict]:
+    md = format_exhibition_md(e, compact=compact)
     lines = md.split("\n")
     body_md = "\n".join(lines[1:]) if len(lines) > 1 else ""
     from telegraph.utils import html_to_nodes
@@ -703,6 +706,7 @@ def _build_month_page_content_sync(
     )
 
     if exhibitions and not exceeded:
+        exhibitions = exhibitions[:MONTH_PERMANENT_EXHIBITIONS_LIMIT]
         add_many([PERM_START])
         add({"tag": "h3", "children": ["Постоянные выставки"]})
         add({"tag": "br"})
@@ -710,7 +714,7 @@ def _build_month_page_content_sync(
         for ev in exhibitions:
             if exceeded:
                 break
-            add_many(exhibition_to_nodes(ev))
+            add_many(exhibition_to_nodes(ev, compact=True))
         add_many([PERM_END])
 
 
@@ -1267,12 +1271,13 @@ async def build_weekend_page_content(
         month_nav = [{"tag": "h4", "children": nav_children}]
 
     if exhibitions and not exceeded:
+        exhibitions = exhibitions[:MONTH_PERMANENT_EXHIBITIONS_LIMIT]
         add({"tag": "h3", "children": ["Постоянные выставки"]})
         add_many(telegraph_br())
         for ev in exhibitions:
             if exceeded:
                 break
-            add_many(exhibition_to_nodes(ev))
+            add_many(exhibition_to_nodes(ev, compact=True))
 
     if weekend_nav and not exceeded:
         add_many(telegraph_br())

@@ -42,6 +42,7 @@
   - `по 28 марта` (если выставка уже идёт).
 - Если дата закрытия пока только fallback (`date + 1 месяц`), summary-блок Telegraph показывает только начало: `с 10 февраля`.
 - В пользовательских списках (`/exhibitions`, month/weekend pages, отдельная month exhibitions page) существующие duplicate rows дополнительно схлопываются на рендере, чтобы legacy-клоны из БД не дублировались в выдаче.
+- В агрегированных month/weekend-страницах секция `Постоянные выставки` остаётся обзорной: выводится не больше `12` активных выставок, и каждая карточка использует короткое описание (`short_description`/`search_digest`/one-sentence fallback), а не полный Telegraph-текст. Полные тексты остаются на individual event pages и в специализированных exhibition surfaces.
 
 ## Тестовое покрытие
 
@@ -49,6 +50,9 @@
   - `tests/test_smart_event_update_exhibitions.py`
     - merge по пересечению периода (без дубля),
     - trust-aware блокировка продления `end_date`.
+  - `tests/test_month_split_regressions.py`
+    - month-page split дробит exhibition tail и переходит в minimal mode, если exhibition section всё ещё превышает Telegraph limit;
+    - month-page renderer ограничивает и compact-рендерит `Постоянные выставки`.
 - E2E (offline, Behave):
   - `tests/e2e/features/smart_event_update.feature`
     - `Выставка не дублируется при новом источнике внутри периода`

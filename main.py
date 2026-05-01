@@ -1642,6 +1642,7 @@ _vk_session: ClientSession | None = None
 # Telegraph API rejects pages over ~64&nbsp;kB. Use a slightly lower limit
 # to decide when month pages should be split into two parts.
 TELEGRAPH_LIMIT = 45000
+MONTH_PERMANENT_EXHIBITIONS_LIMIT = 12
 
 def rough_size(nodes: Iterable[dict], limit: int | None = None) -> int:
     """Return an approximate size of Telegraph nodes in bytes.
@@ -16657,68 +16658,130 @@ async def optimize_month_chunks(
     """
     from telegraph.utils import nodes_to_html
 
-    async def make_chunks(inc_ics: bool, inc_det: bool) -> list[tuple[list[Event], list[Event]]]:
+    async def make_chunks(inc_ics: bool, inc_det: bool) -> tuple[list[tuple[list[Event], list[Event]]], bool]:
         chunks_list = []
         rem_events = events[:]
+        rem_exhibitions = exhibitions[:]
+        all_fit = True
         # We only attach exhibitions to the very last chunk of the sequence.
         # However, if we split, we might have multiple chunks.
         # Strategy: Keep exhibitions for the end.
         
-        while rem_events or exhibitions:
+        async def rendered_size(
+            evs: list[Event],
+            exhs: list[Event],
+            *,
+            page_num: int,
+            continuation_url: str | None,
+        ) -> int:
+            _title, content, _ = await build_month_page_content(
+                db,
+                month,
+                evs,
+                exhs,
+                include_ics=inc_ics,
+                include_details=inc_det,
+                continuation_url=continuation_url,
+                page_number=page_num,
+            )
+            html = unescape_html_comments(nodes_to_html(content))
+            html = ensure_footer_nav_with_hr(html, nav_block, month=month, page=page_num)
+            return len(html.encode())
+
+        while rem_events or rem_exhibitions:
             page_num = len(chunks_list) + 1
             
             # Case 1: Try fitting EVERYTHING remaining (events + exhibitions)
             # This is the "Final Page" scenario.
-            title, content, _ = await build_month_page_content(
-                db, month, rem_events, exhibitions,
-                include_ics=inc_ics, include_details=inc_det,
-                continuation_url=None, # Last page has no continuation
-                page_number=page_num
-            )
-            html = unescape_html_comments(nodes_to_html(content))
-            html = ensure_footer_nav_with_hr(html, nav_block, month=month, page=page_num)
-            
-            if len(html.encode()) <= TELEGRAPH_LIMIT:
-                chunks_list.append((rem_events, exhibitions))
-                logging.info("optimize_month_chunks: Case 1 success. Appended chunk with events=%d exhibitions=%d", len(rem_events), len(exhibitions))
-                return chunks_list
+            if await rendered_size(
+                rem_events,
+                rem_exhibitions,
+                page_num=page_num,
+                continuation_url=None,
+            ) <= TELEGRAPH_LIMIT:
+                chunks_list.append((rem_events, rem_exhibitions))
+                logging.info(
+                    "optimize_month_chunks: Case 1 success. Appended chunk with events=%d exhibitions=%d",
+                    len(rem_events),
+                    len(rem_exhibitions),
+                )
+                return chunks_list, all_fit
 
             # Case 2: Cannot fit all. Must split.
             # We assume exhibitions go to the LAST page, so current intermediate page will have NO exhibitions.
-            # Unless we have NO events left? Then we must split exhibitions (not implemented, force fit).
+            # Unless we have NO events left; then split exhibitions too instead of forcing
+            # an oversized final page into Telegraph.
             
             if not rem_events:
                 # Only exhibitions left.
-                if exhibitions:
-                     logging.warning("optimize_month_chunks: Exhibitions remaining, forcing new page.")
-                     chunks_list.append(([], exhibitions))
+                if rem_exhibitions:
+                    logging.info(
+                        "optimize_month_chunks: splitting exhibitions. Exhibitions left: %d",
+                        len(rem_exhibitions),
+                    )
+                    low = 1
+                    high = len(rem_exhibitions)
+                    best_k = 0
+                    while low <= high:
+                        mid = (low + high) // 2
+                        continuation = "x" if mid < len(rem_exhibitions) else None
+                        if await rendered_size(
+                            [],
+                            rem_exhibitions[:mid],
+                            page_num=page_num,
+                            continuation_url=continuation,
+                        ) <= TELEGRAPH_LIMIT:
+                            best_k = mid
+                            low = mid + 1
+                        else:
+                            high = mid - 1
+                    if best_k <= 0:
+                        # Last-resort forward progress. The caller will try a
+                        # more compact render mode before this reaches Telegraph.
+                        best_k = 1
+                        all_fit = False
+                        logging.warning(
+                            "optimize_month_chunks: single exhibition too large in mode ics=%s details=%s",
+                            inc_ics,
+                            inc_det,
+                        )
+                    chunks_list.append(([], rem_exhibitions[:best_k]))
+                    rem_exhibitions = rem_exhibitions[best_k:]
+                    continue
                 else:
                      logging.info("optimize_month_chunks: No events and no exhibitions left.")
-                return chunks_list
+                return chunks_list, all_fit
 
             logging.info("optimize_month_chunks: Splitting. Events left: %d", len(rem_events))
             # Binary search for max events for this intermediate page
             low = 1
             high = len(rem_events)
-            best_k = 1
+            best_k = 0
             
             while low <= high:
                 mid = (low + high) // 2
                 # Intermediate page: No exhibitions, YES continuation link
-                title, content, _ = await build_month_page_content(
-                    db, month, rem_events[:mid], [],
-                    include_ics=inc_ics, include_details=inc_det,
+                if await rendered_size(
+                    rem_events[:mid],
+                    [],
+                    page_num=page_num,
                     continuation_url="x", # Placeholder for size estimation
-                    page_number=page_num
-                )
-                html = unescape_html_comments(nodes_to_html(content))
-                html = ensure_footer_nav_with_hr(html, nav_block, month=month, page=page_num)
-                
-                if len(html.encode()) <= TELEGRAPH_LIMIT:
+                ) <= TELEGRAPH_LIMIT:
                     best_k = mid
                     low = mid + 1
                 else:
                     high = mid - 1
+
+            if best_k <= 0:
+                # Last-resort forward progress. The caller will retry with a
+                # more compact mode before attempting Telegraph writes.
+                best_k = 1
+                all_fit = False
+                logging.warning(
+                    "optimize_month_chunks: single event too large in mode ics=%s details=%s",
+                    inc_ics,
+                    inc_det,
+                )
             
             # ATOMIC DATE SPLIT check
             # We have best_k events.
@@ -16749,22 +16812,29 @@ async def optimize_month_chunks(
             chunks_list.append((rem_events[:best_k], []))
             rem_events = rem_events[best_k:]
             
-        return chunks_list
+        return chunks_list, all_fit
 
     # 1. Try Default Mode
-    res_default = await make_chunks(True, True)
+    res_default, default_fit = await make_chunks(True, True)
     
     # If it fits in 1 or 2 pages, perfect.
-    if len(res_default) <= 2:
+    if default_fit and len(res_default) <= 2:
         return res_default, True, True
 
     # 2. Try Compact Mode (no ICS)
     # Requirement: "If ... requires 3 or more pages, use compact" (implied preference for compact if big)
-    res_compact = await make_chunks(False, True)
+    res_compact, compact_fit = await make_chunks(False, True)
     
     # If compact mode reduces pages OR we are just complying with "many pages = compact" rule:
     # We use compact mode if default yielded > 2 pages.
-    return res_compact, False, True
+    if compact_fit:
+        return res_compact, False, True
+
+    # 3. Last compact mode: remove per-event details links too. This is the
+    # smallest supported month-page representation and prevents an oversized
+    # exhibition or dense event day from reaching Telegraph as CONTENT_TOO_BIG.
+    res_minimal, _minimal_fit = await make_chunks(False, False)
+    return res_minimal, False, False
 
 
 async def split_month_until_ok(
@@ -19134,12 +19204,39 @@ def format_event_daily_inline(
     return body
 
 
-def format_exhibition_md(e: Event) -> str:
+def _compact_exhibition_description(e: Event) -> str:
+    from digest_helper import (
+        clean_search_digest,
+        clean_short_description,
+        fallback_one_sentence,
+        is_short_description_acceptable,
+    )
+
+    digest = clean_short_description(getattr(e, "short_description", None))
+    if digest and not is_short_description_acceptable(digest, min_words=8, max_words=18):
+        digest = fallback_one_sentence(digest, max_words=18)
+    if not digest:
+        digest = clean_search_digest(getattr(e, "search_digest", None))
+        if digest:
+            digest = fallback_one_sentence(digest, max_words=18)
+    if not digest:
+        digest = fallback_one_sentence(getattr(e, "description", None), max_words=18)
+    return (digest or "").strip()
+
+
+def format_exhibition_md(e: Event, *, compact: bool = False) -> str:
     prefix = ""
     if is_recent(e):
         prefix += "\U0001f6a9 "
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
-    lines = [f"{prefix}{emoji_part}{title_text}".strip(), e.description.strip()]
+    description = (
+        _compact_exhibition_description(e)
+        if compact
+        else str(getattr(e, "description", "") or "").strip()
+    )
+    lines = [f"{prefix}{emoji_part}{title_text}".strip()]
+    if description:
+        lines.append(description)
     if e.pushkin_card:
         lines.append("\u2705 Пушкинская карта")
     if e.is_free:

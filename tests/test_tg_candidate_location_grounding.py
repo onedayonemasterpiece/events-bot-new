@@ -144,6 +144,100 @@ async def test_tg_build_candidate_drops_section_label_location_and_uses_default(
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_future_quality_recovers_pure_from_text():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level=None)
+    message = {
+        "source_username": "meowafisha",
+        "message_id": 7223,
+        "source_link": "https://t.me/meowafisha/7223",
+        "text": (
+            "ELECTRODVOR празднуют свою первую дату. "
+            "2 мая в Pure, Каштановая аллея 1а."
+        ),
+    }
+    event_data = {
+        "title": "ТУСОВЩИКИ",
+        "date": "2026-05-02",
+        "time": "",
+        "location_name": (
+            "ELECTRODVOR празднуют свою первую дату. Вспомнят и другие проекты - на Ялтинской"
+        ),
+        "location_address": "Мусорского в Бастионе и остальные рейвы за 5 лет.",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Pure"
+    assert cand.location_address == "Каштановая аллея 1а"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_future_quality_recovers_1255_from_text():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level=None)
+    message = {
+        "source_username": "meowafisha",
+        "message_id": 7224,
+        "source_link": "https://t.me/meowafisha/7224",
+        "text": (
+            "Вечер настольных игр. "
+            "Творческое пространство 12|55, Чкалова 1а, 4 этаж."
+        ),
+    }
+    event_data = {
+        "title": "Вечер настольных игр в творческом пространстве 12|55",
+        "date": "2026-05-07",
+        "time": "18:30",
+        "location_name": (
+            "ламповая атмосфера, приятная компания, чай-кофе-вкусняшки. "
+            "Играют в «Бункер», «Уно», «Мафию»."
+        ),
+        "location_address": "Чкалова 1а 4 этаж",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Творческое пространство 12|55"
+    assert cand.location_address == "Чкалова 1а, 4 этаж"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_future_quality_recovers_zoo_schedule_location():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level=None)
+    message = {
+        "source_username": "kldzoo",
+        "message_id": 7189,
+        "source_link": "https://t.me/kldzoo/7189",
+        "text": (
+            "В Калининградском зоопарке продолжаются музыкальные вечера у фонтана. "
+            "Концерты проходят каждую субботу в 17:00 на сцене у фонтана."
+        ),
+    }
+    event_data = {
+        "title": "Группа «Париж»",
+        "date": "2026-05-02",
+        "time": "17:00",
+        "location_name": "концерты проходят каждую субботу в 17.00 на сцене у фонтана,",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Калининградский зоопарк"
+    assert cand.location_address == "пр-т Мира 26"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_marks_unsupported_time_as_default():
     from source_parsing.telegram.handlers import _build_candidate
 

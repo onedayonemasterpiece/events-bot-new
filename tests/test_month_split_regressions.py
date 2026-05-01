@@ -18,6 +18,8 @@ SNAPSHOT_DB = Path("db_prod_snapshot.sqlite")
 
 async def _load_month_data(tmp_path, month: str):
     """Return prod snapshot month data and festival map."""
+    if not SNAPSHOT_DB.exists():
+        pytest.skip("db_prod_snapshot.sqlite is not available in this checkout")
     db_path = tmp_path / "db.sqlite"
     shutil.copyfile(SNAPSHOT_DB, db_path)
 
@@ -192,6 +194,166 @@ async def test_optimize_month_chunks_preserves_exhibitions(tmp_path, monkeypatch
     assert any(exhs for _, exhs in chunks), (
         "Exhibitions must be preserved when events fit alone but exhibitions overflow"
     )
+
+
+@pytest.mark.asyncio
+async def test_optimize_month_chunks_splits_exhibition_tail(monkeypatch):
+    """Exhibition-only tail pages must be split before Telegraph writes."""
+
+    month = "2026-05"
+    exhibitions = [
+        Event(
+            title=f"Exhibition {idx}",
+            description="d",
+            source_text="s",
+            date=f"{month}-01",
+            end_date=f"{month}-31",
+            time="",
+            location_name="Museum",
+            event_type="выставка",
+        )
+        for idx in range(5)
+    ]
+
+    async def build_stub(
+        _db,
+        _month,
+        evs,
+        exhs,
+        continuation_url=None,
+        size_limit=None,
+        *,
+        include_ics=True,
+        include_details=True,
+        page_number=1,
+        first_date=None,
+        last_date=None,
+    ):
+        units = len(evs) + len(exhs)
+        size = units * 100 + (30 if continuation_url else 0)
+        return "title", [{"tag": "p", "children": ["x" * size]}], size
+
+    monkeypatch.setattr(main, "build_month_page_content", build_stub)
+    monkeypatch.setattr(main, "TELEGRAPH_LIMIT", 250)
+
+    chunks, include_ics, include_details = await main.optimize_month_chunks(
+        None,
+        month,
+        [],
+        exhibitions,
+        "<nav/>",
+    )
+
+    assert chunks
+    assert include_ics is False
+    assert include_details is True
+    assert sum(len(exhs) for _, exhs in chunks) == len(exhibitions)
+    assert all(len(exhs) <= 2 for _, exhs in chunks)
+
+
+@pytest.mark.asyncio
+async def test_optimize_month_chunks_falls_back_without_details_for_oversized_tail(monkeypatch):
+    """If even one exhibition is too large with details, use minimal mode."""
+
+    month = "2026-05"
+    exhibitions = [
+        Event(
+            title=f"Exhibition {idx}",
+            description="d",
+            source_text="s",
+            date=f"{month}-01",
+            end_date=f"{month}-31",
+            time="",
+            location_name="Museum",
+            event_type="выставка",
+        )
+        for idx in range(3)
+    ]
+
+    async def build_stub(
+        _db,
+        _month,
+        evs,
+        exhs,
+        continuation_url=None,
+        size_limit=None,
+        *,
+        include_ics=True,
+        include_details=True,
+        page_number=1,
+        first_date=None,
+        last_date=None,
+    ):
+        per_item = 500 if include_details else 100
+        size = (len(evs) + len(exhs)) * per_item + (30 if continuation_url else 0)
+        return "title", [{"tag": "p", "children": ["x" * size]}], size
+
+    monkeypatch.setattr(main, "build_month_page_content", build_stub)
+    monkeypatch.setattr(main, "TELEGRAPH_LIMIT", 250)
+
+    chunks, include_ics, include_details = await main.optimize_month_chunks(
+        None,
+        month,
+        [],
+        exhibitions,
+        "<nav/>",
+    )
+
+    assert chunks
+    assert include_ics is False
+    assert include_details is False
+    assert sum(len(exhs) for _, exhs in chunks) == len(exhibitions)
+    assert all(len(exhs) <= 2 for _, exhs in chunks)
+
+
+def test_month_page_limits_and_compacts_permanent_exhibitions(monkeypatch):
+    """Permanent exhibitions on aggregate pages stay bounded and digest-sized."""
+
+    month = "2026-05"
+
+    class FakeDatetime(main.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return main.datetime(2026, 5, 10, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(main, "datetime", FakeDatetime)
+
+    long_phrase = "ЭТОТ ДЛИННЫЙ ТЕКСТ НЕ ДОЛЖЕН ПОПАСТЬ В МЕСЯЧНУЮ СТРАНИЦУ"
+    short = "Короткое описание постоянной выставки с главным сюжетом и редким предметом"
+    exhibitions = [
+        Event(
+            title=f"Expo {idx:02d}",
+            description=(long_phrase + " ") * 20,
+            short_description=short,
+            source_text="s",
+            date=f"{month}-01",
+            end_date=f"{month}-31",
+            time="",
+            location_name="Museum",
+            event_type="выставка",
+        )
+        for idx in range(main.MONTH_PERMANENT_EXHIBITIONS_LIMIT + 5)
+    ]
+
+    _title, content, _size = main._build_month_page_content_sync(
+        month,
+        [],
+        exhibitions,
+        {},
+        None,
+        None,
+        None,
+        None,
+        True,
+        True,
+    )
+    html = nodes_to_html(content)
+
+    assert html.count("<h4>") == main.MONTH_PERMANENT_EXHIBITIONS_LIMIT
+    assert "Expo 00" in html
+    assert f"Expo {main.MONTH_PERMANENT_EXHIBITIONS_LIMIT:02d}" not in html
+    assert short in html
+    assert long_phrase not in html
 
 
 @pytest.mark.asyncio

@@ -3437,6 +3437,18 @@ def _build_candidate(
         probe_for_known_location,
         city=str(extracted_city or "").strip() or None,
     )
+    location_address_was_prose = False
+    if location_address and _looks_like_location_prose_fragment(location_address):
+        logger.warning(
+            "telegram: dropped prose-like extracted location_address source=%s message_id=%s title=%r address=%r",
+            username,
+            message_id,
+            title,
+            location_address,
+        )
+        location_address = None
+        extracted_location_address = None
+        location_address_was_prose = True
     if location_name and _looks_like_location_prose_fragment(location_name):
         logger.warning(
             "telegram: dropped prose-like extracted location source=%s message_id=%s title=%r location=%r",
@@ -3446,7 +3458,7 @@ def _build_candidate(
             location_name,
         )
         location_name = source.default_location or known_loc
-        if known_addr and not location_address:
+        if known_addr and (known_loc or not location_address or location_address_was_prose):
             location_address = known_addr
         if known_city and not extracted_city:
             extracted_city = known_city
