@@ -218,6 +218,58 @@ Audit после `v2` показал, что previous "legacy" evidence был b
 
 - baseline остаётся только benchmark reference для length/quality/speed comparison;
 - Gemma 4 `source_facts.v3` извлекает public/logistics facts, lead hooks, structure hints и emergency source draft из source excerpts;
+
+## `baseline_g4` direct baseline migration probe (`2026-04-30`)
+
+Задача: проверить самый простой путь "baseline, но на Gemma 4" без `lollipop_legacy`
+и без baseline-assisted writer. Это отдельный benchmark variant, не rollout contract.
+
+Contract:
+
+- `baseline` на Gemma 3 остаётся только comparison reference;
+- `baseline_g4` generation path использует Gemma 4 stages: native-schema fact extraction,
+  writer, native-schema reviewer;
+- Gemma 3 facts/text не входят в generation payload;
+- no hidden fallback to baseline;
+- no deterministic semantic text repair. Deterministic code may only reject syntax/prose
+  artifacts such as prompt leaks, English words, repeated clusters, too-short/too-long output.
+
+Negative direct-swap evidence:
+
+- `artifacts/codex/lollipop_g4_benchmark_20260430T174227Z.{json,md}`
+- direct Gemma 4 baseline prompt on `AUDIO-WALK-QUARTER-971` leaked prompt/instruction
+  material and produced a huge unusable response (`28838` chars, `424s`), so Gemma 4 is
+  not a drop-in replacement for the Gemma 3 baseline prompt.
+
+Optimized staged evidence:
+
+- `artifacts/codex/lollipop_g4_benchmark_20260430T182208Z.{json,md}`:
+  `AUDIO-WALK-QUARTER-971` passed locally with reviewer `accepted`, `767/834` chars,
+  `quality_delta=improved`, `errors=0`, speed ratio about `1.98x`.
+- `artifacts/codex/lollipop_g4_benchmark_20260430T182444Z.{json,md}`:
+  full five-fixture run completed but was **not accepted**: `AUDIO-WALK` and
+  `PETER-FLEET` passed, while `SACRED`, `WORLD`, and `RED` failed reviewer gates
+  (generic lecture copy / English word artifacts / English mixed token).
+- Subsequent Red-focused probes improved timeout behavior with a separate object-list
+  writer contract but are still **not accepted**:
+  - `lollipop_g4_benchmark_20260430T184811Z`: fast but dry report/list style;
+  - `lollipop_g4_benchmark_20260430T185040Z`: cut-off text artifact;
+  - `lollipop_g4_benchmark_20260430T185158Z` and `185319Z`: no timeout, but repetitive
+    filler on the thin source;
+  - later direct-text object writer probes timed out on `gemma-4-31b-it`.
+- Current full-run artifact after harness fail-open:
+  `artifacts/codex/lollipop_g4_benchmark_20260430T190623Z.{json,md}`.
+  It is **failed**: `AUDIO-WALK` and `RED-COSMOS` hit `TimeoutError`, `PETER-FLEET`
+  has English/typo/unsupported-role errors, `WORLD-HOBBIES` has typo error, and only
+  `SACRED-LECTURE` is accepted by the LLM reviewer.
+
+Current conclusion:
+
+- `baseline_g4` is correctly LLM-first and benchmark-visible, but **not a working result yet**.
+- The hard remaining blocker is thin object-list exhibition text (`RED-COSMOS-7902`):
+  forcing baseline-like length makes Gemma 4 pad/repeat; making the object-list writer compact
+  avoids timeout but can become catalog-like. The next prompt iteration must solve this inside
+  the LLM contract, not with deterministic text rewriting.
 - Gemma 4 writer/repair получает только source-derived facts/context; `baseline_description` в generation payload пустой;
 - baseline fallback удалён. Timeout/error может использовать только Gemma 4 source draft.
 
@@ -240,6 +292,195 @@ Interpretation:
 - `v3` is **not accepted** as quality replacement yet: only `3/5` fixtures improve, `2/5` regress, and latency exceeds `3x` on `3/5`.
 - Source-only extraction is fact-sparse on short Telegram posts (`peter_fleet_lecture`, `world_hobbies`) compared with the old Gemma 3 baseline-derived text; this is an actual product constraint, not a benchmark formatting issue.
 - Next iteration should either make the final writer path shorter/more stable on Gemma 4 or use the explicitly allowed final-writer fallback to `4o` while keeping Gemma 4 as the source-facts extractor.
+
+## `lollipop_legacy.v7` Gemma 4-only source-fidelity pass (`2026-04-30`)
+
+После prompt-family audit через проектный `Opus` alias предыдущие `source draft`, baseline fallback и repair-подходы были сняты из legacy path. `v7` проверяет более строгий LLM-first contract:
+
+- Gemma 4 `facts_v7` извлекает только source-derived `public_facts` и `logistics_facts`;
+- Gemma 4 `writer_v7` получает только эти facts, `title`, `event_type` и advisory `target_chars`;
+- `source_excerpt`, `baseline_description` и baseline facts в writer payload не передаются;
+- baseline используется только как comparison reference для quality/speed metrics;
+- text repair, source-draft fallback и baseline fallback отсутствуют; writer failure остаётся visible failure;
+- objective guard сравнивает source fidelity: invented named-token reduction and retained source named tokens count as improvements, while raw length vs baseline is warning-only;
+- отдельный `length.below_min` gate не даёт принять слишком тонкий public copy.
+
+Implementation:
+
+- `LEGACY_CONTRACT_VERSION = "lollipop_legacy.v7"`;
+- benchmark records `legacy_g4_extract_mode="facts_v7.writer_v7"`;
+- invariant flags remain `generation_uses_baseline=false`, `uses_baseline_fact_floor=false`, `includes_baseline_stage=false`, `writer_fallback_to_baseline=false`;
+- `writer_retry_count=0` on all rows.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260430T151737Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260430T151737Z.md`
+- baseline reused from fresh Gemma 3 artifact `artifacts/codex/lollipop_g4_benchmark_20260430T144616Z.json`
+- command:
+
+```bash
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=22 LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC=22 \
+python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --reuse-baseline-artifact artifacts/codex/lollipop_g4_benchmark_20260430T144616Z.json \
+  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260430T144616Z.json \
+  --gemma-call-gap-s 0
+```
+
+Results:
+
+| Fixture | Baseline chars | Legacy chars | Source facts | Quality delta | Speed ratio | Repair/fallback | Validation |
+| --- | ---: | ---: | ---: | --- | ---: | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | `834` | `172` | `4` | `improved` | `1.3138` | `0/false` | `length.below_min:172/280` |
+| `PETER-FLEET-LECTURE-5600` | `665` | `173` | `4` | `improved` | `0.7170` | `0/false` | `length.below_min:173/280` |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1126` | `266` | `7` | `improved` | `1.7108` | `0/false` | `length.below_min:266/420` |
+| `WORLD-HOBBIES-5505` | `1040` | `283` | `5` | `improved` | `1.1909` | `0/false` | `length.below_min:283/350` |
+| `RED-COSMOS-7902` | `1077` | `194` | `7` | `improved` | `0.7872` | `0/false` | `length.below_min:194/420` |
+
+Interpretation:
+
+- `v7` successfully removes hidden Gemma 3 leakage and all repair/fallback crutches from the generation path.
+- `5/5` fixtures improve on the current objective quality delta because they invent fewer named tokens than the Gemma 3 baseline and retain more source-grounded named material where available.
+- `5/5` fixtures pass the `<=3x` latency gate, and two are faster than the fresh baseline reference.
+- `v7` is **not accepted** as public-copy replacement: `5/5` outputs fail `length.below_min`; the writer is faithful but too thin/dry for production-quality event copy.
+- Next work must improve `writer_v7` richness/texture inside the same Gemma 4-only contract, not by reintroducing baseline text/facts, source-draft fallback, or repair passes.
+
+## `lollipop_legacy.v7` paragraph-bound writer tightening (`2026-04-30`)
+
+После дополнительного `Opus` prompt-family audit `writer_v7` был переведён с flat `description_md` на paragraph records:
+
+- Gemma 4 facts stage теперь просит `source_span` для каждого fact; normalizer проверяет span against `source_excerpt`;
+- Gemma 4 writer возвращает `paragraphs[]`, где каждый lead/body paragraph обязан ссылаться на `public_fact_indexes`, а logistics paragraph — на `logistics_fact_indexes`;
+- финальный `description_md` собирается детерминированно из paragraph records;
+- добавлены reject-only guards для filler phrases, adjacent-stem artifacts (`указам указаниям`, `лектор лекторий`) и слишком пустого public copy (`length.below_public_min`);
+- baseline по-прежнему comparison-only; writer не получает baseline text/facts/source draft и repair/fallback отсутствуют.
+
+Latest five-fixture benchmark:
+
+- json: `artifacts/codex/lollipop_g4_benchmark_20260430T153849Z.json`
+- markdown: `artifacts/codex/lollipop_g4_benchmark_20260430T153849Z.md`
+- baseline reused from fresh Gemma 3 artifact `artifacts/codex/lollipop_g4_benchmark_20260430T144616Z.json`
+
+Results:
+
+| Fixture | Baseline chars | Legacy chars | Public facts | Quality delta | Speed ratio | Validation |
+| --- | ---: | ---: | ---: | --- | ---: | --- |
+| `AUDIO-WALK-QUARTER-971` | `834` | `58` | `1` | `improved` | `0.7050` | `length.below_public_min:58/180` |
+| `PETER-FLEET-LECTURE-5600` | `665` | `222` | `2` | `improved` | `0.8762` | `errors=0`, thin-copy warnings |
+| `SACRED-LECTURE-ZYGMONT-3170` | `1126` | `240` | `2` | `improved` | `1.8565` | `text.filler:доступны на сайте` |
+| `WORLD-HOBBIES-5505` | `1040` | `227` | `2` | `improved` | `1.4081` | `errors=0`, thin-copy warnings |
+| `RED-COSMOS-7902` | `1077` | `102` | `3` | `improved` | `0.4944` | `public_fact.uncovered:1/2`, `length.below_public_min:102/180` |
+
+Interpretation:
+
+- Paragraph-index binding removes the most dangerous writer artifacts from the previous run: no baseline leakage, no text repair, no fallback, no source draft, no visible invented object texture like `глиняные` or broken phrase `указам указаниям`.
+- The stricter source-span extraction overcorrects: public fact recall drops to `1-3` facts on all fixtures, and the resulting copy is source-faithful but not rich enough for public descriptions.
+- This pass is **not accepted**. It is a safer contract boundary and a better regression harness, not a quality replacement for Gemma 3 baseline.
+- Next iteration should improve Gemma 4 source-fact recall and writer texture inside the paragraph-bound contract, or explicitly test passing `source_excerpt` to writer as Gemma 4-only grounding input; neither path may reintroduce baseline facts/text, repair, or fallback.
+
+## `lollipop_legacy.v14` fact-coverage reviewer pass (`2026-05-01`)
+
+### Why we re-focused on the fact layer
+
+After `v13` made the variant stable (5/5 non-empty, 0 baseline leakage) but evaluated mostly on writer text, the next iteration's goal was honest: judge Gemma 4 fact extraction against the existing Gemma 3 baseline before judging final prose. The constraint was LLM-first: no string-overlap or keyword-regex matching, no repair pass, no baseline facts/text in the legacy generation payload (extractor / writer / 4o fallback).
+
+### Implementation
+
+- `smart_update_lollipop_lab/legacy_writer_family.py` (now `v14`) gained a benchmark-only fact-coverage reviewer surface:
+  - `fact_coverage_response_schema()` — JSON schema with `baseline_facts_review[]`, `g4_facts_review[]`, `coverage_summary` (per-axis statuses + `overall_verdict`).
+  - `build_fact_coverage_system_prompt()` — Russian-output reviewer prompt: match by meaning, mark each baseline fact as grounded/false/unclear, decide `covered_by_g4` and `loss_severity` (none/minor/major/critical), tag G4 facts as grounded + useful_new_fact, set `suspicious_reason` when ungrounded/fragmentary/duplicate/leak.
+  - `build_fact_coverage_payload()` — Gemma-4 user payload that flattens public + logistics with category labels and indexes; baseline facts are explicitly carried (reviewer-only).
+  - `normalize_fact_coverage_payload()` — clamps invalid indexes, normalizes enum values (loss_severity, grounded_in_source, *_status, overall_verdict).
+  - `summarize_fact_coverage()` — computes counts, `lost_baseline_facts[]`, `added_g4_facts[]`, `suspicious_g4_facts[]`, and a deterministic verdict floor that takes the more conservative of (LLM verdict, deterministic floor); a single critical loss of a grounded baseline fact, or three+ ungrounded G4 facts, force `rejected`.
+- `scripts/inspect/benchmark_lollipop_g4.py` runs a separate Gemma 4 reviewer call inside `_run_lollipop_legacy_variant` after the writer. Reviewer timeout is `max(_gemma_direct_timeout_sec(), 75.0)` because the structured output across 5+ baseline and 8+ G4 facts is heavier than extraction. The result is exposed as `result["fact_coverage"]` and rendered in the markdown report under `### Fact Extraction Coverage`. `_baseline_fact_list_for_review()` flattens Gemma 3 `per_source_facts` into the reviewer payload only. The report also renders raw baseline `per_source_facts`, baseline `facts_text_clean`, filtered-before-writer facts, metadata anchors, and exact Gemma 4 public/logistics facts so manual fact audit does not depend on reviewer echo text.
+- `tests/test_lollipop_legacy.py` covers schema shape, payload assembly (baseline facts allowed only in reviewer), normalization clamping, deterministic verdict floor (`critical_loss → rejected`, `useful_added → tracked`, `ungrounded_g4 → suspicious + partial floor`), full `PETER-FLEET` source snapshot, exact input texts preserved over reviewer echo, rendered raw fact surfaces, and end-to-end reviewer routing (no baseline leakage in extractor + writer, baseline facts present in reviewer payload, fact_coverage with verdict in the variant result).
+
+### Latest fact-extraction evidence (`artifacts/codex/lollipop_g4_benchmark_20260501T105522Z.{md,json}`)
+
+The earlier `T095915Z` artifact is superseded for fact-layer acceptance because `PETER-FLEET-LECTURE-5600` used a shortened manual Telegram excerpt while still displaying the real `t.me/ambermuseum/5600` URL. `T105522Z` replaces that fixture with the full post snapshot and renders every fact surface needed for manual comparison.
+
+Run command:
+
+```bash
+.venv/bin/python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --gemma-call-gap-s 0
+```
+
+| Fixture | baseline raw | baseline writer | grounded covered | g4 public/logistics | suspicious | verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | 5 | 3 | 5 / 5 | 5 / 6 | 0 | accepted |
+| `PETER-FLEET-LECTURE-5600` | 10 | 9 | 9 / 10 | 8 / 6 | 0 | partial |
+| `SACRED-LECTURE-ZYGMONT-3170` | 7 | 5 | 7 / 7 | 6 / 7 | 0 | accepted |
+| `WORLD-HOBBIES-5505` | 5 | 4 | 5 / 5 | 4 / 4 | 1 | accepted |
+| `RED-COSMOS-7902` | 6 | 6 | 6 / 6 | 7 / 2 | 0 | accepted |
+
+Verdict: **partial** for the fact layer after correcting the source evidence.
+
+- `PETER-FLEET-LECTURE-5600` is now the useful blocker: Gemma 3 baseline extracted 10 raw facts from the full source and passed 9 into `facts_text_clean`; Gemma 4 covered 9/10 grounded baseline facts but missed the major grounded fact `Доклад основан на служебных документах и источниках личного происхождения.`
+- The corrected report shows the full source snapshot with `отделом эстампов и фотографий`, `Лейб-гвардии Преображенский полк, 1709`, `первая треть XVIII века`, and `реконструированные предметы обмундирования петровских матросов`.
+- The previous reviewer echo artifacts (`sБилеты...`, `gМузей...`) are no longer used as the displayed fact text; the report preserves exact input facts by index.
+- Writer prompt was deliberately not tuned in this iteration. Latest writer evidence remains the v13 run (`T201038Z`).
+
+Next step: tune Gemma 4 extraction for the missing `source basis / documents` fact on rich lecture sources, then rerun the fact benchmark before returning to writer-side layout and heading work.
+
+## `lollipop_legacy.v13` simplification: extract+write+4o fallback (`2026-04-30`)
+
+### Why we simplified
+
+After the `v7..v12` multi-stage pass (per-source extract + enrichment + plan + paragraph-bound writer + repair) showed thin / fragile public copy and Gemma 4 writer timeouts on sparse-source fixtures, the goal was reset: stop trying to win quality through a lollipop intermediate stack, and instead get a stable **baseline-equivalent** Gemma 4 path with a clearly-reported 4o final-writer fallback for cases where Gemma 4 cannot deliver non-empty output.
+
+Hard constraints carried into v13:
+
+- no baseline text or baseline facts in any legacy generation payload;
+- no Gemma 3 inside the legacy generation path;
+- no repair pass; no source-draft fallback; no baseline fallback;
+- no regex/post-processing edits to writer output (validator is read-only);
+- 4o fallback only for the **final writer** when Gemma 4 writer times out / errors / returns empty;
+- 4o receives the same source-derived `public_facts`, `logistics_facts`, and `source_excerpt` payload, never baseline text/facts.
+
+### Implementation
+
+- `smart_update_lollipop_lab/legacy_writer_family.py` rewritten to a tight surface: `build_extraction_system_prompt`, `extraction_response_schema`, `normalize_extraction_payload`, `merge_extraction_facts`, `build_writer_system_prompt`, `writer_response_schema`, `build_writer_payload`, `apply_writer_output`, `validate_writer_output`, `compare_to_baseline`. All `enhancement`/`enrich_v8`/`plan_v8`/`writer_v7`/`source_writer`/`source_fact` v12 stages removed.
+- `scripts/inspect/benchmark_lollipop_g4.py::_run_lollipop_legacy_variant` rewritten as: per-source Gemma 4 extraction → single Gemma 4 writer → 4o final-writer fallback on timeout/error/empty. `_baseline_fact_list`, `_legacy_event_fact_floor`, `_legacy_required_fact_floor` (relics of the old baseline-fact-floor approach) removed.
+- `_ask_4o_json` updated to read `FOUR_4O_TOKEN` (with `FOUR_O_TOKEN` legacy fallback) and to convert Gemma-style uppercase JSON-Schema types (`STRING`, `INTEGER`, `OBJECT`, `ARRAY`) to OpenAI lowercase form before calling structured-outputs.
+- `tests/test_lollipop_legacy.py` rewritten to cover v13: extract+write contract, no-baseline-leakage guard for the variant, 4o fallback path on simulated Gemma 4 writer timeout, `FOUR_4O_TOKEN` env handling, narrator-frame and source-fidelity quality signals.
+
+### Latest benchmark (`artifacts/codex/lollipop_g4_benchmark_20260430T201038Z.{md,json}`)
+
+Run command:
+
+```bash
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=35 LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC=30 \
+.venv/bin/python scripts/inspect/benchmark_lollipop_g4.py \
+  --variants baseline,lollipop_legacy \
+  --fixtures audio_walk,peter_fleet_lecture,sacred_lecture,world_hobbies,red_cosmos \
+  --reuse-baseline-artifact artifacts/codex/lollipop_g4_benchmark_20260430T200617Z.json \
+  --reuse-fixture-artifact  artifacts/codex/lollipop_g4_benchmark_20260430T200617Z.json \
+  --gemma-call-gap-s 0
+```
+
+| Fixture | baseline chars | legacy chars | writer model | quality_delta | speed | verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `AUDIO-WALK-QUARTER-971` | 834 | 885 | 4o (Gemma 4 timeout) | regressed (`promo_phrase_regression`); improvements: `score_improved`, `lead_hook_improved`, `invented_named_tokens_reduced`, `source_named_tokens_improved` | 3.10x (warning) | non-empty + grounded; mild CTA register from 4o |
+| `PETER-FLEET-LECTURE-5600` | 665 | 801 | 4o (Gemma 4 timeout) | improved (`source_named_tokens_improved`); warnings: `lost_baseline_lead_hook`, `longer_than_baseline` | 3.20x (warning) | non-empty + grounded; lecturer/topic/logistics covered |
+| `SACRED-LECTURE-ZYGMONT-3170` | 1126 | 924 | gemma-4 | improved (`score_improved`, `lead_hook_improved`, `more_compact`, `invented_named_tokens_reduced`); warning: `lost_baseline_epigraph` | 2.57x (pass) | clean accept |
+| `WORLD-HOBBIES-5505` | 1040 | 909 | gemma-4 | improved (`more_compact`, `invented_named_tokens_reduced`, `source_named_tokens_improved`); warning: `lost_baseline_epigraph` | 1.83x (pass) | clean accept |
+| `RED-COSMOS-7902` | 1077 | 677 | gemma-4 | improved (`score_improved`, `lead_hook_improved`, `invented_named_tokens_reduced`); warnings: `shorter_than_baseline`, `lost_baseline_epigraph` | 0.97x (pass) | clean accept; thin but factually grounded |
+
+Verdict: **partial accepted**.
+
+- 5/5 non-empty legacy outputs (was 0/5 on AUDIO-WALK and RED-COSMOS in `T190623Z`).
+- 0 critical validation errors across all five fixtures.
+- 0 baseline leakage in any generation payload (the test `test_lollipop_legacy_variant_does_not_send_baseline_to_generation` pins this contract).
+- 4o fallback was used on AUDIO-WALK and PETER-FLEET after Gemma 4 writer timed out; both produced grounded, complete public copy. `writer_model`, `writer_fallback_to_4o`, and `writer_failure_reasons` are reported per row.
+- 3/5 fixtures stayed at `<=3x` speed gate; 2/5 are slightly over (3.10x and 3.20x) because the 4o fallback was added on top of the timed-out Gemma 4 writer attempt. Speed gate violations are recorded as warnings, not errors, since the user explicitly prioritised non-empty stability over latency in this iteration.
+- Known weakness: 4o-fallback prose tends to use mild CTA / direct-address phrasing (`предлагает уникальную возможность`, `вы сможете`), which the read-only validator flags as `style.direct_address` warning and `quality.promo_phrase_regression` (AUDIO-WALK). This is a register-only issue; facts and structure are correct.
+
+Next step (deferred): tighten the 4o fallback prompt to avoid promo register, and find a Gemma 4 writer-tuning pass that gets AUDIO-WALK and PETER-FLEET to first-pass success without inflating per-source extraction.
 
 ## Non-canonical writer-swap result on `KALMANIA-2885`
 

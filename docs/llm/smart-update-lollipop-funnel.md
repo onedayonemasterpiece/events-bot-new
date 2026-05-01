@@ -48,31 +48,29 @@ source.scope
 
 Статус: `lab variant`, не production default.
 
-Цель: быстро восстановить lollipop-quality public text после потери части `lollipop g4 fast` work. Важное уточнение после audit `2026-04-30`: `lollipop_legacy.v2` был baseline-assisted recovery prototype, а не Gemma 4-only реализация, потому что использовал Gemma 3 baseline facts/description как generation input. Его tag `lollipop-legacy-v2` оставлен только как исторический артефакт и не является accepted Gemma 4-only contract.
+Цель: получить baseline-equivalent public text на Gemma 4 (с 4o final-writer fallback при сбое Gemma 4), не возвращая baseline facts/draft в legacy generation payload и не вводя сложный intermediate planning.
 
-Текущая рабочая версия в коде: `lollipop_legacy.v3`.
+Текущая рабочая версия в коде: `lollipop_legacy.v14`.
 
 - Version owner: `smart_update_lollipop_lab/legacy_writer_family.py::LEGACY_CONTRACT_VERSION`
-- Статус: `Gemma 4-only lab candidate`, **не accepted** по quality/latency на five-fixture gate.
-- Latest evidence: `artifacts/codex/lollipop_g4_benchmark_20260430T141614Z.{md,json}`
-- Baseline в benchmark допускается только как comparison reference: длина, quality delta, speed ratio. Baseline text/facts не должны попадать в Gemma 4 extraction, writer, repair или fallback.
+- Статус: fact-extraction layer **partial** по audit `2026-05-01` после исправления benchmark fixture/source evidence. Writer/text quality **в этой итерации специально не тюнился** — accepted/partial по text quality остаётся вторичным сигналом (`v13` summary).
+- Latest fact-extraction evidence: `artifacts/codex/lollipop_g4_benchmark_20260501T105522Z.{md,json}`. Предыдущий `T095915Z` superseded для `PETER-FLEET-LECTURE-5600`, потому что fixture содержал укороченный manual excerpt, не полный Telegram post snapshot.
+- Latest writer evidence (carry-over): `artifacts/codex/lollipop_g4_benchmark_20260430T201038Z.{md,json}`
+- Baseline в benchmark — только comparison reference (chars, quality delta, speed ratio). Baseline text/facts не попадают в Gemma 4 extraction, writer, fallback или 4o payload.
 
-Контракт `lollipop_legacy.v3`:
+Контракт `lollipop_legacy.v14` (Stage 1+2 как в v13 + benchmark-only fact-coverage reviewer):
 
-- Gemma 4 31b выполняет `source_facts.v3`: извлекает public facts, logistics facts, lead hooks, structure hints и emergency source-grounded draft напрямую из `source_excerpt`;
-- Gemma 4 31b final writer получает только source-derived public fact floor, logistics context, lead hooks, structure hints и source excerpt; `baseline_description` в v3 generation payload должен быть пустым;
-- при writer timeout/error можно использовать только Gemma 4 source draft, никогда Gemma 3 baseline draft;
-- `writer_fallback_to_baseline` должен оставаться `false`; `generation_uses_baseline`, `uses_baseline_fact_floor`, `includes_baseline_stage`, `baseline_assisted` должны оставаться `false`;
-- final writer должен покрыть source-derived public fact floor, не ухудшить hook/register/style metrics и целиться в `70-105%` benchmark reference length, если facts не требуют сопоставимого объёма;
-- objective guard `quality_delta_vs_baseline` считает вариант `regressed`, если появляется новый report/promo/meta leak, теряется baseline hook, lead открывается stock narrator-frame шаблоном (`Погружение в ...`, `Знакомство с ...`, `Путешествие в мир ...`, `Прогулка по миру ...`, `Окунитесь в ...`, `Откройте для себя ...`, `Добро пожаловать в ...`, `Приготовьтесь ...`) которого не было в baseline, текст становится слишком коротким или ломает validation. Тот же guard поощряет уход от narrator-frame и помечает мягкими warnings потерю ≥2 baseline `### ` headings или baseline `>` epigraph, не блокируя rollout;
-- writer prompt напрямую запрещает narrator-frame openings и подаёт positive lead exemplars (object/actor/format-texture/event-action/named-quote), чтобы lead открывался конкретной приметой события, а не позой нарратора;
-- deterministic validator ловит Gemma 4 `,, ` double-comma artifact как `text.double_comma`, чтобы repair pass переписал такой пассаж до публикации;
-- при validation/quality regression запускается один bounded Gemma repair pass;
-- speed gate: `lollipop_legacy.wall_clock_sec / baseline.wall_clock_sec <= 3.0`, где numerator считает только Gemma 4-only legacy stages, без baseline stage;
-- direct Gemma JSON calls ограничены `LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC` (`75s` default), writer pass отдельно ограничен `LOLLIPOP_GEMMA_WRITER_TIMEOUT_SEC` (`12s` default; benchmark recovery run used `16s`);
-- optional `--legacy-g4-extract` теперь deprecated no-op: v3 всегда использует собственный Gemma 4 `source_facts.v3` stage.
-
-Текущее состояние `v3` по latest benchmark: generation path честно Gemma 4-only, но acceptance не пройден. На `20260430T141614Z` только `3/5` fixtures имеют `quality_delta_status=improved`; `2/5` имеют regressions, `3/5` не проходят latency/validation. Следующий шаг — сокращать/стабилизировать Gemma 4 writer path или менять final writer на разрешённый fallback `4o`, если Gemma 4 final writer продолжит срывать качество/таймауты.
+- Stage 1 — Gemma 4 31b extraction per source: один JSON-call на каждый source, который возвращает `public_facts[]` и `logistics_facts[]`. Только `source_text` + event metadata в payload, никаких baseline draft/fact передач.
+- Stage 2 — единственный Gemma 4 31b writer-call: получает merged `public_facts`, `logistics_facts`, `source_excerpt`, advisory `length_contract` (вычисленный от reference baseline length, но без передачи baseline текста), и возвращает финальный `description_md` + честные `covered_*_fact_indexes`.
+- Final-writer fallback: если Gemma 4 writer падает по timeout / exception / возвращает пустой `description_md`, один раз вызывается gpt-4o с тем же writer payload (через `FOUR_4O_TOKEN`, OpenAI structured output с lowercase JSON-Schema). Никаких baseline facts/draft в 4o-payload.
+- Никаких intermediate enrichment / planning stages, никаких repair pass'ов, никакого baseline fallback. Никаких regex/post-processing fixes текста — валидатор только репортит.
+- `generation_uses_baseline`, `uses_baseline_fact_floor`, `includes_baseline_stage`, `baseline_assisted`, `writer_fallback_to_baseline` всегда остаются `false`. Видимость fallback — `writer_model` (`gemma-4` или `4o`), `writer_fallback_to_4o`, `writer_failure_reasons`.
+- Validator (`legacy_writer_family.validate_writer_output`) — read-only signal: пустой текст / явные duplicate word / repeated cluster / prompt leak — errors; `style.direct_address`, `age.leak`, `text.english_word`, `length.below_baseline_ratio`, `length.long`, и `latency.3x_exceeded:N` — warnings.
+- Quality delta (`legacy_writer_family.compare_to_baseline`) — read-only signal для отчёта (narrator-frame, source-fidelity, length, lost-headings, lost-epigraph). Не запускает retry/repair.
+- Speed gate: целимся в `<=3x` от Gemma 3 baseline. Превышение остаётся как warning, не блокирует output, потому что non-empty стабильность сейчас приоритетнее.
+- `--legacy-g4-extract` остаётся как deprecated no-op для совместимости CLI; v14 всегда использует staged Gemma 4 extract+write flow.
+- **Stage 3 (benchmark-only)**: после writer в variant добавлен LLM-first fact-coverage reviewer. Получает `source_excerpt`, event metadata, baseline facts (Gemma 3) и Gemma 4 facts; возвращает `baseline_facts_review[]` (`grounded_in_source`, `covered_by_g4`, `loss_severity`), `g4_facts_review[]` (`grounded_in_source`, `useful_new_fact`, `suspicious_reason`), и `coverage_summary` с `public/logistics/named_entity/format_topic_program/overall_verdict`. Reviewer — benchmark-only: baseline facts разрешены в его payload, но extractor/writer payload остаются чистыми (регрессионно проверяется тестом `test_lollipop_legacy_reviewer_payload_uses_baseline_facts_but_generation_does_not`). Markdown evidence дополнительно показывает raw baseline `per_source_facts`, baseline `facts_text_clean`, filtered-before-writer facts, metadata anchors и exact Gemma 4 public/logistics facts, чтобы ручная сверка не зависела от reviewer-пересказа.
+- **Deterministic verdict floor**: дополнительно к LLM `overall_verdict` benchmark считает свой floor (`accepted`/`partial`/`rejected`). Critical loss любого grounded baseline fact или 3+ ungrounded G4 facts ⇒ `rejected`. Финальный `verdict` — минимальный из двух (LLM judge не может перевернуть deterministic floor).
 
 Benchmark command:
 
@@ -87,7 +85,41 @@ Implementation surface:
 
 - [legacy_writer_family.py](/workspaces/events-bot-new/smart_update_lollipop_lab/legacy_writer_family.py) owns `lollipop_legacy` prompt/schema/validation/objective quality delta;
 - [benchmark_lollipop_g4.py](/workspaces/events-bot-new/scripts/inspect/benchmark_lollipop_g4.py) owns variant routing, five real-post fixtures, timing, and markdown report rendering;
-- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers v3 Gemma 4-only routing, source fact normalization, coverage validation, bad-register validation, duplicate-word/tail validation, objective quality delta, reference-volume validation, and benchmark routing.
+- [test_lollipop_legacy.py](/workspaces/events-bot-new/tests/test_lollipop_legacy.py) covers v14 contract: Gemma 4 extract+write, no-baseline-leakage guard for extractor and writer (with reviewer carve-out), 4o fallback on writer timeout, `FOUR_4O_TOKEN` env handling, narrator-frame and source-fidelity quality signals, full `PETER-FLEET` source snapshot, and the fact-coverage reviewer/reporting surface (schema shape, payload assembly, normalization clamping, deterministic verdict floor — `critical loss → rejected`, `useful added → tracked`, `ungrounded g4 → suspicious + partial floor`, exact input texts preserved over reviewer echo).
+
+## `baseline_g4`
+
+Статус: `benchmark probe`, **not accepted**.
+
+Цель: отдельно от `lollipop_legacy` проверить прямой перевод baseline contract на
+Gemma 4 в LLM-first форме.
+
+Текущий контракт:
+
+- Gemma 4 native-schema fact extraction from source/metadata;
+- Gemma 4 writer stage;
+- Gemma 4 native-schema reviewer as semantic acceptance gate;
+- Gemma 3 baseline только для comparison: chars, quality delta, speed ratio;
+- no baseline fallback, no Gemma 3 facts/text in generation payload, no deterministic
+  semantic rewrite/repair.
+
+Latest useful evidence:
+
+- `AUDIO-WALK-QUARTER-971` can pass the current gate (`767/834` chars, reviewer
+  `accepted`, `errors=0`, speed ratio about `1.98x`);
+- latest full five-fixture artifact:
+  `artifacts/codex/lollipop_g4_benchmark_20260430T190623Z.{json,md}`;
+- full five-fixture benchmark is **failed**, not merely weak: `AUDIO-WALK` and
+  `RED-COSMOS` currently hit writer `TimeoutError`, `PETER-FLEET` / `WORLD-HOBBIES`
+  have reviewer-blocked prose errors, and only `SACRED-LECTURE` is accepted.
+
+Acceptance bar before this probe can be called working:
+
+- full five-fixture run must complete without provider timeout;
+- `validation.errors=0` and reviewer verdict accepted/no-worse for every fixture;
+- no English/mixed-language artifacts, repeated clusters, prompt leaks, or JSON/list
+  syntax leakage in public prose;
+- speed ratio must remain within `<=3x` of Gemma 3 baseline.
 
 ## Активные families
 

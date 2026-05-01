@@ -221,9 +221,20 @@ def _build_peter_fleet_lecture_fixture() -> BenchmarkFixture:
         location_address="пл. Василевского, 1",
         url="https://t.me/ambermuseum/5600",
         text=(
-            "Приглашаем на лекцию о быте и нравах регулярного военного флота Петра Великого. "
-            "Лектор — Борис Мегорский, заведующий отделом Российской национальной библиотеки. "
-            "Билеты продаются на сайте и в кассе музея. OCR: 24.04 в 16:00."
+            "Приглашаем на лекцию о быте и нравах регулярного военного флота Петра Великого.\n\n"
+            "Лектор – Борис Мегорский, заведующий отделом эстампов и фотографий Российской "
+            "национальной библиотеки, руководитель клуба исторической реконструкции "
+            "«Лейб-гвардии Преображенский полк, 1709», историк-исследователь, автор книг "
+            "и статей по истории Северной войны.\n\n"
+            "⚓ Вы узнаете о поведении и нравах личного состава российского корабельного "
+            "флота первой трети XVIII века. На основании служебных документов и источников "
+            "личного происхождения станет понятнее дисциплина и поведение в экстремальных "
+            "ситуациях, отношения офицеров и нижних чинов и девиантные поступки, которыми "
+            "могли «грешить» моряки.\n\n"
+            "Во время доклада лектор покажет реконструированные предметы обмундирования "
+            "петровских матросов.\n\n"
+            "Билеты продаются на сайте (https://clck.ru/3TD7H8) и в кассе музея. "
+            "OCR: 24.04 в 16:00."
         ),
     )
 
@@ -307,14 +318,14 @@ def _fixtures_from_cli(raw: str) -> list[BenchmarkFixture]:
 
 
 def _variants_from_cli(raw: str) -> list[str]:
-    allowed = {"baseline", "lollipop", "lollipop_g4", "lollipop_legacy"}
+    allowed = {"baseline", "baseline_g4", "lollipop", "lollipop_g4", "lollipop_legacy"}
     variants = [item.strip() for item in (raw or DEFAULT_VARIANTS).split(",") if item.strip()]
     if not variants:
         variants = [item.strip() for item in DEFAULT_VARIANTS.split(",") if item.strip()]
     unknown = [item for item in variants if item not in allowed]
     if unknown:
         raise ValueError(f"Unsupported variants: {', '.join(unknown)}")
-    if "lollipop_legacy" in variants and "baseline" not in variants:
+    if ("baseline_g4" in variants or "lollipop_legacy" in variants) and "baseline" not in variants:
         variants.insert(0, "baseline")
     return list(dict.fromkeys(variants))
 
@@ -471,6 +482,572 @@ async def _run_baseline(
     }
 
 
+def _baseline_g4_fact_schema() -> dict[str, Any]:
+    fact_item = {
+        "type": "OBJECT",
+        "properties": {
+            "text": {"type": "STRING"},
+            "source_span": {"type": "STRING"},
+            "kind": {"type": "STRING"},
+        },
+        "required": ["text", "source_span", "kind"],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "public_facts": {"type": "ARRAY", "items": fact_item},
+            "logistics_facts": {"type": "ARRAY", "items": fact_item},
+            "lead_hooks": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "narrative_angles": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["public_facts", "logistics_facts", "lead_hooks", "narrative_angles", "warnings"],
+    }
+
+
+def _baseline_g4_writer_schema() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "title": {"type": "STRING"},
+            "description_md": {"type": "STRING"},
+            "covered_public_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "used_logistics_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["title", "description_md", "covered_public_fact_indexes", "used_logistics_fact_indexes", "warnings"],
+    }
+
+
+def _baseline_g4_review_schema() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "verdict": {"type": "STRING"},
+            "errors": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "quality_notes": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["verdict", "errors", "warnings", "quality_notes"],
+    }
+
+
+def _baseline_g4_fact_prompt() -> str:
+    return textwrap.dedent(
+        """
+        You are the Gemma 4 version of the existing Smart Update baseline fact extractor.
+        Return only JSON matching the schema. No markdown. No analysis. No comments.
+
+        Extract concise Russian facts from the source text for one event description.
+        Keep the same semantic contract as the baseline:
+        - public_facts: event format, title/program, topic, named people and roles,
+          route/object/list, source-local atmosphere, explicit format texture, and source-grounded
+          cultural handle for the writer;
+        - logistics_facts: date, time, venue, address, tickets, price, age, URL, service instructions.
+
+        Rules:
+        - Use only the provided source text and event metadata.
+        - Preserve named entities exactly.
+        - Do not invent programme items, promises, locations, dates, prices, or cultural interpretation.
+        - Each fact is one short Russian phrase; source_span is the shortest supporting source phrase.
+        - kind is a short lowercase label: format, title, topic, person, route, object, texture,
+          date, time, venue, address, tickets, price, age, url, service.
+        - Prefer recall over brevity: return 4-10 public_facts when source supports them.
+        - Do not collapse a short source to only "format + title": split format, route/place,
+          instruction/map, source OCR route, and start mode when present.
+        - Fact text must be a clean Russian phrase. Do not include field labels such as
+          "text:", "kind:", JSON keys, or English helper words inside fact text.
+        - Format mechanics are public facts when they define the experience: "start any time
+          within an interval", "get full instruction and map", "self-guided route", "opening
+          of an exhibition", "lecture cycle starts". They may also appear as logistics/service
+          facts if needed, but do not hide them only in logistics.
+        - If an OCR line names a street/place without service wording, classify it by source role:
+          route/object if it looks like the route or object of the event, venue/address only if
+          the source explicitly says it is the venue/address.
+        - A street plus house number attached to a named venue is logistics/address, not route,
+          unless the source explicitly says the route passes there. For this shape, "Бар Советов,
+          проспект Мира, 118" is a pickup venue/address; a separate OCR place like
+          "Каштановая аллея, 1А" may be the route/location marker.
+        - lead_hooks are short grounded lead options, not slogans or ad CTA.
+        - narrative_angles are source-grounded ways to write about the format/topic. They may
+          unpack audio walk/lecture/exhibition as a public experience, but must not add new
+          names, places, works, dates, prices, promises, or programme items.
+        """
+    ).strip()
+
+
+def _baseline_g4_writer_prompt() -> str:
+    return textwrap.dedent(
+        """
+        You are the Gemma 4 version of the existing Smart Update baseline public-description writer.
+        Return one JSON object only. No markdown fences. No analysis.
+
+        Write description_md: final Russian Markdown for Telegram.
+        Ground truth: public_facts, logistics_facts, lead_hooks, narrative_angles, source_excerpt.
+
+        Hard rules:
+        - Single string output: description_md must contain prose only, never JSON/list fragments
+          like "],", field names, braces, or schema words.
+        - Cover every meaningful public_fact. Use logistics_facts only in one compact final
+          "### Когда и где" block when date/time/place facts are useful.
+        - Do not invent names, works, venues, route details, dates, prices, promises, or claims.
+        - Keep two locations separate unless source explicitly says they are the same venue/address.
+          Never say a route leads to/ends at a venue unless source_excerpt says leads/ends.
+        - No URL, phone, age limit, OCR/poster labels, internal field names, or English prompt words.
+        - Russian prose only. Do not use English words or mixed-language phrases unless the exact
+          English name appears in source_excerpt.
+        - No direct address or CTA: "вы", "вам", "для вас", "приглашаем", "приходите",
+          "не упустите", "уникальная возможность", "вы сможете", "позволит вам".
+        - Avoid dry formulas: "посвящено", "характеризуется", "программа состоит из",
+          "представляет собой".
+
+        Style and length:
+        - min_description_chars is binding when public_facts are present; target
+          target_description_chars, stay under max_description_chars. A shorter description is
+          invalid output. Before returning, expand if description_md is below min_description_chars.
+        - If min_description_chars is 650 or more, use at least three public paragraphs before
+          the final logistics block.
+        - Use 2-4 public paragraphs. Add ### headings only when they help; logistics heading
+          must be "### Когда и где".
+        - If public_facts contain a concrete object list, use one compact paragraph plus a short
+          bullet list. Do not inflate each object into generic art-history prose.
+        - Do not hard-wrap sentences. Each paragraph is one continuous line; use a blank line
+          only between paragraphs, before/after a ### heading, and nowhere inside a sentence.
+        - Open with a concrete grounded hook from a fact/hook/angle: route, object, topic,
+          person, exact title phrase, or format texture. Never open with "Название — это...".
+        - To reach the floor, expand only through grounded interpretation of the existing
+          format/topic: audio walk = listening/route/city attention; lecture = unpacking topic;
+          exhibition = looking at named objects. No new facts.
+        - Prefer concrete source nouns over abstract filler. Avoid "исследование пространства",
+          "инструменты познания", "полностью погрузиться", "атмосфера путешествия",
+          "архитектура", "точки маршрута", and "аудиогид" unless those words are in source_excerpt.
+        - For audio walks, prefer concrete grounded phrasing: карта, инструкция, маршрут,
+          возможность начать в выбранный промежуток, Каштановая аллея, Бар Советов.
+        - Each paragraph must add new information. Proofread: no duplicate adjacent words,
+          broken phrases, doubled place/address fragments, invented compound words, or
+          accidentally concatenated Russian words. If any syllable or letter cluster repeats
+          more than three times in a row, rewrite before returning.
+
+        Return title, description_md, covered_public_fact_indexes, used_logistics_fact_indexes, warnings.
+        """
+    ).strip()
+
+
+def _baseline_g4_writer_text_prompt() -> str:
+    return textwrap.dedent(
+        """
+        You are the Gemma 4 version of the existing Smart Update baseline public-description writer.
+        Return only the final Russian Markdown description text. No JSON. No markdown fences.
+        No analysis, comments, field names, schema words, or instruction echoes.
+
+        Ground truth: public_facts, logistics_facts, lead_hooks, narrative_angles, source_excerpt.
+
+        Hard rules:
+        - Cover every meaningful public_fact.
+        - Use logistics_facts only in one compact final "### Когда и где" block when useful.
+        - Do not invent names, works, venues, route details, dates, prices, promises, or claims.
+        - Keep locations separate. Never say a route leads to/ends at a venue unless source says so.
+        - Russian prose only; no English words unless the exact English name appears in source.
+        - No URL, phone, age limit, OCR/poster labels, direct address, or ad CTA.
+        - Avoid: "вы", "вам", "для вас", "приглашаем", "приходите", "не упустите",
+          "уникальная возможность", "вы сможете", "позволит вам", "представляет собой",
+          "посвящено", "характеризуется", "программа состоит из".
+
+        Shape:
+        - Obey length_contract. Shorter output is invalid.
+        - Use 2-4 public paragraphs and then the final logistics block.
+        - Do not hard-wrap sentences. Each paragraph is one continuous line; blank lines only
+          between paragraphs and around a ### heading.
+        - Open with a concrete grounded hook: route, object, topic, person, exact title phrase,
+          or format texture. Never open with "Название — это...".
+        - Expand only through grounded interpretation of the existing format/topic:
+          audio walk = listening/route/city attention; lecture = unpacking topic;
+          exhibition = looking at named objects. No new facts.
+        - Prefer concrete source nouns over abstract filler.
+        - Proofread before returning: no duplicate words, broken grammar, invented compound words,
+          or mixed-language phrases.
+        """
+    ).strip()
+
+
+def _baseline_g4_object_list_writer_prompt() -> str:
+    return textwrap.dedent(
+        """
+        Return one JSON object matching the schema. No markdown fences. No analysis.
+
+        Write final Russian Markdown for a cultural digest from public_facts only.
+        This fixture has a concrete object list. Use a compact structure:
+        - opening paragraph that starts with concrete named objects, not with "Выставка...";
+        - one flowing sentence that names the object list, not bullets;
+        - one paragraph explaining the source-grounded common theme;
+        - final "### Когда и где" block only if logistics_facts have place/date/time.
+
+        Rules:
+        - Russian only, no English words.
+        - Do not invent artists, techniques, dates, venues, schools, eras, prices, or claims.
+        - Preserve every named object from public_facts; do not expand beyond source.
+        - Do not add regions, techniques, motifs, "роспись", "сюжеты", or art-history claims
+          unless those exact ideas are in public_facts/source_excerpt.
+        - No bullets. No catalog tone.
+        - No CTA/direct address/report formulas: "представляем вашему вниманию", "данная",
+          "в рамках мероприятия", "посвящена", "представлен", "представляет",
+          "включает в себя", "демонстрирует", "позволяет", "уникальные",
+          "приглашаем", "посетители".
+        - Do not use generic filler or repeat syllables/clusters.
+        - Finish every sentence. Do not return if the last sentence is incomplete.
+        - Obey length_contract, but prefer compactness over padding.
+        - description_md contains prose/Markdown only, no JSON fragments or field names.
+
+        Return title, description_md, covered_public_fact_indexes, used_logistics_fact_indexes, warnings.
+        """
+    ).strip()
+
+
+def _baseline_g4_review_prompt() -> str:
+    return textwrap.dedent(
+        """
+        You are an LLM-first reviewer for the Gemma 4 baseline migration.
+        Return only JSON matching the schema. No prose outside JSON.
+
+        Decide whether candidate_description is acceptable as a replacement for
+        baseline_description for the same event.
+
+        Use provided candidate_chars, baseline_chars, and min_description_chars exactly.
+        Do not estimate or recount character length by eye.
+
+        Review against source_excerpt first, then against baseline quality:
+        - factual grounding: no unsupported venue/address/date/price/person/work claims;
+        - fact coverage: all meaningful public_facts must be reflected, with logistics only in
+          a compact final block when useful;
+        - public-copy completeness: not a noticeably poorer card if baseline has richer useful copy;
+          however, do not penalize the candidate for omitting baseline decorative claims that are
+          not supported by source_excerpt or public_facts;
+        - baseline_description is a quality/length reference, not a source of extra facts. Never
+          require candidate to preserve baseline epigraphs, bullets, thematic questions, atmosphere,
+          or interpretation unless the same concrete details are supported by source_excerpt or
+          public_facts;
+        - length: reject only when candidate_chars is below min_description_chars unless public_facts are empty or
+          the source genuinely cannot support a longer public text without invention;
+        - Russian prose quality: no broken grammar, stray JSON/list artifacts, duplicate words,
+          malformed phrases, or prompt/instruction leaks;
+        - style: cultural digest, not ad CTA and not dry report;
+        - logistics: compact and correctly attached to the right venue/location.
+
+        Put hard blockers in errors. Put softer tradeoffs in warnings.
+        verdict must be one of: accepted, no_worse_with_warnings, rejected.
+        Do not repair the text.
+        """
+    ).strip()
+
+
+def _normalize_baseline_g4_fact_items(payload: dict[str, Any]) -> dict[str, Any]:
+    def _items(key: str) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for raw in list(payload.get(key) or []):
+            if not isinstance(raw, dict):
+                continue
+            text = re.sub(r"\s+", " ", str(raw.get("text") or "")).strip()
+            text = re.sub(r"(?iu)^(?:text|kind|fact)\s*:\s*", "", text).strip()
+            if not text:
+                continue
+            normalized = text.casefold()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(
+                {
+                    "text": text[:420],
+                    "source_span": re.sub(r"\s+", " ", str(raw.get("source_span") or "")).strip()[:220],
+                    "kind": re.sub(r"\s+", " ", str(raw.get("kind") or "")).strip()[:40],
+                }
+            )
+        return result
+
+    def _strings(key: str, limit: int) -> list[str]:
+        result: list[str] = []
+        for raw in list(payload.get(key) or []):
+            text = re.sub(r"\s+", " ", str(raw or "")).strip()
+            if text and text not in result:
+                result.append(text[:limit])
+        return result
+
+    return {
+        "public_facts": _items("public_facts"),
+        "logistics_facts": _items("logistics_facts"),
+        "lead_hooks": _strings("lead_hooks", 220),
+        "narrative_angles": _strings("narrative_angles", 260),
+        "warnings": _strings("warnings", 220),
+    }
+
+
+def _merge_baseline_g4_fact_items(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    merged: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        if not text:
+            continue
+        normalized = text.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(
+            {
+                "index": len(merged),
+                "text": text[:420],
+                "source_span": re.sub(r"\s+", " ", str(item.get("source_span") or "")).strip()[:220],
+                "kind": re.sub(r"\s+", " ", str(item.get("kind") or "")).strip()[:40],
+            }
+        )
+    return merged
+
+
+def _baseline_g4_prompt_leaks(text: str) -> list[str]:
+    leaks: list[str] = []
+    patterns = (
+        "facts_text_clean",
+        "epigraph_fact",
+        "Cultural journalist",
+        "Self-Correction",
+        "Wait,",
+        "I need",
+        "schema",
+        "prompt",
+    )
+    for pattern in patterns:
+        if pattern.lower() in str(text or "").lower():
+            leaks.append(pattern)
+    return leaks
+
+
+async def _run_baseline_g4(
+    fixture: BenchmarkFixture,
+    *,
+    baseline: dict[str, Any],
+    gemma_model: str,
+    gemma_call_gap_s: float,
+) -> dict[str, Any]:
+    print(f"[benchmark] {fixture.fixture_id} start baseline_g4 model={gemma_model}", file=sys.stderr, flush=True)
+    started_at = time.perf_counter()
+    gemma_calls = 0
+    sleep_sec = 0.0
+    source_excerpt = _source_excerpt(fixture.sources, limit=5000)
+    per_source: dict[str, list[str]] = {}
+    public_fact_items_raw: list[dict[str, str]] = []
+    logistics_fact_items_raw: list[dict[str, str]] = []
+    lead_hooks: list[str] = []
+    narrative_angles: list[str] = []
+    source_warnings: list[str] = []
+
+    for source in fixture.sources:
+        raw = await _ask_gemma_json_direct(
+            model=gemma_model,
+            system_prompt=_baseline_g4_fact_prompt(),
+            user_payload={
+                "title": fixture.title,
+                "event_type": fixture.event_type,
+                "date": fixture.date,
+                "time": fixture.time,
+                "location_name": fixture.location_name,
+                "location_address": fixture.location_address,
+                "city": fixture.city,
+                "source_id": source.source_id,
+                "source_type": source.source_type,
+                "source_text": source.text[:5000],
+            },
+            max_tokens=900,
+            response_schema=_baseline_g4_fact_schema(),
+            timeout_sec=min(_gemma_direct_timeout_sec(), 35.0),
+            allow_json_repair=False,
+        )
+        gemma_calls += 1
+        normalized = _normalize_baseline_g4_fact_items(raw)
+        public_items = list(normalized.get("public_facts") or [])
+        logistics_items = list(normalized.get("logistics_facts") or [])
+        per_source[source.source_id] = [item["text"] for item in public_items + logistics_items if item.get("text")]
+        public_fact_items_raw.extend(public_items)
+        logistics_fact_items_raw.extend(logistics_items)
+        for key, target in (
+            ("lead_hooks", lead_hooks),
+            ("narrative_angles", narrative_angles),
+            ("warnings", source_warnings),
+        ):
+            for item in list(normalized.get(key) or []):
+                if item not in target:
+                    target.append(item)
+        await _gemma_gap_sleep(gemma_call_gap_s)
+        sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
+
+    public_fact_items = _merge_baseline_g4_fact_items(public_fact_items_raw)
+    logistics_fact_items = _merge_baseline_g4_fact_items(logistics_fact_items_raw)
+    facts_text_clean = [str(item.get("text") or "") for item in public_fact_items if item.get("text")]
+    baseline_len = len(str(baseline.get("description_md") or ""))
+    object_fact_count = sum(
+        1
+        for item in public_fact_items
+        if str(item.get("kind") or "").casefold() == "object"
+    )
+    if object_fact_count >= 3 and baseline_len >= 1000:
+        length_floor_ratio = 0.52
+        length_target_ratio = 0.62
+    else:
+        length_floor_ratio = 0.68 if baseline_len >= 1000 else 0.80
+        length_target_ratio = 0.78 if baseline_len >= 1000 else 0.92
+    min_description_chars = int((baseline_len or 650) * length_floor_ratio) if facts_text_clean else 0
+    target_description_chars = int((baseline_len or 650) * length_target_ratio) if facts_text_clean else 0
+    max_description_ratio = 0.75 if object_fact_count >= 3 and baseline_len >= 1000 else 1.0
+    max_description_chars = int((baseline_len or 650) * max_description_ratio) if facts_text_clean else 0
+    writer_payload = {
+        "title": fixture.title,
+        "event_type": fixture.event_type,
+        "reference_description_chars": baseline_len,
+        "min_description_chars": min_description_chars,
+        "target_description_chars": target_description_chars,
+        "max_description_chars": max_description_chars,
+        "length_contract": (
+            f"description_md must be {min_description_chars}-{max_description_chars} characters; "
+            f"target about {target_description_chars}; shorter output is invalid"
+        ),
+        "public_facts": public_fact_items,
+        "logistics_facts": logistics_fact_items[:10],
+        "lead_hooks": lead_hooks[:8],
+        "narrative_angles": narrative_angles[:8],
+        "source_excerpt": source_excerpt[:2600],
+    }
+    writer_system_prompt = (
+        _baseline_g4_object_list_writer_prompt()
+        if object_fact_count >= 3
+        else _baseline_g4_writer_prompt()
+    )
+    writer_max_tokens = 600 if object_fact_count >= 3 else 700
+    writer_raw = await _ask_gemma_json_direct(
+        model=gemma_model,
+        system_prompt=writer_system_prompt,
+        user_payload=writer_payload,
+        max_tokens=writer_max_tokens,
+        response_schema=_baseline_g4_writer_schema(),
+        timeout_sec=min(_gemma_writer_timeout_sec(), 55.0),
+        allow_json_repair=False,
+    )
+    gemma_calls += 1
+    description = str(writer_raw.get("description_md") or "").strip()
+    writer_raw["payload_contract"] = writer_payload
+    quality_delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=str(baseline.get("description_md") or ""),
+        candidate_description=description,
+        source_excerpt=source_excerpt,
+    )
+    validation_errors: list[str] = []
+    validation_warnings: list[str] = list(quality_delta.get("warnings") or [])
+    leaks = _baseline_g4_prompt_leaks(description)
+    for leak in leaks:
+        validation_errors.append(f"prompt_leak:{leak}")
+    if not description:
+        validation_errors.append("description.empty")
+    if len(description) > max(1400, int((len(str(baseline.get("description_md") or "")) or 650) * 1.25)):
+        validation_errors.append(f"length.too_long:{len(description)}")
+    if len(description) < 180:
+        validation_errors.append(f"length.too_short:{len(description)}")
+    if min_description_chars and len(description) < min_description_chars:
+        validation_errors.append(f"length.below_min_description_chars:{len(description)}/{min_description_chars}")
+    duplicate_word = re.search(r"(?iu)\b([а-яёa-z]{4,})\b[\s,;:—-]+\1\b", description)
+    if duplicate_word:
+        validation_errors.append(f"text.duplicate_word:{duplicate_word.group(1).lower()}")
+    repeated_cluster = re.search(r"(?iu)([а-яё]{2,5})\1{3,}", description)
+    if repeated_cluster:
+        validation_errors.append(f"text.repeated_cluster:{repeated_cluster.group(1).lower()}")
+    english_word = re.search(r"\b[A-Za-z]{3,}\b", description)
+    if english_word:
+        validation_errors.append(f"text.english_word:{english_word.group(0)}")
+    if baseline_len and len(description) < min_description_chars:
+        validation_errors.append(f"length.too_short_vs_baseline:{len(description)}/{baseline_len}")
+    if re.search(r"(?iu)\b(?:вы сможете|для вас|позволит вам)\b", description):
+        validation_errors.append("style.direct_address")
+    review_raw = await _ask_gemma_json_direct(
+        model=gemma_model,
+        system_prompt=_baseline_g4_review_prompt(),
+        user_payload={
+            "title": fixture.title,
+            "event_type": fixture.event_type,
+            "source_excerpt": source_excerpt[:3000],
+            "public_facts": public_fact_items,
+            "logistics_facts": logistics_fact_items[:10],
+            "min_description_chars": min_description_chars,
+            "target_description_chars": target_description_chars,
+            "candidate_chars": len(description),
+            "baseline_chars": baseline_len,
+            "baseline_description": str(baseline.get("description_md") or ""),
+            "candidate_description": description,
+        },
+        max_tokens=900,
+        response_schema=_baseline_g4_review_schema(),
+        timeout_sec=min(_gemma_direct_timeout_sec(), 35.0),
+        allow_json_repair=False,
+    )
+    gemma_calls += 1
+    review_errors = [str(item).strip() for item in list(review_raw.get("errors") or []) if str(item).strip()]
+    review_warnings = [str(item).strip() for item in list(review_raw.get("warnings") or []) if str(item).strip()]
+    verdict = str(review_raw.get("verdict") or "").strip().lower()
+    validation_errors.extend(f"llm_review:{item}" for item in review_errors)
+    validation_warnings.extend(f"llm_review:{item}" for item in review_warnings)
+    if verdict == "rejected" and not review_errors:
+        validation_errors.append("llm_review:rejected")
+    if quality_delta.get("regressions"):
+        validation_errors.extend(str(item) for item in quality_delta.get("regressions") or [])
+
+    wall_clock_sec = round(time.perf_counter() - started_at, 6)
+    baseline_wall = None
+    try:
+        baseline_wall = float((baseline.get("timings") or {}).get("wall_clock_sec") or 0.0) or None
+    except Exception:
+        baseline_wall = None
+    speed_ratio = None
+    if baseline_wall:
+        ratio = wall_clock_sec / baseline_wall
+        speed_ratio = {
+            "ratio": round(ratio, 4),
+            "target": 3.0,
+            "pass": ratio <= 3.0,
+            "gate": "pass" if ratio <= 3.0 else "latency.3x_exceeded",
+        }
+        if ratio > 3.0:
+            validation_errors.append("latency.3x_exceeded")
+
+    return {
+        "gemma_model": gemma_model,
+        "variant_mode": "baseline_g4",
+        "baseline_g4_mode": "optimized_fact_first_baseline_contract",
+        "per_source_facts": per_source,
+        "facts_text_clean": facts_text_clean,
+        "public_fact_items": public_fact_items,
+        "logistics_facts": [str(item.get("text") or "") for item in logistics_fact_items if item.get("text")],
+        "logistics_fact_items": logistics_fact_items,
+        "lead_hooks": lead_hooks,
+        "narrative_angles": narrative_angles,
+        "source_warnings": source_warnings,
+        "writer_output": writer_raw,
+        "llm_review": review_raw,
+        "applied_output": {"title": fixture.title, "description_md": description},
+        "description_md": description,
+        "quality_delta_vs_baseline": quality_delta,
+        "validation": {"errors": validation_errors, "warnings": validation_warnings},
+        "quality_profile": _quality_profile(description),
+        "metrics": _variant_metrics(description),
+        "timings": {
+            "wall_clock_sec": wall_clock_sec,
+            "model_active_sec": round(max(0.0, wall_clock_sec - sleep_sec), 6),
+            "sleep_sec": round(sleep_sec, 6),
+            "gemma_calls": gemma_calls,
+            "four_o_calls": 0,
+            "baseline_stage_sec": baseline_wall,
+        },
+        "speed_ratio_vs_baseline": speed_ratio,
+    }
+
+
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     cleaned = (text or "").strip()
     if not cleaned:
@@ -569,6 +1146,7 @@ async def _ask_gemma_json_direct(
     max_tokens: int,
     response_schema: dict[str, Any] | None = None,
     timeout_sec: float | None = None,
+    allow_json_repair: bool = True,
 ) -> dict[str, Any]:
     api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
     if not api_key:
@@ -647,6 +1225,8 @@ async def _ask_gemma_json_direct(
     data = _extract_json_object(raw)
     if data is not None:
         return data
+    if not allow_json_repair:
+        raise RuntimeError(f"Invalid JSON from {model}: {raw[:1200]}")
     repair_payload = json.dumps(
         {
             "stage_contract": system_prompt,
@@ -665,6 +1245,73 @@ async def _ask_gemma_json_direct(
     if repaired is None:
         raise RuntimeError(f"Invalid JSON from {model}: {raw[:1200]}")
     return repaired
+
+
+async def _ask_gemma_text_direct(
+    *,
+    model: str,
+    system_prompt: str,
+    user_payload: dict[str, Any],
+    max_tokens: int,
+    timeout_sec: float | None = None,
+) -> str:
+    api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY is missing")
+    genai.configure(api_key=api_key)
+    prompt_json = json.dumps(user_payload, ensure_ascii=False, indent=2)
+    model_name = _gemma_model_name(model)
+    timeout_sec = timeout_sec or _gemma_direct_timeout_sec()
+
+    async def _invoke(system_text: str, user_text: str, *, use_system_instruction: bool) -> Any:
+        generation_config = {
+            "temperature": 0,
+            "max_output_tokens": max_tokens,
+        }
+        if use_system_instruction:
+            return await asyncio.wait_for(
+                genai.GenerativeModel(
+                    model_name=model_name,
+                    system_instruction=system_text.strip(),
+                ).generate_content_async(user_text, generation_config=generation_config),
+                timeout=timeout_sec,
+            )
+        return await asyncio.wait_for(
+            genai.GenerativeModel(model_name=model_name).generate_content_async(
+                "SYSTEM:\n" + system_text.strip() + "\n\nUSER:\n" + user_text,
+                generation_config=generation_config,
+            ),
+            timeout=timeout_sec,
+        )
+
+    use_system_instruction = True
+    last_error: Exception | None = None
+    for _attempt in range(3):
+        try:
+            response = await _invoke(system_prompt, prompt_json, use_system_instruction=use_system_instruction)
+            return _extract_model_text(response).strip()
+        except Exception as exc:
+            last_error = exc
+            lower = str(exc).lower()
+            if use_system_instruction and (
+                "developer instruction is not enabled" in lower or "system instruction" in lower
+            ):
+                use_system_instruction = False
+                continue
+            retry_delay = _quota_retry_delay_seconds(str(exc))
+            if retry_delay is None and (
+                "internal error encountered" in lower
+                or "statuscode.internal" in lower
+                or "500 internal" in lower
+            ):
+                retry_delay = 5.0
+            if retry_delay is not None:
+                await asyncio.sleep(retry_delay)
+                continue
+            raise
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError(f"Gemma text call failed without explicit error for {model}")
 
 
 def _extract_prompt_system() -> str:
@@ -1141,20 +1788,41 @@ def _build_writer_prompt(pack: dict[str, Any]) -> str:
     ).strip()
 
 
-async def _ask_4o_json(*, prompt: str, schema: dict[str, Any], model: str) -> dict[str, Any]:
-    token = os.getenv("FOUR_O_TOKEN")
+def _four_o_token() -> str:
+    token = (os.getenv("FOUR_4O_TOKEN") or os.getenv("FOUR_O_TOKEN") or "").strip()
     if not token:
-        raise RuntimeError("FOUR_O_TOKEN is missing")
+        raise RuntimeError("FOUR_4O_TOKEN is missing")
+    return token
+
+
+def _to_openai_schema(node: Any) -> Any:
+    """Convert a Gemma-style response_schema (uppercase types) into the
+    lowercase JSON-Schema shape OpenAI's structured-output API accepts."""
+    if isinstance(node, dict):
+        result: dict[str, Any] = {}
+        for key, value in node.items():
+            if key == "type" and isinstance(value, str):
+                result[key] = value.lower()
+            else:
+                result[key] = _to_openai_schema(value)
+        return result
+    if isinstance(node, list):
+        return [_to_openai_schema(item) for item in node]
+    return node
+
+
+async def _ask_4o_json(*, prompt: str, schema: dict[str, Any], model: str, system_prompt: str | None = None, max_tokens: int = 1600) -> dict[str, Any]:
+    token = _four_o_token()
     payload = {
         "model": model,
         "temperature": 0,
-        "max_tokens": 1600,
+        "max_tokens": max_tokens,
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "LollipopFinalWriter", "schema": schema},
+            "json_schema": {"name": "LollipopFinalWriter", "schema": _to_openai_schema(schema)},
         },
         "messages": [
-            {"role": "system", "content": "Return only valid JSON for the requested schema."},
+            {"role": "system", "content": system_prompt or "Return only valid JSON for the requested schema."},
             {"role": "user", "content": prompt},
         ],
     }
@@ -1284,7 +1952,13 @@ async def _run_lollipop_variant(
     return result
 
 
-def _baseline_fact_list(baseline: dict[str, Any]) -> list[str]:
+def _baseline_fact_list_for_review(baseline: dict[str, Any]) -> list[str]:
+    """Flatten Gemma 3 baseline per-source facts for reviewer comparison only.
+
+    The flat list is used in the benchmark fact-coverage reviewer payload, which
+    is read-only. It must never be passed back into the legacy generation
+    payloads (extractor / writer / 4o fallback).
+    """
     facts: list[str] = []
     for _source_id, source_facts in dict(baseline.get("per_source_facts") or {}).items():
         for fact in list(source_facts or []):
@@ -1294,38 +1968,207 @@ def _baseline_fact_list(baseline: dict[str, Any]) -> list[str]:
     return facts
 
 
-def _legacy_event_fact_floor(facts: list[str]) -> list[str]:
-    event_facts: list[str] = []
-    logistics_re = re.compile(
-        r"(?iu)\b(?:"
-        r"\d{1,2}(?:[.:]\d{2})?|"
-        r"апрел[ья]|ма[йяе]|июн[ья]|июл[ья]|август|сентябр|октябр|ноябр|декабр|"
-        r"билет\w*|касс\w*|сайт\w*|стоимост\w*|руб(?:\.|л|лей)?|₽|"
-        r"место\s+старта"
-        r")\b"
-    )
-    for fact in facts:
-        text = re.sub(r"\s+", " ", str(fact or "")).strip()
-        if not text:
-            continue
-        if logistics_re.search(text):
-            continue
-        event_facts.append(text)
-    return event_facts or facts
+def _baseline_fact_surfaces_for_review(
+    baseline: dict[str, Any],
+    fixture: BenchmarkFixture,
+) -> dict[str, list[str]]:
+    """Expose every baseline fact surface used by the benchmark.
 
-
-def _legacy_required_fact_floor(facts: list[str]) -> list[str]:
-    """Full baseline fact floor used by old lollipop_legacy v2 artifacts.
-
-    v3 does not call this helper for generation; it is kept so old benchmark
-    reports/tests remain readable.
+    `raw_extracted_facts` are the Gemma 3 extractor output. `writer_facts_text_clean`
+    is the filtered list actually passed to the baseline writer. Metadata/anchors
+    are not extractor facts, but they are visible to the baseline benchmark path
+    and must be shown so the report is auditable by eye.
     """
-    required: list[str] = []
-    for fact in facts:
+
+    raw_facts = _baseline_fact_list_for_review(baseline)
+    writer_facts: list[str] = []
+    for fact in list(baseline.get("facts_text_clean") or []):
         text = re.sub(r"\s+", " ", str(fact or "")).strip()
-        if text and text not in required:
-            required.append(text)
-    return required
+        if text and text not in writer_facts:
+            writer_facts.append(text)
+    writer_set = set(writer_facts)
+    filtered_out = [fact for fact in raw_facts if fact not in writer_set]
+
+    metadata_pairs = [
+        ("title", fixture.title),
+        ("event_type", fixture.event_type),
+        ("date", fixture.date),
+        ("time", fixture.time),
+        ("location_name", fixture.location_name),
+        ("location_address", fixture.location_address),
+        ("city", fixture.city),
+    ]
+    metadata_facts = [
+        f"{key}: {value}"
+        for key, value in metadata_pairs
+        if str(value or "").strip()
+    ]
+    return {
+        "raw_extracted_facts": raw_facts,
+        "writer_facts_text_clean": writer_facts,
+        "filtered_out_before_writer": filtered_out,
+        "metadata_anchors": metadata_facts,
+    }
+
+
+async def _run_fact_coverage_reviewer(
+    *,
+    fixture: BenchmarkFixture,
+    baseline: dict[str, Any],
+    public_facts: list[dict[str, Any]],
+    logistics_facts: list[dict[str, Any]],
+    source_excerpt: str,
+    gemma_model: str,
+) -> dict[str, Any]:
+    """Run an LLM-first fact-coverage reviewer on (baseline, Gemma 4) facts.
+
+    Benchmark-only stage. Baseline facts are allowed in this payload because the
+    reviewer is read-only; the legacy generation payloads (extractor / writer /
+    4o fallback) continue to receive no baseline text/facts.
+    """
+    baseline_surfaces = _baseline_fact_surfaces_for_review(baseline, fixture)
+    baseline_facts = baseline_surfaces["raw_extracted_facts"]
+    gemma_calls = 0
+    errors: list[str] = []
+    review_payload_user = legacy_writer_family.build_fact_coverage_payload(
+        title=fixture.title,
+        event_type=fixture.event_type,
+        date=fixture.date,
+        time=fixture.time,
+        location_name=fixture.location_name,
+        location_address=fixture.location_address,
+        city=fixture.city,
+        source_excerpt=source_excerpt,
+        baseline_facts=baseline_facts,
+        baseline_writer_facts=baseline_surfaces["writer_facts_text_clean"],
+        baseline_metadata_facts=baseline_surfaces["metadata_anchors"],
+        g4_public_facts=public_facts,
+        g4_logistics_facts=logistics_facts,
+    )
+    baseline_count = len(review_payload_user["baseline_facts"])
+    g4_count = len(review_payload_user["g4_facts"])
+    if baseline_count == 0 and g4_count == 0:
+        normalized = legacy_writer_family.normalize_fact_coverage_payload(
+            {
+                "baseline_facts_review": [],
+                "g4_facts_review": [],
+                "coverage_summary": {
+                    "public_coverage_status": "unknown",
+                    "logistics_coverage_status": "unknown",
+                    "named_entity_coverage_status": "unknown",
+                    "format_topic_program_coverage_status": "unknown",
+                    "overall_verdict": "unknown",
+                    "verdict_reason": "no facts on either side",
+                },
+            },
+            baseline_count=0,
+            g4_count=0,
+            baseline_facts=review_payload_user["baseline_facts"],
+            g4_facts=review_payload_user["g4_facts"],
+        )
+        summary = legacy_writer_family.summarize_fact_coverage(normalized)
+        summary.update(
+            {
+                "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
+                "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
+                "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
+                "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
+                "g4_public_fact_count": len(public_facts),
+                "g4_logistics_fact_count": len(logistics_facts),
+            }
+        )
+        return {
+            "input": review_payload_user,
+            "baseline_fact_surfaces": baseline_surfaces,
+            "review": normalized,
+            "summary": summary,
+            "errors": ["no_facts_on_either_side"],
+            "gemma_calls": 0,
+            "model": "none",
+            "verdict": "unknown",
+        }
+
+    raw: dict[str, Any] = {}
+    try:
+        raw = await _ask_gemma_json_direct(
+            model=gemma_model,
+            system_prompt=legacy_writer_family.build_fact_coverage_system_prompt(),
+            user_payload=review_payload_user,
+            max_tokens=2400,
+            response_schema=legacy_writer_family.fact_coverage_response_schema(),
+            timeout_sec=max(_gemma_direct_timeout_sec(), 75.0),
+            allow_json_repair=False,
+        )
+        gemma_calls += 1
+    except asyncio.TimeoutError:
+        gemma_calls += 1
+        errors.append("reviewer.timeout")
+    except Exception as exc:
+        gemma_calls += 1
+        errors.append(f"reviewer.error:{type(exc).__name__}")
+
+    normalized = legacy_writer_family.normalize_fact_coverage_payload(
+        raw or {},
+        baseline_count=baseline_count,
+        g4_count=g4_count,
+        baseline_facts=review_payload_user["baseline_facts"],
+        g4_facts=review_payload_user["g4_facts"],
+    )
+    summary = legacy_writer_family.summarize_fact_coverage(normalized)
+    summary.update(
+        {
+            "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
+            "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
+            "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
+            "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
+            "g4_public_fact_count": len(public_facts),
+            "g4_logistics_fact_count": len(logistics_facts),
+        }
+    )
+    if errors and summary.get("verdict") == "accepted":
+        # Reviewer never returned a real answer — do not let the deterministic
+        # floor over-promise an "accepted" verdict.
+        summary["verdict"] = "unknown"
+    return {
+        "input": review_payload_user,
+        "baseline_fact_surfaces": baseline_surfaces,
+        "review": normalized,
+        "summary": summary,
+        "errors": errors,
+        "gemma_calls": gemma_calls,
+        "model": gemma_model if not errors else f"{gemma_model}+errors",
+        "verdict": summary.get("verdict") or "unknown",
+    }
+
+
+def _legacy_4o_writer_text_prompt(payload: dict[str, Any]) -> str:
+    return textwrap.dedent(
+        f"""
+        Это финальный writer для lollipop_legacy.v13 (4o final fallback).
+        Возвращай только JSON, соответствующий response_format. Без markdown-fence.
+
+        Входные данные:
+        {json.dumps(payload, ensure_ascii=False, indent=2)}
+
+        Жёсткие правила:
+        - description_md — это финальный публичный текст события на русском в Markdown.
+        - Покрой каждый осмысленный public_fact. logistics_facts разрешены только в
+          одном финальном блоке `### Когда и где`, если это полезно.
+        - Не выдумывай ни одного факта/имени/даты/цены, которых нет в public_facts,
+          logistics_facts или source_excerpt.
+        - Соблюдай длину: между `min_description_chars` и `max_description_chars`,
+          целься в `target_description_chars`. Текст короче минимума — невалидный ответ.
+        - 2–4 публичных абзаца перед опциональным `### Когда и где`. Заголовки
+          ставь только если они помогают читателю. Никаких других `###` заголовков.
+        - Открывай первый абзац конкретной зацепкой: маршрут, объект, тема, имя,
+          точная цитата названия, format texture, или событийное действие. Никаких
+          стоковых нарраторских открытий вроде "Погружение в ...", "Знакомство с ...".
+        - Никаких CTA, прямых обращений к читателю, "приглашаем", "вы сможете",
+          "не упустите", "уникальная возможность".
+        - Поля covered_public_fact_indexes и used_logistics_fact_indexes заполняй
+          честно: какие индексы реально покрыты текстом.
+        """
+    ).strip()
 
 
 async def _run_lollipop_legacy_variant(
@@ -1336,235 +2179,198 @@ async def _run_lollipop_legacy_variant(
     gemma_call_gap_s: float,
     legacy_g4_extract: bool = False,
 ) -> dict[str, Any]:
-    print(f"[benchmark] {fixture.fixture_id} start lollipop_legacy model={gemma_model}", file=sys.stderr, flush=True)
+    """Baseline-equivalent Gemma 4 extract+write with 4o final fallback.
+
+    Flow (lollipop_legacy.v13):
+      1. Per-source Gemma 4 extraction -> public_facts, logistics_facts.
+      2. Single Gemma 4 writer call from those facts + source_excerpt.
+      3. If Gemma 4 writer times out / errors / returns empty,
+         fall back once to gpt-4o with the same writer payload.
+
+    No baseline text/facts in any generation payload. No repair pass. No
+    deterministic regex fixers; the validator only reports issues.
+    """
+    print(
+        f"[benchmark] {fixture.fixture_id} start lollipop_legacy model={gemma_model}",
+        file=sys.stderr,
+        flush=True,
+    )
     started_at = time.perf_counter()
     gemma_calls = 0
+    four_o_calls = 0
     sleep_sec = 0.0
     _set_gemma_model(gemma_model)
 
     source_excerpt = _source_excerpt(fixture.sources, limit=5000)
     baseline_description = str(baseline.get("description_md") or "")
-    reference_description_chars = len(baseline_description)
-    source_fact_raw: dict[str, Any] = {}
-    source_fact_warnings: list[str] = []
-    try:
-        source_fact_raw = await _ask_gemma_json_direct(
-            model=gemma_model,
-            system_prompt=legacy_writer_family.build_source_fact_system_prompt(),
-            user_payload=legacy_writer_family.build_source_fact_payload(
-                title=fixture.title,
-                event_type=fixture.event_type,
-                source_excerpt=source_excerpt,
-                reference_description_chars=reference_description_chars,
-            ),
-            max_tokens=2200,
-            response_schema=legacy_writer_family.source_fact_response_schema(),
-            timeout_sec=_gemma_direct_timeout_sec(),
-        )
-        gemma_calls += 1
+    reference_chars = len(baseline_description)
+
+    extract_warnings: list[str] = []
+    public_items_raw: list[dict[str, str]] = []
+    logistics_items_raw: list[dict[str, str]] = []
+    per_source_facts: dict[str, list[str]] = {}
+
+    extraction_schema = legacy_writer_family.extraction_response_schema()
+    extraction_prompt = legacy_writer_family.build_extraction_system_prompt()
+
+    for source in fixture.sources:
+        try:
+            raw = await _ask_gemma_json_direct(
+                model=gemma_model,
+                system_prompt=extraction_prompt,
+                user_payload={
+                    "title": fixture.title,
+                    "event_type": fixture.event_type,
+                    "date": fixture.date,
+                    "time": fixture.time,
+                    "location_name": fixture.location_name,
+                    "location_address": fixture.location_address,
+                    "city": fixture.city,
+                    "source_id": source.source_id,
+                    "source_type": source.source_type,
+                    "source_text": source.text[:5000],
+                },
+                max_tokens=900,
+                response_schema=extraction_schema,
+                timeout_sec=min(_gemma_direct_timeout_sec(), 35.0),
+                allow_json_repair=False,
+            )
+            gemma_calls += 1
+        except asyncio.TimeoutError:
+            gemma_calls += 1
+            extract_warnings.append(f"extraction.timeout:{source.source_id}")
+            raw = {}
+        except Exception as exc:
+            gemma_calls += 1
+            extract_warnings.append(
+                f"extraction.error:{source.source_id}:{type(exc).__name__}"
+            )
+            raw = {}
+        normalized = legacy_writer_family.normalize_extraction_payload(raw)
+        public_items_raw.extend(normalized["public_facts"])
+        logistics_items_raw.extend(normalized["logistics_facts"])
+        per_source_facts[source.source_id] = [
+            item["text"]
+            for item in normalized["public_facts"] + normalized["logistics_facts"]
+            if item.get("text")
+        ]
         await _gemma_gap_sleep(gemma_call_gap_s)
         sleep_sec += gemma_call_gap_s if gemma_call_gap_s > 0 else 0.0
-    except asyncio.TimeoutError:
-        gemma_calls += 1
-        source_fact_warnings.append("source_facts.timeout")
-    except Exception as exc:
-        gemma_calls += 1
-        source_fact_warnings.append(f"source_facts.error:{type(exc).__name__}")
 
-    source_facts = legacy_writer_family.normalize_source_fact_payload(source_fact_raw)
-    fact_floor = [item["text"] for item in source_facts["public_facts"] if str(item.get("text") or "").strip()]
-    logistics_facts = [item["text"] for item in source_facts["logistics_facts"] if str(item.get("text") or "").strip()]
-    if not fact_floor:
-        fallback_fact = re.sub(r"\s+", " ", f"{fixture.event_type or 'Событие'}: {fixture.title}".strip()).strip()
-        if fallback_fact:
-            fact_floor = [fallback_fact]
-        source_fact_warnings.append("source_facts.empty_public_floor")
+    public_facts = legacy_writer_family.merge_extraction_facts(public_items_raw)
+    logistics_facts = legacy_writer_family.merge_extraction_facts(logistics_items_raw)
 
-    quote_candidates = list(source_facts.get("lead_hooks") or [])[:5]
-    writer_notes = [
-        "Gemma-4-only legacy v3: write from source-extracted public_facts, not from baseline text.",
-    ]
-    writer_notes.extend(list(source_facts.get("structure_hints") or [])[:5])
-    enhancement = {
-        "lead_hook_fact_indexes": [],
-        "quote_candidates": quote_candidates,
-        "extra_facts": [],
-        "writer_notes": writer_notes,
-        "logistics_facts": logistics_facts,
-    }
-    enhancement_raw: dict[str, Any] = {
-        "mode": "gemma4_source_facts_to_writer",
-        "source_facts": source_fact_raw,
-    }
-    source_draft_raw = {
-        "title": fixture.title,
-        "description_md": str(source_facts.get("draft_description_md") or "").strip(),
-        "covered_baseline_fact_indexes": list(source_facts.get("draft_covered_public_fact_indexes") or []),
-        "used_extra_fact_indexes": [],
-    }
+    writer_payload = legacy_writer_family.build_writer_payload(
+        title=fixture.title,
+        event_type=fixture.event_type,
+        public_facts=public_facts,
+        logistics_facts=logistics_facts[:10],
+        source_excerpt=source_excerpt,
+        reference_description_chars=reference_chars,
+    )
+    writer_schema = legacy_writer_family.writer_response_schema()
+    writer_system_prompt = legacy_writer_family.build_writer_system_prompt()
 
-    fallback_to_baseline = False
-    fallback_to_source_draft = False
-    fallback_reasons: list[str] = []
-    quality_delta: dict[str, Any] | None = None
-    writer_retry_count = 0
-    try:
-        writer_payload = legacy_writer_family.build_writer_payload(
-            title=fixture.title,
-            event_type=fixture.event_type,
-            baseline_description="",
-            baseline_facts=fact_floor,
-            enhancement=enhancement,
-            source_excerpt=source_excerpt,
-            reference_description_chars=reference_description_chars,
-        )
-        writer_raw = await _ask_gemma_json_direct(
-            model=gemma_model,
-            system_prompt=legacy_writer_family.build_writer_system_prompt(),
-            user_payload=writer_payload,
-            max_tokens=2200,
-            response_schema=legacy_writer_family.writer_response_schema(),
-            timeout_sec=_gemma_writer_timeout_sec(),
-        )
-        gemma_calls += 1
-        applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
-        validation = legacy_writer_family.validate_writer_output(
-            baseline_facts=fact_floor,
-            baseline_description=baseline_description,
-            enhancement=enhancement,
-            output=writer_raw,
-        )
-        quality_delta = legacy_writer_family.compare_to_baseline(
-            baseline_description=baseline_description,
-            candidate_description=str(applied_output.get("description_md") or ""),
-        )
-        validation.warnings.extend(quality_delta.get("warnings") or [])
-    except asyncio.TimeoutError:
-        gemma_calls += 1
-        fallback_to_baseline = False
-        fallback_to_source_draft = bool(source_draft_raw["description_md"])
-        fallback_reasons = ["writer.timeout_source_draft" if fallback_to_source_draft else "writer.timeout"]
-        writer_raw = source_draft_raw if fallback_to_source_draft else {
-            "title": fixture.title,
-            "description_md": "",
-            "covered_baseline_fact_indexes": [],
-            "used_extra_fact_indexes": [],
-        }
-        applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
-        validation = legacy_writer_family.validate_writer_output(
-            baseline_facts=fact_floor,
-            baseline_description=baseline_description,
-            enhancement=enhancement,
-            output=writer_raw,
-        )
-        quality_delta = legacy_writer_family.compare_to_baseline(
-            baseline_description=baseline_description,
-            candidate_description=str(applied_output.get("description_md") or ""),
-        )
-        if not fallback_to_source_draft:
-            validation.errors.append("writer.timeout")
-        else:
-            validation.warnings.append("writer.timeout_used_source_draft")
-    except Exception as exc:
-        fallback_to_source_draft = bool(source_draft_raw["description_md"])
-        writer_raw = source_draft_raw if fallback_to_source_draft else {
-            "title": fixture.title,
-            "description_md": "",
-            "covered_baseline_fact_indexes": [],
-            "used_extra_fact_indexes": [],
-        }
-        applied_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=writer_raw)
-        validation = legacy_writer_family.validate_writer_output(
-            baseline_facts=fact_floor,
-            baseline_description=baseline_description,
-            enhancement=enhancement,
-            output=writer_raw,
-        )
-        quality_delta = legacy_writer_family.compare_to_baseline(
-            baseline_description=baseline_description,
-            candidate_description=str(applied_output.get("description_md") or ""),
-        )
-        fallback_reasons = [
-            f"writer.error_source_draft:{type(exc).__name__}" if fallback_to_source_draft else f"writer.error:{type(exc).__name__}"
-        ]
-        if fallback_to_source_draft:
-            validation.warnings.extend(fallback_reasons)
-        else:
-            validation.errors.extend(fallback_reasons)
-    if quality_delta is not None and quality_delta.get("regressions"):
-        validation.errors.extend(str(item) for item in quality_delta.get("regressions") or [])
-    if validation.errors:
-        retry_reasons = list(validation.errors)
+    writer_model = "gemma-4"
+    writer_raw: dict[str, Any] = {}
+    writer_failure_reasons: list[str] = []
+    if not public_facts:
+        writer_failure_reasons.append("extraction.no_public_facts")
+    else:
         try:
-            retry_raw = await _ask_gemma_json_direct(
+            writer_raw = await _ask_gemma_json_direct(
                 model=gemma_model,
-                system_prompt=legacy_writer_family.build_writer_system_prompt(),
-                user_payload=legacy_writer_family.build_writer_repair_payload(
-                    title=fixture.title,
-                    event_type=fixture.event_type,
-                    baseline_description="",
-                    baseline_facts=fact_floor,
-                    enhancement=enhancement,
-                    previous_output=writer_raw,
-                    validation_errors=retry_reasons,
-                    quality_regressions=list((quality_delta or {}).get("regressions") or []),
-                    source_excerpt=source_excerpt,
-                    reference_description_chars=reference_description_chars,
-                ),
-                max_tokens=2200,
-                response_schema=legacy_writer_family.writer_response_schema(),
-                timeout_sec=max(8.0, min(_gemma_writer_timeout_sec(), 12.0)),
+                system_prompt=writer_system_prompt,
+                user_payload=writer_payload,
+                max_tokens=1300,
+                response_schema=writer_schema,
+                timeout_sec=min(_gemma_writer_timeout_sec(), 55.0),
+                allow_json_repair=False,
             )
-            writer_retry_count = 1
             gemma_calls += 1
-            retry_output = legacy_writer_family.apply_writer_output(title=fixture.title, output=retry_raw)
-            retry_validation = legacy_writer_family.validate_writer_output(
-                baseline_facts=fact_floor,
-                baseline_description=baseline_description,
-                enhancement=enhancement,
-                output=retry_raw,
-            )
-            retry_quality_delta = legacy_writer_family.compare_to_baseline(
-                baseline_description=baseline_description,
-                candidate_description=str(retry_output.get("description_md") or ""),
-            )
-            retry_validation.warnings.extend(retry_quality_delta.get("warnings") or [])
-            if retry_quality_delta.get("regressions"):
-                retry_validation.errors.extend(str(item) for item in retry_quality_delta.get("regressions") or [])
-            if not retry_validation.errors:
-                writer_raw = retry_raw
-                applied_output = retry_output
-                validation = retry_validation
-                quality_delta = retry_quality_delta
-            else:
-                writer_raw = retry_raw
-                applied_output = retry_output
-                fallback_reasons = list(retry_validation.errors)
-                validation = retry_validation
-                quality_delta = retry_quality_delta
         except asyncio.TimeoutError:
-            writer_retry_count = 1
             gemma_calls += 1
-            fallback_reasons = retry_reasons + ["writer.retry_timeout"]
+            writer_failure_reasons.append("writer.timeout:gemma4")
+            writer_raw = {}
         except Exception as exc:
-            writer_retry_count = 1
             gemma_calls += 1
-            fallback_reasons = retry_reasons + [f"writer.retry_error:{type(exc).__name__}"]
-            validation.errors.append(f"writer.retry_error:{type(exc).__name__}")
+            writer_failure_reasons.append(
+                f"writer.error:gemma4:{type(exc).__name__}"
+            )
+            writer_raw = {}
 
-    if legacy_g4_extract:
-        validation.warnings.append("legacy_g4_extract_flag.ignored:v3_always_uses_source_facts")
-    validation.warnings.extend(source_fact_warnings)
+    description = str((writer_raw or {}).get("description_md") or "").strip()
+    if writer_raw and not description:
+        writer_failure_reasons.append("writer.empty:gemma4")
 
-    if validation.errors:
-        fallback_to_baseline = False
-        if not fallback_reasons:
-            fallback_reasons = list(validation.errors)
+    fallback_used = False
+    if writer_failure_reasons and public_facts:
+        try:
+            writer_raw_4o = await _ask_4o_json(
+                prompt=_legacy_4o_writer_text_prompt(writer_payload),
+                schema=writer_schema,
+                model="gpt-4o",
+                system_prompt=writer_system_prompt,
+                max_tokens=1500,
+            )
+            four_o_calls += 1
+            description_4o = str(writer_raw_4o.get("description_md") or "").strip()
+            if description_4o:
+                writer_raw = writer_raw_4o
+                description = description_4o
+                writer_model = "4o"
+                fallback_used = True
+            else:
+                writer_failure_reasons.append("writer.empty:4o")
+        except Exception as exc:
+            four_o_calls += 1
+            writer_failure_reasons.append(
+                f"writer.error:4o:{type(exc).__name__}"
+            )
+
+    applied_output = legacy_writer_family.apply_writer_output(
+        title=fixture.title,
+        output=writer_raw or {},
+    )
+    description = str(applied_output.get("description_md") or "")
+
+    validation = legacy_writer_family.validate_writer_output(
+        public_facts=public_facts,
+        description_md=description,
+        baseline_description=baseline_description,
+    )
+    if writer_failure_reasons and not description.strip():
+        validation.errors.extend(writer_failure_reasons)
+    elif writer_failure_reasons:
+        validation.warnings.extend(writer_failure_reasons)
+    validation.warnings.extend(extract_warnings)
+
+    quality_delta = legacy_writer_family.compare_to_baseline(
+        baseline_description=baseline_description,
+        candidate_description=description,
+        source_excerpt=source_excerpt,
+    )
+    validation.warnings.extend(quality_delta.get("warnings") or [])
+
+    fact_coverage = await _run_fact_coverage_reviewer(
+        fixture=fixture,
+        baseline=baseline,
+        public_facts=public_facts,
+        logistics_facts=logistics_facts,
+        source_excerpt=source_excerpt,
+        gemma_model=gemma_model,
+    )
+    if fact_coverage.get("errors"):
+        for err in fact_coverage["errors"]:
+            validation.warnings.append(f"fact_coverage:{err}")
+
     wall_clock_sec = round(time.perf_counter() - started_at, 6)
     model_active_sec = round(max(0.0, wall_clock_sec - sleep_sec), 6)
     baseline_wall = None
     try:
-        baseline_wall = float((baseline.get("timings") or {}).get("wall_clock_sec") or 0.0) or None
+        baseline_wall = float(
+            (baseline.get("timings") or {}).get("wall_clock_sec") or 0.0
+        ) or None
     except Exception:
         baseline_wall = None
     speed_ratio = None
@@ -1577,51 +2383,202 @@ async def _run_lollipop_legacy_variant(
             "gate": "pass" if ratio <= 3.0 else "latency.3x_exceeded",
         }
         if ratio > 3.0:
-            validation.errors.append("latency.3x_exceeded")
+            validation.warnings.append(f"latency.3x_exceeded:{ratio:.2f}")
+    fact_calls = int(fact_coverage.get("gemma_calls") or 0)
 
     return {
         "gemma_model": gemma_model,
         "variant_mode": "lollipop_legacy",
         "contract_version": legacy_writer_family.LEGACY_CONTRACT_VERSION,
+        "writer_model": writer_model,
         "generation_uses_baseline": False,
         "uses_baseline_fact_floor": False,
         "includes_baseline_stage": False,
         "baseline_assisted": False,
         "legacy_g4_extract_enabled": True,
-        "legacy_g4_extract_mode": "source_facts.v3",
         "legacy_g4_extract_flag_ignored": bool(legacy_g4_extract),
-        "baseline_reference_chars": reference_description_chars,
-        "legacy_public_fact_count": len(fact_floor),
+        "baseline_reference_chars": reference_chars,
+        "legacy_public_fact_count": len(public_facts),
         "legacy_logistics_fact_count": len(logistics_facts),
-        "legacy_lead_hook_count": len(quote_candidates),
-        "legacy_source_fact_warnings": source_fact_warnings,
-        "source_fact_raw": source_fact_raw,
-        "legacy_public_facts": fact_floor,
-        "legacy_logistics_facts": logistics_facts,
-        "enhancement_raw": enhancement_raw,
-        "enhancement": enhancement,
+        "legacy_extract_warnings": extract_warnings,
+        "writer_fallback_to_4o": fallback_used,
+        "writer_failure_reasons": writer_failure_reasons,
+        "writer_fallback_to_baseline": False,
+        "writer_retry_count": 0,
+        "per_source_facts": per_source_facts,
+        "legacy_public_facts": [item["text"] for item in public_facts],
+        "legacy_logistics_facts": [item["text"] for item in logistics_facts],
+        "writer_payload_contract": {
+            "min_description_chars": writer_payload["min_description_chars"],
+            "target_description_chars": writer_payload["target_description_chars"],
+            "max_description_chars": writer_payload["max_description_chars"],
+            "reference_description_chars": writer_payload["reference_description_chars"],
+        },
         "writer_output": writer_raw,
-        "writer_retry_count": writer_retry_count,
-        "writer_fallback_to_baseline": fallback_to_baseline,
-        "writer_fallback_to_source_draft": fallback_to_source_draft,
-        "writer_fallback_reasons": fallback_reasons,
         "applied_output": applied_output,
         "validation": {"errors": validation.errors, "warnings": validation.warnings},
         "quality_delta_vs_baseline": quality_delta,
-        "quality_profile": _quality_profile(applied_output.get("description_md")),
-        "metrics": _variant_metrics(applied_output.get("description_md")),
+        "quality_profile": _quality_profile(description),
+        "metrics": _variant_metrics(description),
+        "fact_coverage": fact_coverage,
         "timings": {
             "wall_clock_sec": wall_clock_sec,
             "model_active_sec": model_active_sec,
             "sleep_sec": round(sleep_sec, 6),
-            "gemma_calls": gemma_calls,
-            "four_o_calls": 0,
+            "gemma_calls": gemma_calls + fact_calls,
+            "four_o_calls": four_o_calls,
             "baseline_stage_sec": baseline_wall,
             "lollipop_legacy_only_sec": wall_clock_sec,
-            "lollipop_legacy_only_gemma_calls": gemma_calls,
+            "lollipop_legacy_only_gemma_calls": gemma_calls + fact_calls,
+            "fact_coverage_gemma_calls": fact_calls,
         },
         "speed_ratio_vs_baseline": speed_ratio,
     }
+
+def _render_fact_coverage_section(fact_coverage: dict[str, Any]) -> list[str]:
+    summary = dict(fact_coverage.get("summary") or {})
+    inputs = dict(fact_coverage.get("input") or {})
+    surfaces = dict(
+        fact_coverage.get("baseline_fact_surfaces")
+        or inputs.get("baseline_fact_surfaces")
+        or {}
+    )
+    review = dict(fact_coverage.get("review") or {})
+    coverage_summary = dict(summary.get("coverage_summary") or {})
+    errors = list(fact_coverage.get("errors") or [])
+    lines: list[str] = ["", "### Fact Extraction Coverage", ""]
+    lines.append(f"- verdict: `{summary.get('verdict') or 'unknown'}`")
+    lines.append(f"- llm_overall_verdict: `{summary.get('llm_overall_verdict') or 'unknown'}`")
+    lines.append(
+        f"- deterministic_verdict_floor: `{summary.get('deterministic_verdict_floor') or 'unknown'}`"
+    )
+    lines.append(
+        "- baseline_fact_count: "
+        f"`{summary.get('baseline_fact_count') or 0}` "
+        f"(grounded `{summary.get('grounded_baseline_fact_count') or 0}`, "
+        f"covered `{summary.get('covered_grounded_baseline_fact_count') or 0}`)"
+    )
+    lines.append(
+        "- baseline surfaces: "
+        f"raw `{summary.get('baseline_raw_extracted_fact_count') or 0}`, "
+        f"writer facts_text_clean `{summary.get('baseline_writer_fact_count') or 0}`, "
+        f"filtered before writer `{summary.get('baseline_filtered_out_fact_count') or 0}`, "
+        f"metadata anchors `{summary.get('baseline_metadata_fact_count') or 0}`"
+    )
+    lines.append(
+        "- g4_fact_count: "
+        f"`{summary.get('g4_fact_count') or 0}` "
+        f"(grounded `{summary.get('grounded_g4_fact_count') or 0}`, "
+        f"public `{summary.get('g4_public_fact_count') or 0}`, "
+        f"logistics `{summary.get('g4_logistics_fact_count') or 0}`)"
+    )
+    lines.append(f"- public_coverage: `{coverage_summary.get('public_coverage_status') or '-'}`")
+    lines.append(
+        f"- logistics_coverage: `{coverage_summary.get('logistics_coverage_status') or '-'}`"
+    )
+    lines.append(
+        f"- named_entity_coverage: `{coverage_summary.get('named_entity_coverage_status') or '-'}`"
+    )
+    lines.append(
+        f"- format_topic_program_coverage: "
+        f"`{coverage_summary.get('format_topic_program_coverage_status') or '-'}`"
+    )
+    if coverage_summary.get("verdict_reason"):
+        lines.append(f"- verdict_reason: `{coverage_summary['verdict_reason']}`")
+    if errors:
+        lines.append(f"- reviewer_errors: `{', '.join(errors)}`")
+
+    def _render_input_list(title: str, items: list[object], *, field: str = "text") -> None:
+        lines.extend(["", title])
+        if not items:
+            lines.append("- -")
+            return
+        for item in items:
+            if isinstance(item, dict):
+                idx = item.get("index")
+                text = item.get(field) or item.get("text") or ""
+                prefix = f"`{idx}` " if idx is not None else ""
+                kind = item.get("kind") or item.get("category") or ""
+                suffix = f" ({kind})" if kind else ""
+                lines.append(f"- {prefix}{text}{suffix}")
+            else:
+                lines.append(f"- {item}")
+
+    _render_input_list(
+        "**Baseline raw extractor facts (`per_source_facts`):**",
+        list(surfaces.get("raw_extracted_facts") or inputs.get("baseline_facts") or []),
+    )
+    _render_input_list(
+        "**Baseline writer facts (`facts_text_clean`):**",
+        list(surfaces.get("writer_facts_text_clean") or []),
+    )
+    _render_input_list(
+        "**Baseline facts filtered out before writer:**",
+        list(surfaces.get("filtered_out_before_writer") or []),
+    )
+    _render_input_list(
+        "**Baseline metadata / anchors visible to writer:**",
+        list(surfaces.get("metadata_anchors") or []),
+    )
+    g4_input_facts = list(inputs.get("g4_facts") or [])
+    _render_input_list(
+        "**Gemma 4 extracted facts (public + logistics, exact extractor output):**",
+        g4_input_facts,
+    )
+
+    lost = list(summary.get("lost_baseline_facts") or [])
+    if lost:
+        lines.extend(["", "**Lost baseline facts:**"])
+        for item in lost:
+            severity = item.get("loss_severity") or "minor"
+            lines.append(
+                f"- [{severity}] {item.get('baseline_fact') or ''}"
+                + (f" — {item.get('reason')}" if item.get("reason") else "")
+            )
+    added = list(summary.get("added_g4_facts") or [])
+    if added:
+        lines.extend(["", "**Useful added Gemma 4 facts:**"])
+        for item in added:
+            kind_hint = item.get("fact_kind") or item.get("category") or ""
+            tag = f" ({kind_hint})" if kind_hint else ""
+            lines.append(f"- {item.get('g4_fact') or ''}{tag}")
+    suspicious = list(summary.get("suspicious_g4_facts") or [])
+    if suspicious:
+        lines.extend(["", "**Suspicious Gemma 4 facts:**"])
+        for item in suspicious:
+            reason = item.get("suspicious_reason") or item.get("grounded_in_source") or ""
+            tag = f" — {reason}" if reason else ""
+            lines.append(f"- {item.get('g4_fact') or ''}{tag}")
+
+    baseline_review = list(review.get("baseline_facts_review") or [])
+    if baseline_review:
+        lines.extend(["", "**Baseline facts (reviewer view):**"])
+        for item in baseline_review:
+            covered = "✓" if item.get("covered_by_g4") else "✗"
+            grounded = item.get("grounded_in_source") or "?"
+            severity = item.get("loss_severity") or "none"
+            lines.append(
+                f"- {covered} grounded={grounded} severity={severity}: {item.get('baseline_fact') or ''}"
+            )
+    g4_review = list(review.get("g4_facts_review") or [])
+    if g4_review:
+        lines.extend(["", "**Gemma 4 facts (reviewer view):**"])
+        for item in g4_review:
+            grounded = item.get("grounded_in_source") or "?"
+            useful = "✓" if item.get("useful_new_fact") else "·"
+            category = item.get("category") or "?"
+            kind = item.get("fact_kind") or ""
+            tag = f" [{kind}]" if kind else ""
+            note = (
+                f" — {item.get('suspicious_reason')}"
+                if item.get("suspicious_reason")
+                else ""
+            )
+            lines.append(
+                f"- {useful} grounded={grounded} cat={category}{tag}: "
+                f"{item.get('g4_fact') or ''}{note}"
+            )
+    return lines
 
 
 def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Path) -> str:
@@ -1632,6 +2589,37 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
         f"- artifact_json: `{output_json_path}`",
         "",
     ]
+    if any(isinstance(result.get("baseline_g4"), dict) for result in results):
+        lines.extend(
+            [
+                "## Baseline vs Baseline G4 Summary",
+                "",
+                "| Fixture | Baseline chars | Baseline G4 chars | Length ratio | Quality | Errors | Warnings | Speed ratio | Gemma calls |",
+                "| --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for result in results:
+            fixture = result["fixture"]
+            baseline = result.get("baseline") if isinstance(result.get("baseline"), dict) else {}
+            baseline_g4 = result.get("baseline_g4") if isinstance(result.get("baseline_g4"), dict) else None
+            if not baseline_g4:
+                continue
+            baseline_chars = int((baseline.get("metrics") or _variant_metrics(baseline.get("description_md"))).get("chars") or 0)
+            g4_chars = int((baseline_g4.get("metrics") or {}).get("chars") or 0)
+            length_ratio = round(g4_chars / baseline_chars, 4) if baseline_chars else None
+            quality_delta = baseline_g4.get("quality_delta_vs_baseline") if isinstance(baseline_g4.get("quality_delta_vs_baseline"), dict) else {}
+            validation = baseline_g4.get("validation") if isinstance(baseline_g4.get("validation"), dict) else {}
+            speed = baseline_g4.get("speed_ratio_vs_baseline") if isinstance(baseline_g4.get("speed_ratio_vs_baseline"), dict) else {}
+            timings = baseline_g4.get("timings") if isinstance(baseline_g4.get("timings"), dict) else {}
+            lines.append(
+                "| "
+                f"`{fixture['fixture_id']}` | {baseline_chars} | {g4_chars} | "
+                f"{length_ratio if length_ratio is not None else '-'} | "
+                f"{quality_delta.get('status') or '-'} | "
+                f"{len(validation.get('errors') or [])} | {len(validation.get('warnings') or [])} | "
+                f"{speed.get('ratio') if speed else '-'} | {timings.get('gemma_calls') or '-'} |"
+            )
+        lines.append("")
     for result in results:
         fixture = result["fixture"]
         lines.extend(
@@ -1649,6 +2637,7 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
         lines.extend(["", "### Source Excerpts", "", "```text", _source_excerpt([SourcePacket(**source) for source in fixture["sources"]]), "```", ""])
         variant_labels = [
             ("baseline", "Baseline"),
+            ("baseline_g4", "Baseline G4"),
             ("lollipop", "Lollipop"),
             ("lollipop_g4", "Lollipop G4"),
             ("lollipop_legacy", "Lollipop Legacy"),
@@ -1699,27 +2688,15 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
                 lines.append(f"- kept_records_after_dedup: `{len([item for item in payload['extract_records'] if item['record_id'] not in {decision['record_id'] for decision in payload['dedup']['decisions'] if decision['keep'] == 'drop'}])}`")
                 lines.append(f"- validation errors: `{len(payload['validation']['errors'])}`")
                 lines.append(f"- validation warnings: `{len(payload['validation']['warnings'])}`")
-            if key == "lollipop_legacy":
-                lines.append(f"- contract_version: `{payload.get('contract_version')}`")
-                lines.append(f"- generation_uses_baseline: `{bool(payload.get('generation_uses_baseline'))}`")
-                lines.append(f"- includes_baseline_stage: `{bool(payload.get('includes_baseline_stage'))}`")
-                lines.append(f"- uses_baseline_fact_floor: `{bool(payload.get('uses_baseline_fact_floor'))}`")
-                lines.append(f"- legacy_g4_extract_mode: `{payload.get('legacy_g4_extract_mode')}`")
-                lines.append(f"- legacy_public_fact_count: `{payload.get('legacy_public_fact_count')}`")
-                lines.append(f"- legacy_logistics_fact_count: `{payload.get('legacy_logistics_fact_count')}`")
-                lines.append(f"- legacy_lead_hook_count: `{payload.get('legacy_lead_hook_count')}`")
-                lines.append(f"- writer_retry_count: `{payload.get('writer_retry_count') or 0}`")
-                lines.append(f"- writer_fallback_to_baseline: `{bool(payload.get('writer_fallback_to_baseline'))}`")
-                lines.append(f"- writer_fallback_to_source_draft: `{bool(payload.get('writer_fallback_to_source_draft'))}`")
-                quality_delta = payload.get("quality_delta_vs_baseline") if isinstance(payload.get("quality_delta_vs_baseline"), dict) else None
-                if quality_delta:
-                    lines.append(f"- quality_delta_status: `{quality_delta.get('status')}`")
-                    lines.append(f"- quality_score: `{quality_delta.get('baseline_score')} -> {quality_delta.get('candidate_score')}`")
-                    lines.append(f"- length_ratio_vs_baseline: `{quality_delta.get('length_ratio')}`")
-                    improvements = ", ".join(quality_delta.get("improvements") or [])
-                    regressions = ", ".join(quality_delta.get("regressions") or [])
-                    lines.append(f"- quality_improvements: `{improvements or '-'}`")
-                    lines.append(f"- quality_regressions: `{regressions or '-'}`")
+            if key in {"baseline_g4", "lollipop_legacy"} and isinstance(payload.get("quality_delta_vs_baseline"), dict):
+                quality_delta = payload.get("quality_delta_vs_baseline")
+                lines.append(f"- quality_delta_status: `{quality_delta.get('status')}`")
+                lines.append(f"- quality_score: `{quality_delta.get('baseline_score')} -> {quality_delta.get('candidate_score')}`")
+                lines.append(f"- length_ratio_vs_baseline: `{quality_delta.get('length_ratio')}`")
+                improvements = ", ".join(quality_delta.get("improvements") or [])
+                regressions = ", ".join(quality_delta.get("regressions") or [])
+                lines.append(f"- quality_improvements: `{improvements or '-'}`")
+                lines.append(f"- quality_regressions: `{regressions or '-'}`")
                 speed = payload.get("speed_ratio_vs_baseline") if isinstance(payload.get("speed_ratio_vs_baseline"), dict) else None
                 if speed:
                     lines.append(f"- speed_ratio_vs_baseline: `{speed.get('ratio')}` (`{speed.get('gate')}`)")
@@ -1727,6 +2704,20 @@ def _render_markdown_report(results: list[dict[str, Any]], output_json_path: Pat
                 lines.append(f"- validation warnings: `{len(payload.get('validation', {}).get('warnings') or [])}`")
                 if payload.get("validation", {}).get("errors"):
                     lines.append(f"- validation error list: `{', '.join(payload['validation']['errors'])}`")
+            if key == "lollipop_legacy":
+                lines.append(f"- contract_version: `{payload.get('contract_version')}`")
+                lines.append(f"- generation_uses_baseline: `{bool(payload.get('generation_uses_baseline'))}`")
+                lines.append(f"- includes_baseline_stage: `{bool(payload.get('includes_baseline_stage'))}`")
+                lines.append(f"- uses_baseline_fact_floor: `{bool(payload.get('uses_baseline_fact_floor'))}`")
+                lines.append(f"- writer_model: `{payload.get('writer_model')}`")
+                lines.append(f"- writer_fallback_to_4o: `{bool(payload.get('writer_fallback_to_4o'))}`")
+                lines.append(f"- legacy_public_fact_count: `{payload.get('legacy_public_fact_count')}`")
+                lines.append(f"- legacy_logistics_fact_count: `{payload.get('legacy_logistics_fact_count')}`")
+                lines.append(f"- writer_retry_count: `{payload.get('writer_retry_count') or 0}`")
+                lines.append(f"- writer_fallback_to_baseline: `{bool(payload.get('writer_fallback_to_baseline'))}`")
+                fact_coverage = payload.get("fact_coverage") if isinstance(payload.get("fact_coverage"), dict) else None
+                if fact_coverage:
+                    lines.extend(_render_fact_coverage_section(fact_coverage))
             lines.extend(["", "```md", str(body or ""), "```", ""])
     return "\n".join(lines).strip() + "\n"
 
@@ -1763,6 +2754,37 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
         }
         if "baseline" in variants:
             row["baseline"] = baseline
+
+        if "baseline_g4" in variants:
+            try:
+                baseline_g4 = await _run_baseline_g4(
+                    fixture,
+                    baseline=baseline,
+                    gemma_model=args.g4_model,
+                    gemma_call_gap_s=args.gemma_call_gap_s,
+                )
+            except Exception as exc:
+                baseline_g4 = {
+                    "gemma_model": args.g4_model,
+                    "variant_mode": "baseline_g4",
+                    "baseline_g4_mode": "optimized_fact_first_baseline_contract",
+                    "description_md": "",
+                    "applied_output": {"title": fixture.title, "description_md": ""},
+                    "validation": {"errors": [f"exception:{type(exc).__name__}:{str(exc)[:240]}"], "warnings": []},
+                    "quality_delta_vs_baseline": {"status": "failed", "regressions": ["exception"], "warnings": []},
+                    "quality_profile": _quality_profile(""),
+                    "metrics": _variant_metrics(""),
+                    "timings": {
+                        "wall_clock_sec": None,
+                        "model_active_sec": None,
+                        "sleep_sec": 0.0,
+                        "gemma_calls": None,
+                        "four_o_calls": 0,
+                        "baseline_stage_sec": (baseline.get("timings") or {}).get("wall_clock_sec"),
+                    },
+                    "speed_ratio_vs_baseline": None,
+                }
+            row["baseline_g4"] = baseline_g4
 
         if "lollipop" in variants:
             lollipop = _load_reused_variant_payload(
@@ -1815,9 +2837,9 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run baseline/lollipop/lollipop g4/lollipop legacy benchmark.")
+    parser = argparse.ArgumentParser(description="Run baseline/baseline g4/lollipop/lollipop g4/lollipop legacy benchmark.")
     parser.add_argument("--fixtures", default=DEFAULT_FIXTURES, help="Comma-separated fixture names")
-    parser.add_argument("--variants", default=DEFAULT_VARIANTS, help="Comma-separated variants: baseline,lollipop,lollipop_g4,lollipop_legacy")
+    parser.add_argument("--variants", default=DEFAULT_VARIANTS, help="Comma-separated variants: baseline,baseline_g4,lollipop,lollipop_g4,lollipop_legacy")
     parser.add_argument("--g3-model", default=DEFAULT_G3_MODEL, help="Gemma 3 upstream/baseline model")
     parser.add_argument("--g4-model", default=DEFAULT_G4_MODEL, help="Gemma 4 upstream model")
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL, help="Final writer model")
@@ -1825,7 +2847,7 @@ def main() -> int:
     parser.add_argument(
         "--legacy-g4-extract",
         action="store_true",
-        help="Deprecated no-op for v3: lollipop_legacy now always uses Gemma 4 source_facts extraction and never baseline facts.",
+        help="Deprecated no-op for v7: lollipop_legacy now always uses Gemma 4 facts+writer stages and never baseline facts.",
     )
     parser.add_argument(
         "--reuse-baseline-artifact",

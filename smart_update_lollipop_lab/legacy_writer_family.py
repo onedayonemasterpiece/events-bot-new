@@ -1,3 +1,28 @@
+"""Legacy lab variant `lollipop_legacy.v14`.
+
+Goal: a baseline-equivalent public-description path on Gemma 4. The contract is
+intentionally minimal: extract public/logistics facts from the source, then ask
+a single writer (Gemma 4 default, 4o fallback when Gemma 4 fails) to produce the
+final Russian Markdown. The benchmark also runs an LLM-first fact-coverage
+reviewer to compare Gemma 3 baseline facts against Gemma 4 facts; that reviewer
+is benchmark-only and never touches generation.
+
+Hard rules carried from project policy:
+- No baseline text/facts/draft enter the legacy generation payload. Baseline is
+  only used by the benchmark for length/quality/timing comparison and by the
+  fact-coverage reviewer (which is read-only).
+- No repair pass. The writer either returns clean output or the variant falls
+  back to the 4o final writer (still source-grounded, no baseline leakage).
+- No deterministic regex post-processing of the output. Validation reports
+  errors but never edits the text.
+- No intermediate enrichment/planning stage. The legacy candidate is just
+  extract -> write.
+- Fact coverage is judged by an LLM-first reviewer, never by string overlap or
+  keyword regex. The reviewer is allowed to mark a baseline fact as
+  `baseline_ungrounded` so we do not punish Gemma 4 for skipping a baseline
+  hallucination.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +33,7 @@ from typing import Any
 from . import writer_final_4o_family
 
 
-LEGACY_CONTRACT_VERSION = "lollipop_legacy.v3"
+LEGACY_CONTRACT_VERSION = "lollipop_legacy.v14"
 
 
 @dataclass(slots=True)
@@ -21,10 +46,8 @@ def _clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-# Narrator-frame openers: stock copywriter leads that frame the event from
-# the narrator's pose ("X plunges you into / introduces you to ...") instead
-# of opening with a concrete object, named actor, quote, or event action.
-# Anchored to the very start of the lead paragraph.
+# --- text-quality helpers (shared with the benchmark reporting) -------------
+
 NARRATOR_FRAME_LEAD_PATTERNS: tuple[str, ...] = (
     r"(?iu)^[\s>«\"`*_-]*Погружение\s+в\b",
     r"(?iu)^[\s>«\"`*_-]*Знакомство\s+с\b",
@@ -41,7 +64,6 @@ def _lead_paragraph(text: str) -> str:
     body = str(text or "").strip()
     if not body:
         return ""
-    # Skip a leading blockquote epigraph if it sits as its own paragraph.
     paragraphs = [part for part in re.split(r"\n\s*\n", body) if part.strip()]
     for part in paragraphs:
         stripped = part.strip()
@@ -71,180 +93,6 @@ def _has_blockquote_epigraph(text: str) -> bool:
     return first_line.startswith(">")
 
 
-def enhancement_response_schema() -> dict[str, Any]:
-    return {
-        "type": "OBJECT",
-        "properties": {
-            "lead_hook_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-            "quote_candidates": {"type": "ARRAY", "items": {"type": "STRING"}},
-            "extra_facts": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "text": {"type": "STRING"},
-                        "source_refs": {"type": "ARRAY", "items": {"type": "STRING"}},
-                    },
-                    "required": ["text", "source_refs"],
-                },
-            },
-            "writer_notes": {"type": "ARRAY", "items": {"type": "STRING"}},
-        },
-        "required": ["lead_hook_fact_indexes", "quote_candidates", "extra_facts", "writer_notes"],
-    }
-
-
-def source_fact_response_schema() -> dict[str, Any]:
-    fact_item = {
-        "type": "OBJECT",
-        "properties": {
-            "text": {"type": "STRING"},
-            "source_refs": {"type": "ARRAY", "items": {"type": "STRING"}},
-        },
-        "required": ["text", "source_refs"],
-    }
-    return {
-        "type": "OBJECT",
-        "properties": {
-            "public_facts": {"type": "ARRAY", "items": fact_item},
-            "logistics_facts": {"type": "ARRAY", "items": fact_item},
-            "lead_hooks": {"type": "ARRAY", "items": {"type": "STRING"}},
-            "structure_hints": {"type": "ARRAY", "items": {"type": "STRING"}},
-            "draft_description_md": {"type": "STRING"},
-            "draft_covered_public_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
-        },
-        "required": [
-            "public_facts",
-            "logistics_facts",
-            "lead_hooks",
-            "structure_hints",
-            "draft_description_md",
-            "draft_covered_public_fact_indexes",
-            "warnings",
-        ],
-    }
-
-
-def build_source_fact_system_prompt() -> str:
-    return textwrap.dedent(
-        """
-        You do one bounded step: lollipop_legacy.source_facts.v3.
-
-        Extract source-grounded facts for a public event description in Russian.
-        This is a Gemma-4-only legacy path: there is no Gemma 3 baseline draft or fact floor.
-
-        CONTRACT
-        - Extract every meaningful public fact needed for a no-worse event text:
-          event format, named title/programme, named people and roles, topic/theme,
-          explicit object/work/item lists, format texture, route/programme shape,
-          curator/artist/lecturer details, and distinctive atmosphere/context.
-        - Prefer recall over brevity. For a rich source, return 5-12 public_facts; do not stop
-          after title + one generic theme. Capture the concrete "what exactly happens / what is
-          shown / what will be discussed" layer.
-        - If the source has a programme, named sections, named works, named objects, or lecturer
-          agenda points, preserve them as separate facts.
-        - Put date, time, address, ticket, price, URL, age limit, and pure service details
-          into logistics_facts, not public_facts.
-        - Do not invent facts beyond source_excerpt.
-        - Preserve explicit named lists; do not collapse names/items to "и другие".
-        - Keep facts short, natural Russian, and source-local.
-        - lead_hooks are short grounded lead options, not slogans.
-        - structure_hints may suggest headings or paragraph clusters only when the facts are rich enough.
-        - Also write draft_description_md: a source-grounded emergency draft for the same public
-          description. It must be vivid but factual, avoid ad/report formulas, and use logistics
-          only in one compact natural sentence when helpful. If reference_description_chars is
-          present, aim for roughly 70-95% of it without padding or invention.
-        - draft_covered_public_fact_indexes must list every public_facts index covered by that draft.
-        - Return one JSON object only. No markdown. No commentary.
-        """
-    ).strip()
-
-
-def build_source_fact_payload(
-    *,
-    title: str,
-    event_type: str,
-    source_excerpt: str,
-    reference_description_chars: int | None = None,
-) -> dict[str, Any]:
-    return {
-        "title": title,
-        "event_type": event_type,
-        "reference_description_chars": reference_description_chars,
-        "source_excerpt": str(source_excerpt or "")[:9000],
-    }
-
-
-def normalize_source_fact_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    def _items(key: str, *, logistics: bool = False) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        for raw in list(payload.get(key) or []):
-            if not isinstance(raw, dict):
-                continue
-            text = _clean_text(raw.get("text"))
-            if not text:
-                continue
-            if not logistics and re.search(
-                r"(?iu)\b(?:билет\w*|цен[аы]|руб(?:\.|л|лей)?|₽|https?://|www\.|\d{1,2}:\d{2}|(?:6|12|16|18)\+)\b",
-                text,
-            ):
-                continue
-            refs: list[str] = []
-            for item in list(raw.get("source_refs") or []):
-                ref = _clean_text(item)
-                if ref and ref not in refs:
-                    refs.append(ref)
-            if not any(item["text"] == text for item in result):
-                result.append({"text": text[:420], "source_refs": refs[:4]})
-        return result
-
-    lead_hooks: list[str] = []
-    for raw in list(payload.get("lead_hooks") or []):
-        text = _clean_text(raw)
-        if text and text not in lead_hooks:
-            lead_hooks.append(text[:220])
-
-    structure_hints: list[str] = []
-    for raw in list(payload.get("structure_hints") or []):
-        text = _clean_text(raw)
-        if text and text not in structure_hints:
-            structure_hints.append(text[:180])
-
-    warnings: list[str] = []
-    for raw in list(payload.get("warnings") or []):
-        text = _clean_text(raw)
-        if text and text not in warnings:
-            warnings.append(text[:180])
-
-    return {
-        "public_facts": _items("public_facts"),
-        "logistics_facts": _items("logistics_facts", logistics=True),
-        "lead_hooks": lead_hooks[:6],
-        "structure_hints": structure_hints[:6],
-        "draft_description_md": str(payload.get("draft_description_md") or "").strip(),
-        "draft_covered_public_fact_indexes": [
-            idx
-            for idx in _indexes(payload.get("draft_covered_public_fact_indexes"))
-            if 0 <= idx < len(_items("public_facts"))
-        ],
-        "warnings": warnings[:6],
-    }
-
-
-def writer_response_schema() -> dict[str, Any]:
-    return {
-        "type": "OBJECT",
-        "properties": {
-            "title": {"type": "STRING"},
-            "description_md": {"type": "STRING"},
-            "covered_baseline_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-            "used_extra_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
-        },
-        "required": ["title", "description_md", "covered_baseline_fact_indexes", "used_extra_fact_indexes"],
-    }
-
-
 def _text_quality_score(description: str) -> int:
     quality = writer_final_4o_family._describe_text_quality(description)
     score = 0
@@ -263,15 +111,42 @@ def _text_quality_score(description: str) -> int:
     return score
 
 
+def _named_tokens(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for match in re.finditer(r"(?u)[«\"']?[A-ZА-ЯЁ][0-9A-ZА-ЯЁа-яёA-Za-z_-]{2,}", str(text or "")):
+        token = match.group(0).strip("«»\"'")
+        if token:
+            tokens.add(token)
+    return tokens
+
+
+def _source_fidelity_delta(
+    *,
+    source_excerpt: str,
+    baseline_description: str,
+    candidate_description: str,
+) -> dict[str, int]:
+    source_tokens = _named_tokens(source_excerpt)
+    baseline_tokens = _named_tokens(baseline_description)
+    candidate_tokens = _named_tokens(candidate_description)
+    return {
+        "candidate_source_tokens": len(candidate_tokens & source_tokens),
+        "baseline_source_tokens": len(baseline_tokens & source_tokens),
+        "candidate_invented_tokens": len(candidate_tokens - source_tokens),
+        "baseline_invented_tokens": len(baseline_tokens - source_tokens),
+    }
+
+
 def compare_to_baseline(
     *,
     baseline_description: str,
     candidate_description: str,
+    source_excerpt: str = "",
 ) -> dict[str, Any]:
-    """Deterministic quality guard for the benchmark contract.
+    """Read-only quality signal for the benchmark.
 
-    It is intentionally narrow: semantic/factual coverage remains LLM-owned via
-    the writer schema, while this guard catches measurable public-text regressions.
+    Emits regressions/improvements/warnings; never rewrites the candidate. The
+    benchmark uses this for reporting only, never to gate a repair pass.
     """
 
     baseline = str(baseline_description or "")
@@ -294,6 +169,11 @@ def compare_to_baseline(
     candidate_headings = _heading_count(candidate)
     baseline_epigraph = _has_blockquote_epigraph(baseline)
     candidate_epigraph = _has_blockquote_epigraph(candidate)
+    fidelity = _source_fidelity_delta(
+        source_excerpt=source_excerpt,
+        baseline_description=baseline,
+        candidate_description=candidate,
+    )
 
     if len(candidate_quality["report_formula_hits"]) > len(baseline_quality["report_formula_hits"]):
         regressions.append("quality.report_formula_regression")
@@ -306,17 +186,31 @@ def compare_to_baseline(
     if candidate_quality["age_leak"] and not baseline_quality["age_leak"]:
         regressions.append("quality.age_leak_regression")
     if baseline_quality["lead_hook_signals"] and not candidate_quality["lead_hook_signals"]:
-        regressions.append("quality.lost_lead_hook")
+        if (
+            fidelity["candidate_source_tokens"] >= fidelity["baseline_source_tokens"]
+            or fidelity["candidate_invented_tokens"] < fidelity["baseline_invented_tokens"]
+        ):
+            warnings.append("quality.lost_baseline_lead_hook")
+        else:
+            regressions.append("quality.lost_lead_hook")
     if candidate_narrator_frame and not baseline_narrator_frame:
         regressions.append("quality.narrator_frame_opening")
     if baseline_len and candidate_len < int(baseline_len * 0.68):
-        regressions.append(f"quality.too_short_vs_baseline:{candidate_len}/{baseline_len}")
+        warnings.append(f"quality.shorter_than_baseline:{candidate_len}/{baseline_len}")
     if baseline_len and candidate_len > int(baseline_len * 1.12):
         warnings.append(f"quality.longer_than_baseline:{candidate_len}/{baseline_len}")
     if baseline_headings >= 2 and candidate_headings == 0:
         warnings.append(f"quality.lost_baseline_headings:{baseline_headings}")
     if baseline_epigraph and not candidate_epigraph:
         warnings.append("quality.lost_baseline_epigraph")
+    if (
+        fidelity["candidate_source_tokens"] < fidelity["baseline_source_tokens"] - 3
+        and fidelity["candidate_source_tokens"] < 2
+    ):
+        regressions.append(
+            "quality.source_named_token_loss:"
+            f"{fidelity['candidate_source_tokens']}/{fidelity['baseline_source_tokens']}"
+        )
 
     if candidate_score > baseline_score:
         improvements.append("quality.score_improved")
@@ -330,6 +224,10 @@ def compare_to_baseline(
         improvements.append("quality.promo_phrase_reduced")
     if baseline_narrator_frame and not candidate_narrator_frame:
         improvements.append("quality.narrator_frame_avoided")
+    if fidelity["candidate_invented_tokens"] < fidelity["baseline_invented_tokens"]:
+        improvements.append("quality.invented_named_tokens_reduced")
+    if fidelity["candidate_source_tokens"] > fidelity["baseline_source_tokens"]:
+        improvements.append("quality.source_named_tokens_improved")
 
     status = "regressed" if regressions else ("improved" if improvements else "no_worse")
     return {
@@ -340,181 +238,203 @@ def compare_to_baseline(
         "regressions": regressions,
         "improvements": improvements,
         "warnings": warnings,
+        "source_fidelity": fidelity,
         "baseline_quality": baseline_quality,
         "candidate_quality": candidate_quality,
     }
 
 
-def build_enhancement_system_prompt() -> str:
+# --- extraction stage --------------------------------------------------------
+
+def extraction_response_schema() -> dict[str, Any]:
+    fact_item = {
+        "type": "OBJECT",
+        "properties": {
+            "text": {"type": "STRING"},
+            "source_span": {"type": "STRING"},
+            "kind": {"type": "STRING"},
+        },
+        "required": ["text", "source_span", "kind"],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "public_facts": {"type": "ARRAY", "items": fact_item},
+            "logistics_facts": {"type": "ARRAY", "items": fact_item},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": ["public_facts", "logistics_facts", "warnings"],
+    }
+
+
+def build_extraction_system_prompt() -> str:
     return textwrap.dedent(
-        """
-        You do one bounded step: lollipop_legacy.enhance.v1.
+        f"""
+        You are the Gemma 4 fact extractor for the {LEGACY_CONTRACT_VERSION} pipeline.
+        Return only JSON matching the response schema. No markdown. No analysis.
 
-        Goal: preserve the full baseline fact floor and add only source-grounded lollipop-style strength.
+        Extract concise Russian facts from the provided source text and event metadata
+        for one cultural event description. Use the standard public/logistics split:
+        - public_facts: format, title/programme, topic, named people and roles,
+          route/object/list, source-local atmosphere, format texture, source-grounded
+          cultural handle. These are what a public description must convey.
+        - logistics_facts: date, time, venue, address, tickets, price, age, URLs,
+          registration/instruction service lines.
 
-        CONTRACT
-        - Input baseline_facts are mandatory factual floor. Do not rewrite or drop them.
-        - Find which baseline fact indexes can act as the lead hook: rarity, format, strong action,
-          atmosphere, named programme, quote-like official phrasing, or local context.
-        - Add extra_facts only when the source excerpts contain grounded attendance-relevant detail
-          that is absent from baseline_facts.
-        - Do not add logistics as extra_facts: date, time, venue, address, tickets, prices, URLs.
-        - Keep extra_facts short, Russian, and directly traceable to source_refs.
-        - quote_candidates may contain short exact source phrases, not invented slogans.
-        - writer_notes are compact tactical hints for the final writer, not public prose.
-        - Return one JSON object only. No markdown. No commentary.
+        Rules:
+        - Use only the source text and event metadata. Do not invent venues, dates,
+          prices, programme items, names, or interpretations.
+        - Preserve named entities exactly. Do not transliterate or paraphrase names.
+        - Each fact text is one short Russian phrase. source_span is the shortest
+          supporting source phrase. kind is a short lowercase label such as format,
+          title, topic, person, route, object, texture, date, time, venue, address,
+          tickets, price, age, url, service.
+        - Prefer recall over brevity: emit 4-10 public_facts when source supports.
+        - For sparse sources (1-2 source sentences) still split format, route/place,
+          instruction/map, OCR location, and start mode when present, so the writer
+          has enough public substance.
+        - Do not put field labels ("text:", "kind:", JSON keys) inside fact text.
+        - A street + house number attached to a named venue is logistics/address; a
+          separate OCR street that the source presents as the route/object goes to
+          public_facts as kind=route.
+        - Russian only. No English helper words inside fact texts.
         """
     ).strip()
 
 
-def build_enhancement_payload(
-    *,
-    title: str,
-    event_type: str,
-    baseline_facts: list[str],
-    source_excerpt: str,
-) -> dict[str, Any]:
+def normalize_extraction_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    def _items(key: str) -> list[dict[str, str]]:
+        result: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for raw in list(payload.get(key) or []):
+            if not isinstance(raw, dict):
+                continue
+            text = _clean_text(raw.get("text"))
+            text = re.sub(r"(?iu)^(?:text|kind|fact)\s*:\s*", "", text).strip()
+            if not text:
+                continue
+            normalized = text.casefold()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(
+                {
+                    "text": text[:420],
+                    "source_span": _clean_text(raw.get("source_span"))[:220],
+                    "kind": _clean_text(raw.get("kind"))[:40],
+                }
+            )
+        return result
+
+    public_items = _items("public_facts")
+    logistics_items = _items("logistics_facts")
+    warnings: list[str] = []
+    for raw in list(payload.get("warnings") or []):
+        text = _clean_text(raw)
+        if text and text not in warnings:
+            warnings.append(text[:220])
     return {
-        "title": title,
-        "event_type": event_type,
-        "baseline_facts": [
-            {"index": idx, "text": fact}
-            for idx, fact in enumerate(baseline_facts)
-            if _clean_text(fact)
-        ],
-        "source_excerpt": source_excerpt[:9000],
+        "public_facts": public_items,
+        "logistics_facts": logistics_items,
+        "warnings": warnings,
     }
 
 
-def normalize_enhancement_payload(payload: dict[str, Any], *, baseline_fact_count: int) -> dict[str, Any]:
-    valid_indexes = set(range(max(0, baseline_fact_count)))
-    lead_hook_fact_indexes: list[int] = []
-    for raw in list(payload.get("lead_hook_fact_indexes") or []):
-        try:
-            idx = int(raw)
-        except Exception:
+def merge_extraction_facts(items: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Deduplicate facts across source extractions and assign stable indexes."""
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
             continue
-        if idx in valid_indexes and idx not in lead_hook_fact_indexes:
-            lead_hook_fact_indexes.append(idx)
-
-    quote_candidates: list[str] = []
-    for raw in list(payload.get("quote_candidates") or []):
-        text = _clean_text(raw)
-        if text and text not in quote_candidates:
-            quote_candidates.append(text[:180])
-
-    extra_facts: list[dict[str, Any]] = []
-    for raw in list(payload.get("extra_facts") or []):
-        if not isinstance(raw, dict):
-            continue
-        text = _clean_text(raw.get("text"))
+        text = _clean_text(item.get("text"))
         if not text:
             continue
-        if re.search(r"(?iu)\b(?:билет|цена|руб|адрес|ссылка|https?://|\d{1,2}:\d{2})\b", text):
+        key = text.casefold()
+        if key in seen:
             continue
-        refs = []
-        for item in list(raw.get("source_refs") or []):
-            ref = _clean_text(item)
-            if ref and ref not in refs:
-                refs.append(ref)
-        extra_facts.append({"text": text[:360], "source_refs": refs})
+        seen.add(key)
+        merged.append(
+            {
+                "index": len(merged),
+                "text": text[:420],
+                "source_span": _clean_text(item.get("source_span"))[:220],
+                "kind": _clean_text(item.get("kind"))[:40],
+            }
+        )
+    return merged
 
-    writer_notes: list[str] = []
-    for raw in list(payload.get("writer_notes") or []):
-        text = _clean_text(raw)
-        if text and text not in writer_notes:
-            writer_notes.append(text[:220])
 
+# --- writer stage ------------------------------------------------------------
+
+def writer_response_schema() -> dict[str, Any]:
     return {
-        "lead_hook_fact_indexes": lead_hook_fact_indexes,
-        "quote_candidates": quote_candidates[:5],
-        "extra_facts": extra_facts[:8],
-        "writer_notes": writer_notes[:8],
+        "type": "OBJECT",
+        "properties": {
+            "title": {"type": "STRING"},
+            "description_md": {"type": "STRING"},
+            "covered_public_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "used_logistics_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": [
+            "title",
+            "description_md",
+            "covered_public_fact_indexes",
+            "used_logistics_fact_indexes",
+            "warnings",
+        ],
     }
 
 
 def build_writer_system_prompt() -> str:
     return textwrap.dedent(
         f"""
-        You do one bounded step: {LEGACY_CONTRACT_VERSION} final public-text editor.
+        You are the Gemma 4 / 4o final writer for the {LEGACY_CONTRACT_VERSION} pipeline.
+        Return one JSON object matching the response schema. No markdown fences. No analysis.
 
-        Return one JSON object only:
-        {{
-          "title": "string",
-          "description_md": "string",
-          "covered_baseline_fact_indexes": [0],
-          "used_extra_fact_indexes": [0]
-        }}
+        Write description_md as the final Russian Markdown for one cultural event card.
+        Ground truth lives in public_facts, logistics_facts, source_excerpt, and the event
+        metadata. Baseline text/facts are not in the request and must not be assumed.
 
-        HARD CONTRACT
-        - You write the final public event description in Russian.
-        - In the v3 benchmark path baseline_description must be empty. Do not ask for, infer, or
-          reconstruct a hidden Gemma 3 draft.
-        - If baseline_description is present only for old v2 artifact repair, treat it as the draft
-          you are editing, not as disposable context. Keep every concrete meaningful claim,
-          named object/person/place/programme, explicit list, and useful texture unless it is unsafe,
-          unsupported, repetitive, or violates the style rules.
-        - If baseline_description is empty, this is the Gemma-4-only path: write from baseline_facts,
-          logistics_context, lead hooks, structure hints, and source_excerpt only. Do not assume or
-          reconstruct any hidden baseline draft.
-        - The baseline_facts list is the mandatory public factual floor. Semantically cover every
-          baseline fact, but rewrite dry extractor phrasing into natural event-facing Russian.
-        - logistics_context contains service facts. Use them only when they are already part of
-          baseline_description or when omitting them would make the public text misleading.
-        - source_excerpt is available only to verify or add grounded texture. It does not override
-          the public factual floor.
-        - If a fact is awkward but important, rewrite it naturally without changing meaning.
-        - Use extra_facts only when they strengthen the text without crowding out baseline facts.
-        - Do not invent facts, dates, venues, prices, ticket conditions, names, or quotes.
-        - Do not stuff date/time/address/ticket logistics into narrative prose just to prove coverage.
-          If logistics are needed, keep them in one compact natural sentence.
-        - Keep the result at least as detailed as baseline_description in meaningful event substance,
-          not necessarily in raw character count.
-        - In the Gemma-4-only path, use source_excerpt to restore grounded public texture when
-          baseline_facts are sparse. Do not invent decorative claims to satisfy length.
-        - Required length window is in the user payload: min_description_chars..max_description_chars.
-          Treat min_description_chars as a hard floor. Prefer the lower half of the window when all
-          meaningful facts still fit naturally, but do not return a visibly thin summary.
-        - Do not compress the baseline into a short summary. Aim for a sharper edited version:
-          fewer weak phrases, same or better factual substance.
-        - If coverage requires comparable length, choose coverage and texture over arbitrary brevity.
-        - The first paragraph should use the strongest grounded hook early: rarity, format,
-          quote-like phrase, atmosphere, named programme, local context, or stage action.
-        - Avoid report/card/promotional formulas: "посвящено", "характеризуется",
-          "программа состоит из", "наполнен", "уникальная возможность", "не упустите",
-          "зрители смогут насладиться", "X — это ...".
-        - Never open with an em-dash definition like `Название — это ...`; write through action,
-          atmosphere, object, or format instead.
-        - Never open the lead with a stock narrator-frame: "Погружение в ...",
-          "Знакомство с ...", "Путешествие в мир ...", "Прогулка по миру ...",
-          "Окунитесь в ...", "Откройте для себя ...", "Добро пожаловать в ...",
-          "Приготовьтесь к ...". Open with a concrete object, named actor, exact phrase
-          from the source, format texture word, or event action instead.
-        - Positive lead patterns to imitate (pick the kind that already exists in the facts):
-          - object: "Жостовские подносы, каргопольская и дымковская игрушки..."
-          - actor: "Религиовед Алексей Зыгмонт предлагает взглянуть на сакральное..."
-          - format texture: "Звуки старого города, где каждый камень хранит отголоски..."
-          - event action: "В преддверии Дня Земли откроется персональная выставка..."
-          - named programme/quote: "«Космос красного» собирает русские народные промыслы..."
-        - Keep the register: vivid cultural digest, not a dry card and not ad copy.
-        - If baseline_description already used `### Heading` blocks for distinct thematic
-          clusters and the fact floor is rich (4+ public facts), prefer either keeping the
-          same heading structure or producing equivalently scannable paragraph breaks.
-          Do not collapse a clearly structured baseline into one undifferentiated blob.
-        - If a baseline fact contains an explicit named list, preserve the names; do not collapse to
-          "и другие".
-        - For programme/title lists, use markdown bullets only when the facts genuinely contain a
-          list of works or items.
-        - Mark covered_baseline_fact_indexes honestly. Include an index only if the output text
-          semantically covers that fact.
-        - Mark used_extra_fact_indexes honestly.
+        Hard rules:
+        - description_md is plain Russian Markdown prose. Never JSON fragments, schema words,
+          field names, English helper words, or instruction echoes.
+        - Cover every meaningful public_fact. Never invent names, works, venues, route
+          details, dates, prices, age limits, promises, or claims.
+        - Logistics belong only in one optional final block "### Когда и где" when the
+          date/time/place facts are useful. Do not stuff date/time/address/ticket lines into
+          narrative prose.
+        - Russian only. No English words unless the exact English token appears in
+          source_excerpt as a name.
+        - No URL, phone, age limit, OCR/poster labels, direct address, or ad CTA.
+        - Avoid dry/promo formulas: "посвящено", "характеризуется", "программа состоит из",
+          "представляет собой", "не упустите", "уникальная возможность", "приглашаем вас",
+          "вы сможете", "позволит вам". Avoid stock narrator-frame leads
+          ("Погружение в ...", "Знакомство с ...", "Путешествие в мир ...").
+        - Open with a concrete grounded hook from a fact: route, object, topic, named
+          person, exact title phrase, format texture, or event action. Never open with
+          "Название — это ...".
 
-        QUALITY TARGET
-        - The candidate should be objectively no worse than the benchmark reference:
-          stronger or equal hook, no extra report/promotional formulas, no meta lead, and no factual loss.
-        - Best outcome: 70-100% of baseline length with all meaningful facts preserved and a cleaner lead.
-        - Acceptable outcome: comparable length but clearly cleaner prose.
-        - Bad outcome: shorter by dropping concrete facts, or longer because logistics were pasted in.
+        Shape and length:
+        - Obey the length contract: produce a description_md within
+          [min_description_chars, max_description_chars]; aim for target_description_chars.
+          Shorter than min_description_chars is invalid output.
+        - Use 2-4 public paragraphs before the optional logistics block. Add ### headings
+          only when they help readability; the only allowed logistics heading is
+          "### Когда и где".
+        - Each paragraph is one continuous line; blank lines only between paragraphs and
+          around a ### heading. Do not hard-wrap sentences.
+        - For sparse sources, expand only through grounded interpretation of the existing
+          format/topic (audio walk = listening/route/city attention; lecture = unpacking
+          the topic; exhibition = looking at named objects). Never add new facts.
+        - Each paragraph must add new information. Do not repeat the title or a fact across
+          paragraphs.
+
+        Honesty fields:
+        - covered_public_fact_indexes lists the public_fact indexes you actually covered.
+        - used_logistics_fact_indexes lists the logistics indexes you actually mentioned.
+        - warnings is a short list of caveats (empty list if none).
         """
     ).strip()
 
@@ -523,169 +443,614 @@ def build_writer_payload(
     *,
     title: str,
     event_type: str,
-    baseline_description: str,
-    baseline_facts: list[str],
-    enhancement: dict[str, Any],
-    source_excerpt: str = "",
-    reference_description_chars: int | None = None,
+    public_facts: list[dict[str, Any]],
+    logistics_facts: list[dict[str, Any]],
+    source_excerpt: str,
+    reference_description_chars: int,
 ) -> dict[str, Any]:
-    reference_len = int(reference_description_chars if reference_description_chars is not None else len(str(baseline_description or "")))
+    """Build the user payload for the writer stage.
+
+    The reference_description_chars value is used only to compute advisory length
+    bounds. Baseline description text and baseline facts are not included.
+    """
+    base_len = max(int(reference_description_chars or 0), 0) or 650
+    object_count = sum(
+        1
+        for item in public_facts
+        if str(item.get("kind") or "").casefold() == "object"
+    )
+    if object_count >= 3 and base_len >= 1000:
+        floor_ratio, target_ratio, max_ratio = 0.55, 0.70, 0.95
+    elif base_len >= 1000:
+        floor_ratio, target_ratio, max_ratio = 0.70, 0.82, 1.05
+    else:
+        floor_ratio, target_ratio, max_ratio = 0.80, 0.92, 1.10
+    min_chars = int(base_len * floor_ratio)
+    target_chars = int(base_len * target_ratio)
+    max_chars = int(base_len * max_ratio)
     return {
         "title": title,
         "event_type": event_type,
-        "baseline_description_chars": len(str(baseline_description or "")),
-        "reference_description_chars": reference_len,
-        "min_description_chars": int(reference_len * 0.70),
-        "target_description_chars": int(reference_len * 0.86),
-        "max_description_chars": int(reference_len * 1.05),
-        "hard_validation_gates": {
-            "cover_all_baseline_fact_indexes": True,
-            "minimum_description_chars": int(reference_len * 0.68),
-            "objective_quality_status": "must be no_worse or improved versus benchmark reference",
-            "speed_profile": "benchmark counts only Gemma-4-only lollipop_legacy stages",
-            "forbidden_lead_pattern": "title — это",
-            "forbidden_register": ["dry report", "promo CTA", "short summary"],
-        },
-        "baseline_description": baseline_description,
-        "source_excerpt": str(source_excerpt or "")[:5000],
-        "baseline_facts": [
-            {"index": idx, "text": fact}
-            for idx, fact in enumerate(baseline_facts)
-            if _clean_text(fact)
-        ],
-        "logistics_context": list(enhancement.get("logistics_facts") or []),
-        "lead_hook_fact_indexes": list(enhancement.get("lead_hook_fact_indexes") or []),
-        "quote_candidates": list(enhancement.get("quote_candidates") or []),
-        "extra_facts": [
-            {"index": idx, **item}
-            for idx, item in enumerate(list(enhancement.get("extra_facts") or []))
-            if isinstance(item, dict) and _clean_text(item.get("text"))
-        ],
-        "writer_notes": list(enhancement.get("writer_notes") or []),
+        "public_facts": public_facts,
+        "logistics_facts": logistics_facts,
+        "source_excerpt": str(source_excerpt or "")[:3000],
+        "reference_description_chars": base_len,
+        "min_description_chars": min_chars,
+        "target_description_chars": target_chars,
+        "max_description_chars": max_chars,
+        "length_contract": (
+            f"description_md must be {min_chars}-{max_chars} characters; "
+            f"target about {target_chars}; output below {min_chars} is invalid"
+        ),
     }
-
-
-def build_writer_repair_payload(
-    *,
-    title: str,
-    event_type: str,
-    baseline_description: str,
-    baseline_facts: list[str],
-    enhancement: dict[str, Any],
-    previous_output: dict[str, Any],
-    validation_errors: list[str],
-    quality_regressions: list[str],
-    source_excerpt: str = "",
-    reference_description_chars: int | None = None,
-) -> dict[str, Any]:
-    payload = build_writer_payload(
-        title=title,
-        event_type=event_type,
-        baseline_description=baseline_description,
-        baseline_facts=baseline_facts,
-        enhancement=enhancement,
-        source_excerpt=source_excerpt,
-        reference_description_chars=reference_description_chars,
-    )
-    payload["repair_instruction"] = {
-        "mode": "repair_previous_writer_output",
-        "previous_description_md": str(previous_output.get("description_md") or ""),
-        "previous_covered_baseline_fact_indexes": list(previous_output.get("covered_baseline_fact_indexes") or []),
-        "validation_errors": list(validation_errors or []),
-        "quality_regressions": list(quality_regressions or []),
-        "rules": [
-            "Fix the listed errors without falling back to a dry card.",
-            "If length is too short, restore the concrete baseline texture and programme/list details.",
-            "If a hook is missing, rewrite the first paragraph through grounded format, atmosphere, action, or object.",
-            "Return a fresh complete JSON object, not a patch.",
-        ],
-    }
-    return payload
 
 
 def apply_writer_output(*, title: str, output: dict[str, Any]) -> dict[str, Any]:
+    """Lift the writer JSON into the canonical applied_output shape (title, description_md)."""
+    description = str(output.get("description_md") or "").strip()
     return {
         "title": _clean_text(output.get("title")) or title,
-        "description_md": str(output.get("description_md") or "").strip(),
+        "description_md": description,
     }
 
 
-def _indexes(value: Any) -> set[int]:
-    result: set[int] = set()
-    for item in list(value or []):
-        try:
-            result.add(int(item))
-        except Exception:
-            continue
-    return result
+# --- validation (read-only signal, never rewrites text) ----------------------
+
+_PROMPT_LEAK_PATTERNS: tuple[str, ...] = (
+    "facts_text_clean",
+    "epigraph_fact",
+    "Self-Correction",
+    "schema",
+    "prompt",
+    "JSON",
+    "}\n",
+    "],",
+)
 
 
 def validate_writer_output(
     *,
-    baseline_facts: list[str],
-    baseline_description: str,
-    enhancement: dict[str, Any],
-    output: dict[str, Any],
-    min_length_ratio: float = 0.68,
-    max_length_ratio: float = 1.12,
+    public_facts: list[dict[str, Any]] | list[str],
+    description_md: str,
+    baseline_description: str = "",
 ) -> LegacyValidationResult:
-    description = str(output.get("description_md") or "")
+    """Light-weight, deterministic signal for the writer output.
+
+    This validator never edits the candidate. It reports issues so the benchmark
+    table is honest; the runtime falls back to 4o only on extraction/writer
+    timeouts, exceptions, or empty/invalid output.
+    """
+    description = str(description_md or "")
     errors: list[str] = []
     warnings: list[str] = []
 
-    expected_indexes = set(range(len([fact for fact in baseline_facts if _clean_text(fact)])))
-    covered = _indexes(output.get("covered_baseline_fact_indexes"))
-    missing = sorted(expected_indexes - covered)
-    for idx in missing:
-        errors.append(f"baseline_fact.missing:{idx}")
-    extra_indexes = set(range(len(list(enhancement.get("extra_facts") or []))))
-    used_extra = _indexes(output.get("used_extra_fact_indexes"))
-    for idx in sorted(used_extra - extra_indexes):
-        errors.append(f"extra_fact.unknown:{idx}")
-
     if not description.strip():
         errors.append("description.empty")
-    if re.search(r"(?iu)\b(?:6|12|16|18)\+\b|возрастн", description):
-        errors.append("age.leak")
+        return LegacyValidationResult(errors=errors, warnings=warnings)
+
+    public_count = len(list(public_facts or []))
+    baseline_len = len(str(baseline_description or ""))
+    cand_len = len(description)
+
+    if cand_len < 180 and public_count:
+        errors.append(f"length.too_short_absolute:{cand_len}")
+    if cand_len > 1600:
+        warnings.append(f"length.long:{cand_len}")
+    if baseline_len and cand_len < int(baseline_len * 0.55):
+        warnings.append(f"length.below_baseline_ratio:{cand_len}/{baseline_len}")
+
     duplicate_word = re.search(r"(?iu)\b([а-яёa-z]{4,})\b[\s,;:—-]+\1\b", description)
     if duplicate_word:
         errors.append(f"text.duplicate_word:{duplicate_word.group(1).lower()}")
-    if re.search(r",[\s ]*,", description):
-        errors.append("text.double_comma")
-    duplicate_tail = re.search(r"(?iu)\b[а-яё]*([а-яё]{3,})\1[а-яё]*\b", description)
-    if duplicate_tail:
-        errors.append(f"text.duplicate_tail:{duplicate_tail.group(1).lower()}")
-    allowed_ticket_or_price = any(
-        re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", str(fact or ""))
-        for fact in baseline_facts
-    ) or any(
-        re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", str(fact or ""))
-        for fact in list(enhancement.get("logistics_facts") or [])
-    )
-    if re.search(r"(?iu)\b(?:http|www\.)\b", description):
-        warnings.append("url.leak")
-    if (
-        not allowed_ticket_or_price
-        and re.search(r"(?iu)\b(?:билет\w*|руб(?:\.|л|лей)?|₽)\b", description)
-    ):
-        errors.append("ticket_or_price.invented_or_unexpected")
+    repeated_cluster = re.search(r"(?iu)([а-яё]{2,5})\1{3,}", description)
+    if repeated_cluster:
+        errors.append(f"text.repeated_cluster:{repeated_cluster.group(1).lower()}")
+    english_word = re.search(r"\b[A-Za-z]{3,}\b", description)
+    if english_word and not re.search(r"[«\"]" + re.escape(english_word.group(0)) + r"[»\"]", description):
+        warnings.append(f"text.english_word:{english_word.group(0)}")
 
-    quality = writer_final_4o_family._describe_text_quality(description)
-    for label in quality["report_formula_hits"]:
-        errors.append(f"style.report_formula:{label}")
-    for label in quality["promo_phrase_hits"]:
-        errors.append(f"style.promo_phrase:{label}")
-    if quality["lead_meta_opening"]:
-        errors.append("lead.meta_opening")
-    if re.search(r"(?iu)зрител\w+[^.!?\n]{0,36}(?:смогут|могут)\s+наслад", description):
-        errors.append("style.audience_template:will_enjoy")
+    lower = description.lower()
+    for marker in _PROMPT_LEAK_PATTERNS:
+        if marker.lower() in lower and len(marker) >= 5:
+            errors.append(f"prompt_leak:{marker}")
+            break
 
-    baseline_len = len(str(baseline_description or ""))
-    if baseline_len and len(description) < int(baseline_len * min_length_ratio):
-        errors.append(f"length.below_baseline_ratio:{len(description)}/{baseline_len}")
-    if baseline_len and len(description) > int(baseline_len * max_length_ratio):
-        warnings.append(f"length.above_baseline_ratio:{len(description)}/{baseline_len}")
-    if not quality["lead_hook_signals"]:
-        warnings.append("lead_hook_signal.absent")
+    if re.search(r"(?iu)\b(?:6|12|16|18)\+\b|возрастн", description):
+        warnings.append("age.leak")
+    if re.search(r"(?iu)\b(?:вы\s+сможете|для\s+вас|позволит\s+вам|приглашаем\s+вас)\b", description):
+        warnings.append("style.direct_address")
 
     return LegacyValidationResult(errors=errors, warnings=warnings)
+
+
+# --- fact-coverage reviewer (benchmark-only LLM judge) ----------------------
+
+FACT_COVERAGE_VERDICTS: tuple[str, ...] = ("accepted", "partial", "rejected", "unknown")
+LOSS_SEVERITIES: tuple[str, ...] = ("none", "minor", "major", "critical")
+GROUNDED_VALUES: tuple[str, ...] = ("true", "false", "unclear")
+
+
+def fact_coverage_response_schema() -> dict[str, Any]:
+    baseline_review_item = {
+        "type": "OBJECT",
+        "properties": {
+            "baseline_index": {"type": "INTEGER"},
+            "baseline_fact": {"type": "STRING"},
+            "grounded_in_source": {"type": "STRING"},
+            "covered_by_g4": {"type": "BOOLEAN"},
+            "matched_g4_fact_indexes": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "loss_severity": {"type": "STRING"},
+            "reason": {"type": "STRING"},
+        },
+        "required": [
+            "baseline_index",
+            "baseline_fact",
+            "grounded_in_source",
+            "covered_by_g4",
+            "matched_g4_fact_indexes",
+            "loss_severity",
+            "reason",
+        ],
+    }
+    g4_review_item = {
+        "type": "OBJECT",
+        "properties": {
+            "g4_index": {"type": "INTEGER"},
+            "g4_fact": {"type": "STRING"},
+            "fact_kind": {"type": "STRING"},
+            "category": {"type": "STRING"},
+            "grounded_in_source": {"type": "STRING"},
+            "useful_new_fact": {"type": "BOOLEAN"},
+            "suspicious_reason": {"type": "STRING"},
+        },
+        "required": [
+            "g4_index",
+            "g4_fact",
+            "fact_kind",
+            "category",
+            "grounded_in_source",
+            "useful_new_fact",
+            "suspicious_reason",
+        ],
+    }
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "baseline_facts_review": {"type": "ARRAY", "items": baseline_review_item},
+            "g4_facts_review": {"type": "ARRAY", "items": g4_review_item},
+            "coverage_summary": {
+                "type": "OBJECT",
+                "properties": {
+                    "public_coverage_status": {"type": "STRING"},
+                    "logistics_coverage_status": {"type": "STRING"},
+                    "named_entity_coverage_status": {"type": "STRING"},
+                    "format_topic_program_coverage_status": {"type": "STRING"},
+                    "overall_verdict": {"type": "STRING"},
+                    "verdict_reason": {"type": "STRING"},
+                },
+                "required": [
+                    "public_coverage_status",
+                    "logistics_coverage_status",
+                    "named_entity_coverage_status",
+                    "format_topic_program_coverage_status",
+                    "overall_verdict",
+                    "verdict_reason",
+                ],
+            },
+        },
+        "required": ["baseline_facts_review", "g4_facts_review", "coverage_summary"],
+    }
+
+
+def build_fact_coverage_system_prompt() -> str:
+    return textwrap.dedent(
+        f"""
+        You are an LLM-first fact-coverage reviewer for the {LEGACY_CONTRACT_VERSION} pipeline.
+        Return only JSON matching the response schema. No prose outside JSON.
+
+        You judge how well a Gemma 4 fact extraction covers the same event as a
+        Gemma 3 baseline extraction. Both extractions came from the same source.
+
+        Method:
+        - Match by meaning, not by word overlap. Two facts match when they convey
+          the same atomic claim about the event (same name, same date, same role,
+          same object, same programme item, same instruction). Paraphrasing is
+          allowed; "Лектор — Борис Мегорский" and "Борис Мегорский, лектор" match;
+          "Билеты на сайте" and "Билеты в кассе" are two different logistics facts.
+        - For each baseline fact, set grounded_in_source to one of: true, false,
+          unclear. A baseline fact is grounded only when source_excerpt or event
+          metadata supports it. If baseline invented "знаковые места" or
+          "интересно всем", mark it false (baseline hallucination); we will not
+          punish G4 for skipping it.
+        - For each baseline fact, decide covered_by_g4 (true/false). When matched,
+          list matched_g4_fact_indexes from g4_facts. When unmatched, set
+          loss_severity:
+            * none      -> baseline fact is decorative/ungrounded and not needed;
+            * minor     -> small phrasing nuance lost, no factual gap;
+            * major     -> a real public fact missing (programme item, secondary
+                            person, useful texture, named object);
+            * critical  -> date/time/venue/address/title/lecturer/author/format
+                            missing AND the baseline fact was grounded.
+        - For each G4 fact, set grounded_in_source the same way and decide
+          useful_new_fact when G4 brings a real source-grounded detail that the
+          baseline did not have (e.g. exact start time, age limit, address).
+          If a G4 fact is suspicious (ungrounded, fragmented, duplicate, English
+          word leak, JSON debris, or label-only like "лекция"), set
+          suspicious_reason to a short Russian phrase. Otherwise leave it empty.
+        - In coverage_summary set each *_coverage_status to one of:
+          accepted | partial | rejected.
+            * named_entity covers title, lecturer/author, named work,
+              named programme item;
+            * format_topic_program covers event type, lecture cycle, programme
+              list, route/object list;
+            * logistics covers date, time, venue, address, tickets, age, URL;
+            * public covers everything that is not strictly logistics.
+        - overall_verdict is one of: accepted | partial | rejected.
+            * accepted -> no critical or major losses on grounded baseline facts,
+                          and named_entity / format_topic_program / logistics are
+                          each accepted or partial.
+            * partial  -> minor or major losses on a few grounded baseline facts
+                          but no critical loss.
+            * rejected -> at least one critical loss of a grounded baseline fact,
+                          or G4 widely invents non-grounded claims.
+        - verdict_reason: one short Russian sentence explaining the verdict.
+
+        Hard rules:
+        - Do not invent baseline or G4 facts that are not in the inputs.
+        - matched_g4_fact_indexes must reference indexes that actually appear in
+          g4_facts. If you cannot match, return an empty list.
+        - Do not edit the texts you receive. Echo baseline_fact and g4_fact
+          verbatim from the inputs.
+        - Russian for free-form fields (reason, suspicious_reason, verdict_reason).
+        - Lowercase enum values exactly as listed above.
+        """
+    ).strip()
+
+
+def _coerce_grounded(value: Any) -> str:
+    text = _clean_text(value).lower()
+    if text in {"true", "yes", "истина", "да"}:
+        return "true"
+    if text in {"false", "no", "ложь", "нет"}:
+        return "false"
+    return "unclear"
+
+
+def _coerce_severity(value: Any) -> str:
+    text = _clean_text(value).lower()
+    if text in {"none", "minor", "major", "critical"}:
+        return text
+    return "none"
+
+
+def _coerce_verdict(value: Any, *, allowed: tuple[str, ...] = ("accepted", "partial", "rejected")) -> str:
+    text = _clean_text(value).lower()
+    if text in allowed:
+        return text
+    return "unknown"
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = _clean_text(value).lower()
+    return text in {"true", "yes", "1"}
+
+
+def _coerce_index_list(value: Any, *, max_index: int) -> list[int]:
+    result: list[int] = []
+    seen: set[int] = set()
+    for raw in list(value or []):
+        try:
+            idx = int(raw)
+        except Exception:
+            continue
+        if 0 <= idx < max_index and idx not in seen:
+            seen.add(idx)
+            result.append(idx)
+    return result
+
+
+def build_fact_coverage_payload(
+    *,
+    title: str,
+    event_type: str,
+    date: str | None,
+    time: str | None,
+    location_name: str | None,
+    location_address: str | None,
+    city: str | None,
+    source_excerpt: str,
+    baseline_facts: list[str],
+    g4_public_facts: list[dict[str, Any]] | list[str],
+    g4_logistics_facts: list[dict[str, Any]] | list[str],
+    baseline_writer_facts: list[str] | None = None,
+    baseline_metadata_facts: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build the user payload for the fact-coverage reviewer.
+
+    Baseline facts are intentionally allowed in this payload because the reviewer
+    is benchmark-only. The variant generation payloads (extractor / writer / 4o
+    fallback) must continue to omit baseline facts and baseline text — that
+    invariant is asserted by the corresponding regression test.
+    """
+    def _normalize_g4(items: list[Any], category: str) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for raw in items:
+            if isinstance(raw, dict):
+                text = _clean_text(raw.get("text"))
+                kind = _clean_text(raw.get("kind"))
+            else:
+                text = _clean_text(raw)
+                kind = ""
+            if not text:
+                continue
+            normalized.append(
+                {
+                    "index": len(normalized),
+                    "text": text[:420],
+                    "kind": kind[:40],
+                    "category": category,
+                }
+            )
+        return normalized
+
+    public_items = _normalize_g4(list(g4_public_facts or []), "public")
+    logistics_items = _normalize_g4(list(g4_logistics_facts or []), "logistics")
+    public_count = len(public_items)
+    flat_g4 = list(public_items)
+    for item in logistics_items:
+        flat_g4.append({**item, "index": public_count + item["index"]})
+
+    baseline_items = []
+    for idx, fact in enumerate(baseline_facts or []):
+        text = _clean_text(fact)
+        if text:
+            baseline_items.append({"index": len(baseline_items), "text": text[:420]})
+
+    writer_items: list[dict[str, Any]] = []
+    writer_seen: set[str] = set()
+    for fact in list(baseline_writer_facts or []):
+        text = _clean_text(fact)
+        if text and text not in writer_seen:
+            writer_seen.add(text)
+            writer_items.append({"index": len(writer_items), "text": text[:420]})
+
+    metadata_items: list[dict[str, Any]] = []
+    metadata_seen: set[str] = set()
+    for fact in list(baseline_metadata_facts or []):
+        text = _clean_text(fact)
+        if text and text not in metadata_seen:
+            metadata_seen.add(text)
+            metadata_items.append({"index": len(metadata_items), "text": text[:420]})
+
+    return {
+        "event": {
+            "title": title,
+            "event_type": event_type,
+            "date": date,
+            "time": time,
+            "location_name": location_name,
+            "location_address": location_address,
+            "city": city,
+        },
+        "source_excerpt": str(source_excerpt or "")[:5000],
+        "baseline_facts": baseline_items,
+        "baseline_fact_surfaces": {
+            "raw_extracted_facts": baseline_items,
+            "writer_facts_text_clean": writer_items,
+            "metadata_anchors": metadata_items,
+        },
+        "g4_facts": flat_g4,
+    }
+
+
+def normalize_fact_coverage_payload(
+    payload: dict[str, Any],
+    *,
+    baseline_count: int,
+    g4_count: int,
+    baseline_facts: list[dict[str, Any]] | None = None,
+    g4_facts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    baseline_text_by_index: dict[int, str] = {}
+    for item in list(baseline_facts or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item.get("index"))
+        except Exception:
+            continue
+        text = _clean_text(item.get("text"))[:420]
+        if text:
+            baseline_text_by_index[idx] = text
+
+    g4_by_index: dict[int, dict[str, str]] = {}
+    for item in list(g4_facts or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item.get("index"))
+        except Exception:
+            continue
+        text = _clean_text(item.get("text"))[:420]
+        if text:
+            g4_by_index[idx] = {
+                "text": text,
+                "kind": _clean_text(item.get("kind"))[:40],
+                "category": _clean_text(item.get("category")).lower(),
+            }
+
+    baseline_review: list[dict[str, Any]] = []
+    seen_baseline_idx: set[int] = set()
+    for raw in list(payload.get("baseline_facts_review") or []):
+        if not isinstance(raw, dict):
+            continue
+        try:
+            idx = int(raw.get("baseline_index"))
+        except Exception:
+            continue
+        if not (0 <= idx < baseline_count) or idx in seen_baseline_idx:
+            continue
+        seen_baseline_idx.add(idx)
+        baseline_fact = baseline_text_by_index.get(idx) or _clean_text(raw.get("baseline_fact"))[:420]
+        baseline_review.append(
+            {
+                "baseline_index": idx,
+                "baseline_fact": baseline_fact,
+                "grounded_in_source": _coerce_grounded(raw.get("grounded_in_source")),
+                "covered_by_g4": _coerce_bool(raw.get("covered_by_g4")),
+                "matched_g4_fact_indexes": _coerce_index_list(
+                    raw.get("matched_g4_fact_indexes"), max_index=g4_count
+                ),
+                "loss_severity": _coerce_severity(raw.get("loss_severity")),
+                "reason": _clean_text(raw.get("reason"))[:300],
+            }
+        )
+
+    g4_review: list[dict[str, Any]] = []
+    seen_g4_idx: set[int] = set()
+    for raw in list(payload.get("g4_facts_review") or []):
+        if not isinstance(raw, dict):
+            continue
+        try:
+            idx = int(raw.get("g4_index"))
+        except Exception:
+            continue
+        if not (0 <= idx < g4_count) or idx in seen_g4_idx:
+            continue
+        seen_g4_idx.add(idx)
+        original = g4_by_index.get(idx) or {}
+        category = (original.get("category") or _clean_text(raw.get("category"))).lower()
+        if category not in {"public", "logistics"}:
+            category = ""
+        g4_review.append(
+            {
+                "g4_index": idx,
+                "g4_fact": original.get("text") or _clean_text(raw.get("g4_fact"))[:420],
+                "fact_kind": original.get("kind") or _clean_text(raw.get("fact_kind"))[:40],
+                "category": category,
+                "grounded_in_source": _coerce_grounded(raw.get("grounded_in_source")),
+                "useful_new_fact": _coerce_bool(raw.get("useful_new_fact")),
+                "suspicious_reason": _clean_text(raw.get("suspicious_reason"))[:200],
+            }
+        )
+
+    summary_raw = payload.get("coverage_summary") or {}
+    coverage_summary = {
+        "public_coverage_status": _coerce_verdict(summary_raw.get("public_coverage_status")),
+        "logistics_coverage_status": _coerce_verdict(summary_raw.get("logistics_coverage_status")),
+        "named_entity_coverage_status": _coerce_verdict(summary_raw.get("named_entity_coverage_status")),
+        "format_topic_program_coverage_status": _coerce_verdict(
+            summary_raw.get("format_topic_program_coverage_status")
+        ),
+        "overall_verdict": _coerce_verdict(summary_raw.get("overall_verdict")),
+        "verdict_reason": _clean_text(summary_raw.get("verdict_reason"))[:300],
+    }
+
+    return {
+        "baseline_facts_review": baseline_review,
+        "g4_facts_review": g4_review,
+        "coverage_summary": coverage_summary,
+    }
+
+
+def summarize_fact_coverage(normalized: dict[str, Any]) -> dict[str, Any]:
+    """Derive lost / added / suspicious lists and a deterministic verdict floor.
+
+    The reviewer's `overall_verdict` is the LLM judgement; this helper derives a
+    second-opinion floor from the per-fact decisions so the benchmark report can
+    cross-check. We pick the more conservative of the two for the surfaced
+    `verdict` field, so a single critical loss cannot be dismissed as accepted.
+    """
+    baseline_review = list(normalized.get("baseline_facts_review") or [])
+    g4_review = list(normalized.get("g4_facts_review") or [])
+    coverage_summary = dict(normalized.get("coverage_summary") or {})
+
+    lost_baseline_facts: list[dict[str, Any]] = []
+    grounded_baseline_count = 0
+    covered_grounded_baseline_count = 0
+    for item in baseline_review:
+        grounded = item.get("grounded_in_source") == "true"
+        if grounded:
+            grounded_baseline_count += 1
+        if grounded and item.get("covered_by_g4"):
+            covered_grounded_baseline_count += 1
+        if grounded and not item.get("covered_by_g4"):
+            lost_baseline_facts.append(
+                {
+                    "baseline_index": item.get("baseline_index"),
+                    "baseline_fact": item.get("baseline_fact"),
+                    "loss_severity": item.get("loss_severity"),
+                    "reason": item.get("reason"),
+                }
+            )
+
+    added_g4_facts: list[dict[str, Any]] = []
+    suspicious_g4_facts: list[dict[str, Any]] = []
+    grounded_g4_count = 0
+    for item in g4_review:
+        grounded = item.get("grounded_in_source") == "true"
+        if grounded:
+            grounded_g4_count += 1
+        if grounded and item.get("useful_new_fact"):
+            added_g4_facts.append(
+                {
+                    "g4_index": item.get("g4_index"),
+                    "g4_fact": item.get("g4_fact"),
+                    "category": item.get("category"),
+                    "fact_kind": item.get("fact_kind"),
+                }
+            )
+        suspicious_reason = (item.get("suspicious_reason") or "").strip()
+        if suspicious_reason or item.get("grounded_in_source") in {"false", "unclear"}:
+            suspicious_g4_facts.append(
+                {
+                    "g4_index": item.get("g4_index"),
+                    "g4_fact": item.get("g4_fact"),
+                    "category": item.get("category"),
+                    "grounded_in_source": item.get("grounded_in_source"),
+                    "suspicious_reason": suspicious_reason or item.get("grounded_in_source"),
+                }
+            )
+
+    deterministic_verdict = "accepted"
+    has_critical_loss = any(
+        item.get("loss_severity") == "critical" for item in lost_baseline_facts
+    )
+    has_major_loss = any(
+        item.get("loss_severity") == "major" for item in lost_baseline_facts
+    )
+    suspicious_grounded_false_count = sum(
+        1
+        for item in g4_review
+        if item.get("grounded_in_source") == "false"
+    )
+    if has_critical_loss or suspicious_grounded_false_count >= 3:
+        deterministic_verdict = "rejected"
+    elif has_major_loss or lost_baseline_facts or suspicious_grounded_false_count >= 1:
+        deterministic_verdict = "partial"
+
+    llm_verdict = coverage_summary.get("overall_verdict") or "unknown"
+    rank = {"unknown": -1, "rejected": 0, "partial": 1, "accepted": 2}
+    final_verdict = min(
+        (deterministic_verdict, llm_verdict),
+        key=lambda v: rank.get(v, -1),
+    )
+    if final_verdict == "unknown":
+        final_verdict = deterministic_verdict
+
+    return {
+        "baseline_fact_count": len(baseline_review),
+        "grounded_baseline_fact_count": grounded_baseline_count,
+        "covered_grounded_baseline_fact_count": covered_grounded_baseline_count,
+        "g4_fact_count": len(g4_review),
+        "grounded_g4_fact_count": grounded_g4_count,
+        "lost_baseline_facts": lost_baseline_facts,
+        "added_g4_facts": added_g4_facts,
+        "suspicious_g4_facts": suspicious_g4_facts,
+        "llm_overall_verdict": llm_verdict,
+        "deterministic_verdict_floor": deterministic_verdict,
+        "verdict": final_verdict,
+        "coverage_summary": coverage_summary,
+    }
