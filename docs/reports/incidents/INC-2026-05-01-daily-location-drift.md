@@ -1,10 +1,10 @@
 # INC-2026-05-01 Daily Location Drift In Announcement
 
-Status: open
+Status: closed
 Severity: sev1
 Service: Telegram daily announcement / Telegram Monitoring import / Smart Update
 Opened: 2026-05-01
-Closed: —
+Closed: 2026-05-01
 Owners: Codex / event ingestion owner
 Related incidents: `INC-2026-04-26-daily-location-fragments`, `INC-2026-04-29-bar-bastion-city-jazz-location`, `INC-2026-04-30-tg-monitoring-event-quality-regressions`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/llm/request-guide.md`
@@ -30,6 +30,10 @@ The 2026-05-01 daily announcement exposed repeated event-quality regressions: `l
 - 2026-05-01 UTC: production DB evidence confirmed affected rows and source posts.
 - 2026-05-01 UTC: linked hotfix worktree created from `origin/main` because the primary worktree was dirty/out-of-sync.
 - 2026-05-01 UTC: fix implementation started with LLM-first venue review, time-default grounding, VK source default repair, and reference additions.
+- 2026-05-01 07:17 UTC: deployed `c9266892` to Fly app `events-bot-new-wngqia`, machine version `1029`.
+- 2026-05-01 07:27 UTC: repaired production rows with backup tables `incident_event_quality_backup_20260501` / `incident_event_source_backup_20260501`.
+- 2026-05-01 07:29 UTC: verified daily preview for 2026-05-01 with `bad_hits=[]`.
+- 2026-05-01 07:29 UTC: sent corrected daily catch-up to `@kenigevents` and `@keniggpt`, 12 Telegram posts each, `record=False`.
 
 ## Root Cause
 
@@ -84,7 +88,7 @@ The 2026-05-01 daily announcement exposed repeated event-quality regressions: `l
 
 ## Immediate Mitigation
 
-- In progress: repair affected production rows, rebuild affected Telegraph pages, and run a same-day daily catch-up after deployment.
+- Repaired affected production rows, cancelled duplicate public cards, requeued Telegraph/ICS/month/week rebuild jobs, and sent a same-day corrected daily catch-up.
 
 ## Corrective Actions
 
@@ -100,10 +104,11 @@ The 2026-05-01 daily announcement exposed repeated event-quality regressions: `l
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `c9266892`, reachable from `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean linked worktree; image `deployment-01KQH6A59543PCQPC298XB8RBF`; machine `48e42d5b714228` version `1029`.
+- regression checks: `46 passed` for `tests/test_tg_monitor_gemma4_contract.py`, `tests/test_tg_candidate_location_grounding.py`, `tests/test_smart_event_update_duplicate_guards.py`, `tests/test_smart_event_update_location_aliases.py`, `tests/test_vk_default_time.py`; `py_compile` passed for `kaggle/TelegramMonitor/telegram_monitor.py`, `source_parsing/telegram/handlers.py`, `db.py`, `smart_event_update.py`.
+- production DB repair: backup tables contain `22` event rows and `32` event-source rows; duplicate rows `4288`, `4117`, `4152`, `4261`, `4199`, `4456`, `4465` were set non-active/silent; active affected rows now have grounded venues.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `db=ok`; Fly status showed `1 total, 1 passing`; daily preview returned `bad_hits=[]`; corrected catch-up sent `12` posts to each daily channel.
 
 ## Prevention
 
