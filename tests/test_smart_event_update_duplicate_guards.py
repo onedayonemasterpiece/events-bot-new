@@ -38,6 +38,28 @@ async def _seed_club_znakomstv_event(db: Database) -> int:
         return int(ev.id or 0)
 
 
+async def _seed_dramteatr_zhenitba_event(db: Database) -> int:
+    async with db.get_session() as session:
+        ev = Event(
+            title="Женитьба",
+            description="Существующая карточка спектакля.",
+            date="2026-05-01",
+            time="19:00",
+            location_name="Драматический театр",
+            location_address="Мира 4",
+            city="Калининград",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+            source_text="О спектакле «Женитьба». Ближайшие спектакли: 1 мая, 19:00.",
+            source_post_url="https://dramteatr39.ru/spektakli/jenitba",
+            telegraph_url="https://telegra.ph/ZHenitba-04-06",
+            telegraph_path="ZHenitba-04-06",
+        )
+        session.add(ev)
+        await session.commit()
+        return int(ev.id or 0)
+
+
 @pytest.mark.asyncio
 async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_differs(
     tmp_path,
@@ -48,6 +70,7 @@ async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_diff
     try:
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         eid = await _seed_club_znakomstv_event(db)
 
         candidate = EventCandidate(
@@ -91,6 +114,44 @@ async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_diff
 
 
 @pytest.mark.asyncio
+async def test_smart_update_merges_unsupported_default_time_duplicate(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+        eid = await _seed_dramteatr_zhenitba_event(db)
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/dramteatr39/4126",
+            source_chat_id=1371643671,
+            source_message_id=4126,
+            source_text="01.05 | Женитьба",
+            title="Женитьба",
+            date="2026-05-01",
+            time="18:00",
+            time_is_default=True,
+            location_name="Драматический театр",
+            location_address="Мира 4",
+            city="Калининград",
+            ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+            event_type="спектакль",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        assert int(result.event_id or 0) == eid
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_smart_update_merges_doors_vs_start_duplicate_without_ticket_anchor(
     tmp_path,
     monkeypatch,
@@ -100,6 +161,7 @@ async def test_smart_update_merges_doors_vs_start_duplicate_without_ticket_ancho
     try:
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         eid = await _seed_club_znakomstv_event(db)
 
         candidate = EventCandidate(

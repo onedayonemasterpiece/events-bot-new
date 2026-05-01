@@ -106,3 +106,94 @@ async def test_tg_build_candidate_drops_prose_location_and_finds_known_venue_in_
     assert cand.location_name == "Филиал Третьяковской галереи"
     assert cand.location_address == "Парадная наб. 3"
     assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_drops_section_label_location_and_uses_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Филиал Третьяковской галереи, Парадная наб. 3, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "tretyakovka_kaliningrad",
+        "message_id": 2839,
+        "source_link": "https://t.me/tretyakovka_kaliningrad/2839",
+        "text": (
+            "Дайджест событий в музее 28 апреля – 3 мая:\n"
+            "📍Кинозал:\n"
+            "📍Мастерские:\n"
+            "1 мая в 14:00 – столярный мастер-класс «Солнечный круг»."
+        ),
+    }
+    event_data = {
+        "title": "Столярный мастер-класс «Солнечный круг»",
+        "date": "2026-05-01",
+        "time": "14:00",
+        "location_name": "Кинозал:",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Филиал Третьяковской галереи"
+    assert cand.location_address == "Парадная наб. 3"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_marks_unsupported_time_as_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Драматический театр, Мира 4, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "dramteatr39",
+        "message_id": 4126,
+        "source_link": "https://t.me/dramteatr39/4126",
+        "text": "01.05 | Женитьба",
+    }
+    event_data = {
+        "title": "Женитьба",
+        "date": "2026-05-01",
+        "time": "18:00",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.time == "18:00"
+    assert cand.time_is_default is True
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_normalizes_camember_reference_location():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="medium")
+    message = {
+        "source_username": "kulturnaya_chaika",
+        "message_id": 7615,
+        "source_link": "https://t.me/kulturnaya_chaika/7615",
+        "text": '📍 сырный магазин "Камамбер", в Зеленоградске. Ул. Потемкина, 20Б',
+    }
+    event_data = {
+        "title": "Винные дегустации с сомелье Ольгой Скобовой",
+        "date": "2026-05-01",
+        "time": "19:00",
+        "location_name": 'сырный магазин "Камамбер"',
+        "location_address": "Потемкина 20Б",
+        "city": "Зеленоградск",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Сырный магазин Камамбер"
+    assert cand.location_address == "Потемкина 20Б"
+    assert cand.city == "Зеленоградск"

@@ -1196,7 +1196,7 @@ EVENT_ARRAY_SCHEMA = {
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
             'location_name': _string_schema(
                 'Venue name where the event takes place; empty string if unknown. '
-                'Must be a venue/place name or a precise hall/room label. Never copy descriptive prose, '
+                'Must be a venue/place name, not a nearby content fragment. Never copy descriptive prose, '
                 'speaker biographies, schedule commentary, film metadata, ticket instructions, or narrative sentences. '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
@@ -1302,6 +1302,22 @@ TITLE_REVIEW_SCHEMA = {
             'search_digest': _string_schema('Optional short search phrase; empty string if unsure.'),
         },
         'required': ['title', 'event_type', 'search_digest'],
+    },
+}
+
+LOCATION_REVIEW_SCHEMA = {
+    'type': 'array',
+    'items': {
+        'type': 'object',
+        'properties': {
+            'location_name': _string_schema(
+                'Corrected venue/place name for the input event, or empty string if the venue is not grounded. '
+                'Never descriptive prose, schedule commentary, a service heading, a ticket instruction, or film metadata.'
+            ),
+            'location_address': _string_schema('Corrected venue street address, or empty string if not grounded.'),
+            'city': _string_schema('Corrected venue city, or empty string if not grounded.'),
+        },
+        'required': ['location_name', 'location_address', 'city'],
     },
 }
 
@@ -2077,6 +2093,19 @@ _SERVICE_HEADING_TITLE_RE = re.compile(
     r")\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_TIME_RANGE_RE = re.compile(
+    r"^\s*\d{1,2}[.:]\d{2}\s*[-–—]\s*\d{1,2}[.:]\d{2}\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_DATE_RE = re.compile(
+    r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_ADDRESS_HINT_RE = re.compile(
+    r"\b(?:ул\.?|улица|проспект|пр-т|пер\.?|переулок|площадь|пл\.?|наб\.?|набережная|"
+    r"шоссе|бульвар|аллея|проезд|д\.|дом)\b",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def _clean_event_string_value(value) -> str:
@@ -2207,12 +2236,118 @@ async def _repair_service_heading_titles(
     return events
 
 
+def _needs_llm_location_review(events: list, *, source_default_location: str | None = None) -> bool:
+    """Detect broad venue-shape smells; the semantic repair stays LLM-owned."""
+    if not events or not isinstance(events, list):
+        return False
+    has_default_location = bool(str(source_default_location or '').strip())
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        raw = str(ev.get('location_name') or '').strip()
+        if not raw:
+            continue
+        if has_default_location:
+            return True
+        compact = re.sub(r"\s+", " ", raw).strip()
+        words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+        if len(compact) > 90:
+            return True
+        if "\n" in raw:
+            return True
+        if compact.endswith(":") and len(words) <= 4:
+            return True
+        if _LOCATION_REVIEW_TIME_RANGE_RE.search(compact):
+            return True
+        if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
+            return True
+        if len(words) >= 8 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
+            return True
+    return False
+
+
+async def _repair_suspicious_locations(
+    *,
+    message_text: str,
+    ocr_text: str | None,
+    date_context: str,
+    source_context_line: str,
+    events: list,
+    source_default_location: str | None = None,
+) -> list:
+    """Ask the LLM to repair suspicious venue fields against the original message.
+
+    The deterministic part only decides whether the extracted venue field has a
+    broad bad shape (overlong sentence, schedule row, short section label). It
+    does not infer the replacement venue.
+    """
+    if not _needs_llm_location_review(events, source_default_location=source_default_location):
+        return events
+
+    prompt = (
+        'Review extracted Telegram events and repair only the venue fields. '
+        'Return strict JSON array with exactly one object per input event, same order. '
+        'Return raw JSON only: the first character must be "[" and the last character must be "]"; '
+        'do not wrap the array in markdown/code fences and do not append trailing ``` markers. '
+        'Each output object has location_name, location_address, city only. '
+        'Do not add events. Do not drop events. Do not change title/date/time. '
+        'Use the original message text, OCR, source title, source username, and source default location as evidence. '
+        'location_name must be a real venue/place name where attendees go. '
+        'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
+        'speaker bios, or an event description as location_name. '
+        'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
+        'by source context or message text, output the host venue as location_name and leave the hall label out. '
+        'If the source default location is provided, treat it as a strong prior for this source, but override it only '
+        'when the message explicitly names a different venue/address. '
+        'If no venue is grounded, output empty strings for unresolved venue fields rather than prose or generic '
+        'placeholders like "музей", "галерея", "пространство", or "площадка". '
+        'For events whose current venue fields are already correct, repeat the same venue fields unchanged. '
+        'Never include comments, markdown, alternatives, uncertainty markers, or reasoning in JSON values. '
+        + date_context + '\n'
+        + (source_context_line + '\n' if source_context_line else '')
+        + 'Message caption/text:\n' + (message_text or '')[:6000] + '\n\n'
+        + ('OCR text:\n' + (ocr_text or '')[:3000] + '\n\n' if ocr_text else '')
+        + 'Extracted events JSON:\n' + json.dumps(events, ensure_ascii=False)
+    )
+    try:
+        repaired_text = await _call_model('text', prompt, response_schema=LOCATION_REVIEW_SCHEMA)
+        repaired = _safe_json(repaired_text)
+    except Exception as exc:
+        logger.warning('extract_events location_review failed: %s', exc)
+        return events
+    if isinstance(repaired, dict) and isinstance(repaired.get('locations'), list):
+        repaired = repaired['locations']
+    if not (isinstance(repaired, list) and len(repaired) == len(events)):
+        return events
+
+    out = []
+    for old, new in zip(events, repaired):
+        if not isinstance(old, dict):
+            out.append(old)
+            continue
+        merged = dict(old)
+        original_suspect = _needs_llm_location_review(
+            [old],
+            source_default_location=source_default_location,
+        )
+        if isinstance(new, dict):
+            for field in ('location_name', 'location_address', 'city'):
+                if field not in new:
+                    continue
+                value = _clean_event_string_value(new.get(field))
+                if value or original_suspect:
+                    merged[field] = value
+        out.append(merged)
+    return out
+
+
 async def extract_events(
     text: str,
     ocr_text: str | None = None,
     message_date: str | None = None,
     source_username: str | None = None,
     source_title: str | None = None,
+    source_default_location: str | None = None,
 ):
     content = (text or '').strip()
     if not content or len(content) < 10:
@@ -2395,6 +2530,8 @@ async def extract_events(
         source_context_parts.append(f"Source username: @{str(source_username).strip().lstrip('@')}")
     if source_title:
         source_context_parts.append(f"Source title: {str(source_title).strip()[:120]}")
+    if source_default_location:
+        source_context_parts.append(f"Source default location: {str(source_default_location).strip()[:180]}")
     source_context = ("\n" + "\n".join(source_context_parts)) if source_context_parts else ""
     source_context_line = "Source context: " + "; ".join(source_context_parts) if source_context_parts else ""
     schedule_like = bool(
@@ -2556,6 +2693,14 @@ async def extract_events(
         date_context=date_context,
         source_context_line=source_context_line,
         events=out,
+    )
+    out = await _repair_suspicious_locations(
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        date_context=date_context,
+        source_context_line=source_context_line,
+        events=out,
+        source_default_location=source_default_location,
     )
     # Guardrails: prevent pseudo-events from open calls/applications, and avoid
     # inventing event start dates from message date unless there's an explicit anchor.
@@ -2889,6 +3034,14 @@ async def extract_events(
         date_context=date_context,
         source_context_line=source_context_line,
         events=out,
+    )
+    out = await _repair_suspicious_locations(
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        date_context=date_context,
+        source_context_line=source_context_line,
+        events=out,
+        source_default_location=source_default_location,
     )
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]
@@ -3324,6 +3477,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 message_date=msg_date,
                 source_username=username,
                 source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
+                source_default_location=default_location,
             )
             ocr_date_hint, ocr_time_hint = _extract_ocr_datetime(ocr_text, msg_date)
 

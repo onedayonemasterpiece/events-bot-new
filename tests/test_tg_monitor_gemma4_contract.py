@@ -80,6 +80,13 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "keep the cycle/series label in raw_excerpt/search_digest, not as a second event row" in source
     assert 'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка"' in source
     assert 'For museum posts spotlighting one artist or one body of work currently shown in the museum' in source
+    assert "_repair_suspicious_locations" in source
+    assert "Review extracted Telegram events and repair only the venue fields" in source
+    assert "source default location as evidence" in source
+    assert "The deterministic part only decides whether the extracted venue field has a" in source
+    assert "source_default_location=default_location" in source
+    assert "Source default location:" in source
+    assert "source default location is provided, treat it as a strong prior" in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:

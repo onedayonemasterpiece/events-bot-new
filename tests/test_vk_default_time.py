@@ -411,6 +411,33 @@ async def test_vk_default_location_message_updates_db(tmp_path):
         cur = await conn.execute("SELECT location FROM vk_source WHERE id=?", (vid,))
         (location_val,) = await cur.fetchone()
     assert location_val is None
+
+
+@pytest.mark.asyncio
+async def test_db_init_repairs_known_vk_source_location_defaults(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (214027639, "locostandup", "Loco Standup", "Калининград Сити Джаз Клуб, Мира 33-35, Калининград"),
+        )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (149955604, "bar_bastion", "БАСТИОН. Калининград", "Калининград Сити Джаз Клуб"),
+        )
+        await conn.commit()
+
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        rows = await conn.execute_fetchall(
+            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?) ORDER BY group_id",
+            (149955604, 214027639),
+        )
+    locations = {int(row[0]): row[1] for row in rows}
+    assert locations[149955604] == "Бар Бастион, Судостроительная 6/1, Калининград"
+    assert locations[214027639] == "Стендап клуб Локация, Юбилейная 18, Калининград"
 @pytest.mark.asyncio
 async def test_build_event_payload_includes_default_time(monkeypatch):
     captured = {}

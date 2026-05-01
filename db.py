@@ -1430,6 +1430,38 @@ class Database:
                     """,
                     ("Понарт, Судостроительная 6/2, Калининград", 226847232),
                 )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Калининград Сити Джаз Клуб',
+                            'Калининград Сити Джаз Клуб, Мира 33-35, Калининград'
+                        )
+                      )
+                    """,
+                    ("Стендап клуб Локация, Юбилейная 18, Калининград", 214027639),
+                )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Калининград Сити Джаз Клуб',
+                            'Калининград Сити Джаз Клуб, Мира 33-35, Калининград'
+                        )
+                      )
+                    """,
+                    ("Бар Бастион, Судостроительная 6/1, Калининград", 149955604),
+                )
             except Exception:
                 logging.warning("db.init: failed to seed vk_source defaults", exc_info=True)
 

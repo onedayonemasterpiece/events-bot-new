@@ -1101,6 +1101,21 @@ def _extract_time_tokens(text: str | None) -> list[str]:
     return out
 
 
+def _time_is_supported_by_texts(time_value: str | None, *texts: str | None) -> bool:
+    raw = str(time_value or "").strip()
+    if not raw:
+        return False
+    wanted = _extract_time_tokens(raw)
+    if not wanted:
+        return False
+    supported: set[str] = set()
+    for text in texts:
+        supported.update(_extract_time_tokens(text))
+    if not supported:
+        return False
+    return any(token in supported for token in wanted)
+
+
 def _source_filters(source: TelegramSource) -> dict[str, Any]:
     value = getattr(source, "filters_json", None)
     if not value:
@@ -2348,6 +2363,12 @@ _LOCATION_PROSE_START_RE = re.compile(
     r"(?iu)^\s*(?:которые|известн\w*|дарим|вместо|по\s+решению|это|аниме|мультфильм|"
     r"мастер[- ]?класс\w*|немого\s+кино|которые\s+не)\b"
 )
+_LOCATION_LABEL_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*(?:кинозал|мастерские|мастер[- ]?классы|расписание|программа|сцена|зал)\s*:?\s*$"
+)
+_LOCATION_SCHEDULE_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*\d{1,2}[:.]\d{2}\s*[-–—]\s*\d{1,2}[:.]\d{2}\s*[-–—]\s+\S+"
+)
 _CITY_PREFIX_RE = re.compile(
     r"(?i)^\s*(?:г\.?|город|пос\.?|посёлок|поселок|пгт|село|деревня)\s+"
 )
@@ -2572,7 +2593,13 @@ def _looks_like_location_prose_fragment(value: str | None) -> bool:
         return True
     compact = re.sub(r"\s+", " ", raw)
     words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+    if _LOCATION_LABEL_FRAGMENT_RE.match(compact):
+        return True
+    if _LOCATION_SCHEDULE_FRAGMENT_RE.search(compact):
+        return True
     if len(compact) > 90:
+        return True
+    if re.search(r"[:]\s*$", compact) and len(words) <= 3 and not _ADDRESS_HINT_RE.search(compact):
         return True
     if "|" in compact or re.search(r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b", compact):
         return True
@@ -3819,6 +3846,33 @@ def _build_candidate(
                 len(posters),
             )
 
+    time_support_chunks: list[str | None] = [
+        message_text_s,
+        event_source_text,
+        event_source_text_raw,
+        raw_excerpt,
+    ]
+    for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        time_support_chunks.append(item.get("ocr_text"))
+        time_support_chunks.append(item.get("ocr_title"))
+    current_time_for_support = str(time_raw or "").strip()
+    time_is_default = False
+    if current_time_for_support and current_time_for_support not in {"00:00", "0:00"}:
+        time_is_default = not _time_is_supported_by_texts(
+            current_time_for_support,
+            *time_support_chunks,
+        )
+        if time_is_default:
+            logger.warning(
+                "telegram: marked unsupported extracted time as default source=%s message_id=%s title=%r time=%r",
+                username,
+                message_id,
+                title,
+                current_time_for_support,
+            )
+
     metrics_raw = message.get("metrics")
     metrics: dict[str, Any] = dict(metrics_raw) if isinstance(metrics_raw, dict) else {}
     metrics.update(
@@ -3834,6 +3888,7 @@ def _build_candidate(
             "tg_location_kept_extracted": kept_explicit_location,
             "tg_city_overridden_by_default": bool(city_overridden_by_default),
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
+            "tg_time_is_default": bool(time_is_default),
         }
     )
 
@@ -3844,6 +3899,7 @@ def _build_candidate(
         title=str(title).strip() if title else None,
         date=str(date_raw).strip() if date_raw else None,
         time=str(time_raw).strip() if time_raw else "",
+        time_is_default=bool(time_is_default),
         end_date=str(end_date).strip() if end_date else None,
         festival=_coerce_optional_text(event_data.get("festival")),
         festival_source=bool(getattr(source, "festival_source", False)),
