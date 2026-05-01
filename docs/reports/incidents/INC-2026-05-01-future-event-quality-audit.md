@@ -39,6 +39,7 @@ This is a production incident because the affected rows are active future public
 - 2026-05-01 08:14-08:15 UTC — affected event Telegraph pages were rebuilt. A forced May month-page rebuild was attempted but failed with Telegraph `CONTENT_TOO_BIG` on part 8; daily announcement publishing was intentionally not run.
 - 2026-05-01 08:17 UTC — production verification completed: `PRAGMA quick_check=ok`, all 18 canonical survivor rows present, all 7 duplicate rows absent, and `/tmp` repair scripts removed. Production `/data` remained at 78% used; no full DB snapshot was left on the Fly volume.
 - 2026-05-01 UTC — code corrective work added targeted guards for prose-like Telegram `location_address`, confirmed venue references/aliases, permanent-exhibition compact rendering/limit, and month splitter exhibition-tail splitting.
+- 2026-05-01 UTC — production May month rebuild exposed a second month-page mechanism bug: nav-refresh fallback rebuilds could recursively trigger another full nav refresh when the updated nav block was too large. The run was stopped after the 7-part month page had already been written, and the recursion guard was added before closure.
 
 ## Confirmed Candidates
 
@@ -75,6 +76,7 @@ Root cause was a compound regression across import grounding, reference coverage
 2. The reference layer was missing several venues/aliases seen in the confirmed future posts (`Pure`, `12|55`, `Бар Бастион`, `Soul Garden`, zoo aliases), so candidate grounding had fewer deterministic anchors after LLM review failed open.
 3. Some duplicate clusters were already covered by known Smart Update guards (`copy_post_ticket_same_day`, weak/default time handling, Bar Bastion defaults), but the production rows were created before all guards/reference fixes were present or before the confirmed future audit was repaired.
 4. Month-page splitting assumed all remaining `Постоянные выставки` could be forced onto the final part, and aggregate exhibition rendering used full descriptions; enough long-running exhibitions made the final Telegraph part exceed `CONTENT_TOO_BIG`.
+5. Month nav refresh treated a fallback full rebuild as a signal to refresh nav again even when it was already running in `update_links=True` mode, so a page that needed rebuild instead of in-place nav update could repeat work.
 
 ## Contributing Factors
 
@@ -149,6 +151,7 @@ Root cause was a compound regression across import grounding, reference coverage
 - Done: added confirmed venue references/aliases for the future-event repair cases.
 - Done: month/weekend aggregate pages now cap `Постоянные выставки` at 12 items and render compact descriptions instead of full event text.
 - Done: month splitter now splits oversized exhibition tails across continuation pages and can fall back to `no ICS + no details` before Telegraph writes.
+- Done: month nav-refresh fallback rebuilds no longer recursively trigger a second `refresh_month_nav`.
 
 ## Follow-up Actions
 
@@ -157,6 +160,7 @@ Root cause was a compound regression across import grounding, reference coverage
 - [x] Fix or tune May month-page splitting so forced rebuild does not fail with Telegraph `CONTENT_TOO_BIG`.
 - [x] Add regression tests for the exact confirmed Telegram venue-recovery shapes and exhibition split/rendering failure.
 - [x] Review Bar Bastion source/default handling and add the confirmed `Бар Бастион` reference/aliases.
+- [x] Add regression coverage for month nav-refresh fallback rebuild recursion.
 - [ ] Add a reusable future-event quality audit command/report for prose-like venue rows and duplicate clusters.
 
 ## Release And Closure Evidence
@@ -174,7 +178,7 @@ Root cause was a compound regression across import grounding, reference coverage
   - no daily announcement rerun; `joboutbox` daily task query returned no rows
   - `/tmp` repair/rebuild/verify scripts removed; Fly `/data` remained at 78% used and no full DB snapshot was left on the volume
   - local code verification: `python3 -m py_compile main.py main_part2.py source_parsing/telegram/handlers.py`
-  - targeted regression tests: `16 passed, 2 skipped` for `tests/test_month_split_regressions.py`, `tests/test_tg_candidate_location_grounding.py`, `tests/test_smart_event_update_duplicate_guards.py`, and `tests/test_vk_default_time.py::test_db_init_repairs_known_vk_source_location_defaults`
+  - targeted regression tests: `17 passed, 2 skipped` for `tests/test_month_split_regressions.py`, `tests/test_tg_candidate_location_grounding.py`, `tests/test_smart_event_update_duplicate_guards.py`, and `tests/test_vk_default_time.py::test_db_init_repairs_known_vk_source_location_defaults`
   - local May 2026 month render against the repaired DB copy produced 7 parts, all below Telegraph limit (`44618`, `14984`, `39849`, `38405`, `43098`, `42833`, `37079` bytes)
 - post-deploy verification: pending code deploy and production May month-page rebuild
 

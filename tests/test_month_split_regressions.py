@@ -357,6 +357,32 @@ def test_month_page_limits_and_compacts_permanent_exhibitions(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_month_page_update_links_fallback_does_not_recurse_nav(monkeypatch):
+    """A nav-refresh fallback rebuild must not trigger another nav refresh loop."""
+
+    calls = []
+
+    async def inner_stub(db, month, update_links=False, force=False, progress=None):
+        calls.append(("inner", month, update_links, force))
+        return True
+
+    async def refresh_stub(db):
+        calls.append(("refresh",))
+
+    monkeypatch.setattr(main, "_sync_month_page_inner", inner_stub)
+    monkeypatch.setattr(main, "refresh_month_nav", refresh_stub)
+
+    await main.sync_month_page(object(), "2026-05", update_links=True, force=True)
+    assert calls == [("inner", "2026-05", True, True)]
+
+    await main.sync_month_page(object(), "2026-06", update_links=False, force=True)
+    assert calls[-2:] == [
+        ("inner", "2026-06", False, True),
+        ("refresh",),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_split_month_until_ok_updates_page_object(tmp_path, monkeypatch):
     """split_month_until_ok should mutate переданный MonthPage (path/url)."""
     month = "2025-07"  # smaller slice keeps test fast

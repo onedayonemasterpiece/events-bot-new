@@ -1034,7 +1034,7 @@ async def sync_month_page(
         needs_nav = await _sync_month_page_inner(
             db, month, update_links, force, progress
         )
-    if needs_nav:
+    if needs_nav and not update_links:
         await refresh_month_nav(db)
 
 
