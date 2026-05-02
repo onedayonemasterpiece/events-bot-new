@@ -135,6 +135,20 @@ def _normalize_bundle_facts(bundle: dict[str, Any] | None) -> list[str]:
     return out
 
 
+def _bundle_derived_fields(bundle: dict[str, Any] | None) -> tuple[str | None, str | None]:
+    if not isinstance(bundle, dict):
+        return None, None
+    search_digest = su._clean_search_digest(bundle.get("search_digest"))
+    short_description = su._clean_short_description(bundle.get("short_description"))
+    if short_description and not su._is_short_description_acceptable(
+        short_description,
+        min_words=12,
+        max_words=16,
+    ):
+        short_description = None
+    return search_digest, short_description
+
+
 def _field_snapshot(candidate: su.EventCandidate, bundle: dict[str, Any] | None) -> dict[str, Any]:
     bundle = bundle if isinstance(bundle, dict) else {}
     return {
@@ -329,6 +343,57 @@ def _writer_response_schema_gemma() -> dict[str, Any]:
             "description_md": {"type": "STRING"},
         },
         "required": ["title", "description_md"],
+    }
+
+
+def _compact_gemma_writer_system_prompt() -> str:
+    return (
+        "You are smart_update.g4_lollipop_light.final_writer.v2. Return only JSON.\n"
+        "Write polished Russian event copy from the provided writer_pack only.\n"
+        "Cover every must_cover_fact_id exactly once in natural prose. Do not add unsupported facts.\n"
+        "Keep logistics out of narrative. Use exact ### headings from each section. "
+        "If a section has literal_items, render every item on its own line as `- item` "
+        "with a hyphen and a space. Do not use `* item` bullets.\n"
+        "Tone: cultural city digest, lively but restrained. No direct address, CTA, promo promises, or report formulas.\n"
+        "Never output report words like `характеризуется`, `осуществляется`, `представляет собой`, "
+        "even if a fact uses them. Rewrite them naturally without changing meaning.\n"
+        "Target length: 700-1100 characters for 8+ facts; 450-800 for smaller packs."
+    )
+
+
+def _compact_gemma_writer_payload(pack: dict[str, Any]) -> dict[str, Any]:
+    sections: list[dict[str, Any]] = []
+    for section in list(pack.get("sections") or []):
+        if not isinstance(section, dict):
+            continue
+        sections.append(
+            {
+                "role": section.get("role"),
+                "style": section.get("style"),
+                "heading": section.get("heading"),
+                "fact_ids": section.get("fact_ids") or [],
+                "facts": [
+                    {
+                        "fact_id": fact.get("fact_id"),
+                        "text": fact.get("text"),
+                    }
+                    for fact in list(section.get("facts") or [])
+                    if isinstance(fact, dict)
+                ],
+                "coverage_plan": section.get("coverage_plan") or [],
+                "literal_items": section.get("literal_items") or [],
+            }
+        )
+    return {
+        "title": ((pack.get("title_context") or {}).get("original_title") or ""),
+        "event_type": pack.get("event_type"),
+        "must_cover_fact_ids": (pack.get("constraints") or {}).get("must_cover_fact_ids") or [],
+        "required_headings": (pack.get("constraints") or {}).get("headings") or [],
+        "sections": sections,
+        "output_contract": {
+            "title": "Keep original title unless writer_pack explicitly asks otherwise.",
+            "description_md": "Markdown prose only; no infoblock, no date/time/address/city/tickets.",
+        },
     }
 
 
@@ -668,17 +733,17 @@ async def _run_candidate_g4_lollipop2(
     except Exception as exc:
         stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
         try:
-            writer_model = f"{four_o_model}->gemma-4"
+            writer_model = f"{four_o_model}->gemma-4-compact"
             writer_output = await _time_stage(
                 timings,
-                "writer.final_g4_after_4o_error",
+                "writer.final_g4_compact_after_4o_error",
                 bench._ask_gemma_json_direct(
                     model=model,
-                    system_prompt=writer_final_family._build_prompt(writer_pack["payload"]),
-                    user_payload={"task": "Return final title and description_md JSON for this writer_pack."},
-                    max_tokens=1400,
+                    system_prompt=_compact_gemma_writer_system_prompt(),
+                    user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
+                    max_tokens=1200,
                     response_schema=_writer_response_schema_gemma(),
-                    timeout_sec=min(bench._gemma_direct_timeout_sec(), 90.0),
+                    timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
                     allow_json_repair=False,
                 ),
             )
@@ -696,16 +761,23 @@ async def _run_candidate_g4_lollipop2(
             )
     applied = writer_final_family._apply_writer_output(writer_pack["payload"], writer_output)
     description = str(applied.get("description_md") or "")
-    search_digest = await _time_stage(
-        timings,
-        "search_digest_g4",
-        su._llm_build_search_digest(title=applied.get("title") or fixture.title, description=description, event_type=fixture.event_type),
-    )
-    short_description = await _time_stage(
-        timings,
-        "short_description_g4",
-        su._llm_build_short_description(title=applied.get("title") or fixture.title, description=description, event_type=fixture.event_type),
-    )
+    search_digest, short_description = _bundle_derived_fields(bundle)
+    if not search_digest:
+        search_digest = await _time_stage(
+            timings,
+            "search_digest_g4",
+            su._llm_build_search_digest(title=applied.get("title") or fixture.title, description=description, event_type=fixture.event_type),
+        )
+    if not search_digest:
+        search_digest = su._fallback_digest_from_description(description)
+    if not short_description:
+        short_description = await _time_stage(
+            timings,
+            "short_description_g4",
+            su._llm_build_short_description(title=applied.get("title") or fixture.title, description=description, event_type=fixture.event_type),
+        )
+    if not short_description:
+        short_description = su._fallback_short_description_from_text(description)
     wall = round(time.perf_counter() - started, 6)
     return {
         "model": model,

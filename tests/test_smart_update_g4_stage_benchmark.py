@@ -147,3 +147,68 @@ def test_stage_benchmark_loads_single_fixture_stage_artifact(tmp_path: Path) -> 
     assert baseline["raw_facts"] == ["Факт из staged baseline."]
     assert baseline["short_description"] == "Коротко."
     assert baseline["search_digest"] == "Поиск."
+
+
+def test_stage_benchmark_uses_valid_bundle_derived_fields_before_extra_calls() -> None:
+    stage = _load_stage_benchmark()
+
+    search_digest, short_description = stage._bundle_derived_fields(
+        {
+            "search_digest": "Экспозиция соединяет жостовскую роспись, каргопольскую и дымковскую игрушку в рассказ о народных промыслах.",
+            "short_description": "Экспозиция рассказывает о жостовской росписи, каргопольской и дымковской игрушке в народной традиции.",
+        }
+    )
+
+    assert search_digest
+    assert short_description
+
+
+def test_stage_benchmark_rejects_invalid_bundle_short_description() -> None:
+    stage = _load_stage_benchmark()
+
+    _search_digest, short_description = stage._bundle_derived_fields(
+        {
+            "search_digest": "Короткий дайджест.",
+            "short_description": "Слишком коротко.",
+        }
+    )
+
+    assert short_description is None
+
+
+def test_compact_gemma_writer_payload_keeps_only_writer_contract_fields() -> None:
+    stage = _load_stage_benchmark()
+
+    payload = stage._compact_gemma_writer_payload(
+        {
+            "event_type": "выставка",
+            "title_context": {"original_title": "Космос красного"},
+            "constraints": {
+                "must_cover_fact_ids": ["EC01", "SC01"],
+                "headings": ["Жостовская роспись"],
+            },
+            "sections": [
+                {
+                    "role": "body",
+                    "style": "narrative",
+                    "heading": "Жостовская роспись",
+                    "fact_ids": ["EC01", "SC01"],
+                    "facts": [
+                        {"fact_id": "EC01", "text": "Представлены жостовские подносы"},
+                        {"fact_id": "SC01", "text": "Жостовская роспись существует с 1825 года"},
+                    ],
+                    "coverage_plan": [{"fact_id": "EC01", "mode": "narrative"}],
+                    "literal_items": [],
+                }
+            ],
+        }
+    )
+
+    assert payload["title"] == "Космос красного"
+    assert payload["must_cover_fact_ids"] == ["EC01", "SC01"]
+    assert payload["required_headings"] == ["Жостовская роспись"]
+    assert payload["sections"][0]["facts"] == [
+        {"fact_id": "EC01", "text": "Представлены жостовские подносы"},
+        {"fact_id": "SC01", "text": "Жостовская роспись существует с 1825 года"},
+    ]
+    assert "infoblock" not in payload

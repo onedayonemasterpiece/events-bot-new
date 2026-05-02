@@ -313,6 +313,8 @@ Artifact:
 
 - `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.md`
 - `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.json`
+- latest accepted single-fixture rerun after frozen-baseline + prompt tuning:
+  `artifacts/codex/smart_update_g4_stage_benchmark_20260502T145722Z.{md,json}`
 
 Scope:
 
@@ -335,6 +337,31 @@ Summary:
 | Epigraph | yes | no | review needed |
 | Derived fields | short/search present | short/search empty | rejected for derived-field parity |
 | Wall time | `36.98s` | `245.23s` | rejected for latency |
+
+Follow-up rerun `2026-05-02T145722Z` moved the single fixture to a materially better state:
+
+| Stage | Baseline G3 frozen | Candidate G4 variant 2 | Verdict |
+| --- | ---: | ---: | --- |
+| Raw facts | `12` | `14` | accepted |
+| facts_text_clean coverage | `12/12` grounded baseline facts covered | `0` lost facts | accepted |
+| lollipop-light writer_pack | n/a | `14` must-cover facts, `4` semantic headings | accepted |
+| Final description chars | `983` | `747` | accepted |
+| Semantic headings / bullets | `3 / 0` | `4 / 7` | accepted |
+| Derived fields | short/search present | short/search present | accepted |
+| Wall time | `36.98s` | `131.30s` | warning (`~3.55x`) |
+
+What changed in the rerun:
+
+- `create_bundle` prompt now explicitly preserves source-local craft/object properties as separate facts (materials, technique, secret production details, visual signature, diversity/uniqueness, freedom of execution, typical plots/forms).
+- `search_digest` and `short_description` prompts ban direct-address CTA/promo wording.
+- staged runner reuses valid bundle `short_description` / `search_digest` before making extra Gemma calls, matching production create behavior more closely and avoiding two slow derived-field calls when the bundle is valid.
+- when final `4o` is unavailable, the benchmark uses a compact Gemma 4 writer fallback (`writer_model=gpt-4o->gemma-4-compact`) with a structured writer payload instead of sending the large 4o-oriented writer prompt to Gemma.
+
+Remaining blockers before expanding beyond single fixture:
+
+- latency is still above the `<=3x` gate, mainly `create_bundle_g4`, `lollipop.bucket_facts`, and `lollipop.editorial.layout`;
+- `4o` final writer remains unavailable in this environment (`429 insufficient_quota`), so current accepted text evidence is for the compact Gemma 4 writer fallback lane;
+- epigraph parity is still lower than baseline (`false` vs `true`), although final description passed local validation and preserved facts.
 
 Important findings:
 
