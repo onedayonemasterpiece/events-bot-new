@@ -2,56 +2,120 @@
 
 Статус: `planning`
 
-Назначение: канонический reference-doc для перехода `lollipop`-каскада с `Gemma 3` на `Gemma 4` без изменения финального public writer.
+Назначение: канонический reference-doc для перевода **реального Smart Update** с `Gemma 3` на `Gemma 4` с сохранением корректного merge-механизма и качеством публичного текста не хуже текущего Smart Update.
 
 Важно:
 
-- `lollipop g4` в этом проекте означает только `Gemma 4 upstream + final 4o`;
-- `writer.final_4o` остаётся единственным финальным public writer stage;
-- любые эксперименты, где `Gemma 4` пишет финальный публичный текст, не являются канонической целью этой миграции;
-- live-пробы, fixture-ы и benchmark-логи вынесены в отдельный eval-doc:
+- `Smart Update G4 candidate` означает **полное удаление живой Gemma 3 из candidate path**. Все Gemma-backed стадии Smart Update должны перейти на `Gemma 4`: extraction, match/create/merge LLM stages, fact-first auxiliary stages, `short_description`, `search_digest`, revise/reflow/shrink/full-rewrite stages. Финальный public writer при этом может быть отдельным `4o` writer lane, если это явно зафиксировано и измеряется.
+- `baseline` = текущий Smart Update на `Gemma 3`; он используется только как внешний benchmark reference для сравнения фактов, merge/result fields, текста, структуры и скорости. Baseline facts/text запрещены в payload любых `Smart Update G4 candidate` stages.
+- Текущий выбранный путь для следующей работы: **вариант 2 — G4 Smart Update parity + lollipop-light для description**.
+- `4o` в конце не запрещён: допустимы и `Gemma 4 final writer`, и `Gemma 4 upstream + final 4o`. Benchmark обязан явно показывать `writer_model`, fallback usage и сравнивать writer lanes отдельно, чтобы не смешивать качество Gemma 4 upstream с качеством финального writer-а.
+- Ранние документы/артефакты, где `lollipop g4` означал `Gemma 4 upstream + final 4o`, остаются релевантным research track. Для текущей forced migration цель шире: убрать `Gemma 3` из Smart Update candidate path и доказать, что итоговый Smart Update result не хуже текущего baseline.
+- Live-пробы, fixture-ы и benchmark-логи вынесены в отдельный eval-doc:
   [smart-update-lollipop-gemma-4-eval.md](/workspaces/events-bot-new/docs/llm/smart-update-lollipop-gemma-4-eval.md).
 
 ## Каноническая цель миграции
 
-`lollipop g4` должен улучшать итоговое качество текста не за счёт замены `4o`, а за счёт более сильного upstream-процессинга:
+Перевести production-relevant Smart Update path на `Gemma 4`, сохранив текущий product contract и добавив лучшие lollipop-наработки там, где они реально улучшают public output.
+
+Current Smart Update surface:
 
 ```text
-source.scope
--> facts.extract
--> facts.dedup
--> facts.merge
--> facts.prioritize
--> editorial.layout
--> writer_pack.compose
--> writer_pack.select
--> writer.final_4o
+source post / parser text / OCR
+-> EventCandidate
+-> Smart Update match/create/merge
+-> event_source_fact / canonical facts
+-> fact-first description
+-> short_description + search_digest
+-> Telegraph / daily / VK / event pages
 ```
 
-Где:
+Target candidate for the selected path:
 
-- `Gemma 4` рассматривается только для Gemma-backed upstream families;
-- `writer_pack.compose` и `writer_pack.select` остаются deterministic;
-- `writer.final_4o` остаётся последним и единственным финальным writer call.
+```text
+source post / parser text / OCR
+-> EventCandidate
+-> Gemma 4 match/create/merge stages
+-> Gemma 4 fact extraction
+-> Smart Update fact buckets
+-> lollipop-light prioritize/layout
+-> deterministic writer_pack
+-> final public writer (Gemma 4 lane or 4o lane, reported explicitly)
+-> Gemma 4 short_description + search_digest
+-> existing render/publication surfaces
+```
 
 Практический смысл:
 
-- `baseline` остаётся эталоном сравнения;
-- `lollipop` остаётся текущим каноническим funnel с final `4o`;
-- `lollipop g4` отличается от `lollipop` только тем, что upstream Gemma-стадии адаптированы под `Gemma 4`.
+- текущий Smart Update на `Gemma 3` остаётся benchmark baseline, а не частью нового pipeline;
+- lollipop используется не как отдельная абстрактная система, а как набор уже проверенных Smart Update улучшений: salience, section planning, writer_pack, literal lists, heading discipline;
+- успех измеряется итоговым Smart Update result: merge correctness, public facts, `description`, `short_description`, `search_digest`, Telegraph/daily safety and latency.
+
+## Варианты внедрения
+
+| Вариант | Суть | Плюсы | Минусы | Статус |
+| --- | --- | --- | --- | --- |
+| 1. `G4 parity Smart Update` | Перевести текущие Smart Update LLM stages на `Gemma 4`, архитектуру почти не менять | Минимальный production diff, проще локализовать regressions | Может сохранить текущие слабости writer-а и не использовать lollipop-наработки | Обязательная база, но не выбран как финальный quality path |
+| 2. `G4 parity + lollipop-light description` | Весь Smart Update candidate на `Gemma 4`; для description добавить lollipop `prioritize/layout/writer_pack` поверх Smart Update facts | Лучший баланс: сохраняет Smart Update merge/fact-first contract и возвращает структуру, semantic headings, literal lists | Есть риск потерять часть baseline writer-наработок, если writer_pack заменит prompt-contract вместо дополнения к нему | **Выбран для следующей итерации** |
+| 3. `Full lollipop Smart Update G4` | Встроить полный cascade `source.scope -> facts.extract -> facts.dedup -> facts.merge -> facts.prioritize -> editorial.layout -> writer_pack -> writer` | Потенциально максимальное качество на сложных multi-source cases | Слишком дорогой и сложный первый rollout; трудно диагностировать, какая stage ухудшила результат | Research-only до успеха варианта 2 |
+| 4. `Adaptive G4 router` | Простые events идут быстрым G4 parity path; dense/list-heavy/mixed-phase events идут через lollipop-light/full stages | Лучший production latency/quality баланс | Требует уже принятых быстрых и дорогих путей плюс routing criteria | Следующий шаг после принятого варианта 2 |
+| 5. `Big-bang G4 + full lollipop` | Сразу заменить весь Smart Update на полный lollipop G4 | Теоретически быстро прийти к целевой архитектуре | Очень высокий риск качества, скорости и merge regressions | Не использовать |
+
+## Выбранный вариант 2
+
+Вариант 2 должен быть реализован как extension текущего Smart Update, а не как параллельный writer-product.
+
+Инварианты:
+
+- Candidate path не вызывает `Gemma 3`; финальный writer может быть `Gemma 4` или `4o`, но его модель всегда явно записывается в benchmark/result metadata.
+- Baseline G3 не попадает в generation payload; он существует только в benchmark.
+- `EventCandidate`, deterministic shortlist/anchor guards, `event_source`, `event_source_fact`, title/venue merge rules и public render path остаются Smart Update-owned.
+- Lollipop-light добавляется только после того, как факты уже приведены к Smart Update-compatible buckets.
+- Baseline writer-наработки должны быть перенесены как обязательный writer contract, а не потеряны:
+  - эпиграф из grounded quote/fact, если применимо;
+  - lead одним абзацем;
+  - 2-3 смысловых `###` headings для dense cases;
+  - списки для program/literal items;
+  - запрет логистики в narrative;
+  - style C: `сцена -> смысл -> детали`;
+  - запрет CTA, report/promo formulas, `посвящ...`, `это ... не ..., а ...`;
+  - фактический budget от объёма facts, а не только от baseline chars.
+- Lollipop-light отвечает за то, что baseline writer делал слабо или нестабильно: salience, section boundaries, exact heading plan, literal list survival, writer_pack coverage.
+
+Главный известный риск варианта 2: при подключении `layout/writer_pack` можно случайно заменить baseline-style public writer более сухим pack-following writer-ом. Поэтому benchmark обязан отдельно измерять **baseline feature parity**: эпиграф, heading count, semantic heading quality, lead richness, list preservation, length/density, style regressions.
+
+### Writer lane decision rule
+
+Выбор между `Gemma 4 final writer` и `Gemma 4 upstream + final 4o` решается только итоговым качеством Smart Update result.
+
+Правило:
+
+- если `Gemma 4 final writer` даёт текст не хуже текущего Smart Update baseline и проходит скорость/стабильность, он может быть выбран как более цельный G4 path;
+- если `Gemma 4 upstream + final 4o` даёт заметно лучшее качество текста при приемлемой скорости, этот lane допустим и не считается нарушением миграции, потому что главный запрет касается `Gemma 3` и baseline leakage;
+- если `4o` используется только после timeout/error Gemma 4 writer-а, benchmark обязан показывать это как fallback, а не как обычный writer lane;
+- если оба lanes проходят hard gates, выбирается тот, где выше итоговое public quality: fact coverage, structure, style, grounded richness, short/search quality, render safety.
+
+При этом промежуточные стадии обязаны сохранять всё, что уже работает в текущем Smart Update:
+
+- корректный match/create/merge без новых дублей;
+- event-local venue grounding и title grounding;
+- сохранение `event_source_fact` как audit surface;
+- strict fact-first narrative без логистики в описании;
+- bounded coverage/revise без semantic regex repair;
+- сохранение `short_description` и `search_digest` contracts.
 
 ## Non-goals
 
 Вне канонической области этой миграции:
 
-- замена `writer.final_4o` на `Gemma 4`;
-- giant-prompt redesign вместо small-stage `lollipop`;
+- giant-prompt redesign вместо stage-oriented Smart Update / lollipop-light;
 - rollout по одному красивому writer-case без upstream family audit;
-- включение `thinking` по умолчанию на финальном public prose stage.
+- включение `thinking` по умолчанию на финальном public prose stage;
+- любые варианты, где `Smart Update G4 candidate` тихо использует `Gemma 3` или baseline facts/text.
 
-## Почему Gemma 4 имеет смысл именно upstream
+## Почему Gemma 4 имеет смысл stage-oriented
 
-Для `lollipop` ценность `Gemma 4` прежде всего в этом:
+Для Smart Update ценность `Gemma 4` прежде всего в этом:
 
 - нативная `system`-роль вместо legacy `Gemma 3` prompt style;
 - более сильный long-context профиль для multi-source fact packs;
@@ -66,13 +130,14 @@ source.scope
 - меньшем prompt drift между family stages;
 - лучшем контроле над schema-following и validator-driven reruns.
 
-## Ключевой контракт `lollipop g4`
+## Ключевой контракт Smart Update G4
 
-При любой реализации `lollipop g4` должны одновременно сохраняться три инварианта:
+При любой реализации Smart Update G4 должны одновременно сохраняться инварианты:
 
-1. Финальный публичный текст пишет только `writer.final_4o`.
-2. Все Gemma-этапы upstream работают как маленькие self-contained requests с явным schema contract.
-3. Успех миграции измеряется качеством итогового public текста относительно `baseline`, а не субъективной "силой" отдельного Gemma-stage.
+1. Candidate generation path полностью свободен от `Gemma 3`; Gemma-backed stages работают на `Gemma 4`, а финальный public writer может быть `Gemma 4` или явно измеряемый `4o`.
+2. Structured stages работают как маленькие self-contained requests с явным schema contract.
+3. Успех миграции измеряется качеством итогового Smart Update result относительно текущего Smart Update baseline, а не субъективной "силой" отдельного Gemma-stage.
+4. Regression guards из `INC-2026-05-02-pre-daily-event-quality` обязательны для любых changes в extraction/merge/title/venue surfaces: event-local venue grounding, placeholder literal ban (`location_address` и подобные), canonical title guidance.
 
 ## Сравнение Gemma 3 и Gemma 4 по ключевым атрибутам
 
@@ -87,7 +152,7 @@ source.scope
 
 ## Что именно должно поменяться в `lollipop g4`
 
-Ниже перечислены только те family changes, которые совместимы с канонической архитектурой `Gemma 4 upstream + final 4o`.
+Ниже перечислены family changes для выбранного варианта 2. Они применимы и к lane `Gemma 4 upstream + final 4o`, и к lane `Gemma 4 upstream + Gemma 4 final writer`; различие writer lane должно оставаться видимым в benchmark.
 
 ### `source.scope`
 
@@ -217,13 +282,14 @@ source.scope
 - не мигрируются на Gemma 4;
 - только принимают более сильный upstream payload.
 
-### `writer.final_4o`
+### Final writer lanes
 
-Канонический статус не меняется:
+Финальный public writer выбирается по качеству:
 
-- остаётся final public writer;
-- prompt family не переезжает на Gemma 4;
-- acceptance для `lollipop g4` измеряется именно на итоговом `4o`-тексте.
+- `writer.final_4o` остаётся допустимым final public writer lane;
+- `Gemma 4 final writer` может тестироваться как отдельный lane, если он не ухудшает итоговое качество;
+- acceptance измеряется на итоговом Smart Update тексте, но benchmark обязан показывать `writer_model` и не смешивать обычный `4o` lane с fallback после Gemma 4 timeout;
+- если `writer.final_4o` выбран как quality lane, upstream/merge/fact stages всё равно должны быть `Gemma 3`-free.
 
 ## Prompt-contract deltas для Gemma 4
 
@@ -263,7 +329,7 @@ source.scope
 
 - по умолчанию `thinking = off`;
 - `LOW thinking` допускается только на planning/disambiguation-heavy upstream stages;
-- final public prose stage не использует Gemma 4 и не должен быть зависим от thought-channel вообще.
+- если final public prose stage идёт через `4o`, он не зависит от Gemma 4 thought-channel; если тестируется `Gemma 4 final writer` lane, `thinking` для него должен быть `off`.
 
 ### 4. Structured output важнее prose cleverness
 
@@ -326,9 +392,9 @@ source.scope
 
 ### Phase 0. Каноника и eval frame
 
-- зафиксировать правильную цель: `Gemma 4 upstream + final 4o`;
+- зафиксировать правильную цель: `Gemma 3` отсутствует в Smart Update candidate path; финальный writer lane (`Gemma 4` или `4o`) выбирается и измеряется явно;
 - держать reference-doc отдельно от eval-log;
-- зафиксировать benchmark protocol, где final writer не меняется.
+- зафиксировать benchmark protocol, где writer lane не меняется внутри одной строки сравнения и всегда явно указан.
 
 ### Phase 1. Family audit
 
@@ -354,8 +420,8 @@ source.scope
 
 - взять свежий synthetic benchmark с несколькими multi-source fixtures;
 - прогнать `baseline`, `lollipop`, `lollipop g4`;
-- во всех трёх вариантах сохранить один и тот же final `writer.final_4o`;
-- сравнивать итоговый public text, а не локальную красоту upstream fragments.
+- сравнивать итоговый Smart Update result, а не локальную красоту upstream fragments;
+- отдельно показывать `Gemma 4 upstream + final 4o` и `Gemma 4 upstream + Gemma 4 writer`, если оба writer lanes участвуют в прогоне.
 
 ### Phase 5. Rollout gate
 
@@ -393,7 +459,7 @@ source.scope
 | Token budgeting | Пересчитать stage caps и pacing | Long-context profile и tokenization меняют бюджет |
 | State / history | Гарантировать strip thoughts из persisted history | Это обязательное runtime правило для Gemma 4 |
 | Logging | Логировать transport-aware debug traces без thought leakage в public path | Иначе тяжело локализовать regressions |
-| Final writer | Не менять `writer.final_4o` | Это базовый архитектурный инвариант миграции |
+| Final writer | Поддержать явно выбранный writer lane: `writer.final_4o` или `Gemma 4 final writer`; не смешивать их в отчёте | Иначе нельзя понять, что улучшило результат: upstream, layout или writer |
 
 ## Связанные документы
 

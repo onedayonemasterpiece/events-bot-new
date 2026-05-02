@@ -9,7 +9,7 @@
 - этот документ не является каноническим migration contract;
 - канонический target architecture описан в
   [smart-update-lollipop-gemma-4-migration.md](/workspaces/events-bot-new/docs/llm/smart-update-lollipop-gemma-4-migration.md);
-- acceptance-relevant сравнения для `lollipop g4` должны сохранять `writer.final_4o` как неизменный финальный writer.
+- current acceptance-relevant сравнения для Smart Update G4 должны быть `Gemma 3`-free в candidate path и явно показывать final writer lane (`Gemma 4` или `4o`), не смешивая обычный `4o` lane с fallback после Gemma 4 timeout.
 
 ## Live availability check (`2026-04-06`)
 
@@ -23,6 +23,261 @@
 - `Gemma 4` уже доступна для исследовательских прогонов;
 - raw responses могут нести separate thought-channel (`parts[].thought = true`);
 - значит любой production-like path для Gemma 4 обязан явно фильтровать thought content.
+
+## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
+
+Цель следующего benchmark: сравнить **текущий Smart Update baseline на Gemma 3** и **Smart Update G4 candidate, вариант 2** на одном и том же полном source evidence.
+
+Вариант 2:
+
+```text
+current Smart Update mechanics
+-> Gemma 4 extraction / match / create / merge / auxiliary fact-first stages
+-> Smart Update fact buckets
+-> lollipop-light prioritize + editorial.layout + writer_pack
+-> final writer lane: Gemma 4 or 4o, reported explicitly
+-> short_description + search_digest
+```
+
+Главное правило: benchmark постоянен и внешний. Baseline G3 используется только для сравнения, а не для generation payload. Candidate path не содержит живых Gemma 3 вызовов и не получает baseline facts/text.
+
+### Iteration ladder
+
+Работа идёт не сразу по всему набору, а ступенями:
+
+1. `single_fixture`: один representative event гоняется до результата `no-worse` по hard gates. На этой стадии нельзя прятать проблему в average score.
+2. `five_fixture_pack`: текущий полный набор `audio_walk`, `peter_fleet_lecture`, `sacred_lecture`, `world_hobbies`, `red_cosmos`.
+3. `expanded_smart_update_pack`: 12-20 live-derived cases с Telegram/VK/parser sources, включая multi-source merge, list-heavy, object exhibition, lecture, opaque title, mixed-phase/repost, venue-risk cases.
+4. `production-like canary`: прогон на свежих источниках с тем же runtime key/model/fallback settings, что будут у production.
+
+Переход на следующий уровень разрешён только если предыдущий уровень прошёл hard gates и markdown artifact позволяет глазами понять, почему.
+
+### Stage-by-stage diagnostic table
+
+Каждый benchmark artifact должен иметь одну summary-таблицу и stage blocks по каждому fixture.
+
+Summary columns:
+
+| Column | Meaning |
+| --- | --- |
+| `fixture_id` | Stable fixture id |
+| `baseline_model` | Current Smart Update baseline model, e.g. `gemma-3-27b-it` |
+| `candidate_models` | All candidate models used by stage, including final writer |
+| `writer_model` | `gemma-4` / `4o` / fallback chain |
+| `candidate_has_g3` | Must be `false` |
+| `baseline_chars` / `candidate_chars` / `length_ratio` | Public description length comparison |
+| `baseline_headings` / `candidate_headings` | Count of semantic `###` headings, excluding logistics-only headings |
+| `baseline_epigraph` / `candidate_epigraph` | Leading blockquote present |
+| `baseline_bullets` / `candidate_bullets` | Markdown list preservation |
+| `facts_covered` | `covered_grounded_baseline / grounded_baseline` |
+| `critical_losses` / `major_losses` / `minor_losses` | Fact coverage severity counts |
+| `useful_added` / `suspicious_g4` | Candidate fact additions and suspicious facts |
+| `merge_verdict` | Same/create/merge result parity |
+| `title_verdict` | Same/improved/regressed with grounding reason |
+| `venue_verdict` | Same/improved/regressed; must include event-local grounding |
+| `description_verdict` | accepted/partial/rejected by structure + quality reviewer |
+| `short_search_verdict` | derived field contract status |
+| `generation_wall_sec` | Candidate generation only, reviewer excluded |
+| `benchmark_wall_sec` | Full benchmark including reviewers |
+| `speed_ratio_generation` | Candidate generation vs baseline generation |
+| `speed_ratio_total` | Full benchmark vs baseline full benchmark |
+
+### Stage 0: source evidence parity
+
+Purpose: prevent the old mistake where benchmark used shortened excerpts while reporting real source URLs.
+
+Report:
+
+- full source text char count per source;
+- source URL and exact extraction method;
+- Telegram exact post id / `data-post` proof when applicable;
+- OCR text char count and poster ids when applicable;
+- source hash for baseline and candidate input.
+
+Hard gates:
+
+- same full source evidence for baseline and candidate;
+- no shortened manual excerpt unless fixture explicitly declares it as the source;
+- source extraction failure blocks quality comparison for that fixture.
+
+### Stage 1: candidate field extraction and merge safety
+
+Purpose: Smart Update migration is not only text generation; wrong venue/title/date creates production incidents.
+
+Report per fixture:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | --- | --- | --- |
+| `title` | value | value | same/improved/regressed |
+| `event_type` | value | value | same/improved/regressed |
+| `date/time/end_date` | value | value | same/improved/regressed |
+| `location_name/location_address/city` | value | value | same/improved/regressed |
+| `ticket/status` | value | value | same/improved/regressed |
+| `match_event_id / create` | value | value | same/improved/regressed |
+
+Hard gates:
+
+- no `location_address` / schema field-name literals;
+- no prose-like `location_name`;
+- venue must be event-local for multi-event/digest/repost sources;
+- no new duplicate-creating mismatch on title/date/time/venue;
+- title update must be grounded in source/ticket/program evidence.
+
+This stage is also the regression guard for `INC-2026-05-02-pre-daily-event-quality`.
+
+### Stage 2: source fact extraction
+
+Purpose: prove Gemma 4 preserves at least the useful fact layer of current Smart Update.
+
+Report:
+
+- baseline raw `per_source_facts`;
+- baseline filtered `facts_text_clean`;
+- candidate raw facts by source;
+- candidate buckets: public/logistics/drop/uncertain;
+- grounded baseline facts covered by candidate facts;
+- useful candidate-only facts;
+- suspicious/ungrounded/fragmentary candidate facts.
+
+Metrics:
+
+| Metric | Gate |
+| --- | --- |
+| `grounded_baseline_coverage` | `100%` on single fixture; no critical/major losses on pack |
+| `critical_loss_count` | `0` |
+| `major_loss_count` | `0` |
+| `minor_loss_count` | visible and manually reviewable |
+| `suspicious_g4_count` | `0` target; `<=1` warning on pack only |
+| `useful_added_count` | tracked as upside, not required |
+
+If extraction loses important facts, do not tune writer first; fix extraction prompt/schema.
+
+### Stage 3: Smart Update fact buckets
+
+Purpose: ensure current fact-first invariants survive after G4 extraction.
+
+Report:
+
+- `facts_text_clean`;
+- `facts_infoblock`;
+- `facts_drop`;
+- facts filtered out before writer with reasons;
+- anchor strings used to remove logistics from narrative.
+
+Hard gates:
+
+- no date/time/city/venue/address/ticket/price/age/Pushkin-card facts in `facts_text_clean`;
+- no meaningful public facts incorrectly dropped into `facts_drop`;
+- no logistics fact required for UI lost from infoblock/canonical fields.
+
+### Stage 4: lollipop-light prioritize/layout/writer_pack
+
+Purpose: diagnose whether lollipop helps or hurts before final prose.
+
+Report:
+
+- prioritized facts with `weight`, `narrative_policy`, `lead_fact_id`, `lead_support_id`;
+- layout blocks with `role`, `heading`, `fact_refs`, `style`;
+- writer_pack sections with `facts`, `literal_items`, `coverage_plan`, `must_cover_fact_ids`;
+- headings selected by layout.
+
+Hard gates:
+
+- every included public fact appears exactly once in layout/writer_pack;
+- suppressed facts are not in `must_cover_fact_ids`;
+- literal program/list items survive as `literal_items`;
+- dense cases with `non_logistics_total >= 4` should have semantic headings unless reviewer explains why not;
+- no generic headings: `Подробности`, `О событии`, `Основная идея`.
+
+This stage specifically guards against losing baseline writer strengths when lollipop-light is introduced.
+
+### Stage 5: final description
+
+Purpose: compare final public text quality, not only fact extraction.
+
+Report:
+
+| Metric | Baseline | Candidate | Gate |
+| --- | ---: | ---: | --- |
+| `chars` | n | n | `>=0.85x` baseline unless reviewer accepts compactness |
+| `semantic_headings` | n | n | if baseline has `>=2`, candidate should have `>=2` |
+| `logistics_only_headings` | n | n | logistics heading cannot be the only heading on dense cases |
+| `epigraph` | bool | bool | preserve when grounded and baseline uses it, or explain loss |
+| `bullets` | n | n | no loss of program/literal list structure |
+| `paragraphs` | n | n | no one-blob collapse |
+| `covered_public_facts` | n | n | all must-cover facts covered |
+| `extra_claims` | n | n | `0` |
+| `style_regressions` | list | list | `0` hard for CTA/report/promo leaks |
+
+Hard gates:
+
+- no critical/major fact loss from final description;
+- no unsupported names, venues, dates, prices, age limits, promises;
+- no CTA/direct address/promo register;
+- no report-style dry formulas replacing a live announcement;
+- no prompt/schema/English/helper-word leakage;
+- no `### Когда и где` as the only heading when baseline has semantic sections.
+
+Writer lane reporting:
+
+- `writer_model` must be explicit;
+- normal `4o` lane and fallback `4o after Gemma 4 timeout` must be different statuses;
+- if both `Gemma 4 writer` and `4o writer` are tested, show side-by-side text metrics and reviewer verdicts.
+
+### Stage 6: derived public fields
+
+Purpose: Smart Update quality also depends on cards/search, not only Telegraph text.
+
+Report:
+
+| Field | Metrics |
+| --- | --- |
+| `short_description` | one sentence, 12-16 words, no logistics, no CTA, not title duplicate |
+| `search_digest` | 25-55 target words, no logistics, no emoji, grounded in facts |
+| `title` | canonical attendee-facing title, grounded |
+
+Hard gates:
+
+- no empty derived fields when baseline has valid values;
+- no field uses date/time/place/address/ticket/age unless the existing field contract permits it;
+- no title drift into promo slogan when source has canonical program/ticket title.
+
+### Stage 7: latency and cost
+
+Purpose: separate product generation latency from benchmark reviewer overhead.
+
+Report:
+
+- per-stage `wall_sec`;
+- per-stage `model_active_sec`;
+- `sleep_sec`;
+- Gemma calls;
+- 4o calls;
+- timeout/retry/fallback counts;
+- `generation_wall_sec` excluding benchmark-only reviewers;
+- `benchmark_wall_sec` including reviewers.
+
+Initial gates:
+
+- single fixture: quality gates are hard; latency over `3x` is warning unless caused by repeated timeout/fallback loop;
+- five-fixture pack: target `generation_speed_ratio <= 3x`, no fixture above `5x` without a documented stage-level fix plan;
+- production-like canary: latency must be compatible with Telegram/VK auto-import scheduling and provider TPM limits.
+
+### Single-fixture acceptance before expanding
+
+The first fixture is accepted only when:
+
+- `candidate_has_g3=false`;
+- source evidence parity passes;
+- match/title/venue/date gates pass;
+- `grounded_baseline_coverage=100%`;
+- `critical_loss=0`, `major_loss=0`;
+- final description has no hard validation errors;
+- structure is not poorer than baseline on headings/epigraph/list where baseline uses them;
+- candidate text is not materially poorer by LLM reviewer and manual audit;
+- stage table makes the failure point obvious if any metric regresses.
+
+Only then should the run expand to the five-fixture pack.
 
 ## Early benchmark fixture: `KALMANIA-2885`
 
@@ -511,7 +766,12 @@ Next step (deferred): tighten the 4o fallback prompt to avoid promo register, an
 - writer-swapped `Gemma 4` уже может давать лучше `baseline` на одном clean case;
 - этого недостаточно для канонического решения по `lollipop g4`.
 
-## Канонический benchmark protocol на следующий проход
+## Superseded benchmark protocol (`2026-04-06`)
+
+Этот блок оставлен как historical record раннего research track, где `lollipop g4`
+означал `Gemma 4 upstream + unchanged final 4o`. Для текущей forced Smart Update
+G4 migration он superseded разделом
+`Smart Update G4 variant 2 benchmark protocol (2026-05-02)` выше.
 
 Следующие сравнения должны быть поставлены так:
 
@@ -545,7 +805,7 @@ Next step (deferred): tighten the 4o fallback prompt to avoid promo register, an
 
 ### Что больше не допускается
 
-Нельзя считать каноническим benchmark-ом проход, где:
+Для этого historical `2026-04-06` protocol нельзя было считать каноническим benchmark-ом проход, где:
 
 - меняется final writer;
 - сравнивается только один красивый case;
