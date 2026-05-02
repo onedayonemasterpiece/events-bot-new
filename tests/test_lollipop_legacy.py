@@ -9,6 +9,7 @@ import pytest
 
 from smart_update_lollipop_lab import legacy_writer_family
 from smart_update_lollipop_lab import writer_final_4o_family
+from smart_update_lollipop_lab import editorial_layout_family
 
 
 def _load_benchmark_module():
@@ -218,6 +219,39 @@ def test_quality_detector_does_not_flag_predstavleniy_false_positive() -> None:
         "В центре внимания — эволюция представлений о священном от древности до современности."
     )
     assert "stories_presented" not in quality["report_formula_hits"]
+
+
+def test_editorial_layout_drops_invalid_heading_without_repairing_semantics() -> None:
+    pack = {
+        "support_context": [
+            {"fact_id": "SC01", "bucket": "support_context", "text": "Жостовская роспись существует с 1825 года."},
+            {"fact_id": "SC02", "bucket": "support_context", "text": "Букет стал визитной карточкой жостовских подносов."},
+            {"fact_id": "SC03", "bucket": "support_context", "text": "Каргопольская игрушка допускает свободное исполнение."},
+        ],
+        "logistics_infoblock": [{"fact_id": "LG01", "bucket": "logistics_infoblock", "text": "Калининград."}],
+    }
+    precompute = {
+        "all_fact_ids": ["SC01", "SC02", "SC03", "LG01"],
+        "logistics_ids": ["LG01"],
+        "allow_semantic_headings": True,
+        "body_block_floor": 1,
+    }
+    cleaned = editorial_layout_family._clean_layout_plan(
+        {
+            "title_strategy": "keep",
+            "blocks": [
+                {"role": "body", "fact_refs": ["SC01", "SC02"], "style": "narrative", "heading": "s"},
+                {"role": "body", "fact_refs": ["SC03"], "style": "narrative", "heading": "Каргопольская игрушка"},
+            ],
+        },
+        title="Космос красного",
+        pack=pack,
+        lead_payload={"lead_fact_id": "SC01"},
+        precompute=precompute,
+    )
+    headings = [block.get("heading") for block in cleaned["blocks"] if block.get("role") == "body"]
+    assert "s" not in headings
+    assert "Каргопольская игрушка" in headings
 
 
 # --- benchmark wiring -------------------------------------------------------
@@ -495,6 +529,36 @@ def test_four_o_token_helper_prefers_FOUR_4O_TOKEN(monkeypatch: pytest.MonkeyPat
     monkeypatch.delenv("FOUR_4O_TOKEN", raising=False)
     with pytest.raises(RuntimeError):
         benchmark._four_o_token()
+
+
+def test_openai_error_summary_preserves_rate_limit_diagnostics() -> None:
+    benchmark = _load_benchmark_module()
+
+    class FakeResponse:
+        status_code = 429
+        text = ""
+        headers = {
+            "retry-after": "7",
+            "x-ratelimit-remaining-requests": "0",
+            "x-ratelimit-reset-requests": "1s",
+            "x-ratelimit-remaining-tokens": "1200",
+        }
+
+        def json(self):
+            return {
+                "error": {
+                    "message": "Rate limit reached for gpt-4o on requests per min.",
+                    "type": "rate_limit_error",
+                    "code": "rate_limit_exceeded",
+                }
+            }
+
+    summary = benchmark._openai_error_summary(FakeResponse())
+    assert "status=429" in summary
+    assert "type=rate_limit_error" in summary
+    assert "code=rate_limit_exceeded" in summary
+    assert "x-ratelimit-remaining-requests" in summary
+    assert benchmark._openai_429_retry_delay(FakeResponse(), attempt=1) == 7.0
 
 
 # --- fact-coverage reviewer (benchmark-only LLM judge) ----------------------

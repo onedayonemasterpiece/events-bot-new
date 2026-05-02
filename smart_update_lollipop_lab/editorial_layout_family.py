@@ -83,6 +83,19 @@ def _reorder_body_refs_for_opening(refs: list[str], catalog: dict[str, dict[str,
     )
 
 
+def _clean_heading(value: Any) -> str | None:
+    heading = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not heading:
+        return None
+    if len(heading) < 3:
+        return None
+    if not re.search(r"[A-Za-zА-Яа-яЁё0-9]", heading):
+        return None
+    if heading.casefold() in {"о событии", "подробности", "основная идея", "что будет"}:
+        return None
+    return heading
+
+
 def _build_prompt(
     *,
     title: str,
@@ -178,7 +191,7 @@ def _clean_layout_plan(
                 role = "body"
         if not refs:
             continue
-        heading = str(block.get("heading") or "").strip() or None
+        heading = _clean_heading(block.get("heading"))
         if role in {"lead", "infoblock"} or not precompute.get("allow_semantic_headings"):
             heading = None
         cleaned_blocks.append(

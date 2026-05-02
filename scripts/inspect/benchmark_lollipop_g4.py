@@ -6,6 +6,7 @@ import asyncio
 import html
 import json
 import os
+import random
 import re
 import sys
 import textwrap
@@ -1661,6 +1662,19 @@ def _precompute_layout(prioritized_facts: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
+def _clean_layout_heading(value: Any) -> str | None:
+    heading = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not heading:
+        return None
+    if len(heading) < 3:
+        return None
+    if not re.search(r"[A-Za-zА-Яа-яЁё0-9]", heading):
+        return None
+    if heading.casefold() in {"о событии", "подробности", "основная идея", "что будет"}:
+        return None
+    return heading
+
+
 def _clean_layout_plan(prioritized: dict[str, Any], precompute: dict[str, Any], raw_layout: dict[str, Any]) -> dict[str, Any]:
     included = [item for item in prioritized["facts"] if item.get("narrative_policy") != "suppress"]
     included_ids = [item["fact_id"] for item in included]
@@ -1681,7 +1695,7 @@ def _clean_layout_plan(prioritized: dict[str, Any], precompute: dict[str, Any], 
                 continue
             if role in {"lead", "infoblock"}:
                 continue
-            heading_value = str(block.get("heading") or "").strip() or None
+            heading_value = _clean_layout_heading(block.get("heading"))
             if role in {"body", "program"} and not precompute["allow_semantic_headings"]:
                 heading_value = None
             if heading is None:
@@ -1718,7 +1732,7 @@ def _clean_layout_plan(prioritized: dict[str, Any], precompute: dict[str, Any], 
                     "role": "body",
                     "fact_refs": block_ids,
                     "style": "narrative",
-                    "heading": (str(block.get("heading") or "").strip() or None) if precompute["allow_semantic_headings"] else None,
+                    "heading": _clean_layout_heading(block.get("heading")) if precompute["allow_semantic_headings"] else None,
                 }
             )
 
@@ -1907,6 +1921,64 @@ def _to_openai_schema(node: Any) -> Any:
     return node
 
 
+def _openai_429_retry_delay(response: requests.Response, *, attempt: int) -> float:
+    raw = (response.headers.get("retry-after") or "").strip()
+    if raw:
+        try:
+            return max(0.0, min(90.0, float(raw)))
+        except Exception:
+            pass
+    base = float(os.getenv("LOLLIPOP_4O_RETRY_BASE_SEC", "4") or "4")
+    delay = base * (2 ** max(0, attempt - 1))
+    return max(1.0, min(90.0, delay + random.uniform(0.0, 1.5)))
+
+
+def _openai_error_summary(response: requests.Response) -> str:
+    """Compact error details for benchmark artifacts.
+
+    OpenAI 429 can mean RPM/TPM/RPD/TPD rate limits or account/project quota.
+    The HTTP status alone is not enough for debugging, so preserve the structured
+    body and rate-limit headers without exposing the API token.
+    """
+    status = int(getattr(response, "status_code", 0) or 0)
+    err_type = ""
+    err_code = ""
+    err_message = ""
+    try:
+        payload = response.json()
+        err = payload.get("error") if isinstance(payload, dict) else None
+        if isinstance(err, dict):
+            err_type = str(err.get("type") or "").strip()
+            err_code = str(err.get("code") or "").strip()
+            err_message = re.sub(r"\s+", " ", str(err.get("message") or "")).strip()
+    except Exception:
+        err_message = re.sub(r"\s+", " ", str(response.text or "")).strip()
+    header_names = [
+        "retry-after",
+        "x-ratelimit-limit-requests",
+        "x-ratelimit-remaining-requests",
+        "x-ratelimit-reset-requests",
+        "x-ratelimit-limit-tokens",
+        "x-ratelimit-remaining-tokens",
+        "x-ratelimit-reset-tokens",
+    ]
+    headers = {
+        name: response.headers.get(name)
+        for name in header_names
+        if response.headers.get(name) is not None
+    }
+    parts = [f"status={status}"]
+    if err_type:
+        parts.append(f"type={err_type}")
+    if err_code:
+        parts.append(f"code={err_code}")
+    if err_message:
+        parts.append(f"message={err_message[:500]}")
+    if headers:
+        parts.append(f"headers={json.dumps(headers, ensure_ascii=False, sort_keys=True)}")
+    return "openai_http_error:" + " ".join(parts)
+
+
 async def _ask_4o_json(*, prompt: str, schema: dict[str, Any], model: str, system_prompt: str | None = None, max_tokens: int = 1600) -> dict[str, Any]:
     token = _four_o_token()
     payload = {
@@ -1922,14 +1994,29 @@ async def _ask_4o_json(*, prompt: str, schema: dict[str, Any], model: str, syste
             {"role": "user", "content": prompt},
         ],
     }
-    response = await asyncio.to_thread(
-        requests.post,
-        os.getenv("FOUR_O_URL", "https://api.openai.com/v1/chat/completions"),
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
+    max_retries = max(0, int(os.getenv("LOLLIPOP_4O_MAX_RETRIES", "2") or "2"))
+    response: requests.Response | None = None
+    for attempt in range(1, max_retries + 2):
+        response = await asyncio.to_thread(
+            requests.post,
+            os.getenv("FOUR_O_URL", "https://api.openai.com/v1/chat/completions"),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=120,
+        )
+        if response.status_code < 400:
+            break
+        summary = _openai_error_summary(response)
+        if (
+            response.status_code == 429
+            and "insufficient_quota" not in summary
+            and attempt <= max_retries
+        ):
+            await asyncio.sleep(_openai_429_retry_delay(response, attempt=attempt))
+            continue
+        raise RuntimeError(summary)
+    if response is None:
+        raise RuntimeError("openai_http_error:no_response")
     raw = response.json().get("choices", [{}])[0].get("message", {}).get("content") or "{}"
     parsed = _extract_json_object(raw)
     if parsed is None:

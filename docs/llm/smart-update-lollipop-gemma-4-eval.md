@@ -257,6 +257,20 @@ Report:
 - `generation_wall_sec` excluding benchmark-only reviewers;
 - `benchmark_wall_sec` including reviewers.
 
+Provider error diagnostics are part of this stage, not terminal-only noise:
+
+- OpenAI `429` must be rendered with structured body fields when available:
+  `status`, `error.type`, `error.code`, compact message;
+- artifact should keep `Retry-After` and `x-ratelimit-*` headers when present, especially
+  request/token remaining and reset values;
+- retryable `429` may use bounded exponential backoff with jitter, but `insufficient_quota`
+  is not retried blindly;
+- final writer errors must fail open for benchmark artifact generation: upstream source/fact/layout
+  payloads, writer_pack, timings, and explicit `writer.final_4o.error:*` validation errors must
+  still be written so the failed stage is diagnosable;
+- a fail-open writer artifact is never accepted for public-quality gates; it only preserves
+  evidence from earlier stages.
+
 Initial gates:
 
 - single fixture: quality gates are hard; latency over `3x` is warning unless caused by repeated timeout/fallback loop;

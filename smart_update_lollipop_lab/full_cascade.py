@@ -1074,21 +1074,31 @@ async def run_full_cascade_variant(
     }
     pack_payload = writer_pack["payload"]
     _log("writer.final_4o")
-    writer_output = await _timed_four_o(
-        "writer.final_4o.initial",
-        prompt=writer_final_family._build_prompt(pack_payload),
-        schema=writer_schema,
-        model=four_o_model,
-    )
-    validation = writer_final_family._validate_writer_output(pack_payload, writer_output)
-    if validation.errors:
+    writer_output: dict[str, Any] = {}
+    validation = writer_final_family.ValidationResult(errors=["writer.final_4o.not_run"], warnings=[])
+    try:
         writer_output = await _timed_four_o(
-            "writer.final_4o.retry",
-            prompt=writer_final_family._build_retry_prompt(pack_payload, validation),
+            "writer.final_4o.initial",
+            prompt=writer_final_family._build_prompt(pack_payload),
             schema=writer_schema,
             model=four_o_model,
         )
         validation = writer_final_family._validate_writer_output(pack_payload, writer_output)
+        if validation.errors:
+            writer_output = await _timed_four_o(
+                "writer.final_4o.retry",
+                prompt=writer_final_family._build_retry_prompt(pack_payload, validation),
+                schema=writer_schema,
+                model=four_o_model,
+            )
+            validation = writer_final_family._validate_writer_output(pack_payload, writer_output)
+    except Exception as exc:
+        stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
+        writer_output = {"title": fixture.title, "description_md": ""}
+        validation = writer_final_family.ValidationResult(
+            errors=[f"writer.final_4o.error:{type(exc).__name__}"],
+            warnings=[],
+        )
     applied_output = writer_final_family._apply_writer_output(pack_payload, writer_output)
     timing_profile["wall_clock_sec"] = round(time.perf_counter() - started_at, 6)
 
