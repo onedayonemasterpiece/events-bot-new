@@ -1,10 +1,10 @@
 # INC-2026-05-02 Pre-Daily Event Quality
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / VK auto-import / Smart Event Update event quality
 Opened: 2026-05-02
-Closed: —
+Closed: 2026-05-02
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-05-01-future-event-quality-audit`, `INC-2026-05-01-daily-location-drift`, `INC-2026-04-20-club-znakomstv-duplicate-event-cards`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/vk-auto-queue/README.md`, `docs/llm/prompts.md`, `docs/operations/runtime-logs.md`
@@ -36,6 +36,7 @@ This is a production incident because these rows were active and could appear in
 - 2026-05-02 05:24-05:25 UTC — affected Telegraph event pages rebuilt for 13 survivor events; daily announcement was not rerun.
 - 2026-05-02 05:27 UTC — production verification: `PRAGMA quick_check=ok`, no temporary repair script remained on the machine, no daily joboutbox tasks were created, and all duplicate rows were inactive `merged`.
 - 2026-05-02 UTC — prompt/code corrective work added event-local venue grounding, literal field-placeholder rejection, and canonical title guidance for Telegram/VK extraction.
+- 2026-05-02 05:35 UTC — corrective SHA `dbde95636794de547fde6bea3f5d8fed4e6ea9c0` deployed to Fly machine version `1032`.
 
 ## Root Cause
 
@@ -118,8 +119,8 @@ This is a production incident because these rows were active and could appear in
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `dbde95636794de547fde6bea3f5d8fed4e6ea9c0` (reachable from `origin/main`)
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia`
 - regression checks:
   - production repair verification: `PRAGMA quick_check=ok`; 29 event rows and 11 side rows backed up; duplicate IDs listed above are `lifecycle_status='merged'`; 13 survivor rows are active with corrected venues.
   - Telegraph rebuild: survivor IDs `3450`, `3675`, `3676`, `4035`, `4096`, `4329`, `4351`, `4384`, `4436`, `4444`, `4462`, `4471`, `4488` returned `TELEGRAPH_OK`.
@@ -127,7 +128,10 @@ This is a production incident because these rows were active and could appear in
   - temporary `/tmp/prod_repair_and_rebuild_20260502.py` removed from production machine.
   - local syntax check: `python3 -m py_compile vk_intake.py kaggle/TelegramMonitor/telegram_monitor.py`.
   - targeted regression tests: `24 passed` for `tests/test_tg_monitor_gemma4_contract.py` and `tests/test_vk_default_time.py::test_vk_llm_text_field_cleaner_drops_location_placeholders`.
-- post-deploy verification: pending
+  - Fly deploy evidence: app `events-bot-new-wngqia`, machine `48e42d5b714228`, version `1032`, image `deployment-01KQKJV05FTD9HQ6XGG5HCXEEG`, health check passing.
+  - post-deploy `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, no issues.
+  - post-deploy production DB verification: `quick_check=ok`, `merged_bad=0`, `survivor_bad=0`, `daily_joboutbox_count=0`.
+- post-deploy verification: passed
 
 ## Prevention
 
