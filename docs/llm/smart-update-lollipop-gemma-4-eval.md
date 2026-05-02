@@ -293,6 +293,67 @@ The first fixture is accepted only when:
 
 Only then should the run expand to the five-fixture pack.
 
+## Smart Update staged benchmark: `RED-COSMOS-7902` (`2026-05-02`)
+
+Runner:
+
+```bash
+SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=20 \
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=90 LOLLIPOP_4O_MAX_RETRIES=0 \
+python scripts/inspect/benchmark_smart_update_g4_stages.py \
+  --fixtures red_cosmos \
+  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json
+```
+
+Artifact:
+
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.json`
+
+Scope:
+
+- This is the first real stage-by-stage Smart Update comparison for the selected variant 2.
+- It exercises the offline create path on one full-source fixture:
+  `create_bundle -> facts_text_clean -> lollipop-light bucket/weight/lead/layout/writer_pack -> final writer -> short_description/search_digest`.
+- It does not yet exercise the DB merge path against an existing event; merge-path parity remains the next benchmark layer.
+
+Summary:
+
+| Stage | Baseline G3 | Candidate G4 variant 2 | Verdict |
+| --- | ---: | ---: | --- |
+| Source evidence | same full fixture | same full fixture | accepted |
+| Raw facts | `12` | `12` | accepted |
+| facts_text_clean coverage | `12` | `12`; `10/12` grounded baseline covered | partial |
+| Critical / major / minor fact losses | `0 / 0 / 0` | `0 / 0 / 2` | partial |
+| lollipop-light writer_pack | n/a | `12` must-cover facts, `3` semantic headings, `0` layout flags | accepted |
+| Final description chars | `983` | `728` | accepted by local writer validation |
+| Semantic headings | `3` | `3` | accepted |
+| Epigraph | yes | no | review needed |
+| Derived fields | short/search present | short/search empty | rejected for derived-field parity |
+| Wall time | `36.98s` | `245.23s` | rejected for latency |
+
+Important findings:
+
+- G4 upstream did not collapse the whole fact layer, but it lost two minor grounded baseline details:
+  the near-uniqueness of Жостово works and the freedom of Каргопольская игрушка execution.
+- Candidate added one useful grounded fact: the section title `Красны девицы, добры молодцы`.
+- Lollipop-light restored the missing heading behavior: `Жостовская роспись`, `Каргопольская игрушка`, `Дымковская игрушка`.
+- Final `4o` writer could not be used because OpenAI returned `429 insufficient_quota`; the runner fell back to a Gemma 4 final writer and kept the 4o error in `stage_errors`.
+- The produced Gemma 4 final text is non-empty and structured, but it is not accepted as a full replacement yet:
+  it drops the baseline epigraph and depends on candidate facts that already lost two minor details.
+- Speed is the largest blocker on this fixture:
+  - `create_bundle_g4`: `78.08s`;
+  - `search_digest_g4`: `41.64s`;
+  - `short_description_g4`: `73.88s` after a provider `500` retry;
+  - lollipop-light stages together are material but not the only bottleneck.
+
+Next tuning order:
+
+1. Fix G4 extraction/create prompt so `facts_text_clean` covers the two minor lost facts on this fixture.
+2. Add bounded timeout/fail-open or narrower prompts for `short_description` and `search_digest`; current G4 derived-field latency is production-incompatible.
+3. Decide whether final writer should normally be `4o` or Gemma 4 only after OpenAI quota is restored; current artifact proves Gemma 4 writer can produce text, but not that it beats baseline.
+4. Only after this single fixture reaches no-worse should the benchmark expand to the five-fixture pack.
+
 ## Early benchmark fixture: `KALMANIA-2885`
 
 ### Fixture scope
