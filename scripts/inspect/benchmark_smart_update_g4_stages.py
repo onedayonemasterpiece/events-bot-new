@@ -173,6 +173,105 @@ def _variant_metrics(text: str | None) -> dict[str, Any]:
     }
 
 
+def _flatten_per_source_facts(per_source_facts: Any) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    if not isinstance(per_source_facts, dict):
+        return out
+    for source_facts in per_source_facts.values():
+        for raw in list(source_facts or []):
+            text = re.sub(r"\s+", " ", str(raw or "")).strip()
+            if not text:
+                continue
+            key = text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(text)
+    return out
+
+
+def _fixture_id(fixture: Any) -> str:
+    if isinstance(fixture, dict):
+        return str(fixture.get("fixture_id") or "").strip()
+    return str(getattr(fixture, "fixture_id", "") or "").strip()
+
+
+def _find_result_for_fixture(artifact: dict[str, Any], fixture: Any) -> dict[str, Any]:
+    target = _fixture_id(fixture)
+    if isinstance(artifact.get("baseline"), dict) and _fixture_id(artifact.get("fixture") or {}) == target:
+        return artifact
+    for result in list(artifact.get("results") or []):
+        if _fixture_id(result.get("fixture") or {}) == target:
+            return result
+    available = [
+        _fixture_id(result.get("fixture") or {})
+        for result in list(artifact.get("results") or [])
+        if _fixture_id(result.get("fixture") or {})
+    ]
+    raise RuntimeError(
+        f"Baseline artifact does not contain fixture {target!r}; available fixtures: {available}"
+    )
+
+
+def _baseline_from_artifact_result(result: dict[str, Any], fixture: Any) -> dict[str, Any]:
+    baseline = result.get("baseline") if isinstance(result, dict) else None
+    if not isinstance(baseline, dict):
+        raise RuntimeError("Baseline artifact result does not contain a baseline object")
+
+    model = str(baseline.get("model") or baseline.get("gemma_model") or DEFAULT_BASELINE_MODEL)
+    candidate = _candidate_from_fixture(fixture)
+    raw_facts = _flatten_per_source_facts(baseline.get("per_source_facts"))
+    if not raw_facts:
+        raw_facts = [str(item).strip() for item in list(baseline.get("raw_facts") or []) if str(item).strip()]
+    facts_text_clean = [
+        str(item).strip()
+        for item in list(baseline.get("facts_text_clean") or [])
+        if str(item).strip()
+    ]
+    description = str(baseline.get("description_md") or "")
+    timings = baseline.get("timings") if isinstance(baseline.get("timings"), dict) else {}
+    wall = timings.get("wall_clock_sec")
+    return {
+        "model": model,
+        "path": "frozen_current_smart_update_baseline",
+        "baseline_artifact_mode": str(baseline.get("baseline_mode") or "reused"),
+        "candidate_has_g3": "gemma-3" in model,
+        "fields": _field_snapshot(candidate, baseline.get("create_bundle") if isinstance(baseline.get("create_bundle"), dict) else None),
+        "create_bundle": baseline.get("create_bundle") or {},
+        "per_source_facts": baseline.get("per_source_facts") or {},
+        "raw_facts": raw_facts,
+        "facts_text_clean": facts_text_clean,
+        "description_md": description,
+        "short_description": baseline.get("short_description") or "",
+        "search_digest": baseline.get("search_digest") or "",
+        "metrics": _variant_metrics(description),
+        "quality_profile": baseline.get("quality_profile") or writer_final_family._describe_text_quality(description),
+        "timings": {
+            "wall_clock_sec": wall,
+            "stage_sec": timings.get("stage_sec") or {},
+            "source_artifact_timings": timings,
+            "gemma_calls_observed": timings.get("gemma_calls")
+            if timings.get("gemma_calls") is not None
+            else timings.get("gemma_calls_observed"),
+            "four_o_calls_observed": timings.get("four_o_calls")
+            if timings.get("four_o_calls") is not None
+            else timings.get("four_o_calls_observed"),
+        },
+    }
+
+
+def _load_frozen_baseline(path_value: str, fixture: Any) -> dict[str, Any]:
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    result = _find_result_for_fixture(artifact, fixture)
+    baseline = _baseline_from_artifact_result(result, fixture)
+    baseline["source_artifact"] = str(path)
+    return baseline
+
+
 def _fact_item_list(facts: list[str], *, category: str = "public") -> list[dict[str, Any]]:
     return [
         {"index": idx, "text": fact, "kind": category, "source_span": ""}
@@ -750,6 +849,8 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
         f"- artifact_json: `{json_path}`",
         f"- fixture: `{fixture['fixture_id']}`",
         f"- baseline: `{baseline['model']}`",
+        f"- baseline_path: `{baseline.get('path') or '-'}`",
+        f"- baseline_source_artifact: `{baseline.get('source_artifact') or '-'}`",
         f"- candidate: `{candidate['model']}`",
         f"- candidate_path: `{candidate['path']}`",
         f"- writer_model: `{candidate.get('writer_model') or '-'}`",
@@ -825,7 +926,10 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
     if len(fixtures) != 1:
         raise RuntimeError("Stage debug runner currently expects exactly one fixture")
     fixture = fixtures[0]
-    baseline = await _run_current_smart_update_baseline(fixture, model=args.baseline_model)
+    if args.reuse_baseline_artifact:
+        baseline = _load_frozen_baseline(args.reuse_baseline_artifact, fixture)
+    else:
+        baseline = await _run_current_smart_update_baseline(fixture, model=args.baseline_model)
     candidate = await _run_candidate_g4_lollipop2(
         fixture,
         model=args.candidate_model,
@@ -853,6 +957,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run staged Smart Update G3 vs G4+lollipop-light benchmark.")
     parser.add_argument("--fixtures", default="red_cosmos")
     parser.add_argument("--reuse-fixture-artifact", default="")
+    parser.add_argument(
+        "--reuse-baseline-artifact",
+        default="",
+        help=(
+            "Reuse frozen Gemma 3 baseline data from a lollipop_g4 or staged benchmark artifact. "
+            "Use this after Gemma 3 is unavailable; candidate generation still receives no baseline payload."
+        ),
+    )
     parser.add_argument("--baseline-model", default=DEFAULT_BASELINE_MODEL)
     parser.add_argument("--candidate-model", default=DEFAULT_CANDIDATE_MODEL)
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL)

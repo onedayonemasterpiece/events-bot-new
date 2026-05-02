@@ -41,6 +41,9 @@ current Smart Update mechanics
 
 Главное правило: benchmark постоянен и внешний. Baseline G3 используется только для сравнения, а не для generation payload. Candidate path не содержит живых Gemma 3 вызовов и не получает baseline facts/text.
 
+После отключения Gemma 3 staged Smart Update benchmark должен брать baseline только из сохранённого frozen artifact. Текущий опорный five-fixture baseline pack:
+`artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json`. В нём сохранены Gemma 3 `per_source_facts`, `facts_text_clean`, `description_md`, text metrics и timings по пяти full-source fixtures. Для single-fixture повторов можно также использовать предыдущий staged artifact, например `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.json` для `RED-COSMOS`, потому что там дополнительно сохранены baseline `short_description` / `search_digest`. Runner обязан показывать `baseline_path=frozen_current_smart_update_baseline` и `baseline_source_artifact=...`; live baseline rerun допустим только для исторического воспроизведения в окружении, где Gemma 3 ещё доступна.
+
 ### Iteration ladder
 
 Работа идёт не сразу по всему набору, а ступенями:
@@ -302,7 +305,8 @@ SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=20 \
 LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=90 LOLLIPOP_4O_MAX_RETRIES=0 \
 python scripts/inspect/benchmark_smart_update_g4_stages.py \
   --fixtures red_cosmos \
-  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json
+  --reuse-fixture-artifact artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json \
+  --reuse-baseline-artifact artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json
 ```
 
 Artifact:
