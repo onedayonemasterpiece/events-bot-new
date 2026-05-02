@@ -52,6 +52,7 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 - The title MUST be grounded in the source text (or poster OCR if provided). Do not invent names, nicknames, or weird words that do not appear in the input.
 - If the post does not contain an explicit name, use a neutral descriptive title based on `event_type` and the venue (e.g. "Выставка — Музей …", "Лекция — …"), but still do NOT introduce new terms.
 - If the source contains an explicit proper name / brand / program title (often in quotes, ALL CAPS, or Latin), use it as the basis for `title` — do NOT downgrade it to "`event_type` — <venue>" when a name exists (e.g. "ЕвроДэнс'90", not "Концерт — Янтарь холл").
+- If a post is written as in-character promo copy, but its ticket URL/page or clear program title gives the canonical attendee-facing title, use that canonical title rather than a plot/in-character phrase.
 - If the source clearly describes a standup/comedy show (e.g. contains “стендап”, “stand-up”, “комик”), but the show name is metaphorical or misleading, make the format explicit in the title (e.g. "Стендап: <название>"). Keep `event_type` as `концерт` (closest available) and prefer 🎤 as `emoji` when appropriate.
 - Avoid typos and nonsense tokens (e.g. made-up 3–4 letter words). If in doubt, simplify the title.
 
@@ -169,6 +170,9 @@ Guidelines:
   (“сегодня/завтра/в эту субботу”), return no events — do NOT default to “today”.
 - The “Known venues” list is for normalising venues that are explicitly mentioned (or provided as an explicit default hint).
   Do NOT pick a random venue just because it contains a similar word (e.g. “ворота”).
+- For multi-date, multi-event, timetable, digest, or repost posts, each event's venue fields must come from the local block nearest that event's own date/title. Do NOT reuse a venue/default/source hint from another block when the event-local block explicitly names its own venue/address.
+- Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
+- If the source/group/default location conflicts with an explicitly named event-local venue (for example a repost from a bar about a library event), prefer the explicit venue in the event text.
 - `city` must be the city name only (no street/house number). If the city is unknown, return an empty string.
 - If the year is missing, choose the nearest future date relative to ‘Today’ (from the system header). If the day/month has already passed this year, roll the year forward.
 - Omit any events dated before today.

@@ -7,6 +7,14 @@ import main
 import vk_intake
 
 
+def test_vk_llm_text_field_cleaner_drops_location_placeholders():
+    assert vk_intake._clean_llm_text_field("location_address", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field(" address ", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field("адрес", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field("location_name", field_name="location_name") is None
+    assert vk_intake._clean_llm_text_field("Черняховского 26", field_name="location_address") == "Черняховского 26"
+
+
 class DummyMessage:
     def __init__(self, chat_id, text, reply_markup):
         self.chat = SimpleNamespace(id=chat_id)

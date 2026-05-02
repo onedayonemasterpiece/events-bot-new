@@ -45,8 +45,12 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Never return whitespace-only strings." in source
     assert "Use evidence from both message text and OCR." in source
     assert "Prefer filling location_name and location_address" in source
+    assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
     assert "never copy a descriptive sentence" in source
+    assert "each event must use venue/address/city facts" in source
+    assert "the event-local venue wins" in source
+    assert "canonical attendee-facing title rather than the in-character/plot phrase" in source
     assert "speaker biography, schedule commentary, film metadata" in source
     assert 'hall/room label such as "Кинозал:" or "Атриум:"' in source
     assert "use the host venue as location_name" in source
@@ -265,6 +269,8 @@ def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
     assert "Ticket links, ticket sale/status, paid registration, or venue" in source
     assert "location_name must be the shared venue/place for the timetable" in source
+    assert 'Never output field-name placeholders like "location_address", "address", "location_name"' in source
+    assert "that event-local venue wins over source context or defaults" in source
     assert "not descriptive prose from surrounding text" in source
     assert "Full message context for shared venue/address facts" in source
     assert 'a trailing "📍Остров Канта" line applies to all schedule rows' in source
@@ -347,6 +353,7 @@ def _load_sanitizer_in_isolation():
     wanted = {
         "_EVENT_STRING_FIELDS",
         "_UNKNOWN_LITERALS",
+        "_FIELD_NAME_PLACEHOLDER_LITERALS",
         "_LEAKED_COMMENT_TAIL_RE",
         "_MARKDOWN_STRIP_RE",
         "_HTML_TAG_RE",
@@ -402,7 +409,7 @@ def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None
             "title": "Космос красного",
             "date": "2026-04-10",
             "location_name": "unknown",
-            "location_address": "Unknown",
+            "location_address": "location_address",
             "city": "unknown",
         },
         {

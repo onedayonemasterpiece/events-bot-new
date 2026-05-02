@@ -141,6 +141,31 @@ def _truncate_prompt_block(text: str, limit: int) -> str:
     return f"{text[:head].rstrip()}\n...\n{text[-tail:].lstrip()}".strip()
 
 
+_LLM_FIELD_PLACEHOLDER_LITERALS: dict[str, frozenset[str]] = {
+    "location_name": frozenset({"location_name", "venue", "place", "место", "площадка"}),
+    "location_address": frozenset({"location_address", "address", "адрес"}),
+    "city": frozenset({"city", "город"}),
+}
+
+
+def _clean_llm_text_field(value: Any, *, field_name: str | None = None) -> str | None:
+    """Drop literal field-name placeholders from LLM output without semantic rewrites."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        text = str(value).strip()
+    if not text:
+        return None
+    if field_name:
+        norm = unicodedata.normalize("NFKC", text).casefold().replace("ё", "е")
+        placeholders = _LLM_FIELD_PLACEHOLDER_LITERALS.get(field_name, frozenset())
+        if norm in placeholders:
+            return None
+    return text
+
+
 def _budget_vk_parse_poster_texts(post_text: str, poster_texts: Sequence[str]) -> list[str]:
     cleaned = [
         block
@@ -1551,6 +1576,16 @@ async def build_event_drafts_from_vk(
     # LLM-first hinting: if the source explicitly says it's a standup/comedy show,
     # nudge the parser to make the format visible in the title (without hardcoding
     # deterministic renames after parsing).
+    llm_text += (
+        "\nПравила извлечения локации: если пост содержит несколько дат/блоков/репостов, "
+        "для каждого события бери площадку, адрес и город из ближайшего к нему блока даты/названия. "
+        "Хинт источника или дефолт группы используй только когда в самом блоке нет своей площадки. "
+        "Если текст события явно называет библиотеку, музей, бар или другую площадку, она важнее "
+        "дефолтной площадки источника. Никогда не возвращай буквальные плейсхолдеры вроде "
+        "`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`: "
+        "оставь поле пустым. Если билетная страница или URL ясно содержит каноническое название "
+        "спектакля/концерта/показа, не заменяй его рекламной или сюжетной фразой из поста."
+    )
     try:
         hint_parts: list[str] = [text or ""]
         if poster_texts:
@@ -1705,12 +1740,7 @@ async def build_event_drafts_from_vk(
             return None
 
     def clean_str(value: Any) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-            return value or None
-        return str(value)
+        return _clean_llm_text_field(value)
 
     def clean_bool(value: Any) -> bool:
         if isinstance(value, bool):
@@ -2009,7 +2039,7 @@ async def build_event_drafts_from_vk(
         # Heuristic: if the title contains any Cyrillic word (3+ chars) absent from the source
         # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer a safe fallback.
         if missing_tokens:
-            venue_val = clean_str(data.get("location_name")) or source_name or ""
+            venue_val = _clean_llm_text_field(data.get("location_name"), field_name="location_name") or source_name or ""
             fallback = _fallback_title(
                 title_raw,
                 event_type=event_type_val,
@@ -2029,11 +2059,11 @@ async def build_event_drafts_from_vk(
                 date=final_date,
                 time=final_time,
                 time_is_default=time_is_default,
-                venue=data.get("location_name"),
+                venue=_clean_llm_text_field(data.get("location_name"), field_name="location_name"),
                 description=data.get("short_description"),
                 festival=clean_str(data.get("festival")),
-                location_address=clean_str(data.get("location_address")),
-                city=clean_str(data.get("city")),
+                location_address=_clean_llm_text_field(data.get("location_address"), field_name="location_address"),
+                city=_clean_llm_text_field(data.get("city"), field_name="city"),
                 ticket_price_min=ticket_price_min,
                 ticket_price_max=ticket_price_max,
                 event_type=event_type_val,

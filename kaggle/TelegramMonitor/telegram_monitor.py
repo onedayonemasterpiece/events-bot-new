@@ -1206,7 +1206,8 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'location_address': _string_schema(
                 'Street address of the venue; empty string if unknown. '
-                'Never the literal string "unknown".'
+                'Never the literal string "unknown" and never field-name placeholders like '
+                '"location_address", "address", or "адрес".'
             ),
             'city': _string_schema(
                 'City of the venue where attendees physically go; empty string if not grounded in the text/OCR. '
@@ -2070,6 +2071,11 @@ _EVENT_STRING_FIELDS: tuple[str, ...] = (
     'festival',
 )
 _UNKNOWN_LITERALS: frozenset[str] = frozenset({'unknown', 'n/a', 'none', 'null', '-', 'title'})
+_FIELD_NAME_PLACEHOLDER_LITERALS: dict[str, frozenset[str]] = {
+    'location_name': frozenset({'location_name', 'venue', 'place'}),
+    'location_address': frozenset({'location_address', 'address', 'адрес'}),
+    'city': frozenset({'city', 'город'}),
+}
 _LEAKED_COMMENT_TAIL_RE = re.compile(
     r"(?:\s+[(\[{]?\s*(?://|#)\s.*$|[(\[{]\s*(?://|#)\s.*$)",
     re.DOTALL,
@@ -2152,6 +2158,8 @@ def _sanitize_extracted_events(events) -> list[dict]:
         for field in _EVENT_STRING_FIELDS:
             if field in evt:
                 evt[field] = _clean_event_string_value(evt.get(field))
+                if evt[field].casefold() in _FIELD_NAME_PLACEHOLDER_LITERALS.get(field, frozenset()):
+                    evt[field] = ''
         title = str(evt.get('title') or '').strip()
         date_val = str(evt.get('date') or '').strip()
         if not title:
@@ -2556,12 +2564,16 @@ async def extract_events(
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
         'Never return whitespace-only strings. '
         'Never output the literal string "unknown" (or "n/a", "none") in any text field; use empty string instead. '
+        'Never output literal field-name placeholders like "location_address", "address", "location_name", '
+        '"venue", "city", "адрес", or "город"; use empty string instead. '
         'Never include inline comments ("//", "#", "TODO"), meta-commentary, reasoning, or markdown markers '
         '(**, __, ```, ~~) inside any field value; JSON values must be plain text only. '
         'Never include uncertainty markers like "or something similar", alternative title candidates, '
         'or instruction-like phrases such as "return one event object" or "second row" inside any field value. '
         'Choose the final title silently. '
         'Title must be the attendee-facing event name, not a poster service heading. '
+        'If a post is in-character promo copy but a ticket URL/page or clear program title gives the canonical event name, '
+        'use the canonical attendee-facing title rather than the in-character/plot phrase. '
         'If message text/caption contains a named event and OCR contains only schedule/service headings '
         'like a date, weekday, time, "НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ", price, age limit, or venue label, '
         'keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields. '
@@ -2576,6 +2588,10 @@ async def extract_events(
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
         'location_name must be a venue/place name, not arbitrary nearby text: never copy a descriptive sentence, '
         'speaker biography, schedule commentary, film metadata, ticket instruction, or event description into location_name. '
+        'For multi-date, multi-event, timetable, digest, or repost posts, each event must use venue/address/city facts '
+        'from the local block nearest that event date/title; do not reuse a source default or another block venue when '
+        'the event-local block explicitly names a different venue. '
+        'If a source/default location conflicts with an explicitly named event-local venue, the event-local venue wins. '
         'If a schedule groups items under a hall/room label such as "Кинозал:" or "Атриум:" and source context names '
         'the museum/theatre/venue, use the host venue as location_name; do not return only the hall label as the venue. '
         'If the venue is not grounded, leave location_name empty rather than filling it with prose. '
@@ -2808,9 +2824,11 @@ async def extract_events(
                 'Missing price is unknown, not free. Ticket links, ticket sale/status, paid registration, or venue '
                 'admission without explicit free-entry wording mean is_free=false or omitted when uncertain. '
                 'Never use placeholder literals like "title" as a title; copy the attendee-facing name from the time line. '
+                'Never output field-name placeholders like "location_address", "address", "location_name", "venue", "city", "адрес", or "город"; use empty strings. '
                 'location_name must be the shared venue/place for the timetable, not descriptive prose from surrounding text. '
                 'Use the full message context below to recover shared venue/address facts that are outside this small day-block '
                 '(for example a trailing "📍Остров Канта" line applies to all schedule rows in the block). '
+                'If the day-block itself names a different venue/address for one line, that event-local venue wins over source context or defaults. '
                 'If the chunk only has a hall/room label and the full message/source context names the host venue, use the host venue; '
                 'otherwise leave location_name empty. '
                 'Never emit empty JSON objects ({}) or venue-only rows. '
