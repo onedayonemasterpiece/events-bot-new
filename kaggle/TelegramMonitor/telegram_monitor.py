@@ -2550,6 +2550,11 @@ async def extract_events(
         )
         and len(re.findall(r'\b\d{1,2}[.:]\d{2}\b', content)) >= 2
     )
+    festival_program_like = bool(
+        schedule_like
+        and re.search(r'(?i)\bфестивал\w*|#\s*80[_\s-]*истор', content)
+        and re.search(r'(?i)\b(лекци|встреч|диалог|музе[йя]|библиотек|регистрац)', content)
+    )
     prompt = (
         'You extract events from a Telegram message. A single message may contain MULTIPLE events, '
         'including repertoire/schedule lines like "DD.MM | Title". '
@@ -2635,6 +2640,11 @@ async def extract_events(
         'a street/address such as "Музейная аллея", weekdays, dates, or times. '
         'If it announces attendee-facing lectures, shows, talks, workshops, excursions, or festival program slots '
         'with concrete dates/times, extract those events even when they happen at a museum or library. '
+        'A named festival context does not make a concrete post a whole-festival non-event: if a post says an event is '
+        '"in the framework of" a festival, or includes a festival hashtag, and also gives a specific title/date/time/venue '
+        'or registration signal, return the concrete event with festival filled. '
+        'If a festival post lists several dated program items, split it into separate event rows, one per dated item, '
+        'rather than returning [] or one generic festival row. '
         'Official city notices about развод мостов / разводка мостов ARE events: extract them as public city events, '
         'even when the purpose is mobility planning rather than entertainment. '
         'For @klgdcity bridge-lifting notices, use title like "Развод мостов" plus grounded bridge names if present; '
@@ -2677,7 +2687,7 @@ async def extract_events(
         + date_context + source_context + '\n'
         'Message text:\n' + content
     )
-    if schedule_like:
+    if schedule_like and not festival_program_like:
         text = '[]'
     else:
         try:

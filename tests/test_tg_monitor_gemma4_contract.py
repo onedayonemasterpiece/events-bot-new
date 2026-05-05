@@ -260,7 +260,9 @@ def test_tg_monitor_single_lecture_rescue_pass_is_llm_first() -> None:
 def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     assert "schedule_like = bool(" in source
-    assert "if schedule_like:\n        text = '[]'" in source
+    assert "festival_program_like = bool(" in source
+    assert "if schedule_like and not festival_program_like:\n        text = '[]'" in source
+    assert "If a festival post lists several dated program items" in source
     assert "Extract attendable schedule items from one small Telegram timetable chunk as strict JSON array." in source
     assert 'one date header like "18 АПРЕЛЯ" followed by up to three time lines' in source
     assert "range(0, len(timed_lines), 3)" in source

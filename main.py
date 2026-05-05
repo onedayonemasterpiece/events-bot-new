@@ -15818,6 +15818,217 @@ async def ensure_event_telegraph_link(e: Event, fest: Festival | None, db: Datab
     e.telegraph_url = e.source_post_url or ""
 
 
+def _event_source_media_rehydrate_enabled() -> bool:
+    raw = (os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH") or "1").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _source_media_hash(prefix: str, value: str) -> str:
+    return hashlib.sha256(f"{prefix}:{value}".encode("utf-8", errors="ignore")).hexdigest()
+
+
+async def _fetch_event_source_poster_candidates(
+    source_type: str | None,
+    source_url: str | None,
+    *,
+    limit: int,
+) -> list[Any]:
+    """Best-effort media rehydrate for already-attached event sources.
+
+    Event sources are the durable evidence graph. Older imports, idempotent replays,
+    or source-only merges may have kept the source URL/text while missing its media.
+    Telegraph rebuilds can safely repair that storage gap without changing event text.
+    """
+
+    url = (source_url or "").strip()
+    stype = (source_type or "").strip().casefold()
+    if not url:
+        return []
+    if stype == "telegram" or "t.me/" in url:
+        try:
+            from source_parsing.telegram.handlers import (
+                _fallback_fetch_posters_from_public_tg_page,
+                _parse_tg_source_url,
+            )
+        except Exception:
+            logging.debug("telegraph.source_media: tg helper import failed", exc_info=True)
+            return []
+        username, message_id = _parse_tg_source_url(url)
+        if not username or not message_id:
+            return []
+        try:
+            return list(
+                await _fallback_fetch_posters_from_public_tg_page(
+                    username=username,
+                    message_id=int(message_id),
+                    limit=limit,
+                    need_ocr=False,
+                )
+                or []
+            )
+        except Exception:
+            logging.debug("telegraph.source_media: tg rehydrate failed url=%s", url, exc_info=True)
+            return []
+    if stype == "vk" or "vk.com/wall" in url:
+        try:
+            from smart_event_update import PosterCandidate
+            from vk_auto_queue import fetch_vk_post_text_and_photos
+            from vk_intake import _vk_wall_source_ids_from_url
+        except Exception:
+            logging.debug("telegraph.source_media: vk helper import failed", exc_info=True)
+            return []
+        group_id, post_id = _vk_wall_source_ids_from_url(url)
+        if not group_id or not post_id:
+            return []
+        try:
+            _text, photos, _published_at, _metrics, status = await fetch_vk_post_text_and_photos(
+                int(group_id),
+                int(post_id),
+                limit=limit,
+            )
+        except Exception:
+            logging.debug("telegraph.source_media: vk rehydrate failed url=%s", url, exc_info=True)
+            return []
+        if not getattr(status, "ok", False):
+            logging.info(
+                "telegraph.source_media: vk rehydrate unavailable url=%s kind=%s",
+                url,
+                getattr(status, "kind", None),
+            )
+            return []
+        out: list[Any] = []
+        for photo_url in [str(u or "").strip() for u in list(photos or []) if str(u or "").strip()]:
+            out.append(
+                PosterCandidate(
+                    catbox_url=photo_url,
+                    sha256=_source_media_hash("vk-source-photo", photo_url),
+                )
+            )
+        return out
+    return []
+
+
+async def _rehydrate_missing_event_source_posters_for_telegraph(
+    session,
+    ev: Event,
+    *,
+    event_id: int,
+) -> int:
+    if not _event_source_media_rehydrate_enabled():
+        return 0
+    try:
+        max_sources = int((os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_MAX_SOURCES") or "6").strip())
+    except Exception:
+        max_sources = 6
+    max_sources = max(1, min(max_sources, 20))
+    try:
+        per_source_limit = int((os.getenv("EVENT_SOURCE_MEDIA_REHYDRATE_PER_SOURCE_LIMIT") or "3").strip())
+    except Exception:
+        per_source_limit = 3
+    per_source_limit = max(1, min(per_source_limit, 8))
+
+    try:
+        from models import EventPoster, EventSource
+    except Exception:
+        return 0
+
+    source_rows = (
+        await session.execute(
+            select(EventSource.source_type, EventSource.source_url)
+            .where(EventSource.event_id == event_id)
+            .order_by(EventSource.imported_at.asc(), EventSource.id.asc())
+            .limit(max_sources)
+        )
+    ).all()
+    if len(source_rows) <= 1:
+        return 0
+
+    poster_rows = (
+        await session.execute(
+            select(EventPoster.poster_hash, EventPoster.catbox_url, EventPoster.supabase_url)
+            .where(EventPoster.event_id == event_id)
+        )
+    ).all()
+    existing_hashes = {
+        str(row[0] or "").strip()
+        for row in list(poster_rows or [])
+        if str(row[0] or "").strip()
+    }
+    existing_urls = {
+        str(u or "").strip()
+        for row in list(poster_rows or [])
+        for u in (row[1], row[2])
+        if str(u or "").strip()
+    }
+    event_urls = {
+        str(u or "").strip()
+        for u in list(getattr(ev, "photo_urls", None) or [])
+        if str(u or "").strip()
+    }
+    existing_urls.update(event_urls)
+
+    # Avoid network calls on already-rich pages. When stored images are fewer than
+    # attached sources, the page may still miss source-specific illustrations.
+    if len(existing_urls) >= len(source_rows):
+        return 0
+
+    added = 0
+    photo_urls = list(getattr(ev, "photo_urls", None) or [])
+    now = datetime.now(timezone.utc)
+    for source_type, source_url in source_rows:
+        candidates = await _fetch_event_source_poster_candidates(
+            str(source_type or ""),
+            str(source_url or ""),
+            limit=per_source_limit,
+        )
+        for poster in candidates:
+            display_url = str(
+                getattr(poster, "supabase_url", None)
+                or getattr(poster, "catbox_url", None)
+                or ""
+            ).strip()
+            if not display_url:
+                continue
+            digest = str(getattr(poster, "sha256", None) or "").strip()
+            if not digest:
+                digest = _source_media_hash("source-photo-url", display_url)
+            if digest in existing_hashes or display_url in existing_urls:
+                continue
+            session.add(
+                EventPoster(
+                    event_id=event_id,
+                    catbox_url=getattr(poster, "catbox_url", None),
+                    supabase_url=getattr(poster, "supabase_url", None),
+                    supabase_path=getattr(poster, "supabase_path", None),
+                    poster_hash=digest,
+                    phash=getattr(poster, "phash", None),
+                    ocr_text=getattr(poster, "ocr_text", None),
+                    ocr_title=getattr(poster, "ocr_title", None),
+                    prompt_tokens=int(getattr(poster, "prompt_tokens", 0) or 0),
+                    completion_tokens=int(getattr(poster, "completion_tokens", 0) or 0),
+                    total_tokens=int(getattr(poster, "total_tokens", 0) or 0),
+                    updated_at=now,
+                )
+            )
+            existing_hashes.add(digest)
+            existing_urls.add(display_url)
+            if display_url not in photo_urls:
+                photo_urls.append(display_url)
+            added += 1
+    if added:
+        ev.photo_urls = photo_urls
+        ev.photo_count = len(photo_urls)
+        session.add(ev)
+        await session.flush()
+        logging.info(
+            "telegraph.source_media: rehydrated event_id=%s added_posters=%s sources=%s",
+            event_id,
+            added,
+            len(source_rows),
+        )
+    return added
+
+
 async def update_telegraph_event_page(
     event_id: int, db: Database, bot: Bot | None
 ) -> str | None:
@@ -16005,6 +16216,18 @@ async def update_telegraph_event_page(
                     summary.other_dates_more = int(more)
         except Exception:
             logging.warning("telegraph: failed to build other_dates for event %s", event_id, exc_info=True)
+        try:
+            await _rehydrate_missing_event_source_posters_for_telegraph(
+                session,
+                ev,
+                event_id=event_id,
+            )
+        except Exception:
+            logging.warning(
+                "telegraph: failed to rehydrate source posters for event %s",
+                event_id,
+                exc_info=True,
+            )
         photos = list(ev.photo_urls or [])
         # For rendering (Telegraph + Telegram cached previews), prefer Supabase when available.
         # Catbox may be flaky (connection drops) and breaks Telegraph/Telegram previews when used

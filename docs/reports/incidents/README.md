@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-05-80-stories-source-coverage.md`
+  - Scope: VK crawl/date-hint admission, Telegram Monitoring festival-program extraction, `@kraftmarket39` source coverage, and future `80 историй о главном` backfill.
+  - Must not regress: concrete festival event posts with title/date/time/venue/registration must reach the LLM-first import path and attach a durable `event_source`; Russian month-name dates like `16 мая 2026 г. в 16:00` must not be masked as phone-like noise before crawl admission.
+- `INC-2026-05-05-event-source-media-aggregation-gap.md`
+  - Scope: Telegraph event rebuild, `event_source` media rehydration, `eventposter`/`event.photo_urls`, Telegram public-page poster fallback, VK wall photo fetch.
+  - Must not regress: a multi-source event page must not show only the current row's single image when attached Telegram/VK sources still expose additional unique images; duplicate repost media must be deduped.
+- `INC-2026-05-05-80-stories-video-promo-gap.md`
+  - Scope: CherryFlash/CrumpleVideo festival visibility and future `promo` feature.
+  - Must not regress: failed/test video sessions must not be counted as public festival exposure, and future promo/festival selection work must explicitly verify `80 историй о главном` candidate visibility after source backfill.
 - `INC-2026-05-05-kitoboya-garage-date.md`
   - Scope: Telegram Monitoring / VK auto-import / Smart Update exhibition date grounding, teaser handling, `course_promo` skip guard, long-running inferred-range correction, and production cleanup for the `Куплю гараж. Калининград` duplicate/date regression.
   - Must not regress: exhibition/fair teasers without an exact day/range/end date must not materialize as first-of-month or message-date event cards; later exact announcements with `кураторские экскурсии` must not be skipped as course promos; and a later source-grounded opening date must be able to correct an inferred legacy long-run exhibition row through a real import + Smart Update replay.

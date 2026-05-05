@@ -638,6 +638,51 @@ def detect_historical_context(text: str) -> bool:
     return any(name in text_low for name in HISTORICAL_TOPONYMS)
 
 
+_VK_LLM_RESCUE_INVITE_RE = re.compile(
+    r"(?iu)\b("
+    r"приглаша(?:ем|ет|ют)|"
+    r"состо(?:ится|ятся)|"
+    r"пройд(?:е|ё)т|"
+    r"регистрац\w*|"
+    r"по\s+регистрации|"
+    r"билет\w*|"
+    r"встреч[аеуы]|"
+    r"лекци[яюи]|"
+    r"мастер-?класс\w*|"
+    r"экскурси[яюи]|"
+    r"фестивал\w*"
+    r")\b"
+)
+_VK_LLM_RESCUE_PLACE_RE = re.compile(
+    r"(?iu)\b("
+    r"зал|лектори[йя]|музе[йя]|библиотек\w*|галере[яи]|театр\w*|"
+    r"дк|дом\s+культур\w*|ул\.|улиц[аеы]|проспект|пр-т|набережн\w*|"
+    r"этаж|кабинет|аудитори[яи]"
+    r")\b"
+)
+
+
+def _vk_should_rescue_to_llm_without_ts_hint(text: str) -> bool:
+    """Fail open into the normal LLM parser for event-like VK posts.
+
+    This does not extract or create event semantics. It only prevents crawl-time
+    deterministic date-hint uncertainty from dropping posts that have strong
+    invite/registration/offline-place signals; the downstream VK import remains
+    LLM-first and may still reject the post.
+    """
+
+    clean = (text or "").strip()
+    if len(clean) < 40:
+        return False
+    if not detect_date(clean):
+        return False
+    if not _VK_LLM_RESCUE_INVITE_RE.search(clean):
+        return False
+    if not _VK_LLM_RESCUE_PLACE_RE.search(clean):
+        return False
+    return True
+
+
 def _vk_parse_preclassify(
     text: str,
     *,
@@ -732,25 +777,35 @@ def _vk_parse_preclassify(
 def normalize_phone_candidates(text: str) -> str:
     """Strip separators from phone-like sequences without touching valid dates."""
 
-    date_intervals: list[tuple[int, int]] = []
+    date_intervals: list[tuple[int, int, str]] = []
 
-    def _collect_intervals(pattern: re.Pattern[str]) -> None:
+    def _collect_intervals(pattern: re.Pattern[str], kind: str) -> None:
         for match in pattern.finditer(text):
-            date_intervals.append((match.start(), match.end()))
+            date_intervals.append((match.start(), match.end(), kind))
 
-    for date_pattern in (DATE_RANGE_RE, NUM_DATE_RE, MONTH_NAME_RE):
-        _collect_intervals(date_pattern)
+    _collect_intervals(DATE_RANGE_RE, "date_range")
+    _collect_intervals(NUM_DATE_RE, "num_date")
+    _collect_intervals(MONTH_NAME_RE, "month_name")
 
     phone_spans: list[tuple[int, int]] = [
         (m.start(), m.end()) for m in PHONE_CANDIDATE_RE.finditer(text)
     ]
 
     filtered_intervals: list[tuple[int, int]] = []
-    for start, end in date_intervals:
+    for start, end, kind in date_intervals:
         skip_interval = False
         for p_start, p_end in phone_spans:
             if p_start <= start and end <= p_end:
                 if p_start < start or end < p_end:
+                    # Month-name dates ("16 мая 2026 г. в 16:00") can be swallowed by
+                    # broad phone-like spans because PHONE_CANDIDATE_RE allows arbitrary
+                    # non-digits between digit groups. Keep the date token intact; the
+                    # semantic event decision still belongs to the LLM parser downstream.
+                    if kind == "month_name":
+                        mon_match = MONTH_NAME_RE.match(text[start:end])
+                        mon_word = (mon_match.group(2).rstrip(".") if mon_match else "")
+                        if MONTHS_RU.get(mon_word) is not None:
+                            continue
                     skip_interval = True
                     break
                 context_start = max(0, start - 20)
@@ -3880,6 +3935,14 @@ async def crawl_once(
                                     ).year
                                     if year_val is not None and year_val > publish_year:
                                         allow_without_hint = True
+                            if not allow_without_hint and _vk_should_rescue_to_llm_without_ts_hint(post_text):
+                                allow_without_hint = True
+                                logger.info(
+                                    "vk_intake.crawl_rescue_to_llm group_id=%s post_id=%s url=%s reason=event_like_without_ts_hint",
+                                    gid,
+                                    pid,
+                                    post_url,
+                                )
                             if not allow_without_hint:
                                 exporter.log_miss(
                                     group_id=gid,
