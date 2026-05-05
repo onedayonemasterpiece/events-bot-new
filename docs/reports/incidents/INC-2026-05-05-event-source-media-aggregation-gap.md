@@ -1,10 +1,10 @@
 # INC-2026-05-05 Event Source Media Aggregation Gap
 
-Status: mitigated
+Status: closed
 Severity: sev3
 Service: Telegraph event pages / source media
 Opened: 2026-05-05
-Closed: —
+Closed: 2026-05-05
 Owners: events-bot
 Related incidents: `INC-2026-04-27-cherryflash-missing-photo-urls`, `INC-2026-05-05-kitoboya-garage-date`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/vk-auto-queue/README.md`, `docs/operations/supabase-storage.md`
@@ -34,6 +34,7 @@ The event page for `Выставка «Куплю гараж. Калинингр
 - 2026-04-01..2026-05-05: four sources accumulated on `event #4517`.
 - 2026-05-05: audit confirmed production had only one poster/photo URL.
 - 2026-05-05: mitigation added Telegraph rebuild-time source media rehydration from already attached `event_source` rows.
+- 2026-05-05: deployed SHA `acc89995`, rebuilt production event `4517`, and confirmed `photo_count=3`, `eventposter=3`, and Telegraph page image count `3`.
 
 ## Root Cause
 
@@ -85,10 +86,10 @@ Added best-effort Telegraph rebuild repair: for multi-source events with only on
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: pending deploy/backfill
-- post-deploy verification: —
+- deployed SHA: `acc89995a4f2a7ed823d22cf28cd43b5fcc91f64`, reachable from `origin/main`
+- deploy path: `flyctl deploy --remote-only` to `events-bot-new-wngqia`
+- regression checks: focused source-ingestion/media suite `92 passed`; production rebuild for event `4517` rehydrated two missing unique images and deduped the duplicate VK repost image
+- post-deploy verification: production `event #4517` has `photo_count=3`, three `eventposter` rows, and `https://telegra.ph/Vystavka-Kuplyu-garazh-Kaliningrad-05-03` currently renders three `<img>` elements
 
 ## Prevention
 

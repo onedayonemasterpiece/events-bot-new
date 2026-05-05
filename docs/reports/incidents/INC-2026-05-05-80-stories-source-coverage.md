@@ -30,6 +30,7 @@ The festival `80 историй о главном` was underrepresented in produ
 - 2026-04..2026-05: `@kraftmarket39/140`, `/193`, `/202` had extracted concrete events but were not imported; `/202` was `skipped_non_event:work_schedule`.
 - 2026-05-05: VK post `wall-30777579_15138` announced the 2026-05-16 lecture `Заводы и пароходы`; the crawl cursor advanced past it without `vk_inbox` row.
 - 2026-05-05: mitigation added LLM-first fail-open for event-like VK posts with uncertain timestamp hints, preserved Russian month-name dates through phone normalization, and routed festival program-like Telegram posts through the main LLM extractor instead of immediate schedule suppression.
+- 2026-05-05: deployed SHA `acc89995` and ran production backfill; `kraftmarket39/140` created event `4602`, `kraftmarket39/193` merged into `4602`, `kraftmarket39/202` created `4603`, and `vk.com/wall-30777579_15138` created `4604`.
 
 ## Root Cause
 
@@ -87,10 +88,12 @@ The festival `80 историй о главном` was underrepresented in produ
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: pending full deploy/backfill
-- post-deploy verification: —
+- deployed SHA: `acc89995a4f2a7ed823d22cf28cd43b5fcc91f64`, reachable from `origin/main`
+- deploy path: `flyctl deploy --remote-only` to `events-bot-new-wngqia`
+- regression checks: focused source-ingestion/media suite `92 passed`; production Smart Update backfill attached `event_source` rows for `https://t.me/kraftmarket39/140`, `/193`, `/202`, and `https://vk.com/wall-30777579_15138`
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, no issues; production rows `4602`, `4603`, `4604` have festival `80 историй о главном` and Telegraph URLs
+
+Note: the production LLM-enabled backfill exposed `INC-2026-05-05-smart-update-gemma3-fallback-hallucination`; the required source rows were restored via deterministic-safe Smart Update mode, and LLM writer re-enrichment remains blocked on that follow-up.
 
 ## Prevention
 

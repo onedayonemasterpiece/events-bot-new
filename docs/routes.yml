@@ -90,6 +90,7 @@ sections:
     incident_80_stories_source_coverage_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-source-coverage.md
     incident_80_stories_video_promo_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-video-promo-gap.md
     incident_event_source_media_aggregation_gap_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-source-media-aggregation-gap.md
+    incident_smart_update_gemma3_fallback_hallucination_2026_05_05: docs/reports/incidents/INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md
     incident_event_quality_regression_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-quality-regression.md
     incident_kitoboya_garage_date_2026_05_05: docs/reports/incidents/INC-2026-05-05-kitoboya-garage-date.md
     incident_future_event_quality_audit: docs/reports/incidents/INC-2026-05-01-future-event-quality-audit.md

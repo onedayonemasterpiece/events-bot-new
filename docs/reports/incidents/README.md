@@ -27,6 +27,9 @@
 - `INC-2026-05-05-80-stories-video-promo-gap.md`
   - Scope: CherryFlash/CrumpleVideo festival visibility and future `promo` feature.
   - Must not regress: failed/test video sessions must not be counted as public festival exposure, and future promo/festival selection work must explicitly verify `80 историй о главном` candidate visibility after source backfill.
+- `INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md`
+  - Scope: Smart Update model-chain configuration, Google AI provider compatibility, writer-stage fallback policy, and production backfills with LLM enabled.
+  - Must not regress: a provider `NotFound` for the first-hop Smart Update model must fail closed for writer stages instead of falling through to broad fallback prose that can introduce unrelated event content.
 - `INC-2026-05-05-kitoboya-garage-date.md`
   - Scope: Telegram Monitoring / VK auto-import / Smart Update exhibition date grounding, teaser handling, `course_promo` skip guard, long-running inferred-range correction, and production cleanup for the `Куплю гараж. Калининград` duplicate/date regression.
   - Must not regress: exhibition/fair teasers without an exact day/range/end date must not materialize as first-of-month or message-date event cards; later exact announcements with `кураторские экскурсии` must not be skipped as course promos; and a later source-grounded opening date must be able to correct an inferred legacy long-run exhibition row through a real import + Smart Update replay.
