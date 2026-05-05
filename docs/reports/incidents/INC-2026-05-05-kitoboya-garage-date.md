@@ -1,10 +1,10 @@
 # INC-2026-05-05 Kitoboya Garage Exhibition Date
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / VK auto-import / Smart Event Update event quality
 Opened: 2026-05-05
-Closed: —
+Closed: 2026-05-05
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-05-05-event-quality-regression`, `INC-2026-05-01-future-event-quality-audit`, `INC-2026-05-02-pre-daily-event-quality`, `INC-2026-04-20-club-znakomstv-duplicate-event-cards`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/vk-auto-queue/README.md`, `docs/operations/incident-management.md`, `docs/operations/runtime-logs.md`
@@ -87,7 +87,7 @@ This is a production incident because active future rows can leak into `/daily`,
 
 ## Immediate Mitigation
 
-- Pending production data repair: keep canonical event `4517`, set `date=2026-05-13`, inferred `end_date=2026-06-13`, attach source `domkitoboya/3193`, and mark/repoint duplicate rows `3551` and `3620` as merged into `4517`.
+- Completed production data repair: kept canonical event `4517`, set `date=2026-05-13`, inferred `end_date=2026-06-13`, attached source `domkitoboya/3193`, cleared the false free/ticket-link state, and marked/repointed duplicate rows `3551` and `3620` as `merged` into `4517`.
 
 ## Corrective Actions
 
@@ -106,12 +106,22 @@ This is a production incident because active future rows can leak into `/daily`,
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `f419b1cc9565a11483f46f1c43d4152061ce29e4`, pushed to `origin/main`
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia`, Fly release `1037`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KQWSE74RGCXMZQTCEYGXR3EQ`, machine `48e42d5b714228` passing 1/1 checks
 - regression checks:
   - `/home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q tests/test_smart_event_update_non_event_guards.py tests/test_tg_monitor_gemma4_contract.py` -> `35 passed`
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile smart_event_update.py vk_intake.py kaggle/TelegramMonitor/telegram_monitor.py` -> ok
+  - `git diff --check` -> ok
   - prod snapshot replay: `domkitoboya/3191 -> skipped_non_event:unsupported_exhibition_teaser_date`; `domkitoboya/3193 -> merged event_id=4517`, date corrected to `2026-05-13`, end date `2026-06-13`
+- production data repair:
+  - backup tables: `incident_kitoboya_garage_repair_20260505192628_*`
+  - target rows after repair: `3551` and `3620` -> `lifecycle_status=merged`, `silent=1`; `4517` -> `date=2026-05-13`, `end_date=2026-06-13`, `ticket_price_min=300`, `is_free=0`, `source_post_url=https://t.me/domkitoboya/3193`
+  - `telegram_scanned_message(source_id=8,message_id=3193)` -> `status=done`, `events_extracted=1`, `events_imported=1`, `error=NULL`
+  - `event_source` for `4517` includes VK teaser sources, `domkitoboya/3191`, and exact source `domkitoboya/3193`
+  - `telegraph_build`, `month_pages`, and `weekend_pages` jobs for `4517` -> `done`; event Telegraph URL rebuilt: `https://telegra.ph/Vystavka-Kuplyu-garazh-Kaliningrad-05-03`
 - post-deploy verification:
+  - `/healthz` -> `{"ok": true, "ready": true, "db": "ok", ... "issues": []}`
+  - production query `title LIKE '%Куплю гараж%' AND lifecycle_status='active' AND silent=0` -> `1`
 
 ## Prevention
 
