@@ -108,11 +108,32 @@ The 2026-05-05 CherryFlash `popular_review` slot could not build a valid popular
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
-- compensating CherryFlash 2026-05-05: session `#238`, dataset `zigomaro/cherryflash-session-238-1777972597`, kernel `zigomaro/cherryflash`; terminal story/video evidence pending
+- deployed SHA: `1c2dd83da5ae1d8ed9d009ab0aac729a1180b629`
+- deploy path:
+  - branch `incident/cherryflash-disk-full-20260505`
+  - commit fast-forwarded to `origin/main`
+  - manual Fly deploy from clean worktree after compensating CherryFlash render completed
+  - Fly release `1035`, image `events-bot-new-wngqia:deployment-01KQVTXZW3SAEG06C7W81RMAQT`, created `2026-05-05T10:30:18Z`
+- regression checks:
+  - `python3 -m py_compile guide_excursions/kaggle_service.py tests/test_guide_kaggle_results_retention.py` → ok
+  - `git diff --check` → ok
+  - `python3 -m pytest tests/test_guide_kaggle_results_retention.py` could not run in the local system Python because `pytest` was not installed (`No module named pytest`)
+- post-deploy verification:
+  - production `/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues
+  - Fly machine `48e42d5b714228` reached version `1035`, state `started`, checks passing
+  - `/data` after deploy: `974M` total, `374M` used, `534M` available (`42%`)
+  - `/data/guide_monitoring_results`: `65M`, 2 result bundles
+  - SQLite `PRAGMA quick_check` → `ok`
+- compensating CherryFlash 2026-05-05:
+  - session `#238`
+  - dataset `zigomaro/cherryflash-session-238-1777972597`
+  - kernel `zigomaro/cherryflash`
+  - Kaggle status reached `COMPLETE`
+  - output downloaded successfully
+  - dataset deleted after output retrieval
+  - final DB status `PUBLISHED_TEST`
+  - video `cherryflash_full_final.mp4`
+  - `published_at=2026-05-05 10:27:28.569672`, `finished_at=2026-05-05 10:28:05.878073`, `error=NULL`
 
 ## Prevention
 
