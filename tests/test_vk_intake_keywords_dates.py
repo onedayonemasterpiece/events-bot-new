@@ -401,7 +401,7 @@ def test_extract_event_ts_hint_numeric_date_survives_phone_normalization():
 
 
 @pytest.mark.asyncio
-async def test_build_drafts_library_defaults_to_free(monkeypatch):
+async def test_build_drafts_library_without_free_evidence_stays_not_free(monkeypatch):
     async def fake_parse(*args, **kwargs):
         return [
             {
@@ -415,6 +415,27 @@ async def test_build_drafts_library_defaults_to_free(monkeypatch):
 
     drafts, festival_payload = await vk_intake.build_event_drafts_from_vk(
         "Встреча читателей в уютной библиотеке"
+    )
+
+    assert drafts and drafts[0].is_free is False
+    assert festival_payload is None
+
+
+@pytest.mark.asyncio
+async def test_build_drafts_library_explicit_free_stays_free(monkeypatch):
+    async def fake_parse(*args, **kwargs):
+        return [
+            {
+                "title": "Лекция в библиотеке",
+                "location_name": "Центральная библиотека",
+                "location_address": "ул. Ленина, 10",
+            }
+        ]
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse, raising=False)
+
+    drafts, festival_payload = await vk_intake.build_event_drafts_from_vk(
+        "Встреча читателей в библиотеке. Вход свободный."
     )
 
     assert drafts and drafts[0].is_free is True

@@ -1,4 +1,13 @@
 import smart_event_update as su
+import pytest
+
+from db import Database
+from models import Event
+from smart_event_update import EventCandidate, smart_event_update
+
+
+async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
+    return None
 
 
 def test_online_registration_does_not_make_offline_event_online_only() -> None:
@@ -73,3 +82,84 @@ def test_weekend_wording_without_work_hours_headline_stays_llm_owned() -> None:
     )
 
     assert su._looks_like_work_schedule_notice("Лекции в библиотеке", text) is False
+
+
+def test_rental_booking_availability_is_not_event() -> None:
+    text = (
+        "11 мая в АгроПарке «Некрасово поле» свободны купола. "
+        "Можно забронировать купол для отдыха с семьей или компанией. "
+        "Доступны три варианта, стоимость 1500 ₽ / 2500 ₽."
+    )
+
+    assert su._looks_like_rental_booking_not_event("Аренда куполов", text) is True
+
+
+@pytest.mark.asyncio
+async def test_zero_ticket_price_without_explicit_free_evidence_stays_not_free(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/kraftmarket39/196",
+            source_text="Лекция по регистрации. Стоимость в посте не указана.",
+            title="История парусного спорта",
+            date="2026-05-19",
+            time="16:00",
+            location_name="Лекторий ОКЕАНиЯ",
+            city="Калининград",
+            ticket_price_min=0,
+            ticket_price_max=0,
+            is_free=None,
+            event_type="лекция",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.is_free is False
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_giveaway_does_not_mark_event_free(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/meowafisha/7288",
+            source_text=(
+                "БИЗОН МЕТАЛ ФЕСТ пройдет 17 мая в 18:00 в Yalta Club. "
+                "Разыгрываем два билета, победитель получит билеты."
+            ),
+            title="БИЗОН МЕТАЛ ФЕСТ",
+            date="2026-05-17",
+            time="18:00",
+            location_name="Yalta Club",
+            city="Калининград",
+            is_free=True,
+            event_type="концерт",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.is_free is False
+    finally:
+        await db.close()

@@ -2281,6 +2281,8 @@ async def build_event_drafts_from_vk(
     combined_lower = (combined_text or "").lower()
     paid_keywords = ("руб", "₽", "платн", "стоимост", "взнос", "донат")
     has_paid_keywords = any(keyword in combined_lower for keyword in paid_keywords)
+    explicit_free_keywords = ("вход свобод", "бесплат", "участие свобод")
+    has_explicit_free_keywords = any(keyword in combined_lower for keyword in explicit_free_keywords)
 
     for draft in drafts:
         venue_text = (draft.venue or "").lower()
@@ -2290,6 +2292,8 @@ async def build_event_drafts_from_vk(
         if draft.ticket_price_min is not None or draft.ticket_price_max is not None:
             continue
         if has_paid_keywords:
+            continue
+        if not has_explicit_free_keywords:
             continue
         if not draft.is_free:
             draft.is_free = True

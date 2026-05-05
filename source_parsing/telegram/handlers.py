@@ -3305,8 +3305,6 @@ def _build_candidate(
     event_type = _normalize_event_type(event_data.get("event_type"))
     emoji = event_data.get("emoji")
     is_free = event_data.get("is_free")
-    if ticket_price_min == 0 and ticket_price_max in (0, None):
-        is_free = True
     pushkin_card = event_data.get("pushkin_card")
     search_digest = event_data.get("search_digest") or event_data.get("search_description")
 
@@ -3457,7 +3455,7 @@ def _build_candidate(
             title,
             location_name,
         )
-        location_name = source.default_location or known_loc
+        location_name = known_loc or source.default_location
         if known_addr and (known_loc or not location_address or location_address_was_prose):
             location_address = known_addr
         if known_city and not extracted_city:
@@ -3535,9 +3533,19 @@ def _build_candidate(
                 location_name = grounded_loc
                 location_address = grounded_addr
             else:
-                location_name = source.default_location
-                location_address = None
-                location_overridden_by_default = True
+                # Fail closed: an unsupported extracted venue should not be
+                # converted into a possibly unrelated source default. Keep the
+                # source default available in metadata for the LLM disambiguation
+                # pass, but only write grounded venue evidence here.
+                if known_loc:
+                    location_name = known_loc
+                    location_address = known_addr
+                    if known_city and not extracted_city:
+                        extracted_city = known_city
+                else:
+                    location_name = None
+                    location_address = None
+                location_overridden_by_default = bool(location_name is None)
     elif extracted_location:
         probe_parts = [str(message_text_s or event_source_text or "").strip()]
         for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:

@@ -3519,7 +3519,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 if ocr_time_hint:
                     ev['time'] = ocr_time_hint
             if default_location and not ev.get('location_name'):
-                ev['location_name'] = default_location
+                ev.setdefault('source_default_location', default_location)
             if default_ticket_link and not ev.get('ticket_link'):
                 ev['ticket_link'] = default_ticket_link
             if linked_texts and text_for_extract:

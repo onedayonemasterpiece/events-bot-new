@@ -167,7 +167,7 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
     assert json.loads(row[3]) == {"skip_breakdown": {"invalid:missing_location": 1}}
 
 
-def test_zero_ticket_price_overrides_false_free_flag_for_tg_candidate():
+def test_zero_ticket_price_does_not_override_false_free_flag_for_tg_candidate():
     source = TelegramSource(username="kraftmarket39", title="Полюбить 39 | Маркет", enabled=True)
     message = {
         "source_username": "kraftmarket39",
@@ -196,4 +196,4 @@ def test_zero_ticket_price_overrides_false_free_flag_for_tg_candidate():
 
     candidate = tg_handlers._build_candidate(source, message, event)
 
-    assert candidate.is_free is True
+    assert candidate.is_free is False

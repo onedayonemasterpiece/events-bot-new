@@ -144,6 +144,35 @@ async def test_tg_build_candidate_drops_section_label_location_and_uses_default(
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_does_not_replace_unsupported_offsite_location_with_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Калининград Сити Джаз Клуб, Грекова 3, Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "regional_events",
+        "message_id": 4520,
+        "source_link": "https://t.me/regional_events/4520",
+        "text": "11 мая спортивные игры пройдут на площадке Зеленоградский городской стадион.",
+    }
+    event_data = {
+        "title": "Спортивные игры",
+        "date": "2026-05-11",
+        "time": "12:00",
+        "location_name": "Зеленоградский городской стадион",
+        "city": "Зеленоградск",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name != "Калининград Сити Джаз Клуб"
+    assert cand.city == "Зеленоградск"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_future_quality_recovers_pure_from_text():
     from source_parsing.telegram.handlers import _build_candidate
 

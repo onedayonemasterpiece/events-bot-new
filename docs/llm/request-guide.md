@@ -39,6 +39,13 @@ explicitly documented as an exception.
 Documented exceptions (rare, guardrail-only):
 - Collapsing duplicate drafts produced from a single umbrella “program/schedule” post
   into one event with a `time` range (prevents accidental duplicates).
+- Fail-closed contradiction guards: a zero/missing price never creates a free
+  label; explicit giveaway/included-entry-ticket/positive-price evidence can only
+  clear `is_free`, not invent paid/free meaning.
+- Exact identity plumbing: a specific ticket URL plus same date/place, or
+  near-identical source text plus same date/time/place, may converge candidates
+  before LLM to prevent duplicate public cards. Generic ticket landing pages and
+  ambiguous title/location-only matches remain LLM-owned.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The
