@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-05-cherryflash-disk-full.md`
+  - Scope: `guide_excursions/kaggle_service.py`, `/data/guide_monitoring_results`, Fly `/data` volume, SQLite `/data/db.sqlite`, scheduled CherryFlash `popular_review`, production catch-up health checks.
+  - Must not regress: Guide monitoring result bundles must not fill the production SQLite volume; `database or disk is full` / `Errno 28` must trigger disk evidence collection and same-day CherryFlash catch-up if the local slot was missed.
 - `INC-2026-05-02-pre-daily-event-quality.md`
   - Scope: Telegram Monitoring / VK auto-import event-local venue grounding, literal field-placeholder cleanup, canonical ticket/program titles, and pre-daily future duplicate/location audit.
   - Must not regress: active today/future event cards must not borrow unrelated source/default venues when the event-local block names a different venue; field-name literals like `location_address` must not become public data; and one real event must not survive as multiple active cards before daily surfaces.

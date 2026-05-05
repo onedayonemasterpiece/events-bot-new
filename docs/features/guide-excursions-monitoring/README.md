@@ -139,6 +139,12 @@ Guide track должен быть проверяемым так же, как Sma
 
 - `guide_monitoring` регистрирует pushed kernel в общем `kaggle_registry` сразу после успешного `push`.
 - После успешного download сервер копирует весь output bundle в persistent store `GUIDE_MONITORING_RESULTS_STORE_ROOT` (по умолчанию `/data/guide_monitoring_results`) и пишет `results_path` в recovery meta, чтобы рестарт во время server-import или scheduled auto-publish не терял уже готовый результат.
+- Persistent store живёт на том же Fly `/data`, что и SQLite, поэтому перед и после копирования нового bundle сервер чистит старые `guide-excursions-*` директории по guard-параметрам:
+  - `GUIDE_MONITORING_RESULTS_STORE_RETENTION_DAYS=2`;
+  - `GUIDE_MONITORING_RESULTS_STORE_MAX_RUNS=6` (включая текущий run);
+  - `GUIDE_MONITORING_RESULTS_STORE_MAX_MB=256`;
+  - `GUIDE_MONITORING_RESULTS_STORE_MIN_FREE_MB=256`.
+  Эти defaults можно расширять только вместе с явным disk budget; иначе Guide recovery artifacts могут повторно заполнить `/data` и сломать SQLite-backed scheduler/video jobs.
 - Scheduler `kaggle_recovery` проверяет и `guide_monitoring`, так же как остальные Kaggle jobs:
   - если kernel ещё работает, запись остаётся в реестре;
   - если output уже был скачан до рестарта, recovery сначала поднимает import из сохранённого `results_path` без повторного запроса в Kaggle;
