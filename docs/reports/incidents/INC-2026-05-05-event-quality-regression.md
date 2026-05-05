@@ -115,12 +115,19 @@ Audit artifact directory:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `9f3b1c99869de48273070d133b62f0f4f2789b02` (reachable from `origin/main`)
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia`
+- deployed image: `events-bot-new-wngqia:deployment-01KQVWBAS2RV23VD6BX62SYA4N`
+- Fly machine: `48e42d5b714228`, version `1036`, region `iad`, checks `1 total, 1 passing`, updated `2026-05-05T10:54:31Z`
 - regression checks:
-  - pending
+  - `artifacts/codex/event-quality-venv/bin/python -m pytest tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_tg_candidate_location_grounding.py tests/test_smart_event_update_duplicate_guards.py tests/test_smart_event_update_non_event_guards.py tests/test_vk_intake_keywords_dates.py` -> `76 passed`
+  - `python3 -m py_compile smart_event_update.py source_parsing/telegram/handlers.py kaggle/TelegramMonitor/telegram_monitor.py vk_intake.py`
+  - `git diff --check`
+  - release-governance: branch `incident/event-quality-gates-20260505` created from `origin/main`, clean deploy worktree, `HEAD` pushed to `origin/main`; remote `hotfix/INC-2026-05-01-daily-location-drift` is behind `origin/main` and not ahead (`10 0`)
 - post-deploy verification:
-  - pending
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, `issues=[]`
+  - Fly startup logs show `BOOT_OK`, aiohttp listening on `0.0.0.0:8080`, service health check passing, and `video_popular_review` startup catch-up skipped because today's Kaggle handoff already exists.
+  - No production data backfill was run in this deploy; old active bad rows remain a separate cleanup step and should not be used to judge recurrence of the new gates until after cleanup or newly imported rows are audited.
 
 ## Prevention
 
