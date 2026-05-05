@@ -78,6 +78,7 @@ Incident-related задача не считается завершённой, п
 - сохранить минимальные сырые source artifacts, которые воспроизводят сбой, в `tests/replays/<incident-id>/` или в incident-linked fixture;
 - прогнать эти artifacts через тот же production import boundary, который сломался (`Telegram Monitoring` server import, `VK auto-import`, `/parse`, linked-source import и т.п.), дальше обязательно через `smart_event_update.py`, на prod snapshot copy или shadow DB;
 - зафиксировать pre/post DB diff или проверочный query output: какие кандидаты были созданы/смёржены/пропущены, какие public rows стали active/merged/skipped;
+- если replay не даёт целевой результат incident record, closure запрещён: агент обязан продолжить итерацию prompt/code/guard изменений и повторять replay до прохождения, либо явно оформить внешний blocker; production data repair может быть частью mitigation, но не заменяет passing replay для prevention;
 - добавить хотя бы один negative/opposite control, чтобы guard не превратился в blanket skip валидных будущих событий;
 - считать prompt-only diff, unit tests, локальный вызов extractor без Smart Update и ручной SQL-аудит недостаточными для closure, если replay не выполнен или blocker не оформлен как follow-up.
 

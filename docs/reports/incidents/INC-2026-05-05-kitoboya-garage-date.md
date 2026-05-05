@@ -34,7 +34,7 @@ This is a production incident because active future rows can leak into `/daily`,
 - 2026-04-03 04:38 UTC — VK repost `wall-75964367_17779` with the same vague text created duplicate event `3620`, also `2026-05-01..2026-06-01`.
 - 2026-05-03 00:27 UTC — Telegram source `domkitoboya/3191` said only `Май, труд`, `готовим`, `Анонс через пару дней`; prod created event `4517` with `date=2026-05-02`, inferred `end_date=2026-06-02`.
 - 2026-05-04 23:30 UTC — Telegram source `domkitoboya/3193` with exact `13 мая` was scanned but skipped as `skipped_non_event:course_promo`.
-- 2026-05-05 UTC — incident opened, fresh prod snapshot collected, source texts saved to `tests/replays/INC-2026-05-05-kitoboya-garage-date/sources.json`, and a post-fix replay on a prod snapshot copy confirmed `3191 -> skipped_non_event:unsupported_exhibition_teaser_date` and `3193 -> merged event_id=4517`.
+- 2026-05-05 UTC — incident opened, fresh prod snapshot collected, source texts saved to `tests/replays/INC-2026-05-05-kitoboya-garage-date/sources.json`, and post-fix replays on prod snapshot copies confirmed both legacy correction (`3191 -> skipped_non_event:unsupported_exhibition_teaser_date`; `3193 -> merged event_id=4517`) and clean-slate all-source recurrence prevention.
 
 ## Root Cause
 
@@ -113,6 +113,8 @@ This is a production incident because active future rows can leak into `/daily`,
   - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile smart_event_update.py vk_intake.py kaggle/TelegramMonitor/telegram_monitor.py` -> ok
   - `git diff --check` -> ok
   - prod snapshot replay: `domkitoboya/3191 -> skipped_non_event:unsupported_exhibition_teaser_date`; `domkitoboya/3193 -> merged event_id=4517`, date corrected to `2026-05-13`, end date `2026-06-13`
+  - all-source clean-slate Smart Update replay with real `.env` and `SMART_UPDATE_LLM_DISABLED=False`: `wall-148784347_6671 -> skipped_non_event:unsupported_exhibition_teaser_date`; `wall-75964367_17779 -> skipped_non_event:unsupported_exhibition_teaser_date`; `domkitoboya/3191 -> skipped_non_event:unsupported_exhibition_teaser_date`; `domkitoboya/3193 -> created event_id=4602`; final DB query returned exactly one active `Куплю гараж` card with `date=2026-05-13`, `end_date=2026-06-13`, `ticket_price_min=300`
+  - all-source replay artifact: `artifacts/codex/inc-2026-05-05-kitoboya-garage/replay_all_sources_clean_after_fix_with_env.txt`
 - production data repair:
   - backup tables: `incident_kitoboya_garage_repair_20260505192628_*`
   - target rows after repair: `3551` and `3620` -> `lifecycle_status=merged`, `silent=1`; `4517` -> `date=2026-05-13`, `end_date=2026-06-13`, `ticket_price_min=300`, `is_free=0`, `source_post_url=https://t.me/domkitoboya/3193`
