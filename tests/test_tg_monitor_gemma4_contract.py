@@ -56,6 +56,8 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "use the host venue as location_name" in source
     assert "leave location_name empty rather than filling it with prose" in source
     assert "Do not invent end_date for single-date events." in source
+    assert "teaser or pre-announcement without an exact day/date range/end_date" in source
+    assert "do not use the message date or the first day of the mentioned month" in source
     assert "Message date is only context for resolving explicit relative anchors" in source
     assert "return [] rather than using message_date as the event date" in source
     assert 'If a post says "в разделе X на выставке Y"' in source

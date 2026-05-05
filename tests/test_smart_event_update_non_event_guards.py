@@ -1,5 +1,6 @@
 import smart_event_update as su
 import pytest
+from sqlalchemy import select
 
 from db import Database
 from models import Event
@@ -161,5 +162,135 @@ async def test_giveaway_does_not_mark_event_free(tmp_path, monkeypatch):
             saved = await session.get(Event, result.event_id)
             assert saved is not None
             assert saved.is_free is False
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_exhibition_teaser_without_exact_date_is_skipped(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/domkitoboya/3191",
+            source_text=(
+                "Май, труд\n\n"
+                "Выставка «Куплю гараж. Калининград», которую мы готовим совместно "
+                "с Музеем Транспорта Москвы.\n\n"
+                "Анонс через пару дней"
+            ),
+            title="Выставка «Куплю гараж. Калининград»",
+            date="2026-05-02",
+            location_name="Дом китобоя",
+            location_address="Мира 9",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "unsupported_exhibition_teaser_date"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_dated_exhibition_with_curator_excursions_is_not_course_promo(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "13 мая в музее «Дом китобоя» откроется выставка "
+            "«Куплю гараж. Калининград».\n\n"
+            "Выставка будет работать ежедневно с 12 до 20 часов.\n"
+            "Стоимость билета - 300 р.\n"
+            "13 и 14 мая пройдут кураторские экскурсии. Начало в 15.00 и 19.00."
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/domkitoboya/3193",
+            source_text=source_text,
+            title="Выставка «Куплю гараж. Калининград»",
+            date="2026-05-13",
+            location_name="Дом китобоя",
+            location_address="Мира 9",
+            city="Калининград",
+            ticket_price_min=300,
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved is not None
+            assert saved.date == "2026-05-13"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_grounded_exhibition_date_corrects_inferred_legacy_range(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        async with db.get_session() as session:
+            session.add(
+                Event(
+                    title="Выставка «Куплю гараж. Калининград»",
+                    description="Анонс выставки.",
+                    date="2026-05-02",
+                    end_date="2026-06-02",
+                    end_date_is_inferred=True,
+                    time="",
+                    location_name="Дом китобоя",
+                    location_address="Мира 9",
+                    city="Калининград",
+                    source_text="Май, труд. Анонс через пару дней.",
+                    source_post_url="https://t.me/domkitoboya/3191",
+                    event_type="выставка",
+                )
+            )
+            await session.commit()
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/domkitoboya/3193",
+            source_text=(
+                "13 мая в музее «Дом китобоя» откроется выставка "
+                "«Куплю гараж. Калининград»."
+            ),
+            title="Выставка «Куплю гараж. Калининград»",
+            date="2026-05-13",
+            location_name="Дом китобоя",
+            location_address="Мира 9",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        async with db.get_session() as session:
+            rows = (await session.execute(select(Event))).scalars().all()
+            assert len(rows) == 1
+            assert rows[0].date == "2026-05-13"
+            assert rows[0].end_date == "2026-06-13"
+            assert rows[0].end_date_is_inferred is True
     finally:
         await db.close()

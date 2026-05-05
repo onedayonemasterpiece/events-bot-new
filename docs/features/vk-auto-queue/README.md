@@ -16,6 +16,8 @@ Gemma 4 migration note: VK auto-import draft extraction — это не бина
 
 После `INC-2026-05-02-pre-daily-event-quality` VK draft prompt явно требует event-local venue grounding: для репостов и постов с несколькими блоками площадка/адрес/город берутся из блока конкретного события, а дефолт источника используется только как fallback. Если пост явно говорит, что событие проходит в библиотеке/музее/баре/другой площадке, это важнее дефолтной площадки VK-группы. Literal placeholders (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) вычищаются как syntax-only guardrail и не должны доходить до Smart Update.
 
+После `INC-2026-05-05-kitoboya-garage-date` VK draft prompt также fail-closed для выставок/ярмарок без точной даты: teaser вроде `в мае откроем`, `готовим выставку`, `анонсируем дату позже` должен возвращать `[]`, а не материализоваться как первое число месяца. Смысловое решение остаётся LLM-first; детерминированный слой Smart Update только страхует unsupported teaser date как `skipped_non_event:unsupported_exhibition_teaser_date`.
+
 Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
 
 - при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY` новые постеры пишутся в Yandex Object Storage (`kenigevents`);

@@ -3040,6 +3040,32 @@ _COURSE_PROMO_RE = re.compile(
     r"професси\w*\s+переподготовк\w*"
     r")\b"
 )
+_COURSE_PROMO_STRONG_RE = re.compile(
+    r"(?i)\b("
+    r"старт\s+курс\w*|"
+    r"набор\s+на\s+курс|"
+    r"курс\w*|"
+    r"обучени\w*|"
+    r"программ\w*\s+курс\w*|"
+    r"поток\s+|"
+    r"модул\w*|"
+    r"домашн\w*\s+задан\w*|"
+    r"сертификат\w*|"
+    r"професси\w*\s+переподготовк\w*"
+    r")\b"
+)
+_UNSUPPORTED_EXHIBITION_TEASER_RE = re.compile(
+    r"(?iu)\b("
+    r"готовим|"
+    r"готовится|"
+    r"скоро\s+анонс|"
+    r"анонс\s+через|"
+    r"анонсируем\s+(?:чуть\s+)?позже|"
+    r"точн\w+\s+дат\w+[^.\n]{0,80}анонсир\w+|"
+    r"в\s+(?:мае|июне|июле|августе|сентябре|октябре|ноябре|декабре|январе|феврале|марте|апреле)\s+[^.\n]{0,120}откро\w+|"
+    r"скоро\s+откро\w+"
+    r")\b"
+)
 
 _SERVICE_PROMO_OCCASION_RE = re.compile(
     r"(?iu)\b("
@@ -3456,8 +3482,21 @@ def _looks_like_course_promo(title: str | None, text: str | None) -> bool:
         return False
     if not _COURSE_PROMO_RE.search(combined):
         return False
+    # Words like "кураторские экскурсии" are common in exhibition announcements.
+    # Do not let the broad `куратор*` token override a grounded dated exhibition.
+    if (
+        _EVENT_INVITE_RE.search(combined)
+        and re.search(r"(?iu)\bвыставк\w*\b", combined)
+        and (
+            re.search(r"\b([01]?\d|2[0-3])[:.][0-5]\d\b", combined)
+            or _DATE_SIGNAL_RE.search(combined)
+            or _TICKET_PRICE_CONTEXT_RE.search(combined)
+        )
+        and not _COURSE_PROMO_STRONG_RE.search(combined)
+    ):
+        return False
     # If it's clearly a one-off masterclass/lecture with concrete start time, keep it.
-    if re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", combined) and _EVENT_INVITE_RE.search(combined):
+    if re.search(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", combined) and _EVENT_INVITE_RE.search(combined):
         return False
     # "Старт курса" and multi-session language strongly indicates non-event promo content.
     if re.search(r"(?i)\bна\s+кажд(ом|ом\s+из)\s+заняти\w*\b", combined):
@@ -5919,6 +5958,46 @@ def _candidate_date_range(candidate: EventCandidate) -> tuple[date | None, date 
     if start and not end:
         end = start
     return start, end
+
+
+def _candidate_date_is_grounded_in_sources(candidate: EventCandidate) -> bool:
+    cand_start = _parse_iso_date(candidate.date)
+    if not cand_start:
+        return False
+    hay_parts = [
+        str(candidate.source_text or ""),
+        str(candidate.raw_excerpt or ""),
+    ]
+    for poster in candidate.posters or []:
+        hay_parts.append(str(getattr(poster, "ocr_text", "") or ""))
+        hay_parts.append(str(getattr(poster, "ocr_title", "") or ""))
+    pairs = _extract_day_month_pairs("\n".join(part for part in hay_parts if part).strip())
+    return (int(cand_start.day), int(cand_start.month)) in pairs
+
+
+def _looks_like_unsupported_exhibition_teaser_date(candidate: EventCandidate, text: str | None) -> bool:
+    event_type = _normalize_event_type_value(
+        candidate.title,
+        candidate.raw_excerpt or candidate.source_text,
+        candidate.event_type,
+    )
+    if event_type not in {"выставка", "экспозиция", "ярмарка"}:
+        return False
+    if not str(candidate.date or "").strip():
+        return False
+    if _candidate_date_is_grounded_in_sources(candidate):
+        return False
+    combined = "\n".join(
+        [
+            str(candidate.title or ""),
+            str(text or ""),
+            str(candidate.source_text or ""),
+            str(candidate.raw_excerpt or ""),
+        ]
+    ).strip()
+    if not combined:
+        return False
+    return bool(_UNSUPPORTED_EXHIBITION_TEASER_RE.search(combined))
 
 
 def _smart_update_skip_past_events_enabled() -> bool:
@@ -8631,7 +8710,15 @@ def _deterministic_longrun_exhibition_exact_title_match(
         if not _ranges_overlap(cand_start, cand_end, ev_start, ev_end):
             continue
         ev_end_iso = str(getattr(ev, "end_date", "") or "").strip() or None
-        if cand_end_iso and ev_end_iso and cand_end_iso != ev_end_iso:
+        if (
+            cand_end_iso
+            and ev_end_iso
+            and cand_end_iso != ev_end_iso
+            and not (
+                bool(getattr(ev, "end_date_is_inferred", False))
+                or bool(getattr(candidate, "end_date_is_inferred", False))
+            )
+        ):
             continue
         same_source = _event_has_source_url_hint(ev, candidate.source_url)
         if candidate.location_name and getattr(ev, "location_name", None):
@@ -9742,6 +9829,18 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="congrats_notice")
+        if _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text):
+            logger.info(
+                "smart_update.skip reason=unsupported_exhibition_teaser_date source_type=%s source_url=%s title=%s date=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+                candidate.date,
+            )
+            return SmartUpdateResult(
+                status="skipped_non_event",
+                reason="unsupported_exhibition_teaser_date",
+            )
         if _looks_like_course_promo(clean_title, combined_text):
             logger.info(
                 "smart_update.skip reason=course_promo source_type=%s source_url=%s title=%s",
@@ -11407,6 +11506,34 @@ async def _smart_event_update_impl(
                 event_db.location_address = candidate.location_address.strip()
                 updated_fields = True
                 updated_keys.append("location_address")
+        elif (
+            candidate.date
+            and candidate.date != (event_db.date or "")
+            and bool(getattr(event_db, "end_date_is_inferred", False))
+            and _is_long_event_type_value(getattr(event_db, "event_type", None) or candidate.event_type)
+            and _candidate_date_is_grounded_in_sources(candidate)
+            and (
+                not candidate.location_name
+                or not getattr(event_db, "location_name", None)
+                or _event_candidate_location_matches(event_db, candidate)
+            )
+        ):
+            # A later exact source can correct legacy exhibition rows created from vague
+            # month/message-date teasers. Only do this when the old range is inferred and
+            # the new start date is explicitly grounded in the candidate source/OCR.
+            event_db.date = candidate.date
+            updated_fields = True
+            if "date" not in updated_keys:
+                updated_keys.append("date")
+            conflicting.pop("date", None)
+            if _apply_event_end_date(
+                event_db,
+                end_date=candidate.end_date,
+                inferred=bool(candidate.end_date_is_inferred),
+                updated_keys=updated_keys,
+            ):
+                updated_fields = True
+                conflicting.pop("end_date", None)
 
         # Operator-entered sources are allowed to корректировать title even if the
         # candidate doesn't bring enough new text/posters for LLM merge.

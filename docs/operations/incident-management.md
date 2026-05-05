@@ -73,6 +73,14 @@ Incident-related задача не считается завершённой, п
 6. заведены follow-up actions, если нужны долгосрочные изменения;
 7. docs/README/changelog синхронизированы, если поведение или процесс поменялись.
 
+Дополнительный обязательный gate для source-import / Smart Update quality incidents:
+
+- сохранить минимальные сырые source artifacts, которые воспроизводят сбой, в `tests/replays/<incident-id>/` или в incident-linked fixture;
+- прогнать эти artifacts через тот же production import boundary, который сломался (`Telegram Monitoring` server import, `VK auto-import`, `/parse`, linked-source import и т.п.), дальше обязательно через `smart_event_update.py`, на prod snapshot copy или shadow DB;
+- зафиксировать pre/post DB diff или проверочный query output: какие кандидаты были созданы/смёржены/пропущены, какие public rows стали active/merged/skipped;
+- добавить хотя бы один negative/opposite control, чтобы guard не превратился в blanket skip валидных будущих событий;
+- считать prompt-only diff, unit tests, локальный вызов extractor без Smart Update и ручной SQL-аудит недостаточными для closure, если replay не выполнен или blocker не оформлен как follow-up.
+
 ## Incident Control Block
 
 Для каждой incident-related задачи агент должен быстро собрать рабочий блок:
