@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 
 import smart_event_update as su
@@ -145,3 +148,34 @@ async def test_fact_first_description_timeout_is_opt_in(monkeypatch):
     result = await su._llm_fact_first_description_md_bounded(label="create")
 
     assert result == "ready"
+
+
+@pytest.mark.asyncio
+async def test_smart_update_gemma_outer_retry_defaults_to_one(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            RuntimeError("provider failed"),
+            '{"facts":["late"]}',
+        ]
+    )
+    monkeypatch.delenv("SMART_UPDATE_GEMMA_RETRIES", raising=False)
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", False)
+    fake_main = types.ModuleType("main")
+    fake_main.ask_4o = None
+    fake_main.notify_llm_incident = None
+    monkeypatch.setitem(sys.modules, "main", fake_main)
+
+    data = await su._ask_gemma_json(
+        "Верни факты.",
+        {
+            "type": "object",
+            "properties": {"facts": {"type": "array", "items": {"type": "string"}}},
+            "required": ["facts"],
+        },
+        max_tokens=100,
+        label="create_bundle",
+    )
+
+    assert data is None
+    assert len(client.calls) == 1

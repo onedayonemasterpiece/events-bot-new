@@ -122,6 +122,58 @@ Decision:
 - do not use the timeout as a default speed fix because it can lower fact coverage;
 - next speed work must target prompt/schema quality for `fact_first_desc` / `fact_first_cov` and provider-call bounding for long `create_bundle` calls without accepting fact losses.
 
+### Fact-first off / retry nesting probe (`2026-05-06T15:37Z`)
+
+Artifacts:
+
+- [`smart_update_g4_full_surface_benchmark_20260506T153728Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T153728Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260506T153728Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T153728Z.json)
+
+Runtime:
+
+- `EVENT_TOPICS_GEMMA_NATIVE_SCHEMA=1`
+- `SMART_UPDATE_FACT_FIRST=0`
+
+Findings:
+
+| Fixture | Result | Smart Update wall | Trace signal | Decision |
+| --- | --- | ---: | --- | --- |
+| `PRODDB-4594` | `15/22`, `partial` | `112.33s` | only `create_bundle=106.97s` | much faster, but no quality improvement |
+| `PRODDB-4598` | `review_error` | `79.12s` | only `create_bundle=75.06s`; reviewer later hit repeated `500` | inconclusive quality |
+| `PRODDB-4538` | incomplete | stalled on `create_bundle` after fast provider `500` errors | provider-call stability issue |
+
+Additional control on `PRODDB-4538` with `GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120` showed the deeper retry shape:
+
+- `GoogleAIClient` already retries retryable provider failures up to `3` provider attempts;
+- Smart Update `_ask_gemma_json` also had `SMART_UPDATE_GEMMA_RETRIES=3` by default;
+- therefore one `create_bundle` stage could expand to up to `9` provider calls before fallback.
+
+Post-fix control:
+
+- [`smart_update_g4_full_surface_benchmark_20260506T155513Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T155513Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260506T155513Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T155513Z.json)
+
+Runtime:
+
+- `EVENT_TOPICS_GEMMA_NATIVE_SCHEMA=1`
+- `SMART_UPDATE_FACT_FIRST=0`
+- `GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120`
+- default `SMART_UPDATE_GEMMA_RETRIES=1`
+
+Result on `PRODDB-4538`:
+
+- benchmark completed instead of entering nested outer retries;
+- fact coverage stayed `11/11`, verdict `partial`;
+- Smart Update wall was still unacceptable (`605.50s`) because the fallback chain hit several long text stages;
+- trace confirmed one outer call per Smart Update label: `create_bundle=122.83s` (`failed`, `provider_errors=2`), `rewrite=120.17s` (`failed`), `rewrite_full=60.26s` (`ok`), `rewrite_full_remove_logistics=120.19s` (`failed`), `facts_extract=40.30s`, `search_digest=39.76s`, `short_description=96.66s`.
+
+Decision:
+
+- do not accept `SMART_UPDATE_FACT_FIRST=0` as a quality fix; it is useful only as a latency diagnostic;
+- change Smart Update Gemma wrapper default to `SMART_UPDATE_GEMMA_RETRIES=1`, leaving provider retry ownership inside `GoogleAIClient`;
+- keep `SMART_UPDATE_GEMMA_RETRIES` as an explicit override for experiments.
+- next architectural work should collapse the create-description fallback chain into one bounded writer path; otherwise removing fact-first only exposes the old multi-rewrite path and does not make Smart Update production-fast.
+
 ## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
 
 Цель следующего benchmark: сравнить **текущий Smart Update baseline на Gemma 3** и **Smart Update G4 candidate, вариант 2** на одном и том же полном source evidence.

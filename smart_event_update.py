@@ -4951,8 +4951,11 @@ async def _ask_gemma_json(
     max_tokens: int,
     label: str,
 ) -> dict[str, Any] | None:
-    # Retry Gemma a few times, then fall back to 4o (operator-visible) if configured.
-    max_tries = int(os.getenv("SMART_UPDATE_GEMMA_RETRIES", "3"))
+    # Ask Gemma through the shared gateway, then fall back to 4o (operator-visible) if configured.
+    # GoogleAIClient already retries retryable provider failures. Keep the
+    # Smart Update wrapper to a single outer attempt by default so one failing
+    # stage cannot expand into 3 x 3 provider calls; override via env for probes.
+    max_tries = int(os.getenv("SMART_UPDATE_GEMMA_RETRIES", "1"))
     base_sleep = float(os.getenv("SMART_UPDATE_GEMMA_RETRY_BASE_SEC", "1.0"))
     # When we are rate-limited, prefer waiting (do not count it as a "try") to
     # keep the new GOOGLE_API_KEY within quota and avoid burning 4o fallback.
@@ -5245,7 +5248,10 @@ async def _ask_gemma_text(
     label: str,
     temperature: float = 0.0,
 ) -> str | None:
-    max_tries = int(os.getenv("SMART_UPDATE_GEMMA_RETRIES", "3"))
+    # GoogleAIClient already retries retryable provider failures. Keep the
+    # Smart Update wrapper to a single outer attempt by default so one failing
+    # stage cannot expand into 3 x 3 provider calls; override via env for probes.
+    max_tries = int(os.getenv("SMART_UPDATE_GEMMA_RETRIES", "1"))
     base_sleep = float(os.getenv("SMART_UPDATE_GEMMA_RETRY_BASE_SEC", "1.0"))
     rl_max_wait_sec = float(os.getenv("SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "180") or "180")
     rl_max_wait_sec = max(0.0, min(rl_max_wait_sec, 1800.0))
