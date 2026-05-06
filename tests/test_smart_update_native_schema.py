@@ -179,3 +179,50 @@ async def test_smart_update_gemma_outer_retry_defaults_to_one(monkeypatch):
 
     assert data is None
     assert len(client.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_writer_uses_fact_payload(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"description":"Лид про камерный концерт и сочетание органа с голосом.\\n\\n'
+                '### Музыкальная линия\\nВ программе звучат Ave Maria и духовная музыка. '
+                'Факты собраны в цельный анонс без служебной информации.\\n\\n'
+                '### Акценты программы\\n- Орган\\n- Голос",'
+                '"short_description":"Камерный концерт соединяет органное звучание, вокал, духовную традицию и редкую акустику программы.",'
+                '"search_digest":"Камерный концерт с органом, голосом и Ave Maria",'
+                '"warnings":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", False)
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_1",
+        source_text="Концерт Ave Maria: орган и голос.",
+        title="Аве Мария",
+        date="2026-05-08",
+        time="18:00",
+        location_name="Филармония",
+        city="Калининград",
+        event_type="concert",
+    )
+
+    result = await su._llm_g4_split_create_writer(
+        candidate=candidate,
+        title="Аве Мария",
+        event_type="concert",
+        facts_text_clean=[
+            "В программе звучат Ave Maria и духовная музыка.",
+            "Формат: камерный концерт органа и голоса.",
+        ],
+    )
+
+    assert result is not None
+    assert "### Музыкальная линия" in result["description"]
+    assert result["short_description"]
+    assert result["search_digest"] == "Камерный концерт с органом, голосом и Ave Maria"
+    assert client.calls[0]["max_output_tokens"] >= 1500
+    assert "facts_text_clean" in client.calls[0]["prompt"]

@@ -158,6 +158,7 @@ Diagnostic-only step:
 - Full-surface Smart Update G4 benchmarks now collect a per-call LLM trace for Gemma stages, including label, kind, model, status, duration, attempts, provider errors, and rate-limit waits.
 - `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC` can bound `fact_first_description` in explicit sandbox probes, but defaults to `0`. A 90s timeout sped up two fixtures and exposed the true latency surface, but regressed one accepted fixture from `16/16` to `15/16` fact coverage, so it is not accepted as a production-default speed fix.
 - Smart Update Gemma wrappers default `SMART_UPDATE_GEMMA_RETRIES` to `1`; retryable provider failures are retried by `GoogleAIClient`, so the Smart Update wrapper must not multiply one failing stage into nested provider attempts. Use higher `SMART_UPDATE_GEMMA_RETRIES` only for explicit probes.
+- `SMART_UPDATE_G4_SPLIT_CREATE=1` (`g4-split-create-v1`) is an off-by-default probe that removes the heavy `create_bundle` create-stage from the candidate path and splits create into `facts_extract -> split_create_writer`; it must remain gated until a full-surface benchmark proves no-worse facts/text against the frozen Gemma 3-era baseline.
 
 ## Сравнение Gemma 3 и Gemma 4 по ключевым атрибутам
 

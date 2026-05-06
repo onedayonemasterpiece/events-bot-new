@@ -167,6 +167,12 @@ SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES = {
     for item in (os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", "facts_extract,create_bundle") or "").split(",")
     if item.strip()
 }
+SMART_UPDATE_G4_SPLIT_CREATE = (os.getenv("SMART_UPDATE_G4_SPLIT_CREATE", "0") or "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 SMART_UPDATE_YO_RULE = (
     "Уважай букву «ё»: если слово в норме пишется через «ё», не заменяй её на «е»."
 )
@@ -1779,6 +1785,165 @@ def _fact_first_description_prompt(
         Верни только Markdown‑текст описания (без JSON).
         """
     ).strip()
+
+
+def _g4_split_create_writer_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "description": {"type": "string"},
+            "short_description": {"type": "string"},
+            "search_digest": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["description", "short_description", "search_digest", "warnings"],
+        "additionalProperties": False,
+    }
+
+
+def _cleanup_g4_split_create_description(
+    value: str | None,
+    *,
+    candidate: EventCandidate,
+) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    raw = _strip_private_use(raw) or raw
+    raw = _fix_inline_bullet_lists(raw) or raw
+    raw = _normalize_bullet_markers(raw) or raw
+    raw = _promote_review_bullets_to_blockquotes(raw) or raw
+    raw = _normalize_blockquote_markers(raw) or raw
+    raw = _limit_description_emojis(raw) or raw
+    raw = _sanitize_description_output(raw, source_text="") or raw
+    raw = _dedupe_description(raw) or raw
+    raw = _normalize_plaintext_paragraphs(raw) or raw
+    raw = _ensure_minimal_description_headings(raw) or raw
+    raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+    if _description_needs_infoblock_logistics_strip(raw, candidate=candidate):
+        logger.warning(
+            "smart_update: g4_split_create_writer rejected description with logistics source_type=%s source_url=%s",
+            candidate.source_type,
+            candidate.source_url,
+        )
+        return None
+    return raw.strip() or None
+
+
+async def _llm_g4_split_create_writer(
+    *,
+    candidate: EventCandidate,
+    title: str | None,
+    event_type: str | None,
+    facts_text_clean: Sequence[str],
+) -> dict[str, Any] | None:
+    facts = [str(f or "").strip() for f in (facts_text_clean or []) if str(f or "").strip()]
+    if not facts or SMART_UPDATE_LLM_DISABLED:
+        return None
+    facts = _dedupe_source_facts([_sanitize_fact_text_clean_for_prompt(f) for f in facts])[:28]
+    budget_chars = _estimate_fact_first_description_budget_chars(facts)
+    max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1500, ceil=3600)
+    payload = {
+        "title": (title or candidate.title or "").strip(),
+        "event_type": (event_type or candidate.event_type or "").strip(),
+        "description_budget_chars": budget_chars,
+        "facts_text_clean": facts,
+        "infoblock_context": {
+            "date": candidate.date,
+            "time": candidate.time,
+            "end_date": candidate.end_date,
+            "location_name": candidate.location_name,
+            "location_address": candidate.location_address,
+            "city": candidate.city,
+            "ticket_status": candidate.ticket_status,
+            "is_free": candidate.is_free,
+            "ticket_link_present": bool((candidate.ticket_link or "").strip()),
+            "pushkin_card": candidate.pushkin_card,
+        },
+    }
+    prompt = (
+        "Ты пишешь один готовый публичный Markdown-анонс события из уже извлечённых фактов.\n"
+        "Это Smart Update G4 split-create writer: extraction уже сделан, поэтому не извлекай новые факты и не используй baseline.\n\n"
+        "Источник истины для описания: только `facts_text_clean`.\n"
+        "`infoblock_context` нужен только чтобы НЕ повторять логистику в описании: дата, время, город, площадка, адрес, билеты, ссылки, цена, возраст, Пушкинская карта показываются отдельно.\n\n"
+        f"{SMART_UPDATE_YO_RULE}\n\n"
+        "Верни JSON:\n"
+        "- `description`: Markdown-текст; лид одним абзацем, затем 2-3 информативных `###` раздела; не сухая выжимка.\n"
+        "- Сохрани цитаты, имена, названия, цифры и элементы списков из фактов; списки лучше оформить markdown-пунктами.\n"
+        "- Не добавляй фактов, которых нет в facts_text_clean.\n"
+        "- Не пиши CTA/рекламу: «приходите», «не пропустите», «ждём вас», «приглашаем», «успейте», «присоединяйтесь».\n"
+        "- Не используй корень «посвящ» и конструкцию «это ... не ..., а ...».\n"
+        "- Не повторяй логистику из infoblock_context в description.\n"
+        "- `short_description`: одно законченное предложение 12-16 слов, без логистики, emoji и hashtags.\n"
+        "- `search_digest`: короткое резюме для поиска/карточек, до 160 символов, без логистики, emoji и hashtags.\n"
+        "- `warnings`: пустой массив или короткие предупреждения о пропущенных/сомнительных фактах.\n\n"
+        f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        _g4_split_create_writer_schema(),
+        max_tokens=max_tokens,
+        label="split_create_writer",
+    )
+    if not isinstance(data, dict):
+        return None
+    description = _cleanup_g4_split_create_description(
+        str(data.get("description") or ""),
+        candidate=candidate,
+    )
+    if not description:
+        return None
+    short = _clean_short_description(str(data.get("short_description") or ""))
+    if short and not _is_short_description_acceptable(short, min_words=12, max_words=16):
+        short = None
+    digest = _clean_search_digest(str(data.get("search_digest") or ""))
+    return {
+        "description": description,
+        "short_description": short,
+        "search_digest": digest,
+        "warnings": [str(x).strip() for x in (data.get("warnings") or []) if str(x or "").strip()],
+    }
+
+
+async def _llm_g4_split_create_bundle(
+    candidate: EventCandidate,
+    *,
+    clean_title: str,
+    normalized_event_type: str | None,
+) -> dict[str, Any] | None:
+    facts = await _llm_extract_candidate_facts(candidate)
+    facts_text_clean = _facts_text_clean_from_facts(
+        facts,
+        anchors=[
+            candidate.date or "",
+            candidate.time or "",
+            candidate.city or "",
+            candidate.location_name or "",
+            candidate.location_address or "",
+        ],
+    )
+    if not facts_text_clean:
+        return None
+    writer = await _llm_g4_split_create_writer(
+        candidate=candidate,
+        title=clean_title,
+        event_type=normalized_event_type or candidate.event_type,
+        facts_text_clean=facts_text_clean,
+    )
+    bundle: dict[str, Any] = {
+        "title": None,
+        "description": None,
+        "search_digest": None,
+        "short_description": None,
+        "facts": list(facts_text_clean),
+        "_split_create": True,
+    }
+    if isinstance(writer, dict):
+        bundle["description"] = writer.get("description")
+        bundle["search_digest"] = writer.get("search_digest")
+        bundle["short_description"] = writer.get("short_description")
+        bundle["_split_create_warnings"] = writer.get("warnings") or []
+    return bundle
 
 
 def _fact_first_coverage_prompt(
@@ -10454,6 +10619,8 @@ async def _smart_event_update_impl(
             )
             source_type_clean = str(candidate.source_type or "").strip().lower()
             use_match_create_bundle = use_match_create_bundle and source_type_clean in {"vk", "tg", "telegram"}
+            if SMART_UPDATE_G4_SPLIT_CREATE:
+                use_match_create_bundle = False
             if use_match_create_bundle:
                 normalized_event_type_hint = _normalize_event_type_value(
                     candidate.title,
@@ -10667,6 +10834,12 @@ async def _smart_event_update_impl(
         try:
             if llm_create_bundle is not None:
                 bundled = llm_create_bundle
+            elif SMART_UPDATE_G4_SPLIT_CREATE:
+                bundled = await _llm_g4_split_create_bundle(
+                    candidate,
+                    clean_title=clean_title,
+                    normalized_event_type=normalized_event_type,
+                )
             else:
                 bundled = await _llm_create_description_facts_and_digest(
                     candidate,
@@ -10769,7 +10942,21 @@ async def _smart_event_update_impl(
         final_title = _clip_title(final_title, 160) or clean_title
 
         fact_first_used = False
-        if SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
+        if (
+            SMART_UPDATE_G4_SPLIT_CREATE
+            and isinstance(bundled, dict)
+            and bundled.get("_split_create")
+            and bundled_desc
+            and bundled_facts
+        ):
+            description_value = bundled_desc
+            fact_first_used = True
+            logger.info(
+                "smart_update.create_description path=g4_split_create_v1 source_type=%s source_url=%s",
+                candidate.source_type,
+                candidate.source_url,
+            )
+        if (not fact_first_used) and SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
             fact_first_facts = list(bundled_facts or [])
             if not fact_first_facts:
                 try:

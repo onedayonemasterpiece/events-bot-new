@@ -174,6 +174,39 @@ Decision:
 - keep `SMART_UPDATE_GEMMA_RETRIES` as an explicit override for experiments.
 - next architectural work should collapse the create-description fallback chain into one bounded writer path; otherwise removing fact-first only exposes the old multi-rewrite path and does not make Smart Update production-fast.
 
+### Split create v1 probe (`2026-05-06T17:15Z`)
+
+Rollback point:
+
+- `g4-retry-bound-baseline` = git tag `smart-update-g4-retry-bound-baseline` at commit `204538ef`.
+- The rejected intermediate single-writer-after-create-bundle diff is preserved only as an artifact patch:
+  [`smart_update_g4_single_writer_rejected_20260506T170000Z.patch`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_single_writer_rejected_20260506T170000Z.patch).
+
+Artifact:
+
+- [`smart_update_g4_full_surface_benchmark_20260506T171534Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T171534Z.json)
+
+Runtime:
+
+- `SMART_UPDATE_G4_SPLIT_CREATE=1`
+- `SMART_UPDATE_GEMMA_NATIVE_SCHEMA=1`
+- `SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES=facts_extract,split_create_writer`
+- `GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120`
+
+Result:
+
+| Fixture | Smart Update wall | Trace | Coverage | Decision |
+| --- | ---: | --- | --- | --- |
+| `PRODDB-4594` | `25.51s` | `facts_extract=12.52s`, `split_create_writer=6.95s` | `8/22`, `partial` | speed promising, quality rejected |
+| `PRODDB-4598` | `30.10s` | `facts_extract=8.90s`, `split_create_writer=15.39s` | `16/16`, verdict floor `partial` because of suspicious metadata/logistics duplicates | promising but needs cleanup |
+| `PRODDB-4538` | interrupted before checkpoint completion | live trace showed `facts_extract` + `split_create_writer` stayed short, with provider `500` retry on writer | not evaluated | incomplete |
+
+Manual audit notes:
+
+- This probe is the first one where candidate Smart Update runtime approached a reasonable range (`~25-30s`) because it removed the heavy `create_bundle` and fact-first coverage/revise cascade.
+- It is not accepted: `PRODDB-4594` lost important facts (organizer, urban research, role-management methodology, participation modes) and produced a short/typo-prone description.
+- The benchmark LLM reviewer is no longer suitable as the inner-loop bottleneck for this migration work; future probes should use the artifact plus direct manual/Codex audit first, then reserve LLM review for final gate only.
+
 ## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
 
 Цель следующего benchmark: сравнить **текущий Smart Update baseline на Gemma 3** и **Smart Update G4 candidate, вариант 2** на одном и том же полном source evidence.

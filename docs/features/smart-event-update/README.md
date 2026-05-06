@@ -9,6 +9,7 @@ Smart Update по умолчанию строит публичный текст 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
 - `SMART_UPDATE_FACT_FIRST=0` — rollback на прежний rewrite/merge‑first путь.
+- `SMART_UPDATE_G4_SPLIT_CREATE=1` — экспериментальный вариант `g4-split-create-v1` для миграции на Gemma 4: create-path не вызывает тяжёлый `create_bundle`, а делает `facts_extract -> split_create_writer`. По умолчанию выключен; если writer не дал валидный текст, текущий fact‑first fallback остаётся рабочим rollback-ом.
 
 Канонический контракт и детали реализации:
 
