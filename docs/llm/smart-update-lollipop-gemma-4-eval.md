@@ -25,6 +25,72 @@
 - raw responses могут нести separate thought-channel (`parts[].thought = true`);
 - значит любой production-like path для Gemma 4 обязан явно фильтровать thought content.
 
+## Smart Update G4 latency variants probe (`2026-05-06`)
+
+Artifact:
+
+- [`smart_update_g4_latency_variants_20260506T130213Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_latency_variants_20260506T130213Z.md)
+- [`smart_update_g4_latency_variants_20260506T130213Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_latency_variants_20260506T130213Z.json)
+- extra control: [`smart_update_g4_topics_native_31_probe_20260506T130213Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_topics_native_31_probe_20260506T130213Z.json)
+
+Scope:
+
+- same three local production DB snapshot events as the full-surface sandbox benchmark: `4594`, `4598`, `4538`;
+- first-attempt stage-level probe (`GOOGLE_AI_MAX_RETRIES=1`, `SMART_UPDATE_GEMMA_RETRIES=1`) to measure request-shape latency separately from retry wait time;
+- baseline/candidate facts/text were not used in generation payloads.
+
+Result:
+
+| Stage variant | Success | Sum latency | Median latency | Decision |
+| --- | ---: | ---: | ---: | --- |
+| `event_topics` current `31b` prompt-schema | `3/3` | `71.824s` | `23.982s` | replace |
+| `event_topics` `31b` native schema | `3/3` | `11.099s` | `3.928s` | accepted safe optimization |
+| `event_topics` `26b-a4b` native schema | `2/3` | `6.739s` | `2.144s` | too unstable |
+| `facts_extract` current `31b` prompt-schema | `2/3` | `108.829s` | `43.383s` | slow |
+| `facts_extract` `31b` native schema | `2/3` | `12.904s` | `5.579s` | faster, gated by fact-recall review |
+| `create_bundle` current `31b` prompt-schema | `1/3` | `74.149s` | `0.372s` | provider-unstable |
+| `create_bundle` `31b` native schema | `2/3` | `43.296s` | `19.262s` | promising, gated by full-surface review |
+| `search_digest` native JSON field | `1/3` | `7.313s` | `0.354s` | rejected for now |
+| `short_description` native JSON field | `0/3` | `1.112s` | `0.360s` | rejected |
+
+Implementation decision:
+
+- move `event_topics` to `gemma-4-31b-it` native `response_schema` with prompt-schema fallback;
+- add an experimental, off-by-default Smart Update native schema flag for `facts_extract` and `create_bundle`;
+- do not move `search_digest` / `short_description` to separate native JSON calls.
+
+Open gate:
+
+- run full-surface benchmark with `SMART_UPDATE_GEMMA_NATIVE_SCHEMA=1` and compare persisted fields, infoblock/logistics facts, `facts_text_clean`, Telegraph body, `short_description`, `search_digest`, and latency before enabling native schema for Smart Update core stages by default.
+
+### Full-surface follow-up (`2026-05-06T14:10Z`)
+
+Artifact:
+
+- [`smart_update_g4_full_surface_benchmark_20260506T141044Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T141044Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260506T141044Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T141044Z.json)
+
+Runtime:
+
+- `EVENT_TOPICS_GEMMA_NATIVE_SCHEMA=1`
+- `SMART_UPDATE_GEMMA_NATIVE_SCHEMA=1`
+- `SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES=facts_extract,create_bundle`
+
+Comparison against the previous full-surface artifact `smart_update_g4_full_surface_benchmark_20260506T094705Z`:
+
+| Fixture | Previous facts | Native-schema facts | Previous wall | Native-schema wall | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `PRODDB-4594` | `15/22` | `12/22` | `267.21s` | `160.76s` | faster but worse facts |
+| `PRODDB-4598` | `16/16` | `13/16` | `249.19s` | `149.97s` | faster but regressed from accepted to partial |
+| `PRODDB-4538` | `11/11` | `review_error` | `180.89s` | `386.55s` | worse and slower |
+
+Decision:
+
+- do not enable Smart Update core native schema by default yet;
+- keep the flag for isolated prompt/schema work only;
+- `event_topics` native schema remains accepted because the extra 31b-only control probe passed `3/3` and does not affect fact/text generation;
+- the next latency bottlenecks are not only JSON schema calls: `create:fact_first_desc`, `create:fact_first_cov`, `create:fact_first_revise`, and benchmark reviewer calls also caused long waits or repeated `500`.
+
 ## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
 
 Цель следующего benchmark: сравнить **текущий Smart Update baseline на Gemma 3** и **Smart Update G4 candidate, вариант 2** на одном и том же полном source evidence.

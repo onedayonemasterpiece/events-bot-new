@@ -139,6 +139,20 @@ source post / parser text / OCR
 3. Успех миграции измеряется качеством итогового Smart Update result относительно текущего Smart Update baseline, а не субъективной "силой" отдельного Gemma-stage.
 4. Regression guards из `INC-2026-05-02-pre-daily-event-quality` обязательны для любых changes в extraction/merge/title/venue surfaces: event-local venue grounding, placeholder literal ban (`location_address` и подобные), canonical title guidance.
 
+### Structured output rollout note (`2026-05-06`)
+
+Latency probes on the current three production-snapshot Smart Update fixtures showed that native `response_schema` can remove a large part of Gemma 4 structured-call overhead without switching away from `gemma-4-31b-it`.
+
+Accepted safe step:
+
+- `event_topics` now uses `gemma-4-31b-it` with native `response_schema` by default and falls back to the old prompt-schema JSON contract if the native call fails or returns invalid JSON.
+
+Experimental step, not production-default:
+
+- Smart Update JSON stages can opt into native `response_schema` with `SMART_UPDATE_GEMMA_NATIVE_SCHEMA=1`.
+- The default experimental stage allowlist is `SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES=facts_extract,create_bundle`.
+- This remains gated because the first latency probe showed speed gains for `facts_extract` and `create_bundle`, but `facts_extract` could return fewer facts on dense cases. Full-surface benchmark parity is required before enabling it by default.
+
 ## Сравнение Gemma 3 и Gemma 4 по ключевым атрибутам
 
 | Атрибут | Gemma 3 | Gemma 4 | Что это означает для `lollipop` |

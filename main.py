@@ -2210,6 +2210,9 @@ EVENT_TOPICS_MODEL = os.getenv(
     "EVENT_TOPICS_MODEL",
     "gemma-4-31b-it",
 ).strip()
+EVENT_TOPICS_GEMMA_NATIVE_SCHEMA = (
+    os.getenv("EVENT_TOPICS_GEMMA_NATIVE_SCHEMA", "1") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _current_utc_date() -> date:
@@ -9891,6 +9894,30 @@ def _event_topics_extract_json(text: str) -> dict[str, Any] | None:
     return None
 
 
+_GEMMA_NATIVE_SCHEMA_UNSUPPORTED_KEYS = {"$schema", "additionalProperties", "uniqueItems"}
+
+
+def _gemma_native_response_schema(schema: Any) -> Any:
+    """Return a Google GenAI-compatible schema subset for Gemma 4 structured output."""
+    if isinstance(schema, dict):
+        out: dict[str, Any] = {}
+        for key, value in schema.items():
+            if key in _GEMMA_NATIVE_SCHEMA_UNSUPPORTED_KEYS:
+                continue
+            if key == "type" and isinstance(value, str):
+                out[key] = value.upper()
+                continue
+            if key == "type" and isinstance(value, list):
+                non_null = [item for item in value if item != "null"]
+                out[key] = str(non_null[0] if non_null else "string").upper()
+                continue
+            out[key] = _gemma_native_response_schema(value)
+        return out
+    if isinstance(schema, list):
+        return [_gemma_native_response_schema(item) for item in schema if item != "null"]
+    return schema
+
+
 async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
     client = _get_event_topics_gemma_client()
     if client is None:
@@ -9903,16 +9930,46 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         "Верни только JSON без markdown и комментариев.\n"
         f"JSON schema:\n{schema_text}"
     )
-    try:
-        raw, _usage = await client.generate_content_async(
-            model=EVENT_TOPICS_MODEL,
-            prompt=full_prompt,
-            generation_config={"temperature": 0},
-            max_output_tokens=FOUR_O_RESPONSE_LIMIT,
+    raw = ""
+    if EVENT_TOPICS_GEMMA_NATIVE_SCHEMA:
+        native_prompt = (
+            f"{EVENT_TOPIC_SYSTEM_PROMPT}\n\n"
+            f"{prompt_text}\n\n"
+            "Верни только JSON без markdown и комментариев."
         )
-    except Exception as exc:  # pragma: no cover - provider failures
-        logging.warning("Topic classification (gemma) failed: %s", exc)
-        return []
+        try:
+            raw, _usage = await client.generate_content_async(
+                model=EVENT_TOPICS_MODEL,
+                prompt=native_prompt,
+                generation_config={
+                    "temperature": 0,
+                    "response_mime_type": "application/json",
+                    "response_schema": _gemma_native_response_schema(schema),
+                },
+                max_output_tokens=FOUR_O_RESPONSE_LIMIT,
+            )
+        except Exception as exc:  # pragma: no cover - provider failures
+            logging.warning(
+                "Topic classification (gemma native schema) failed; falling back to prompt schema: %s",
+                exc,
+            )
+        else:
+            data = _event_topics_extract_json(raw or "")
+            if isinstance(data, dict) and isinstance(data.get("topics"), list):
+                return data.get("topics") or []
+            raw = ""
+
+    if not raw:
+        try:
+            raw, _usage = await client.generate_content_async(
+                model=EVENT_TOPICS_MODEL,
+                prompt=full_prompt,
+                generation_config={"temperature": 0},
+                max_output_tokens=FOUR_O_RESPONSE_LIMIT,
+            )
+        except Exception as exc:  # pragma: no cover - provider failures
+            logging.warning("Topic classification (gemma) failed: %s", exc)
+            return []
     data = _event_topics_extract_json(raw or "")
     if data is None:
         fix_prompt = (

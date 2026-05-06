@@ -11,6 +11,19 @@ import main
 import models
 
 
+class _FakeGemmaTopicsClient:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls: list[dict] = []
+
+    async def generate_content_async(self, **kwargs):
+        self.calls.append(kwargs)
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item, {}
+
+
 def test_event_topic_prompt_mentions_topics():
     prompt = main.EVENT_TOPIC_SYSTEM_PROMPT
     for key, label in main.TOPIC_LABELS.items():
@@ -26,6 +39,46 @@ def test_event_topic_prompt_mentions_topics():
     assert "экспериментальным, иммерсивным" in prompt
     assert "ставь обе темы" in prompt
     assert "не должен использоваться сам по себе" in prompt
+
+
+@pytest.mark.asyncio
+async def test_classify_event_topics_gemma_uses_native_schema(monkeypatch):
+    client = _FakeGemmaTopicsClient(['{"topics":["CONCERTS"]}'])
+    monkeypatch.setattr(main, "_get_event_topics_gemma_client", lambda: client)
+    monkeypatch.setattr(main, "EVENT_TOPICS_GEMMA_NATIVE_SCHEMA", True)
+
+    topics = await main._classify_event_topics_gemma("Название: Концерт\nОписание: Орган и голос")
+
+    assert topics == ["CONCERTS"]
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["generation_config"]["response_mime_type"] == "application/json"
+    schema = call["generation_config"]["response_schema"]
+    assert schema["type"] == "OBJECT"
+    assert schema["properties"]["topics"]["type"] == "ARRAY"
+    assert "uniqueItems" not in schema["properties"]["topics"]
+    assert "additionalProperties" not in schema
+    assert "JSON schema:" not in call["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_classify_event_topics_gemma_falls_back_after_native_error(monkeypatch):
+    client = _FakeGemmaTopicsClient(
+        [
+            RuntimeError("500 INTERNAL"),
+            '{"topics":["LECTURES"]}',
+        ]
+    )
+    monkeypatch.setattr(main, "_get_event_topics_gemma_client", lambda: client)
+    monkeypatch.setattr(main, "EVENT_TOPICS_GEMMA_NATIVE_SCHEMA", True)
+
+    topics = await main._classify_event_topics_gemma("Название: Лекция")
+
+    assert topics == ["LECTURES"]
+    assert len(client.calls) == 2
+    assert "response_schema" in client.calls[0]["generation_config"]
+    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    assert "JSON schema:" in client.calls[1]["prompt"]
 
 
 def test_topic_labels_include_theatre_subtypes():

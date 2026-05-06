@@ -153,6 +153,14 @@ if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
         SMART_UPDATE_MODEL,
     )
     SMART_UPDATE_MODEL = "gemma-4-31b-it"
+SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
+    os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
+SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES = {
+    item.strip()
+    for item in (os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", "facts_extract,create_bundle") or "").split(",")
+    if item.strip()
+}
 SMART_UPDATE_YO_RULE = (
     "Уважай букву «ё»: если слово в норме пишется через «ё», не заменяй её на «е»."
 )
@@ -4812,6 +4820,37 @@ def _extract_json(text: str) -> dict[str, Any] | None:
     return None
 
 
+_GEMMA_NATIVE_SCHEMA_UNSUPPORTED_KEYS = {"$schema", "additionalProperties", "uniqueItems"}
+
+
+def _gemma_native_response_schema(schema: Any) -> Any:
+    """Convert local JSON-schema-ish contracts to the Google GenAI schema subset."""
+    if isinstance(schema, dict):
+        out: dict[str, Any] = {}
+        for key, value in schema.items():
+            if key in _GEMMA_NATIVE_SCHEMA_UNSUPPORTED_KEYS:
+                continue
+            if key == "type" and isinstance(value, str):
+                out[key] = value.upper()
+                continue
+            if key == "type" and isinstance(value, list):
+                non_null = [item for item in value if item != "null"]
+                out[key] = str(non_null[0] if non_null else "string").upper()
+                continue
+            out[key] = _gemma_native_response_schema(value)
+        return out
+    if isinstance(schema, list):
+        return [_gemma_native_response_schema(item) for item in schema if item != "null"]
+    return schema
+
+
+def _smart_update_native_schema_enabled(label: str) -> bool:
+    if not SMART_UPDATE_GEMMA_NATIVE_SCHEMA:
+        return False
+    stages = SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES
+    return "*" in stages or label in stages
+
+
 async def _ask_gemma_json(
     prompt: str,
     schema: dict[str, Any],
@@ -4835,6 +4874,7 @@ async def _ask_gemma_json(
         "Верни только JSON без markdown и комментариев.\n"
         f"JSON schema:\n{schema_text}"
     )
+    native_prompt = f"{prompt}\n\nВерни только JSON без markdown и комментариев."
     last_exc: Exception | None = None
     raw_last = ""
 
@@ -4851,6 +4891,12 @@ async def _ask_gemma_json(
     json_gen_cfg = {"temperature": 0}
     if _GEMMA_JSON_MIME_SUPPORTED:
         json_gen_cfg["response_mime_type"] = "application/json"
+    native_schema_enabled = _smart_update_native_schema_enabled(label)
+    native_gen_cfg = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+        "response_schema": _gemma_native_response_schema(schema),
+    }
 
     rl_deadline = time.monotonic() + rl_max_wait_sec
     attempt = 1
@@ -4867,6 +4913,28 @@ async def _ask_gemma_json(
                     attempt,
                     max_tries,
                 )
+                if native_schema_enabled:
+                    try:
+                        raw_native, _usage = await client.generate_content_async(
+                            model=SMART_UPDATE_MODEL,
+                            prompt=native_prompt,
+                            generation_config=native_gen_cfg,
+                            max_output_tokens=max_tokens,
+                        )
+                        raw_last = raw_native or ""
+                        data_native = _extract_json(raw_last)
+                        if data_native is not None:
+                            return data_native
+                        logger.warning(
+                            "smart_update: gemma native schema %s returned invalid json; falling back to prompt schema",
+                            label,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "smart_update: gemma native schema %s failed; falling back to prompt schema: %s",
+                            label,
+                            exc,
+                        )
                 while True:
                     try:
                         raw, _usage = await client.generate_content_async(
