@@ -192,6 +192,67 @@ def test_prod_db_snapshot_baseline_uses_stored_facts_without_reextracting() -> N
     assert "baseline_text_fact_extract" not in baseline
 
 
+def test_candidate_logistics_facts_include_raw_and_canonical_infoblock_values() -> None:
+    stage = _load_stage_benchmark()
+    fixture = stage.StageBenchmarkFixture(
+        fixture_id="PRODDB-2",
+        title="Событие",
+        event_type="встреча",
+        date="2026-05-14",
+        time="18:00",
+        location_name="Сигнал",
+        location_address="Леонова 22",
+        city="Калининград",
+        ticket_link="https://example.com/register",
+        is_free=True,
+        pushkin_card=False,
+        sources=[],
+    )
+
+    facts = stage._candidate_logistics_facts(
+        fixture,
+        {
+            "raw_facts": [
+                "Мероприятие открыто и бесплатно.",
+                "Возрастное ограничение 6+.",
+                "Питч — это быстрый рассказ об идее.",
+            ]
+        },
+    )
+
+    assert "Мероприятие открыто и бесплатно." in facts
+    assert "Возрастное ограничение 6+." in facts
+    assert "Бесплатно" in facts
+    assert "Регистрация: https://example.com/register" in facts
+    assert "2026-05-14" in facts
+    assert "Сигнал" in facts
+    assert "Питч — это быстрый рассказ об идее." not in facts
+
+
+def test_fact_coverage_reviewer_error_is_not_reported_as_accepted() -> None:
+    stage = _load_stage_benchmark()
+
+    summary = stage._fact_coverage_error_summary(
+        errors=["reviewer.error:ProviderError:500 INTERNAL"],
+        baseline_count=11,
+        g4_count=14,
+        public_fact_count=8,
+        logistics_fact_count=6,
+        candidate_logistics_texts=["Цена: 1000 ₽"],
+        baseline_surfaces={
+            "raw_extracted_facts": ["Факт"],
+            "writer_facts_text_clean": ["Факт"],
+            "filtered_out_before_writer": [],
+            "metadata_anchors": [],
+        },
+    )
+
+    assert summary["verdict"] == "review_error"
+    assert summary["covered_grounded_baseline_fact_count"] is None
+    assert summary["grounded_baseline_fact_count"] == 11
+    assert summary["g4_logistics_fact_texts"] == ["Цена: 1000 ₽"]
+
+
 def test_stage_benchmark_uses_valid_bundle_derived_fields_before_extra_calls() -> None:
     stage = _load_stage_benchmark()
 

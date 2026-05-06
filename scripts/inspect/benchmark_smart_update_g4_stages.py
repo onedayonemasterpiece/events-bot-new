@@ -658,6 +658,112 @@ def _fact_item_list(facts: list[str], *, category: str = "public") -> list[dict[
     ]
 
 
+_LOGISTICS_FACT_RE = re.compile(
+    r"(?iu)("
+    r"дат[ауы]?|время|начало|окончани[ея]|"
+    r"локаци[яи]|адрес|место|зал|"
+    r"бесплатн\w*|регистраци\w*|зарегистрир\w*|"
+    r"билет\w*|стоимост\w*|цен[ауы]?|₽|рубл\w*|"
+    r"пушкинск\w*\s+карт\w*|"
+    r"возрастн\w*\s+ограничени\w*|\b\d{1,2}\+|"
+    r"ежедневно|работает|час[ао]в|"
+    r"https?://"
+    r")"
+)
+
+
+def _looks_like_logistics_fact(text: str) -> bool:
+    return bool(_LOGISTICS_FACT_RE.search(str(text or "")))
+
+
+def _unique_fact_texts(values: list[Any]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        text = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
+def _candidate_logistics_facts(fixture: Any, candidate: dict[str, Any]) -> list[str]:
+    facts: list[str] = []
+    for raw in list(candidate.get("raw_facts") or []):
+        text = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if text and _looks_like_logistics_fact(text):
+            facts.append(text)
+    for value in [
+        getattr(fixture, "date", None),
+        getattr(fixture, "time", None),
+        getattr(fixture, "location_name", None),
+        getattr(fixture, "location_address", None),
+        getattr(fixture, "city", None),
+    ]:
+        if value:
+            facts.append(str(value))
+    ticket_link = str(getattr(fixture, "ticket_link", "") or "").strip()
+    if _as_bool(getattr(fixture, "is_free", None)):
+        facts.append("Бесплатно")
+        if ticket_link:
+            facts.append(f"Регистрация: {ticket_link}")
+    elif ticket_link:
+        facts.append(f"Билеты: {ticket_link}")
+    price_min = getattr(fixture, "ticket_price_min", None)
+    price_max = getattr(fixture, "ticket_price_max", None)
+    if price_min is not None or price_max is not None:
+        if price_min is not None and price_max is not None and int(price_min) != int(price_max):
+            facts.append(f"Цена: {_format_money(price_min)} — {_format_money(price_max)}")
+        else:
+            facts.append(f"Цена: {_format_money(price_min if price_min is not None else price_max)}")
+    if _as_bool(getattr(fixture, "pushkin_card", None)):
+        facts.append("Пушкинская карта")
+    if getattr(fixture, "ticket_status", None):
+        facts.append(f"ticket_status: {getattr(fixture, 'ticket_status')}")
+    return _unique_fact_texts(facts)
+
+
+def _fact_coverage_error_summary(
+    *,
+    errors: list[str],
+    baseline_count: int,
+    g4_count: int,
+    public_fact_count: int,
+    logistics_fact_count: int,
+    candidate_logistics_texts: list[str],
+    baseline_surfaces: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "baseline_fact_count": baseline_count,
+        "grounded_baseline_fact_count": baseline_count,
+        "covered_grounded_baseline_fact_count": None,
+        "g4_fact_count": g4_count,
+        "grounded_g4_fact_count": None,
+        "lost_baseline_facts": [],
+        "added_g4_facts": [],
+        "suspicious_g4_facts": [],
+        "llm_overall_verdict": "review_error",
+        "deterministic_verdict_floor": "review_error",
+        "verdict": "review_error",
+        "review_errors": errors,
+        "coverage_summary": {
+            "overall_verdict": "review_error",
+            "verdict_reason": "; ".join(errors)[:300],
+        },
+        "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
+        "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
+        "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
+        "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
+        "g4_public_fact_count": public_fact_count,
+        "g4_logistics_fact_count": logistics_fact_count,
+        "g4_logistics_fact_texts": candidate_logistics_texts,
+    }
+
+
 def _bucket_schema() -> dict[str, Any]:
     return {
         "type": "OBJECT",
@@ -1241,20 +1347,8 @@ async def _run_fact_coverage(fixture: Any, baseline: dict[str, Any], candidate: 
         "description_md": baseline.get("description_md") or "",
     }
     public_facts = _fact_item_list(list(candidate.get("facts_text_clean") or []), category="public")
-    logistics_facts = _fact_item_list(
-        [
-            str(value)
-            for value in [
-                fixture.date,
-                fixture.time,
-                fixture.location_name,
-                fixture.location_address,
-                fixture.city,
-            ]
-            if value
-        ],
-        category="logistics",
-    )
+    candidate_logistics_texts = _candidate_logistics_facts(fixture, candidate)
+    logistics_facts = _fact_item_list(candidate_logistics_texts, category="logistics")
     baseline_surfaces = bench._baseline_fact_surfaces_for_review(baseline_for_review, fixture)
     review_payload_user = legacy_writer_family.build_fact_coverage_payload(
         title=fixture.title,
@@ -1289,24 +1383,44 @@ async def _run_fact_coverage(fixture: Any, baseline: dict[str, Any], candidate: 
             errors.append(f"reviewer.error:{type(exc).__name__}:{str(exc)[:240]}")
     else:
         errors.append("no_facts_on_either_side")
-    normalized = legacy_writer_family.normalize_fact_coverage_payload(
-        raw or {},
-        baseline_count=baseline_count,
-        g4_count=g4_count,
-        baseline_facts=review_payload_user["baseline_facts"],
-        g4_facts=review_payload_user["g4_facts"],
-    )
-    summary = legacy_writer_family.summarize_fact_coverage(normalized)
-    summary.update(
-        {
-            "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
-            "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
-            "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
-            "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
-            "g4_public_fact_count": len(public_facts),
-            "g4_logistics_fact_count": len(logistics_facts),
+    if errors:
+        normalized = {
+            "baseline_facts_review": [],
+            "g4_facts_review": [],
+            "coverage_summary": {
+                "overall_verdict": "review_error",
+                "verdict_reason": "; ".join(errors)[:300],
+            },
         }
-    )
+        summary = _fact_coverage_error_summary(
+            errors=errors,
+            baseline_count=baseline_count,
+            g4_count=g4_count,
+            public_fact_count=len(public_facts),
+            logistics_fact_count=len(logistics_facts),
+            candidate_logistics_texts=candidate_logistics_texts,
+            baseline_surfaces=baseline_surfaces,
+        )
+    else:
+        normalized = legacy_writer_family.normalize_fact_coverage_payload(
+            raw or {},
+            baseline_count=baseline_count,
+            g4_count=g4_count,
+            baseline_facts=review_payload_user["baseline_facts"],
+            g4_facts=review_payload_user["g4_facts"],
+        )
+        summary = legacy_writer_family.summarize_fact_coverage(normalized)
+        summary.update(
+            {
+                "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
+                "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
+                "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
+                "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
+                "g4_public_fact_count": len(public_facts),
+                "g4_logistics_fact_count": len(logistics_facts),
+                "g4_logistics_fact_texts": candidate_logistics_texts,
+            }
+        )
     return {
         "input": review_payload_user,
         "baseline_fact_surfaces": baseline_surfaces,
@@ -1390,6 +1504,13 @@ def _fenced(text: str | None, info: str = "md") -> list[str]:
     return [f"```{info}", body, "```"]
 
 
+def _coverage_cell(summary: dict[str, Any]) -> str:
+    total = summary.get("grounded_baseline_fact_count")
+    if summary.get("verdict") == "review_error":
+        return f"review_error/{total}"
+    return f"{summary.get('covered_grounded_baseline_fact_count')}/{total}"
+
+
 def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_level: int = 1) -> list[str]:
     fixture = data["fixture"]
     baseline = data["baseline"]
@@ -1433,7 +1554,7 @@ def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_leve
             f"{sub} Fact Coverage",
             "",
             f"- verdict: `{coverage_summary.get('verdict')}`",
-            f"- grounded covered: `{coverage_summary.get('covered_grounded_baseline_fact_count')}` / `{coverage_summary.get('grounded_baseline_fact_count')}`",
+            f"- grounded covered: `{_coverage_cell(coverage_summary)}`",
             f"- critical/major/minor losses: `{critical_losses}` / `{major_losses}` / `{minor_losses}`",
             f"- useful added: `{len(coverage_summary.get('added_g4_facts') or [])}`",
             f"- suspicious: `{len(coverage_summary.get('suspicious_g4_facts') or [])}`",
@@ -1450,6 +1571,11 @@ def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_leve
     lines.extend(["", f"{subsub} Candidate facts_text_clean", ""])
     for fact in candidate.get("facts_text_clean") or []:
         lines.append(f"- {fact}")
+    candidate_logistics = list(coverage_summary.get("g4_logistics_fact_texts") or [])
+    if candidate_logistics:
+        lines.extend(["", f"{subsub} Candidate logistics / infoblock facts", ""])
+        for fact in candidate_logistics:
+            lines.append(f"- {fact}")
     lines.extend(["", f"{sub} Lollipop-Light Writer Pack", ""])
     constraints = (((candidate.get("writer_pack") or {}).get("payload") or {}).get("constraints") or {})
     lines.append(f"- must_cover_fact_ids: `{constraints.get('must_cover_fact_ids') or []}`")
@@ -1512,7 +1638,7 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
             + f"`{fixture.get('fixture_id')}` | "
             + f"{_clip(fixture.get('title'), 70)} | "
             + f"`{candidate.get('writer_model') or '-'}` | "
-            + f"`{coverage_summary.get('covered_grounded_baseline_fact_count')}/{coverage_summary.get('grounded_baseline_fact_count')}` | "
+            + f"`{_coverage_cell(coverage_summary)}` | "
             + f"`{(baseline.get('metrics') or {}).get('chars')} -> {(candidate.get('metrics') or {}).get('chars')}` | "
             + f"`{coverage_summary.get('verdict')}` | "
             + f"`{(candidate.get('timings') or {}).get('wall_clock_sec')}` |"

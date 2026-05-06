@@ -404,6 +404,8 @@ Reason:
 
 ## Prod DB three-fixture staged benchmark (`2026-05-06T082857Z`)
 
+Status: superseded by `2026-05-06T085906Z`; this run treated candidate logistics / infoblock facts too narrowly, so several losses were benchmark artifacts rather than proven Gemma 4 extraction losses.
+
 Runner:
 
 ```bash
@@ -440,8 +442,38 @@ Summary:
 Conclusion:
 
 - Transport/writer-lane migration is verified for this benchmark: no live Gemma 3 in candidate and no final `4o` calls.
-- The benchmark process now matches the intended no-worse comparison shape: stored Gemma 3 facts/text from DB versus fresh Smart Update G4 output on the same sources.
-- Quality is not accepted for rollout. Candidate G4 still loses stored baseline facts, especially registration/free/ticket facts and price/Pushkin-card logistics. The next fix should target extraction/bucketing/logistics preservation before any writer tuning.
+- Quality is not accepted for rollout. Candidate G4 still loses stored baseline facts, but the logistics/infoblock losses in this artifact must be re-read through the corrected `085906Z` run.
+
+## Prod DB three-fixture staged benchmark with logistics surface (`2026-05-06T085906Z`)
+
+Artifacts:
+
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T085906Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T085906Z.json`
+
+Scope correction:
+
+- Baseline facts still come from stored production `event_source_fact` rows; no baseline facts are re-extracted.
+- Baseline public text still comes from saved production `event.description`, the Telegraph body between generated infoblock and footer.
+- Candidate `facts_text_clean` is compared as the writer/public-fact surface only.
+- Candidate logistics / infoblock facts are compared separately from `facts_text_clean`: logistics-like `raw_facts` plus canonical date, time, venue, address, city, free/ticket link, price, Pushkin card, and ticket status.
+- A fact-coverage reviewer provider failure is now reported as `review_error`, never as `accepted`.
+- This staged runner still seeds candidate canonical fields from the prod fixture before generation, so it does not yet prove full field-extraction parity. The full no-worse gate must compare independently produced Smart Update G4 output across canonical fields / infoblock, stored raw facts, writer facts, final Telegraph text, `short_description`, and `search_digest`.
+
+Summary:
+
+| Fixture | Baseline chars | Candidate chars | Facts covered | Candidate logistics visible | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| `PRODDB-4594` / `Питчинг в Сигнале` | `1173` | `1322` | `18/22` | free + registration visible | `partial` |
+| `PRODDB-4598` / `Аве Мария` | `565` | `494` | `14/16` | ticket link + Pushkin card visible | `partial` |
+| `PRODDB-4538` / `Хаусмарки` | `838` | `724` | `review_error/13` | price `1000 ₽` visible | `review_error` |
+
+Current interpretation:
+
+- Part of the previous "fact loss" was a benchmark bug: free/registration, ticket link, Pushkin card, and price live in logistics / infoblock, not in `facts_text_clean`.
+- Remaining confirmed losses are public/text facts: for `PRODDB-4594`, organizer/meeting goal/412-respondent context; for `PRODDB-4598`, two minor audience-positioning facts.
+- `PRODDB-4538` cannot be judged from this run because the reviewer hit provider `500 INTERNAL`; the corrected artifact preserves the candidate output and marks the fact gate as `review_error`.
+- The next benchmark step is a full Smart Update candidate snapshot that compares every persisted surface, not just writer facts: canonical event fields / infoblock, `event_source_fact`, `facts_text_clean`, Telegraph body, `short_description`, and `search_digest`.
 
 ## Early benchmark fixture: `KALMANIA-2885`
 
