@@ -9,7 +9,8 @@
 - этот документ не является каноническим migration contract;
 - канонический target architecture описан в
   [smart-update-lollipop-gemma-4-migration.md](/workspaces/events-bot-new/docs/llm/smart-update-lollipop-gemma-4-migration.md);
-- current acceptance-relevant сравнения для Smart Update G4 должны быть `Gemma 3`-free в candidate path и явно показывать final writer lane (`Gemma 4` или `4o`), не смешивая обычный `4o` lane с fallback после Gemma 4 timeout.
+- current acceptance-relevant сравнения для Smart Update G4 должны быть `Gemma 3`-free в candidate path и явно показывать final writer lane (`Gemma 4` или `4o`), не смешивая обычный `4o` lane с fallback после Gemma 4 timeout;
+- benchmark artifacts должны показывать не только fact coverage, но и читаемый итоговый текст: baseline/candidate descriptions и Telegraph preview рендерятся fenced `md`-блоками, чтобы вложенные `###` модели не ломали структуру отчёта.
 
 ## Live availability check (`2026-04-06`)
 
@@ -43,6 +44,8 @@ current Smart Update mechanics
 
 После отключения Gemma 3 staged Smart Update benchmark должен брать baseline только из сохранённого frozen artifact. Текущий опорный five-fixture baseline pack:
 `artifacts/codex/lollipop_g4_benchmark_20260501T212029Z.json`. В нём сохранены Gemma 3 `per_source_facts`, `facts_text_clean`, `description_md`, text metrics и timings по пяти full-source fixtures. Для single-fixture повторов можно также использовать предыдущий staged artifact, например `artifacts/codex/smart_update_g4_stage_benchmark_20260502T072137Z.json` для `RED-COSMOS`, потому что там дополнительно сохранены baseline `short_description` / `search_digest`. Runner обязан показывать `baseline_path=frozen_current_smart_update_baseline` и `baseline_source_artifact=...`; live baseline rerun допустим только для исторического воспроизведения в окружении, где Gemma 3 ещё доступна.
+
+Для свежих production-like сравнений допустим baseline из локального prod DB snapshot: `event.description`, `event.short_description`, `event.search_digest` и `event_source_fact` считаются frozen Gemma 3-era output, а candidate path получает только source evidence. Такой режим должен указывать `baseline_path=prod_db_snapshot_current_smart_update_text` и добавлять Telegraph preview с инфоблоком (`date/time`, location, tickets/free/Pushkin card), `search_digest` и description.
 
 ### Iteration ladder
 
@@ -384,6 +387,45 @@ Next tuning order:
 2. Add bounded timeout/fail-open or narrower prompts for `short_description` and `search_digest`; current G4 derived-field latency is production-incompatible.
 3. Decide whether final writer should normally be `4o` or Gemma 4 only after OpenAI quota is restored; current artifact proves Gemma 4 writer can produce text, but not that it beats baseline.
 4. Only after this single fixture reaches no-worse should the benchmark expand to the five-fixture pack.
+
+## Prod DB three-fixture staged benchmark (`2026-05-06`)
+
+Runner:
+
+```bash
+SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=20 \
+LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=90 LOLLIPOP_4O_MAX_RETRIES=0 \
+python scripts/inspect/benchmark_smart_update_g4_stages.py \
+  --prod-db /home/dev/projects/events-bot-new/artifacts/db/incident-80-stories-prod-snapshot.sqlite \
+  --event-ids 4517,4518,4208
+```
+
+Artifacts:
+
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.json`
+
+Scope:
+
+- Baseline comes from the local prod SQLite snapshot, not from live Gemma 3 calls.
+- Candidate path uses `Gemma 4` via the shared `GoogleAIClient` / `google.genai` gateway for create bundle, lollipop-light stages, final writer, and fact coverage reviewer.
+- Final writer lane is `gemma-4-primary`: each fixture records `writer_model=gemma-4-31b-it`, `candidate_has_g3=false`, `four_o_calls_observed=0`, and `writer.final_g4_primary` in stage timings. The old `4o` primary writer branch remains commented in the runner for quick rollback/comparison.
+- The runner checkpoints after each completed fixture, writing partial `.json`/`.md` artifacts so a later provider failure does not lose completed work.
+- Markdown output now fences baseline/candidate descriptions and includes baseline/candidate Telegraph previews with generated infoblock, `search_digest`, and final description.
+
+Summary:
+
+| Fixture | Type | Baseline chars | Candidate chars | Facts covered | Losses | Suspicious | Verdict |
+| --- | --- | ---: | ---: | ---: | --- | ---: | --- |
+| `PRODDB-4517` | exhibition | `772` | `661` | `8/15` | `0 critical / 2 major / 4 minor` | `2` | `partial` |
+| `PRODDB-4518` | performance | `701` | `574` | `12/13` | `0 critical / 0 major / 1 minor` | `0` | `partial` |
+| `PRODDB-4208` | film screening | `1081` | `384` | `12/29` | `0 critical / 17 major / 0 minor` | `0` | `partial` |
+
+Conclusion:
+
+- Transport/writer-lane migration is verified for this benchmark: no live Gemma 3 in candidate and no final `4o` calls.
+- Text generation is visible and auditable now, including Telegraph-style infoblocks.
+- Quality is not yet accepted for rollout. `PRODDB-4518` is close and mostly loses one grounded baseline fact, while `PRODDB-4517` and especially list-heavy `PRODDB-4208` show extraction/prioritization coverage regressions that should be fixed before expanding to a canary.
 
 ## Early benchmark fixture: `KALMANIA-2885`
 

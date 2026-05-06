@@ -8,7 +8,7 @@
 Обеспечить надежную работу с LLM (Gemma 2/3, Gemini) в условиях жестких ограничений API (RPM, TPM, Daily Limit), исключая "молчаливые" падения и превышения квот.
 
 ## 2. Архитектура
-Фреймворк реализован как обертка над `google.generativeai` с централизованным контролем стейта через Supabase.
+Фреймворк реализован как обертка над текущим SDK `google.genai` с централизованным контролем стейта через Supabase. Deprecated `google.generativeai` оставлен только ленивым fallback для старых локальных probe/скриптов, которые ещё не прошли миграцию.
 
 ### 2.1. Ключевые компоненты
 *   **GoogleAIClient (`google_ai/client.py`)**: Единая точка входа. Управляет повторными попытками (Retries), логированием и вызовом RPC.
@@ -113,6 +113,7 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 *   `Gemma 3` / старые Gemma-path по-прежнему fail-open работают через prompt-only JSON contract: `response_mime_type` / `response_schema` снимаются на клиенте, потому что эти модели часто отвергали native JSON knobs.
 *   `Gemma 4` (`gemma-4-31b`, `gemma-4-26b-a4b`) теперь сохраняет native `response_mime_type=application/json` и `response_schema`, если вызывающий stage их передал. Это нужно для structured extract / classify / dedup stages, где `lollipop g4` уже показал реальный practical uplift именно от native schema discipline.
 *   `generate_content_async()` теперь принимает не только plain string, но и multimodal prompt parts (`text` + `inline_data` blobs). Это позволяет guide/Telegram Kaggle runtimes использовать общий gateway и для image+text OCR/vision paths, а не обходить лимитер отдельным direct SDK-вызовом.
+*   Provider call для новых Gemma stages идёт через `google.genai.Client(...).aio.models.generate_content(...)`; legacy `google.generativeai.GenerativeModel.generate_content_async(...)` используется только если новый SDK отсутствует или тест явно подставил legacy fake.
 
 Дополнительное правило transport hygiene:
 
@@ -214,4 +215,4 @@ python kaggle/execute_gemma_key2_probe.py --env-file ".env copy"
 * любые новые `Gemma 4` structured stages нужно smoke-проверять именно на реальном provider, а не только по локальным unit-тестам.
 
 ## TODO / Risks
-- Проверить и зафиксировать статус возможной deprecation `google.generativeai` (источник сигнала: операторский репорт), подготовить план миграции SDK при подтверждении.
+- Дочистить оставшиеся direct-SDK inspect/probe scripts после Smart Update G4 rollout, чтобы удалить legacy `google.generativeai` fallback из runtime dependencies.

@@ -16,7 +16,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import google.generativeai as genai
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +27,17 @@ from smart_event_update import EventCandidate
 from smart_update_lollipop_lab.full_cascade import run_full_cascade_variant
 from smart_update_lollipop_lab import writer_final_4o_family as writer_final_family
 from smart_update_lollipop_lab import legacy_writer_family
+
+_LEGACY_GENAI = None
+
+
+def _legacy_genai():
+    global _LEGACY_GENAI
+    if _LEGACY_GENAI is None:
+        import google.generativeai as genai
+
+        _LEGACY_GENAI = genai
+    return _LEGACY_GENAI
 
 
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
@@ -1248,6 +1258,7 @@ async def _ask_gemma_json_direct(
     api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is missing")
+    genai = _legacy_genai()
     genai.configure(api_key=api_key)
     prompt_json = json.dumps(user_payload, ensure_ascii=False, indent=2)
     model_name = _gemma_model_name(model)
@@ -1355,6 +1366,7 @@ async def _ask_gemma_text_direct(
     api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY2") or "").strip()
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is missing")
+    genai = _legacy_genai()
     genai.configure(api_key=api_key)
     prompt_json = json.dumps(user_payload, ensure_ascii=False, indent=2)
     model_name = _gemma_model_name(model)

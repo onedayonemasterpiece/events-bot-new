@@ -1,7 +1,7 @@
 """Google AI client with Supabase-based rate limiting.
 
 Features:
-- Wrapper over google.generativeai
+- Wrapper over google.genai with legacy google.generativeai fallback
 - Atomic reserve/finalize through Supabase RPC
 - NO_WAIT policy: raises RateLimitError immediately on limit exceeded
 - Retries only on provider errors (max 3)
@@ -255,7 +255,9 @@ class GoogleAIClient:
         self._legacy_finalize_rpc_missing = False
         self._missing_rpc_logged: set[str] = set()
         
-        # Lazy import google.generativeai
+        # Lazy imports for Google provider SDKs. Prefer google.genai; keep the
+        # legacy SDK only as a compatibility fallback while rollout finishes.
+        self._genai_new = None
         self._genai = None
 
     @staticmethod
@@ -518,7 +520,7 @@ class GoogleAIClient:
     
     @property
     def genai(self):
-        """Lazy-load google.generativeai module."""
+        """Lazy-load legacy google.generativeai module."""
         if self._genai is None:
             try:
                 import google.generativeai as genai
@@ -529,6 +531,18 @@ class GoogleAIClient:
                     "Install with: pip install google-generativeai"
                 )
         return self._genai
+
+    @property
+    def genai_new(self):
+        """Lazy-load the current google.genai SDK."""
+        if self._genai_new is None:
+            try:
+                from google import genai
+
+                self._genai_new = genai
+            except ImportError:
+                return None
+        return self._genai_new
     
     async def generate_content_async(
         self,
@@ -1363,9 +1377,6 @@ class GoogleAIClient:
         max_output_tokens: Optional[int],
     ) -> tuple[str, UsageInfo]:
         """Call Google AI provider."""
-        # Configure API key
-        self.genai.configure(api_key=api_key)
-        
         # Build generation config
         config = dict(generation_config or {})
         if max_output_tokens and "max_output_tokens" not in config:
@@ -1381,14 +1392,14 @@ class GoogleAIClient:
         # benefits from native structured output contracts. Keep the old guard
         # for pre-Gemma-4 models, but allow `response_mime_type` /
         # `response_schema` through for Gemma 4.
+        if "response_schema_name" in config:
+            config.pop("response_schema_name", None)
         if self._is_gemma_model(model_name) or self._is_gemma_model(model):
             stripped = []
             if self._is_gemma4_model(model_name) or self._is_gemma4_model(model):
-                if "response_schema_name" in config:
-                    stripped.append("response_schema_name")
-                    config.pop("response_schema_name", None)
+                pass
             else:
-                for key in ("response_mime_type", "response_schema", "response_schema_name"):
+                for key in ("response_mime_type", "response_schema"):
                     if key in config:
                         stripped.append(key)
                         config.pop(key, None)
@@ -1399,14 +1410,32 @@ class GoogleAIClient:
                     model_name,
                     ",".join(stripped),
                 )
-        gen_model = self.genai.GenerativeModel(model_name)
-        
-        # Generate content
-        provider_call = gen_model.generate_content_async(
-            prompt,
-            generation_config=config,
-            safety_settings=safety_settings,
-        )
+
+        # Generate content. Prefer the current google.genai SDK; fall back to
+        # deprecated google.generativeai only if the new SDK is unavailable in a
+        # local/dev environment.
+        # Unit tests and a few local probes inject `client._genai` with a fake
+        # legacy module. Respect that injection instead of preferring the real
+        # new SDK and accidentally making network calls with test keys.
+        new_sdk = None if self._genai is not None else self.genai_new
+        if new_sdk is not None:
+            new_config = dict(config)
+            if safety_settings and "safety_settings" not in new_config:
+                new_config["safety_settings"] = safety_settings
+            gen_client = new_sdk.Client(api_key=api_key)
+            provider_call = gen_client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=new_config or None,
+            )
+        else:
+            self.genai.configure(api_key=api_key)
+            gen_model = self.genai.GenerativeModel(model_name)
+            provider_call = gen_model.generate_content_async(
+                prompt,
+                generation_config=config,
+                safety_settings=safety_settings,
+            )
         if self.provider_timeout_seconds > 0:
             try:
                 response = await asyncio.wait_for(

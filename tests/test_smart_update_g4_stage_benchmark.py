@@ -212,3 +212,94 @@ def test_compact_gemma_writer_payload_keeps_only_writer_contract_fields() -> Non
         {"fact_id": "SC01", "text": "Жостовская роспись существует с 1825 года"},
     ]
     assert "infoblock" not in payload
+
+
+def test_telegraph_preview_includes_infoblock_search_and_description() -> None:
+    stage = _load_stage_benchmark()
+    fixture = stage.StageBenchmarkFixture(
+        fixture_id="PRODDB-1",
+        title="Кинопоказ",
+        event_type="кинопоказ",
+        date="2026-05-08",
+        time="17:00",
+        location_name="Остров Канта",
+        location_address=None,
+        city="Калининград",
+        is_free=True,
+        sources=[],
+    )
+
+    preview = stage._telegraph_preview_text(
+        fixture,
+        {
+            "search_digest": "Подборка короткометражных фильмов калининградских режиссёров.",
+            "description_md": "### Программа\n\n- Первый фильм",
+        },
+    )
+
+    assert "🗓 8 мая в 17:00" in preview
+    assert "📍 Остров Канта, Калининград" in preview
+    assert "🆓 Бесплатно" in preview
+    assert "Подборка короткометражных фильмов" in preview
+    assert "### Программа" in preview
+
+
+def test_stage_report_fences_generated_markdown_blocks(tmp_path: Path) -> None:
+    stage = _load_stage_benchmark()
+    data = {
+        "generated_at": "2026-05-06T00:00:00+00:00",
+        "fixture": {
+            "fixture_id": "PRODDB-1",
+            "title": "Событие",
+            "event_type": "лекция",
+            "date": "2026-05-08",
+            "time": "18:00",
+            "location_name": "Музей",
+            "location_address": "ул. Примерная, 1",
+            "city": "Калининград",
+        },
+        "baseline": {
+            "model": "prod_db_gemma3_snapshot",
+            "path": "prod_db_snapshot_current_smart_update_text",
+            "source_artifact": "snapshot.sqlite",
+            "facts_text_clean": ["Факт baseline."],
+            "description_md": "### Baseline section\n\nТекст baseline.",
+            "short_description": "Коротко baseline.",
+            "search_digest": "Дайджест baseline.",
+            "metrics": {"chars": 34},
+            "timings": {"wall_clock_sec": None, "stage_sec": {}},
+        },
+        "candidate": {
+            "model": "gemma-4-31b-it",
+            "path": "smart_update_g4_variant2_lollipop_light_create_path",
+            "writer_model": "gemma-4-31b-it",
+            "candidate_has_g3": False,
+            "facts_text_clean": ["Факт candidate."],
+            "layout_payload": {"blocks": []},
+            "layout_audit": {"flags": []},
+            "writer_pack": {"payload": {"constraints": {"must_cover_fact_ids": [], "headings": []}}},
+            "description_md": "### Candidate section\n\nТекст candidate.",
+            "short_description": "Коротко candidate.",
+            "search_digest": "Дайджест candidate.",
+            "metrics": {"chars": 36},
+            "timings": {"wall_clock_sec": 12.0, "stage_sec": {"writer.final_g4_primary": 1.0}},
+            "stage_errors": [],
+        },
+        "fact_coverage": {
+            "summary": {
+                "verdict": "accepted",
+                "covered_grounded_baseline_fact_count": 1,
+                "grounded_baseline_fact_count": 1,
+                "lost_baseline_facts": [],
+                "added_g4_facts": [],
+                "suspicious_g4_facts": [],
+            }
+        },
+        "stage_summary": [],
+    }
+
+    report = stage._render_report(data, tmp_path / "report.json")
+
+    assert "### Baseline Description\n\n```md\n### Baseline section" in report
+    assert "### Candidate Description\n\n```md\n### Candidate section" in report
+    assert "### Baseline Telegraph Preview\n\n```md\n🗓 8 мая в 18:00" in report

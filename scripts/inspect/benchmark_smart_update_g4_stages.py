@@ -8,10 +8,11 @@ import importlib.util
 import json
 import os
 import re
+import sqlite3
 import sys
 import time
-from dataclasses import asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, is_dataclass
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,60 @@ ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
 DEFAULT_BASELINE_MODEL = "gemma-3-27b-it"
 DEFAULT_CANDIDATE_MODEL = "gemma-4-31b-it"
 DEFAULT_4O_MODEL = "gpt-4o"
+DEFAULT_PROD_DB_EVENT_IDS = "4517,4518,4208"
+MONTHS_RU = [
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+]
+
+
+class StageBenchmarkFixture:
+    __slots__ = (
+        "fixture_id",
+        "title",
+        "event_type",
+        "date",
+        "time",
+        "location_name",
+        "location_address",
+        "city",
+        "sources",
+        "end_date",
+        "end_date_is_inferred",
+        "ticket_price_min",
+        "ticket_price_max",
+        "ticket_link",
+        "ticket_status",
+        "is_free",
+        "pushkin_card",
+        "lifecycle_status",
+        "telegraph_url",
+        "source_post_url",
+        "baseline_description_md",
+        "baseline_short_description",
+        "baseline_search_digest",
+        "baseline_raw_facts",
+        "baseline_facts_text_clean",
+        "baseline_source_artifact",
+    )
+
+    def __init__(self, **kwargs: Any) -> None:
+        for name in self.__slots__:
+            setattr(self, name, kwargs.get(name))
+        self.sources = list(kwargs.get("sources") or [])
+        self.end_date_is_inferred = bool(kwargs.get("end_date_is_inferred") or False)
+        self.baseline_raw_facts = list(kwargs.get("baseline_raw_facts") or [])
+        self.baseline_facts_text_clean = list(kwargs.get("baseline_facts_text_clean") or [])
 
 
 def _load_benchmark_module() -> Any:
@@ -78,6 +133,137 @@ def _clip(value: Any, limit: int = 900) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "..."
 
 
+def _object_to_dict(value: Any) -> dict[str, Any]:
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, dict):
+        return dict(value)
+    out: dict[str, Any] = {}
+    for name in getattr(value, "__slots__", []):
+        raw = getattr(value, name, None)
+        if name == "sources":
+            out[name] = [_object_to_dict(item) for item in list(raw or [])]
+        else:
+            out[name] = raw
+    return out
+
+
+def _as_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    try:
+        return bool(int(value))
+    except Exception:
+        return str(value).strip().casefold() in {"true", "yes", "on"}
+
+
+def _parse_iso_date(raw: str | None) -> date | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if ".." in value:
+        value = value.split("..", 1)[0].strip()
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _format_day_month(raw: str | None) -> str:
+    parsed = _parse_iso_date(raw)
+    if not parsed:
+        return (raw or "").strip()
+    return f"{parsed.day} {MONTHS_RU[parsed.month - 1]}"
+
+
+def _format_money(value: Any) -> str:
+    try:
+        amount = int(value)
+    except Exception:
+        return ""
+    return f"{amount} ₽"
+
+
+def _summary_infoblock_lines(fixture: Any) -> list[str]:
+    lines: list[str] = []
+    lifecycle = str(getattr(fixture, "lifecycle_status", "") or "").strip().casefold()
+    if lifecycle and lifecycle != "active":
+        if lifecycle == "cancelled":
+            lines.append("❌ Отменено")
+        elif lifecycle == "postponed":
+            lines.append("⏸ Перенесено")
+        else:
+            lines.append(f"⛔ Статус: {lifecycle}")
+
+    event_type = str(getattr(fixture, "event_type", "") or "").strip().casefold()
+    raw_date = str(getattr(fixture, "date", "") or "").strip()
+    raw_end_date = str(getattr(fixture, "end_date", "") or "").strip()
+    raw_time = str(getattr(fixture, "time", "") or "").strip()
+    if raw_date:
+        if event_type == "выставка" and raw_end_date and raw_end_date != raw_date:
+            date_line = f"🗓 {_format_day_month(raw_date)} — {_format_day_month(raw_end_date)}"
+        else:
+            date_line = f"🗓 {_format_day_month(raw_date)}"
+            if raw_time and raw_time != "00:00":
+                date_line += f" в {raw_time}"
+        lines.append(date_line)
+
+    location_parts: list[str] = []
+    for raw in [
+        getattr(fixture, "location_name", None),
+        getattr(fixture, "location_address", None),
+        getattr(fixture, "city", None),
+    ]:
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        value_norm = value.casefold()
+        if any(value_norm in existing.casefold() for existing in location_parts):
+            continue
+        location_parts.append(value)
+    if location_parts:
+        lines.append("📍 " + ", ".join(location_parts))
+
+    if _as_bool(getattr(fixture, "pushkin_card", None)):
+        lines.append("✅ Пушкинская карта")
+
+    ticket_link = str(getattr(fixture, "ticket_link", "") or "").strip()
+    ticket_status = str(getattr(fixture, "ticket_status", "") or "").strip()
+    if ticket_status == "sold_out":
+        lines.append("❌ Билеты все проданы")
+    elif _as_bool(getattr(fixture, "is_free", None)):
+        lines.append("🆓 Бесплатно, по регистрации" if ticket_link else "🆓 Бесплатно")
+    elif ticket_link:
+        lines.append("🎟 Билеты")
+    else:
+        price_min = getattr(fixture, "ticket_price_min", None)
+        price_max = getattr(fixture, "ticket_price_max", None)
+        if price_min is not None or price_max is not None:
+            if price_min is not None and price_max is not None and int(price_min) != int(price_max):
+                lines.append(f"🎟 Билеты {_format_money(price_min)} — {_format_money(price_max)}")
+            else:
+                lines.append(f"🎟 Билеты {_format_money(price_min if price_min is not None else price_max)}")
+    return lines
+
+
+def _telegraph_preview_text(fixture: Any, variant: dict[str, Any]) -> str:
+    parts: list[str] = []
+    infoblock = _summary_infoblock_lines(fixture)
+    if infoblock:
+        parts.extend(infoblock)
+        parts.append("")
+    search_digest = str(variant.get("search_digest") or "").strip()
+    if search_digest:
+        parts.append(search_digest)
+        parts.append("")
+    description = str(variant.get("description_md") or "").strip()
+    if description:
+        parts.append(description)
+    return "\n".join(parts).strip()
+
+
 def _candidate_from_fixture(fixture: Any) -> su.EventCandidate:
     source_text = "\n\n".join(
         f"[{source.source_id}] {source.url}\n{source.text}" for source in fixture.sources
@@ -94,6 +280,12 @@ def _candidate_from_fixture(fixture: Any) -> su.EventCandidate:
         location_name=fixture.location_name,
         location_address=fixture.location_address,
         city=fixture.city,
+        ticket_link=getattr(fixture, "ticket_link", None),
+        ticket_price_min=getattr(fixture, "ticket_price_min", None),
+        ticket_price_max=getattr(fixture, "ticket_price_max", None),
+        ticket_status=getattr(fixture, "ticket_status", None),
+        is_free=getattr(fixture, "is_free", None),
+        pushkin_card=getattr(fixture, "pushkin_card", None),
         event_type=fixture.event_type,
     )
 
@@ -286,6 +478,183 @@ def _load_frozen_baseline(path_value: str, fixture: Any) -> dict[str, Any]:
     return baseline
 
 
+def _clean_db_facts(raw_facts: list[str], fixture: Any) -> list[str]:
+    return su._facts_text_clean_from_facts(
+        raw_facts,
+        anchors=[
+            getattr(fixture, "date", None) or "",
+            getattr(fixture, "time", None) or "",
+            getattr(fixture, "city", None) or "",
+            getattr(fixture, "location_name", None) or "",
+            getattr(fixture, "location_address", None) or "",
+        ],
+    )
+
+
+def _baseline_from_fixture_snapshot(fixture: Any) -> dict[str, Any]:
+    description = str(getattr(fixture, "baseline_description_md", None) or "").strip()
+    raw_facts = [
+        re.sub(r"\s+", " ", str(item or "")).strip()
+        for item in list(getattr(fixture, "baseline_raw_facts", None) or [])
+        if re.sub(r"\s+", " ", str(item or "")).strip()
+    ]
+    facts_text_clean = [
+        re.sub(r"\s+", " ", str(item or "")).strip()
+        for item in list(getattr(fixture, "baseline_facts_text_clean", None) or [])
+        if re.sub(r"\s+", " ", str(item or "")).strip()
+    ]
+    if not facts_text_clean and raw_facts:
+        facts_text_clean = _clean_db_facts(raw_facts, fixture)
+    candidate = _candidate_from_fixture(fixture)
+    return {
+        "model": "prod_db_gemma3_snapshot",
+        "path": "prod_db_snapshot_current_smart_update_text",
+        "baseline_artifact_mode": "prod_db_snapshot",
+        "candidate_has_g3": True,
+        "fields": _field_snapshot(
+            candidate,
+            {
+                "title": getattr(fixture, "title", None),
+                "search_digest": getattr(fixture, "baseline_search_digest", None),
+                "short_description": getattr(fixture, "baseline_short_description", None),
+            },
+        ),
+        "create_bundle": {},
+        "per_source_facts": {"prod_db_event_source_fact": raw_facts},
+        "raw_facts": raw_facts,
+        "facts_text_clean": facts_text_clean,
+        "description_md": description,
+        "short_description": str(getattr(fixture, "baseline_short_description", None) or "").strip(),
+        "search_digest": str(getattr(fixture, "baseline_search_digest", None) or "").strip(),
+        "metrics": _variant_metrics(description),
+        "quality_profile": writer_final_family._describe_text_quality(description),
+        "summary_infoblock": _summary_infoblock_lines(fixture),
+        "telegraph_preview_text": "",
+        "timings": {
+            "wall_clock_sec": None,
+            "stage_sec": {},
+            "source_artifact_timings": {},
+            "gemma_calls_observed": None,
+            "four_o_calls_observed": None,
+        },
+        "source_artifact": str(getattr(fixture, "baseline_source_artifact", None) or ""),
+    }
+
+
+def _source_url_from_event_row(row: sqlite3.Row) -> str:
+    for key in ("source_post_url", "source_vk_post_url", "telegraph_url"):
+        value = str(row[key] or "").strip() if key in row.keys() else ""
+        if value:
+            return value
+    path = str(row["telegraph_path"] or "").strip() if "telegraph_path" in row.keys() else ""
+    return f"https://telegra.ph/{path.lstrip('/')}" if path else ""
+
+
+def _fixtures_from_prod_db(path_value: str, event_ids: str) -> list[StageBenchmarkFixture]:
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    ids = [int(item.strip()) for item in (event_ids or DEFAULT_PROD_DB_EVENT_IDS).split(",") if item.strip()]
+    if not ids:
+        raise RuntimeError("No event ids provided for prod DB benchmark")
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    fixtures: list[StageBenchmarkFixture] = []
+    for event_id in ids:
+        event = con.execute("SELECT * FROM event WHERE id = ?", (event_id,)).fetchone()
+        if event is None:
+            raise RuntimeError(f"Event {event_id} not found in {path}")
+        source_rows = con.execute(
+            """
+            SELECT id, source_type, source_url, source_text
+            FROM event_source
+            WHERE event_id = ?
+            ORDER BY id
+            """,
+            (event_id,),
+        ).fetchall()
+        sources: list[Any] = []
+        for idx, row in enumerate(source_rows, start=1):
+            text = re.sub(r"\s+", " ", str(row["source_text"] or "")).strip()
+            if not text:
+                continue
+            sources.append(
+                bench.SourcePacket(
+                    source_id=f"{row['source_type'] or 'source'}-{row['id'] or idx}",
+                    source_type=str(row["source_type"] or "source"),
+                    url=str(row["source_url"] or "").strip(),
+                    text=text,
+                )
+            )
+        if not sources:
+            fallback_text = re.sub(r"\s+", " ", str(event["source_text"] or "")).strip()
+            if fallback_text:
+                sources.append(
+                    bench.SourcePacket(
+                        source_id="event-source-text",
+                        source_type="source",
+                        url=_source_url_from_event_row(event),
+                        text=fallback_text,
+                    )
+                )
+        if not sources:
+            raise RuntimeError(f"Event {event_id} has no usable source text in {path}")
+        fact_rows = con.execute(
+            """
+            SELECT status, fact
+            FROM event_source_fact
+            WHERE event_id = ?
+            ORDER BY id
+            """,
+            (event_id,),
+        ).fetchall()
+        raw_facts: list[str] = []
+        seen_facts: set[str] = set()
+        for row in fact_rows:
+            status = str(row["status"] or "").strip().casefold()
+            if status in {"conflict", "drop", "skipped"}:
+                continue
+            fact = re.sub(r"\s+", " ", str(row["fact"] or "")).strip()
+            if not fact:
+                continue
+            key = fact.casefold()
+            if key in seen_facts:
+                continue
+            seen_facts.add(key)
+            raw_facts.append(fact)
+        fixture = StageBenchmarkFixture(
+            fixture_id=f"PRODDB-{event_id}",
+            title=str(event["title"] or "").strip(),
+            event_type=str(event["event_type"] or "").strip(),
+            date=str(event["date"] or "").strip() or None,
+            time=str(event["time"] or "").strip() or None,
+            end_date=str(event["end_date"] or "").strip() or None,
+            end_date_is_inferred=bool(event["end_date_is_inferred"] or False),
+            location_name=str(event["location_name"] or "").strip() or None,
+            location_address=str(event["location_address"] or "").strip() or None,
+            city=str(event["city"] or "").strip() or None,
+            ticket_price_min=event["ticket_price_min"],
+            ticket_price_max=event["ticket_price_max"],
+            ticket_link=str(event["ticket_link"] or "").strip() or None,
+            ticket_status=str(event["ticket_status"] or "").strip() or None,
+            is_free=_as_bool(event["is_free"]),
+            pushkin_card=_as_bool(event["pushkin_card"]),
+            lifecycle_status=str(event["lifecycle_status"] or "").strip() or None,
+            telegraph_url=str(event["telegraph_url"] or "").strip() or None,
+            source_post_url=str(event["source_post_url"] or "").strip() or None,
+            sources=sources,
+            baseline_description_md=str(event["description"] or "").strip(),
+            baseline_short_description=str(event["short_description"] or "").strip(),
+            baseline_search_digest=str(event["search_digest"] or "").strip(),
+            baseline_raw_facts=raw_facts,
+            baseline_facts_text_clean=[],
+            baseline_source_artifact=str(path),
+        )
+        fixture.baseline_facts_text_clean = _clean_db_facts(raw_facts, fixture)
+        fixtures.append(fixture)
+    return fixtures
+
+
 def _fact_item_list(facts: list[str], *, category: str = "public") -> list[dict[str, Any]]:
     return [
         {"index": idx, "text": fact, "kind": category, "source_span": ""}
@@ -475,6 +844,46 @@ async def _time_stage(timings: dict[str, float], stage: str, coro: Any) -> Any:
         timings[stage] = round(time.perf_counter() - started, 6)
 
 
+async def _ask_gemma_json_gateway(
+    *,
+    model: str,
+    system_prompt: str,
+    user_payload: dict[str, Any],
+    max_tokens: int,
+    response_schema: dict[str, Any] | None = None,
+    timeout_sec: float | None = None,
+    allow_json_repair: bool = False,
+) -> dict[str, Any]:
+    client = su._get_gemma_client()
+    if client is None:
+        raise RuntimeError("GoogleAIClient is unavailable")
+    old_timeout = getattr(client, "provider_timeout_seconds", None)
+    if timeout_sec:
+        client.provider_timeout_seconds = float(timeout_sec)
+    generation_config: dict[str, Any] = {
+        "temperature": 0,
+        "max_output_tokens": max_tokens,
+        "response_mime_type": "application/json",
+        "system_instruction": system_prompt.strip(),
+    }
+    if response_schema is not None:
+        generation_config["response_schema"] = response_schema
+    try:
+        raw, _usage = await client.generate_content_async(
+            model=model,
+            prompt=json.dumps(user_payload, ensure_ascii=False, indent=2),
+            generation_config=generation_config,
+            max_output_tokens=max_tokens,
+        )
+    finally:
+        if timeout_sec and old_timeout is not None:
+            client.provider_timeout_seconds = old_timeout
+    data = su._extract_json(raw)
+    if data is None:
+        raise RuntimeError(f"Invalid JSON from {model}: {raw[:1200]}")
+    return data
+
+
 async def _run_current_smart_update_baseline(fixture: Any, *, model: str) -> dict[str, Any]:
     _set_smart_update_model(model)
     candidate = _candidate_from_fixture(fixture)
@@ -612,7 +1021,7 @@ async def _run_candidate_g4_lollipop2(
     bucket_raw = await _time_stage(
         timings,
         "lollipop.bucket_facts",
-        bench._ask_gemma_json_direct(
+        _ask_gemma_json_gateway(
             model=model,
             system_prompt=_bucket_system_prompt(),
             user_payload={
@@ -634,7 +1043,7 @@ async def _run_candidate_g4_lollipop2(
     weight_raw = await _time_stage(
         timings,
         "lollipop.prioritize.weight",
-        bench._ask_gemma_json_direct(
+        _ask_gemma_json_gateway(
             model=model,
             system_prompt=cascade_family._prioritize_weight_system_prompt(gemma4=True),
             user_payload={"event_title": fixture.title, "event_type": fixture.event_type, "facts": flat_weight_facts},
@@ -654,7 +1063,7 @@ async def _run_candidate_g4_lollipop2(
     lead_raw = await _time_stage(
         timings,
         "lollipop.prioritize.lead",
-        bench._ask_gemma_json_direct(
+        _ask_gemma_json_gateway(
             model=model,
             system_prompt=cascade_family._prioritize_lead_system_prompt(gemma4=True),
             user_payload={"event_id": 0, "event_title": fixture.title, "event_type": fixture.event_type, "facts": flat_lead_facts},
@@ -675,7 +1084,7 @@ async def _run_candidate_g4_lollipop2(
     layout_raw = await _time_stage(
         timings,
         "lollipop.editorial.layout",
-        bench._ask_gemma_json_direct(
+        _ask_gemma_json_gateway(
             model=model,
             system_prompt=cascade_family._editorial_layout_system_prompt(gemma4=True),
             user_payload={
@@ -712,53 +1121,66 @@ async def _run_candidate_g4_lollipop2(
         prioritize_result={"weight_result": {"payload": weighted_pack}},
     )
     writer_output: dict[str, Any] = {}
-    writer_validation = writer_final_family.ValidationResult(errors=["writer.final_4o.not_run"], warnings=[])
-    writer_model = four_o_model
+    writer_validation = writer_final_family.ValidationResult(errors=["writer.final_g4.not_run"], warnings=[])
+    writer_model = model
     try:
         writer_output = await _time_stage(
             timings,
-            "writer.final_4o",
-            bench._ask_4o_json(
-                prompt=writer_final_family._build_prompt(writer_pack["payload"]),
-                schema={
-                    "type": "object",
-                    "properties": {"title": {"type": "string"}, "description_md": {"type": "string"}},
-                    "required": ["title", "description_md"],
-                    "additionalProperties": False,
-                },
-                model=four_o_model,
+            "writer.final_g4_primary",
+            _ask_gemma_json_gateway(
+                model=model,
+                system_prompt=_compact_gemma_writer_system_prompt(),
+                user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
+                max_tokens=1200,
+                response_schema=_writer_response_schema_gemma(),
+                timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
+                allow_json_repair=False,
             ),
         )
         writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
     except Exception as exc:
-        stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
-        try:
-            writer_model = f"{four_o_model}->gemma-4-compact"
-            writer_output = await _time_stage(
-                timings,
-                "writer.final_g4_compact_after_4o_error",
-                bench._ask_gemma_json_direct(
-                    model=model,
-                    system_prompt=_compact_gemma_writer_system_prompt(),
-                    user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
-                    max_tokens=1200,
-                    response_schema=_writer_response_schema_gemma(),
-                    timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
-                    allow_json_repair=False,
-                ),
-            )
-            writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
-            writer_validation.warnings.append(f"writer.final_4o.error:{type(exc).__name__}")
-        except Exception as gemma_exc:
-            stage_errors.append(f"writer.final_g4.error:{type(gemma_exc).__name__}:{str(gemma_exc)[:240]}")
-            writer_output = {"title": fixture.title, "description_md": ""}
-            writer_validation = writer_final_family.ValidationResult(
-                errors=[
-                    f"writer.final_4o.error:{type(exc).__name__}",
-                    f"writer.final_g4.error:{type(gemma_exc).__name__}",
-                ],
-                warnings=[],
-            )
+        stage_errors.append(f"writer.final_g4.error:{type(exc).__name__}:{str(exc)[:240]}")
+        writer_output = {"title": fixture.title, "description_md": ""}
+        writer_validation = writer_final_family.ValidationResult(
+            errors=[f"writer.final_g4.error:{type(exc).__name__}"],
+            warnings=[],
+        )
+    # Previous 4o-primary lane kept for quick rollback/comparison when quota is available:
+    #
+    # writer_model = four_o_model
+    # try:
+    #     writer_output = await _time_stage(
+    #         timings,
+    #         "writer.final_4o",
+    #         bench._ask_4o_json(
+    #             prompt=writer_final_family._build_prompt(writer_pack["payload"]),
+    #             schema={
+    #                 "type": "object",
+    #                 "properties": {"title": {"type": "string"}, "description_md": {"type": "string"}},
+    #                 "required": ["title", "description_md"],
+    #                 "additionalProperties": False,
+    #             },
+    #             model=four_o_model,
+    #         ),
+    #     )
+    #     writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
+    # except Exception as exc:
+    #     stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
+    #     writer_model = f"{four_o_model}->gemma-4-compact"
+    #     writer_output = await _time_stage(
+    #         timings,
+    #         "writer.final_g4_compact_after_4o_error",
+    #         _ask_gemma_json_gateway(
+    #             model=model,
+    #             system_prompt=_compact_gemma_writer_system_prompt(),
+    #             user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
+    #             max_tokens=1200,
+    #             response_schema=_writer_response_schema_gemma(),
+    #             timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
+    #             allow_json_repair=False,
+    #         ),
+    #     )
+    #     writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
     applied = writer_final_family._apply_writer_output(writer_pack["payload"], writer_output)
     description = str(applied.get("description_md") or "")
     search_digest, short_description = _bundle_derived_fields(bundle)
@@ -805,42 +1227,101 @@ async def _run_candidate_g4_lollipop2(
         "search_digest": search_digest,
         "metrics": _variant_metrics(description),
         "quality_profile": writer_final_family._describe_text_quality(description),
+        "summary_infoblock": _summary_infoblock_lines(fixture),
+        "telegraph_preview_text": "",
         "timings": {
             "wall_clock_sec": wall,
             "stage_sec": timings,
-            "gemma_calls_observed": len([k for k in timings if k.startswith(("create", "facts", "lollipop", "search", "short"))]),
-            "four_o_calls_observed": 1 if "writer.final_4o" in timings else 0,
+            "gemma_calls_observed": len([k for k in timings if k.startswith(("create", "facts", "lollipop", "writer.final_g4", "search", "short"))]),
+            "four_o_calls_observed": 0,
         },
     }
 
 
 async def _run_fact_coverage(fixture: Any, baseline: dict[str, Any], candidate: dict[str, Any], *, model: str) -> dict[str, Any]:
     source_excerpt = bench._source_excerpt(fixture.sources, limit=9000)
-    return await bench._run_fact_coverage_reviewer(
-        fixture=fixture,
-        baseline={
-            "per_source_facts": {"smart_update": baseline.get("raw_facts") or []},
-            "facts_text_clean": baseline.get("facts_text_clean") or [],
-            "description_md": baseline.get("description_md") or "",
-        },
-        public_facts=_fact_item_list(list(candidate.get("facts_text_clean") or []), category="public"),
-        logistics_facts=_fact_item_list(
-            [
-                str(value)
-                for value in [
-                    fixture.date,
-                    fixture.time,
-                    fixture.location_name,
-                    fixture.location_address,
-                    fixture.city,
-                ]
-                if value
-            ],
-            category="logistics",
-        ),
-        source_excerpt=source_excerpt,
-        gemma_model=model,
+    baseline_for_review = {
+        "per_source_facts": {"smart_update": baseline.get("raw_facts") or []},
+        "facts_text_clean": baseline.get("facts_text_clean") or [],
+        "description_md": baseline.get("description_md") or "",
+    }
+    public_facts = _fact_item_list(list(candidate.get("facts_text_clean") or []), category="public")
+    logistics_facts = _fact_item_list(
+        [
+            str(value)
+            for value in [
+                fixture.date,
+                fixture.time,
+                fixture.location_name,
+                fixture.location_address,
+                fixture.city,
+            ]
+            if value
+        ],
+        category="logistics",
     )
+    baseline_surfaces = bench._baseline_fact_surfaces_for_review(baseline_for_review, fixture)
+    review_payload_user = legacy_writer_family.build_fact_coverage_payload(
+        title=fixture.title,
+        event_type=fixture.event_type,
+        date=fixture.date,
+        time=fixture.time,
+        location_name=fixture.location_name,
+        location_address=fixture.location_address,
+        city=fixture.city,
+        source_excerpt=source_excerpt,
+        baseline_facts=baseline_surfaces["raw_extracted_facts"],
+        baseline_writer_facts=baseline_surfaces["writer_facts_text_clean"],
+        baseline_metadata_facts=baseline_surfaces["metadata_anchors"],
+        g4_public_facts=public_facts,
+        g4_logistics_facts=logistics_facts,
+    )
+    baseline_count = len(review_payload_user["baseline_facts"])
+    g4_count = len(review_payload_user["g4_facts"])
+    errors: list[str] = []
+    raw: dict[str, Any] = {}
+    if baseline_count or g4_count:
+        try:
+            raw = await _ask_gemma_json_gateway(
+                model=model,
+                system_prompt=legacy_writer_family.build_fact_coverage_system_prompt(),
+                user_payload=review_payload_user,
+                max_tokens=2400,
+                response_schema=legacy_writer_family.fact_coverage_response_schema(),
+                timeout_sec=max(bench._gemma_direct_timeout_sec(), 180.0),
+            )
+        except Exception as exc:
+            errors.append(f"reviewer.error:{type(exc).__name__}:{str(exc)[:240]}")
+    else:
+        errors.append("no_facts_on_either_side")
+    normalized = legacy_writer_family.normalize_fact_coverage_payload(
+        raw or {},
+        baseline_count=baseline_count,
+        g4_count=g4_count,
+        baseline_facts=review_payload_user["baseline_facts"],
+        g4_facts=review_payload_user["g4_facts"],
+    )
+    summary = legacy_writer_family.summarize_fact_coverage(normalized)
+    summary.update(
+        {
+            "baseline_raw_extracted_fact_count": len(baseline_surfaces["raw_extracted_facts"]),
+            "baseline_writer_fact_count": len(baseline_surfaces["writer_facts_text_clean"]),
+            "baseline_filtered_out_fact_count": len(baseline_surfaces["filtered_out_before_writer"]),
+            "baseline_metadata_fact_count": len(baseline_surfaces["metadata_anchors"]),
+            "g4_public_fact_count": len(public_facts),
+            "g4_logistics_fact_count": len(logistics_facts),
+        }
+    )
+    return {
+        "input": review_payload_user,
+        "baseline_fact_surfaces": baseline_surfaces,
+        "review": normalized,
+        "summary": summary,
+        "errors": errors,
+        "gemma_calls": 1 if raw else 0,
+        "model": model,
+        "verdict": summary.get("verdict") or "unknown",
+    }
 
 
 def _compare_stage_summary(baseline: dict[str, Any], candidate: dict[str, Any], fact_coverage: dict[str, Any]) -> list[dict[str, Any]]:
@@ -909,17 +1390,26 @@ def _compare_stage_summary(baseline: dict[str, Any], candidate: dict[str, Any], 
     ]
 
 
-def _render_report(data: dict[str, Any], json_path: Path) -> str:
+def _fenced(text: str | None, info: str = "md") -> list[str]:
+    body = str(text or "").strip() or "_empty_"
+    return [f"```{info}", body, "```"]
+
+
+def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_level: int = 1) -> list[str]:
     fixture = data["fixture"]
     baseline = data["baseline"]
     candidate = data["candidate"]
     fact_coverage = data["fact_coverage"]
+    heading = "#" * heading_level
+    sub = "#" * (heading_level + 1)
+    subsub = "#" * (heading_level + 2)
     lines = [
-        "# Smart Update G4 Stage Benchmark",
+        f"{heading} Smart Update G4 Stage Benchmark: {fixture['fixture_id']}",
         "",
         f"- generated_at: `{data['generated_at']}`",
         f"- artifact_json: `{json_path}`",
         f"- fixture: `{fixture['fixture_id']}`",
+        f"- title: `{fixture.get('title') or ''}`",
         f"- baseline: `{baseline['model']}`",
         f"- baseline_path: `{baseline.get('path') or '-'}`",
         f"- baseline_source_artifact: `{baseline.get('source_artifact') or '-'}`",
@@ -928,7 +1418,7 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
         f"- writer_model: `{candidate.get('writer_model') or '-'}`",
         f"- candidate_has_g3: `{candidate.get('candidate_has_g3')}`",
         "",
-        "## Stage Summary",
+        f"{sub} Stage Summary",
         "",
         "| Stage | Baseline | Candidate | Verdict |",
         "| --- | --- | --- | --- |",
@@ -945,7 +1435,7 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
     lines.extend(
         [
             "",
-            "## Fact Coverage",
+            f"{sub} Fact Coverage",
             "",
             f"- verdict: `{coverage_summary.get('verdict')}`",
             f"- grounded covered: `{coverage_summary.get('covered_grounded_baseline_fact_count')}` / `{coverage_summary.get('grounded_baseline_fact_count')}`",
@@ -953,53 +1443,93 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
             f"- useful added: `{len(coverage_summary.get('added_g4_facts') or [])}`",
             f"- suspicious: `{len(coverage_summary.get('suspicious_g4_facts') or [])}`",
             "",
-            "### Baseline facts_text_clean",
+            f"{subsub} Baseline facts_text_clean",
             "",
         ]
     )
     for fact in baseline.get("facts_text_clean") or []:
         lines.append(f"- {fact}")
-    lines.extend(["", "### Candidate facts_text_clean", ""])
+    lines.extend(["", f"{subsub} Candidate facts_text_clean", ""])
     for fact in candidate.get("facts_text_clean") or []:
         lines.append(f"- {fact}")
-    lines.extend(["", "## Lollipop-Light Writer Pack", ""])
+    lines.extend(["", f"{sub} Lollipop-Light Writer Pack", ""])
     constraints = (((candidate.get("writer_pack") or {}).get("payload") or {}).get("constraints") or {})
     lines.append(f"- must_cover_fact_ids: `{constraints.get('must_cover_fact_ids') or []}`")
     lines.append(f"- headings: `{constraints.get('headings') or []}`")
     lines.append(f"- layout_flags: `{(candidate.get('layout_audit') or {}).get('flags') or []}`")
-    lines.extend(["", "### Layout Blocks", ""])
+    lines.extend(["", f"{subsub} Layout Blocks", ""])
     for block in (candidate.get("layout_payload") or {}).get("blocks") or []:
         lines.append(f"- role=`{block.get('role')}` heading=`{block.get('heading')}` refs=`{block.get('fact_refs')}` style=`{block.get('style')}`")
-    lines.extend(["", "## Text Comparison", "", "### Baseline Description", "", baseline.get("description_md") or "_empty_", "", "### Candidate Description", "", candidate.get("description_md") or "_empty_"])
-    lines.extend(["", "## Derived Fields", ""])
+    lines.extend(["", f"{sub} Text Comparison", "", f"{subsub} Baseline Description", ""])
+    lines.extend(_fenced(baseline.get("description_md"), "md"))
+    lines.extend(["", f"{subsub} Candidate Description", ""])
+    lines.extend(_fenced(candidate.get("description_md"), "md"))
+    lines.extend(["", f"{sub} Telegraph Preview", "", f"{subsub} Baseline Telegraph Preview", ""])
+    lines.extend(_fenced(baseline.get("telegraph_preview_text") or _telegraph_preview_text(type("FixtureView", (), fixture), baseline), "md"))
+    lines.extend(["", f"{subsub} Candidate Telegraph Preview", ""])
+    lines.extend(_fenced(candidate.get("telegraph_preview_text") or _telegraph_preview_text(type("FixtureView", (), fixture), candidate), "md"))
+    lines.extend(["", f"{sub} Derived Fields", ""])
     lines.append(f"- baseline short_description: `{baseline.get('short_description') or ''}`")
     lines.append(f"- candidate short_description: `{candidate.get('short_description') or ''}`")
     lines.append(f"- baseline search_digest: `{baseline.get('search_digest') or ''}`")
     lines.append(f"- candidate search_digest: `{candidate.get('search_digest') or ''}`")
-    lines.extend(["", "## Timings", ""])
+    lines.extend(["", f"{sub} Timings", ""])
     lines.append(f"- baseline wall: `{(baseline.get('timings') or {}).get('wall_clock_sec')}`")
     lines.append(f"- candidate wall: `{(candidate.get('timings') or {}).get('wall_clock_sec')}`")
     lines.append(f"- baseline stages: `{(baseline.get('timings') or {}).get('stage_sec')}`")
     lines.append(f"- candidate stages: `{(candidate.get('timings') or {}).get('stage_sec')}`")
     if candidate.get("stage_errors"):
-        lines.extend(["", "## Stage Errors", ""])
+        lines.extend(["", f"{sub} Stage Errors", ""])
         for err in candidate.get("stage_errors") or []:
             lines.append(f"- `{err}`")
+    return lines
+
+
+def _render_report(data: dict[str, Any], json_path: Path) -> str:
+    if "results" not in data:
+        return "\n".join(_render_single_report(data, json_path)).rstrip() + "\n"
+    results = list(data.get("results") or [])
+    lines = [
+        "# Smart Update G4 Stage Benchmark",
+        "",
+        f"- generated_at: `{data['generated_at']}`",
+        f"- artifact_json: `{json_path}`",
+        f"- fixtures: `{len(results)}`",
+        f"- writer_lane: `{data.get('writer_lane') or 'gemma-4-primary'}`",
+        f"- prod_db: `{data.get('prod_db') or '-'}`",
+        f"- checkpoint: `{data.get('checkpoint') or {}}`",
+        "",
+        "## Fixture Summary",
+        "",
+        "| Fixture | Title | Writer | Facts | Description chars | Verdict | Latency |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for result in results:
+        fixture = result.get("fixture") or {}
+        candidate = result.get("candidate") or {}
+        baseline = result.get("baseline") or {}
+        coverage_summary = ((result.get("fact_coverage") or {}).get("summary") or {})
+        lines.append(
+            "| "
+            + f"`{fixture.get('fixture_id')}` | "
+            + f"{_clip(fixture.get('title'), 70)} | "
+            + f"`{candidate.get('writer_model') or '-'}` | "
+            + f"`{coverage_summary.get('covered_grounded_baseline_fact_count')}/{coverage_summary.get('grounded_baseline_fact_count')}` | "
+            + f"`{(baseline.get('metrics') or {}).get('chars')} -> {(candidate.get('metrics') or {}).get('chars')}` | "
+            + f"`{coverage_summary.get('verdict')}` | "
+            + f"`{(candidate.get('timings') or {}).get('wall_clock_sec')}` |"
+        )
+    for result in results:
+        lines.extend(["", ""])
+        lines.extend(_render_single_report(result, json_path, heading_level=2))
     return "\n".join(lines).rstrip() + "\n"
 
 
-async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
-    _load_env_file()
-    ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
-    if args.reuse_fixture_artifact:
-        fixtures = bench._fixtures_from_artifact(args.reuse_fixture_artifact, args.fixtures)
-    else:
-        fixtures = bench._fixtures_from_cli(args.fixtures)
-    if len(fixtures) != 1:
-        raise RuntimeError("Stage debug runner currently expects exactly one fixture")
-    fixture = fixtures[0]
+async def _run_one(args: argparse.Namespace, fixture: Any) -> dict[str, Any]:
     if args.reuse_baseline_artifact:
         baseline = _load_frozen_baseline(args.reuse_baseline_artifact, fixture)
+    elif getattr(fixture, "baseline_description_md", None):
+        baseline = _baseline_from_fixture_snapshot(fixture)
     else:
         baseline = await _run_current_smart_update_baseline(fixture, model=args.baseline_model)
     candidate = await _run_candidate_g4_lollipop2(
@@ -1008,18 +1538,64 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
         four_o_model=args.four_o_model,
     )
     fact_coverage = await _run_fact_coverage(fixture, baseline, candidate, model=args.candidate_model)
-    generated_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     data = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "fixture": asdict(fixture),
+        "fixture": _object_to_dict(fixture),
         "source_evidence": _source_evidence(fixture),
         "baseline": baseline,
         "candidate": candidate,
         "fact_coverage": fact_coverage,
     }
+    data["baseline"]["telegraph_preview_text"] = _telegraph_preview_text(fixture, baseline)
+    data["candidate"]["telegraph_preview_text"] = _telegraph_preview_text(fixture, candidate)
     data["stage_summary"] = _compare_stage_summary(baseline, candidate, fact_coverage)
+    return data
+
+
+async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
+    _load_env_file()
+    ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
+    if args.prod_db:
+        fixtures = _fixtures_from_prod_db(args.prod_db, args.event_ids or args.fixtures)
+    elif args.reuse_fixture_artifact:
+        fixtures = bench._fixtures_from_artifact(args.reuse_fixture_artifact, args.fixtures)
+    else:
+        fixtures = bench._fixtures_from_cli(args.fixtures)
+    if not fixtures:
+        raise RuntimeError("No fixtures selected")
+    generated_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     json_path = ARTIFACTS_ROOT / f"smart_update_g4_stage_benchmark_{generated_at}.json"
     md_path = ARTIFACTS_ROOT / f"smart_update_g4_stage_benchmark_{generated_at}.md"
+    results: list[dict[str, Any]] = []
+    for fixture in fixtures:
+        results.append(await _run_one(args, fixture))
+        checkpoint_data: dict[str, Any]
+        if len(fixtures) == 1:
+            checkpoint_data = results[0]
+        else:
+            checkpoint_data = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "writer_lane": "gemma-4-primary",
+                "prod_db": args.prod_db or "",
+                "checkpoint": {
+                    "completed": len(results),
+                    "total": len(fixtures),
+                    "complete": len(results) == len(fixtures),
+                },
+                "results": results,
+            }
+        json_path.write_text(json.dumps(checkpoint_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        md_path.write_text(_render_report(checkpoint_data, json_path), encoding="utf-8")
+    if len(results) == 1:
+        data = results[0]
+    else:
+        data = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "writer_lane": "gemma-4-primary",
+            "prod_db": args.prod_db or "",
+            "checkpoint": {"completed": len(results), "total": len(fixtures), "complete": True},
+            "results": results,
+        }
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(_render_report(data, json_path), encoding="utf-8")
     return json_path, md_path
@@ -1040,6 +1616,16 @@ def main() -> int:
     parser.add_argument("--baseline-model", default=DEFAULT_BASELINE_MODEL)
     parser.add_argument("--candidate-model", default=DEFAULT_CANDIDATE_MODEL)
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL)
+    parser.add_argument(
+        "--prod-db",
+        default="",
+        help="Load benchmark fixtures and frozen Gemma 3-era baseline text/facts from a local production SQLite snapshot.",
+    )
+    parser.add_argument(
+        "--event-ids",
+        default="",
+        help=f"Comma-separated event ids for --prod-db. Default: {DEFAULT_PROD_DB_EVENT_IDS}.",
+    )
     args = parser.parse_args()
     json_path, md_path = asyncio.run(_run(args))
     print(json_path)
