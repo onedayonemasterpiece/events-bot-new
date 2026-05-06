@@ -388,7 +388,21 @@ Next tuning order:
 3. Decide whether final writer should normally be `4o` or Gemma 4 only after OpenAI quota is restored; current artifact proves Gemma 4 writer can produce text, but not that it beats baseline.
 4. Only after this single fixture reaches no-worse should the benchmark expand to the five-fixture pack.
 
-## Prod DB three-fixture staged benchmark (`2026-05-06`)
+## Superseded prod DB three-fixture staged benchmark (`2026-05-06T074156Z`)
+
+Artifacts:
+
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.json`
+
+Status: superseded diagnostic only.
+
+Reason:
+
+- `PRODDB-4517` / `Куплю гараж` had a manually repaired / incremental history and mixed old `event_source_fact` entries with a newer production description.
+- The run was useful for verifying `gemma-4-primary` transport and markdown visibility, but it is not a clean no-worse benchmark pack.
+
+## Prod DB three-fixture staged benchmark (`2026-05-06T082857Z`)
 
 Runner:
 
@@ -397,17 +411,19 @@ SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=20 \
 LOLLIPOP_GEMMA_DIRECT_TIMEOUT_SEC=90 LOLLIPOP_4O_MAX_RETRIES=0 \
 python scripts/inspect/benchmark_smart_update_g4_stages.py \
   --prod-db /home/dev/projects/events-bot-new/artifacts/db/incident-80-stories-prod-snapshot.sqlite \
-  --event-ids 4517,4518,4208
+  --event-ids 4594,4598,4538
 ```
 
 Artifacts:
 
-- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.md`
-- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T074156Z.json`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T082857Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260506T082857Z.json`
 
 Scope:
 
 - Baseline comes from the local prod SQLite snapshot, not from live Gemma 3 calls.
+- Baseline facts are copied from stored `event_source_fact` rows (`baseline_fact_source=prod_db_event_source_fact`); they are not re-extracted from baseline text by Gemma 4.
+- Baseline public text is the saved `event.description` body from the same snapshot, equivalent to the Telegraph body between the generated infoblock and footer.
 - Candidate path uses `Gemma 4` via the shared `GoogleAIClient` / `google.genai` gateway for create bundle, lollipop-light stages, final writer, and fact coverage reviewer.
 - Final writer lane is `gemma-4-primary`: each fixture records `writer_model=gemma-4-31b-it`, `candidate_has_g3=false`, `four_o_calls_observed=0`, and `writer.final_g4_primary` in stage timings. The old `4o` primary writer branch remains commented in the runner for quick rollback/comparison.
 - The runner checkpoints after each completed fixture, writing partial `.json`/`.md` artifacts so a later provider failure does not lose completed work.
@@ -417,15 +433,15 @@ Summary:
 
 | Fixture | Type | Baseline chars | Candidate chars | Facts covered | Losses | Suspicious | Verdict |
 | --- | --- | ---: | ---: | ---: | --- | ---: | --- |
-| `PRODDB-4517` | exhibition | `772` | `661` | `8/15` | `0 critical / 2 major / 4 minor` | `2` | `partial` |
-| `PRODDB-4518` | performance | `701` | `574` | `12/13` | `0 critical / 0 major / 1 minor` | `0` | `partial` |
-| `PRODDB-4208` | film screening | `1081` | `384` | `12/29` | `0 critical / 17 major / 0 minor` | `0` | `partial` |
+| `PRODDB-4594` | meeting/pitching | `1173` | `1175` | `16/22` | `1 critical / 3 major / 2 minor` | `0` | `rejected` |
+| `PRODDB-4598` | concert | `565` | `494` | `12/16` | `0 critical / 2 major / 2 minor` | `0` | `partial` |
+| `PRODDB-4538` | lecture/walk | `838` | `746` | `9/11` | `2 critical / 0 major / 0 minor` | `0` | `rejected` |
 
 Conclusion:
 
 - Transport/writer-lane migration is verified for this benchmark: no live Gemma 3 in candidate and no final `4o` calls.
-- Text generation is visible and auditable now, including Telegraph-style infoblocks.
-- Quality is not yet accepted for rollout. `PRODDB-4518` is close and mostly loses one grounded baseline fact, while `PRODDB-4517` and especially list-heavy `PRODDB-4208` show extraction/prioritization coverage regressions that should be fixed before expanding to a canary.
+- The benchmark process now matches the intended no-worse comparison shape: stored Gemma 3 facts/text from DB versus fresh Smart Update G4 output on the same sources.
+- Quality is not accepted for rollout. Candidate G4 still loses stored baseline facts, especially registration/free/ticket facts and price/Pushkin-card logistics. The next fix should target extraction/bucketing/logistics preservation before any writer tuning.
 
 ## Early benchmark fixture: `KALMANIA-2885`
 

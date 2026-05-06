@@ -149,6 +149,49 @@ def test_stage_benchmark_loads_single_fixture_stage_artifact(tmp_path: Path) -> 
     assert baseline["search_digest"] == "Поиск."
 
 
+def test_prod_db_snapshot_baseline_uses_stored_facts_without_reextracting() -> None:
+    stage = _load_stage_benchmark()
+    fixture = stage.StageBenchmarkFixture(
+        fixture_id="PRODDB-1",
+        title="Событие",
+        event_type="концерт",
+        date="2026-05-08",
+        time="18:00",
+        location_name="Филармония",
+        location_address="ул. Примерная, 1",
+        city="Калининград",
+        sources=[
+            stage.bench.SourcePacket(
+                source_id="tg",
+                source_type="telegram",
+                url="https://t.me/example/1",
+                text="Исполнитель: Анна Юсупова. В программе произведения Баха.",
+            )
+        ],
+        baseline_description_md="Prod Telegraph body.",
+        baseline_short_description="Коротко.",
+        baseline_search_digest="Дайджест.",
+        baseline_raw_facts=[
+            "Дата: 2026-05-08",
+            "Время: 18:00",
+            "Локация: Филармония, ул. Примерная, 1, Калининград",
+            "Исполнитель: Анна Юсупова",
+            "В программе произведения Баха",
+        ],
+        baseline_source_artifact="snapshot.sqlite",
+    )
+
+    baseline = stage._baseline_from_fixture_snapshot(fixture)
+
+    assert baseline["baseline_fact_source"] == "prod_db_event_source_fact"
+    assert baseline["raw_facts"] == fixture.baseline_raw_facts
+    assert baseline["facts_text_clean"] == [
+        "Исполнитель: Анна Юсупова",
+        "В программе произведения Баха",
+    ]
+    assert "baseline_text_fact_extract" not in baseline
+
+
 def test_stage_benchmark_uses_valid_bundle_derived_fields_before_extra_calls() -> None:
     stage = _load_stage_benchmark()
 

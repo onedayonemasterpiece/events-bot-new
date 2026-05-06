@@ -498,13 +498,7 @@ def _baseline_from_fixture_snapshot(fixture: Any) -> dict[str, Any]:
         for item in list(getattr(fixture, "baseline_raw_facts", None) or [])
         if re.sub(r"\s+", " ", str(item or "")).strip()
     ]
-    facts_text_clean = [
-        re.sub(r"\s+", " ", str(item or "")).strip()
-        for item in list(getattr(fixture, "baseline_facts_text_clean", None) or [])
-        if re.sub(r"\s+", " ", str(item or "")).strip()
-    ]
-    if not facts_text_clean and raw_facts:
-        facts_text_clean = _clean_db_facts(raw_facts, fixture)
+    facts_text_clean = _clean_db_facts(raw_facts, fixture) if raw_facts else []
     candidate = _candidate_from_fixture(fixture)
     return {
         "model": "prod_db_gemma3_snapshot",
@@ -523,6 +517,7 @@ def _baseline_from_fixture_snapshot(fixture: Any) -> dict[str, Any]:
         "per_source_facts": {"prod_db_event_source_fact": raw_facts},
         "raw_facts": raw_facts,
         "facts_text_clean": facts_text_clean,
+        "baseline_fact_source": "prod_db_event_source_fact",
         "description_md": description,
         "short_description": str(getattr(fixture, "baseline_short_description", None) or "").strip(),
         "search_digest": str(getattr(fixture, "baseline_search_digest", None) or "").strip(),
@@ -1447,6 +1442,9 @@ def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_leve
             "",
         ]
     )
+    if baseline.get("baseline_fact_source"):
+        lines.append(f"_source: `{baseline.get('baseline_fact_source')}`_")
+        lines.append("")
     for fact in baseline.get("facts_text_clean") or []:
         lines.append(f"- {fact}")
     lines.extend(["", f"{subsub} Candidate facts_text_clean", ""])
