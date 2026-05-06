@@ -153,6 +153,11 @@ Experimental step, not production-default:
 - The default experimental stage allowlist is `SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES=facts_extract,create_bundle`.
 - This remains gated because the first latency probe showed speed gains for `facts_extract` and `create_bundle`, but `facts_extract` could return fewer facts on dense cases. Full-surface benchmark parity is required before enabling it by default.
 
+Diagnostic-only step:
+
+- Full-surface Smart Update G4 benchmarks now collect a per-call LLM trace for Gemma stages, including label, kind, model, status, duration, attempts, provider errors, and rate-limit waits.
+- `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC` can bound `fact_first_description` in explicit sandbox probes, but defaults to `0`. A 90s timeout sped up two fixtures and exposed the true latency surface, but regressed one accepted fixture from `16/16` to `15/16` fact coverage, so it is not accepted as a production-default speed fix.
+
 ## Сравнение Gemma 3 и Gemma 4 по ключевым атрибутам
 
 | Атрибут | Gemma 3 | Gemma 4 | Что это означает для `lollipop` |

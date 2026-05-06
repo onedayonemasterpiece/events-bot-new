@@ -20,7 +20,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from db import Database
-from smart_event_update import EventCandidate, smart_event_update
+from smart_event_update import (
+    EventCandidate,
+    get_smart_update_llm_trace,
+    reset_smart_update_llm_trace,
+    smart_event_update,
+)
 
 
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
@@ -266,14 +271,25 @@ def _prepare_sandbox(src: Path, dst: Path) -> None:
 async def _run_event(db: Database, baseline_event: dict[str, Any], sources: list[dict[str, Any]]) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     candidate_event_id: int | None = None
+    llm_trace: list[dict[str, Any]] = []
     started = time.perf_counter()
     for source in sources:
+        reset_smart_update_llm_trace()
         candidate = _candidate_from_source(baseline_event, source)
         result = await smart_event_update(
             db,
             candidate,
             check_source_url=False,
             schedule_tasks=False,
+        )
+        source_trace = get_smart_update_llm_trace()
+        llm_trace.extend(
+            {
+                **item,
+                "source_url": candidate.source_url,
+                "source_type": candidate.source_type,
+            }
+            for item in source_trace
         )
         results.append(
             {
@@ -294,7 +310,48 @@ async def _run_event(db: Database, baseline_event: dict[str, Any], sources: list
     return {
         "candidate_event_id": candidate_event_id,
         "smart_update_results": results,
+        "llm_trace": llm_trace,
+        "llm_trace_summary": _llm_trace_summary(llm_trace),
         "wall_clock_sec": round(time.perf_counter() - started, 6),
+    }
+
+
+def _llm_trace_summary(trace: list[dict[str, Any]]) -> dict[str, Any]:
+    total_sec = round(sum(float(item.get("duration_sec") or 0.0) for item in trace), 6)
+    provider_errors = sum(int(item.get("provider_errors") or 0) for item in trace)
+    rate_limit_waits = sum(int(item.get("rate_limit_waits") or 0) for item in trace)
+    by_label: dict[str, dict[str, Any]] = {}
+    for item in trace:
+        label = str(item.get("label") or "?")
+        bucket = by_label.setdefault(
+            label,
+            {
+                "calls": 0,
+                "duration_sec": 0.0,
+                "provider_errors": 0,
+                "statuses": {},
+                "kind": item.get("kind"),
+            },
+        )
+        bucket["calls"] += 1
+        bucket["duration_sec"] = round(float(bucket["duration_sec"]) + float(item.get("duration_sec") or 0.0), 6)
+        bucket["provider_errors"] += int(item.get("provider_errors") or 0)
+        status = str(item.get("status") or "?")
+        bucket["statuses"][status] = int(bucket["statuses"].get(status) or 0) + 1
+    top_labels = sorted(
+        by_label.items(),
+        key=lambda pair: float(pair[1].get("duration_sec") or 0.0),
+        reverse=True,
+    )
+    return {
+        "calls": len(trace),
+        "duration_sec": total_sec,
+        "provider_errors": provider_errors,
+        "rate_limit_waits": rate_limit_waits,
+        "top_labels": [
+            {"label": label, **values}
+            for label, values in top_labels[:12]
+        ],
     }
 
 
@@ -474,6 +531,27 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
         lines.append(f"- fact verdict: `{coverage_summary.get('verdict')}`")
         lines.append(f"- grounded covered: `{stage._coverage_cell(coverage_summary)}`")
         lines.append(f"- smart_update wall: `{(result.get('smart_update_run') or {}).get('wall_clock_sec')}`")
+        trace_summary = (result.get("smart_update_run") or {}).get("llm_trace_summary") or {}
+        lines.append(
+            "- smart_update llm trace: "
+            + f"`calls={trace_summary.get('calls')}` "
+            + f"`llm_sec={trace_summary.get('duration_sec')}` "
+            + f"`provider_errors={trace_summary.get('provider_errors')}`"
+        )
+        top_labels = list(trace_summary.get("top_labels") or [])
+        if top_labels:
+            lines.extend(["", "### Smart Update LLM Trace", ""])
+            lines.extend(["| Label | Kind | Calls | Sec | Provider errors | Statuses |", "| --- | --- | ---: | ---: | ---: | --- |"])
+            for item in top_labels:
+                lines.append(
+                    "| "
+                    + f"`{stage._clip(item.get('label'), 80)}` | "
+                    + f"`{item.get('kind') or ''}` | "
+                    + f"`{item.get('calls')}` | "
+                    + f"`{item.get('duration_sec')}` | "
+                    + f"`{item.get('provider_errors')}` | "
+                    + f"`{item.get('statuses')}` |"
+                )
         lines.extend(["", "### Field Diff", ""])
         diffs = result.get("field_diff") or []
         if not diffs:

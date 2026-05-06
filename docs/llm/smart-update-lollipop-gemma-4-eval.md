@@ -91,6 +91,37 @@ Decision:
 - `event_topics` native schema remains accepted because the extra 31b-only control probe passed `3/3` and does not affect fact/text generation;
 - the next latency bottlenecks are not only JSON schema calls: `create:fact_first_desc`, `create:fact_first_cov`, `create:fact_first_revise`, and benchmark reviewer calls also caused long waits or repeated `500`.
 
+### LLM trace / fact-first timeout probe (`2026-05-06T14:33Z`)
+
+Artifacts:
+
+- [`smart_update_g4_full_surface_benchmark_20260506T143359Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T143359Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260506T143359Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T143359Z.json)
+- [`smart_update_g4_full_surface_benchmark_20260506T145507Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T145507Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260506T145507Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T145507Z.json)
+
+What changed in the benchmark harness:
+
+- full-surface artifacts now include per-source Smart Update LLM trace records: stage label, kind (`json` / `text`), model, status, attempts, provider errors, rate-limit waits, and duration;
+- the trace is diagnostic only and does not enter generation payloads;
+- `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC` was added as an opt-in fail-open guard for `fact_first_description`; default is `0` because parity has not passed.
+
+Findings:
+
+| Probe | Fixture | Result | Trace signal | Decision |
+| --- | --- | --- | --- | --- |
+| no timeout trace | `PRODDB-4594` | `15/22`, `partial`, `373.55s` | `create:fact_first_desc=174.40s`, `create_bundle=113.76s`, `create:fact_first_cov=75.49s` | confirms fact-first latency bottleneck |
+| `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC=90` | `PRODDB-4594` | `15/22`, `partial`, `207.53s` | `create_bundle=111.23s`, `fact_first_desc` cancelled at timeout | faster, no coverage gain |
+| `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC=90` | `PRODDB-4598` | `15/16`, `partial`, `166.36s` | `fact_first_desc` cancelled at timeout, `create_bundle=73.68s` | faster but regressed from accepted `16/16` |
+| `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC=90` | `PRODDB-4538` | incomplete | `create_bundle` hit two quick `500` errors, then a long third provider call | separate provider-call stability issue |
+
+Decision:
+
+- keep Smart Update LLM trace in the benchmark harness;
+- keep the fact-first timeout guard, but only as explicit opt-in (`SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC>0`);
+- do not use the timeout as a default speed fix because it can lower fact coverage;
+- next speed work must target prompt/schema quality for `fact_first_desc` / `fact_first_cov` and provider-call bounding for long `create_bundle` calls without accepting fact losses.
+
 ## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
 
 Цель следующего benchmark: сравнить **текущий Smart Update baseline на Gemma 3** и **Smart Update G4 candidate, вариант 2** на одном и том же полном source evidence.

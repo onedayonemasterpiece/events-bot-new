@@ -10,6 +10,7 @@ import time
 import re
 import textwrap
 import unicodedata
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -24,6 +25,11 @@ from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCa
 from sections import MONTHS_RU
 
 logger = logging.getLogger(__name__)
+
+_SMART_UPDATE_LLM_TRACE: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "smart_update_llm_trace",
+    default=None,
+)
 
 _HALL_HINT_RE = re.compile(
     r"\b(зал|аудитория|лекторий|сцена|фойе|этаж|корпус)\b\s+([^\s,.;:]+)(?:\s+([^\s,.;:]+))?(?:\s+([^\s,.;:]+))?",
@@ -224,6 +230,12 @@ SMART_UPDATE_DESCRIPTION_MAX_CHARS = _env_int(
 SMART_UPDATE_REWRITE_MAX_TOKENS = _env_int(
     # Default kept fairly high: we want a full description, not a short snippet.
     "SMART_UPDATE_REWRITE_MAX_TOKENS", 1400, lo=120, hi=6500
+)
+SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC = _env_int(
+    "SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC",
+    0,
+    lo=0,
+    hi=600,
 )
 
 # If an event is extracted far into the future, treat poster date mismatches as a high-risk signal.
@@ -2254,6 +2266,27 @@ async def _llm_fact_first_description_md(
     )
     description3 = _cleanup_description(revised2) or description2
     return description3.strip() or None
+
+
+async def _llm_fact_first_description_md_bounded(
+    **kwargs: Any,
+) -> str | None:
+    timeout = int(SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC or 0)
+    if timeout <= 0:
+        return await _llm_fact_first_description_md(**kwargs)
+    label = str(kwargs.get("label") or "fact_first")
+    try:
+        return await asyncio.wait_for(
+            _llm_fact_first_description_md(**kwargs),
+            timeout=float(timeout),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "smart_update: fact_first_description timeout label=%s timeout_sec=%s; falling back to bundle/rewrite path",
+            label,
+            timeout,
+        )
+        return None
 
 
 def _has_overlong_paragraph(text: str | None, *, limit: int = 900) -> bool:
@@ -4851,6 +4884,66 @@ def _smart_update_native_schema_enabled(label: str) -> bool:
     return "*" in stages or label in stages
 
 
+def reset_smart_update_llm_trace() -> None:
+    """Start collecting Smart Update LLM call diagnostics in the current context."""
+    _SMART_UPDATE_LLM_TRACE.set([])
+
+
+def get_smart_update_llm_trace() -> list[dict[str, Any]]:
+    trace = _SMART_UPDATE_LLM_TRACE.get()
+    if not isinstance(trace, list):
+        return []
+    out: list[dict[str, Any]] = []
+    now = time.perf_counter()
+    for item in trace:
+        copied = dict(item)
+        if copied.get("status") == "running" and "started_at_monotonic" in copied:
+            try:
+                started = float(copied.get("started_at_monotonic") or now)
+                copied["duration_sec"] = round(now - started, 6)
+            except Exception:
+                copied["duration_sec"] = None
+            copied["status"] = "cancelled_or_running"
+        copied.pop("started_at_monotonic", None)
+        out.append(copied)
+    return out
+
+
+def _start_llm_trace_record(kind: str, label: str, **extra: Any) -> dict[str, Any] | None:
+    trace = _SMART_UPDATE_LLM_TRACE.get()
+    if not isinstance(trace, list):
+        return None
+    record: dict[str, Any] = {
+        "kind": kind,
+        "label": label,
+        "model": SMART_UPDATE_MODEL,
+        "started_at_monotonic": time.perf_counter(),
+        "attempts": 0,
+        "provider_errors": 0,
+        "rate_limit_waits": 0,
+        "status": "running",
+    }
+    record.update(extra)
+    trace.append(record)
+    return record
+
+
+def _finish_llm_trace_record(
+    record: dict[str, Any] | None,
+    *,
+    status: str,
+    error: Exception | str | None = None,
+) -> None:
+    if not isinstance(record, dict):
+        return
+    started = float(record.get("started_at_monotonic") or time.perf_counter())
+    record["duration_sec"] = round(time.perf_counter() - started, 6)
+    record["status"] = status
+    record.pop("started_at_monotonic", None)
+    if error is not None:
+        record["error"] = str(error)[:500]
+
+
 async def _ask_gemma_json(
     prompt: str,
     schema: dict[str, Any],
@@ -4897,10 +4990,18 @@ async def _ask_gemma_json(
         "response_mime_type": "application/json",
         "response_schema": _gemma_native_response_schema(schema),
     }
+    trace_record = _start_llm_trace_record(
+        "json",
+        label,
+        max_tokens=max_tokens,
+        native_schema_enabled=native_schema_enabled,
+    )
 
     rl_deadline = time.monotonic() + rl_max_wait_sec
     attempt = 1
     while attempt <= max_tries:
+        if trace_record is not None:
+            trace_record["attempts"] = max(int(trace_record.get("attempts") or 0), attempt)
         if client is None:
             last_exc = RuntimeError("gemma client unavailable")
         else:
@@ -4924,12 +5025,15 @@ async def _ask_gemma_json(
                         raw_last = raw_native or ""
                         data_native = _extract_json(raw_last)
                         if data_native is not None:
+                            _finish_llm_trace_record(trace_record, status="ok_native")
                             return data_native
                         logger.warning(
                             "smart_update: gemma native schema %s returned invalid json; falling back to prompt schema",
                             label,
                         )
                     except Exception as exc:
+                        if trace_record is not None:
+                            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                         logger.warning(
                             "smart_update: gemma native schema %s failed; falling back to prompt schema: %s",
                             label,
@@ -4979,12 +5083,20 @@ async def _ask_gemma_json(
                             if int(getattr(exc, "status_code", 0) or 0) == 429:
                                 retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                         if retry_ms > 0 and time.monotonic() < rl_deadline:
+                            if trace_record is not None:
+                                trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                             await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
                             continue
+                        if trace_record is not None:
+                            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                         raise
                 raw_last = raw or ""
                 data = _extract_json(raw_last)
                 if data is not None:
+                    _finish_llm_trace_record(
+                        trace_record,
+                        status="ok_prompt_after_native" if native_schema_enabled else "ok",
+                    )
                     return data
                 fix_prompt = (
                     "Исправь JSON под схему. Верни только JSON без markdown.\n"
@@ -5033,14 +5145,22 @@ async def _ask_gemma_json(
                             if int(getattr(exc, "status_code", 0) or 0) == 429:
                                 retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                         if retry_ms > 0 and time.monotonic() < rl_deadline:
+                            if trace_record is not None:
+                                trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                             await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
                             continue
+                        if trace_record is not None:
+                            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                         raise
                 raw_last = raw_fix or raw_last
                 fixed = _extract_json(raw_fix or "")
                 if fixed is not None:
+                    _finish_llm_trace_record(trace_record, status="ok_json_fix")
                     return fixed
                 last_exc = RuntimeError("gemma returned invalid json")
+            except asyncio.CancelledError:
+                _finish_llm_trace_record(trace_record, status="cancelled")
+                raise
             except Exception as exc:  # pragma: no cover - provider failures
                 last_exc = exc
                 # If it's a rate limit, wait (not an "attempt") until the max wait budget.
@@ -5056,8 +5176,12 @@ async def _ask_gemma_json(
                     if int(getattr(exc, "status_code", 0) or 0) == 429:
                         retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                 if retry_ms > 0 and time.monotonic() < rl_deadline:
+                    if trace_record is not None:
+                        trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                     await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
                     continue
+                if trace_record is not None:
+                    trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                 logger.warning(
                     "smart_update: gemma %s failed attempt=%d/%d: %s",
                     label,
@@ -5077,6 +5201,7 @@ async def _ask_gemma_json(
         ask_4o = None
         notify_llm_incident = None
     if ask_4o is None:
+        _finish_llm_trace_record(trace_record, status="failed", error=last_exc or "4o unavailable")
         return None
     try:
         if notify_llm_incident is not None:
@@ -5105,9 +5230,11 @@ async def _ask_gemma_json(
             meta={"consumer": "smart_update", "label": label, "fallback": "gemma_failed"},
         )
         data = _extract_json(raw_4o or "")
+        _finish_llm_trace_record(trace_record, status="ok_4o_fallback")
         return data
     except Exception as exc:  # pragma: no cover - network / token failures
         logger.warning("smart_update: 4o fallback failed label=%s: %s", label, exc)
+        _finish_llm_trace_record(trace_record, status="failed", error=exc)
         return None
 
 
@@ -5126,10 +5253,18 @@ async def _ask_gemma_text(
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
     last_exc: Exception | None = None
+    trace_record = _start_llm_trace_record(
+        "text",
+        label,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
 
     rl_deadline = time.monotonic() + rl_max_wait_sec
     attempt = 1
     while attempt <= max_tries:
+        if trace_record is not None:
+            trace_record["attempts"] = max(int(trace_record.get("attempts") or 0), attempt)
         if client is None:
             last_exc = RuntimeError("gemma client unavailable")
         else:
@@ -5168,13 +5303,21 @@ async def _ask_gemma_text(
                             if int(getattr(exc, "status_code", 0) or 0) == 429:
                                 retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                         if retry_ms > 0 and time.monotonic() < rl_deadline:
+                            if trace_record is not None:
+                                trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                             await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
                             continue
+                        if trace_record is not None:
+                            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                         raise
                 cleaned = _strip_code_fences(raw or "").strip()
                 if cleaned:
+                    _finish_llm_trace_record(trace_record, status="ok")
                     return cleaned
                 last_exc = RuntimeError("gemma returned empty text")
+            except asyncio.CancelledError:
+                _finish_llm_trace_record(trace_record, status="cancelled")
+                raise
             except Exception as exc:  # pragma: no cover - provider failures
                 last_exc = exc
                 try:
@@ -5189,8 +5332,12 @@ async def _ask_gemma_text(
                     if int(getattr(exc, "status_code", 0) or 0) == 429:
                         retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                 if retry_ms > 0 and time.monotonic() < rl_deadline:
+                    if trace_record is not None:
+                        trace_record["rate_limit_waits"] = int(trace_record.get("rate_limit_waits") or 0) + 1
                     await asyncio.sleep(min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2)))
                     continue
+                if trace_record is not None:
+                    trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
                 logger.warning(
                     "smart_update: gemma %s failed attempt=%d/%d: %s",
                     label,
@@ -5209,6 +5356,7 @@ async def _ask_gemma_text(
         ask_4o = None
         notify_llm_incident = None
     if ask_4o is None:
+        _finish_llm_trace_record(trace_record, status="failed", error=last_exc or "4o unavailable")
         return None
     try:
         if notify_llm_incident is not None:
@@ -5233,9 +5381,11 @@ async def _ask_gemma_text(
             meta={"consumer": "smart_update", "label": label, "fallback": "gemma_failed"},
         )
         cleaned = _strip_code_fences(raw_4o or "").strip()
+        _finish_llm_trace_record(trace_record, status="ok_4o_fallback")
         return cleaned or None
     except Exception as exc:  # pragma: no cover - network / token failures
         logger.warning("smart_update: 4o fallback failed label=%s: %s", label, exc)
+        _finish_llm_trace_record(trace_record, status="failed", error=exc)
         return None
 
 
@@ -10634,7 +10784,7 @@ async def _smart_event_update_impl(
             )
             if facts_text_clean:
                 try:
-                    ff_desc = await _llm_fact_first_description_md(
+                    ff_desc = await _llm_fact_first_description_md_bounded(
                         title=final_title,
                         event_type=normalized_event_type or candidate.event_type,
                         facts_text_clean=facts_text_clean,
@@ -11577,7 +11727,7 @@ async def _smart_event_update_impl(
                         )
                         if facts_text_clean:
                             try:
-                                ff_desc = await _llm_fact_first_description_md(
+                                ff_desc = await _llm_fact_first_description_md_bounded(
                                     title=event_db.title,
                                     event_type=getattr(event_db, "event_type", None) or candidate.event_type,
                                     facts_text_clean=facts_text_clean,

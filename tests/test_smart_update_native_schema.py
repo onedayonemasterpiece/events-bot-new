@@ -83,3 +83,65 @@ async def test_ask_gemma_json_falls_back_to_prompt_schema_after_native_error(mon
     assert "response_schema" in client.calls[0]["generation_config"]
     assert client.calls[1]["generation_config"] == {"temperature": 0}
     assert "JSON schema:" in client.calls[1]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_smart_update_llm_trace_records_json_and_text_calls(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            '{"facts":["Факт"]}',
+            "Готовый текст",
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", False)
+
+    su.reset_smart_update_llm_trace()
+    data = await su._ask_gemma_json(
+        "Верни факты.",
+        {
+            "type": "object",
+            "properties": {"facts": {"type": "array", "items": {"type": "string"}}},
+            "required": ["facts"],
+        },
+        max_tokens=100,
+        label="facts_extract",
+    )
+    text = await su._ask_gemma_text("Верни текст.", max_tokens=50, label="fact_first_desc")
+
+    assert data == {"facts": ["Факт"]}
+    assert text == "Готовый текст"
+    trace = su.get_smart_update_llm_trace()
+    assert [item["label"] for item in trace] == ["facts_extract", "fact_first_desc"]
+    assert [item["kind"] for item in trace] == ["json", "text"]
+    assert all(item["status"] == "ok" for item in trace)
+    assert all(item["duration_sec"] >= 0 for item in trace)
+
+
+@pytest.mark.asyncio
+async def test_fact_first_description_bounded_timeout(monkeypatch):
+    async def slow_fact_first(**_kwargs):
+        import asyncio
+
+        await asyncio.sleep(10)
+        return "too late"
+
+    monkeypatch.setattr(su, "_llm_fact_first_description_md", slow_fact_first)
+    monkeypatch.setattr(su, "SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC", 1)
+
+    result = await su._llm_fact_first_description_md_bounded(label="create")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_fact_first_description_timeout_is_opt_in(monkeypatch):
+    async def fast_fact_first(**_kwargs):
+        return "ready"
+
+    monkeypatch.setattr(su, "_llm_fact_first_description_md", fast_fact_first)
+    monkeypatch.setattr(su, "SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC", 0)
+
+    result = await su._llm_fact_first_description_md_bounded(label="create")
+
+    assert result == "ready"
