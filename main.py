@@ -2208,7 +2208,7 @@ FOUR_O_TRACKED_MODELS: tuple[str, str] = ("gpt-4o", "gpt-4o-mini")
 EVENT_TOPICS_LLM = (os.getenv("EVENT_TOPICS_LLM", "gemma") or "gemma").strip().lower()
 EVENT_TOPICS_MODEL = os.getenv(
     "EVENT_TOPICS_MODEL",
-    os.getenv("TG_MONITORING_TEXT_MODEL", "gemma-3-27b-it"),
+    "gemma-4-31b-it",
 ).strip()
 
 

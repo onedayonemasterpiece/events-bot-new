@@ -475,6 +475,49 @@ Current interpretation:
 - `PRODDB-4538` cannot be judged from this run because the reviewer hit provider `500 INTERNAL`; the corrected artifact preserves the candidate output and marks the fact gate as `review_error`.
 - The next benchmark step is a full Smart Update candidate snapshot that compares every persisted surface, not just writer facts: canonical event fields / infoblock, `event_source_fact`, `facts_text_clean`, Telegraph body, `short_description`, and `search_digest`.
 
+## Full-surface sandbox Smart Update benchmark (`2026-05-06T094705Z`)
+
+Runner:
+
+```bash
+GOOGLE_AI_MAX_RETRIES=1 GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120 \
+SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=20 \
+EVENT_TOPICS_MODEL=gemma-4-31b-it \
+python scripts/inspect/benchmark_smart_update_g4_full_surfaces.py \
+  --prod-db /home/dev/projects/events-bot-new/artifacts/db/incident-80-stories-prod-snapshot.sqlite \
+  --event-ids 4594,4598,4538
+```
+
+Artifacts:
+
+- `artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T094705Z.md`
+- `artifacts/codex/smart_update_g4_full_surface_benchmark_20260506T094705Z.json`
+- `artifacts/codex/smart_update_g4_full_surface_sandbox_20260506T094705Z.sqlite`
+
+Scope:
+
+- The runner copies the local prod SQLite snapshot into `artifacts/codex/`, removes events from the sandbox copy, and recreates the selected events through the real `smart_event_update()` create path.
+- Candidate anchor fields are seeded from the baseline event row because `event_source` does not store the original upstream `EventCandidate` from Telegram/parser. Therefore this benchmark validates Smart Update G4 create/merge/persisted surfaces, not upstream parser extraction parity.
+- `SMART_UPDATE_MODEL` and `EVENT_TOPICS_MODEL` both run on `gemma-4-31b-it`; topic classification is not disabled.
+- Provider calls are bounded with `GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120` and `GOOGLE_AI_MAX_RETRIES=1` so 500/timeouts are visible instead of turning into unbounded benchmark hangs.
+
+Summary:
+
+| Fixture | Candidate ID | Fields / infoblock | Fact coverage | Text chars | Verdict | Smart Update wall |
+| --- | ---: | --- | ---: | ---: | --- | ---: |
+| `PRODDB-4594` / `Питчинг в Сигнале` | `1` | `0 diff` | `15/22` | `1173 -> 1558` | `partial` | `267.21s` |
+| `PRODDB-4598` / `Аве Мария` | `2` | `0 diff` | `16/16` | `565 -> 818` | `accepted` | `249.19s` |
+| `PRODDB-4538` / `Хаусмарки` | `3` | `0 diff` | `11/11` | `838 -> 1235` | `partial` | `180.89s` |
+
+Findings:
+
+- Canonical fields / generated infoblock matched for all three sandbox-created events.
+- `PRODDB-4598` is the only accepted full-surface fixture.
+- `PRODDB-4594` is still not no-worse: the G4 persisted facts miss several grounded public facts, including the meeting goal, the 412-person research context, and several example-interest/request facts.
+- `PRODDB-4538` covers all grounded baseline facts but remains `partial` because Smart Update persisted a technical note (`Описание расширено: заменён слишком короткий дайджест`) as a candidate public fact.
+- Runtime is not production-acceptable: single-event Smart Update wall time was about `181s..267s`, with repeated Gemma 4 `500 INTERNAL` and one `fact_first_desc` timeout at `120s`.
+- Because `FOUR_O_TOKEN` is absent locally, every 4o fallback attempt failed; the evidence is still useful for Gemma 4 migration because no Gemma 3 call is needed on Smart Update or event topics in this run.
+
 ## Early benchmark fixture: `KALMANIA-2885`
 
 ### Fixture scope

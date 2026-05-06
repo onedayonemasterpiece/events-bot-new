@@ -145,14 +145,14 @@ if not SMART_UPDATE_LLM_DISABLED and SMART_UPDATE_LLM != "gemma":
     SMART_UPDATE_LLM = "gemma"
 SMART_UPDATE_MODEL = os.getenv(
     "SMART_UPDATE_MODEL",
-    "gemma-3-27b-it",
+    "gemma-4-31b-it",
 ).strip()
 if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
     logger.warning(
-        "smart_update: SMART_UPDATE_MODEL=%r is not a Gemma model; forcing 'gemma-3-27b-it'",
+        "smart_update: SMART_UPDATE_MODEL=%r is not a Gemma model; forcing 'gemma-4-31b-it'",
         SMART_UPDATE_MODEL,
     )
-    SMART_UPDATE_MODEL = "gemma-3-27b-it"
+    SMART_UPDATE_MODEL = "gemma-4-31b-it"
 SMART_UPDATE_YO_RULE = (
     "Уважай букву «ё»: если слово в норме пишется через «ё», не заменяй её на «е»."
 )
