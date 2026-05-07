@@ -11,7 +11,12 @@ from aiogram import Bot, types
 
 from aiohttp import web
 from telegraph import Telegraph
-from markup import md_to_html, telegraph_br, linkify_for_telegraph
+from markup import (
+    md_to_html,
+    telegraph_br,
+    linkify_for_telegraph,
+    format_tel_link_for_display,
+)
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
 from source_parsing.telegram.commands import tg_monitor_router
@@ -16231,7 +16236,19 @@ async def _build_source_summary_block(
     price_text = _format_ticket_price(
         event_summary.ticket_price_min, event_summary.ticket_price_max
     )
-    
+
+    # Phone-only contacts (ticket_link='tel:+...') do not survive Telegraph's
+    # href allowlist — Telegraph silently strips `tel:` from `<a href>` and the
+    # reader sees just the word "Билеты" with no link. Surface the phone as a
+    # dedicated "Контакт" line with the human-readable number visible as plain
+    # text so it remains actionable (selectable / long-press to dial) on every
+    # surface that consumes the infoblock, and treat `link_value` as empty for
+    # the regular ticket-segment rendering below.
+    contact_phone_display = ""
+    if link_value.lower().startswith("tel:"):
+        contact_phone_display = format_tel_link_for_display(link_value)
+        link_value = ""
+
     # Check ticket status for sold-out events
     if event_summary.ticket_status == "sold_out":
         ticket_segments.append(html.escape("❌ Билеты все проданы"))
@@ -16253,9 +16270,16 @@ async def _build_source_summary_block(
                 ticket_segments.append(html.escape(f" {price_text}"))
         elif price_text:
             ticket_segments.append(html.escape(f"🎟 {status_icon}Билеты {price_text}"))
+        elif contact_phone_display:
+            # Phone-only event with no price: still emit a 🎟 marker so the reader
+            # understands the contact is the way to register/buy a slot.
+            ticket_segments.append(html.escape(f"🎟 {status_icon}Запись по телефону"))
 
     if ticket_segments:
         lines.append("".join(ticket_segments).strip())
+
+    if contact_phone_display:
+        lines.append(html.escape(f"📞 {contact_phone_display}"))
 
     if not lines:
         return ""

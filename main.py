@@ -246,6 +246,7 @@ from markup import (
     FEST_INDEX_INTRO_END,
     linkify_for_telegraph,
     sanitize_for_vk,
+    format_tel_link_for_display,
 )
 from aiogram.utils.text_decorations import html_decoration
 from sections import (
@@ -19086,14 +19087,19 @@ def format_event_md(
         lines.append(digest)
     if e.pushkin_card:
         lines.append("\u2705 Пушкинская карта")
+    contact_phone_md = (
+        format_tel_link_for_display(e.ticket_link) if e.ticket_link else ""
+    )
+    has_tel_link = bool(contact_phone_md)
+    ticket_link_for_render = "" if has_tel_link else (e.ticket_link or "")
     if getattr(e, "ticket_status", None) == "sold_out":
         lines.append("❌ Билеты все проданы")
     elif e.is_free:
         txt = "🟡 Бесплатно"
-        if e.ticket_link:
-            txt += f" [по регистрации]({e.ticket_link})"
+        if ticket_link_for_render:
+            txt += f" [по регистрации]({ticket_link_for_render})"
         lines.append(txt)
-    elif e.ticket_link and (
+    elif ticket_link_for_render and (
         e.ticket_price_min is not None or e.ticket_price_max is not None
     ):
         status_icon = "✅ " if getattr(e, "ticket_status", None) == "available" else ""
@@ -19101,10 +19107,10 @@ def format_event_md(
             price = f"от {e.ticket_price_min} до {e.ticket_price_max}"
         else:
             price = str(e.ticket_price_min or e.ticket_price_max or "")
-        lines.append(f"{status_icon}[Билеты в источнике]({e.ticket_link}) {price}".strip())
-    elif e.ticket_link:
+        lines.append(f"{status_icon}[Билеты в источнике]({ticket_link_for_render}) {price}".strip())
+    elif ticket_link_for_render:
         status_icon = "✅ " if getattr(e, "ticket_status", None) == "available" else ""
-        lines.append(f"{status_icon}[по регистрации]({e.ticket_link})")
+        lines.append(f"{status_icon}[по регистрации]({ticket_link_for_render})")
     else:
         if (
             e.ticket_price_min is not None
@@ -19118,9 +19124,13 @@ def format_event_md(
             price = str(e.ticket_price_max)
         else:
             price = ""
+        status_icon = "✅ " if getattr(e, "ticket_status", None) == "available" else ""
         if price:
-            status_icon = "✅ " if getattr(e, "ticket_status", None) == "available" else ""
             lines.append(f"{status_icon}Билеты {price}")
+        elif has_tel_link:
+            lines.append(f"🎟 {status_icon}Запись по телефону".strip())
+    if has_tel_link:
+        lines.append(f"📞 {contact_phone_md}")
     if include_details and e.telegraph_url:
         cam = "\U0001f4f8" * min(2, max(0, e.photo_count))
         prefix = f"{cam} " if cam else ""
@@ -19216,14 +19226,27 @@ def format_event_vk(
         if e.vk_ticket_short_url
         else None
     )
-    ticket_link_display = formatted_short_ticket or e.ticket_link
+    contact_phone_vk = (
+        format_tel_link_for_display(e.ticket_link) if e.ticket_link else ""
+    )
+    has_tel_link_vk = bool(contact_phone_vk)
+    if has_tel_link_vk and not formatted_short_ticket:
+        # VK does not auto-link the ``tel:`` scheme on wall posts, so a raw
+        # ``tel:+79114743004`` URL would land as ugly plain text. Surface the
+        # phone as a separate ``📞 Запись по телефону +7 (XXX) XXX-XX-XX``
+        # line below the ticket segment instead.
+        ticket_link_display = ""
+        ticket_link_for_render = ""
+    else:
+        ticket_link_display = formatted_short_ticket or e.ticket_link
+        ticket_link_for_render = e.ticket_link
     if e.is_free:
         lines.append("🟡 Бесплатно")
-        if e.ticket_link:
+        if ticket_link_for_render:
             lines.append("по регистрации")
             if show_ticket_link and ticket_link_display:
                 lines.append(f"\U0001f39f {ticket_link_display}")
-    elif e.ticket_link and (
+    elif ticket_link_for_render and (
         e.ticket_price_min is not None or e.ticket_price_max is not None
     ):
         if e.ticket_price_max is not None and e.ticket_price_max != e.ticket_price_min:
@@ -19236,7 +19259,7 @@ def format_event_vk(
             lines.append(f"\U0001f39f {ticket_link_display}")
         else:
             lines.append(f"Билеты {price}".strip())
-    elif e.ticket_link:
+    elif ticket_link_for_render:
         lines.append("по регистрации")
         if show_ticket_link and ticket_link_display:
             lines.append(f"\U0001f39f {ticket_link_display}")
@@ -19254,6 +19277,10 @@ def format_event_vk(
             price = f"{e.ticket_price_max} руб."
         if price:
             lines.append(f"Билеты {price}")
+        elif has_tel_link_vk:
+            lines.append("Запись по телефону")
+    if has_tel_link_vk:
+        lines.append(f"📞 {contact_phone_vk}")
 
     # details link already appended to description above
 

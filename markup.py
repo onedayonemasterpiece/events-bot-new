@@ -13,6 +13,33 @@ _TEXT_LINK_RE = re.compile(r'([^<>\[]+?)\s*\((https?://(?:\\\)|[^)])+)\)')
 _VK_LINK_RE = re.compile(r'\[([^|\]]+)\|([^\]]+)\]')
 _TG_MENTION_RE = re.compile(r'(?<![\w/@])@([a-zA-Z0-9_]{4,32})')
 
+
+def format_tel_link_for_display(link_value: str | None) -> str:
+    """Format a ``tel:+79114743004`` ticket_link as a human-readable phone string.
+
+    Telegraph silently strips ``tel:`` from ``<a href>`` (only ``http``,
+    ``https``, ``mailto`` survive its allowlist), and VK wall posts also do
+    not auto-link the ``tel:`` scheme. So when ticket_link is phone-only we
+    surface the number visibly as plain text on every public surface (event
+    Telegraph page infoblock, /daily Telegram message, /daily VK post) where
+    the reader can long-press / tap to dial. Russian-format numbers
+    (``+7XXXXXXXXXX``) become ``+7 (911) 474-30-04``; other lengths fall
+    back to the raw digits with a leading ``+``.
+    """
+    raw = (link_value or "").strip()
+    if not raw.lower().startswith("tel:"):
+        return ""
+    digits = re.sub(r"\D", "", raw[4:])
+    if not digits:
+        return ""
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) == 11 and digits.startswith("7"):
+        return f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
+    if len(digits) == 10:
+        return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:10]}"
+    return f"+{digits}"
+
 # Phone number patterns for tel: links (Telegraph).
 # We intentionally match only phone-looking sequences (starting with +7 / 8 / "(...)" )
 # to avoid false positives like dates ("2026-02-13").
