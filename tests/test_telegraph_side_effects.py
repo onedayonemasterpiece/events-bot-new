@@ -1,5 +1,6 @@
 import importlib
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -145,3 +146,97 @@ async def test_navigation_builds_do_not_touch_events(tmp_path, monkeypatch):
     await m.rebuild_pages(db, ["2025-09"], ["2025-09-06"])
     assert all(c[0] == "event_pipeline" for c in create_calls if c[1] == eid)
     assert all(c[0] == "event_pipeline" for c in edit_calls if c[1] == eid)
+
+
+@pytest.mark.asyncio
+async def test_telegraph_rehydrates_missing_media_from_event_sources(tmp_path, monkeypatch):
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        ev = m.Event(
+            title="Выставка «Куплю гараж. Калининград»",
+            description="D",
+            date="2026-05-13",
+            time="12:00",
+            location_name="Дом китобоя",
+            source_text="SRC",
+            photo_urls=["https://cdn.example/existing.jpg"],
+            photo_count=1,
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        eid = int(ev.id)
+        session.add(
+            m.EventPoster(
+                event_id=eid,
+                catbox_url="https://cdn.example/existing.jpg",
+                poster_hash="existing",
+            )
+        )
+        session.add_all(
+            [
+                m.EventSource(
+                    event_id=eid,
+                    source_type="vk",
+                    source_url="https://vk.com/wall-1_10",
+                    source_text="vk",
+                ),
+                m.EventSource(
+                    event_id=eid,
+                    source_type="telegram",
+                    source_url="https://t.me/domkitoboya/3191",
+                    source_text="tg1",
+                ),
+                m.EventSource(
+                    event_id=eid,
+                    source_type="telegram",
+                    source_url="https://t.me/domkitoboya/3193",
+                    source_text="tg2",
+                ),
+            ]
+        )
+        await session.commit()
+
+    async def fake_fetch(source_type, source_url, *, limit):
+        if source_url.endswith("1_10"):
+            return [
+                SimpleNamespace(catbox_url="https://cdn.example/existing.jpg", sha256="existing"),
+                SimpleNamespace(catbox_url="https://cdn.example/vk.jpg", sha256="vk"),
+            ]
+        if source_url.endswith("/3191"):
+            return [SimpleNamespace(catbox_url="https://cdn.example/tg3191.jpg", sha256="tg3191")]
+        if source_url.endswith("/3193"):
+            return [SimpleNamespace(catbox_url="https://cdn.example/tg3193.jpg", sha256="tg3193")]
+        return []
+
+    monkeypatch.setattr(m, "_fetch_event_source_poster_candidates", fake_fetch)
+    monkeypatch.setenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH", "1")
+
+    async with db.get_session() as session:
+        ev = await session.get(m.Event, eid)
+        added = await m._rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            ev,
+            event_id=eid,
+        )
+        await session.commit()
+
+    assert added == 3
+    async with db.get_session() as session:
+        ev = await session.get(m.Event, eid)
+        assert ev.photo_count == 4
+        assert ev.photo_urls == [
+            "https://cdn.example/existing.jpg",
+            "https://cdn.example/vk.jpg",
+            "https://cdn.example/tg3191.jpg",
+            "https://cdn.example/tg3193.jpg",
+        ]
+        rows = (
+            await session.execute(
+                m.select(m.EventPoster.poster_hash).where(m.EventPoster.event_id == eid)
+            )
+        ).all()
+        assert {r[0] for r in rows} == {"existing", "vk", "tg3191", "tg3193"}

@@ -63,9 +63,9 @@
 
 ## LLM‑first обработка текста (важно)
 
-Если задача касается качества/смысла текста событий (например `title`, `description`, `search_digest`), приоритет у обработки **через LLM** (промпты в `docs/llm/` и LLM‑пасс в Smart Update).
+Если задача касается качества/смысла данных событий (например `title`, `description`, `search_digest`, `is_free`, `ticket_status`, work-hours/non-event классификация, venue/title semantics, duplicate/match решения), приоритет у обработки **через LLM** (промпты в `docs/llm/`, provider prompts вроде `kaggle/TelegramMonitor/telegram_monitor.py`, и LLM‑пасс в Smart Update).
 
-Детерминированные функции допустимы как поддержка (санитайзеры, нормализация, извлечение дат/времени, безопасные guardrail‑проверки), но они **не должны менять смысл** текста.
+Детерминированные функции допустимы как поддержка (санитайзеры, нормализация, извлечение дат/времени, узкие consistency/safety guardrail‑проверки), но они **не должны менять смысл** текста или подменять LLM‑решение широкими regex/keyword правилами.
 
 Каноническая политика: `docs/llm/request-guide.md` (секция про LLM‑first).
 

@@ -45,13 +45,19 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Never return whitespace-only strings." in source
     assert "Use evidence from both message text and OCR." in source
     assert "Prefer filling location_name and location_address" in source
+    assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
     assert "never copy a descriptive sentence" in source
+    assert "each event must use venue/address/city facts" in source
+    assert "the event-local venue wins" in source
+    assert "canonical attendee-facing title rather than the in-character/plot phrase" in source
     assert "speaker biography, schedule commentary, film metadata" in source
     assert 'hall/room label such as "Кинозал:" or "Атриум:"' in source
     assert "use the host venue as location_name" in source
     assert "leave location_name empty rather than filling it with prose" in source
     assert "Do not invent end_date for single-date events." in source
+    assert "teaser or pre-announcement without an exact day/date range/end_date" in source
+    assert "do not use the message date or the first day of the mentioned month" in source
     assert "Message date is only context for resolving explicit relative anchors" in source
     assert "return [] rather than using message_date as the event date" in source
     assert 'If a post says "в разделе X на выставке Y"' in source
@@ -66,11 +72,27 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert 'must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00"' in source
     assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
     assert 'Use source context only as weak hosting context' in source
+    assert "Institution work-hours notices are NOT events" in source
+    assert "do NOT classify a post as a work-hours notice merely because it mentions a museum/library venue" in source
+    assert 'a street/address such as "Музейная аллея"' in source
+    assert "extract those events even when they happen at a museum or library" in source
+    assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
+    assert "Missing price is unknown, not free." in source
+    assert "Do not mark zoo/museum/theatre events free merely because" in source
+    assert 'Return raw JSON only: the first character must be "[" and the last character must be "]"' in source
+    assert "do not wrap the array in markdown/code fences" in source
     assert "prefer one ongoing exhibition card over [] or {}" in source
     assert "Do not split one real event into an extra title-only row" in source
     assert "keep the cycle/series label in raw_excerpt/search_digest, not as a second event row" in source
     assert 'Do not use generic placeholder venue names like "музей", "галерея", "пространство", or "площадка"' in source
     assert 'For museum posts spotlighting one artist or one body of work currently shown in the museum' in source
+    assert "_repair_suspicious_locations" in source
+    assert "Review extracted Telegram events and repair only the venue fields" in source
+    assert "source default location as evidence" in source
+    assert "The deterministic part only decides whether the extracted venue field has a" in source
+    assert "source_default_location=default_location" in source
+    assert "Source default location:" in source
+    assert "source default location is provided, treat it as a strong prior" in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:
@@ -238,13 +260,21 @@ def test_tg_monitor_single_lecture_rescue_pass_is_llm_first() -> None:
 def test_tg_monitor_schedule_rescue_pass_is_llm_first() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
     assert "schedule_like = bool(" in source
-    assert "if schedule_like:\n        text = '[]'" in source
+    assert "festival_program_like = bool(" in source
+    assert "if schedule_like and not festival_program_like:\n        text = '[]'" in source
+    assert "If a festival post lists several dated program items" in source
     assert "Extract attendable schedule items from one small Telegram timetable chunk as strict JSON array." in source
     assert 'one date header like "18 АПРЕЛЯ" followed by up to three time lines' in source
     assert "range(0, len(timed_lines), 3)" in source
     assert "Each returned event must correspond to one real schedule line" in source
+    assert "If the chunk/full message is only an institution work-hours or holiday-opening notice" in source
+    assert "return [] and do not convert those days/hours into events" in source
     assert 'Never use placeholder literals like "title" as a title' in source
+    assert "Ticket/free contract: is_free=true ONLY when the source or OCR explicitly says attendance is free" in source
+    assert "Ticket links, ticket sale/status, paid registration, or venue" in source
     assert "location_name must be the shared venue/place for the timetable" in source
+    assert 'Never output field-name placeholders like "location_address", "address", "location_name"' in source
+    assert "that event-local venue wins over source context or defaults" in source
     assert "not descriptive prose from surrounding text" in source
     assert "Full message context for shared venue/address facts" in source
     assert 'a trailing "📍Остров Канта" line applies to all schedule rows' in source
@@ -307,6 +337,8 @@ def test_tg_monitor_event_schema_carries_gemma4_descriptions() -> None:
     assert "Never include uncertainty markers like \"or something similar\"" in source
     assert "return one attendee-facing lecture title, not two rows" in source
     assert 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка"' in source
+    assert "evidence that the event is free" in source
+    assert "True only when the source explicitly states free attendance" in source
     assert "'required': [" in source
 
 
@@ -325,6 +357,7 @@ def _load_sanitizer_in_isolation():
     wanted = {
         "_EVENT_STRING_FIELDS",
         "_UNKNOWN_LITERALS",
+        "_FIELD_NAME_PLACEHOLDER_LITERALS",
         "_LEAKED_COMMENT_TAIL_RE",
         "_MARKDOWN_STRIP_RE",
         "_HTML_TAG_RE",
@@ -380,7 +413,7 @@ def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None
             "title": "Космос красного",
             "date": "2026-04-10",
             "location_name": "unknown",
-            "location_address": "Unknown",
+            "location_address": "location_address",
             "city": "unknown",
         },
         {

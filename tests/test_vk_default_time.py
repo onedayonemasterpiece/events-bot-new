@@ -7,6 +7,14 @@ import main
 import vk_intake
 
 
+def test_vk_llm_text_field_cleaner_drops_location_placeholders():
+    assert vk_intake._clean_llm_text_field("location_address", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field(" address ", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field("адрес", field_name="location_address") is None
+    assert vk_intake._clean_llm_text_field("location_name", field_name="location_name") is None
+    assert vk_intake._clean_llm_text_field("Черняховского 26", field_name="location_address") == "Черняховского 26"
+
+
 class DummyMessage:
     def __init__(self, chat_id, text, reply_markup):
         self.chat = SimpleNamespace(id=chat_id)
@@ -411,6 +419,33 @@ async def test_vk_default_location_message_updates_db(tmp_path):
         cur = await conn.execute("SELECT location FROM vk_source WHERE id=?", (vid,))
         (location_val,) = await cur.fetchone()
     assert location_val is None
+
+
+@pytest.mark.asyncio
+async def test_db_init_repairs_known_vk_source_location_defaults(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (214027639, "locostandup", "Loco Standup", "Калининград Сити Джаз Клуб, Мира 33-35, Калининград"),
+        )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (149955604, "bar_bastion", "БАСТИОН. Калининград", "Калининград Сити Джаз Клуб"),
+        )
+        await conn.commit()
+
+    await db.init()
+
+    async with db.raw_conn() as conn:
+        rows = await conn.execute_fetchall(
+            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?) ORDER BY group_id",
+            (149955604, 214027639),
+        )
+    locations = {int(row[0]): row[1] for row in rows}
+    assert locations[149955604] == "Бар Бастион, Судостроительная 6/1, Калининград"
+    assert locations[214027639] == "Стендап клуб Локация, Юбилейная 18, Калининград"
 @pytest.mark.asyncio
 async def test_build_event_payload_includes_default_time(monkeypatch):
     captured = {}
@@ -426,7 +461,8 @@ async def test_build_event_payload_includes_default_time(monkeypatch):
         "text", default_time="19:00"
     )
 
-    assert captured["text"] == "text"
+    assert captured["text"].startswith("text\n")
+    assert "Правила извлечения локации" in captured["text"]
     assert captured["festival_names"] is None
     assert draft.time == "19:00"
     assert festival_payload is None

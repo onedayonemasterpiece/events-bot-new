@@ -11,6 +11,7 @@
   - Catbox используется только в `fallback/off` режимах.
   - Инвариант: extractor **не должен придумывать дату события** из даты публикации поста.
     - Дата/период должны быть явно в тексте/афише (или в виде относительных слов типа «сегодня/завтра», которые разрешено резолвить от даты поста).
+    - Для выставок/ярмарок extractor должен вернуть событие только если есть явный диапазон/дата закрытия или точный день открытия/начала. Teaser/pre-announcement без точного дня (`готовим выставку`, `анонс через пару дней`, `точную дату анонсируем позже`, `в мае откроем`) возвращает `[]`; `message_date` и первое число месяца запрещены как substitute date.
     - Посты вида `open call` / «конкурсный отбор» / «приём заявок» считаются **не‑событиями** (это не «куда пойти») и должны отфильтровываться на стороне Kaggle (server-side guard существует как safety-net).
     - Посты‑отчёты о уже прошедшем мероприятии (`приняли участие`, `встреча прошла`, `педагоги отметили`, `администрация выразила благодарность`) не должны создавать event card; серверный Smart Update режет их как `skipped_non_event:completed_event_report`, если в тексте нет invite/registration/ticket сигналов.
     - Официальные уведомления администрации Калининграда о **разводе/разводке мостов** считаются событиями городской повестки: `@klgdcity` входит в мониторинг, Gemma 4 извлекает их как `Развод мостов`; если общий extractor вернул пустой или непригодный bridge-ответ, запускается узкий Gemma rescue-pass, и только затем структурный fallback сохраняет карточки по явно grounded дате/тексту. Для источника также включён `bridge_notice_daily`: после успешного `event_id` сервер отправляет notice в `/daily` каналы.
@@ -48,7 +49,8 @@
 - `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
-  - если extractor отдал в `location_name` фрагмент прозы/описания/расписания вместо названия площадки, сервер отбрасывает этот фрагмент и восстанавливает площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback.
+  - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
+  - если extractor разложил соседнюю прозу между `location_name` и `location_address`, сервер отбрасывает prose-like address-фрагмент и восстанавливает структурные `location_name/location_address/city` из единственной известной площадки в исходном тексте/алиасах.
 - если афиша явно содержит несколько дат/времён одного и того же события (например «12 июня 19:00» и «13 июня 15:00»), а extractor их схлопнул в одну дату, сервер (best-effort) расширяет карточку до нескольких событий по OCR афиши.
   - сохраняет `source_title`/`sources_meta[].title` в `telegram_source.title` (человекочитаемое название канала/группы).
   - сохраняет метаданные источника из `sources_meta[]`: `about`, `about_links_json`, `meta_hash`, `meta_fetched_at`.
@@ -69,7 +71,10 @@
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
+- `Gemma 4` extract prompt различает явные work-hours notices и события в музеях/библиотеках: `график/режим/часы работы`, `санитарный день`, `не работает/закрыто` возвращают `[]`, но лекции, шоу, мастер-классы, экскурсии и фестивальные слоты с датой/временем должны извлекаться даже при venue/address словах вроде `Библиотека ...` или `Музейная аллея`.
 - `Gemma 4` producer-level contract for `location_name`: поле должно быть реальным venue/place name, а не соседней прозой, биографией спикера, schedule commentary, film metadata, ticket instruction или описанием события. Для расписаний schedule-rescue передаёт в каждый day-block prompt общий контекст поста, чтобы хвостовые venue-линии вроде `📍Остров Канта` были видны LLM для всех строк расписания.
+- После `INC-2026-05-02-pre-daily-event-quality` prompt contract дополнительно закрепляет **event-local venue grounding**: в multi-event/digest/repost постах площадка, адрес и город берутся из ближайшего блока конкретного события, а source/default location используется только когда event-local блок не называет свою площадку. Литералы имён полей (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) считаются синтаксическими placeholders и должны стать пустыми строками, не публичными значениями.
+- `Gemma 4` venue-review stage: если extracted `location_name` имеет широкий плохой shape (слишком длинная фраза, schedule row, короткий section label вроде `Кинозал:`) или источник имеет `default_location`, Kaggle делает отдельный LLM-pass только по `location_name/location_address/city` на original message + OCR + source context + `default_location`. Детерминированная часть решает только “нужна проверка”; смысловую площадку выбирает LLM. Это canonical fix path для произвольных фрагментов вроде случайно попавшей фразы из соседнего предложения.
 - Второй hardening wave по реальным Gemma 4 outputs (`run_id=48fa98294333486d94dd0e14785d774f`) точечно лечит наблюдавшиеся регрессии: prompt явно запрещает inline `//`/`#` комментарии и markdown (`**`/`__`) внутри JSON-значений, запрещает ghost-события с пустыми `title` и `date`, запрещает литерал `"unknown"` в любом поле, требует lowercase русский `event_type` (`концерт`/`выставка`/`лекция`/...) вместо английских токенов вроде `"exhibition"`/`"meetup"`, не даёт копировать город из parenthetical origin notes (`"(Санкт-Петербург)"` в описании коллекции ≠ место события), и скипает fundraiser/video-recap/book-review посты без приглашения на будущее событие. Те же правила дублированы в exhibition fallback prompt и в json-fix retry, чтобы retry не пропускал те же классы ошибок.
 - Schema `EVENT_ARRAY_SCHEMA` получил `description` по ключевым полям (`title`/`city`/`event_type`/`date`/`time`/`location_*`), которые Gemini structured output уважает как дополнительный канал подсказок; hard constraints остаются в prompt text, чтобы не нарушать schema-совместимость Gemma 4.
 - Добавлен LLM-output safety-net `_sanitize_extracted_events` (детерминированный post-LLM хелпер без semantic rewriting): срезает leaked inline `//`/`#` хвосты, снимает оставшиеся markdown-маркеры, нормализует placeholder-литералы (`unknown`/`n/a`/`none`) до пустой строки и дропает ghost-события, где пусты и `title`, и `date`. Это не заменяет LLM — просто не даёт известным Gemma 4 failure modes доехать до Smart Update и Telegraph.
@@ -126,10 +131,10 @@ Live validation (`2026-04-22`):
 это делает намеренные/постоянные skip-решения диагностируемыми и не запускает бесконечный retry.
 Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky-skipped-post.md`.
 
-Для Telegram payload с противоречивыми price/free полями сервер трактует `ticket_price_min=0`
-и пустой/нулевой `ticket_price_max` как бесплатный вход даже если extractor ошибочно вернул
-`is_free=false`. Это защищает посты, где Telegram custom emoji `🆓` были удалены при экспорте,
-но LLM всё же сохранил числовой факт нулевой цены.
+Для Telegram payload free/paid остаётся LLM-first: `is_free=true` допускается только при явном
+free-attendance evidence в исходном тексте/OCR. Нулевой `ticket_price_min=0` больше не повышает
+событие до бесплатного сам по себе; розыгрыш билетов, включение программы во входной билет музея/зоопарка
+или положительная цена снимают free-флаг как fail-closed guardrail.
 
 ## Метрики постов и популярность (⭐/👍)
 
@@ -267,6 +272,10 @@ Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky
   Этот fallback извлекает **только** медиа‑изображения из самого поста (photo wrap + video thumbnail) и **не** должен подхватывать
   аватар канала или картинки из соседних постов. При сборке Telegraph страницы дополнительно есть safety‑net:
   слишком маленькие картинки (avatar‑like) удаляются, если в наборе есть полноценный постер.
+- При сборке Telegraph страницы события есть дополнительный repair для уже привязанных источников: если у события несколько
+  `event_source`, но сохранена только одна картинка, rebuild best-effort повторно забирает изображения из Telegram public page
+  и VK wall API по самим source URLs, дедуплицирует их и дописывает в `eventposter`/`event.photo_urls`. Это чинит старые
+  source-only/идемпотентные merges без повторного semantic import.
 - Если `message.text` в payload выглядит обрезанным (часто заканчивается на `…`/`...`), сервер может (best-effort)
   забрать полный текст поста из публичной HTML страницы `t.me/s/<username>/<message_id>` и использовать его как `source_text`
   для Smart Update (чтобы не терять строки про состав/поддержку/участников).
@@ -319,13 +328,14 @@ Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky
 - Для каналов с заданным `default_location` это значение считается **сильным prior** (защита от контекстных городов вроде «(г. Москва)» в описании участников), но это не «жёсткий игнор»:
   - если extractor извлёк явную **off-site площадку/адрес**, подтверждённые текстом поста, candidate сохраняет эту площадку вместо слепой подмены на `default_location`;
   - если extractor извлёк город, противоречащий `default_location`, Smart Update делает короткую LLM‑проверку и может переключить `city/location_*` на извлечённые значения (после чего сработает регион‑фильтр и out‑of‑region пост будет корректно отвергнут);
-  - если уверенности нет — остаётся `default_location`.
+  - если extractor выдал неподтверждённую off-site площадку или prose-фрагмент, сервер больше не заменяет её слепо на `default_location`: записывается только known/reference/text-grounded площадка, иначе candidate fail-closed без публичного venue-default drift.
 - Для постов-расписаний (несколько спектаклей в одном сообщении) применяется строгая фильтрация афиш по фактам события; если она неуверенна, но Kaggle уже выдал `event_data.posters` для конкретного события, используется event-level fallback (чтобы не терять релевантную афишу при отсутствующем времени в Telegram).
 
 ## Фильтры и санитаризация
 
 - **Custom emoji** (Telegram `MessageEntityCustomEmoji` / `<tg-emoji>`) вычищаются из текста перед публикацией в Telegraph (обычные Unicode‑эмодзи остаются).
-- **Розыгрыши билетов** (giveaway): Smart Update не делает детерминированного “вырезания” текста. LLM получает исходный текст и по инструкции игнорирует механику розыгрыша (условия участия, «подпишись/репост/коммент» и т.п.), сохраняя факты о событии. Если после разбора не остаётся признаков события — пост скипается.
+- **Розыгрыши билетов** (giveaway): Smart Update отделяет механику розыгрыша от фактов события, LLM сохраняет только grounded event facts. Если после разбора не остаётся признаков события — пост скипается; если событие импортируется, giveaway не делает его бесплатным.
+- **Аренда/бронь площадок**: посты про свободные купола/домики/залы, варианты вместимости и price tiers не импортируются как события, если источник не объявляет отдельную публичную программу с собственной attendable intent.
 - **Поздравления** (не‑ивент контент) не импортируются как события и не должны становиться источниками события (например посты «Поздравляем…» со списком ближайших спектаклей).
 - **Акции/промо**: промо‑фрагменты (скидки/промокоды/«акция») должны игнорироваться/удаляться **внутри LLM** по инструкциям промпта (детерминированного regex‑стрипинга нет). Если в посте есть полноценный анонс события (дата/время/место), он импортируется/мерджится.
 - OCR‑подсказка времени стала устойчивее: поддерживаются диапазоны (`10:00–18:00`), выбор времени при множественных упоминаниях на афише и защита от ложных совпадений типа `05.02` → `05:02` (дата на афише не должна становиться временем).

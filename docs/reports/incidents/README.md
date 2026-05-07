@@ -18,6 +18,42 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-05-80-stories-source-coverage.md`
+  - Scope: VK crawl/date-hint admission, Telegram Monitoring festival-program extraction, `@kraftmarket39` source coverage, and future `80 историй о главном` backfill.
+  - Must not regress: concrete festival event posts with title/date/time/venue/registration must reach the LLM-first import path and attach a durable `event_source`; Russian month-name dates like `16 мая 2026 г. в 16:00` must not be masked as phone-like noise before crawl admission.
+- `INC-2026-05-05-event-source-media-aggregation-gap.md`
+  - Scope: Telegraph event rebuild, `event_source` media rehydration, `eventposter`/`event.photo_urls`, Telegram public-page poster fallback, VK wall photo fetch.
+  - Must not regress: a multi-source event page must not show only the current row's single image when attached Telegram/VK sources still expose additional unique images; duplicate repost media must be deduped.
+- `INC-2026-05-05-80-stories-video-promo-gap.md`
+  - Scope: CherryFlash/CrumpleVideo festival visibility and future `promo` feature.
+  - Must not regress: failed/test video sessions must not be counted as public festival exposure, and future promo/festival selection work must explicitly verify `80 историй о главном` candidate visibility after source backfill.
+- `INC-2026-05-05-smart-update-gemma3-fallback-hallucination.md`
+  - Scope: Smart Update model-chain configuration, Google AI provider compatibility, writer-stage fallback policy, and production backfills with LLM enabled.
+  - Must not regress: a provider `NotFound` for the first-hop Smart Update model must fail closed for writer stages instead of falling through to broad fallback prose that can introduce unrelated event content.
+- `INC-2026-05-05-kitoboya-garage-date.md`
+  - Scope: Telegram Monitoring / VK auto-import / Smart Update exhibition date grounding, teaser handling, `course_promo` skip guard, long-running inferred-range correction, and production cleanup for the `Куплю гараж. Калининград` duplicate/date regression.
+  - Must not regress: exhibition/fair teasers without an exact day/range/end date must not materialize as first-of-month or message-date event cards; later exact announcements with `кураторские экскурсии` must not be skipped as course promos; and a later source-grounded opening date must be able to correct an inferred legacy long-run exhibition row through a real import + Smart Update replay.
+- `INC-2026-05-05-event-quality-regression.md`
+  - Scope: Telegram Monitoring / VK auto-import / Smart Update free/location/duplicate invariants, source/default venue fallback, same-ticket/same-slot matching, rental/non-event guards, production event inventory cleanup.
+  - Must not regress: zero or missing ticket price must not imply `is_free=true`; ticket giveaways or included-in-entry-ticket wording must not mark the event free; prose/unsupported locations must not be replaced by unrelated `default_location`; same real event must not survive as multiple cards when a specific ticket URL/date/place or near-identical same-slot source text proves identity.
+- `INC-2026-05-05-cherryflash-disk-full.md`
+  - Scope: `guide_excursions/kaggle_service.py`, `/data/guide_monitoring_results`, Fly `/data` volume, SQLite `/data/db.sqlite`, scheduled CherryFlash `popular_review`, production catch-up health checks.
+  - Must not regress: Guide monitoring result bundles must not fill the production SQLite volume; `database or disk is full` / `Errno 28` must trigger disk evidence collection and same-day CherryFlash catch-up if the local slot was missed.
+- `INC-2026-05-02-pre-daily-event-quality.md`
+  - Scope: Telegram Monitoring / VK auto-import event-local venue grounding, literal field-placeholder cleanup, canonical ticket/program titles, and pre-daily future duplicate/location audit.
+  - Must not regress: active today/future event cards must not borrow unrelated source/default venues when the event-local block names a different venue; field-name literals like `location_address` must not become public data; and one real event must not survive as multiple active cards before daily surfaces.
+- `INC-2026-05-01-future-event-quality-audit.md`
+  - Scope: Telegram Monitoring / VK auto-import future active event rows, prose-like `location_name`, source/default venue recovery, Smart Update duplicate merge guards, Bar Bastion future imports, `/daily`/Telegraph/month/day/video-announcement surfaces.
+  - Must not regress: future active event cards must not expose prose/schedule fragments as venues, and one real future event must not survive as multiple active public cards when source posts differ only by repost, ticket URL, title wording, or doors/start time.
+- `INC-2026-05-01-daily-location-drift.md`
+  - Scope: Telegram Monitoring Gemma venue extraction/review, Telegram candidate grounding, Smart Update weak/default time duplicate matching, VK source default-location repair, and May 1 daily catch-up.
+  - Must not regress: arbitrary prose/schedule fragments must not survive as public `location_name`; semantic venue repair must stay LLM-first rather than a growing phrase dictionary; unsupported extracted times must be weak anchors; known VK sources must not default unrelated events to `Калининград Сити Джаз Клуб`.
+- `INC-2026-04-30-tg-monitoring-event-quality-regressions.md`
+  - Scope: Telegram Monitoring Gemma extraction prompts/schema, schedule-rescue prompt, free/ticket semantics, Smart Update duplicate matching, production cleanup for false-free/work-hours/duplicate event rows from the 2026-04-30 batch.
+  - Must not regress: missing ticket price must not mean free; ticket links/status/sale wording must not produce `is_free=true` without explicit free-entry evidence; institution work-hours/holiday-opening notices must not be imported as events by schedule rescue; same real event must not survive as multiple public cards because title/location wording drifted.
+- `INC-2026-04-30-tg-monitoring-work-schedule-false-skips.md`
+  - Scope: `smart_event_update.py` deterministic non-event guard `work_schedule`, Telegram Monitoring server import, `telegram_scanned_message` skip diagnostics, `/daily` recently-added inventory, production catch-up for `@kenigatom/496` and `@kraftmarket39/199`.
+  - Must not regress: concrete future Telegram events at a museum/library venue or an address containing `Музейная` must not be skipped as `skipped_non_event:work_schedule` unless the source is actually a work-hours notice.
 - `INC-2026-04-28-vk-smart-update-false-skips.md`
   - Scope: `smart_event_update.py` online-only guard, `festival_queue.py` festival-context routing, `docs/llm/prompts.md`, VK auto-import `persist_skipped` handling, production `vk_inbox`/`ops_run` catch-up evidence.
   - Must not regress: a concrete offline VK event must not be skipped only because it has online registration, and a single masterclass/lecture/show/ride inside a festival/cycle/program context must create/update an event instead of being routed as a whole `festival_post`.
@@ -104,3 +140,4 @@
    - required evidence;
    - follow-up actions.
 4. Инцидент не считается дисциплинированно закрытым, пока fix не в проде, не достижим из `origin/main`, не покрыт regression evidence и не заведены follow-up actions.
+5. Для source-import / Smart Update quality incidents regression evidence обязано включать replay сырых offending source artifacts через production import path + Smart Update на prod snapshot/shadow DB. Prompt diff, unit tests или ручной SQL-аудит без такого replay не являются достаточным closure.

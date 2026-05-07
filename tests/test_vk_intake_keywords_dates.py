@@ -400,8 +400,33 @@ def test_extract_event_ts_hint_numeric_date_survives_phone_normalization():
     assert (dt.year, dt.month, dt.day) == (2024, 10, 20)
 
 
+def test_extract_event_ts_hint_month_name_year_time_survives_phone_normalization():
+    publish_dt = real_datetime(2026, 5, 5, tzinfo=main.LOCAL_TZ)
+    text = (
+        "Заводы и пароходы. Постсоветское индустриальное наследие Калининграда.\n"
+        "В рамках фестиваля «80 историй о главном».\n"
+        "📅16 мая 2026 г. в 16:00\n"
+        "📍лекционный зал, 4 этаж"
+    )
+    ts = extract_event_ts_hint(text, publish_ts=publish_dt)
+    assert ts is not None
+    dt = real_datetime.fromtimestamp(ts, tz=main.LOCAL_TZ)
+    assert (dt.year, dt.month, dt.day, dt.hour, dt.minute) == (2026, 5, 16, 16, 0)
+
+
+def test_vk_llm_rescue_accepts_festival_registration_post_without_ts_hint():
+    text = (
+        "Открыли регистрацию на лекцию «Заводы и пароходы» "
+        "в рамках фестиваля «80 историй о главном». "
+        "Необходима регистрация, лекционный зал библиотеки. "
+        "16 мая 2026 г. в 16:00."
+    )
+
+    assert vk_intake._vk_should_rescue_to_llm_without_ts_hint(text) is True
+
+
 @pytest.mark.asyncio
-async def test_build_drafts_library_defaults_to_free(monkeypatch):
+async def test_build_drafts_library_without_free_evidence_stays_not_free(monkeypatch):
     async def fake_parse(*args, **kwargs):
         return [
             {
@@ -415,6 +440,27 @@ async def test_build_drafts_library_defaults_to_free(monkeypatch):
 
     drafts, festival_payload = await vk_intake.build_event_drafts_from_vk(
         "Встреча читателей в уютной библиотеке"
+    )
+
+    assert drafts and drafts[0].is_free is False
+    assert festival_payload is None
+
+
+@pytest.mark.asyncio
+async def test_build_drafts_library_explicit_free_stays_free(monkeypatch):
+    async def fake_parse(*args, **kwargs):
+        return [
+            {
+                "title": "Лекция в библиотеке",
+                "location_name": "Центральная библиотека",
+                "location_address": "ул. Ленина, 10",
+            }
+        ]
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse, raising=False)
+
+    drafts, festival_payload = await vk_intake.build_event_drafts_from_vk(
+        "Встреча читателей в библиотеке. Вход свободный."
     )
 
     assert drafts and drafts[0].is_free is True

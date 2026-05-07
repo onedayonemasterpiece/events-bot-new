@@ -30,7 +30,7 @@ city              - city name only; do not duplicate it in `location_address`
 ticket_price_min  - minimum ticket price as integer or null
 ticket_price_max  - maximum ticket price as integer or null
 ticket_link       - URL for purchasing tickets **or** registration form if present; ignore map service links such as https://yandex.ru/maps/
-is_free           - true if explicitly stated the event is free. Exception: blood donation actions (“День донора”, “донорская акция”, “сдача крови”, “станция переливания крови”) are free-to-attend — set `is_free=true` even if “бесплатно” is not written.
+is_free           - true only if the source explicitly states free attendance/free entry/free registration/no fee. Missing price is unknown, not free. If the source has a ticket link, ticket sale/status, or paid venue entry and no explicit free-attendance evidence, set `is_free=false`. Exception: blood donation actions (“День донора”, “донорская акция”, “сдача крови”, “станция переливания крови”) are free-to-attend — set `is_free=true` even if “бесплатно” is not written.
 pushkin_card     - true if the event accepts the Пушкинская карта
 event_type       - one of: спектакль, выставка, концерт, ярмарка, лекция, встреча, мастер-класс, кинопоказ, спорт
 emoji            - an optional emoji representing the event
@@ -41,6 +41,10 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 
 **Money / ticket price rules (important):**
 - `ticket_price_min/max` must describe the **cost to attend** (tickets/entry/participation fee).
+- Absence of a visible price does not make the event free. Use `is_free=true`
+  only for explicit free-attendance evidence. Ticket links, phrases like
+  “билеты”, “продажа”, “купить билет”, or a ticket status without explicit
+  free-entry wording mean the event is not free.
 - Do NOT treat money paid **to participants** as a ticket price: `компенсация`, `вознаграждение`, `выплата`, `гонорар`, `приз`, `подарок`, cashback/кэшбэк.
 - For blood donation actions, donor compensation amounts (e.g. “компенсация 1063 руб.”) are NOT tickets: keep `ticket_price_min/max=null` and set `is_free=true`.
 
@@ -48,6 +52,7 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 - The title MUST be grounded in the source text (or poster OCR if provided). Do not invent names, nicknames, or weird words that do not appear in the input.
 - If the post does not contain an explicit name, use a neutral descriptive title based on `event_type` and the venue (e.g. "Выставка — Музей …", "Лекция — …"), but still do NOT introduce new terms.
 - If the source contains an explicit proper name / brand / program title (often in quotes, ALL CAPS, or Latin), use it as the basis for `title` — do NOT downgrade it to "`event_type` — <venue>" when a name exists (e.g. "ЕвроДэнс'90", not "Концерт — Янтарь холл").
+- If a post is written as in-character promo copy, but its ticket URL/page or clear program title gives the canonical attendee-facing title, use that canonical title rather than a plot/in-character phrase.
 - If the source clearly describes a standup/comedy show (e.g. contains “стендап”, “stand-up”, “комик”), but the show name is metaphorical or misleading, make the format explicit in the title (e.g. "Стендап: <название>"). Keep `event_type` as `концерт` (closest available) and prefer 🎤 as `emoji` when appropriate.
 - Avoid typos and nonsense tokens (e.g. made-up 3–4 letter words). If in doubt, simplify the title.
 
@@ -149,10 +154,12 @@ Guidelines:
 - Do NOT create events out of course/program advertisements ("старт курса", "набор", multi-session training programs)
   unless it's explicitly a single attendable session (e.g. one-day masterclass) with a concrete date+venue (and ideally time).
 - Do NOT create events out of institution working-hours notices (e.g. "график/режим/часы работы",
-  "праздничные/выходные дни", "санитарный день", "расширенный график").
+  "санитарный день", "не работает/закрыто", "расширенный график").
   Dates/times in such posts describe opening hours, not event schedule.
-  Return no events unless the post explicitly announces an attendable activity with action wording
-  (e.g. "состоится", "пройдет", "приглашаем") and concrete event details.
+  Do NOT classify a post as a working-hours notice merely because it mentions a museum/library venue,
+  an address like "Музейная аллея", weekdays, dates, or times. If it announces attendee-facing
+  lectures, shows, talks, workshops, excursions, or festival program slots with concrete dates/times,
+  extract those events even when they happen at a museum or library.
 - Do NOT create events out of post-event reports / recaps. If the text mainly describes what already happened
   (past-tense narrative like "мы провели/исследовали/работали", after-the-fact summary like "было здорово",
   gratitude/wrap-up like "спасибо ...", "скоро увидимся вновь") and there is no concrete attendable future anchor,
@@ -163,6 +170,9 @@ Guidelines:
   (“сегодня/завтра/в эту субботу”), return no events — do NOT default to “today”.
 - The “Known venues” list is for normalising venues that are explicitly mentioned (or provided as an explicit default hint).
   Do NOT pick a random venue just because it contains a similar word (e.g. “ворота”).
+- For multi-date, multi-event, timetable, digest, or repost posts, each event's venue fields must come from the local block nearest that event's own date/title. Do NOT reuse a venue/default/source hint from another block when the event-local block explicitly names its own venue/address.
+- Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
+- If the source/group/default location conflicts with an explicitly named event-local venue (for example a repost from a bar about a library event), prefer the explicit venue in the event text.
 - `city` must be the city name only (no street/house number). If the city is unknown, return an empty string.
 - If the year is missing, choose the nearest future date relative to ‘Today’ (from the system header). If the day/month has already passed this year, roll the year forward.
 - Omit any events dated before today.

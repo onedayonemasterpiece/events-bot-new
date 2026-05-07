@@ -107,6 +107,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - duplicate prevention is based on remote handoff evidence: a matching session with a non-local kernel ref plus `cherryflash-session-*` dataset suppresses catch-up even if local status later drifts.
 - **kaggle recovery** – resumes in-flight Kaggle jobs after restarts, including `tg_monitoring` and `guide_monitoring`.
   - `guide_monitoring` now keeps a persisted copy of the downloaded results bundle under `GUIDE_MONITORING_RESULTS_STORE_ROOT` (default `/data/guide_monitoring_results`), so a restart during server import or scheduled digest publish can resume from the saved `results_path` instead of depending on a second Kaggle download.
+  - before and after copying a new guide output bundle, the server prunes old `guide-excursions-*` directories in that store by age/count/size/free-space guard. This is production-critical because the store shares Fly `/data` with SQLite; without retention, old recovery bundles can trigger `database or disk is full` and drop daily scheduler slots.
   - for scheduled `full` guide runs with `ENABLE_GUIDE_DIGEST_SCHEDULED=1`, recovery is responsible for finishing both the import and the same-job digest auto-publish if the process died in between.
 
 ## Health Checks
@@ -147,6 +148,8 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `GUIDE_EXCURSIONS_LIGHT_TIMES_LOCAL` / `GUIDE_EXCURSIONS_FULL_TIME_LOCAL` / `GUIDE_EXCURSIONS_TZ` – guide monitoring light/full schedule in local time zone.
 - `GUIDE_MONITORING_MISFIRE_GRACE_SECONDS` – per-job APScheduler misfire window for the critical scheduled `full` guide slot (default: `1800`).
 - `GUIDE_MONITORING_CATCHUP_LOOKBACK_SECONDS` – startup/watchdog lookback for the last missed critical `full` guide slot (default: `86400`).
+- `GUIDE_MONITORING_RESULTS_STORE_ROOT` – persistent store for downloaded Guide monitoring Kaggle output bundles (default: `/data/guide_monitoring_results` on Fly).
+- `GUIDE_MONITORING_RESULTS_STORE_RETENTION_DAYS` / `GUIDE_MONITORING_RESULTS_STORE_MAX_RUNS` / `GUIDE_MONITORING_RESULTS_STORE_MAX_MB` / `GUIDE_MONITORING_RESULTS_STORE_MIN_FREE_MB` – retention guard for the persistent result store (defaults: `2` days, `6` runs including the current one, `256` MB total, and `256` MB free-space target). This guard runs before and after a new bundle is copied so old guide recovery artifacts cannot fill the SQLite volume.
 - `ENABLE_GUIDE_DIGEST_SCHEDULED` – after a successful scheduled `full` guide scan, automatically publish the `new_occurrences` digest in the same job instead of a separate cron slot.
 - `ENABLE_V_TOMORROW_SCHEDULED` – enable scheduled automatic `/v` run for tomorrow (`ENABLE_V_TEST_TOMORROW_SCHEDULED` remains a legacy alias).
 - `V_TOMORROW_TIME_LOCAL` / `V_TOMORROW_TZ` – local schedule for automatic `/v` run. When `ENABLE_V_TOMORROW_SCHEDULED=1`, these canonical vars own the slot; `V_TEST_TOMORROW_*` remain legacy aliases only for legacy-enabled envs.

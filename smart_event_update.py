@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, or_, select
 
@@ -3589,6 +3590,32 @@ _COURSE_PROMO_RE = re.compile(
     r"професси\w*\s+переподготовк\w*"
     r")\b"
 )
+_COURSE_PROMO_STRONG_RE = re.compile(
+    r"(?i)\b("
+    r"старт\s+курс\w*|"
+    r"набор\s+на\s+курс|"
+    r"курс\w*|"
+    r"обучени\w*|"
+    r"программ\w*\s+курс\w*|"
+    r"поток\s+|"
+    r"модул\w*|"
+    r"домашн\w*\s+задан\w*|"
+    r"сертификат\w*|"
+    r"професси\w*\s+переподготовк\w*"
+    r")\b"
+)
+_UNSUPPORTED_EXHIBITION_TEASER_RE = re.compile(
+    r"(?iu)\b("
+    r"готовим|"
+    r"готовится|"
+    r"скоро\s+анонс|"
+    r"анонс\s+через|"
+    r"анонсируем\s+(?:чуть\s+)?позже|"
+    r"точн\w+\s+дат\w+[^.\n]{0,80}анонсир\w+|"
+    r"в\s+(?:мае|июне|июле|августе|сентябре|октябре|ноябре|декабре|январе|феврале|марте|апреле)\s+[^.\n]{0,120}откро\w+|"
+    r"скоро\s+откро\w+"
+    r")\b"
+)
 
 _SERVICE_PROMO_OCCASION_RE = re.compile(
     r"(?iu)\b("
@@ -3640,10 +3667,6 @@ _WORK_SCHEDULE_RE = re.compile(
     r"расширенн\w*\s+график\w*|"
     r"режим\s+работ\w*|"
     r"часы\s+работ\w*|"
-    r"в\s+праздничн\w*\s+дни|"
-    r"в\s+выходн\w*\s+дни|"
-    r"праздничн\w*\s+дни|"
-    r"выходн\w*\s+дни|"
     r"санитарн\w*\s+день|"
     r"не\s+работа(?:ет|ют)|"
     r"работаем\s+по\s+(?:обычн\w*|нов\w*)\s+график\w*|"
@@ -3721,6 +3744,32 @@ _BLOOD_DONATION_CONTEXT_RE = re.compile(
     r"центр\w*\s+кров\w*|"
     r"служб\w*\s+кров\w*|"
     r"кроводач\w*"
+    r")\b"
+)
+_FREE_CONTRADICTION_RE = re.compile(
+    r"(?iu)\b("
+    r"розыгрыш\w*|разыгрыва\w*|выигра\w*\s+билет\w*|дарим\s+билет\w*|"
+    r"главн\w*\s+приз\w*\s*[—-]?\s*билет\w*|"
+    r"входит?\s+во\s+входн\w*\s+билет\w*|"
+    r"по\s+(?:входн\w*\s+)?билет\w*\s+(?:музе[яй]|зоопарк\w*|парка|площадк\w*)|"
+    r"в\s+стоимост\w*\s+(?:входн\w*\s+)?билет\w*"
+    r")\b"
+)
+_RENTAL_BOOKING_RE = re.compile(
+    r"(?iu)\b("
+    r"аренд\w*|"
+    r"свободн\w*\s+(?:купол\w*|домик\w*|зал\w*|беседк\w*)|"
+    r"заброниру\w*\s+(?:купол\w*|домик\w*|зал\w*|беседк\w*)|"
+    r"брон(?:ь|ирован\w*)\s+(?:купол\w*|домик\w*|зал\w*|беседк\w*)|"
+    r"купол\w*\s+для\s+отдых\w*|"
+    r"беседк[аи]\s*-\s*домик\w*"
+    r")\b"
+)
+_RENTAL_BOOKING_DETAIL_RE = re.compile(
+    r"(?iu)\b("
+    r"будни\w*|выходн\w*|стоимост\w*|вариант\w*|вместимост\w*|до\s+\d+\s+человек|"
+    r"\d{2,6}\s*(?:₽|руб|р\.)|на\s+(?:семь[еёй]|компани\w*)|"
+    r"пространств\w*\s+для\s+отдых\w*"
     r")\b"
 )
 _EVENT_INVITE_RE = re.compile(
@@ -3983,8 +4032,21 @@ def _looks_like_course_promo(title: str | None, text: str | None) -> bool:
         return False
     if not _COURSE_PROMO_RE.search(combined):
         return False
+    # Words like "кураторские экскурсии" are common in exhibition announcements.
+    # Do not let the broad `куратор*` token override a grounded dated exhibition.
+    if (
+        _EVENT_INVITE_RE.search(combined)
+        and re.search(r"(?iu)\bвыставк\w*\b", combined)
+        and (
+            re.search(r"\b([01]?\d|2[0-3])[:.][0-5]\d\b", combined)
+            or _DATE_SIGNAL_RE.search(combined)
+            or _TICKET_PRICE_CONTEXT_RE.search(combined)
+        )
+        and not _COURSE_PROMO_STRONG_RE.search(combined)
+    ):
+        return False
     # If it's clearly a one-off masterclass/lecture with concrete start time, keep it.
-    if re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", combined) and _EVENT_INVITE_RE.search(combined):
+    if re.search(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", combined) and _EVENT_INVITE_RE.search(combined):
         return False
     # "Старт курса" and multi-session language strongly indicates non-event promo content.
     if re.search(r"(?i)\bна\s+кажд(ом|ом\s+из)\s+заняти\w*\b", combined):
@@ -4019,6 +4081,33 @@ def _looks_like_service_promo_not_event(title: str | None, text: str | None) -> 
     return False
 
 
+def _looks_like_rental_booking_not_event(title: str | None, text: str | None) -> bool:
+    """Detect venue/space availability posts that are not attendable events."""
+
+    combined = "\n".join([str(title or ""), str(text or "")]).strip()
+    if not combined:
+        return False
+    low = combined.casefold()
+    if not _RENTAL_BOOKING_RE.search(low):
+        return False
+    # A real public activity can mention a rented venue. Keep it when the source
+    # clearly announces a program item rather than only inventory/price tiers.
+    if _EVENT_ACTION_INVITE_RE.search(low) and re.search(
+        r"(?iu)\b(концерт\w*|лекци\w*|мастер-?класс\w*|спектакл\w*|показ\w*|экскурси\w*)\b",
+        low,
+    ):
+        return False
+    return bool(_RENTAL_BOOKING_DETAIL_RE.search(low))
+
+
+def _free_claim_contradicted_by_source(candidate: EventCandidate, text: str | None) -> bool:
+    if candidate.ticket_price_min and candidate.ticket_price_min > 0:
+        return True
+    if candidate.ticket_price_max and candidate.ticket_price_max > 0:
+        return True
+    return bool(_FREE_CONTRADICTION_RE.search(str(text or "")))
+
+
 def _looks_like_work_schedule_notice(title: str | None, text: str | None) -> bool:
     """Institution work schedules must not become events."""
     combined = "\n".join([str(title or ""), str(text or "")]).strip()
@@ -4027,7 +4116,7 @@ def _looks_like_work_schedule_notice(title: str | None, text: str | None) -> boo
     low = combined.casefold()
     has_schedule_headline = bool(_WORK_SCHEDULE_RE.search(low))
     has_schedule_details = bool(_WORK_SCHEDULE_DETAIL_RE.search(combined))
-    if not (has_schedule_headline or (("музей" in low or "библиотек" in low) and has_schedule_details)):
+    if not has_schedule_headline:
         return False
     # If the post is clearly announcing a concrete attendable event, keep it.
     # Use action verbs, not generic nouns ("выставка/концерт"), otherwise
@@ -7281,6 +7370,46 @@ def _candidate_date_range(candidate: EventCandidate) -> tuple[date | None, date 
     return start, end
 
 
+def _candidate_date_is_grounded_in_sources(candidate: EventCandidate) -> bool:
+    cand_start = _parse_iso_date(candidate.date)
+    if not cand_start:
+        return False
+    hay_parts = [
+        str(candidate.source_text or ""),
+        str(candidate.raw_excerpt or ""),
+    ]
+    for poster in candidate.posters or []:
+        hay_parts.append(str(getattr(poster, "ocr_text", "") or ""))
+        hay_parts.append(str(getattr(poster, "ocr_title", "") or ""))
+    pairs = _extract_day_month_pairs("\n".join(part for part in hay_parts if part).strip())
+    return (int(cand_start.day), int(cand_start.month)) in pairs
+
+
+def _looks_like_unsupported_exhibition_teaser_date(candidate: EventCandidate, text: str | None) -> bool:
+    event_type = _normalize_event_type_value(
+        candidate.title,
+        candidate.raw_excerpt or candidate.source_text,
+        candidate.event_type,
+    )
+    if event_type not in {"выставка", "экспозиция", "ярмарка"}:
+        return False
+    if not str(candidate.date or "").strip():
+        return False
+    if _candidate_date_is_grounded_in_sources(candidate):
+        return False
+    combined = "\n".join(
+        [
+            str(candidate.title or ""),
+            str(text or ""),
+            str(candidate.source_text or ""),
+            str(candidate.raw_excerpt or ""),
+        ]
+    ).strip()
+    if not combined:
+        return False
+    return bool(_UNSUPPORTED_EXHIBITION_TEASER_RE.search(combined))
+
+
 def _smart_update_skip_past_events_enabled() -> bool:
     raw = (os.getenv("SMART_UPDATE_SKIP_PAST_EVENTS") or "1").strip().lower()
     return raw in {"1", "true", "yes", "on"}
@@ -7333,6 +7462,61 @@ def _normalize_url(url: str | None) -> str | None:
     if value.startswith("http://") or value.startswith("https://"):
         value = value.rstrip("/")
     return value
+
+
+_TRACKING_QUERY_KEYS = {
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "yclid",
+    "fbclid",
+    "gclid",
+}
+
+
+def _normalize_ticket_url_for_match(url: str | None) -> str | None:
+    norm = _normalize_url(url)
+    if not norm:
+        return None
+    try:
+        parts = urlsplit(norm)
+    except Exception:
+        return norm
+    query = [
+        (k, v)
+        for k, v in parse_qsl(parts.query, keep_blank_values=True)
+        if k.casefold() not in _TRACKING_QUERY_KEYS
+    ]
+    return urlunsplit(
+        (
+            parts.scheme.casefold(),
+            parts.netloc.casefold(),
+            parts.path.rstrip("/"),
+            urlencode(query, doseq=True),
+            "",
+        )
+    )
+
+
+def _specific_ticket_url_for_match(url: str | None) -> str | None:
+    norm = _normalize_ticket_url_for_match(url)
+    if not norm:
+        return None
+    try:
+        path = urlsplit(norm).path.strip("/")
+    except Exception:
+        path = ""
+    if not path:
+        return None
+    if path.casefold() in {"tickets", "ticket", "afisha", "events", "event"}:
+        return None
+    if re.search(r"\d", path):
+        return norm
+    if "-" in path and len(path) >= 12:
+        return norm
+    return None
 
 
 def _is_http_url(url: str | None) -> bool:
@@ -9958,7 +10142,15 @@ def _deterministic_longrun_exhibition_exact_title_match(
         if not _ranges_overlap(cand_start, cand_end, ev_start, ev_end):
             continue
         ev_end_iso = str(getattr(ev, "end_date", "") or "").strip() or None
-        if cand_end_iso and ev_end_iso and cand_end_iso != ev_end_iso:
+        if (
+            cand_end_iso
+            and ev_end_iso
+            and cand_end_iso != ev_end_iso
+            and not (
+                bool(getattr(ev, "end_date_is_inferred", False))
+                or bool(getattr(candidate, "end_date_is_inferred", False))
+            )
+        ):
             continue
         same_source = _event_has_source_url_hint(ev, candidate.source_url)
         if candidate.location_name and getattr(ev, "location_name", None):
@@ -9985,7 +10177,7 @@ def _deterministic_ticket_source_anchor_match(
     candidate: EventCandidate,
     events: Sequence[Event],
 ) -> tuple[Event | None, str]:
-    cand_ticket = _normalize_url(candidate.ticket_link)
+    cand_ticket = _normalize_ticket_url_for_match(candidate.ticket_link)
     cand_date = str(candidate.date or "").strip()
     cand_loc = str(candidate.location_name or "").strip()
     cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
@@ -10003,7 +10195,7 @@ def _deterministic_ticket_source_anchor_match(
             continue
         if not _event_candidate_location_matches(ev, candidate):
             continue
-        if _normalize_url(getattr(ev, "ticket_link", None)) != cand_ticket:
+        if _normalize_ticket_url_for_match(getattr(ev, "ticket_link", None)) != cand_ticket:
             continue
         if not _source_texts_look_nearly_identical(source_text, getattr(ev, "source_text", None)):
             continue
@@ -10037,11 +10229,79 @@ def _deterministic_ticket_source_anchor_match(
     return None, ""
 
 
+def _deterministic_same_ticket_same_place_match(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> tuple[Event | None, str]:
+    cand_ticket = _specific_ticket_url_for_match(candidate.ticket_link)
+    cand_date = str(candidate.date or "").strip()
+    cand_loc = str(candidate.location_name or "").strip()
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    if not (cand_ticket and cand_date and cand_loc):
+        return None, ""
+
+    matches: list[Event] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if str(getattr(ev, "date", "") or "").strip() != cand_date:
+            continue
+        if not _event_candidate_location_matches(ev, candidate):
+            continue
+        if _specific_ticket_url_for_match(getattr(ev, "ticket_link", None)) != cand_ticket:
+            continue
+        if _has_explicit_time_conflict(cand_time, _event_anchor_time(ev)):
+            continue
+        matches.append(ev)
+
+    if len(matches) == 1:
+        return matches[0], "deterministic_specific_ticket_same_place"
+    if matches:
+        sigs = {_anchor_signature_for_duplicate_event(ev) for ev in matches}
+        if len(sigs) == 1:
+            return _pick_best_duplicate_event(matches), "deterministic_specific_ticket_same_place"
+    return None, ""
+
+
+def _deterministic_same_slot_near_text_match(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> tuple[Event | None, str]:
+    cand_date = str(candidate.date or "").strip()
+    cand_loc = str(candidate.location_name or "").strip()
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    source_text = candidate.source_text or candidate.raw_excerpt
+    if not (cand_date and cand_loc and source_text):
+        return None, ""
+
+    matches: list[Event] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if str(getattr(ev, "date", "") or "").strip() != cand_date:
+            continue
+        if not _event_candidate_location_matches(ev, candidate):
+            continue
+        if _has_explicit_time_conflict(cand_time, _event_anchor_time(ev)):
+            continue
+        if not _source_texts_look_nearly_identical(source_text, getattr(ev, "source_text", None)):
+            continue
+        matches.append(ev)
+
+    if len(matches) == 1:
+        return matches[0], "deterministic_same_slot_near_text"
+    if matches:
+        sigs = {_anchor_signature_for_duplicate_event(ev) for ev in matches}
+        if len(sigs) == 1:
+            return _pick_best_duplicate_event(matches), "deterministic_same_slot_near_text"
+    return None, ""
+
+
 def _deterministic_copy_post_ticket_same_day_match(
     candidate: EventCandidate,
     events: Sequence[Event],
 ) -> Event | None:
-    cand_ticket = _normalize_url(candidate.ticket_link)
+    cand_ticket = _normalize_ticket_url_for_match(candidate.ticket_link)
     cand_date = str(candidate.date or "").strip()
     source_text = candidate.source_text or candidate.raw_excerpt
     if not (cand_ticket and cand_date and source_text):
@@ -10052,7 +10312,7 @@ def _deterministic_copy_post_ticket_same_day_match(
             continue
         if str(getattr(ev, "date", "") or "").strip() != cand_date:
             continue
-        if _normalize_url(getattr(ev, "ticket_link", None)) != cand_ticket:
+        if _normalize_ticket_url_for_match(getattr(ev, "ticket_link", None)) != cand_ticket:
             continue
         if not _source_texts_look_nearly_identical(source_text, getattr(ev, "source_text", None)):
             continue
@@ -11001,6 +11261,18 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="congrats_notice")
+        if _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text):
+            logger.info(
+                "smart_update.skip reason=unsupported_exhibition_teaser_date source_type=%s source_url=%s title=%s date=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+                candidate.date,
+            )
+            return SmartUpdateResult(
+                status="skipped_non_event",
+                reason="unsupported_exhibition_teaser_date",
+            )
         if _looks_like_course_promo(clean_title, combined_text):
             logger.info(
                 "smart_update.skip reason=course_promo source_type=%s source_url=%s title=%s",
@@ -11017,6 +11289,14 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="service_promo")
+        if _looks_like_rental_booking_not_event(clean_title, combined_text):
+            logger.info(
+                "smart_update.skip reason=rental_booking source_type=%s source_url=%s title=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+            )
+            return SmartUpdateResult(status="skipped_non_event", reason="rental_booking")
         outage_reason = _looks_like_utility_outage_or_road_closure(clean_title, combined_text)
         if outage_reason:
             logger.info(
@@ -11104,6 +11384,25 @@ async def _smart_event_update_impl(
                 before_min,
                 before_max,
             )
+
+    free_probe_text = "\n".join(
+        [
+            clean_title,
+            clean_source_text or "",
+            clean_raw_excerpt or "",
+        ]
+    ).strip()
+    if candidate.is_free is True and _free_claim_contradicted_by_source(candidate, free_probe_text):
+        candidate.is_free = False
+        note = "Бесплатность снята: источник противоречит free-attendance"
+        if note not in text_filter_facts:
+            text_filter_facts.append(note)
+        logger.info(
+            "smart_update.free_dropped source_type=%s source_url=%s title=%s",
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(clean_title),
+        )
 
     # Blood donation actions are free-to-attend; mentions of money are typically about
     # donor compensation, not an entrance fee. If no ticket price survived grounding,
@@ -11538,12 +11837,12 @@ async def _smart_event_update_impl(
             match_reason = ""
 
         candidate_hashes = _poster_hashes(candidate.posters)
-        ticket_norm = _normalize_url(candidate.ticket_link)
+        ticket_norm = _normalize_ticket_url_for_match(candidate.ticket_link)
 
         strong_matches: dict[int, int] = {}
         if ticket_norm:
             for ev in shortlist:
-                if _normalize_url(ev.ticket_link) == ticket_norm and ev.id:
+                if _normalize_ticket_url_for_match(ev.ticket_link) == ticket_norm and ev.id:
                     strong_matches[ev.id] = strong_matches.get(ev.id, 0) + 3
         if candidate_hashes:
             for ev in shortlist:
@@ -11580,6 +11879,34 @@ async def _smart_event_update_impl(
             if ticket_anchor_match is not None:
                 match_event = ticket_anchor_match
                 match_reason = ticket_anchor_reason
+                logger.info(
+                    "smart_update.match type=%s event_id=%s",
+                    match_reason,
+                    getattr(match_event, "id", None),
+                )
+
+        if match_event is None:
+            same_ticket_match, same_ticket_reason = _deterministic_same_ticket_same_place_match(
+                candidate,
+                shortlist,
+            )
+            if same_ticket_match is not None:
+                match_event = same_ticket_match
+                match_reason = same_ticket_reason
+                logger.info(
+                    "smart_update.match type=%s event_id=%s",
+                    match_reason,
+                    getattr(match_event, "id", None),
+                )
+
+        if match_event is None:
+            near_text_match, near_text_reason = _deterministic_same_slot_near_text_match(
+                candidate,
+                shortlist,
+            )
+            if near_text_match is not None:
+                match_event = near_text_match
+                match_reason = near_text_reason
                 logger.info(
                     "smart_update.match type=%s event_id=%s",
                     match_reason,
@@ -11755,6 +12082,8 @@ async def _smart_event_update_impl(
                 narrow_reason = str(match_reason or "").strip().lower()
                 safe_single = narrow_reason in {
                     "deterministic_specific_ticket_same_slot",
+                    "deterministic_specific_ticket_same_place",
+                    "deterministic_same_slot_near_text",
                     "deterministic_doors_start_ticket_bridge",
                 }
                 try:
@@ -11845,10 +12174,7 @@ async def _smart_event_update_impl(
         elif candidate.is_free is False:
             is_free_value = False
         else:
-            is_free_value = bool(
-                candidate.ticket_price_min == 0
-                and (candidate.ticket_price_max in (0, None))
-            )
+            is_free_value = False
         # Seed with excerpt/title only; never publish full source_text verbatim as a fallback.
         # Full source is preserved separately in `event.source_text`/`event_source`.
         description_value = (clean_raw_excerpt or clean_title or "").strip()
@@ -12697,6 +13023,34 @@ async def _smart_event_update_impl(
                 event_db.location_address = candidate.location_address.strip()
                 updated_fields = True
                 updated_keys.append("location_address")
+        elif (
+            candidate.date
+            and candidate.date != (event_db.date or "")
+            and bool(getattr(event_db, "end_date_is_inferred", False))
+            and _is_long_event_type_value(getattr(event_db, "event_type", None) or candidate.event_type)
+            and _candidate_date_is_grounded_in_sources(candidate)
+            and (
+                not candidate.location_name
+                or not getattr(event_db, "location_name", None)
+                or _event_candidate_location_matches(event_db, candidate)
+            )
+        ):
+            # A later exact source can correct legacy exhibition rows created from vague
+            # month/message-date teasers. Only do this when the old range is inferred and
+            # the new start date is explicitly grounded in the candidate source/OCR.
+            event_db.date = candidate.date
+            updated_fields = True
+            if "date" not in updated_keys:
+                updated_keys.append("date")
+            conflicting.pop("date", None)
+            if _apply_event_end_date(
+                event_db,
+                end_date=candidate.end_date,
+                inferred=bool(candidate.end_date_is_inferred),
+                updated_keys=updated_keys,
+            ):
+                updated_fields = True
+                conflicting.pop("end_date", None)
 
         # Operator-entered sources are allowed to корректировать title even if the
         # candidate doesn't bring enough new text/posters for LLM merge.
@@ -13544,13 +13898,6 @@ async def _smart_event_update_impl(
             updated_keys.append("pushkin_card")
         if not event_db.is_free:
             if candidate.is_free is True:
-                event_db.is_free = True
-                updated_fields = True
-                updated_keys.append("is_free")
-            elif (
-                event_db.ticket_price_min == 0
-                and (event_db.ticket_price_max in (0, None))
-            ):
                 event_db.is_free = True
                 updated_fields = True
                 updated_keys.append("is_free")

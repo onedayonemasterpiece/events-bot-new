@@ -115,6 +115,22 @@ def _resolve_results_store_root() -> Path:
 
 
 RESULTS_STORE_ROOT = _resolve_results_store_root()
+RESULTS_STORE_RETENTION_DAYS = max(
+    0,
+    _env_int("GUIDE_MONITORING_RESULTS_STORE_RETENTION_DAYS", 2),
+)
+RESULTS_STORE_MAX_RUNS = max(
+    1,
+    _env_int("GUIDE_MONITORING_RESULTS_STORE_MAX_RUNS", 6),
+)
+RESULTS_STORE_MAX_MB = max(
+    0,
+    _env_int("GUIDE_MONITORING_RESULTS_STORE_MAX_MB", 256),
+)
+RESULTS_STORE_MIN_FREE_MB = max(
+    0,
+    _env_int("GUIDE_MONITORING_RESULTS_STORE_MIN_FREE_MB", 256),
+)
 
 
 def _require_env_any(*names: str) -> str:
@@ -887,14 +903,126 @@ def persist_downloaded_guide_results(results_path: str | Path, run_id: str) -> P
     source_root = source_path.parent
     target_root = (RESULTS_STORE_ROOT / f"guide-excursions-{run_id}").resolve()
     target_root.parent.mkdir(parents=True, exist_ok=True)
+    _prune_results_store(exclude={target_root})
     if source_root != target_root:
         if target_root.exists():
             shutil.rmtree(target_root)
         shutil.copytree(source_root, target_root)
+    _prune_results_store(exclude={target_root})
     target_path = target_root / source_path.name
     if not target_path.is_file():
         raise RuntimeError(f"Persisted guide results missing: {target_path}")
     return target_path
+
+
+def _path_size_bytes(path: Path) -> int:
+    if not path.exists():
+        return 0
+    if path.is_file():
+        try:
+            return int(path.stat().st_size)
+        except OSError:
+            return 0
+    total = 0
+    for child in path.rglob("*"):
+        try:
+            if child.is_file():
+                total += int(child.stat().st_size)
+        except OSError:
+            continue
+    return total
+
+
+def _result_store_entries(root: Path, *, exclude: set[Path]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    if not root.is_dir():
+        return entries
+    for path in root.iterdir():
+        try:
+            resolved = path.resolve()
+            if resolved in exclude or not path.is_dir() or not path.name.startswith("guide-excursions-"):
+                continue
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append(
+            {
+                "path": path,
+                "mtime": float(stat.st_mtime),
+                "size": _path_size_bytes(path),
+            }
+        )
+    entries.sort(key=lambda item: float(item["mtime"]))
+    return entries
+
+
+def _store_free_bytes(root: Path) -> int | None:
+    try:
+        usage = shutil.disk_usage(root)
+    except OSError:
+        try:
+            usage = shutil.disk_usage(root.parent)
+        except OSError:
+            return None
+    return int(usage.free)
+
+
+def _prune_results_store(*, exclude: set[Path] | None = None) -> None:
+    root = RESULTS_STORE_ROOT.resolve()
+    if not root.exists():
+        return
+    exclude = {path.resolve() for path in (exclude or set())}
+    entries = _result_store_entries(root, exclude=exclude)
+    if not entries:
+        return
+
+    now = time.time()
+    max_age_seconds = RESULTS_STORE_RETENTION_DAYS * 86400
+    max_total_bytes = RESULTS_STORE_MAX_MB * 1024 * 1024
+    min_free_bytes = RESULTS_STORE_MIN_FREE_MB * 1024 * 1024
+    to_delete: set[Path] = set()
+
+    if max_age_seconds > 0:
+        cutoff = now - max_age_seconds
+        for entry in entries:
+            if float(entry["mtime"]) < cutoff:
+                to_delete.add(entry["path"])
+
+    kept_by_age = [entry for entry in entries if entry["path"] not in to_delete]
+    max_previous_runs = max(0, RESULTS_STORE_MAX_RUNS - len(exclude))
+    overflow = max(0, len(kept_by_age) - max_previous_runs)
+    for entry in kept_by_age[:overflow]:
+        to_delete.add(entry["path"])
+
+    kept = [entry for entry in entries if entry["path"] not in to_delete]
+    total_bytes = sum(int(entry["size"]) for entry in kept)
+    if max_total_bytes > 0:
+        for entry in kept:
+            if total_bytes <= max_total_bytes:
+                break
+            to_delete.add(entry["path"])
+            total_bytes -= int(entry["size"])
+
+    if min_free_bytes > 0:
+        free = _store_free_bytes(root)
+        projected_free = free if free is not None else None
+        for entry in entries:
+            if entry["path"] in to_delete:
+                if projected_free is not None:
+                    projected_free += int(entry["size"])
+                continue
+            if projected_free is not None and projected_free >= min_free_bytes:
+                break
+            to_delete.add(entry["path"])
+            if projected_free is not None:
+                projected_free += int(entry["size"])
+
+    for path in sorted(to_delete, key=lambda item: item.name):
+        try:
+            shutil.rmtree(path)
+            logger.info("guide_monitor.results_store_pruned path=%s", path)
+        except OSError:
+            logger.warning("guide_monitor.results_store_prune_failed path=%s", path, exc_info=True)
 
 
 def _read_results_run_id(path: Path) -> str | None:

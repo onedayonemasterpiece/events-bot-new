@@ -141,6 +141,31 @@ def _truncate_prompt_block(text: str, limit: int) -> str:
     return f"{text[:head].rstrip()}\n...\n{text[-tail:].lstrip()}".strip()
 
 
+_LLM_FIELD_PLACEHOLDER_LITERALS: dict[str, frozenset[str]] = {
+    "location_name": frozenset({"location_name", "venue", "place", "место", "площадка"}),
+    "location_address": frozenset({"location_address", "address", "адрес"}),
+    "city": frozenset({"city", "город"}),
+}
+
+
+def _clean_llm_text_field(value: Any, *, field_name: str | None = None) -> str | None:
+    """Drop literal field-name placeholders from LLM output without semantic rewrites."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        text = str(value).strip()
+    if not text:
+        return None
+    if field_name:
+        norm = unicodedata.normalize("NFKC", text).casefold().replace("ё", "е")
+        placeholders = _LLM_FIELD_PLACEHOLDER_LITERALS.get(field_name, frozenset())
+        if norm in placeholders:
+            return None
+    return text
+
+
 def _budget_vk_parse_poster_texts(post_text: str, poster_texts: Sequence[str]) -> list[str]:
     cleaned = [
         block
@@ -613,6 +638,51 @@ def detect_historical_context(text: str) -> bool:
     return any(name in text_low for name in HISTORICAL_TOPONYMS)
 
 
+_VK_LLM_RESCUE_INVITE_RE = re.compile(
+    r"(?iu)\b("
+    r"приглаша(?:ем|ет|ют)|"
+    r"состо(?:ится|ятся)|"
+    r"пройд(?:е|ё)т|"
+    r"регистрац\w*|"
+    r"по\s+регистрации|"
+    r"билет\w*|"
+    r"встреч[аеуы]|"
+    r"лекци[яюи]|"
+    r"мастер-?класс\w*|"
+    r"экскурси[яюи]|"
+    r"фестивал\w*"
+    r")\b"
+)
+_VK_LLM_RESCUE_PLACE_RE = re.compile(
+    r"(?iu)\b("
+    r"зал|лектори[йя]|музе[йя]|библиотек\w*|галере[яи]|театр\w*|"
+    r"дк|дом\s+культур\w*|ул\.|улиц[аеы]|проспект|пр-т|набережн\w*|"
+    r"этаж|кабинет|аудитори[яи]"
+    r")\b"
+)
+
+
+def _vk_should_rescue_to_llm_without_ts_hint(text: str) -> bool:
+    """Fail open into the normal LLM parser for event-like VK posts.
+
+    This does not extract or create event semantics. It only prevents crawl-time
+    deterministic date-hint uncertainty from dropping posts that have strong
+    invite/registration/offline-place signals; the downstream VK import remains
+    LLM-first and may still reject the post.
+    """
+
+    clean = (text or "").strip()
+    if len(clean) < 40:
+        return False
+    if not detect_date(clean):
+        return False
+    if not _VK_LLM_RESCUE_INVITE_RE.search(clean):
+        return False
+    if not _VK_LLM_RESCUE_PLACE_RE.search(clean):
+        return False
+    return True
+
+
 def _vk_parse_preclassify(
     text: str,
     *,
@@ -707,25 +777,35 @@ def _vk_parse_preclassify(
 def normalize_phone_candidates(text: str) -> str:
     """Strip separators from phone-like sequences without touching valid dates."""
 
-    date_intervals: list[tuple[int, int]] = []
+    date_intervals: list[tuple[int, int, str]] = []
 
-    def _collect_intervals(pattern: re.Pattern[str]) -> None:
+    def _collect_intervals(pattern: re.Pattern[str], kind: str) -> None:
         for match in pattern.finditer(text):
-            date_intervals.append((match.start(), match.end()))
+            date_intervals.append((match.start(), match.end(), kind))
 
-    for date_pattern in (DATE_RANGE_RE, NUM_DATE_RE, MONTH_NAME_RE):
-        _collect_intervals(date_pattern)
+    _collect_intervals(DATE_RANGE_RE, "date_range")
+    _collect_intervals(NUM_DATE_RE, "num_date")
+    _collect_intervals(MONTH_NAME_RE, "month_name")
 
     phone_spans: list[tuple[int, int]] = [
         (m.start(), m.end()) for m in PHONE_CANDIDATE_RE.finditer(text)
     ]
 
     filtered_intervals: list[tuple[int, int]] = []
-    for start, end in date_intervals:
+    for start, end, kind in date_intervals:
         skip_interval = False
         for p_start, p_end in phone_spans:
             if p_start <= start and end <= p_end:
                 if p_start < start or end < p_end:
+                    # Month-name dates ("16 мая 2026 г. в 16:00") can be swallowed by
+                    # broad phone-like spans because PHONE_CANDIDATE_RE allows arbitrary
+                    # non-digits between digit groups. Keep the date token intact; the
+                    # semantic event decision still belongs to the LLM parser downstream.
+                    if kind == "month_name":
+                        mon_match = MONTH_NAME_RE.match(text[start:end])
+                        mon_word = (mon_match.group(2).rstrip(".") if mon_match else "")
+                        if MONTHS_RU.get(mon_word) is not None:
+                            continue
                     skip_interval = True
                     break
                 context_start = max(0, start - 20)
@@ -1551,6 +1631,19 @@ async def build_event_drafts_from_vk(
     # LLM-first hinting: if the source explicitly says it's a standup/comedy show,
     # nudge the parser to make the format visible in the title (without hardcoding
     # deterministic renames after parsing).
+    llm_text += (
+        "\nПравила извлечения локации: если пост содержит несколько дат/блоков/репостов, "
+        "для каждого события бери площадку, адрес и город из ближайшего к нему блока даты/названия. "
+        "Хинт источника или дефолт группы используй только когда в самом блоке нет своей площадки. "
+        "Если текст события явно называет библиотеку, музей, бар или другую площадку, она важнее "
+        "дефолтной площадки источника. Никогда не возвращай буквальные плейсхолдеры вроде "
+        "`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`: "
+        "оставь поле пустым. Если билетная страница или URL ясно содержит каноническое название "
+        "спектакля/концерта/показа, не заменяй его рекламной или сюжетной фразой из поста. "
+        "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
+        "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
+        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца."
+    )
     try:
         hint_parts: list[str] = [text or ""]
         if poster_texts:
@@ -1705,12 +1798,7 @@ async def build_event_drafts_from_vk(
             return None
 
     def clean_str(value: Any) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-            return value or None
-        return str(value)
+        return _clean_llm_text_field(value)
 
     def clean_bool(value: Any) -> bool:
         if isinstance(value, bool):
@@ -2009,7 +2097,7 @@ async def build_event_drafts_from_vk(
         # Heuristic: if the title contains any Cyrillic word (3+ chars) absent from the source
         # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer a safe fallback.
         if missing_tokens:
-            venue_val = clean_str(data.get("location_name")) or source_name or ""
+            venue_val = _clean_llm_text_field(data.get("location_name"), field_name="location_name") or source_name or ""
             fallback = _fallback_title(
                 title_raw,
                 event_type=event_type_val,
@@ -2029,11 +2117,11 @@ async def build_event_drafts_from_vk(
                 date=final_date,
                 time=final_time,
                 time_is_default=time_is_default,
-                venue=data.get("location_name"),
+                venue=_clean_llm_text_field(data.get("location_name"), field_name="location_name"),
                 description=data.get("short_description"),
                 festival=clean_str(data.get("festival")),
-                location_address=clean_str(data.get("location_address")),
-                city=clean_str(data.get("city")),
+                location_address=_clean_llm_text_field(data.get("location_address"), field_name="location_address"),
+                city=_clean_llm_text_field(data.get("city"), field_name="city"),
                 ticket_price_min=ticket_price_min,
                 ticket_price_max=ticket_price_max,
                 event_type=event_type_val,
@@ -2251,6 +2339,8 @@ async def build_event_drafts_from_vk(
     combined_lower = (combined_text or "").lower()
     paid_keywords = ("руб", "₽", "платн", "стоимост", "взнос", "донат")
     has_paid_keywords = any(keyword in combined_lower for keyword in paid_keywords)
+    explicit_free_keywords = ("вход свобод", "бесплат", "участие свобод")
+    has_explicit_free_keywords = any(keyword in combined_lower for keyword in explicit_free_keywords)
 
     for draft in drafts:
         venue_text = (draft.venue or "").lower()
@@ -2260,6 +2350,8 @@ async def build_event_drafts_from_vk(
         if draft.ticket_price_min is not None or draft.ticket_price_max is not None:
             continue
         if has_paid_keywords:
+            continue
+        if not has_explicit_free_keywords:
             continue
         if not draft.is_free:
             draft.is_free = True
@@ -3843,6 +3935,14 @@ async def crawl_once(
                                     ).year
                                     if year_val is not None and year_val > publish_year:
                                         allow_without_hint = True
+                            if not allow_without_hint and _vk_should_rescue_to_llm_without_ts_hint(post_text):
+                                allow_without_hint = True
+                                logger.info(
+                                    "vk_intake.crawl_rescue_to_llm group_id=%s post_id=%s url=%s reason=event_like_without_ts_hint",
+                                    gid,
+                                    pid,
+                                    post_url,
+                                )
                             if not allow_without_hint:
                                 exporter.log_miss(
                                     group_id=gid,
