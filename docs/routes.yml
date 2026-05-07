@@ -95,6 +95,7 @@ sections:
     incident_event_quality_regression_2026_05_05: docs/reports/incidents/INC-2026-05-05-event-quality-regression.md
     incident_kitoboya_garage_date_2026_05_05: docs/reports/incidents/INC-2026-05-05-kitoboya-garage-date.md
     incident_future_event_quality_audit: docs/reports/incidents/INC-2026-05-01-future-event-quality-audit.md
+    incident_bar_bastion_city_jazz_location: docs/reports/incidents/INC-2026-04-29-bar-bastion-city-jazz-location.md
     incident_tg_monitoring_sticky_skipped_post: docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky-skipped-post.md
     incident_daily_location_fragments: docs/reports/incidents/INC-2026-04-26-daily-location-fragments.md
     incident_crumple_story_prod_drift: docs/reports/incidents/INC-2026-04-10-crumple-story-prod-drift.md

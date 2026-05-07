@@ -60,6 +60,9 @@
 - `INC-2026-04-30-tg-monitoring-work-schedule-false-skips.md`
   - Scope: `smart_event_update.py` deterministic non-event guard `work_schedule`, Telegram Monitoring server import, `telegram_scanned_message` skip diagnostics, `/daily` recently-added inventory, production catch-up for `@kenigatom/496` and `@kraftmarket39/199`.
   - Must not regress: concrete future Telegram events at a museum/library venue or an address containing `Музейная` must not be skipped as `skipped_non_event:work_schedule` unless the source is actually a work-hours notice.
+- `INC-2026-04-29-bar-bastion-city-jazz-location.md`
+  - Scope: `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `db.py` `vk_source` seed defaults, `location_reference.py`, `main.py` event-parse reference normalization, VK auto-import rows from `bar_bastion`.
+  - Must not regress: addressless Bar Bastion posts from VK group `149955604` must not be assigned to `Калининград Сити Джаз Клуб`; Bar Bastion must normalize to `Бар Бастион, Судостроительная 6/1, Калининград`, and the production source default must stay set.
 - `INC-2026-04-28-vk-smart-update-false-skips.md`
   - Scope: `smart_event_update.py` online-only guard, `festival_queue.py` festival-context routing, `docs/llm/prompts.md`, VK auto-import `persist_skipped` handling, production `vk_inbox`/`ops_run` catch-up evidence.
   - Must not regress: a concrete offline VK event must not be skipped only because it has online registration, and a single masterclass/lecture/show/ride inside a festival/cycle/program context must create/update an event instead of being routed as a whole `festival_post`.
