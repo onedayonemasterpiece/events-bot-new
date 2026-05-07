@@ -8935,8 +8935,12 @@ async def _parse_event_via_gemma(
         or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
         or "gemma-4-31b-it"
     )
-    max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "2200") or "2200")
-    max_tokens = max(400, min(max_tokens, 6000))
+    # Gemma 4 spends a non-trivial token budget on its internal thought channel
+    # before emitting JSON. With 2200 the digest-detection / multi-rule cases
+    # truncate before the final JSON. Keep headroom for Gemma 4 reasoning while
+    # capping the upper bound so a runaway response can't blow the context.
+    max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000") or "4000")
+    max_tokens = max(400, min(max_tokens, 8000))
 
     raw, usage = await _generate_with_rate_limit_wait(
         full_prompt,

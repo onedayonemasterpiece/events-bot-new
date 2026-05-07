@@ -101,6 +101,18 @@ What to include:
 Length guide: 25–55 words (20-80 allowed if necessary for search uniqueness).
 If an array of events is returned, `search_digest` must be present in every object.
 
+**multi-event digest rule:**
+- If the post is a roundup/digest where each event is ONE short line with only `<date>. <city>. <"NAME">. Билеты: <link or name>` and there is NO per-event description, time, venue/address, programme, or independent OCR poster — return `[]`.
+- Detection heuristic: 3+ bulleted items (e.g. lines starting with `🌿`, `•`, `-`, `🟥`, or numbered) where every item is just date+city+title (and optional ticket marker) without further details. Such posts point readers to other organizers' standalone announcements; the bot ingests each concrete event from its own dedicated post.
+- Anti-fabrication: do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` or `time` from another; do NOT invent a programme to compensate for the missing per-event detail.
+
+**venue / city grounding rule (anti-fabrication):**
+- `location_name`, `location_address`, and `city` MUST be grounded in the source text or poster OCR. Do NOT invent a venue or address that does not appear in the source.
+- If the source only describes the place by an oblique reference (e.g. "На Понарте", "у пивоварни Понарт", "наш зал") and "Known venues" contains the canonical row, copy the canonical `location_name`/`location_address`/`city`.
+- If neither the source/OCR nor a clear reference match a known venue, return empty strings — do NOT fall back to a "plausible" Kaliningrad venue from world knowledge (no `Киноленд`, `Янтарь холл`, `Дом искусств` etc. as default guesses).
+- `location_name` and `city` MUST agree inside one event. If the source says the event happens in another city (e.g. `Пятигорск`, `Москва`), do NOT pair that city with a Калининград venue from "Known venues" — return no event for the out-of-region row instead. Mixed `city=Пятигорск` + `location_name=Театр Третий этаж, Коммунальная 6, Калининград` is a fabrication and is forbidden.
+- Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
+
 **report / recap rule:**
 - If the text is mainly a post-event report / recap about something that already happened, return no events.
 - Typical clues: past-tense narrative ("мы провели/исследовали/работали"), after-the-fact summary ("было здорово"),
@@ -149,11 +161,6 @@ Guidelines:
   into events unless there is a concrete attendable event with explicit date + venue (and preferably time).
   If it's an initiative description with a program "запланировано/включает в себя" but without a specific event entry,
   return no events.
-- Do NOT extract events from a multi-event digest/listing where each event is one short line with only `<date>. <city>. <"NAME">. Билеты: …`
-  and there is NO per-event description, time, venue/address, programme, or independent OCR poster for each line. Such posts are roundups
-  pointing readers to other organizers' announcements; the bot ingests each concrete event from its own dedicated post. Return `[]` for them.
-  Heuristic: 3+ bulleted items where every item has only date+city+title (and optional ticket marker) without further details is a digest.
-  Do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` from another.
 - Do NOT treat administrative deadlines as event dates. If the only date in the text is a "до <date>" deadline
   (e.g. "подать заявку до 16 февраля", "утвердят до 1 марта") and there is no attendable event with date+venue,
   return no events.
@@ -181,8 +188,6 @@ Guidelines:
   (“сегодня/завтра/в эту субботу”), return no events — do NOT default to “today”.
 - The “Known venues” list is for normalising venues that are explicitly mentioned (or provided as an explicit default hint).
   Do NOT pick a random venue just because it contains a similar word (e.g. “ворота”).
-- `location_name` / `location_address` / `city` MUST be grounded in the source text or poster OCR. Do NOT invent a venue or address that does not appear in the source. If the source only describes the place by an oblique reference (e.g. "На Понарте", "у пивоварни Понарт", "наш зал") and the “Known venues” list contains the canonical row, copy the canonical `location_name`/`location_address`/`city`. If neither the source/OCR nor a clear reference match a known venue, return empty strings — do not fall back to a "plausible" Kaliningrad venue from world knowledge (no `Киноленд`, `Янтарь холл`, `Дом искусств` etc. as default guesses).
-- A `location_name` and a `city` must agree with each other inside one event. If the source says the event happens in another city (e.g. `Пятигорск`, `Москва`), do NOT pair that city with a Калининград venue from this region's "Known venues" — return no event for the out-of-region row instead. Mixed `city=Пятигорск` + `location_name=Театр Третий этаж, Коммунальная 6, Калининград` is a fabrication and is forbidden.
 - For multi-date, multi-event, timetable, digest, or repost posts, each event's venue fields must come from the local block nearest that event's own date/title. Do NOT reuse a venue/default/source hint from another block when the event-local block explicitly names its own venue/address.
 - Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
 - If the source/group/default location conflicts with an explicitly named event-local venue (for example a repost from a bar about a library event), prefer the explicit venue in the event text.
