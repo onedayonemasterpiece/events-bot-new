@@ -17,6 +17,7 @@
 - Current `/v` rollout/tasks: `docs/features/crumple-video/tasks/README.md`
 - Popularity signal and `/popular_posts`: `docs/features/post-metrics/README.md`
 - Scheduler policy: `docs/operations/cron.md`
+- Partner-specific Telegram Business Story tracks: `docs/features/cherryflash/partner-story-tracks.md`
 
 ## Current rollout state
 
