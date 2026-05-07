@@ -72,12 +72,48 @@ _VK_CANCEL_RE = re.compile(
     r")\b"
 )
 
+_RU_MONTHS_GENITIVE_LOCAL: dict[str, int] = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+
+_VK_TIME_RESCHEDULE_RE = re.compile(
+    r"(?iu)\b(?:время\s+начала|начал[оа]?|старт)\b[^.!?\n]{0,100}"
+    r"\b(?:перенос\w*|перенес(?:ен(?:а|о)?|ена|ено|ены|ён(?:а|о)?|ёна|ёно|ёны|ли|ем|ём))\b"
+    r"[^.!?\n]{0,80}\b(?:на|к)\s+\d{1,2}[:.]\d{2}\b"
+)
+
+
+def _looks_like_time_reschedule_notice(text: str | None) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    return bool(_VK_TIME_RESCHEDULE_RE.search(raw))
+
 
 def _looks_like_cancellation_notice(text: str | None) -> bool:
     raw = (text or "").strip()
     if not raw:
         return False
     if not _VK_CANCEL_RE.search(raw):
+        return False
+    # "Время начала перенесено на 19:30" is a time update for an event that
+    # still happens, not a cancellation/postponement that should deactivate a
+    # public event card. Let the normal LLM-first VK import path parse it.
+    if _looks_like_time_reschedule_notice(raw) and not re.search(
+        r"(?iu)\b(?:отмен\w*|не\s+состо\w*|отложен\w*|показ\s+не\s+состо\w*)\b",
+        raw,
+    ):
         return False
     # Require at least one anchor to avoid silencing on generic news posts.
     # Prefer using the same extraction helpers as the cancellation flow.
@@ -105,12 +141,13 @@ def _parse_ru_date_from_text(text: str, *, year_hint: int | None) -> str | None:
         day = int(m.group(1))
         month = int(m.group(2))
         year = int(m.group(3)) if (m.group(3) or "").strip() else year_hint
-        if not year:
-            return None
-        try:
-            return datetime(year, month, day).date().isoformat()
-        except Exception:
-            return None
+        if year:
+            try:
+                return datetime(year, month, day).date().isoformat()
+            except Exception:
+                # A time like "19.30" can look like dd.mm. Keep scanning for
+                # Russian month dates such as "8 мая" instead of failing early.
+                pass
     m = re.search(
         r"(?i)\b(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
         raw,
@@ -119,11 +156,7 @@ def _parse_ru_date_from_text(text: str, *, year_hint: int | None) -> str | None:
         return None
     day = int(m.group(1))
     month_word = (m.group(2) or "").casefold()
-    try:
-        from smart_event_update import _RU_MONTHS_GENITIVE  # type: ignore
-    except Exception:
-        _RU_MONTHS_GENITIVE = {}
-    month = int(_RU_MONTHS_GENITIVE.get(month_word) or 0)
+    month = int(_RU_MONTHS_GENITIVE_LOCAL.get(month_word) or 0)
     if not month:
         return None
     year = year_hint
@@ -205,6 +238,8 @@ async def _cancel_matching_event_from_notice(
         except Exception:
             time_hint = None
     title_hint = _extract_title_hint(notice_text)
+    if not date_hint and not title_hint:
+        return None, "insufficient_anchors:no_date_no_title"
     is_postponed = bool(
         re.search(
             r"(?i)\b(?:перенос\w*|перенес(?:ен(?:а|о)?|ена|ено|ены|ён(?:а|о)?|ёна|ёно|ёны|ли|ем|ём)|сдвинул\w*)\b",

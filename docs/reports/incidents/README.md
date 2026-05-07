@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-07-vk-time-reschedule-wrong-match.md`
+  - Scope: VK auto-import cancellation/postponement shortcut, VK date/time parsing, event lifecycle matching, and Smart Update reports for VK transfer/time-change posts.
+  - Must not regress: a notice like `8 мая время начала ... перенесено на 19.30` must parse the date from `8 мая`, must stay on the normal LLM-first VK import path, and must never mark an unrelated old event inactive through weak no-date/no-title matching.
 - `INC-2026-05-05-80-stories-source-coverage.md`
   - Scope: VK crawl/date-hint admission, Telegram Monitoring festival-program extraction, `@kraftmarket39` source coverage, and future `80 историй о главном` backfill.
   - Must not regress: concrete festival event posts with title/date/time/venue/registration must reach the LLM-first import path and attach a durable `event_source`; Russian month-name dates like `16 мая 2026 г. в 16:00` must not be masked as phone-like noise before crawl admission.

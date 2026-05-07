@@ -316,6 +316,52 @@ async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(
         assert int(imported_event_id) == int(event_id)
 
 
+def test_vk_auto_import_time_reschedule_notice_stays_on_normal_import_path():
+    text = (
+        "Друзья, 8 мая время начала Винного вечера перенесено на 19.30!\n"
+        "Места еще есть! Приходите, ждем Вас✨"
+    )
+
+    assert vk_auto_queue._parse_ru_date_from_text(text, year_hint=2026) == "2026-05-08"
+    assert vk_auto_queue._looks_like_time_reschedule_notice(text) is True
+    assert vk_auto_queue._looks_like_cancellation_notice(text) is False
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_cancel_match_requires_date_or_title_anchor(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        from models import Event
+
+        session.add(
+            Event(
+                title="Старое событие",
+                description="Описание",
+                source_text="src",
+                date="2026-01-01",
+                time="19:30",
+                location_name="Кирха Рудау",
+                location_address="",
+                city="Калининград",
+            )
+        )
+        await session.commit()
+
+    event_id, err = await vk_auto_queue._cancel_matching_event_from_notice(
+        db,
+        notice_text="Друзья, время начала перенесено на 19.30!",
+        source_url="https://vk.com/wall-222857709_1116",
+        source_name="Кирха Рудау. Парк-Музей.",
+        location_hint="Кирха Рудау",
+        published_at=datetime(2026, 5, 7, 14, 2, tzinfo=timezone.utc),
+    )
+
+    assert event_id is None
+    assert err == "insufficient_anchors:no_date_no_title"
+
+
 @pytest.mark.asyncio
 async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
