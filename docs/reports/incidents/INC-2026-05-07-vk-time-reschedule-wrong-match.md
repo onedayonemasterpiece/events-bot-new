@@ -1,10 +1,10 @@
 # INC-2026-05-07-vk-time-reschedule-wrong-match VK time reschedule matched wrong old event
 
-Status: open
+Status: closed
 Severity: sev1
 Service: VK auto-import / Smart Update
 Opened: 2026-05-07
-Closed: —
+Closed: 2026-05-07
 Owners: Codex
 Related incidents: `INC-2026-05-05-event-quality-regression`, `INC-2026-05-01-future-event-quality-audit`, `INC-2026-04-20-club-znakomstv-duplicate-event-cards`
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/incident-management.md`
@@ -29,6 +29,9 @@ Manual `/vk_auto_import 1` on 2026-05-07 16:02 Europe/Kaliningrad processed `htt
 - 2026-05-07 14:02 UTC — `/vk_auto_import 1` processed `wall-222857709_1116`; bot reported `event_id=2029` as postponed.
 - 2026-05-07 14:08 UTC — production DB confirmed `event_id=2029` had `lifecycle_status=postponed` and new `event_source.source_type=vk_cancel` from the VK post.
 - 2026-05-07 14:12 UTC — root cause isolated in `vk_auto_queue.py` cancellation/date helper.
+- 2026-05-07 14:18 UTC — hotfix `cb473989` deployed to Fly app `events-bot-new-wngqia`.
+- 2026-05-07 14:22 UTC — production DB repaired: wrong `vk_cancel` source/fact removed from `event_id=2029`; inbox `6709` reset for replay.
+- 2026-05-07 14:25 UTC — targeted production replay created `event_id=4674` for `wall-222857709_1116` with date `2026-05-08` and time `19:30`; `event_id=2029` remained active and unrelated.
 
 ## Root Cause
 
@@ -77,7 +80,7 @@ Manual `/vk_auto_import 1` on 2026-05-07 16:02 Europe/Kaliningrad processed `htt
 
 ## Immediate Mitigation
 
-- Hotfix in progress: prevent time-reschedule notices from entering cancellation shortcut and require date or title anchor before deactivating any event.
+- Deployed hotfix prevents time-reschedule notices from entering the cancellation shortcut and requires a date or title anchor before deactivating any event.
 
 ## Corrective Actions
 
@@ -88,15 +91,18 @@ Manual `/vk_auto_import 1` on 2026-05-07 16:02 Europe/Kaliningrad processed `htt
 
 ## Follow-up Actions
 
-- [ ] Add a production-like replay artifact after the hotfix deploy.
+- [x] Add a production-like replay artifact after the hotfix deploy.
 - [ ] Decide whether to temporarily enable runtime file mirror during VK auto-import canary windows, with disk budget and retention check.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- post-deploy verification:
+- deployed SHA: `cb47398926c9e160e235d9160e0bc18294df90e1`, reachable from `origin/main`.
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `events-bot-new-wngqia:deployment-01KR1CWJKDXH74PXF35323WDST`, machine version `1042`.
+- regression checks: `tests/test_vk_auto_queue_import.py`, `tests/test_vk_auto_queue_gemma4.py`, `tests/test_vk_default_time.py`, `tests/test_vk_intake_keywords_dates.py`, `tests/test_smart_event_update_duplicate_guards.py` printed `103 passed in 11.49s`; the pytest process then hit the known teardown timeout.
+- production repair: removed `event_source.id=1708115`, related fact `54494`, and `vk_inbox_import_event(6709, 2029)`; restored `event_id=2029` to `lifecycle_status=active`; reset inbox `6709` before replay.
+- production replay: processing `vk_inbox.id=6709` through VK auto-import + Smart Update created `event_id=4674` titled `Винный вечер в кирхе Рудау`, date `2026-05-08`, time `19:30`, source `https://vk.com/wall-222857709_1116`; bot report showed `Факты: ✅11 ↩️0 ⚠️0 ℹ️0`.
+- post-replay DB verification: inbox `6709` status `imported`, `imported_event_id=4674`; mapping only `(6709, 4674)`; `event_id=2029` remains `active`; bad source count for `(2029, wall-222857709_1116)` is `0`; bad postponed fact count is `0`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB and scheduler checks ok, no issues.
 
 ## Prevention
 
