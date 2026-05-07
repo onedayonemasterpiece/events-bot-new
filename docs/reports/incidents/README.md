@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-07-vk-auto-import-merge-regression-gemma4.md`
+  - Scope: `vk_intake.py`, `vk_auto_queue.py`, `smart_event_update.py` (`_match_existing_event_by_*`, `_single_candidate_auto_match_ok`, `_llm_match_or_create_bundle`, `_ask_gemma_json`, `_ask_gemma_text`), `markup.py::unescape_public_text_escapes` / `simple_md_to_html`, env `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL`, `SMART_UPDATE_MODEL`, `SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC`, prompt families в `docs/llm/`.
+  - Must not regress: VK auto-import не должен создавать duplicate `event` row при наличии существующей `event` row с совпадающим `(date,time,location_name,ticket_link)`; HTML entities (`&quot;`, `&amp;`, `&lt;`, `&gt;`) не должны утекать в публичный `event.description` через VK source_text; миграции Gemma-backed upstream stage на новый checkpoint обязаны нести family-prompt rewrite, а не только model-id swap; vk_intake не должен fabricate `location_name`/`location_address` вне `docs/reference/locations.md` reference layer; multi-event digest посты (несколько разных событий по одной строчке без описания / времени / площадки) должны идентифицироваться на этапе vk_intake как `multi_event_digest` и не уходить в smart_update; phone-only contact ивенты должны экспонировать кликабельный `tel:` (через `ticket_link='tel:...'`); провайдерские 5xx-ответы не должны держать `_ask_gemma_json` свыше hard wall-clock cap, и неудача merge LLM не должна оставлять `vk_inbox` row в `pending`.
 - `INC-2026-05-07-vk-time-reschedule-wrong-match.md`
   - Scope: VK auto-import cancellation/postponement shortcut, VK date/time parsing, event lifecycle matching, and Smart Update reports for VK transfer/time-change posts.
   - Must not regress: a notice like `8 мая время начала ... перенесено на 19.30` must parse the date from `8 мая`, must stay on the normal LLM-first VK import path, and must never mark an unrelated old event inactive through weak no-date/no-title matching.

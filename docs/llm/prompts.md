@@ -48,10 +48,16 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 - Do NOT treat money paid **to participants** as a ticket price: `компенсация`, `вознаграждение`, `выплата`, `гонорар`, `приз`, `подарок`, cashback/кэшбэк.
 - For blood donation actions, donor compensation amounts (e.g. “компенсация 1063 руб.”) are NOT tickets: keep `ticket_price_min/max=null` and set `is_free=true`.
 
+**ticket_link rules:**
+- Prefer an explicit ticket/registration URL from the source (`https://kassir.ru/...`, `https://vmuzey.com/...`, registration form, etc.) when present.
+- If the source has NO URL ticket/registration link but exposes a phone number as the only contact for booking (e.g. `Запись по телефону 8-XXX...`, `Записаться: +7...`, `Билеты по тел.: ...`), set `ticket_link` to a `tel:` URI composed of digits only with the leading `+` and country code, e.g. `tel:+79673569479` for `8-967-356-9479`. This makes the contact actionable in the public Telegraph card. Do NOT put the phone number into `short_description` or `search_digest`.
+- If the source has neither a URL nor a phone, leave `ticket_link` empty.
+
 **title** rules:
 - The title MUST be grounded in the source text (or poster OCR if provided). Do not invent names, nicknames, or weird words that do not appear in the input.
 - If the post does not contain an explicit name, use a neutral descriptive title based on `event_type` and the venue (e.g. "Выставка — Музей …", "Лекция — …"), but still do NOT introduce new terms.
 - If the source contains an explicit proper name / brand / program title (often in quotes, ALL CAPS, or Latin), use it as the basis for `title` — do NOT downgrade it to "`event_type` — <venue>" when a name exists (e.g. "ЕвроДэнс'90", not "Концерт — Янтарь холл").
+- If the source explicitly classifies the event with a format-anchor word at the start (`мастер-класс`, `лекция`, `спектакль`, `концерт`, `экскурсия`, `кинопоказ`, `воркшоп`, `выставка`, `ярмарка`, `встреча`), keep that word as a prefix of the title together with the proper name in quotes — e.g. source `Мастер-класс «Натюрморт. Старые и новые вещи»` → title `Мастер-класс «Натюрморт. Старые и новые вещи»`, not just `Натюрморт. Старые и новые вещи`. The format-anchor changes how the attendee plans and dresses, so do not strip it as redundant. Use Russian guillemets `«…»` for the proper name; do not use ASCII `"..."`.
 - If a post is written as in-character promo copy, but its ticket URL/page or clear program title gives the canonical attendee-facing title, use that canonical title rather than a plot/in-character phrase.
 - If the source clearly describes a standup/comedy show (e.g. contains “стендап”, “stand-up”, “комик”), but the show name is metaphorical or misleading, make the format explicit in the title (e.g. "Стендап: <название>"). Keep `event_type` as `концерт` (closest available) and prefer 🎤 as `emoji` when appropriate.
 - Avoid typos and nonsense tokens (e.g. made-up 3–4 letter words). If in doubt, simplify the title.
@@ -143,6 +149,11 @@ Guidelines:
   into events unless there is a concrete attendable event with explicit date + venue (and preferably time).
   If it's an initiative description with a program "запланировано/включает в себя" but without a specific event entry,
   return no events.
+- Do NOT extract events from a multi-event digest/listing where each event is one short line with only `<date>. <city>. <"NAME">. Билеты: …`
+  and there is NO per-event description, time, venue/address, programme, or independent OCR poster for each line. Such posts are roundups
+  pointing readers to other organizers' announcements; the bot ingests each concrete event from its own dedicated post. Return `[]` for them.
+  Heuristic: 3+ bulleted items where every item has only date+city+title (and optional ticket marker) without further details is a digest.
+  Do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` from another.
 - Do NOT treat administrative deadlines as event dates. If the only date in the text is a "до <date>" deadline
   (e.g. "подать заявку до 16 февраля", "утвердят до 1 марта") and there is no attendable event with date+venue,
   return no events.
@@ -170,6 +181,8 @@ Guidelines:
   (“сегодня/завтра/в эту субботу”), return no events — do NOT default to “today”.
 - The “Known venues” list is for normalising venues that are explicitly mentioned (or provided as an explicit default hint).
   Do NOT pick a random venue just because it contains a similar word (e.g. “ворота”).
+- `location_name` / `location_address` / `city` MUST be grounded in the source text or poster OCR. Do NOT invent a venue or address that does not appear in the source. If the source only describes the place by an oblique reference (e.g. "На Понарте", "у пивоварни Понарт", "наш зал") and the “Known venues” list contains the canonical row, copy the canonical `location_name`/`location_address`/`city`. If neither the source/OCR nor a clear reference match a known venue, return empty strings — do not fall back to a "plausible" Kaliningrad venue from world knowledge (no `Киноленд`, `Янтарь холл`, `Дом искусств` etc. as default guesses).
+- A `location_name` and a `city` must agree with each other inside one event. If the source says the event happens in another city (e.g. `Пятигорск`, `Москва`), do NOT pair that city with a Калининград venue from this region's "Known venues" — return no event for the out-of-region row instead. Mixed `city=Пятигорск` + `location_name=Театр Третий этаж, Коммунальная 6, Калининград` is a fabrication and is forbidden.
 - For multi-date, multi-event, timetable, digest, or repost posts, each event's venue fields must come from the local block nearest that event's own date/title. Do NOT reuse a venue/default/source hint from another block when the event-local block explicitly names its own venue/address.
 - Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
 - If the source/group/default location conflicts with an explicitly named event-local venue (for example a repost from a bar about a library event), prefer the explicit venue in the event text.

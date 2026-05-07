@@ -304,6 +304,25 @@ SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC = _env_int(
     hi=120,
 )
 
+# Hard wall-clock cap for any single _ask_gemma_json / _ask_gemma_text invocation.
+# Without this, a provider 5xx storm on labels like ``merge`` / ``match_create_bundle`` /
+# ``create_bundle`` could pin smart_update for >15 minutes and leave vk_inbox rows
+# stuck at ``status='pending'`` (see INC-2026-05-07-vk-auto-import-merge-regression-gemma4).
+# Per-stage timeouts (description writer, derived fields) keep their own values; this
+# cap is the universal upper bound applied inside the wrappers themselves.
+SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC = _env_int(
+    "SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC",
+    90,
+    lo=10,
+    hi=600,
+)
+SMART_UPDATE_GEMMA_TEXT_WALL_CLOCK_SEC = _env_int(
+    "SMART_UPDATE_GEMMA_TEXT_WALL_CLOCK_SEC",
+    120,
+    lo=10,
+    hi=600,
+)
+
 # If an event is extracted far into the future, treat poster date mismatches as a high-risk signal.
 # Default matches the operator expectation: > 6 months ahead requires more scrutiny.
 SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
@@ -5570,6 +5589,43 @@ async def _ask_gemma_json(
     max_tokens: int,
     label: str,
 ) -> dict[str, Any] | None:
+    """Wall-clock-bounded entry point for Gemma JSON stages.
+
+    Wraps the unbounded implementation in ``asyncio.wait_for`` so a provider 5xx
+    storm (or any single hung HTTP attempt) cannot pin a smart_update call past
+    ``SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC``. On timeout we return ``None`` and
+    let callers take the deterministic ``ungrounded`` / ``no_match`` fallback;
+    this keeps ``vk_inbox`` rows from getting stuck at ``status='pending'``
+    behind a ~15-minute provider stall (see
+    INC-2026-05-07-vk-auto-import-merge-regression-gemma4).
+    """
+    cap = float(SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC)
+    try:
+        return await asyncio.wait_for(
+            _ask_gemma_json_unbounded(
+                prompt,
+                schema,
+                max_tokens=max_tokens,
+                label=label,
+            ),
+            timeout=cap,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "smart_update: gemma json_call wall_clock_timeout label=%s cap_sec=%s; returning None",
+            label,
+            cap,
+        )
+        return None
+
+
+async def _ask_gemma_json_unbounded(
+    prompt: str,
+    schema: dict[str, Any],
+    *,
+    max_tokens: int,
+    label: str,
+) -> dict[str, Any] | None:
     # Ask Gemma through the shared gateway, then fall back to 4o (operator-visible) if configured.
     # GoogleAIClient already retries retryable provider failures. Keep the
     # Smart Update wrapper to a single outer attempt by default so one failing
@@ -5881,6 +5937,34 @@ async def _ask_gemma_json(
 
 
 async def _ask_gemma_text(
+    prompt: str,
+    *,
+    max_tokens: int,
+    label: str,
+    temperature: float = 0.0,
+) -> str | None:
+    """Wall-clock-bounded entry point for Gemma free-text stages."""
+    cap = float(SMART_UPDATE_GEMMA_TEXT_WALL_CLOCK_SEC)
+    try:
+        return await asyncio.wait_for(
+            _ask_gemma_text_unbounded(
+                prompt,
+                max_tokens=max_tokens,
+                label=label,
+                temperature=temperature,
+            ),
+            timeout=cap,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "smart_update: gemma text_call wall_clock_timeout label=%s cap_sec=%s; returning None",
+            label,
+            cap,
+        )
+        return None
+
+
+async def _ask_gemma_text_unbounded(
     prompt: str,
     *,
     max_tokens: int,
