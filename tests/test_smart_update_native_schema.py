@@ -21,6 +21,113 @@ class _FakeGemmaClient:
         return item, {}
 
 
+def test_g4_split_create_cleanup_keeps_route_words_but_strips_hard_logistics():
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_6",
+        source_text="Экскурсия по Центральному району.",
+        title="Хаусмарки Центрального района",
+        date="2026-05-06",
+        time="17:30",
+        location_name="Центральный район",
+        city="Калининград",
+        event_type="lecture",
+        ticket_price_min=1000,
+        ticket_price_max=1000,
+    )
+
+    cleaned = su._cleanup_g4_split_create_description(
+        (
+            "Маршрут пройдет по главным улицам, переулкам и задворкам Центрального района.\n\n"
+            "### Детали\n"
+            "Участники увидят барельефы, маскароны и медальоны на фасадах зданий.\n"
+            "Стоимость участия составит 1000 рублей."
+        ),
+        candidate=candidate,
+    )
+
+    assert cleaned is not None
+    assert "улицам" in cleaned
+    assert "переулкам" in cleaned
+    assert "1000" not in cleaned
+    assert "Стоимость участия" not in cleaned
+
+
+def test_g4_lollipop_light_prompts_keep_interest_lists_out_of_literal_items():
+    bucket_prompt = su._g4_lollipop_light_bucket_prompt()
+    writer_prompt = su._g4_lollipop_light_writer_system_prompt()
+
+    assert "Do NOT use literal_items for interest lists" in bucket_prompt
+    assert "idea examples" in bucket_prompt
+    assert "one-word bullet lists" in writer_prompt
+    assert "group them in compact natural prose" in writer_prompt
+    assert "ONLY for sections whose writer_pack section has a non-empty literal_items" in writer_prompt
+    assert "merge them into one compact sentence" in writer_prompt
+    assert "final_writer.v3" in writer_prompt
+
+
+def test_g4_lollipop_light_normalize_bucket_suppresses_short_venue_name_from_infoblock():
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_7",
+        source_text="Питчинг в Сигнале.",
+        title="Питчинг в Сигнале",
+        date="2026-05-14",
+        time="18:00",
+        location_name="Сигнал",
+        location_address="Леонова 22",
+        city="Калининград",
+        event_type="meetup",
+    )
+
+    pack = su._g4_lollipop_light_normalize_bucket_payload(
+        ["Организатор — Институт прикладной урбанистики."],
+        {"assignments": [{"fact_index": 0, "bucket": "people_and_roles", "literal_items": []}]},
+        candidate=candidate,
+    )
+
+    logistics = pack["logistics_infoblock"]
+    by_label = {item["record_ids"][0]: item for item in logistics}
+    assert by_label["location"]["narrative_policy"] == "suppress"
+    # Address remains in infoblock — it has digits/comma signals.
+    assert by_label["address"].get("narrative_policy") != "suppress"
+    assert by_label["date"].get("narrative_policy") != "suppress"
+
+
+def test_g4_lollipop_light_normalize_bucket_keeps_address_like_location_in_infoblock():
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_8",
+        source_text="Лекция.",
+        title="Лекция",
+        date="2026-05-06",
+        time="17:30",
+        location_name="ул. Леонова 22, Калининград",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    pack = su._g4_lollipop_light_normalize_bucket_payload(
+        ["Лектор — Игорь Ляшук."],
+        {"assignments": [{"fact_index": 0, "bucket": "people_and_roles", "literal_items": []}]},
+        candidate=candidate,
+    )
+
+    logistics = pack["logistics_infoblock"]
+    by_label = {item["record_ids"][0]: item for item in logistics}
+    # Location text contains street word + digits + commas — keep it in infoblock.
+    assert by_label["location"].get("narrative_policy") != "suppress"
+
+
+def test_g4_split_create_disables_4o_fallback_for_experimental_stages(monkeypatch):
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+
+    assert su._smart_update_4o_fallback_enabled("rich_facts_extract") is False
+    assert su._smart_update_4o_fallback_enabled("split_description_writer") is False
+    assert su._smart_update_4o_fallback_enabled("split_derived_fields") is False
+    assert su._smart_update_4o_fallback_enabled("create_bundle") is True
+
+
 @pytest.mark.asyncio
 async def test_ask_gemma_json_uses_native_schema_when_enabled(monkeypatch):
     client = _FakeGemmaClient(['{"facts":["Факт"]}'])
@@ -86,6 +193,154 @@ async def test_ask_gemma_json_falls_back_to_prompt_schema_after_native_error(mon
     assert "response_schema" in client.calls[0]["generation_config"]
     assert client.calls[1]["generation_config"] == {"temperature": 0}
     assert "JSON schema:" in client.calls[1]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_extracts_sectioned_payload(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Формат события: открытая городская лаборатория."],'
+                '"program_or_examples":["Примеры тем: маршруты, дворы и городские привычки."],'
+                '"context_methodology_facts":["Методология основана на интервью с 42 участниками."],'
+                '"people_org_facts":["Организатор — Музей города."],'
+                '"logistics_facts":["Возрастное ограничение 12+."],'
+                '"uncertain_or_drop":["Приходите всей семьёй."]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_2",
+        source_text=(
+            "Музей города проводит открытую городскую лабораторию. "
+            "Методология основана на интервью с 42 участниками. "
+            "Примеры тем: маршруты, дворы и городские привычки. 12+"
+        ),
+        title="Городская лаборатория",
+        date="2026-05-08",
+        time="18:00",
+        location_name="Музей города",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    su.reset_smart_update_llm_trace()
+    facts = await su._llm_extract_candidate_facts(candidate)
+
+    assert "Формат события: открытая городская лаборатория." in facts
+    assert "Методология основана на интервью с 42 участниками." in facts
+    assert "Организатор — Музей города." in facts
+    assert not any("Приходите" in item for item in facts)
+    trace = su.get_smart_update_llm_trace()
+    assert trace[0]["label"] == "rich_facts_extract"
+    call = client.calls[0]
+    assert call["max_output_tokens"] == 1400
+    assert call["generation_config"]["response_mime_type"] == "application/json"
+    assert "до 40 фактов" in call["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_keeps_prompt_schema_fallback(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            RuntimeError("provider 500"),
+            (
+                '{"public_core_facts":["Формат события: городская лаборатория."],'
+                '"program_or_examples":["Темы: дворы и маршруты."],'
+                '"context_methodology_facts":["Методология основана на интервью."],'
+                '"people_org_facts":["Организатор — Музей города."],'
+                '"logistics_facts":[],'
+                '"uncertain_or_drop":[]}'
+            ),
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_3",
+        source_text="Музей города проводит городскую лабораторию про дворы и маршруты.",
+        title="Городская лаборатория",
+        date="2026-05-08",
+        time="18:00",
+        location_name="Музей города",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    su.reset_smart_update_llm_trace()
+    facts = await su._llm_extract_candidate_facts(candidate)
+
+    assert "Формат события: городская лаборатория." in facts
+    assert len(client.calls) == 2
+    assert "response_schema" in client.calls[0]["generation_config"]
+    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    trace = su.get_smart_update_llm_trace()
+    assert trace[0]["status"] == "ok_prompt_after_native"
+    assert trace[0]["prompt_schema_fallback_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_description_native_timeout_does_not_double_call_prompt_fallback(monkeypatch):
+    client = _FakeGemmaClient([RuntimeError("provider timeout")])
+    monkeypatch.delenv("SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK", raising=False)
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"split_description_writer"})
+
+    su.reset_smart_update_llm_trace()
+    data = await su._ask_gemma_json(
+        "Верни текст.",
+        su._g4_split_description_writer_schema(),
+        max_tokens=100,
+        label="split_description_writer",
+    )
+
+    assert data is None
+    assert len(client.calls) == 1
+    trace = su.get_smart_update_llm_trace()
+    assert trace[0]["status"] == "failed_native"
+    assert trace[0]["prompt_schema_fallback_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_derived_fields_keep_prompt_schema_fallback(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            RuntimeError("provider 500"),
+            '{"short_description":"Короткое описание события без логистики и лишней рекламы.","search_digest":"Короткое резюме события","warnings":[]}',
+        ]
+    )
+    monkeypatch.delenv("SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK", raising=False)
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"split_derived_fields"})
+
+    su.reset_smart_update_llm_trace()
+    data = await su._ask_gemma_json(
+        "Верни производные поля.",
+        su._g4_split_derived_fields_schema(),
+        max_tokens=100,
+        label="split_derived_fields",
+    )
+
+    assert data is not None
+    assert data["search_digest"] == "Короткое резюме события"
+    assert len(client.calls) == 2
+    assert "response_schema" in client.calls[0]["generation_config"]
+    assert client.calls[1]["generation_config"] == {"temperature": 0}
+    trace = su.get_smart_update_llm_trace()
+    assert trace[0]["status"] == "ok_prompt_after_native"
+    assert trace[0]["prompt_schema_fallback_enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -190,10 +445,13 @@ async def test_g4_split_create_writer_uses_fact_payload(monkeypatch):
                 '### Музыкальная линия\\nВ программе звучат Ave Maria и духовная музыка. '
                 'Факты собраны в цельный анонс без служебной информации.\\n\\n'
                 '### Акценты программы\\n- Орган\\n- Голос",'
-                '"short_description":"Камерный концерт соединяет органное звучание, вокал, духовную традицию и редкую акустику программы.",'
+                '"warnings":[]}'
+            ),
+            (
+                '{"short_description":"Камерный концерт соединяет органное звучание, вокал, духовную традицию и редкую акустику программы.",'
                 '"search_digest":"Камерный концерт с органом, голосом и Ave Maria",'
                 '"warnings":[]}'
-            )
+            ),
         ]
     )
     monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
@@ -224,5 +482,101 @@ async def test_g4_split_create_writer_uses_fact_payload(monkeypatch):
     assert "### Музыкальная линия" in result["description"]
     assert result["short_description"]
     assert result["search_digest"] == "Камерный концерт с органом, голосом и Ave Maria"
-    assert client.calls[0]["max_output_tokens"] >= 1500
+    assert client.calls[0]["max_output_tokens"] >= 1700
     assert "facts_text_clean" in client.calls[0]["prompt"]
+    assert "производные поля" in client.calls[1]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_description_writer_timeout_is_bounded(monkeypatch):
+    async def slow_json(*_args, **_kwargs):
+        import asyncio
+
+        await asyncio.sleep(10)
+        return {
+            "description": "too late",
+            "short_description": "",
+            "search_digest": "",
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", slow_json)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC", 1)
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_5",
+        source_text="Концерт Ave Maria: орган и голос.",
+        title="Аве Мария",
+        date="2026-05-08",
+        time="18:00",
+        location_name="Филармония",
+        city="Калининград",
+        event_type="concert",
+    )
+
+    result = await su._llm_g4_split_create_writer(
+        candidate=candidate,
+        title="Аве Мария",
+        event_type="concert",
+        facts_text_clean=["Формат: камерный концерт органа и голоса."],
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_bundle_uses_fact_ledger_fallback_when_writer_fails(monkeypatch):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Формат события: пешеходная экскурсия по архитектурным деталям."],'
+                '"program_or_examples":["Участники увидят барельефы, маскароны и медальоны."],'
+                '"context_methodology_facts":["Хаусмарки помогают понять назначение построек."],'
+                '"people_org_facts":["Ведущий прогулки: Игорь Ляшук."],'
+                '"logistics_facts":["Дата: 2026-05-06","Время: 17:30","Цена: 1000 ₽"],'
+                '"uncertain_or_drop":[]}'
+            ),
+            RuntimeError("writer failed"),
+        ]
+    )
+    monkeypatch.delenv("SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK", raising=False)
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(
+        su,
+        "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES",
+        {"rich_facts_extract", "split_description_writer"},
+    )
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_4",
+        source_text=(
+            "Пешеходная экскурсия по архитектурным деталям. "
+            "Участники увидят барельефы, маскароны и медальоны. "
+            "Ведущий прогулки: Игорь Ляшук."
+        ),
+        title="Хаусмарки Центрального района",
+        date="2026-05-06",
+        time="17:30",
+        location_name="Центральный район",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    bundle = await su._llm_g4_split_create_bundle(
+        candidate,
+        clean_title="Хаусмарки Центрального района",
+        normalized_event_type="lecture",
+    )
+
+    assert bundle is not None
+    assert bundle["_split_create"] is True
+    assert bundle["description"]
+    assert "###" in bundle["description"]
+    assert "барельефы" in bundle["description"]
+    assert "Дата:" not in bundle["description"]
+    assert bundle["facts"]
+    assert bundle["_split_create_warnings"] == ["writer_unavailable_fact_ledger_fallback"]
+    assert "Цена: 1000" not in client.calls[1]["prompt"]
+    assert "барельефы" in client.calls[1]["prompt"]

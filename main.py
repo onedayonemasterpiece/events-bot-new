@@ -8931,8 +8931,8 @@ async def _parse_event_via_gemma(
     )
     model = (
         str(extra.get("gemma_model") or "").strip()
-        or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-3-27b-it") or "").strip()
-        or "gemma-3-27b-it"
+        or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
+        or "gemma-4-31b-it"
     )
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "2200") or "2200")
     max_tokens = max(400, min(max_tokens, 6000))
@@ -8981,7 +8981,13 @@ async def _parse_event_via_gemma(
         data = _event_parse_extract_json(raw2 or "")
     if data is None:
         logging.error("Invalid JSON from Gemma parse: %s", (raw or "")[:2000])
-        if (os.getenv("FOUR_O_TOKEN") or "").strip():
+        fallback_enabled = (os.getenv("EVENT_PARSE_ENABLE_4O_FALLBACK", "0") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if fallback_enabled and (os.getenv("FOUR_O_TOKEN") or "").strip():
             try:
                 await notify_llm_incident(
                     "event_parse_gemma_fallback_4o",

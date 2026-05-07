@@ -217,8 +217,9 @@ async def _gemma_region_fallback(*, city: str, gemma_client: Any | None) -> Regi
         f'Населённый пункт: "{city.strip()}"\n'
     )
     try:
+        model = (os.getenv("GEO_REGION_GEMMA_MODEL", "gemma-4-31b-it") or "").strip() or "gemma-4-31b-it"
         raw, _usage = await gemma_client.generate_content_async(
-            model="gemma-3-27b",
+            model=model,
             prompt=prompt,
             generation_config={"temperature": 0},
             max_output_tokens=256,

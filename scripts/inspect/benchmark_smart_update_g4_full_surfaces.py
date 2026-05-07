@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import smart_event_update as su
 from db import Database
 from smart_event_update import (
     EventCandidate,
@@ -31,6 +32,7 @@ from smart_event_update import (
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts" / "codex"
 DEFAULT_EVENT_IDS = "4594,4598,4538"
 DEFAULT_MODEL = "gemma-4-31b-it"
+DEFAULT_ADAPTIVE_4O_FACT_THRESHOLD = 14
 
 
 def _load_stage_module() -> Any:
@@ -367,102 +369,172 @@ def _field_diff(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[dic
     return out
 
 
+def _manual_fact_coverage_placeholder(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep the benchmark fast when Codex/human review is the comparison loop."""
+    baseline_facts = list(baseline.get("facts_text_clean") or [])
+    candidate_facts = list(candidate.get("facts_text_clean") or [])
+    candidate_raw_facts = list(candidate.get("raw_facts") or [])
+    return {
+        "summary": {
+            "baseline_fact_count": len(baseline_facts),
+            "grounded_baseline_fact_count": len(baseline_facts),
+            "covered_grounded_baseline_fact_count": None,
+            "g4_fact_count": len(candidate_raw_facts),
+            "grounded_g4_fact_count": len(candidate_facts),
+            "lost_baseline_facts": [],
+            "added_g4_facts": [],
+            "suspicious_g4_facts": [],
+            "llm_overall_verdict": "skipped",
+            "deterministic_verdict_floor": "manual_review",
+            "verdict": "manual_review",
+            "reviewer_skipped": True,
+            "coverage_summary": {
+                "overall_verdict": "manual_review",
+                "verdict_reason": "LLM reviewer skipped; compare facts/text manually from benchmark artifact.",
+            },
+            "baseline_raw_extracted_fact_count": len(baseline.get("raw_facts") or []),
+            "baseline_writer_fact_count": len(baseline_facts),
+            "baseline_filtered_out_fact_count": None,
+            "baseline_metadata_fact_count": len(baseline.get("summary_infoblock") or []),
+            "g4_public_fact_count": len(candidate_facts),
+            "g4_logistics_fact_count": None,
+            "g4_logistics_fact_texts": [],
+        },
+        "errors": ["llm_reviewer_skipped"],
+    }
+
+
 async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
     stage._load_env_file()
     stage._set_smart_update_model(args.model)
     os.environ["EVENT_TOPICS_MODEL"] = args.model
-    src_db = _db_path(args.prod_db)
-    event_ids = _event_ids(args.event_ids)
-    generated_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    sandbox_db = ARTIFACTS_ROOT / f"smart_update_g4_full_surface_sandbox_{generated_at}.sqlite"
-    json_path = ARTIFACTS_ROOT / f"smart_update_g4_full_surface_benchmark_{generated_at}.json"
-    md_path = json_path.with_suffix(".md")
-
-    baseline_con = sqlite3.connect(src_db)
-    baseline_con.row_factory = sqlite3.Row
-    baselines: dict[int, dict[str, Any]] = {}
-    source_sets: dict[int, list[dict[str, Any]]] = {}
-    events: dict[int, dict[str, Any]] = {}
+    old_skip_past = os.environ.get("SMART_UPDATE_SKIP_PAST_EVENTS")
+    if args.allow_past_events:
+        os.environ["SMART_UPDATE_SKIP_PAST_EVENTS"] = "0"
+    create_path = str(args.create_path or "current")
     try:
-        for event_id in event_ids:
-            events[event_id] = _fetch_event(baseline_con, event_id)
-            source_sets[event_id] = _fetch_sources(baseline_con, event_id)
-            if not source_sets[event_id]:
-                raise RuntimeError(f"Event {event_id} has no source rows with source_text")
-            baselines[event_id] = _snapshot_from_db(baseline_con, event_id, db_path=src_db)
-    finally:
-        baseline_con.close()
+        if create_path == "lollipop-light":
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE = True
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE = args.writer_lane
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD = int(args.adaptive_4o_fact_threshold)
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_MODEL = args.four_o_model
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC = int(args.lollipop_stage_timeout_sec)
+        else:
+            su.SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE = False
+        src_db = _db_path(args.prod_db)
+        event_ids = _event_ids(args.event_ids)
+        generated_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        sandbox_db = ARTIFACTS_ROOT / f"smart_update_g4_full_surface_sandbox_{generated_at}.sqlite"
+        json_path = ARTIFACTS_ROOT / f"smart_update_g4_full_surface_benchmark_{generated_at}.json"
+        md_path = json_path.with_suffix(".md")
 
-    _prepare_sandbox(src_db, sandbox_db)
-    db = Database(str(sandbox_db))
-    results: list[dict[str, Any]] = []
-    try:
-        for event_id in event_ids:
-            run_info = await _run_event(db, events[event_id], source_sets[event_id])
-            candidate_event_id = run_info.get("candidate_event_id")
-            if not candidate_event_id:
-                candidate_snapshot: dict[str, Any] = {"error": "candidate_event_not_created"}
-                coverage = {"summary": {"verdict": "review_error"}, "errors": ["candidate_event_not_created"]}
-            else:
-                con = sqlite3.connect(sandbox_db)
-                con.row_factory = sqlite3.Row
-                try:
-                    candidate_snapshot = _snapshot_from_db(con, int(candidate_event_id), db_path=sandbox_db)
-                finally:
-                    con.close()
-                baseline_fixture = _fixture_from_event(
-                    events[event_id],
-                    source_sets[event_id],
-                    baselines[event_id].get("facts_by_status") or [],
-                    db_path=src_db,
-                )
-                candidate_snapshot["model"] = args.model
-                candidate_snapshot["path"] = "smart_update_g4_sandbox_create_merge_persisted"
-                coverage = await stage._run_fact_coverage(
-                    baseline_fixture,
-                    baselines[event_id],
-                    candidate_snapshot,
-                    model=args.model,
-                )
-            result = {
-                "fixture": {
-                    "fixture_id": f"PRODDB-{event_id}",
-                    "title": events[event_id].get("title"),
-                    "baseline_event_id": event_id,
-                    "candidate_event_id": candidate_event_id,
-                },
-                "baseline": baselines[event_id],
-                "candidate": candidate_snapshot,
-                "smart_update_run": run_info,
-                "field_diff": _field_diff(baselines[event_id], candidate_snapshot),
-                "fact_coverage": coverage,
-            }
-            results.append(result)
-
-            data = {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "prod_db": str(src_db),
-                "sandbox_db": str(sandbox_db),
-                "model": args.model,
-                "event_ids": event_ids,
-                "results": results,
-                "checkpoint": {
-                    "completed": len(results),
-                    "total": len(event_ids),
-                    "complete": len(results) == len(event_ids),
-                },
-                "limitations": [
-                    "event_source rows do not store the original upstream EventCandidate; candidate anchor fields are seeded from the baseline event row",
-                    "this benchmark validates Smart Update G4 create/merge/persisted surfaces on copied source rows, not Telegram/parser upstream extraction parity",
-                ],
-            }
-            json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-            md_path.write_text(_render_report(data, json_path), encoding="utf-8")
-    finally:
+        baseline_con = sqlite3.connect(src_db)
+        baseline_con.row_factory = sqlite3.Row
+        baselines: dict[int, dict[str, Any]] = {}
+        source_sets: dict[int, list[dict[str, Any]]] = {}
+        events: dict[int, dict[str, Any]] = {}
         try:
-            await db.close()
-        except Exception:
-            pass
+            for event_id in event_ids:
+                events[event_id] = _fetch_event(baseline_con, event_id)
+                source_sets[event_id] = _fetch_sources(baseline_con, event_id)
+                if not source_sets[event_id]:
+                    raise RuntimeError(f"Event {event_id} has no source rows with source_text")
+                baselines[event_id] = _snapshot_from_db(baseline_con, event_id, db_path=src_db)
+        finally:
+            baseline_con.close()
+
+        _prepare_sandbox(src_db, sandbox_db)
+        db = Database(str(sandbox_db))
+        results: list[dict[str, Any]] = []
+        try:
+            for event_id in event_ids:
+                run_info = await _run_event(db, events[event_id], source_sets[event_id])
+                candidate_event_id = run_info.get("candidate_event_id")
+                if not candidate_event_id:
+                    candidate_snapshot: dict[str, Any] = {"error": "candidate_event_not_created"}
+                    coverage = {"summary": {"verdict": "review_error"}, "errors": ["candidate_event_not_created"]}
+                else:
+                    con = sqlite3.connect(sandbox_db)
+                    con.row_factory = sqlite3.Row
+                    try:
+                        candidate_snapshot = _snapshot_from_db(con, int(candidate_event_id), db_path=sandbox_db)
+                    finally:
+                        con.close()
+                    candidate_snapshot["model"] = args.model
+                    candidate_snapshot["path"] = "smart_update_g4_sandbox_create_merge_persisted"
+                    if args.skip_llm_reviewer:
+                        coverage = _manual_fact_coverage_placeholder(baselines[event_id], candidate_snapshot)
+                    else:
+                        baseline_fixture = _fixture_from_event(
+                            events[event_id],
+                            source_sets[event_id],
+                            baselines[event_id].get("facts_by_status") or [],
+                            db_path=src_db,
+                        )
+                        coverage = await stage._run_fact_coverage(
+                            baseline_fixture,
+                            baselines[event_id],
+                            candidate_snapshot,
+                            model=args.model,
+                        )
+                result = {
+                    "fixture": {
+                        "fixture_id": f"PRODDB-{event_id}",
+                        "title": events[event_id].get("title"),
+                        "baseline_event_id": event_id,
+                        "candidate_event_id": candidate_event_id,
+                    },
+                    "baseline": baselines[event_id],
+                    "candidate": candidate_snapshot,
+                    "smart_update_run": run_info,
+                    "field_diff": _field_diff(baselines[event_id], candidate_snapshot),
+                    "fact_coverage": coverage,
+                }
+                results.append(result)
+
+                data = {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "prod_db": str(src_db),
+                    "sandbox_db": str(sandbox_db),
+                    "model": args.model,
+                    "create_path": create_path,
+                    "writer_lane": args.writer_lane,
+                    "adaptive_4o_fact_threshold": int(args.adaptive_4o_fact_threshold),
+                    "four_o_model": args.four_o_model,
+                    "allow_past_events": bool(args.allow_past_events),
+                    "event_ids": event_ids,
+                    "results": results,
+                    "checkpoint": {
+                        "completed": len(results),
+                        "total": len(event_ids),
+                        "complete": len(results) == len(event_ids),
+                    },
+                    "limitations": [
+                        "event_source rows do not store the original upstream EventCandidate; candidate anchor fields are seeded from the baseline event row",
+                        "this benchmark validates Smart Update G4 create/merge/persisted surfaces on copied source rows, not Telegram/parser upstream extraction parity",
+                        "when --skip-llm-reviewer is used, fact coverage verdict is a manual-review placeholder and no Gemma reviewer call is made",
+                    ],
+                }
+                if args.allow_past_events:
+                    data["limitations"].append(
+                        "SMART_UPDATE_SKIP_PAST_EVENTS is disabled only inside this sandbox benchmark so older production snapshots remain replayable"
+                    )
+                json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                md_path.write_text(_render_report(data, json_path), encoding="utf-8")
+        finally:
+            try:
+                await db.close()
+            except Exception:
+                pass
+    finally:
+        if args.allow_past_events:
+            if old_skip_past is None:
+                os.environ.pop("SMART_UPDATE_SKIP_PAST_EVENTS", None)
+            else:
+                os.environ["SMART_UPDATE_SKIP_PAST_EVENTS"] = old_skip_past
 
     return json_path, md_path
 
@@ -485,6 +557,10 @@ def _render_report(data: dict[str, Any], json_path: Path) -> str:
         f"- prod_db: `{data.get('prod_db')}`",
         f"- sandbox_db: `{data.get('sandbox_db')}`",
         f"- model: `{data.get('model')}`",
+        f"- create_path: `{data.get('create_path') or 'current'}`",
+        f"- writer_lane: `{data.get('writer_lane') or '-'}`",
+        f"- adaptive_4o_fact_threshold: `{data.get('adaptive_4o_fact_threshold')}`",
+        f"- four_o_model: `{data.get('four_o_model') or '-'}`",
         f"- checkpoint: `{data.get('checkpoint')}`",
         "",
         "## Scope",
@@ -601,6 +677,36 @@ def main() -> None:
     parser.add_argument("--prod-db", required=True)
     parser.add_argument("--event-ids", default=DEFAULT_EVENT_IDS)
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--create-path",
+        choices=["current", "lollipop-light"],
+        default="current",
+        help="Smart Update create path to benchmark in the sandbox.",
+    )
+    parser.add_argument(
+        "--writer-lane",
+        choices=["gemma4", "4o", "adaptive"],
+        default="adaptive",
+        help="Writer lane for --create-path lollipop-light.",
+    )
+    parser.add_argument(
+        "--adaptive-4o-fact-threshold",
+        type=int,
+        default=DEFAULT_ADAPTIVE_4O_FACT_THRESHOLD,
+        help="For adaptive lollipop-light, use 4o when facts_text_clean count is greater than this threshold.",
+    )
+    parser.add_argument("--four-o-model", default="gpt-4o")
+    parser.add_argument("--lollipop-stage-timeout-sec", type=int, default=70)
+    parser.add_argument(
+        "--allow-past-events",
+        action="store_true",
+        help="Disable Smart Update's past-event guardrail inside the sandbox replay only.",
+    )
+    parser.add_argument(
+        "--skip-llm-reviewer",
+        action="store_true",
+        help="Skip the slow Gemma fact-coverage reviewer; leave facts/text for manual comparison in the artifact.",
+    )
     args = parser.parse_args()
     json_path, md_path = asyncio.run(_run(args))
     print(json_path)

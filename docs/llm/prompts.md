@@ -1,11 +1,11 @@
-# Prompt for model 4o
+# Prompt for event parsing
 
-This repository uses an external LLM (model **4o**) for text parsing and
-normalisation. The current instruction set for the model is stored here so that
-it can be refined over time.
+This repository uses Gemma via Google AI for text parsing and normalisation by
+default. The current instruction set for the model is stored here so that it can
+be refined over time.
 
 Note: this prompt is used by the **draft extraction/parsing** flow (VK/TG → JSON).
-The default backend is **Gemma via Google AI** (4o is supported as an optional fallback); see `main.py:parse_event_via_llm` and `docs/features/llm-gateway/README.md`.
+The default backend is **Gemma 4 via Google AI**; see `main.py:parse_event_via_llm` and `docs/features/llm-gateway/README.md`. The legacy 4o parser can still be forced with `EVENT_PARSE_LLM=4o`; Gemma JSON-error fallback to 4o is opt-in via `EVENT_PARSE_ENABLE_4O_FALLBACK=1`.
 Smart Update (merge/match/rewrite/facts) uses **Gemma via Google AI** with 4o as a fallback only when Gemma fails; see `docs/features/smart-event-update/README.md`.
 Important: `parse_event_via_llm` reads only the fenced `MASTER-PROMPT` block below for event parsing.
 The other sections in this file document separate prompts/workflows and must not be appended to the event-parse system prompt.

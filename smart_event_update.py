@@ -164,7 +164,13 @@ SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
 ).strip().lower() in {"1", "true", "yes", "on"}
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES = {
     item.strip()
-    for item in (os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", "facts_extract,create_bundle") or "").split(",")
+    for item in (
+        os.getenv(
+            "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES",
+            "facts_extract,rich_facts_extract,create_bundle,split_description_writer,split_derived_fields",
+        )
+        or ""
+    ).split(",")
     if item.strip()
 }
 SMART_UPDATE_G4_SPLIT_CREATE = (os.getenv("SMART_UPDATE_G4_SPLIT_CREATE", "0") or "").strip().lower() in {
@@ -173,6 +179,47 @@ SMART_UPDATE_G4_SPLIT_CREATE = (os.getenv("SMART_UPDATE_G4_SPLIT_CREATE", "0") o
     "yes",
     "on",
 }
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE = (
+    os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE", "0") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE = (
+    os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE", "adaptive") or "adaptive"
+).strip().lower()
+if SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE not in {"gemma4", "4o", "adaptive"}:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE = "adaptive"
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_MODEL = (
+    os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_MODEL", "gpt-4o") or "gpt-4o"
+).strip()
+try:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD = int(
+        os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD", "14") or "14"
+    )
+except Exception:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD = 14
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD = min(
+    80,
+    max(1, SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD),
+)
+try:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC = int(
+        os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC", "70") or "70"
+    )
+except Exception:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC = 70
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC = min(
+    240,
+    max(10, SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC),
+)
+try:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES = int(
+        os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES", "2") or "2"
+    )
+except Exception:
+    SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES = 2
+SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES = min(
+    4,
+    max(1, SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES),
+)
 SMART_UPDATE_YO_RULE = (
     "Уважай букву «ё»: если слово в норме пишется через «ё», не заменяй её на «е»."
 )
@@ -242,6 +289,18 @@ SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC = _env_int(
     0,
     lo=0,
     hi=600,
+)
+SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC = _env_int(
+    "SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC",
+    90,
+    lo=1,
+    hi=180,
+)
+SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC = _env_int(
+    "SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC",
+    20,
+    lo=1,
+    hi=120,
 )
 
 # If an event is extracted far into the future, treat poster date mismatches as a high-risk signal.
@@ -1113,6 +1172,13 @@ _LOGISTICS_TICKET_BOILERPLATE_DROP_RE = re.compile(
     r"регистрац\w*.*\bссылк\w*"
     r")\b"
 )
+_LOGISTICS_EXPLICIT_ADDRESS_RE = re.compile(
+    r"(?i)\b("
+    r"по\s+адресу|адрес|"
+    r"(?:ул\.?|улиц\w*|пр\.?|проспект\w*|пер\.?|переул\w*|пл\.?|площад\w*|дом|д\.)"
+    r"[^.!?\n]{0,80}\d"
+    r")\b"
+)
 
 _DESCRIPTION_CHANNEL_PROMO_SENT_RE = re.compile(
     r"(?i)\b("
@@ -1213,7 +1279,7 @@ def _strip_infoblock_logistics_from_description(
         if price_values:
             for pv in sorted(price_values, reverse=True):
                 s = re.sub(
-                    rf"(?i)(?<!\d){pv}\s*(?:₽|руб\.?|рублей|рубля|р\.?)(?!\w)",
+                    rf"(?i)(?<!\d){pv}\s*(?:₽|рублей|рубля|руб\.?|р\.?)(?!\w)",
                     "",
                     s,
                 )
@@ -1256,9 +1322,22 @@ def _strip_infoblock_logistics_from_description(
         p = para.strip()
         if not p:
             continue
-        # Preserve headings/quotes as-is (quotes may include source wording).
-        if p.lstrip().startswith(">") or re.match(r"^\s*#{1,6}\s+\S", p):
+        # Preserve quotes as-is (quotes may include source wording).
+        if p.lstrip().startswith(">"):
             out_paras.append(p)
+            continue
+        if re.match(r"^\s*#{1,6}\s+\S", p):
+            lines = p.splitlines()
+            heading = lines[0].strip()
+            body = "\n".join(lines[1:]).strip()
+            if not body:
+                out_paras.append(heading)
+                continue
+            stripped_body = _strip_infoblock_logistics_from_description(body, candidate=candidate)
+            if stripped_body:
+                out_paras.append(f"{heading}\n{stripped_body}".strip())
+            else:
+                out_paras.append(heading)
             continue
 
         # For list-like blocks keep formatting and strip logistics line-by-line.
@@ -1353,6 +1432,47 @@ def _description_needs_infoblock_logistics_strip(
     if _LOGISTICS_TICKET_WORD_RE.search(raw):
         return True
     # Candidate anchors occasionally leak verbatim; strip only if present.
+    for val in (
+        getattr(candidate, "location_address", None),
+        _format_ru_date_phrase(getattr(candidate, "date", None)),
+        getattr(candidate, "time", None),
+        getattr(candidate, "date", None),
+    ):
+        v = str(val or "").strip()
+        if v and v.casefold() in raw.casefold():
+            return True
+    return False
+
+
+def _description_needs_g4_split_create_logistics_reject(
+    text: str | None,
+    *,
+    candidate: EventCandidate,
+) -> bool:
+    """Stricter reject gate for split-create description output.
+
+    The generic cleanup gate treats words like "улицы" / "город" as address-like
+    because ordinary event descriptions should not duplicate venue logistics.
+    Split-create can describe excursion routes, so only hard logistics signals
+    should make the writer output unusable.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if _LOGISTICS_URL_RE.search(raw):
+        return True
+    if _LOGISTICS_PHONE_RE.search(raw):
+        return True
+    if _LOGISTICS_PRICE_RE.search(raw):
+        return True
+    if _LOGISTICS_TIME_RE.search(raw):
+        return True
+    if _LOGISTICS_DDMM_RE.search(raw):
+        return True
+    if _LOGISTICS_TICKET_WORD_RE.search(raw):
+        return True
+    if _LOGISTICS_EXPLICIT_ADDRESS_RE.search(raw):
+        return True
     for val in (
         getattr(candidate, "location_address", None),
         _format_ru_date_phrase(getattr(candidate, "date", None)),
@@ -1787,18 +1907,162 @@ def _fact_first_description_prompt(
     ).strip()
 
 
-def _g4_split_create_writer_schema() -> dict[str, Any]:
+def _g4_split_description_writer_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
             "description": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["description", "warnings"],
+        "additionalProperties": False,
+    }
+
+
+def _g4_split_derived_fields_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
             "short_description": {"type": "string"},
             "search_digest": {"type": "string"},
             "warnings": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["description", "short_description", "search_digest", "warnings"],
+        "required": ["short_description", "search_digest", "warnings"],
         "additionalProperties": False,
     }
+
+
+def _g4_rich_facts_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "public_core_facts": {"type": "array", "items": {"type": "string"}},
+            "program_or_examples": {"type": "array", "items": {"type": "string"}},
+            "context_methodology_facts": {"type": "array", "items": {"type": "string"}},
+            "people_org_facts": {"type": "array", "items": {"type": "string"}},
+            "logistics_facts": {"type": "array", "items": {"type": "string"}},
+            "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": [
+            "public_core_facts",
+            "program_or_examples",
+            "context_methodology_facts",
+            "people_org_facts",
+            "logistics_facts",
+            "uncertain_or_drop",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _flatten_g4_rich_facts_payload(data: Any) -> list[str]:
+    if not isinstance(data, dict):
+        return []
+    out: list[str] = []
+    for key in (
+        "public_core_facts",
+        "context_methodology_facts",
+        "people_org_facts",
+        "program_or_examples",
+        "logistics_facts",
+    ):
+        for item in data.get(key) or []:
+            s = str(item or "").strip()
+            if s:
+                out.append(s)
+    return out
+
+
+def _g4_split_create_fact_ledger_description(
+    *,
+    candidate: EventCandidate,
+    title: str | None,
+    facts_text_clean: Sequence[str],
+) -> str | None:
+    facts = _dedupe_source_facts(
+        [
+            _sanitize_fact_text_clean_for_prompt(str(f or "").strip())
+            for f in (facts_text_clean or [])
+            if str(f or "").strip()
+        ]
+    )
+    if not facts:
+        return None
+    anchors = [
+        candidate.date or "",
+        candidate.time or "",
+        candidate.city or "",
+        candidate.location_name or "",
+        candidate.location_address or "",
+        candidate.ticket_link or "",
+        "Пушкинская карта" if candidate.pushkin_card else "",
+    ]
+    narrative = _g4_split_description_facts(facts, anchors=anchors, max_items=24)
+    if not narrative:
+        return None
+
+    lead = narrative[0].strip()
+    if lead and lead[-1] not in ".!?":
+        lead += "."
+    rest = narrative[1:]
+    lines: list[str] = [lead]
+    if rest:
+        heading = "Что важно"
+        title_l = (title or candidate.title or "").casefold()
+        if "концерт" in title_l or (candidate.event_type or "").casefold() == "concert":
+            heading = "Программа и участники"
+        elif "экскурс" in title_l or (candidate.event_type or "").casefold() in {"tour", "excursion"}:
+            heading = "Маршрут и детали"
+        lines.extend(["", f"### {heading}"])
+        for fact in rest[:18]:
+            item = fact.strip()
+            if item and item[-1] in ".!?":
+                item = item[:-1].rstrip()
+            if item:
+                lines.append(f"- {item}")
+    description = "\n".join(lines)
+    return _cleanup_g4_split_create_description(description, candidate=candidate)
+
+
+def _g4_split_description_facts(
+    facts: Sequence[str],
+    *,
+    anchors: Sequence[str],
+    max_items: int,
+) -> list[str]:
+    narrative: list[str] = []
+    for fact in facts:
+        text = str(fact or "").strip()
+        if not text:
+            continue
+        if text.casefold().startswith("описание "):
+            continue
+        low = text.casefold()
+        if low.startswith(
+            (
+                "дата:",
+                "время:",
+                "локация:",
+                "место проведения:",
+                "цена:",
+                "стоимость",
+                "билеты",
+                "регистрация",
+                "продолжительность",
+                "пушкинская карта",
+            )
+        ):
+            continue
+        try:
+            forbidden = _fact_first_forbidden_reasons(text, anchors=anchors)
+        except Exception:
+            forbidden = []
+        if forbidden:
+            continue
+        narrative.append(text)
+        if len(narrative) >= max_items:
+            break
+    return narrative
 
 
 def _cleanup_g4_split_create_description(
@@ -1821,8 +2085,13 @@ def _cleanup_g4_split_create_description(
     raw = _ensure_minimal_description_headings(raw) or raw
     raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_infoblock_logistics_strip(raw, candidate=candidate):
+        raw = _strip_infoblock_logistics_from_description(raw, candidate=candidate) or raw
+        raw = _normalize_plaintext_paragraphs(raw) or raw
+        raw = _ensure_minimal_description_headings(raw) or raw
+        raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+    if _description_needs_g4_split_create_logistics_reject(raw, candidate=candidate):
         logger.warning(
-            "smart_update: g4_split_create_writer rejected description with logistics source_type=%s source_url=%s",
+            "smart_update: g4_split_description_writer rejected description with logistics source_type=%s source_url=%s",
             candidate.source_type,
             candidate.source_url,
         )
@@ -1840,14 +2109,25 @@ async def _llm_g4_split_create_writer(
     facts = [str(f or "").strip() for f in (facts_text_clean or []) if str(f or "").strip()]
     if not facts or SMART_UPDATE_LLM_DISABLED:
         return None
-    facts = _dedupe_source_facts([_sanitize_fact_text_clean_for_prompt(f) for f in facts])[:28]
-    budget_chars = _estimate_fact_first_description_budget_chars(facts)
-    max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1500, ceil=3600)
+    facts = _dedupe_source_facts([_sanitize_fact_text_clean_for_prompt(f) for f in facts])[:30]
+    anchors = [
+        candidate.date or "",
+        candidate.time or "",
+        candidate.city or "",
+        candidate.location_name or "",
+        candidate.location_address or "",
+        candidate.ticket_link or "",
+        "Пушкинская карта" if candidate.pushkin_card else "",
+    ]
+    description_facts = _g4_split_description_facts(facts, anchors=anchors, max_items=30) or facts
+    budget_chars = _estimate_fact_first_description_budget_chars(description_facts)
+    desc_max_tokens = _estimate_fact_first_description_max_tokens(budget_chars=budget_chars, floor=1700, ceil=4200)
     payload = {
         "title": (title or candidate.title or "").strip(),
         "event_type": (event_type or candidate.event_type or "").strip(),
         "description_budget_chars": budget_chars,
-        "facts_text_clean": facts,
+        "facts_text_clean": description_facts,
+        "full_fact_count": len(facts),
         "infoblock_context": {
             "date": candidate.date,
             "time": candidate.time,
@@ -1863,7 +2143,7 @@ async def _llm_g4_split_create_writer(
     }
     prompt = (
         "Ты пишешь один готовый публичный Markdown-анонс события из уже извлечённых фактов.\n"
-        "Это Smart Update G4 split-create writer: extraction уже сделан, поэтому не извлекай новые факты и не используй baseline.\n\n"
+        "Это Smart Update G4 description writer: extraction уже сделан, поэтому не извлекай новые факты и не используй baseline.\n\n"
         "Источник истины для описания: только `facts_text_clean`.\n"
         "`infoblock_context` нужен только чтобы НЕ повторять логистику в описании: дата, время, город, площадка, адрес, билеты, ссылки, цена, возраст, Пушкинская карта показываются отдельно.\n\n"
         f"{SMART_UPDATE_YO_RULE}\n\n"
@@ -1874,17 +2154,27 @@ async def _llm_g4_split_create_writer(
         "- Не пиши CTA/рекламу: «приходите», «не пропустите», «ждём вас», «приглашаем», «успейте», «присоединяйтесь».\n"
         "- Не используй корень «посвящ» и конструкцию «это ... не ..., а ...».\n"
         "- Не повторяй логистику из infoblock_context в description.\n"
-        "- `short_description`: одно законченное предложение 12-16 слов, без логистики, emoji и hashtags.\n"
-        "- `search_digest`: короткое резюме для поиска/карточек, до 160 символов, без логистики, emoji и hashtags.\n"
         "- `warnings`: пустой массив или короткие предупреждения о пропущенных/сомнительных фактах.\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
-    data = await _ask_gemma_json(
-        prompt,
-        _g4_split_create_writer_schema(),
-        max_tokens=max_tokens,
-        label="split_create_writer",
-    )
+    try:
+        data = await asyncio.wait_for(
+            _ask_gemma_json(
+                prompt,
+                _g4_split_description_writer_schema(),
+                max_tokens=desc_max_tokens,
+                label="split_description_writer",
+            ),
+            timeout=float(SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "smart_update: g4_split_description_writer timeout source_type=%s source_url=%s timeout_sec=%s",
+            candidate.source_type,
+            candidate.source_url,
+            SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC,
+        )
+        return None
     if not isinstance(data, dict):
         return None
     description = _cleanup_g4_split_create_description(
@@ -1893,15 +2183,57 @@ async def _llm_g4_split_create_writer(
     )
     if not description:
         return None
-    short = _clean_short_description(str(data.get("short_description") or ""))
-    if short and not _is_short_description_acceptable(short, min_words=12, max_words=16):
-        short = None
-    digest = _clean_search_digest(str(data.get("search_digest") or ""))
+    derived_prompt = (
+        "Ты заполняешь короткие производные поля для Smart Update.\n"
+        "Основной публичный текст уже написан; не переписывай его и не добавляй новых фактов.\n\n"
+        "Верни JSON:\n"
+        "- `short_description`: одно законченное предложение 12-16 слов, без даты/времени/адреса/цены/ссылок, emoji и hashtags.\n"
+        "- `search_digest`: короткое резюме для поиска/карточек, до 160 символов, без даты/времени/адреса/цены/ссылок, emoji и hashtags.\n"
+        "- `warnings`: пустой массив или короткие предупреждения.\n\n"
+        f"Данные:\n{json.dumps({**payload, 'description': _clip(description, 4500)}, ensure_ascii=False)}"
+    )
+    derived: dict[str, Any] | None
+    try:
+        derived = await asyncio.wait_for(
+            _ask_gemma_json(
+                derived_prompt,
+                _g4_split_derived_fields_schema(),
+                max_tokens=260,
+                label="split_derived_fields",
+            ),
+            timeout=float(SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "smart_update: g4_split_derived_fields timeout source_type=%s source_url=%s timeout_sec=%s",
+            candidate.source_type,
+            candidate.source_url,
+            SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC,
+        )
+        derived = None
+    short = ""
+    digest = ""
+    derived_warnings: list[str] = []
+    if isinstance(derived, dict):
+        short = _clean_short_description(str(derived.get("short_description") or ""))
+        if short and not _is_short_description_acceptable(short, min_words=12, max_words=16):
+            short = ""
+        digest = _clean_search_digest(str(derived.get("search_digest") or ""))
+        derived_warnings = [
+            str(x).strip() for x in (derived.get("warnings") or []) if str(x or "").strip()
+        ]
+    if not short:
+        short = _fallback_short_description_from_text(description) or ""
+    if not digest:
+        digest = _clean_search_digest(_fallback_digest_from_description(description))
     return {
         "description": description,
         "short_description": short,
         "search_digest": digest,
-        "warnings": [str(x).strip() for x in (data.get("warnings") or []) if str(x or "").strip()],
+        "warnings": [
+            *[str(x).strip() for x in (data.get("warnings") or []) if str(x or "").strip()],
+            *derived_warnings,
+        ],
     }
 
 
@@ -1914,6 +2246,7 @@ async def _llm_g4_split_create_bundle(
     facts = await _llm_extract_candidate_facts(candidate)
     facts_text_clean = _facts_text_clean_from_facts(
         facts,
+        max_items=40,
         anchors=[
             candidate.date or "",
             candidate.time or "",
@@ -1943,6 +2276,17 @@ async def _llm_g4_split_create_bundle(
         bundle["search_digest"] = writer.get("search_digest")
         bundle["short_description"] = writer.get("short_description")
         bundle["_split_create_warnings"] = writer.get("warnings") or []
+    else:
+        fallback_desc = _g4_split_create_fact_ledger_description(
+            candidate=candidate,
+            title=clean_title,
+            facts_text_clean=facts_text_clean,
+        )
+        if fallback_desc:
+            bundle["description"] = fallback_desc
+            bundle["search_digest"] = _clean_search_digest(_fallback_digest_from_description(fallback_desc))
+            bundle["short_description"] = _fallback_short_description_from_text(fallback_desc)
+            bundle["_split_create_warnings"] = ["writer_unavailable_fact_ledger_fallback"]
     return bundle
 
 
@@ -5049,6 +5393,27 @@ def _smart_update_native_schema_enabled(label: str) -> bool:
     return "*" in stages or label in stages
 
 
+def _smart_update_prompt_schema_fallback_enabled(label: str) -> bool:
+    if not SMART_UPDATE_G4_SPLIT_CREATE or label != "split_description_writer":
+        return True
+    return (os.getenv("SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK", "0") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _smart_update_4o_fallback_enabled(label: str) -> bool:
+    if SMART_UPDATE_G4_SPLIT_CREATE and label in {
+        "rich_facts_extract",
+        "split_description_writer",
+        "split_derived_fields",
+    }:
+        return False
+    return True
+
+
 def reset_smart_update_llm_trace() -> None:
     """Start collecting Smart Update LLM call diagnostics in the current context."""
     _SMART_UPDATE_LLM_TRACE.set([])
@@ -5158,11 +5523,13 @@ async def _ask_gemma_json(
         "response_mime_type": "application/json",
         "response_schema": _gemma_native_response_schema(schema),
     }
+    prompt_schema_fallback_enabled = _smart_update_prompt_schema_fallback_enabled(label)
     trace_record = _start_llm_trace_record(
         "json",
         label,
         max_tokens=max_tokens,
         native_schema_enabled=native_schema_enabled,
+        prompt_schema_fallback_enabled=prompt_schema_fallback_enabled,
     )
 
     rl_deadline = time.monotonic() + rl_max_wait_sec
@@ -5195,6 +5562,13 @@ async def _ask_gemma_json(
                         if data_native is not None:
                             _finish_llm_trace_record(trace_record, status="ok_native")
                             return data_native
+                        if not prompt_schema_fallback_enabled:
+                            logger.warning(
+                                "smart_update: gemma native schema %s returned invalid json; prompt fallback disabled",
+                                label,
+                            )
+                            _finish_llm_trace_record(trace_record, status="failed_native_invalid_json")
+                            return None
                         logger.warning(
                             "smart_update: gemma native schema %s returned invalid json; falling back to prompt schema",
                             label,
@@ -5202,6 +5576,14 @@ async def _ask_gemma_json(
                     except Exception as exc:
                         if trace_record is not None:
                             trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
+                        if not prompt_schema_fallback_enabled:
+                            logger.warning(
+                                "smart_update: gemma native schema %s failed; prompt fallback disabled: %s",
+                                label,
+                                exc,
+                            )
+                            _finish_llm_trace_record(trace_record, status="failed_native", error=exc)
+                            return None
                         logger.warning(
                             "smart_update: gemma native schema %s failed; falling back to prompt schema: %s",
                             label,
@@ -5363,6 +5745,9 @@ async def _ask_gemma_json(
         attempt += 1
 
     # Fallback to 4o after Gemma retries.
+    if not _smart_update_4o_fallback_enabled(label):
+        _finish_llm_trace_record(trace_record, status="failed", error=last_exc or "4o fallback disabled")
+        return None
     try:
         from main import ask_4o, notify_llm_incident
     except Exception:
@@ -5560,6 +5945,613 @@ async def _ask_gemma_text(
         return None
 
 
+def _g4_lollipop_light_bucket_schema() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "assignments": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "fact_index": {"type": "INTEGER"},
+                        "bucket": {
+                            "type": "STRING",
+                            "format": "enum",
+                            "enum": [
+                                "event_core",
+                                "program_list",
+                                "people_and_roles",
+                                "forward_looking",
+                                "support_context",
+                                "uncertain",
+                            ],
+                        },
+                        "literal_items": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["fact_index", "bucket", "literal_items"],
+                },
+            },
+        },
+        "required": ["assignments"],
+    }
+
+
+def _g4_lollipop_light_writer_schema_gemma() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "title": {"type": "STRING"},
+            "description_md": {"type": "STRING"},
+            "short_description": {"type": "STRING"},
+            "search_digest": {"type": "STRING"},
+        },
+        "required": ["title", "description_md"],
+    }
+
+
+def _g4_lollipop_light_writer_schema_openai() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "description_md": {"type": "string"},
+            "short_description": {"type": "string"},
+            "search_digest": {"type": "string"},
+        },
+        "required": ["title", "description_md"],
+        "additionalProperties": False,
+    }
+
+
+def _g4_lollipop_light_bucket_prompt() -> str:
+    return (
+        "You do one small step for Smart Update G4: smart_update.facts_to_lollipop_buckets.v1.\n"
+        "Return only JSON. Do not write prose. Do not rewrite fact text.\n"
+        "Assign every input fact_index exactly once to one lollipop-light bucket.\n"
+        "Use literal_items only for explicit named program/repertoire/object title lists that must be printed as a list.\n"
+        "Do NOT use literal_items for interest lists, idea examples, request examples, keywords, roles, or support context; "
+        "keep those as ordinary narrative facts so the final text can group them naturally."
+    )
+
+
+def _g4_lollipop_light_writer_system_prompt() -> str:
+    return (
+        "You are smart_update.g4_lollipop_light.final_writer.v3. Return only JSON.\n"
+        "Write polished Russian event copy from the provided writer_pack only.\n"
+        "Cover every must_cover_fact_id exactly once in natural prose. Do not add unsupported facts.\n"
+        "Keep logistics out of narrative. Use exact ### headings from each section.\n"
+        "Bullet rule: use the `- item` bullet format ONLY for sections whose writer_pack section has a non-empty literal_items array. "
+        "For every other section write continuous prose paragraphs and never emit a `-` bullet line.\n"
+        "When a section has literal_items, render every literal item on its own line as `- item` exactly as given. "
+        "Do not add prefixes like `произведения`, `работы`, `роль` to bullet lines; if a shared prefix is needed, "
+        "introduce it once in the lead-in sentence ending with `:` and then list the bare items.\n"
+        "When several narrative facts in the same section differ only by a named entity "
+        "(composer, performer, work, role, place), merge them into one compact sentence with comma-separated names "
+        "(e.g. `Прозвучат произведения Баха, Шуберта, Бизе и Вьерна`) instead of repeating the surrounding phrase.\n"
+        "Do not turn comma-separated interests, requests, examples, or roles into one-word bullet lists; "
+        "group them in compact natural prose or short thematic bullets only when the section truly has literal_items.\n"
+        "Tone: cultural city digest, lively but restrained. No direct address, CTA, promo promises, or report formulas.\n"
+        "Never output report words like `характеризуется`, `осуществляется`, `представляет собой`; "
+        "rewrite them naturally without changing meaning.\n"
+        "Target length: 700-1100 characters for 8+ facts; 450-800 for smaller packs."
+    )
+
+
+def _g4_lollipop_light_compact_writer_payload(pack: dict[str, Any]) -> dict[str, Any]:
+    sections: list[dict[str, Any]] = []
+    for section in list(pack.get("sections") or []):
+        if not isinstance(section, dict):
+            continue
+        sections.append(
+            {
+                "role": section.get("role"),
+                "style": section.get("style"),
+                "heading": section.get("heading"),
+                "fact_ids": section.get("fact_ids") or [],
+                "facts": [
+                    {"fact_id": fact.get("fact_id"), "text": fact.get("text")}
+                    for fact in list(section.get("facts") or [])
+                    if isinstance(fact, dict)
+                ],
+                "coverage_plan": section.get("coverage_plan") or [],
+                "literal_items": section.get("literal_items") or [],
+            }
+        )
+    return {
+        "title": ((pack.get("title_context") or {}).get("original_title") or ""),
+        "event_type": pack.get("event_type"),
+        "must_cover_fact_ids": (pack.get("constraints") or {}).get("must_cover_fact_ids") or [],
+        "required_headings": (pack.get("constraints") or {}).get("headings") or [],
+        "sections": sections,
+        "output_contract": {
+            "title": "Keep original title unless writer_pack explicitly asks otherwise.",
+            "description_md": "Markdown prose only; no infoblock, no date/time/address/city/tickets.",
+            "short_description": "Optional: one complete Russian sentence, 12-16 words, no logistics.",
+            "search_digest": "Optional: compact Russian search/card summary up to 160 characters, no logistics.",
+        },
+    }
+
+
+def _g4_lollipop_light_normalize_bucket_payload(
+    facts: Sequence[str],
+    raw: dict[str, Any],
+    *,
+    candidate: EventCandidate,
+) -> dict[str, Any]:
+    bucket_prefix = {
+        "event_core": "EC",
+        "program_list": "PL",
+        "people_and_roles": "PR",
+        "forward_looking": "FL",
+        "support_context": "SC",
+        "uncertain": "UN",
+    }
+    allowed = set(bucket_prefix)
+    assignments: dict[int, tuple[str, list[str]]] = {}
+    for item in list((raw or {}).get("assignments") or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item.get("fact_index"))
+        except Exception:
+            continue
+        if idx < 0 or idx >= len(facts) or idx in assignments:
+            continue
+        bucket = str(item.get("bucket") or "").strip()
+        if bucket not in allowed:
+            bucket = "support_context"
+        literal_items = []
+        for raw_item in list(item.get("literal_items") or []):
+            literal = re.sub(r"\s+", " ", str(raw_item or "")).strip()
+            if not literal or literal.casefold() in {"literal_items", "literal item", "items"}:
+                continue
+            literal_items.append(literal)
+            if len(literal_items) >= 12:
+                break
+        assignments[idx] = (bucket, literal_items)
+    for idx in range(len(facts)):
+        assignments.setdefault(idx, ("support_context", []))
+
+    pack: dict[str, Any] = {bucket: [] for bucket in allowed}
+    counters = {bucket: 0 for bucket in allowed}
+    for idx, fact in enumerate(facts):
+        bucket, literal_items = assignments[idx]
+        counters[bucket] += 1
+        pack[bucket].append(
+            {
+                "fact_id": f"{bucket_prefix[bucket]}{counters[bucket]:02d}",
+                "bucket": bucket,
+                "text": str(fact or "").strip(),
+                "literal_items": literal_items,
+                "record_ids": [f"SU{idx:02d}"],
+                "source_refs": ["smart_update.facts_text_clean"],
+            }
+        )
+    logistics: list[dict[str, Any]] = []
+    for value, label in [
+        (candidate.date, "date"),
+        (candidate.time, "time"),
+        (candidate.location_name, "location"),
+        (candidate.location_address, "address"),
+        (candidate.city, "city"),
+    ]:
+        if value:
+            entry = {
+                "fact_id": f"LG{len(logistics) + 1:02d}",
+                "bucket": "logistics_infoblock",
+                "text": str(value),
+                "literal_items": [],
+                "record_ids": [label],
+                "source_refs": ["candidate.metadata"],
+            }
+            # Short venue brand names (e.g. "Сигнал", "Дом", "Музей города")
+            # are part of natural narrative ("в «Сигнале»") and are already
+            # protected from the narrative-strip path. Suppress them from the
+            # writer-pack infoblock so the leak validator does not raise a
+            # false-positive `infoblock.leak:LG03` and trigger a useless retry.
+            if label == "location":
+                v = str(value).strip()
+                looks_like_address = bool(
+                    re.search(r"\d", v)
+                    or _LOGISTICS_ADDR_WORD_RE.search(v)
+                    or v.count(",") >= 2
+                )
+                if not looks_like_address:
+                    entry["narrative_policy"] = "suppress"
+            logistics.append(entry)
+    pack["logistics_infoblock"] = logistics
+    return pack
+
+
+async def _ask_gemma_json_direct_native(
+    *,
+    label: str,
+    system_prompt: str,
+    user_payload: dict[str, Any],
+    response_schema: dict[str, Any],
+    max_tokens: int,
+    timeout_sec: float | None = None,
+) -> dict[str, Any]:
+    client = _get_gemma_client()
+    if client is None:
+        raise RuntimeError("GoogleAIClient is unavailable")
+    trace_record = _start_llm_trace_record(
+        "json",
+        label,
+        max_tokens=max_tokens,
+        native_schema_enabled=True,
+        prompt_schema_fallback_enabled=False,
+    )
+    max_attempts = SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES
+    had_timeout_attr = hasattr(client, "provider_timeout_seconds")
+    old_timeout = getattr(client, "provider_timeout_seconds", None)
+    if timeout_sec:
+        client.provider_timeout_seconds = float(timeout_sec)
+    try:
+        last_exc: Exception | None = None
+        for attempt in range(1, max_attempts + 1):
+            if trace_record is not None:
+                trace_record["attempts"] = attempt
+            try:
+                raw, _usage = await client.generate_content_async(
+                    model=SMART_UPDATE_MODEL,
+                    prompt=json.dumps(user_payload, ensure_ascii=False, indent=2),
+                    generation_config={
+                        "temperature": 0,
+                        "max_output_tokens": max_tokens,
+                        "response_mime_type": "application/json",
+                        "system_instruction": system_prompt.strip(),
+                        "response_schema": response_schema,
+                    },
+                    max_output_tokens=max_tokens,
+                )
+                data = _extract_json(raw or "")
+                if data is None:
+                    raise RuntimeError(f"Invalid JSON from {SMART_UPDATE_MODEL}: {(raw or '')[:600]}")
+                _finish_llm_trace_record(trace_record, status="ok_native")
+                return data
+            except Exception as exc:
+                last_exc = exc
+                if trace_record is not None:
+                    trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
+                if attempt < max_attempts:
+                    await asyncio.sleep(min(2.0, 0.5 * attempt))
+                    continue
+                _finish_llm_trace_record(trace_record, status="failed", error=exc)
+                raise
+        raise last_exc or RuntimeError("Gemma native JSON stage failed")
+    finally:
+        if timeout_sec:
+            if had_timeout_attr:
+                client.provider_timeout_seconds = old_timeout
+            else:
+                try:
+                    delattr(client, "provider_timeout_seconds")
+                except Exception:
+                    pass
+
+
+def _to_openai_schema(node: Any) -> Any:
+    if isinstance(node, dict):
+        out: dict[str, Any] = {}
+        for key, value in node.items():
+            if key == "type" and isinstance(value, str):
+                out[key] = value.lower()
+            else:
+                out[key] = _to_openai_schema(value)
+        return out
+    if isinstance(node, list):
+        return [_to_openai_schema(item) for item in node]
+    return node
+
+
+async def _ask_4o_json_once(
+    *,
+    label: str,
+    prompt: str,
+    schema: dict[str, Any],
+    model: str,
+    max_tokens: int,
+    system_prompt: str | None = None,
+) -> dict[str, Any]:
+    trace_record = _start_llm_trace_record(
+        "json",
+        label,
+        model=model,
+        max_tokens=max_tokens,
+        native_schema_enabled=True,
+        prompt_schema_fallback_enabled=False,
+    )
+    if trace_record is not None:
+        trace_record["attempts"] = 1
+    try:
+        from main import ask_4o
+    except Exception as exc:
+        _finish_llm_trace_record(trace_record, status="failed", error=exc)
+        raise RuntimeError("4o unavailable") from exc
+    injected_token_alias = False
+    if not (os.getenv("FOUR_O_TOKEN") or "").strip():
+        token_alias = (os.getenv("FOUR_4O_TOKEN") or "").strip()
+        if token_alias:
+            os.environ["FOUR_O_TOKEN"] = token_alias
+            injected_token_alias = True
+    try:
+        raw = await ask_4o(
+            prompt,
+            system_prompt=system_prompt or "Return only valid JSON for the requested schema.",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "SmartUpdateLollipopLightFinalWriter",
+                    "schema": _to_openai_schema(schema),
+                },
+            },
+            max_tokens=max_tokens,
+            model=model,
+            meta={"consumer": "smart_update", "label": label, "lane": "lollipop_light_final_writer"},
+            temperature=0,
+        )
+        data = _extract_json(raw or "")
+        if data is None:
+            raise RuntimeError(f"Invalid 4o JSON: {(raw or '')[:600]}")
+        _finish_llm_trace_record(trace_record, status="ok")
+        return data
+    except Exception as exc:
+        if trace_record is not None:
+            trace_record["provider_errors"] = int(trace_record.get("provider_errors") or 0) + 1
+        _finish_llm_trace_record(trace_record, status="failed", error=exc)
+        raise
+    finally:
+        if injected_token_alias:
+            os.environ.pop("FOUR_O_TOKEN", None)
+
+
+def _g4_lollipop_light_selected_writer_lane(fact_count: int) -> str:
+    lane = SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE
+    if lane == "adaptive":
+        return "4o" if fact_count > SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD else "gemma4"
+    return lane
+
+
+async def _llm_g4_lollipop_light_create_bundle(
+    candidate: EventCandidate,
+    *,
+    clean_title: str,
+    normalized_event_type: str | None,
+    raw_facts: Sequence[str],
+    bundled_search_digest: str | None = None,
+    bundled_short_description: str | None = None,
+) -> dict[str, Any] | None:
+    facts_text_clean = _facts_text_clean_from_facts(
+        raw_facts,
+        max_items=40,
+        anchors=[
+            candidate.date or "",
+            candidate.time or "",
+            candidate.city or "",
+            candidate.location_name or "",
+            candidate.location_address or "",
+        ],
+    )
+    if not facts_text_clean:
+        return None
+    try:
+        from smart_update_lollipop_lab import editorial_layout_family as layout_family
+        from smart_update_lollipop_lab import facts_prioritize_family as prioritize_family
+        from smart_update_lollipop_lab import full_cascade as cascade_family
+        from smart_update_lollipop_lab import writer_final_4o_family as writer_final_family
+        from smart_update_lollipop_lab import writer_pack_compose_family as writer_pack_family
+    except Exception as exc:  # pragma: no cover - optional lab package should exist in repo
+        logger.warning("smart_update: lollipop-light modules unavailable: %s", exc)
+        return None
+
+    event_type = normalized_event_type or candidate.event_type
+    timeout_sec = float(SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC)
+    bucket_raw = await _ask_gemma_json_direct_native(
+        label="lollipop.bucket_facts",
+        system_prompt=_g4_lollipop_light_bucket_prompt(),
+        user_payload={
+            "title": clean_title,
+            "event_type": event_type,
+            "facts_text_clean": [{"index": idx, "text": text} for idx, text in enumerate(facts_text_clean)],
+        },
+        response_schema=_g4_lollipop_light_bucket_schema(),
+        max_tokens=900,
+        timeout_sec=timeout_sec,
+    )
+    fact_pack = _g4_lollipop_light_normalize_bucket_payload(
+        facts_text_clean,
+        bucket_raw or {},
+        candidate=candidate,
+    )
+    flat_weight_facts = [
+        {
+            "fact_id": item["fact_id"],
+            "bucket": item["bucket"],
+            "text": item["text"],
+            "literal_items": item.get("literal_items") or [],
+        }
+        for item in prioritize_family._flat_facts(fact_pack)
+    ]
+    weight_raw = await _ask_gemma_json_direct_native(
+        label="lollipop.prioritize.weight",
+        system_prompt=cascade_family._prioritize_weight_system_prompt(gemma4=True),
+        user_payload={"event_title": clean_title, "event_type": event_type, "facts": flat_weight_facts},
+        response_schema=cascade_family._prioritize_weight_response_schema(),
+        max_tokens=900,
+        timeout_sec=timeout_sec,
+    )
+    weighted_pack = cascade_family._apply_weight_payload(fact_pack, weight_raw or {})
+    weighted_pack = prioritize_family._apply_narrative_policies(weighted_pack, event_type=event_type)
+    flat_lead_facts = [
+        {
+            "fact_id": item["fact_id"],
+            "bucket": item["bucket"],
+            "text": item["text"],
+            "weight": item.get("weight"),
+        }
+        for item in prioritize_family._flat_facts(weighted_pack)
+        if item.get("narrative_policy") != "suppress"
+    ]
+    lead_raw = await _ask_gemma_json_direct_native(
+        label="lollipop.prioritize.lead",
+        system_prompt=cascade_family._prioritize_lead_system_prompt(gemma4=True),
+        user_payload={"event_id": 0, "event_title": clean_title, "event_type": event_type, "facts": flat_lead_facts},
+        response_schema=cascade_family._prioritize_lead_response_schema(),
+        max_tokens=500,
+        timeout_sec=timeout_sec,
+    )
+    lead_payload = prioritize_family._clean_lead(
+        lead_raw or {},
+        weighted_pack,
+        title=clean_title,
+        event_type=event_type,
+    )
+    lead_payload["event_title"] = clean_title
+    prioritized_pack = layout_family._prioritized_fact_pack(weighted_pack)
+    precompute = layout_family._precompute_layout_state(
+        event_type=event_type,
+        pack=prioritized_pack,
+        lead_payload=lead_payload,
+    )
+    layout_raw = await _ask_gemma_json_direct_native(
+        label="lollipop.editorial.layout",
+        system_prompt=cascade_family._editorial_layout_system_prompt(gemma4=True),
+        user_payload={
+            "event_title": clean_title,
+            "event_type": event_type,
+            "lead_payload": lead_payload,
+            "precompute": precompute,
+            "fact_pack": prioritized_pack,
+        },
+        response_schema=cascade_family._editorial_layout_response_schema(),
+        max_tokens=1200,
+        timeout_sec=timeout_sec,
+    )
+    layout_payload = layout_family._clean_layout_plan(
+        layout_raw or {},
+        title=clean_title,
+        pack=prioritized_pack,
+        lead_payload=lead_payload,
+        precompute=precompute,
+    )
+    writer_pack = writer_pack_family._compose_writer_pack(
+        event_id=0,
+        title=clean_title,
+        layout_result={
+            "event_type": event_type,
+            "layout_result": {"precompute": precompute, "payload": layout_payload},
+        },
+        prioritize_result={"weight_result": {"payload": weighted_pack}},
+    )
+    selected_writer_lane = _g4_lollipop_light_selected_writer_lane(len(facts_text_clean))
+    if selected_writer_lane == "4o":
+        writer_output = await _ask_4o_json_once(
+            label="writer.final_4o",
+            prompt=writer_final_family._build_prompt(writer_pack["payload"]),
+            schema=_g4_lollipop_light_writer_schema_openai(),
+            model=SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_MODEL,
+            max_tokens=1600,
+        )
+    else:
+        writer_output = await _ask_gemma_json_direct_native(
+            label="writer.final_g4_primary",
+            system_prompt=_g4_lollipop_light_writer_system_prompt(),
+            user_payload=_g4_lollipop_light_compact_writer_payload(writer_pack["payload"]),
+            response_schema=_g4_lollipop_light_writer_schema_gemma(),
+            max_tokens=1200,
+            timeout_sec=timeout_sec,
+        )
+    validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
+    validation_errors = list(validation.errors)
+    if "literal_items" in str(writer_output.get("description_md") or ""):
+        validation_errors.append("technical.literal_items_leak")
+    if selected_writer_lane in {"gemma4", "4o"} and validation_errors:
+        retry_label = "writer.final_g4_retry"
+        retry_system_prompt = (
+            _g4_lollipop_light_writer_system_prompt()
+            + "\nThis is a correction pass. Fix validation errors without adding new facts. "
+            "Never output technical schema words such as `literal_items`."
+        )
+        if selected_writer_lane == "4o":
+            retry_label = "writer.final_g4_after_4o_validation"
+            retry_system_prompt += (
+                "\nThe previous 4o writer output failed validation. Prefer literal list coverage "
+                "and grounded event-specific prose over stylistic expansion."
+            )
+        retry_output = await _ask_gemma_json_direct_native(
+            label=retry_label,
+            system_prompt=retry_system_prompt,
+            user_payload={
+                "writer_pack": _g4_lollipop_light_compact_writer_payload(writer_pack["payload"]),
+                "previous_output": writer_output,
+                "validation_errors": validation_errors,
+            },
+            response_schema=_g4_lollipop_light_writer_schema_gemma(),
+            max_tokens=1200,
+            timeout_sec=timeout_sec,
+        )
+        retry_validation = writer_final_family._validate_writer_output(writer_pack["payload"], retry_output)
+        retry_errors = list(retry_validation.errors)
+        if "literal_items" in str(retry_output.get("description_md") or ""):
+            retry_errors.append("technical.literal_items_leak")
+        if str(retry_output.get("description_md") or "").strip() and len(retry_errors) <= len(validation_errors):
+            writer_output = retry_output
+            validation = retry_validation
+            validation_errors = retry_errors
+    if validation_errors:
+        logger.warning(
+            "smart_update: lollipop-light writer validation errors=%s warnings=%s source_type=%s source_url=%s",
+            validation_errors,
+            validation.warnings,
+            candidate.source_type,
+            candidate.source_url,
+        )
+    applied = writer_final_family._apply_writer_output(writer_pack["payload"], writer_output)
+    description = str(applied.get("description_md") or "").strip()
+    if not description:
+        return None
+    if _description_needs_infoblock_logistics_strip(description, candidate=candidate):
+        description = _strip_infoblock_logistics_from_description(description, candidate=candidate) or description
+    writer_search_digest = _clean_search_digest(writer_output.get("search_digest"))
+    writer_short = _clean_short_description(writer_output.get("short_description"))
+    if writer_short and not _is_short_description_acceptable(writer_short, min_words=12, max_words=16):
+        writer_short = None
+    search_digest = bundled_search_digest or writer_search_digest
+    short_description = bundled_short_description or writer_short
+    if not search_digest:
+        search_digest = await _llm_build_search_digest(
+            title=str(applied.get("title") or clean_title),
+            description=description,
+            event_type=event_type,
+        )
+    if not search_digest:
+        search_digest = _fallback_digest_from_description(description)
+    if not short_description:
+        short_description = await _llm_build_short_description(
+            title=str(applied.get("title") or clean_title),
+            description=description,
+            event_type=event_type,
+        )
+    if not short_description:
+        short_description = _fallback_short_description_from_text(description)
+    return {
+        "title": str(applied.get("title") or clean_title),
+        "description": description,
+        "facts": list(facts_text_clean),
+        "search_digest": search_digest,
+        "short_description": short_description,
+        "_lollipop_light": True,
+        "_lollipop_light_writer_lane": selected_writer_lane,
+        "_lollipop_light_fact_count": len(facts_text_clean),
+        "_lollipop_light_writer_validation": {
+            "errors": validation_errors,
+            "warnings": validation.warnings,
+        },
+    }
+
+
 async def _llm_extract_candidate_facts(
     candidate: EventCandidate,
     *,
@@ -5576,14 +6568,6 @@ async def _llm_extract_candidate_facts(
     if candidate.source_type in ("bot", "manual"):
         return []
 
-    schema = {
-        "type": "object",
-        "properties": {
-            "facts": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": ["facts"],
-        "additionalProperties": False,
-    }
     payload = {
         "today": date.today().isoformat(),
         "title": candidate.title,
@@ -5600,47 +6584,84 @@ async def _llm_extract_candidate_facts(
         "text": _clip(
             (text_for_facts or "").strip()
             or (_strip_promo_lines(candidate.source_text) or candidate.source_text),
-            2800,
+            7000 if SMART_UPDATE_G4_SPLIT_CREATE else 2800,
         ),
         "raw_excerpt": _clip(_strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt, 800),
         "poster_texts": [_clip(p.ocr_text, 700) for p in candidate.posters if (p.ocr_text or "").strip()][:3],
     }
-    prompt = (
-        "Ты извлекаешь атомарные факты о КОНКРЕТНОМ событии из текста источника.\n"
-        "Верни JSON строго по схеме.\n\n"
-        "Правила:\n"
-        "- Верни 6–18 коротких фактов (1 строка = 1 факт), только про это событие.\n"
-        "- Пиши факты как короткие именные группы (по возможности без глаголов 'является', 'будет', 'обещает').\n"
-        "- Для оценочных характеристик и лозунгов используй формулировку из источника максимально близко к тексту "
-        "(если в источнике есть кавычки, сохрани кавычки).\n"
-        "- НЕ включай дату/время/адрес/город как отдельные факты (они фиксируются отдельно).\n"
-        "- НЕ включай строки расписания вида `DD.MM | Название`.\n"
-        f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
-        "- Не используй хэштеги (`#...`) в формулировках фактов.\n"
-        "- НЕ включай рекламные призывы, скидки/промокоды, механику розыгрыша.\n"
-        "- НЕ включай промо-упоминания «где следить за анонсами» и ссылки на каналы/чаты с афишей "
-        "(например «Информация о событиях ... доступна в Telegram-канале ...»).\n"
-        "- Включай условия участия/посещения (длительность, возраст, максимальный размер группы, формат/что взять/как одеться, "
-        "что входит/не входит в оплату, нужен ли отдельный входной билет). Не вставляй ссылки/телефоны, "
-        "КРОМЕ: если в источнике есть ссылка на плейлист Я.Музыки (music.yandex.ru/users/.../playlists/...), "
-        "можно вернуть 1 факт с этой ссылкой; "
-        "точную сумму указывай только если это важно, чтобы пояснить «что оплачивается отдельно» (не более 1 факта).\n"
-        "- НЕ включай факты про общие новости площадки/организации, если они не описывают само событие "
-        "(например отчёты о работе филиала, планы на год, пресс-анонсы о будущих репортажах).\n"
-        "- НЕ включай нейросетевые клише, пустые оценки и прогнозы, которых нет в источнике: "
-        "например 'обещает стать заметным событием', 'яркое событие культурной жизни', "
-        "'не оставит равнодушным', 'незабываемые эмоции', 'уникальная возможность'.\n"
-        "- НЕ выдумывай факты. Если чего-то нет в данных, не добавляй.\n"
-        "- Если есть прямая речь и понятно, кто говорит (например режиссёр), оформи как факт:\n"
-        "  `Цитата (Имя Фамилия): ...`.\n"
-        "- Избегай дублирования: если мысль повторяется, оставь один факт.\n\n"
-        f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
-        f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
-    )
-    data = await _ask_gemma_json(prompt, schema, max_tokens=500, label="facts_extract")
+    if SMART_UPDATE_G4_SPLIT_CREATE:
+        schema = _g4_rich_facts_schema()
+        prompt = (
+            "Ты извлекаешь ПОЛНЫЙ набор фактов о КОНКРЕТНОМ событии для Smart Update G4.\n"
+            "Это quality-critical stage: лучше вернуть больше grounded фактов, чем сжать источник до короткой карточки.\n"
+            "Верни JSON строго по схеме.\n\n"
+            "Секции:\n"
+            "- public_core_facts: суть события, формат, цель, что будет происходить, что получает/делает участник.\n"
+            "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
+            "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры.\n"
+            "- program_or_examples: ВСЕ списки, примеры, пункты программы, интересы, темы, произведения; длинные перечисления не сворачивай.\n"
+            "- logistics_facts: дата/время/площадка/адрес/город/билеты/регистрация/цены/возраст/Пушкинская карта.\n"
+            "- uncertain_or_drop: шум, CTA, промо, неуверенные или не относящиеся к конкретному событию строки.\n\n"
+            "Правила полноты:\n"
+            "- Верни до 40 фактов суммарно, если источник плотный; не ограничивайся 6-10.\n"
+            "- Сохраняй организатора, методологию, результаты исследований и числа, даже если это background.\n"
+            "- Сохраняй примеры из кавычек/списков дословно, отдельными фактами или компактными grouped-фактами.\n"
+            "- Если источник перечисляет варианты участия/условия участия, сохрани их явно.\n"
+            "- Не выдумывай факты. Не добавляй generic praise.\n"
+            "- Не используй хэштеги. Не включай CTA в public sections.\n"
+            f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
+            f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
+            f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
+        )
+        data = await _ask_gemma_json(prompt, schema, max_tokens=1400, label="rich_facts_extract")
+    else:
+        schema = {
+            "type": "object",
+            "properties": {
+                "facts": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["facts"],
+            "additionalProperties": False,
+        }
+        prompt = (
+            "Ты извлекаешь атомарные факты о КОНКРЕТНОМ событии из текста источника.\n"
+            "Верни JSON строго по схеме.\n\n"
+            "Правила:\n"
+            "- Верни 6–18 коротких фактов (1 строка = 1 факт), только про это событие.\n"
+            "- Пиши факты как короткие именные группы (по возможности без глаголов 'является', 'будет', 'обещает').\n"
+            "- Для оценочных характеристик и лозунгов используй формулировку из источника максимально близко к тексту "
+            "(если в источнике есть кавычки, сохрани кавычки).\n"
+            "- НЕ включай дату/время/адрес/город как отдельные факты (они фиксируются отдельно).\n"
+            "- НЕ включай строки расписания вида `DD.MM | Название`.\n"
+            f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
+            "- Не используй хэштеги (`#...`) в формулировках фактов.\n"
+            "- НЕ включай рекламные призывы, скидки/промокоды, механику розыгрыша.\n"
+            "- НЕ включай промо-упоминания «где следить за анонсами» и ссылки на каналы/чаты с афишей "
+            "(например «Информация о событиях ... доступна в Telegram-канале ...»).\n"
+            "- Включай условия участия/посещения (длительность, возраст, максимальный размер группы, формат/что взять/как одеться, "
+            "что входит/не входит в оплату, нужен ли отдельный входной билет). Не вставляй ссылки/телефоны, "
+            "КРОМЕ: если в источнике есть ссылка на плейлист Я.Музыки (music.yandex.ru/users/.../playlists/...), "
+            "можно вернуть 1 факт с этой ссылкой; "
+            "точную сумму указывай только если это важно, чтобы пояснить «что оплачивается отдельно» (не более 1 факта).\n"
+            "- НЕ включай факты про общие новости площадки/организации, если они не описывают само событие "
+            "(например отчёты о работе филиала, планы на год, пресс-анонсы о будущих репортажах).\n"
+            "- НЕ включай нейросетевые клише, пустые оценки и прогнозы, которых нет в источнике: "
+            "например 'обещает стать заметным событием', 'яркое событие культурной жизни', "
+            "'не оставит равнодушным', 'незабываемые эмоции', 'уникальная возможность'.\n"
+            "- НЕ выдумывай факты. Если чего-то нет в данных, не добавляй.\n"
+            "- Если есть прямая речь и понятно, кто говорит (например режиссёр), оформи как факт:\n"
+            "  `Цитата (Имя Фамилия): ...`.\n"
+            "- Избегай дублирования: если мысль повторяется, оставь один факт.\n\n"
+            f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
+            f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
+        )
+        data = await _ask_gemma_json(prompt, schema, max_tokens=500, label="facts_extract")
     raw_facts = []
     if isinstance(data, dict):
-        raw_facts = list(data.get("facts") or [])
+        if SMART_UPDATE_G4_SPLIT_CREATE:
+            raw_facts = _flatten_g4_rich_facts_payload(data)
+        else:
+            raw_facts = list(data.get("facts") or [])
 
     # Normalize + drop anchor-like meaning duplicates.
     anchor_date = (candidate.date or "").strip() or None
@@ -5671,7 +6692,7 @@ async def _llm_extract_candidate_facts(
             continue
         seen.add(key)
         out.append(cleaned)
-        if len(out) >= 20:
+        if len(out) >= (40 if SMART_UPDATE_G4_SPLIT_CREATE else 20):
             break
     return _filter_ungrounded_sensitive_facts(out, candidate=candidate)
 
@@ -6878,7 +7899,13 @@ async def _llm_create_description_facts_and_digest(
         "- Маркер списка пиши с пробелом: `- пункт` или `1. пункт`.\n\n"
         f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
         "2) facts:\n"
-        "- Верни 6–18 атомарных фактов (1 факт = 1 строка), только про ЭТО событие.\n"
+        "- Верни 6–24 атомарных фактов (1 факт = 1 строка), только про ЭТО событие.\n"
+        "- Приоритет полноты: организаторы/институции, цель события, формат, методология/исследования/background, "
+        "точные числа и статистика, участники/ведущие/модераторы/гиды/исполнители, программа/примеры, условия участия.\n"
+        "- Точные числа, названия организаций и формулировки цели сохраняй явно; не заменяй их общими словами "
+        "вроде «несколько», «организаторы», «проект».\n"
+        "- Если фактов много, лучше сократи декоративные оценки, но не выбрасывай организатора, цель, числа, "
+        "модератора/ведущего/гида и их практическую функцию.\n"
         "- НЕ включай дату/время/адрес/город как отдельные факты.\n"
         f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
         "- Для выставок, ремёсел, коллекций и предметных экспозиций НЕ схлопывай качественные свойства "
@@ -10883,7 +11910,7 @@ async def _smart_event_update_impl(
                     continue
                 seen_fact_keys.add(key)
                 bundled_facts_out.append(cleaned)
-                if len(bundled_facts_out) >= 18:
+                if len(bundled_facts_out) >= (40 if SMART_UPDATE_G4_SPLIT_CREATE else 24):
                     break
             bundled_facts = _filter_ungrounded_sensitive_facts(
                 bundled_facts_out,
@@ -10941,20 +11968,81 @@ async def _smart_event_update_impl(
         # Safety-net: Telegraph + Telegram UI behave poorly with extremely long titles.
         final_title = _clip_title(final_title, 160) or clean_title
 
-        fact_first_used = False
+        lollipop_light_used = False
         if (
+            SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE
+            and not SMART_UPDATE_G4_SPLIT_CREATE
+            and bundled_facts
+        ):
+            try:
+                lollipop_bundle = await _llm_g4_lollipop_light_create_bundle(
+                    candidate,
+                    clean_title=final_title,
+                    normalized_event_type=normalized_event_type,
+                    raw_facts=bundled_facts,
+                    bundled_search_digest=bundled_digest,
+                    bundled_short_description=bundled_short,
+                )
+            except Exception:
+                logger.warning(
+                    "smart_update: lollipop-light create path failed source_type=%s source_url=%s",
+                    candidate.source_type,
+                    candidate.source_url,
+                    exc_info=True,
+                )
+                lollipop_bundle = None
+            if isinstance(lollipop_bundle, dict) and str(lollipop_bundle.get("description") or "").strip():
+                bundled_desc = str(lollipop_bundle.get("description") or "").strip()
+                bundled_digest = _clean_search_digest(lollipop_bundle.get("search_digest")) or bundled_digest
+                bundled_short = _clean_short_description(lollipop_bundle.get("short_description")) or bundled_short
+                raw_lollipop_facts = lollipop_bundle.get("facts")
+                if isinstance(raw_lollipop_facts, list) and raw_lollipop_facts:
+                    bundled_facts = [
+                        _normalize_fact_item(str(item or ""), limit=180)
+                        for item in raw_lollipop_facts
+                        if _normalize_fact_item(str(item or ""), limit=180)
+                    ]
+                lollipop_light_used = True
+
+        split_create_used = bool(
             SMART_UPDATE_G4_SPLIT_CREATE
             and isinstance(bundled, dict)
             and bundled.get("_split_create")
+        )
+        fact_first_used = False
+        if lollipop_light_used and bundled_desc and bundled_facts:
+            description_value = bundled_desc
+            fact_first_used = True
+            logger.info(
+                "smart_update.create_description path=g4_lollipop_light source_type=%s source_url=%s facts=%d writer_lane=%s",
+                candidate.source_type,
+                candidate.source_url,
+                len(bundled_facts or []),
+                _g4_lollipop_light_selected_writer_lane(len(bundled_facts or [])),
+            )
+        elif (
+            split_create_used
             and bundled_desc
             and bundled_facts
         ):
             description_value = bundled_desc
             fact_first_used = True
             logger.info(
-                "smart_update.create_description path=g4_split_create_v1 source_type=%s source_url=%s",
+                "smart_update.create_description path=g4_split_create_v2_rich_facts source_type=%s source_url=%s",
                 candidate.source_type,
                 candidate.source_url,
+            )
+        elif split_create_used:
+            # Split-create owns the create narrative surface. If the heavy fact ledger or
+            # the bounded writer is unavailable, keep the existing deterministic seed and
+            # do not fall through to the legacy multi-step fact-first/rewrite cascade.
+            fact_first_used = True
+            logger.warning(
+                "smart_update.create_description path=g4_split_create_v2_rich_facts_unavailable source_type=%s source_url=%s facts=%d desc=%s",
+                candidate.source_type,
+                candidate.source_url,
+                len(bundled_facts or []),
+                bool(bundled_desc),
             )
         if (not fact_first_used) and SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
             fact_first_facts = list(bundled_facts or [])
@@ -11080,7 +12168,7 @@ async def _smart_event_update_impl(
                 or description_value
             )
             description_value = _ensure_minimal_description_headings(description_value) or description_value
-        if _has_overlong_paragraph(description_value, limit=850):
+        if (not split_create_used) and _has_overlong_paragraph(description_value, limit=850):
             try:
                 reflown = await _llm_reflow_description_paragraphs(description_value)
             except Exception:  # pragma: no cover - provider failures
@@ -11254,7 +12342,7 @@ async def _smart_event_update_impl(
 
         # Extract atomic facts for global de-duplication + operator log.
         extracted_facts: list[str] = bundled_facts or []
-        if not extracted_facts:
+        if not extracted_facts and not split_create_used:
             try:
                 # Facts must come from the SOURCE, not from the rewritten description (which is also LLM output).
                 extracted_facts = await _llm_extract_candidate_facts(candidate)
@@ -11265,14 +12353,16 @@ async def _smart_event_update_impl(
         if bundled_digest:
             normalized_digest = bundled_digest
         else:
-            try:
-                llm_digest = await _llm_build_search_digest(
-                    title=final_title,
-                    description=description_value,
-                    event_type=normalized_event_type or candidate.event_type,
-                )
-            except Exception:
-                llm_digest = None
+            llm_digest = None
+            if not split_create_used:
+                try:
+                    llm_digest = await _llm_build_search_digest(
+                        title=final_title,
+                        description=description_value,
+                        event_type=normalized_event_type or candidate.event_type,
+                    )
+                except Exception:
+                    llm_digest = None
             if llm_digest:
                 normalized_digest = llm_digest
         if not normalized_digest:
@@ -11280,7 +12370,7 @@ async def _smart_event_update_impl(
         if not normalized_digest and rich_base:
             normalized_digest = _fallback_digest_from_description(rich_base)
         final_short = bundled_short
-        if not final_short:
+        if not final_short and not split_create_used:
             try:
                 final_short = await _llm_build_short_description(
                     title=final_title,

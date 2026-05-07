@@ -34,6 +34,7 @@ DEFAULT_BASELINE_MODEL = "gemma-3-27b-it"
 DEFAULT_CANDIDATE_MODEL = "gemma-4-31b-it"
 DEFAULT_4O_MODEL = "gpt-4o"
 DEFAULT_PROD_DB_EVENT_IDS = "4517,4518,4208"
+DEFAULT_ADAPTIVE_4O_FACT_THRESHOLD = 14
 MONTHS_RU = [
     "января",
     "февраля",
@@ -811,8 +812,24 @@ def _writer_response_schema_gemma() -> dict[str, Any]:
         "properties": {
             "title": {"type": "STRING"},
             "description_md": {"type": "STRING"},
+            "short_description": {"type": "STRING"},
+            "search_digest": {"type": "STRING"},
         },
         "required": ["title", "description_md"],
+    }
+
+
+def _writer_response_schema_openai() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "description_md": {"type": "string"},
+            "short_description": {"type": "string"},
+            "search_digest": {"type": "string"},
+        },
+        "required": ["title", "description_md"],
+        "additionalProperties": False,
     }
 
 
@@ -863,6 +880,8 @@ def _compact_gemma_writer_payload(pack: dict[str, Any]) -> dict[str, Any]:
         "output_contract": {
             "title": "Keep original title unless writer_pack explicitly asks otherwise.",
             "description_md": "Markdown prose only; no infoblock, no date/time/address/city/tickets.",
+            "short_description": "Optional: one complete Russian sentence, 12-16 words, no logistics.",
+            "search_digest": "Optional: compact Russian search/card summary up to 160 characters, no logistics.",
         },
     }
 
@@ -890,11 +909,14 @@ def _normalize_bucket_payload(facts: list[str], raw: dict[str, Any], fixture: An
         bucket = str(item.get("bucket") or "").strip()
         if bucket not in allowed:
             bucket = "support_context"
-        literal_items = [
-            re.sub(r"\s+", " ", str(raw_item or "")).strip()
-            for raw_item in list(item.get("literal_items") or [])
-            if re.sub(r"\s+", " ", str(raw_item or "")).strip()
-        ][:12]
+        literal_items = []
+        for raw_item in list(item.get("literal_items") or []):
+            literal = re.sub(r"\s+", " ", str(raw_item or "")).strip()
+            if not literal or literal.casefold() in {"literal_items", "literal item", "items"}:
+                continue
+            literal_items.append(literal)
+            if len(literal_items) >= 12:
+                break
         assignments[idx] = (bucket, literal_items)
     for idx in range(len(facts)):
         assignments.setdefault(idx, ("support_context", []))
@@ -1085,6 +1107,8 @@ async def _run_candidate_g4_lollipop2(
     *,
     model: str,
     four_o_model: str,
+    writer_lane: str,
+    adaptive_4o_fact_threshold: int,
 ) -> dict[str, Any]:
     _set_smart_update_model(model)
     candidate = _candidate_from_fixture(fixture)
@@ -1223,68 +1247,69 @@ async def _run_candidate_g4_lollipop2(
     )
     writer_output: dict[str, Any] = {}
     writer_validation = writer_final_family.ValidationResult(errors=["writer.final_g4.not_run"], warnings=[])
-    writer_model = model
-    try:
-        writer_output = await _time_stage(
-            timings,
-            "writer.final_g4_primary",
-            _ask_gemma_json_gateway(
-                model=model,
-                system_prompt=_compact_gemma_writer_system_prompt(),
-                user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
-                max_tokens=1200,
-                response_schema=_writer_response_schema_gemma(),
-                timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
-                allow_json_repair=False,
-            ),
-        )
-        writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
-    except Exception as exc:
-        stage_errors.append(f"writer.final_g4.error:{type(exc).__name__}:{str(exc)[:240]}")
-        writer_output = {"title": fixture.title, "description_md": ""}
-        writer_validation = writer_final_family.ValidationResult(
-            errors=[f"writer.final_g4.error:{type(exc).__name__}"],
-            warnings=[],
-        )
-    # Previous 4o-primary lane kept for quick rollback/comparison when quota is available:
-    #
-    # writer_model = four_o_model
-    # try:
-    #     writer_output = await _time_stage(
-    #         timings,
-    #         "writer.final_4o",
-    #         bench._ask_4o_json(
-    #             prompt=writer_final_family._build_prompt(writer_pack["payload"]),
-    #             schema={
-    #                 "type": "object",
-    #                 "properties": {"title": {"type": "string"}, "description_md": {"type": "string"}},
-    #                 "required": ["title", "description_md"],
-    #                 "additionalProperties": False,
-    #             },
-    #             model=four_o_model,
-    #         ),
-    #     )
-    #     writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
-    # except Exception as exc:
-    #     stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
-    #     writer_model = f"{four_o_model}->gemma-4-compact"
-    #     writer_output = await _time_stage(
-    #         timings,
-    #         "writer.final_g4_compact_after_4o_error",
-    #         _ask_gemma_json_gateway(
-    #             model=model,
-    #             system_prompt=_compact_gemma_writer_system_prompt(),
-    #             user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
-    #             max_tokens=1200,
-    #             response_schema=_writer_response_schema_gemma(),
-    #             timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
-    #             allow_json_repair=False,
-    #         ),
-    #     )
-    #     writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
+    fact_count = len(facts_text_clean)
+    selected_writer_lane = writer_lane
+    if writer_lane == "adaptive":
+        selected_writer_lane = "4o" if fact_count > adaptive_4o_fact_threshold else "gemma4"
+    writer_model = four_o_model if selected_writer_lane == "4o" else model
+    four_o_calls_observed = 0
+    if selected_writer_lane == "4o":
+        try:
+            four_o_calls_observed = 1
+            writer_output = await _time_stage(
+                timings,
+                "writer.final_4o",
+                bench._ask_4o_json(
+                    prompt=writer_final_family._build_prompt(writer_pack["payload"]),
+                    schema=_writer_response_schema_openai(),
+                    model=four_o_model,
+                    max_tokens=1600,
+                ),
+            )
+            writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
+        except Exception as exc:
+            stage_errors.append(f"writer.final_4o.error:{type(exc).__name__}:{str(exc)[:240]}")
+            writer_output = {"title": fixture.title, "description_md": ""}
+            writer_validation = writer_final_family.ValidationResult(
+                errors=[f"writer.final_4o.error:{type(exc).__name__}"],
+                warnings=[],
+            )
+    else:
+        try:
+            writer_output = await _time_stage(
+                timings,
+                "writer.final_g4_primary",
+                _ask_gemma_json_gateway(
+                    model=model,
+                    system_prompt=_compact_gemma_writer_system_prompt(),
+                    user_payload=_compact_gemma_writer_payload(writer_pack["payload"]),
+                    max_tokens=1200,
+                    response_schema=_writer_response_schema_gemma(),
+                    timeout_sec=min(bench._gemma_direct_timeout_sec(), 70.0),
+                    allow_json_repair=False,
+                ),
+            )
+            writer_validation = writer_final_family._validate_writer_output(writer_pack["payload"], writer_output)
+        except Exception as exc:
+            stage_errors.append(f"writer.final_g4.error:{type(exc).__name__}:{str(exc)[:240]}")
+            writer_output = {"title": fixture.title, "description_md": ""}
+            writer_validation = writer_final_family.ValidationResult(
+                errors=[f"writer.final_g4.error:{type(exc).__name__}"],
+                warnings=[],
+            )
     applied = writer_final_family._apply_writer_output(writer_pack["payload"], writer_output)
     description = str(applied.get("description_md") or "")
     search_digest, short_description = _bundle_derived_fields(bundle)
+    writer_search_digest = su._clean_search_digest(writer_output.get("search_digest"))
+    writer_short_description = su._clean_short_description(writer_output.get("short_description"))
+    if writer_short_description and not su._is_short_description_acceptable(
+        writer_short_description,
+        min_words=12,
+        max_words=16,
+    ):
+        writer_short_description = None
+    search_digest = search_digest or writer_search_digest
+    short_description = short_description or writer_short_description
     if not search_digest:
         search_digest = await _time_stage(
             timings,
@@ -1307,6 +1332,9 @@ async def _run_candidate_g4_lollipop2(
         "path": "smart_update_g4_variant2_lollipop_light_create_path",
         "candidate_has_g3": False,
         "writer_model": writer_model,
+        "writer_lane_requested": writer_lane,
+        "writer_lane_selected": selected_writer_lane,
+        "adaptive_4o_fact_threshold": adaptive_4o_fact_threshold,
         "stage_errors": stage_errors,
         "fields": _field_snapshot(candidate, bundle),
         "create_bundle": bundle or {},
@@ -1334,7 +1362,7 @@ async def _run_candidate_g4_lollipop2(
             "wall_clock_sec": wall,
             "stage_sec": timings,
             "gemma_calls_observed": len([k for k in timings if k.startswith(("create", "facts", "lollipop", "writer.final_g4", "search", "short"))]),
-            "four_o_calls_observed": 0,
+            "four_o_calls_observed": four_o_calls_observed,
         },
     }
 
@@ -1532,6 +1560,10 @@ def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_leve
         f"- candidate: `{candidate['model']}`",
         f"- candidate_path: `{candidate['path']}`",
         f"- writer_model: `{candidate.get('writer_model') or '-'}`",
+        f"- writer_lane_requested: `{candidate.get('writer_lane_requested') or '-'}`",
+        f"- writer_lane_selected: `{candidate.get('writer_lane_selected') or '-'}`",
+        f"- adaptive_4o_fact_threshold: `{candidate.get('adaptive_4o_fact_threshold')}`",
+        f"- four_o_calls_observed: `{(candidate.get('timings') or {}).get('four_o_calls_observed')}`",
         f"- candidate_has_g3: `{candidate.get('candidate_has_g3')}`",
         "",
         f"{sub} Stage Summary",
@@ -1602,6 +1634,8 @@ def _render_single_report(data: dict[str, Any], json_path: Path, *, heading_leve
     lines.append(f"- candidate wall: `{(candidate.get('timings') or {}).get('wall_clock_sec')}`")
     lines.append(f"- baseline stages: `{(baseline.get('timings') or {}).get('stage_sec')}`")
     lines.append(f"- candidate stages: `{(candidate.get('timings') or {}).get('stage_sec')}`")
+    lines.append(f"- candidate gemma calls observed: `{(candidate.get('timings') or {}).get('gemma_calls_observed')}`")
+    lines.append(f"- candidate 4o calls observed: `{(candidate.get('timings') or {}).get('four_o_calls_observed')}`")
     if candidate.get("stage_errors"):
         lines.extend(["", f"{sub} Stage Errors", ""])
         for err in candidate.get("stage_errors") or []:
@@ -1660,6 +1694,8 @@ async def _run_one(args: argparse.Namespace, fixture: Any) -> dict[str, Any]:
         fixture,
         model=args.candidate_model,
         four_o_model=args.four_o_model,
+        writer_lane=args.writer_lane,
+        adaptive_4o_fact_threshold=args.adaptive_4o_fact_threshold,
     )
     fact_coverage = await _run_fact_coverage(fixture, baseline, candidate, model=args.candidate_model)
     data = {
@@ -1699,7 +1735,8 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
         else:
             checkpoint_data = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
-                "writer_lane": "gemma-4-primary",
+                "writer_lane": args.writer_lane,
+                "adaptive_4o_fact_threshold": args.adaptive_4o_fact_threshold,
                 "prod_db": args.prod_db or "",
                 "checkpoint": {
                     "completed": len(results),
@@ -1715,7 +1752,8 @@ async def _run(args: argparse.Namespace) -> tuple[Path, Path]:
     else:
         data = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "writer_lane": "gemma-4-primary",
+            "writer_lane": args.writer_lane,
+            "adaptive_4o_fact_threshold": args.adaptive_4o_fact_threshold,
             "prod_db": args.prod_db or "",
             "checkpoint": {"completed": len(results), "total": len(fixtures), "complete": True},
             "results": results,
@@ -1740,6 +1778,21 @@ def main() -> int:
     parser.add_argument("--baseline-model", default=DEFAULT_BASELINE_MODEL)
     parser.add_argument("--candidate-model", default=DEFAULT_CANDIDATE_MODEL)
     parser.add_argument("--four-o-model", default=DEFAULT_4O_MODEL)
+    parser.add_argument(
+        "--writer-lane",
+        choices=["gemma4", "4o", "adaptive"],
+        default="gemma4",
+        help=(
+            "Final writer lane for the candidate. adaptive uses Gemma 4 for short fact packs "
+            "and exactly one 4o request for dense fact packs."
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-4o-fact-threshold",
+        type=int,
+        default=DEFAULT_ADAPTIVE_4O_FACT_THRESHOLD,
+        help="In --writer-lane adaptive, use 4o when len(facts_text_clean) is greater than this threshold.",
+    )
     parser.add_argument(
         "--prod-db",
         default="",

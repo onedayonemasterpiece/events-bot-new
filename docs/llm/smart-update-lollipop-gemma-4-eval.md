@@ -25,6 +25,116 @@
 - raw responses могут нести separate thought-channel (`parts[].thought = true`);
 - значит любой production-like path для Gemma 4 обязан явно фильтровать thought content.
 
+## Lollipop-light writer v3 + venue infoblock-leak suppression (`2026-05-07`)
+
+Production-rescue prompt/code pass on top of the lollipop-light Gemma 4 candidate path:
+
+- final writer prompt bumped to `smart_update.g4_lollipop_light.final_writer.v3`. Bullet `- item` lines are now allowed only for sections whose writer_pack section actually has non-empty `literal_items`; for every other section the writer must produce continuous prose. Several narrative facts in the same section that differ only by a named entity (composer, performer, work, role, place) must be merged into a single sentence with comma-separated names instead of repeating the surrounding phrase. Targets the previous "одно-слово / повторяющийся префикс" bullet spam observed on `4598` (`- произведения Баха / Шуберта / Бизе / Вьерна`) and the role list on `4594`.
+- `_g4_lollipop_light_normalize_bucket_payload` now suppresses short standalone venue brand `location_name` (e.g. `Сигнал`, `Дом`, `Музей города`) from the writer-pack `infoblock` constraint when the value has no address-word/digit/multi-comma signals. The narrative-strip path already preserves natural mentions like «в «Сигнале»», so this only removes the false-positive `infoblock.leak:LG03` validator error and the wasted `writer.final_g4_retry` it triggered. Address-like `location_name` values (`ул.`, `улица`, digits, two-or-more commas) keep the leak guard intact.
+- regression-pinned by `tests/test_smart_update_native_schema.py::test_g4_lollipop_light_prompts_keep_interest_lists_out_of_literal_items` (now also asserts the v3 bullet/merge rules), `::test_g4_lollipop_light_normalize_bucket_suppresses_short_venue_name_from_infoblock`, and `::test_g4_lollipop_light_normalize_bucket_keeps_address_like_location_in_infoblock`.
+
+Upstream smoke evidence — full pipeline `raw vk source_text -> build_event_drafts_from_vk (Gemma 4 parser) -> EventCandidate -> smart_event_update lollipop-light` on harder fixture `PRODDB-4594`:
+
+- script: `scripts/inspect/smoke_smart_update_g4_upstream_vk_4594.py` (one-shot; clears `FOUR_O_TOKEN` / `FOUR_4O_TOKEN` / `OPENAI_*` before run; pins `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4`).
+- canary artifact: [`smart_update_g4_upstream_vk_smoke_4594_20260507T130101Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_upstream_vk_smoke_4594_20260507T130101Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_upstream_vk_smoke_4594_20260507T130101Z.json). `parse 45.6s + smart_update 110.6s` end-to-end on Gemma 4 only (`create_bundle 30.1s`, `lollipop.bucket_facts 17.7s`, `lollipop.prioritize.weight 18.1s`, `lollipop.prioritize.lead 5.1s`, `lollipop.editorial.layout 16.2s`, `writer.final_g4_primary 21.1s` — single primary writer attempt, no retry needed). Persisted anchors: date `2026-05-14`, time `18:00`, venue `Сигнал`, address `Леонова 22`, city `Калининград`, ticket link preserved, `is_free=True`. Body text is continuous prose in every section — no `- item` bullets, no logistics duplication. The dense interest list and the role list are each merged into one compact comma-separated sentence, exactly as the v3 prompt directs. One transient native-stage `500 INTERNAL` was recovered by the existing stage retry and is reported, not hidden.
+- earlier `lane=adaptive` run on the same fixture (`smart_update_g4_upstream_vk_smoke_4594_20260507T125350Z`) attempted a `writer.final_4o` dispatch with no `FOUR_O_TOKEN`, which failed instantly without spending any 4o tokens and routed the body to the legacy fact-first fallback. Kept only for trace context, not as canary evidence — it does not exercise the v3 lollipop-light writer prompt.
+- production canary deploy MUST set `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4` so the path never even attempts a final 4o call when no `FOUR_O_TOKEN` is intentionally provisioned.
+
+## Full-surface lollipop-light production-candidate (`2026-05-07`)
+
+Artifacts:
+
+- [`smart_update_g4_full_surface_benchmark_20260507T063020Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T063020Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T063020Z.json): `4594`, `4598`, Gemma-only writer lane; `4538` skipped by normal past-event guardrail because the snapshot event date is now before current date.
+- [`smart_update_g4_full_surface_benchmark_20260507T064616Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T064616Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T064616Z.json): `4538` replay with benchmark-only `--allow-past-events`.
+- [`smart_update_g4_full_surface_benchmark_20260507T070222Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T070222Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T070222Z.json): tightened `4594` replay after moderator/facilitator fact-priority prompt update and native-stage retry.
+- Fact reviews: [`smart_update_g4_full_surface_fact_review_20260507T065100Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_fact_review_20260507T065100Z.json), [`smart_update_g4_full_surface_fact_review_20260507T070222Z.json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_fact_review_20260507T070222Z.json).
+
+Runtime:
+
+- `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` via benchmark create-path mutation.
+- `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4` for local full-surface proof.
+- `GOOGLE_AI_PROVIDER_TIMEOUT_SEC=180` for the heavy `create_bundle` replay where needed.
+- reviewer skipped during generation, then run separately over saved candidate JSON to avoid regenerating Smart Update outputs.
+
+Result:
+
+| Fixture | Candidate status | Field/infoblock diff | Fact review | Wall / LLM sec | Notes |
+| --- | --- | ---: | --- | ---: | --- |
+| `PRODDB-4594` tightened replay | `created` | `0` | `partial`, `21/22` | `227.93s / 222.82s` | one minor loss: event type not stated separately; moderator fact restored; one transient native-stage `500` recovered by stage retry |
+| `PRODDB-4598` | `created` | `0` | `accepted`, `16/16` | `142.34s / 141.33s` | Gemma-only writer lane |
+| `PRODDB-4538` | `created` | `0` | `accepted`, `11/11` | `204.20s / 199.28s` | needed `--allow-past-events` because the prod snapshot date is now past; `create_bundle` needed 149s, so 120s timeout was too tight |
+
+Decision:
+
+- This is the first production-shaped candidate that creates persisted sandbox events through the real `smart_update()` path with `0` field/infoblock diffs on all three fixtures and without Gemma 3 in candidate generation.
+- The nearest safe rollout path is off-by-default `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` with Gemma-only writer as the fallback lane. Quality is acceptable enough for a guarded production smoke/canary, not a blanket default flip.
+- Adaptive dense `4o` remains conceptually useful, but the full-surface local proof is blocked because `FOUR_O_TOKEN` is absent in the current environment. The staged artifact `smart_update_g4_stage_benchmark_20260507T030037Z` proves the intended “dense -> exactly one final 4o call” routing, but production enablement still needs actual token/runtime evidence.
+- `SMART_UPDATE_G4_SPLIT_CREATE=1` is no longer the fastest production path: it is still a research probe, while lollipop-light-create keeps the more reliable heavy extraction and only splits the supporting work.
+
+### Adaptive 4o single-call check (`2026-05-07T103749Z`)
+
+Artifact:
+
+- [`smart_update_g4_full_surface_benchmark_20260507T103749Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T103749Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T103749Z.json).
+
+Runtime:
+
+- `writer_lane=adaptive`, threshold `14`, fixture `PRODDB-4594`.
+- `FOUR_O_TOKEN` was not exposed to generic Gemma fallback; the token was passed through the `FOUR_4O_TOKEN` alias so only `writer.final_4o` could make the one intended OpenAI request.
+
+Result:
+
+- Routing proof passed: exactly one `writer.final_4o` call, duration `5.05s`, OpenAI usage `1629` tokens, no second 4o request.
+- Persisted Smart Update surfaces still had `0` field/infoblock diff and status `created`.
+- Text quality failed: the 4o writer hallucinated generic concert/art prose, missed the required literal list coverage according to validator, and used promo phrasing.
+
+Decision:
+
+- Adaptive dense `4o` is not production-ready yet despite correct one-call routing.
+- Code now treats validation-failed 4o output as repairable by a Gemma-only correction pass, preserving the “max one 4o request” rule. This repair path still needs evidence before adaptive `4o` can be enabled.
+- Until then, the production candidate remains Gemma-only lollipop-light create path plus full Smart Update integration tests.
+
+### Gemma 3 flow audit + Gemma-only lollipop-light replay (`2026-05-07T111913Z`)
+
+Artifacts:
+
+- [`smart_update_gemma3_flow_audit_20260507T111740Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_gemma3_flow_audit_20260507T111740Z.md)
+- [`smart_update_g4_full_surface_benchmark_20260507T111913Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T111913Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T111913Z.json)
+
+Runtime:
+
+- `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1`
+- `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4`
+- `--allow-past-events --skip-llm-reviewer`
+- `FOUR_O_TOKEN` / `FOUR_4O_TOKEN` cleared for the benchmark command; no OpenAI writer call was possible.
+
+Flow audit result:
+
+- production-relevant files in the audited chain now have `0` direct `gemma-3` mentions: `main.py`, `geo_region.py`, `smart_event_update.py`, `vk_auto_queue.py`, `vk_intake.py`, `source_parsing/telegram/handlers.py`, `kaggle/TelegramMonitor/telegram_monitor.py`;
+- shared VK/TG parser default is now `gemma-4-31b-it`;
+- parser JSON-error fallback to 4o is opt-in via `EVENT_PARSE_ENABLE_4O_FALLBACK=1`;
+- Smart Update region-filter LLM fallback is now `GEO_REGION_GEMMA_MODEL`, default `gemma-4-31b-it`;
+- remaining `gemma-3` mentions are frozen benchmark/docs/test/gateway-reference surfaces, not discovered live Smart Update calls.
+
+Benchmark result:
+
+| Fixture | Candidate status | Field/infoblock diff | Wall / LLM sec | Manual text review |
+| --- | --- | ---: | ---: | --- |
+| `PRODDB-4594` | `created` | `0` | `212.86s / 208.01s` | usable but not clean: fact coverage looks strong, but the program/interests list became too atomized and writer validation reported `infoblock.leak:LG03`; needs prompt/repair tightening before gate |
+| `PRODDB-4598` | `created` | `0` | `108.37s / 106.96s` | good enough for canary: facts, infoblock, derived fields, and body are coherent; body is more concise than baseline |
+| `PRODDB-4538` | `created` | `0` | `120.26s / 118.58s` | generally good, with useful organizer/guide/funding facts; still duplicates price/duration in main text, so logistics-strip guidance should be tightened |
+
+Decision:
+
+- This is a working Gemma-only Smart Update create replay across the three known fixtures, not just fact extraction.
+- It is not yet a blanket production flip because `4594` exposes writer/layout quality debt and `4538` shows logistics duplication.
+- The next narrow step is to tighten lollipop-light writer/layout around dense lists and logistics leakage, then rerun the same full-surface replay plus multi-source/same-event and multi-event-post fixtures.
+
+Follow-up:
+
+- [`smart_update_g4_full_surface_benchmark_20260507T114316Z.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T114316Z.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_full_surface_benchmark_20260507T114316Z.json): after a narrow prompt/cleanup pass, `4594` no longer exploded the interests into one-word bullets and `4538` body length dropped from `805` to `697` chars; `4594` still logs `infoblock.leak:LG03`, so that warning remains a release gate item, not a solved issue.
+- [`smart_update_g4_upstream_vk_smoke_20260507T115350Z.recovered.md`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_upstream_vk_smoke_20260507T115350Z.recovered.md) / [`json`](/workspaces/events-bot-new/artifacts/codex/smart_update_g4_upstream_vk_smoke_20260507T115350Z.recovered.json): real VK raw source smoke for `4598` (`source_text -> build_event_drafts_from_vk -> smart_event_update lollipop-light`) created event `1` with correct persisted anchors (`2026-05-08 18:00`, `Филармония им. Светланова`, ticket link, Pushkin card). `event_parse` used Gemma 4 and completed in `47.144s`; no 4o call was possible in the command environment. Smart Update recovered through provider `500`s via retry. The markdown was recovered from the sandbox DB because the ad-hoc report serializer failed after successful event creation.
+
 ## Smart Update G4 latency variants probe (`2026-05-06`)
 
 Artifact:
@@ -206,6 +316,48 @@ Manual audit notes:
 - This probe is the first one where candidate Smart Update runtime approached a reasonable range (`~25-30s`) because it removed the heavy `create_bundle` and fact-first coverage/revise cascade.
 - It is not accepted: `PRODDB-4594` lost important facts (organizer, urban research, role-management methodology, participation modes) and produced a short/typo-prone description.
 - The benchmark LLM reviewer is no longer suitable as the inner-loop bottleneck for this migration work; future probes should use the artifact plus direct manual/Codex audit first, then reserve LLM review for final gate only.
+
+### Split create v2 rich-facts probe (`2026-05-06`)
+
+Experiment name:
+
+- `g4-split-create-v2-rich-facts`
+
+What changed from v1:
+
+- fact extraction remains the heavy quality-critical stage, but now uses `rich_facts_extract` with a sectioned native schema: `public_core_facts`, `context_methodology_facts`, `people_org_facts`, `program_or_examples`, `logistics_facts`, `uncertain_or_drop`;
+- the source budget and fact cap were raised for split-create so dense events are not compressed into 6-10 facts;
+- `split_description_writer` owns the main Telegraph/body text from a bounded top-30 `facts_text_clean` payload, while the create path can persist up to 40 extracted facts;
+- `split_derived_fields` is the lightweight stage for `short_description` / `search_digest` only;
+- `rich_facts_extract` may fall back from native schema to prompt schema because fact-ledger quality is the expensive/critical part of the path;
+- split description writer native-schema failures are bounded: they do not immediately start a second prompt-schema call unless `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1` is set;
+- `split_derived_fields` may use prompt-schema fallback because it is intentionally small and owns only card/search text;
+- split-create disables legacy 4o fallback for `rich_facts_extract`, `split_description_writer`, and `split_derived_fields`, so migration evidence stays Gemma 4-only instead of mixing in an error fallback lane;
+- `split_description_writer` is capped by `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`) and `split_derived_fields` by `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`);
+- if `split_description_writer` is unavailable after facts were extracted, create uses a bounded fact-ledger fallback and does not enter the legacy fact-first/rewrite/reflow cascade;
+- split-create cleanup strips hard infoblock duplicates but no longer rejects route words like `улицам` / `переулкам` when they are meaningful excursion content;
+- the full-surface benchmark can run with `--skip-llm-reviewer`; this avoids a slow benchmark-only Gemma reviewer during inner-loop development and leaves the artifact for direct manual/Codex comparison.
+
+Status:
+
+- gated/off by default;
+- rollback remains `g4-retry-bound-baseline` = git tag `smart-update-g4-retry-bound-baseline` at commit `204538ef`;
+- acceptance still requires a full-surface benchmark with no-worse fields, infoblock/logistics, facts, Telegraph body, `short_description`, and `search_digest`.
+
+Inner-loop evidence:
+
+- `smart_update_g4_full_surface_benchmark_20260506T181540Z` (`PRODDB-4598`, reviewer skipped): topology passed (`rich_facts_extract=21.23s`, `split_create_writer=12.05s`, `2` Smart Update LLM calls, no legacy rewrite/fact-first calls), fields/infoblock had `0` diffs, candidate facts were `12` clean vs `10` baseline clean, and the writer produced a usable `679` char Telegraph body.
+- `smart_update_g4_full_surface_benchmark_20260506T182321Z` (`PRODDB-4594`, reviewer skipped): heavy extraction recovered the dense fact ledger (`18` clean vs `16` baseline clean), but native writer failed fast (`0.33s`) and fact-ledger fallback produced a bounded `986` char body. Smart Update trace stayed bounded (`rich_facts_extract + split_create_writer` only; no legacy fact-first/rewrite/reflow), but fallback copy is not accepted as the quality path because it drops the tail of example facts.
+- `smart_update_g4_full_surface_benchmark_20260506T182451Z` (`PRODDB-4594`, `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1`, reviewer skipped): allowing writer prompt-schema fallback did not improve the dense case; the writer hit the writer timeout and fell back to the same fact-ledger body. Keep writer prompt fallback explicit/off by default until a lighter writer payload proves better quality under the timeout.
+- `smart_update_g4_full_surface_benchmark_20260506T184801Z` (`PRODDB-4538`, reviewer skipped, after route/logistics cleanup fix): full split path completed in `41.46s` with `3` Smart Update calls (`rich_facts_extract=22.35s`, `split_description_writer=9.66s`, `split_derived_fields=3.25s`), `0` field/infoblock diffs, `16` clean candidate facts vs `8` baseline clean facts, and a `946` char Telegraph body. Manual audit: accepted as topology/coverage evidence, but still needs style polish (`обращая внимание на следующие объекты` before bullets lacks punctuation).
+- `smart_update_g4_full_surface_benchmark_20260506T184914Z` (`PRODDB-4598,4594`, reviewer skipped): topology stayed bounded under provider errors. `4598` hit a fast `split_description_writer` native `500` and used fact-ledger fallback in `24.32s`; the body is factual but list-like and not an accepted main writer quality path. `4594` recovered dense facts through `rich_facts_extract` native→prompt fallback (`87.04s` after a fast native `500`) and produced a strong `1564` char body via native `split_description_writer=15.65s`; however `split_derived_fields` failed native and deterministic fallback made `short_description` / `search_digest` too generic. This motivated enabling lightweight prompt-schema fallback for `split_derived_fields` while keeping description writer fallback explicit/off.
+- `smart_update_g4_full_surface_benchmark_20260506T185234Z` (`PRODDB-4594`, reviewer skipped): native facts and description both succeeded (`rich_facts_extract=26.95s`, `split_description_writer=22.40s`), but both native and prompt-schema `split_derived_fields` received quick provider `500`s. The old global 4o fallback attempted to run and failed locally because `FOUR_O_TOKEN` was absent; code now disables 4o fallback for split-create stages so future evidence remains Gemma 4-only and falls back deterministically for derived fields.
+
+Current read:
+
+- Direction remains worth pursuing: the heavy fact stage is the right place to spend tokens, and the old create/fact-first/rewrite cascade has been replaced by a bounded `2-3` call topology.
+- Not rollout-ready: description writer quality is inconsistent under provider `500`s; fallback bodies are factual but too ledger-like; derived fields still need provider-stability evidence; and no benchmark reviewer/final acceptance run has passed.
+- Next likely work: make the main writer preserve indexed people/list facts more faithfully while avoiding dry fact-ledger prose, then run a three-fixture full-surface pass with reviewer enabled only after manual artifacts look no-worse.
 
 ## Smart Update G4 variant 2 benchmark protocol (`2026-05-02`)
 
@@ -656,6 +808,57 @@ Current interpretation:
 - Remaining confirmed losses are public/text facts: for `PRODDB-4594`, organizer/meeting goal/412-respondent context; for `PRODDB-4598`, two minor audience-positioning facts.
 - `PRODDB-4538` cannot be judged from this run because the reviewer hit provider `500 INTERNAL`; the corrected artifact preserves the candidate output and marks the fact gate as `review_error`.
 - The next benchmark step is a full Smart Update candidate snapshot that compares every persisted surface, not just writer facts: canonical event fields / infoblock, `event_source_fact`, `facts_text_clean`, Telegraph body, `short_description`, and `search_digest`.
+
+## Adaptive writer prod DB staged benchmark (`2026-05-07T030037Z`)
+
+Artifacts:
+
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260507T030037Z.md`
+- `artifacts/codex/smart_update_g4_stage_benchmark_20260507T030037Z.json`
+
+Runner:
+
+```bash
+GOOGLE_AI_PROVIDER_TIMEOUT_SEC=120 GOOGLE_AI_MAX_RETRIES=1 \
+SMART_UPDATE_GEMMA_RETRIES=1 SMART_UPDATE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=30 \
+LOLLIPOP_4O_MAX_RETRIES=0 \
+python scripts/inspect/benchmark_smart_update_g4_stages.py \
+  --prod-db /home/dev/projects/events-bot-new/artifacts/db/incident-80-stories-prod-snapshot.sqlite \
+  --event-ids 4594,4598,4538 \
+  --candidate-model gemma-4-31b-it \
+  --writer-lane adaptive \
+  --adaptive-4o-fact-threshold 14
+```
+
+Scope:
+
+- This keeps the `2026-05-06T085906Z` morning path as the base: `create_bundle_g4 -> lollipop-light bucket/weight/lead/layout/writer_pack -> final writer`.
+- It adds only the production-oriented writer routing probe: dense `facts_text_clean` packs with more than `14` facts use exactly one `gpt-4o` final writer call; smaller packs stay on `gemma-4-31b-it`.
+- The create-bundle fact contract was tightened before the final rerun: it may return up to `24` facts and explicitly preserves organizers, event goals, methodology/background, exact numbers/statistics, people, program/examples, and visitor conditions before decorative facts.
+- Reviewer calls are benchmark-only. Reported candidate latency below is generation wall time; the extra LLM fact-coverage reviewer is not part of the production path.
+
+Summary:
+
+| Fixture | Writer selected | Candidate facts | Losses | Verdict | Candidate latency |
+| --- | --- | ---: | --- | --- | ---: |
+| `PRODDB-4594` / `Питчинг в Сигнале` | `gpt-4o` (`1` call) | `21/22` | `0 critical / 0 major / 1 minor` | `partial` | `149.57s` |
+| `PRODDB-4598` / `Аве Мария` | `gemma-4-31b-it` | `14/16` | `0 critical / 0 major / 0 minor` | `partial` | `92.98s` |
+| `PRODDB-4538` / `Хаусмарки` | `gemma-4-31b-it` | `11/11` | `0 critical / 0 major / 0 minor` | `accepted` | `121.03s` |
+
+Comparison to the morning `2026-05-06T085906Z` run:
+
+| Fixture | Morning | Adaptive after tightening | Read |
+| --- | --- | --- | --- |
+| `PRODDB-4594` | `18/22`, `3` major losses, `189.05s` | `21/22`, `0` major losses, `149.57s` | clear improvement; organizer, goal, and exact `412` context now survive |
+| `PRODDB-4598` | `14/16`, `2` minor losses, `136.06s` | `14/16`, no severity losses, `92.98s` | no worse on facts, faster; text is compact and should be manually checked for richness |
+| `PRODDB-4538` | reviewer error, `108.59s` | `11/11` accepted, `121.03s` | fact gate accepted; latency is somewhat higher due the longer create-bundle call |
+
+Interpretation:
+
+- The morning path was not a dead end. With the adaptive writer and create-bundle fact tightening it becomes the strongest near-production candidate seen so far for these three fixtures.
+- The dense case does not need multiple `4o` calls: `writer.final_4o` took `2.77s` and exactly one observed `4o` call. The expensive parts remain Gemma 4 structured stages, especially `create_bundle_g4`, `lollipop.bucket_facts`, and `editorial.layout`.
+- The remaining quality risk is not broad fact loss. It is public-copy taste/richness on the small Gemma 4 writer lane: `4598` is fact-safe but shorter/drier than baseline, and `4538` passes facts while losing the baseline epigraph style.
+- This is still staged evidence, not full-surface production proof. The next production-readiness run must recreate events through the real Smart Update sandbox and compare persisted `event_source_fact`, `facts_text_clean`, generated Telegraph body, `short_description`, and `search_digest` under the same adaptive policy.
 
 ## Full-surface sandbox Smart Update benchmark (`2026-05-06T094705Z`)
 

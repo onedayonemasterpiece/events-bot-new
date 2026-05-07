@@ -95,6 +95,15 @@ source post / parser text / OCR
 - если `4o` используется только после timeout/error Gemma 4 writer-а, benchmark обязан показывать это как fallback, а не как обычный writer lane;
 - если оба lanes проходят hard gates, выбирается тот, где выше итоговое public quality: fact coverage, structure, style, grounded richness, short/search quality, render safety.
 
+Текущий production-candidate rule из staged benchmark `2026-05-07T030037Z` и full-surface sandbox follow-up `2026-05-07T063020Z..070222Z`:
+
+- dense `facts_text_clean` packs (`>14` facts) route to exactly one final `4o` writer call;
+- smaller packs stay on the Gemma 4 final writer lane;
+- create-bundle fact extraction remains the responsible stage and must preserve organizers, goals, methodology/background, exact numbers/statistics, people/moderators/guides, program/examples, and visitor conditions before decorative facts;
+- the off-by-default production candidate is `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1`: heavy `create_bundle` first, then light Gemma 4 native-schema lollipop stages, then `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4|4o|adaptive`;
+- full-surface Gemma-only evidence is now production-relevant for the fallback lane: persisted fields and infoblocks stay at `0 diff`; `4598` and `4538` are accepted by fact reviewer, and the dense `4594` run is `21/22` with one minor loss after moderator/facilitator prompt tightening;
+- adaptive dense `4o` is still not full-surface-proven locally because the current environment lacks `FOUR_O_TOKEN`; the staged artifact proves the intended one-call routing, but production rollout must verify the actual token/runtime path before enabling adaptive `4o`.
+
 При этом промежуточные стадии обязаны сохранять всё, что уже работает в текущем Smart Update:
 
 - корректный match/create/merge без новых дублей;
@@ -158,7 +167,8 @@ Diagnostic-only step:
 - Full-surface Smart Update G4 benchmarks now collect a per-call LLM trace for Gemma stages, including label, kind, model, status, duration, attempts, provider errors, and rate-limit waits.
 - `SMART_UPDATE_FACT_FIRST_TIMEOUT_SEC` can bound `fact_first_description` in explicit sandbox probes, but defaults to `0`. A 90s timeout sped up two fixtures and exposed the true latency surface, but regressed one accepted fixture from `16/16` to `15/16` fact coverage, so it is not accepted as a production-default speed fix.
 - Smart Update Gemma wrappers default `SMART_UPDATE_GEMMA_RETRIES` to `1`; retryable provider failures are retried by `GoogleAIClient`, so the Smart Update wrapper must not multiply one failing stage into nested provider attempts. Use higher `SMART_UPDATE_GEMMA_RETRIES` only for explicit probes.
-- `SMART_UPDATE_G4_SPLIT_CREATE=1` (`g4-split-create-v1`) is an off-by-default probe that removes the heavy `create_bundle` create-stage from the candidate path and splits create into `facts_extract -> split_create_writer`; it must remain gated until a full-surface benchmark proves no-worse facts/text against the frozen Gemma 3-era baseline.
+- `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` is the nearer production candidate than `SMART_UPDATE_G4_SPLIT_CREATE=1`: it keeps the proven heavy `create_bundle` extraction and splits only the cheaper supporting work into Gemma 4 native-schema lollipop stages. The light stages have their own bounded timeout/retry controls (`SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC`, `SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES`) so transient provider `500`s do not force a fallback to the old multi-step fact-first cascade.
+- `SMART_UPDATE_G4_SPLIT_CREATE=1` (`g4-split-create-v2-rich-facts`) is an off-by-default probe that removes the heavy `create_bundle` create-stage from the candidate path and splits create into quality-critical `rich_facts_extract -> split_description_writer -> split_derived_fields`. Extraction stays the heavy/important fact-ledger stage and uses a sectioned schema to preserve core, methodology/context, people/org, program/example, and logistics facts; it may fall back from native schema to prompt schema when the provider rejects native output. `split_description_writer` owns the main Telegraph/body text from `facts_text_clean` and is capped by `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`); it does not automatically retry through prompt-schema fallback unless `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1` is set. `split_derived_fields` is the lightweight stage for `short_description` / `search_digest`, is capped by `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`), and may use prompt-schema fallback because it is intentionally small. Split-create disables legacy 4o fallback for `rich_facts_extract`, `split_description_writer`, and `split_derived_fields` so Gemma 4 benchmark evidence stays model-clean. If the description writer is unavailable after facts are extracted, create uses a bounded fact-ledger fallback instead of entering the legacy fact-first/rewrite/reflow cascade. This must remain gated until a full-surface benchmark proves no-worse facts/text against the frozen Gemma 3-era baseline.
 
 ## Сравнение Gemma 3 и Gemma 4 по ключевым атрибутам
 

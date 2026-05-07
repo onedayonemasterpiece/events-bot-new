@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import geo_region
 import main
 import vk_auto_queue
 import vk_intake
@@ -159,3 +160,53 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
 
     assert list(parsed) == []
     assert captured["model"] == "models/gemma-4-31b-it"
+
+
+@pytest.mark.asyncio
+async def test_event_parse_gemma_default_is_gemma4_without_implicit_4o_fallback(monkeypatch):
+    captured: dict[str, object] = {"models": [], "four_o_called": False}
+
+    class FakeClient:
+        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens):
+            captured["models"].append(model)
+            return "not json", SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2)
+
+    async def noop_log(*_args, **_kwargs):
+        return None
+
+    async def fake_4o(*_args, **_kwargs):
+        captured["four_o_called"] = True
+        return []
+
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MODEL", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_ENABLE_4O_FALLBACK", raising=False)
+    monkeypatch.setenv("FOUR_O_TOKEN", "test-token")
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+    monkeypatch.setattr(main, "log_token_usage", noop_log)
+    monkeypatch.setattr(main, "_parse_event_via_4o", fake_4o)
+
+    with pytest.raises(RuntimeError, match="bad gemma parse response"):
+        await main._parse_event_via_gemma("Некорректный ответ модели.")
+
+    assert captured["models"] == ["gemma-4-31b-it", "gemma-4-31b-it"]
+    assert captured["four_o_called"] is False
+
+
+@pytest.mark.asyncio
+async def test_geo_region_llm_fallback_defaults_to_gemma4(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens):
+            captured["model"] = model
+            return '{"is_kaliningrad_oblast": true, "region_name": "Калининградская область", "confidence": 0.98}', SimpleNamespace()
+
+    monkeypatch.delenv("GEO_REGION_GEMMA_MODEL", raising=False)
+
+    decision = await geo_region._gemma_region_fallback(
+        city="Калининград",
+        gemma_client=FakeClient(),
+    )
+
+    assert captured["model"] == "gemma-4-31b-it"
+    assert decision.allowed is True
