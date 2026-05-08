@@ -1,10 +1,10 @@
 # INC-2026-05-08 VK Quality False Skips
 
-Status: monitoring
+Status: closed
 Severity: sev1
 Service: VK auto-import / Smart Update / Telegraph event pages
 Opened: 2026-05-08
-Closed: —
+Closed: 2026-05-08
 Owners: Codex / production operator
 Related incidents: `INC-2026-04-28-vk-smart-update-false-skips`, `INC-2026-05-05-smart-update-gemma3-fallback-hallucination`, `INC-2026-05-07-vk-auto-import-merge-regression-gemma4`, `INC-2026-05-08-vk-tg-prompt-and-dup-probe`
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/smart-event-update/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/llm/request-guide.md`
@@ -35,7 +35,9 @@ Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/smart-even
 - 2026-05-08T18:33Z: incident record opened after reproducing failures on a production snapshot.
 - 2026-05-08T18:33Z: pre-fix replay confirmed the three VK sources reached LLM draft extraction but failed in Smart Update guards (`non_event_notice`, `unknown_region`, `online_event`).
 - 2026-05-08T18:33Z: targeted LLM-first code fixes and docs/tests prepared.
-- Deploy/closure evidence: pending in this record until production deployment and remediation complete.
+- 2026-05-08T18:37Z: commit `355b0bfc1db791573510f4300a51184d7ec4512c` deployed to Fly app `events-bot-new-wngqia`.
+- 2026-05-08T18:40Z-18:50Z: production remediation reran the three offending VK sources through live VK fetch, Gemma 4 draft extraction and Smart Update; rows were marked `imported`.
+- 2026-05-08T18:50Z: post-deploy `/healthz` ready, production DB verification and Telegraph checks passed.
 
 ## Root Cause
 
@@ -99,15 +101,24 @@ Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/smart-even
 
 ## Follow-up Actions
 
-- [ ] Stabilize full Smart Update writer replay under Gemma 4 provider 500 storms so incident replay does not require `SMART_UPDATE_LLM=off` for the fast confirmation path.
+- [ ] Stabilize full Smart Update writer replay under Gemma 4 provider 500 storms so incident replay does not need a shortened fast path when the provider is unstable.
 - [ ] Add a scheduled/offline replay harness for source-quality incident fixtures so new VK prompt changes can batch-check known false skips without operator-driven scripts.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `355b0bfc1db791573510f4300a51184d7ec4512c` (`origin/main`)
+- deploy path: clean linked worktree `/home/dev/projects/events-bot-new-deploy-355b0bfc` -> `/home/dev/.fly/bin/flyctl deploy -a events-bot-new-wngqia`; Fly image `events-bot-new-wngqia:deployment-01KR4E0VQB6TRMW3WF5VBPEBEM`; machine `48e42d5b714228`, version `1054`
 - regression checks: `.venv/bin/pytest tests/test_smart_event_update_non_event_guards.py tests/test_smart_event_update_location_aliases.py -q` -> `19 passed`
-- post-deploy verification: pending
+- replay evidence:
+  - pre-fix shadow replay: `artifacts/codex/INC-2026-05-08-vk-quality-replay/pre_replay.json`
+  - post-fix fast shadow replay: `artifacts/codex/INC-2026-05-08-vk-quality-replay/post_replay_fast.json`
+  - production source fixture: `tests/replays/INC-2026-05-08-vk-quality-false-skips/sources.json`
+- production remediation:
+  - event `4717`: `description` and `search_digest` changed from `Симюран` to `Симуран`; Telegraph rebuilt at `https://telegra.ph/Koncert-EHtot-Den-Pobedy-05-08`; external page check found `Симюран=false`, `Симуран=true`.
+  - `wall-48383763_40430`: `vk_inbox.status='imported'`, `imported_event_id=4718`, event `4718` active, `2026-05-10 11:00`, `Калининградский зоопарк`, Telegraph `https://telegra.ph/EHkskursiya-YA-rabotayu-v-zooparke-05-08-2`.
+  - `wall-78248807_6006`: `vk_inbox.status='imported'`, `imported_event_id=4719`, event `4719` active, `2026-05-10 11:00..17:30`, `Форт №11 Дёнхофф`, `Энергетиков 12`, `Калининград`, Telegraph `https://telegra.ph/Prazdnichnaya-programma-k-Dnyu-Pobedy-05-08-2`.
+  - `wall-138053522_2532`: `vk_inbox.status='imported'`, `imported_event_id=4720`, event `4720` active, `2026-05-10 12:00..20:00`, `Остров Канта`, `Калининград`, Telegraph `https://telegra.ph/Art-market-v-Kulturnom-meste-05-08`.
+- post-deploy health: `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
 
 ## Prevention
 
