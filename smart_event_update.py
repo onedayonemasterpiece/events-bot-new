@@ -10064,6 +10064,91 @@ def _deterministic_exact_title_match(
     return None
 
 
+def _pre_create_duplicate_probe(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> Event | None:
+    """Last-line-of-defence dup check before ``INSERT event`` (INC-2026-05-08).
+
+    Walks the shortlist one more time and returns a match when two anchors
+    fully agree under any of these branches:
+
+    1. identical normalised ``ticket_link`` + overlapping ``date`` + no explicit
+       time conflict + ``_titles_look_related``;
+    2. identical normalised ``location_name`` + overlapping ``date`` + identical
+       non-empty time anchor + ``_titles_look_related``.
+
+    Both branches require ``_titles_look_related`` so a season-subscription URL
+    or a shared venue does not drag unrelated events together. The probe is
+    intentionally narrower than the LLM matcher: only what we can prove
+    deterministically. ``parser:*`` sources skip the probe entirely (they own
+    their canonical anchors and do not need it).
+    """
+
+    if not events or not candidate:
+        return None
+    if str(candidate.source_type or "").startswith("parser:"):
+        return None
+    if not _title_has_meaningful_tokens(candidate.title):
+        return None
+
+    cand_ticket = _normalize_url(candidate.ticket_link)
+    cand_loc_norm = _normalize_location(candidate.location_name)
+    cand_time_anchor = _candidate_anchor_time(candidate, is_canonical_site=False)
+    cand_start, cand_end = _candidate_date_range(candidate)
+    if not cand_start or not cand_end:
+        return None
+
+    def _date_overlaps(ev: Event) -> bool:
+        ev_start, ev_end = _event_date_range(ev)
+        if not ev_start or not ev_end:
+            return False
+        return not (cand_end < ev_start or ev_end < cand_start)
+
+    # Branch 1: identical ticket_link parity. Strongest signal.
+    if cand_ticket:
+        for ev in events:
+            if not getattr(ev, "id", None):
+                continue
+            ev_ticket = _normalize_url(getattr(ev, "ticket_link", None))
+            if not ev_ticket or ev_ticket != cand_ticket:
+                continue
+            if not _date_overlaps(ev):
+                continue
+            ev_time_anchor = _event_anchor_time(ev)
+            if _has_explicit_time_conflict(cand_time_anchor, ev_time_anchor):
+                continue
+            ev_title = getattr(ev, "title", None)
+            if not _title_has_meaningful_tokens(ev_title):
+                continue
+            if not _titles_look_related(candidate.title, ev_title):
+                continue
+            return ev
+
+    # Branch 2: location + time + related title. Catches the cross-source repost
+    # case where one source has a ticket URL and the other does not.
+    if not cand_loc_norm or not cand_time_anchor:
+        return None
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if not _date_overlaps(ev):
+            continue
+        ev_time_anchor = _event_anchor_time(ev)
+        if not ev_time_anchor or ev_time_anchor != cand_time_anchor:
+            continue
+        ev_loc_norm = _normalize_location(getattr(ev, "location_name", None))
+        if not ev_loc_norm or ev_loc_norm != cand_loc_norm:
+            continue
+        ev_title = getattr(ev, "title", None)
+        if not _title_has_meaningful_tokens(ev_title):
+            continue
+        if not _titles_look_related(candidate.title, ev_title):
+            continue
+        return ev
+    return None
+
+
 def _deterministic_related_title_anchor_match(
     candidate: EventCandidate,
     events: Sequence[Event],
@@ -12246,6 +12331,29 @@ async def _smart_event_update_impl(
                         getattr(match_event, "id", None),
                         prev_reason,
                     )
+
+    # Pre-create duplicate probe (INC-2026-05-08).
+    # Last-line-of-defence safety net: even after the LLM matcher / rescue / strong / deterministic
+    # checks all said "no match", we still walk the shortlist one final time for the cases
+    # where two anchors fully agree:
+    #   (a) identical normalized ``ticket_link`` AND overlapping date AND no explicit time conflict;
+    #   (b) identical ``location_name`` AND overlapping date AND identical time anchor AND related title.
+    # Both branches require ``_titles_look_related`` so cross-event collisions on a shared venue
+    # / shared ticket page (e.g. season subscription URL) cannot drag unrelated events together.
+    if match_event is None and shortlist and not str(candidate.source_type or "").startswith("parser:"):
+        probe_match = _pre_create_duplicate_probe(candidate, shortlist)
+        if probe_match is not None:
+            match_event = probe_match
+            match_reason = "post_decision_dup_probe"
+            note = "Матчинг: предотвращён дубль (post-decision probe)"
+            if note not in text_filter_facts:
+                text_filter_facts.append(note)
+            logger.info(
+                "smart_update.match type=post_decision_dup_probe event_id=%s candidate_title=%s existing_title=%s",
+                getattr(match_event, "id", None),
+                _clip_title(candidate.title),
+                _clip_title(getattr(match_event, "title", None)),
+            )
 
     if match_event is None:
         normalized_event_type = _normalize_event_type_value(

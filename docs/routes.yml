@@ -86,6 +86,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_vk_tg_prompt_and_dup_probe_2026_05_08: docs/reports/incidents/INC-2026-05-08-vk-tg-prompt-and-dup-probe.md
     incident_vk_auto_import_merge_regression_gemma4: docs/reports/incidents/INC-2026-05-07-vk-auto-import-merge-regression-gemma4.md
     incident_cherryflash_disk_full: docs/reports/incidents/INC-2026-05-05-cherryflash-disk-full.md
     incident_80_stories_source_coverage_2026_05_05: docs/reports/incidents/INC-2026-05-05-80-stories-source-coverage.md
