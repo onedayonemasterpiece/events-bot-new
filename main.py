@@ -8481,10 +8481,45 @@ def _match_known_venue_by_address(
     return None
 
 
+def _match_known_venue_via_alias(value: str | None) -> _KnownVenue | None:
+    """Return a canonical ``_KnownVenue`` iff ``value`` matches a curated alias.
+
+    Aliases (``docs/reference/location-aliases.md``) are explicit dictionary
+    entries that point to a single canonical venue row in
+    ``docs/reference/locations.md``; they should be trusted absolutely
+    (override LLM-supplied address / city, ignore city filters) precisely
+    because a human curator added them.
+    """
+
+    key = _normalize_venue_key(value)
+    if not key:
+        return None
+    try:
+        from location_reference import (
+            read_known_venue_aliases as _ext_aliases,
+        )
+    except Exception:
+        return None
+    canonical_key = _ext_aliases().get(key)
+    if not canonical_key:
+        return None
+    venues = _read_known_venues()
+    if not venues:
+        return None
+    for venue in venues:
+        if canonical_key in {venue.line_key, venue.name_key}:
+            return venue
+    return None
+
+
 def _match_known_venue(value: str | None, *, city: str | None = None) -> _KnownVenue | None:
     key = _normalize_venue_key(value)
     if not key:
         return None
+    # Curated alias always wins, regardless of LLM-supplied city.
+    alias_venue = _match_known_venue_via_alias(value)
+    if alias_venue is not None:
+        return alias_venue
     venues = _read_known_venues()
     if not venues:
         return None
@@ -8650,6 +8685,23 @@ def _normalise_event_location_from_reference(event_obj: dict[str, Any]) -> None:
     raw_city = event_obj.get("city")
     raw_location_name = event_obj.get("location_name")
     raw_location_address = event_obj.get("location_address")
+
+    # Curated aliases (docs/reference/location-aliases.md) win over everything.
+    # When `location_name` matches an explicit alias entry pointing to a single
+    # canonical row in `docs/reference/locations.md`, force-overwrite all three
+    # fields (name + address + city) from the canonical row regardless of what
+    # LLM-supplied `location_address` / `city` looked like. This is what cured
+    # the production-wide `Янтарь-холл` regression: 14 events arrived with
+    # `city='Калининград'` + `location_address='ТРЦ "Европа" 2 этаж'` because the
+    # post mentioned the box-office point, and the previous "address conflict"
+    # guard refused to overwrite either field, leaving the canonical Светлогорск
+    # row out of reach.
+    alias_venue = _match_known_venue_via_alias(raw_location_name)
+    if alias_venue is not None and alias_venue.name and alias_venue.address and alias_venue.city:
+        event_obj["location_name"] = alias_venue.name
+        event_obj["location_address"] = alias_venue.address
+        event_obj["city"] = alias_venue.city
+        return
 
     venue_by_name = _match_known_venue(raw_location_name, city=raw_city)
     venue_by_addr = _match_known_venue_by_address(raw_location_address, city=raw_city)

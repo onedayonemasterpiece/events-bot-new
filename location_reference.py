@@ -189,6 +189,25 @@ def _match_known_venue_alias(
     return None
 
 
+def match_known_venue_via_alias(value: str | None) -> KnownVenue | None:
+    """Return a canonical venue iff ``value`` matches a curated alias key.
+
+    Aliases are explicit dictionary entries that point to one canonical
+    ``KnownVenue``; they should be trusted absolutely (override LLM-supplied
+    address / city, ignore city filters) precisely because a human curator
+    added them. ``match_known_venue`` returns the same object whether the
+    match came from an alias or a fuzzy name; this helper exposes the alias
+    path on its own so callers can decide to apply a forceful overwrite.
+    """
+    key = normalize_venue_key(value)
+    if not key:
+        return None
+    venues = read_known_venues()
+    if not venues:
+        return None
+    return _match_known_venue_alias(key, venues)
+
+
 def match_known_venue_by_address(
     address: str | None, *, city: str | None = None
 ) -> KnownVenue | None:
@@ -232,6 +251,17 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
     venues = read_known_venues()
     if not venues:
         return None
+
+    # Resolve aliases against the FULL venue set first. Aliases are explicit
+    # dictionary entries that point to a single canonical venue; they must not
+    # be silenced by a city filter that disagrees with the canonical row's city.
+    # This was the root of the Янтарь-холл regression: 14 events arrived with
+    # ``city='Калининград'`` (because their box-office sits in Калининград), and
+    # the city filter dropped the canonical Светлогорск row before the alias
+    # `янтарь-холл => Янтарь холл, Ленина 11, Светлогорск` could resolve.
+    alias_match_full = _match_known_venue_alias(key, venues)
+    if alias_match_full is not None:
+        return alias_match_full
 
     venues = _filter_venues_by_city(venues, city)
 
