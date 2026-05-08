@@ -36,3 +36,8 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     gusev = match_known_venue("Станция Гусев", city="Гусев")
     assert gusev is not None
     assert gusev.name == "Железнодорожный вокзал Гусев"
+
+    fort = match_known_venue("Форт №11 «Дёнхофф»")
+    assert fort is not None
+    assert fort.name == "Форт №11 Дёнхофф"
+    assert fort.city == "Калининград"

@@ -1144,6 +1144,21 @@ def _sanitize_description_output(
     return cleaned or None
 
 
+def _restore_source_grounded_known_spellings(text: str | None, *, source_text: str | None) -> str | None:
+    """Narrow spelling guard for known proper-name drift, only when source grounds it."""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    source = source_text or ""
+    replacements = {
+        "Симюран": "Симуран",
+    }
+    for wrong, correct in replacements.items():
+        if correct in source and wrong in raw:
+            raw = raw.replace(wrong, correct)
+    return raw or None
+
+
 def _normalize_for_similarity(text: str | None, *, drop_structured: bool = True) -> str:
     raw = (text or "").strip()
     if not raw:
@@ -3854,14 +3869,18 @@ _EVENT_INVITE_RE = re.compile(
     r"состо(ится|ятся)|"
     r"пройд(ёт|ет|ут)|"
     r"приглаша(ем|ю|ет)|"
+    r"приходите|"
+    r"жд[её]м\s+вас|"
     r"встречаемс\w*|"
     r"открыт(ие|ый)\s+урок|"
     r"мастер-?класс|"
+    r"экскурси\w*|"
     r"лекци\w*|"
     r"спектакл\w*|"
     r"концерт\w*|"
     r"показ\w*|"
-    r"выставк\w*"
+    r"выставк\w*|"
+    r"билет\w*"
     r")\b"
 )
 _EVENT_HAPPENS_VERB_RE = re.compile(
@@ -3891,6 +3910,9 @@ _ONLINE_EVENT_RE = re.compile(
     r"стрим|трансляц\w*|youtube|"
     r"подключайтес\w*|ссылка\s+на\s+подключен\w*"
     r")\b"
+)
+_ONLINE_PLATFORM_LOCATION_RE = re.compile(
+    r"(?iu)\b(zoom|youtube|ютуб|онлайн|online|webinar|вебинар|telegram|телеграм)\b"
 )
 _BOOK_REVIEW_RE = re.compile(r"(?iu)(#книг\w*|\bкниг\w*\b|\bчтени\w*\b|\bфл[эе]т\s+уайт\b)")
 _BOOK_EVENT_KEEP_RE = re.compile(
@@ -3981,6 +4003,26 @@ def _looks_like_online_event(title: str | None, text: str | None) -> bool:
     if not combined:
         return False
     return bool(_ONLINE_EVENT_RE.search(combined))
+
+
+def _candidate_has_physical_event_anchors(candidate: EventCandidate) -> bool:
+    """Return True when LLM extraction already grounded the draft as an offline event."""
+    if not _candidate_has_event_anchors(candidate):
+        return False
+    location_bits = " ".join(
+        str(v or "").strip()
+        for v in (
+            candidate.location_name,
+            candidate.location_address,
+            candidate.city,
+        )
+        if str(v or "").strip()
+    )
+    if not location_bits:
+        return False
+    if _ONLINE_PLATFORM_LOCATION_RE.search(location_bits):
+        return False
+    return True
 
 
 def _looks_like_book_review_not_event(title: str | None, text: str | None) -> bool:
@@ -11543,7 +11585,7 @@ async def _smart_event_update_impl(
             )
             return SmartUpdateResult(status="skipped_non_event", reason="too_soon")
         # Project policy: auto-ingestion should not create online-only events.
-        if _looks_like_online_event(clean_title, combined_text):
+        if _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate):
             logger.info(
                 "smart_update.skip reason=online_event source_type=%s source_url=%s title=%s",
                 candidate.source_type,
@@ -12914,6 +12956,13 @@ async def _smart_event_update_impl(
                 if fallback and len(fallback) <= int(max_expected_i * 1.15):
                     description_value = fallback
                     text_filter_facts.append("Описание сокращено: использован краткий дайджест источника")
+        description_value = (
+            _restore_source_grounded_known_spellings(
+                description_value,
+                source_text=clean_source_text or clean_raw_excerpt or candidate.source_text,
+            )
+            or description_value
+        )
         description_value = _clip(description_value, SMART_UPDATE_DESCRIPTION_MAX_CHARS) if description_value else ""
 
         # Extract atomic facts for global de-duplication + operator log.
@@ -12945,6 +12994,13 @@ async def _smart_event_update_impl(
             normalized_digest = _fallback_digest_from_description(description_value)
         if not normalized_digest and rich_base:
             normalized_digest = _fallback_digest_from_description(rich_base)
+        normalized_digest = (
+            _restore_source_grounded_known_spellings(
+                normalized_digest,
+                source_text=clean_source_text or clean_raw_excerpt or candidate.source_text,
+            )
+            or normalized_digest
+        )
         final_short = bundled_short
         if not final_short and not split_create_used:
             try:
@@ -12961,6 +13017,13 @@ async def _smart_event_update_impl(
                 final_short = candidate_short
         if not final_short:
             final_short = _fallback_short_description_from_text(description_value or clean_source_text)
+        final_short = (
+            _restore_source_grounded_known_spellings(
+                final_short,
+                source_text=clean_source_text or clean_raw_excerpt or candidate.source_text,
+            )
+            or final_short
+        )
         new_event = Event(
             title=final_title,
             description=description_value,

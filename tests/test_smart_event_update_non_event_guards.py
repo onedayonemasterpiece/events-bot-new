@@ -27,6 +27,61 @@ def test_online_only_webinar_still_skips_as_online_event() -> None:
     assert su._looks_like_online_event("Онлайн-вебинар", text) is True
 
 
+def test_zoo_excursion_with_discount_ticket_wording_is_not_non_event_notice() -> None:
+    text = (
+        "10 мая 11:00\n"
+        "Авторская экскурсия «Я работаю в зоопарке!»\n"
+        "Приходите, чтобы взглянуть на зоопарк под другим углом. "
+        "Стоимость участия: 500 руб./чел. + входной билет "
+        "(взрослый - 600 руб., льготный - 300 руб., детский - 300 руб.)."
+    )
+
+    assert su._looks_like_non_event_notice("Авторская экскурсия «Я работаю в зоопарке!»", text) is False
+
+
+def test_source_grounded_known_spelling_guard_restores_performer_name() -> None:
+    source = 'Премьера оратории [id210697448|Евы Симуран] "Возрождение".'
+    generated = "Произведение Евы Симюран посвящено Дню Победы."
+
+    assert (
+        su._restore_source_grounded_known_spellings(generated, source_text=source)
+        == "Произведение Евы Симуран посвящено Дню Победы."
+    )
+
+
+@pytest.mark.asyncio
+async def test_physical_art_market_with_stream_word_in_program_is_not_online_skip(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "10 мая с 12:00 до 19:00 в Культурном месте на Острове Канта "
+            "пройдет арт маркет. В программе: 12:00 - трансляция концерта, "
+            "14:00 - джаз-хоп концерт. Приходите за авторскими работами."
+        )
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-138053522_2532",
+            source_text=source_text,
+            title="Арт-маркет в Культурном месте",
+            date="2026-05-10",
+            time="12:00",
+            location_name="Остров Канта",
+            city="Калининград",
+            event_type="ярмарка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "created"
+    finally:
+        await db.close()
+
+
 def test_festival_program_at_muzeynaya_alley_is_not_work_schedule() -> None:
     text = (
         "Зеленоградск, море, рыба — и наука? Именно так, 1 мая ИЦАЭ Калининграда "

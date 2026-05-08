@@ -18,6 +18,8 @@ Gemma 4 migration note: VK auto-import draft extraction — это не бина
 
 После `INC-2026-05-05-kitoboya-garage-date` VK draft prompt также fail-closed для выставок/ярмарок без точной даты: teaser вроде `в мае откроем`, `готовим выставку`, `анонсируем дату позже` должен возвращать `[]`, а не материализоваться как первое число месяца. Смысловое решение остаётся LLM-first; детерминированный слой Smart Update только страхует unsupported teaser date как `skipped_non_event:unsupported_exhibition_teaser_date`.
 
+После `INC-2026-05-08-vk-quality-false-skips` VK draft prompt для ярмарок, арт-маркетов и праздничных программ явно предпочитает **один umbrella event**, если источник описывает одну программу в одном месте/день. Отдельные child events допустимы только когда у блока есть самостоятельный билет/регистрация, отдельная площадка или явный source anchor; иначе программа уходит в `description`/`search_digest`, а Smart Update получает один устойчивый кандидат.
+
 Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
 
 - при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY` новые постеры пишутся в Yandex Object Storage (`kenigevents`);
@@ -197,6 +199,7 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - если entrypoint или делегированный run падают до нормального summary, bootstrap-запись закрывается как `status='error'` с `fatal_error` в `details_json`;
 - `/general_stats` показывает такие записи в блоке `vk_auto_import runs`, чтобы было видно разницу между “очередь была пустой”, “run реально выполнился” и “scheduler попытался, но пропустил запуск”.
 - `persist_skipped ... skipped_festival_post` / `skipped_non_event:online_event` в `ops_run.details_json` считаются regression-сигналами, если исходный VK-пост описывает один конкретный офлайн event. Примеры guardrail: одиночный мастер-класс внутри цикла/программы не должен уходить в фестивальную очередь как whole-festival post, а «онлайн-регистрация» не делает офлайн велопробег онлайн-only событием.
+- `skipped_non_event:non_event_notice`, `skipped_non_event:online_event` и `rejected_out_of_region:unknown_region` считаются regression-сигналами, если LLM draft уже содержит дату/время/площадку/цену или физический venue anchor. `INC-2026-05-08-vk-quality-false-skips` фиксирует контрольные кейсы: платная экскурсия в зоопарке, Fort 11 Doenhoff и офлайн арт-маркет с упоминанием трансляции в программе.
 - Crawl admission is intentionally LLM-first for event-like edge cases: if a VK post has date-like text plus strong invite/registration/offline-place signals but deterministic `event_ts_hint` is missing or uncertain, crawl should fail open into `vk_inbox`/normal LLM import instead of terminally rejecting it as `past_event`. Deterministic normalization may preserve syntax (for example `16 мая 2026 г. в 16:00` must not be masked as phone-like noise), but semantic event acceptance stays in the LLM/Smart Update path.
 Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update. По умолчанию очередь идёт строго row-by-row без N+1 reserve; если `VK_AUTO_IMPORT_PREFETCH=1`, включается лёгкий prefetch следующего post, а полный (media/OCR/LLM) префетч по-прежнему включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
 
