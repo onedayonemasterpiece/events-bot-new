@@ -715,6 +715,63 @@ def _ensure_minimal_description_headings(text: str | None) -> str | None:
     return f"{first}\n\n{heading}\n\n{rest}".strip()
 
 
+_THINKING_LEAK_MARKER_RE = re.compile(
+    r"(?im)^(?:[ \t]*)?(?:"
+    r"corrected\s+description(?:_md)?\s*:|"
+    r"here(?:\s+is|'s)\s+(?:the\s+)?(?:corrected|revised|updated|final)|"
+    r"corrected\s+version\s*:|"
+    r"revised\s+version\s*:|"
+    r"final\s+version\s*:|"
+    r"updated\s+description\s*:"
+    r")"
+)
+
+_THINKING_LINE_PATTERNS = (
+    re.compile(r"(?im)^[ \t]*(?:wait|hmm|hold on)\s*,\s*let\s+me\b.*$"),
+    re.compile(r"(?im)^[ \t]*(?:actually|on\s+second\s+thought)\s*,?\s+let\s+me\b.*$"),
+    re.compile(r"(?im)^[ \t]*(?:actually|on\s+second\s+thought|let\s+me)\s*,?\s*(?:rewrite|rephrase|revise|try|fix|correct|redo).*$"),
+    re.compile(r"(?im)^[ \t]*let\s+me\s+(?:rewrite|rephrase|revise|try|fix|correct|redo).*$"),
+    re.compile(r"(?im)^[ \t]*\(?\s*note\s+to\s+self\s*[:.].*$"),
+    re.compile(r"(?im)^[ \t]*\[?\s*(?:internal|self)[-_ ]?note\s*[:.].*$"),
+)
+
+
+def _strip_thinking_leak(text: str) -> str:
+    """Strip Gemma 4 thinking / self-correction text from a writer output.
+
+    Production case (INC-2026-05-08, event 4711 «Любовь по-итальянски»): the
+    final writer call returned a draft on English, then the model second-
+    guessed itself on screen (``Wait, let me rewrite the EC05 part to be
+    natural Russian.``) and emitted ``Corrected description_md: <real
+    answer>``. Both halves landed in ``event.description`` and shipped to
+    Telegraph as a public page. We:
+
+    1. If a self-correction marker (``Corrected description_md:``,
+       ``Here is the corrected ...`` etc.) is present, take everything
+       **after** the LAST such marker — that is the LLM's own final answer.
+    2. Drop standalone "Wait, let me ..." / "Let me rewrite ..." / "Note to
+       self:" lines that may still leak even when no self-correction marker
+       was emitted.
+
+    This is non-semantic cleanup: we do not paraphrase, only remove visible
+    LLM-internal markers. Final text remains whatever the LLM actually
+    wrote after deciding it was final.
+    """
+    if not text:
+        return text
+    out = text
+    matches = list(_THINKING_LEAK_MARKER_RE.finditer(out))
+    if matches:
+        last = matches[-1]
+        rest = out[last.end():]
+        rest = rest.lstrip(" \t:.\n")
+        out = rest if rest else out
+    for pat in _THINKING_LINE_PATTERNS:
+        out = pat.sub("", out)
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out
+
+
 def _normalize_plaintext_paragraphs(text: str | None) -> str | None:
     """Normalize LLM output while preserving paragraph breaks.
 
@@ -725,6 +782,7 @@ def _normalize_plaintext_paragraphs(text: str | None) -> str | None:
     raw = (text or "").strip()
     if not raw:
         return None
+    raw = _strip_thinking_leak(raw) or raw
     raw = unescape_public_text_escapes(raw) or raw
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     # Drop fenced code blocks (they are almost always accidental/noise for event pages).
