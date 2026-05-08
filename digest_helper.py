@@ -13,12 +13,63 @@ def _collapse_ws(value: str) -> str:
     return _WS_RE.sub(" ", str(value or "")).strip()
 
 
+_GUILLEMET_PERIOD_PLACEHOLDER = "\x00DOTQ\x00"
+_GUILLEMET_BANG_PLACEHOLDER = "\x00BANGQ\x00"
+_GUILLEMET_QUEST_PLACEHOLDER = "\x00QUESTQ\x00"
+
+
+def _protect_sentence_punct_in_guillemets(text: str) -> str:
+    """Replace ``.``/``!``/``?`` inside ``«...»`` with placeholders.
+
+    Russian event titles often contain a sentence-final period inside the
+    proper noun (``«Эдит Пиаф. На Балу удачи»``). Without this protection
+    ``_first_sentence`` cuts on the period inside the title and leaves the
+    fallback short_description ending mid-name (INC-2026-05-08). We hide
+    those punctuation marks before splitting and restore them afterwards.
+    """
+    if not text or "«" not in text:
+        return text
+    out: list[str] = []
+    depth = 0
+    for ch in text:
+        if ch == "«":
+            depth += 1
+            out.append(ch)
+            continue
+        if ch == "»":
+            if depth > 0:
+                depth -= 1
+            out.append(ch)
+            continue
+        if depth > 0:
+            if ch == ".":
+                out.append(_GUILLEMET_PERIOD_PLACEHOLDER)
+                continue
+            if ch == "!":
+                out.append(_GUILLEMET_BANG_PLACEHOLDER)
+                continue
+            if ch == "?":
+                out.append(_GUILLEMET_QUEST_PLACEHOLDER)
+                continue
+        out.append(ch)
+    return "".join(out)
+
+
+def _restore_sentence_punct(text: str) -> str:
+    return (
+        text.replace(_GUILLEMET_PERIOD_PLACEHOLDER, ".")
+            .replace(_GUILLEMET_BANG_PLACEHOLDER, "!")
+            .replace(_GUILLEMET_QUEST_PLACEHOLDER, "?")
+    )
+
+
 def _first_sentence(text: str) -> str:
     raw = str(text or "").strip()
     if not raw:
         return ""
-    parts = _SENTENCE_SPLIT_RE.split(raw, maxsplit=1)
-    return (parts[0] if parts else raw).strip()
+    protected = _protect_sentence_punct_in_guillemets(raw)
+    parts = _SENTENCE_SPLIT_RE.split(protected, maxsplit=1)
+    return _restore_sentence_punct((parts[0] if parts else protected).strip())
 
 def fallback_one_sentence(text: str | None, *, max_words: int | None = None) -> str | None:
     """Best-effort one-sentence fallback from a long description/body."""
@@ -28,6 +79,11 @@ def fallback_one_sentence(text: str | None, *, max_words: int | None = None) -> 
     # Drop legacy "(подробнее ...)" suffixes if they were appended into the body.
     raw = re.sub(r",?\s*подробнее\s*\([^\n]*\)\s*$", "", raw, flags=re.I).strip()
     # Skip Markdown headings and empty lines; keep the first meaningful paragraph.
+    # Also strip leading blockquote markers (``>``) — Smart Update writers
+    # occasionally emit the lede as a quoted line, and without this strip the
+    # fallback short_description for the Эдит Пиаф 3983 row produced
+    # ``> Спектакль-байопик «Эдит Пиаф.`` (markdown leak + cut on the period
+    # inside the proper noun, INC-2026-05-08).
     lines = [ln.strip() for ln in raw.split("\n")]
     picked: list[str] = []
     started = False
@@ -38,6 +94,7 @@ def fallback_one_sentence(text: str | None, *, max_words: int | None = None) -> 
             continue
         if ln.startswith("#"):
             continue
+        ln = re.sub(r"^>+\s*", "", ln).strip()
         ln = re.sub(r"^[•*\-]\s+", "", ln).strip()
         if not ln:
             continue
