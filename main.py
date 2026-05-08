@@ -15267,13 +15267,22 @@ TASK_LABELS = {
     "fest_nav:update_all": "Навигация",
 }
 
+# Job TTL: how long a pending job is allowed to wait in the queue before
+# the picker marks it ``status=error, last_error='expired'``. The previous
+# 600s (10 min) window proved too tight under realistic prod load on
+# 2026-05-07: events 4664 / 4705 had four jobs each created during a
+# vk_auto_import burst, none were picked up in 10 minutes, all four
+# expired at ``attempts=0``, and event 4664 ended up in /daily without a
+# Telegraph URL (visible to operators in the 2026-05-08 daily). Bump the
+# user-facing publish tasks to 1 hour so heavy operations
+# (vk_auto_import / nightly_page_sync) cannot starve them.
 JOB_TTL: dict[JobTask, int] = {
-    JobTask.telegraph_build: 600,
-    JobTask.ics_publish: 600,
-    JobTask.tg_ics_post: 600,
-    JobTask.month_pages: 600,
-    JobTask.week_pages: 600,
-    JobTask.weekend_pages: 600,
+    JobTask.telegraph_build: 3600,
+    JobTask.ics_publish: 3600,
+    JobTask.tg_ics_post: 3600,
+    JobTask.month_pages: 3600,
+    JobTask.week_pages: 3600,
+    JobTask.weekend_pages: 3600,
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
@@ -15285,7 +15294,7 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.weekend_pages: 180,
 }
 
-DEFAULT_JOB_TTL = 600
+DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
 
 # runtime storage for progress callbacks keyed by event id
