@@ -1436,15 +1436,26 @@ class GoogleAIClient:
                 generation_config=config,
                 safety_settings=safety_settings,
             )
-        if self.provider_timeout_seconds > 0:
+        # Capture the timeout locally so the error message reports the value
+        # that was actually in effect when ``wait_for`` was armed. Smart Update
+        # mutates ``self.provider_timeout_seconds`` per-stage (set in a try /
+        # finally pair around each call); under concurrent or rapidly
+        # successive stages a different caller's ``finally`` can reset the
+        # attribute back to ``0.0`` while this call is still inside
+        # ``wait_for``. Reading the attribute in the ``except`` branch then
+        # surfaced as ``timed out after 0.0s`` even when the real cap was,
+        # say, 70s — observed on label ``telegraph_render_remove_logistics``
+        # on 2026-05-08, INC-2026-05-08.
+        timeout_sec = float(self.provider_timeout_seconds or 0.0)
+        if timeout_sec > 0:
             try:
                 response = await asyncio.wait_for(
                     provider_call,
-                    timeout=self.provider_timeout_seconds,
+                    timeout=timeout_sec,
                 )
             except asyncio.TimeoutError as exc:
                 raise TimeoutError(
-                    f"Google AI provider call timed out after {self.provider_timeout_seconds:.1f}s"
+                    f"Google AI provider call timed out after {timeout_sec:.1f}s"
                 ) from exc
         else:
             response = await provider_call
