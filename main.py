@@ -9232,15 +9232,46 @@ async def parse_event_via_llm(
             poster_summary=poster_summary,
             **extra,
         )
-    return await _parse_event_via_gemma(
-        text,
-        source_channel,
-        festival_names=festival_names,
-        festival_alias_pairs=festival_alias_pairs,
-        poster_texts=poster_texts,
-        poster_summary=poster_summary,
-        **extra,
-    )
+    # Hard wall-clock cap on the Gemma event_parse stage.
+    #
+    # Without this, a Gemma 4 ``500 INTERNAL`` storm can keep the rate-limit
+    # retry loop waiting up to ``EVENT_PARSE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC=120``
+    # **per attempt** while individual HTTP retries inside ``GoogleAIClient``
+    # add their own latency. Combined with the row timeout
+    # ``VK_AUTO_IMPORT_ROW_TIMEOUT_SEC=1800``, a single bad post can pin a
+    # /vk_auto_import slot for the full 30 minutes (observed for
+    # ``wall-211696971_5569`` on 2026-05-08 06:40–07:10). The Smart Update
+    # gateway already enforces ``SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC=90``
+    # via ``asyncio.wait_for``; mirror the same shape for ``event_parse`` so
+    # the row can fail-fast and the import can move on.
+    cap_raw = (os.getenv("EVENT_PARSE_GEMMA_WALL_CLOCK_SEC") or "").strip()
+    try:
+        cap_sec = float(cap_raw) if cap_raw else 240.0
+    except Exception:
+        cap_sec = 240.0
+    cap_sec = max(30.0, min(cap_sec, 600.0))
+    try:
+        return await asyncio.wait_for(
+            _parse_event_via_gemma(
+                text,
+                source_channel,
+                festival_names=festival_names,
+                festival_alias_pairs=festival_alias_pairs,
+                poster_texts=poster_texts,
+                poster_summary=poster_summary,
+                **extra,
+            ),
+            timeout=cap_sec,
+        )
+    except asyncio.TimeoutError as exc:
+        logging.warning(
+            "event_parse: gemma wall_clock_timeout cap_sec=%.1f source_channel=%s; raising",
+            cap_sec,
+            source_channel,
+        )
+        raise RuntimeError(
+            f"event_parse Gemma wall-clock timeout after {cap_sec:.0f}s"
+        ) from exc
 
 
 async def parse_event_via_4o(
