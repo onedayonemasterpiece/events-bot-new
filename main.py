@@ -9250,6 +9250,43 @@ async def parse_event_via_llm(
     except Exception:
         cap_sec = 240.0
     cap_sec = max(30.0, min(cap_sec, 600.0))
+
+    # Large-post pre-routing: send oversized posts directly to a backup model
+    # (default gemini-3.1-flash-lite) instead of Gemma 4 first. Motivation:
+    # Gemma 4's thought channel can balloon on multi-event "afisha" / digest
+    # posts (~32k thought tokens, no output, request hangs ~15 min) — the same
+    # failure mode we observed on wall-69311452_2727 (2026-05-09). Lite Gemini
+    # has no thought channel and parses 15-event 9 May digests in ~11s.
+    # Threshold defaults to 2500 chars (text + poster_summary + poster_texts);
+    # below that Gemma still leads. Size, not token count, is used because
+    # the system prompt (~6000 tokens of venues/holidays/rules) dominates the
+    # provider-reported input_tokens and would mask the per-post signal.
+    if "gemma_model" not in extra:
+        try:
+            threshold_chars = int(
+                os.getenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "2500") or "2500"
+            )
+        except Exception:
+            threshold_chars = 2500
+        large_model = (
+            os.getenv("EVENT_PARSE_LARGE_POST_MODEL", "gemini-3.1-flash-lite") or ""
+        ).strip()
+        if threshold_chars > 0 and large_model:
+            total_chars = len(text or "")
+            if poster_summary:
+                total_chars += len(poster_summary)
+            for p in (poster_texts or ()):
+                total_chars += len(p or "")
+            if total_chars >= threshold_chars:
+                extra["gemma_model"] = large_model
+                logging.info(
+                    "event_parse: large_post route source_channel=%s total_chars=%d threshold=%d primary=%s",
+                    source_channel,
+                    total_chars,
+                    threshold_chars,
+                    large_model,
+                )
+
     try:
         return await asyncio.wait_for(
             _parse_event_via_gemma(
