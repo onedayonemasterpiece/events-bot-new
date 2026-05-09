@@ -443,6 +443,32 @@ def normalise_event_location_from_reference(
     raw_location_name = event_obj.get("location_name")
     raw_location_address = event_obj.get("location_address")
 
+    name_key = normalize_venue_key(raw_location_name)
+    addr_key = normalize_address_key(raw_location_address, city=raw_city)
+    if (
+        addr_key in {"мира 9", "мира 9 11"}
+        and "библиотек" in name_key
+        and "дом китобоя" not in name_key
+    ):
+        for venue in read_known_venues():
+            if venue.name == "Научная библиотека":
+                event_obj["location_name"] = venue.name
+                event_obj["location_address"] = venue.address
+                event_obj["city"] = venue.city
+                return venue
+
+    alias_venue = match_known_venue_via_alias(raw_location_name)
+    if (
+        alias_venue is not None
+        and alias_venue.name
+        and alias_venue.address
+        and alias_venue.city
+    ):
+        event_obj["location_name"] = alias_venue.name
+        event_obj["location_address"] = alias_venue.address
+        event_obj["city"] = alias_venue.city
+        return alias_venue
+
     venue_by_name = match_known_venue(raw_location_name, city=raw_city)
     venue_by_addr = match_known_venue_by_address(raw_location_address, city=raw_city)
 

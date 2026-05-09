@@ -253,6 +253,7 @@ Smart Update содержит детекцию фестивалей как ча�
   Если запись матчится на одну каноническую площадку, Smart Update подставляет reference `location_name`
   и использует город из справочника как авторитетный, даже когда extractor записал в `city` шумный токен вроде названия площадки.
 - Reference-слой умеет также искать единственную известную площадку в свободном тексте по каноническому имени, алиасу или адресу; Telegram Monitoring использует это только как recovery после пустой или явно прозоподобной `location_name`, чтобы не закреплять фрагменты описания как площадку.
+- Curated aliases in `docs/reference/location-aliases.md` force canonical `location_name/location_address/city` from `docs/reference/locations.md` when the alias matches exactly. This is intentionally a reference-normalization guardrail, not a semantic matcher: broad/ambiguous room labels such as bare `Кинозал` still need source context or the Gemma 4 venue-review stage.
 - Для нормализации по `docs/reference/locations.md` действует guardrail: неизвестная площадка не должна схлопываться в известную запись по общему токену вроде `школа`; если в источнике есть явный конфликтующий адрес, сохраняем raw `location_name/location_address/city`, а не создаём гибрид из справочника и текста поста.
 - Цель: стабильный dedup/merge и единообразный summary-блок Telegraph.
 - Детерминированные ранние фильтры “не-событий” (без LLM), чтобы не создавать псевдо-ивенты:

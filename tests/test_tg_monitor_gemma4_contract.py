@@ -93,6 +93,12 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "source_default_location=default_location" in source
     assert "Source default location:" in source
     assert "source default location is provided, treat it as a strong prior" in source
+    assert "_event_needs_location_grounding_review" in source
+    assert "_LOCATION_REVIEW_VENUE_CUE_RE" in source
+    assert "not grounded in the source text/OCR/source context" in source
+    assert "дворец спорта Янтарный" in source
+    assert "use only the venue nearest the event line" in source
+    assert "source_context_line=source_context_line" in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:

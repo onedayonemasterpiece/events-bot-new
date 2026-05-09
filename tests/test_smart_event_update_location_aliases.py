@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import smart_event_update as su
-from location_reference import match_known_venue
+from location_reference import (
+    find_known_venue_in_text,
+    match_known_venue,
+    normalise_event_location_from_reference,
+)
 
 
 def test_gate_locations_do_not_collapse_into_one_bucket() -> None:
@@ -41,3 +45,48 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     assert fort is not None
     assert fort.name == "Форт №11 Дёнхофф"
     assert fort.city == "Калининград"
+
+
+def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
+    yantarny = find_known_venue_in_text('перед дворцом спорта "Янтарный"')
+    assert yantarny is not None
+    assert yantarny.name == "Дворец спорта «Янтарный»"
+    assert yantarny.address == "Согласия 39"
+
+    signal_payload = {
+        "location_name": "Арт-пространство Сигнал",
+        "location_address": "Космонавта Леонова 22",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(signal_payload)
+    assert signal_payload == {
+        "location_name": "Сигнал",
+        "location_address": "Леонова 22",
+        "city": "Калининград",
+    }
+
+    library_payload = {
+        "location_name": "библиотека",
+        "location_address": "Мира 9",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(library_payload)
+    assert library_payload == {
+        "location_name": "Научная библиотека",
+        "location_address": "Мира 9",
+        "city": "Калининград",
+    }
+
+    dreadnought = match_known_venue('бар "Дредноут"', city="Калининград")
+    assert dreadnought is not None
+    assert dreadnought.name == "Бар Дредноут"
+    assert dreadnought.address == "Генделя 5"
+
+    mysig = match_known_venue("Шоурум Mysig", city="Калининград")
+    assert mysig is not None
+    assert mysig.name == "Шоурум Mysig"
+    assert mysig.address == "Судостроительная 6/1"
+
+    icae = match_known_venue("ИЦАЭ Калининграда", city="Калининград")
+    assert icae is not None
+    assert icae.name == "ИЦАЭ (в КГТУ)"

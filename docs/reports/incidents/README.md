@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-09-event-location-alias-free-dup-regressions.md`
+  - Scope: Telegram Monitoring / VK auto-import / Smart Update venue grounding, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, duplicate matching, free/ticket nuance, phone-only contact rendering, and public Telegraph/daily surfaces for the May 9 reported cards.
+  - Must not regress: semantic venue identity and alias convergence must stay LLM-first; public `location_name` must never become prose, box-office text, or unrelated source default; poster/OCR address evidence must be available to venue grounding; one real event must not survive as duplicate cards; missing/zero price or registration-only wording must not imply free; phone-only contact must stay visible/actionable; source-specific partner CherryFlash enhancements must not be mixed into incident data repair.
 - `INC-2026-05-08-vk-quality-false-skips.md`
   - Scope: `vk_intake.py` Gemma 4 VK draft extraction, `smart_event_update.py` non-event/online guards and source-grounded writer spelling guard, Fort 11 Doenhoff location aliases, production event 4717 Telegraph rebuild, and VK sources `wall-48383763_40430`, `wall-78248807_6006`, `wall-138053522_2532`.
   - Must not regress: concrete VK events with date/time/venue/ticket anchors must not be skipped as `non_event_notice`; offline events must not be skipped as `online_event` only because a programme mentions a stream/broadcast; Fort 11 Doenhoff must resolve to Kaliningrad; public writer output must preserve source-grounded rare proper names such as `Симуран`; one art-market/fair/holiday programme in one place/day should import as one umbrella event unless independent ticket/venue anchors prove separate events.

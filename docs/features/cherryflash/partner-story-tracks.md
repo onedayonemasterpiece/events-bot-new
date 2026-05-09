@@ -199,6 +199,38 @@ Initial partner assignment:
 - `publish surface`: Telegram Business Story
 - `target`: encrypted Business target supplied out-of-band; do not write raw handle to repo-visible files.
 
+## Filter `icae_events`
+
+Human label: `ИЦАЭ`.
+
+Main rule: include only events whose primary venue, organizer, source, or explicit programme context is the Информационный центр по атомной энергии in Kaliningrad. The selector should generate a separate CherryFlash video announcement from ИЦАЭ events only and publish it to the partner Business Story target for `partner_icae_001`.
+
+The filter is LLM-first. Deterministic support may pass source/channel hints, known ИЦАЭ venue aliases, and canonical location references to Gemma 4, but the final include/exclude decision must be made by a small native-schema Gemma 4 classification stage.
+
+Include:
+
+- quizzes, intellectual tournaments, lectures, science talks, workshops, screenings, meetings, and public programmes hosted by ИЦАЭ;
+- events where ИЦАЭ is the explicit organizer or partner and the event is meant for the public;
+- reposts from other sources when the source-grounded venue/organizer evidence still points to ИЦАЭ.
+
+Exclude:
+
+- unrelated events that merely mention science, quizzes, or education without ИЦАЭ as venue/organizer/source;
+- broad digest posts where one ИЦАЭ line is mixed with unrelated events unless candidates are split per event before classification;
+- private/internal organizational notices without a public event card.
+
+Recommended native-schema output:
+
+- `event_id`
+- `title`
+- `matched`
+- `confidence`
+- `evidence_fields`
+- `canonical_location_name`
+- `canonical_location_address`
+- `reason`
+- `needs_manual_review`
+
 ## Operator interface requirements
 
 Partner tracks must have direct launch buttons in the CherryFlash operator UI. They must not be hidden behind a generic profile picker or require the operator to remember internal filter ids.
@@ -209,6 +241,16 @@ Required initial buttons:
 - `🍃 Эко-природная` — launches `partner_track_id=partner_eco_nature_001` with `content_filter_id=eco_prirodnaya`.
 
 Future partner tracks should add their own one-click buttons with stable human labels, for example a future east-region partner button may use the `kaliningrad_region_east` geo filter once its Business target is supplied and source audit is complete.
+
+Planned ИЦАЭ partner track:
+
+- `partner_track_id`: `partner_icae_001`
+- `content_filter_id`: `icae_events`
+- `publish surface`: Telegram Business Story
+- `target`: encrypted Business target supplied out-of-band; do not write raw handles to repo-visible files.
+- `status`: planned; this is a product enhancement, not part of incident data repair.
+
+The operator-facing UI should eventually expose this as a direct one-click CherryFlash partner launch, equivalent to the existing partner-button contract below.
 
 Button behavior:
 

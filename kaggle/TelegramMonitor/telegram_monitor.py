@@ -2112,6 +2112,21 @@ _LOCATION_REVIEW_ADDRESS_HINT_RE = re.compile(
     r"шоссе|бульвар|аллея|проезд|д\.|дом)\b",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_VENUE_CUE_RE = re.compile(
+    r"\b(?:"
+    r"двор(?:ец|ца)\s+спорта|дс\s+[а-яёa-z0-9]+|"
+    r"музе[йяе]|библиотек\w*|галере[яи]|кино(?:зал|театр)|"
+    r"бар\w*|паб\w*|шоурум\w*|пространств\w*|арт[- ]?пространств\w*|"
+    r"театр\w*|дом\s+культур\w*|дк\s+[а-яёa-z0-9]+|"
+    r"парк\w*|сквер\w*|арен[аы]|ворот[а-я]*|"
+    r"место\s+проведения|где\s*:"
+    r")\b|📍",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_GENERIC_ROOM_RE = re.compile(
+    r"^\s*(?:кино(?:зал|театр)|зал|холл|аудитори[яи]|сцена|мастерск(?:ая|ие)|дворик|площадка)\s*:?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def _clean_event_string_value(value) -> str:
@@ -2244,16 +2259,86 @@ async def _repair_service_heading_titles(
     return events
 
 
-def _needs_llm_location_review(events: list, *, source_default_location: str | None = None) -> bool:
+def _location_review_norm(value: str | None) -> str:
+    text = str(value or '').strip().casefold().replace('ё', 'е')
+    text = re.sub(r'[«»"\'`]', ' ', text)
+    text = re.sub(r'[^a-zа-я0-9]+', ' ', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def _location_review_value_grounded(value: str | None, evidence_text: str) -> bool:
+    value_norm = _location_review_norm(value)
+    evidence_norm = _location_review_norm(evidence_text)
+    if not value_norm or not evidence_norm:
+        return False
+    if value_norm in evidence_norm:
+        return True
+    tokens = [
+        token
+        for token in value_norm.split()
+        if len(token) >= 4
+        and token not in {
+            'город',
+            'улица',
+            'проспект',
+            'дом',
+            'зал',
+            'сцена',
+            'музей',
+            'бар',
+            'клуб',
+            'пространство',
+            'библиотека',
+            'дворец',
+            'спорта',
+        }
+    ]
+    return bool(tokens) and all(token in evidence_norm for token in tokens)
+
+
+def _event_needs_location_grounding_review(ev: dict, evidence_text: str) -> bool:
+    raw = str(ev.get('location_name') or '').strip()
+    addr = str(ev.get('location_address') or '').strip()
+    if raw and _LOCATION_REVIEW_GENERIC_ROOM_RE.search(raw):
+        return True
+    if raw and not _location_review_value_grounded(raw, evidence_text):
+        if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text) or _LOCATION_REVIEW_VENUE_CUE_RE.search(evidence_text):
+            return True
+    if not addr and _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text):
+        if raw and _LOCATION_REVIEW_VENUE_CUE_RE.search(evidence_text):
+            return True
+    return False
+
+
+def _needs_llm_location_review(
+    events: list,
+    *,
+    source_default_location: str | None = None,
+    message_text: str | None = None,
+    ocr_text: str | None = None,
+    source_context_line: str | None = None,
+) -> bool:
     """Detect broad venue-shape smells; the semantic repair stays LLM-owned."""
     if not events or not isinstance(events, list):
         return False
     has_default_location = bool(str(source_default_location or '').strip())
+    evidence_text = '\n'.join(
+        part
+        for part in (
+            str(message_text or '').strip(),
+            str(ocr_text or '').strip(),
+            str(source_context_line or '').strip(),
+        )
+        if part
+    )
     for ev in events:
         if not isinstance(ev, dict):
             continue
         raw = str(ev.get('location_name') or '').strip()
         if not raw:
+            if evidence_text and _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text):
+                return True
             continue
         if has_default_location:
             return True
@@ -2269,7 +2354,9 @@ def _needs_llm_location_review(events: list, *, source_default_location: str | N
             return True
         if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
             return True
-        if len(words) >= 8 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
+        if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
+            return True
+        if evidence_text and _event_needs_location_grounding_review(ev, evidence_text):
             return True
     return False
 
@@ -2289,7 +2376,13 @@ async def _repair_suspicious_locations(
     broad bad shape (overlong sentence, schedule row, short section label). It
     does not infer the replacement venue.
     """
-    if not _needs_llm_location_review(events, source_default_location=source_default_location):
+    if not _needs_llm_location_review(
+        events,
+        source_default_location=source_default_location,
+        message_text=message_text,
+        ocr_text=ocr_text,
+        source_context_line=source_context_line,
+    ):
         return events
 
     prompt = (
@@ -2301,10 +2394,16 @@ async def _repair_suspicious_locations(
         'Do not add events. Do not drop events. Do not change title/date/time. '
         'Use the original message text, OCR, source title, source username, and source default location as evidence. '
         'location_name must be a real venue/place name where attendees go. '
+        'If current venue fields are not grounded in the source text/OCR/source context, replace them with the '
+        'grounded venue from the source or return empty strings. Do not preserve a plausible but ungrounded venue. '
+        'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '
+        'vs "Дворец спорта Юность"), choose only the source-grounded venue. '
         'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
         'speaker bios, or an event description as location_name. '
         'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
         'by source context or message text, output the host venue as location_name and leave the hall label out. '
+        'For schedule/program posts with many lines, use only the venue nearest the event line. If the event line has '
+        'no venue and a later/nearby line names a different venue for another event, leave this event venue unresolved. '
         'If the source default location is provided, treat it as a strong prior for this source, but override it only '
         'when the message explicitly names a different venue/address. '
         'If no venue is grounded, output empty strings for unresolved venue fields rather than prose or generic '
@@ -2337,6 +2436,9 @@ async def _repair_suspicious_locations(
         original_suspect = _needs_llm_location_review(
             [old],
             source_default_location=source_default_location,
+            message_text=message_text,
+            ocr_text=ocr_text,
+            source_context_line=source_context_line,
         )
         if isinstance(new, dict):
             for field in ('location_name', 'location_address', 'city'):
