@@ -39,6 +39,9 @@ test_data/
 .venv/
 .devcontainer/.mcp-auth/
 
+# Local VPS / dev helper scripts
+.vps/
+
 # Local artifacts (never commit)
 artifacts/*
 !artifacts/README.md
