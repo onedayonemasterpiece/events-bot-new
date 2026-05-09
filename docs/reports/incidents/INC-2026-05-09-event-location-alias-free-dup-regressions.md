@@ -155,15 +155,15 @@ Working hypotheses until replay confirms the exact source path:
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- prevention commit: `5032a06f` (`origin/main`, not deployed yet)
+- deployed SHA: `cd8c4fe6` (origin/main, includes prevention commit `5032a06f` + worktree-cleanup `cd8c4fe6`)
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean `main` worktree, 2026-05-09 ~11:01 UTC, Fly release v1055 (`deployment-01KR66436HF8QY927Y4JWZ6FD4`)
+- prevention commit: `5032a06f` (`origin/main`, deployed 2026-05-09 11:01 UTC as part of v1055)
 - regression checks:
   - `.venv/bin/python -m pytest tests/test_smart_event_update_location_aliases.py -q` -> `4 passed`
-  - `.venv/bin/python -m pytest tests/test_smart_event_update_location_aliases.py tests/test_tg_monitor_gemma4_contract.py -q` -> `27 passed`
+  - `.venv/bin/python -m pytest tests/test_smart_event_update_location_aliases.py tests/test_tg_monitor_gemma4_contract.py -q` -> `27 passed` (re-run pre-deploy on `cd8c4fe6`)
   - `python3 -m py_compile location_reference.py kaggle/TelegramMonitor/telegram_monitor.py`
   - `git diff --check`
-- post-deploy verification: —
+- post-deploy verification: machine `48e42d5b714228` reached `started` state, 1/1 health check passing at 2026-05-09T11:01:06Z; full replay/shadow DB and duplicate/free/phone regression checks plus production data repair/rebuild are still pending per "Mandatory checks before closure or deploy".
 
 ## Prevention
 
