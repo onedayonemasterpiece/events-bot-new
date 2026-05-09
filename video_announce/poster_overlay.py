@@ -21,14 +21,21 @@ from .selection import _has_meaningful_ocr_text
 logger = logging.getLogger(__name__)
 
 # Default per-user request is short; keep output small and strictly JSON.
-_GEMMA_MODEL_RAW = os.getenv("VIDEO_ANNOUNCE_POSTER_CHECK_MODEL", "gemma-3-27b")
+# Migrated 2026-05-09: ``gemma-3-27b-it`` was retired by Google and now
+# returns ``404 NOT_FOUND``; previously this surface only stayed alive
+# because ``GOOGLE_AI_FALLBACK_MODELS`` chained it to Gemini Flash Lite,
+# but every poster scene still paid the 404 round-trip first. Switch to
+# ``gemma-4-31b-it`` which is current and registered in the Supabase
+# limiter; the same fallback chain still covers Gemma 4 5xx storms.
+_GEMMA_MODEL_RAW = os.getenv("VIDEO_ANNOUNCE_POSTER_CHECK_MODEL", "gemma-4-31b-it")
 
 
 def _normalize_gemma_model_id(value: str) -> str:
-    """Keep app-level model id compatible with Supabase limits seed (e.g. 'gemma-3-27b').
+    """Keep app-level model id compatible with Supabase limits seed (e.g. 'gemma-4-31b').
 
-    UniversalFestivalParser uses provider model_name 'models/gemma-3-27b-it' while
-    treating the canonical id as 'gemma-3-27b' for config/limits.
+    Provider call sites use the fully-qualified provider name (e.g.
+    ``models/gemma-4-31b-it``) while the limiter row is keyed by the canonical
+    short id (``gemma-4-31b``).
     """
 
     v = (value or "").strip()
@@ -37,7 +44,7 @@ def _normalize_gemma_model_id(value: str) -> str:
     # Drop provider "-it" suffix if someone passes it in env.
     if v.startswith("gemma-") and v.endswith("-it"):
         v = v[: -len("-it")]
-    return v or "gemma-3-27b"
+    return v or "gemma-4-31b"
 
 
 _GEMMA_MODEL = _normalize_gemma_model_id(_GEMMA_MODEL_RAW)

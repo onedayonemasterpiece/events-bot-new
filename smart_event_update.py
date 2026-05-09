@@ -180,13 +180,28 @@ SMART_UPDATE_WRITER_MODEL = (
 
 def _resolve_smart_update_model(label: str | None) -> str:
     label_l = (label or "").strip().lower()
+    # Pure facts extraction stages (split-create / fact-first paths).
     if label_l in {"facts_extract", "rich_facts_extract"}:
         return SMART_UPDATE_FACTS_MODEL
+    # Pure writer stages (split-create / fact-first paths). The fact-first
+    # writer label is composed as ``f"{label}:fact_first_desc"`` (e.g.
+    # ``merge:4727:fact_first_desc``) so we have to match both the bare
+    # name and the suffix form.
     if (
         label_l == "split_description_writer"
         or label_l == "fact_first_desc"
         or label_l.endswith(":fact_first_desc")
     ):
+        return SMART_UPDATE_WRITER_MODEL
+    # Bundle stages do extraction *and* writing in a single LLM call:
+    #   - ``create_bundle``       — new-event create on the legacy path
+    #   - ``match_create_bundle`` — match-or-create bundle (active by default)
+    #   - ``merge``               — update of an existing event (legacy merge)
+    # All three return the public description + short_description + facts in
+    # one shot, so they are exactly the "fact extraction + text writing"
+    # surface the user asked us to cover. Route them to the writer model so
+    # both halves of the work land on Gemini Flash Lite.
+    if label_l in {"create_bundle", "match_create_bundle", "merge"}:
         return SMART_UPDATE_WRITER_MODEL
     return SMART_UPDATE_MODEL
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
