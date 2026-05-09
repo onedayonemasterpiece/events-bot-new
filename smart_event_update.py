@@ -160,6 +160,35 @@ if not SMART_UPDATE_MODEL or "gemma" not in SMART_UPDATE_MODEL.lower():
         SMART_UPDATE_MODEL,
     )
     SMART_UPDATE_MODEL = "gemma-4-31b-it"
+
+# Per-stage primary model overrides. Default route fact extraction and the
+# main writer to gemini-3.1-flash-lite (500 RPD per key, stable on Google's
+# side at the time of cutover) while the rest of the Smart Update pipeline
+# (revise/rewrite/short_description/search_digest/coverage) keeps
+# SMART_UPDATE_MODEL. ``GOOGLE_AI_FALLBACK_MODELS`` is expected to include
+# ``gemma-4-31b-it`` so the GoogleAIClient model chain falls back to Gemma 4
+# automatically when the primary returns 5xx/429.
+SMART_UPDATE_FACTS_MODEL = (
+    os.getenv("SMART_UPDATE_FACTS_MODEL", "gemini-3.1-flash-lite").strip()
+    or SMART_UPDATE_MODEL
+)
+SMART_UPDATE_WRITER_MODEL = (
+    os.getenv("SMART_UPDATE_WRITER_MODEL", "gemini-3.1-flash-lite").strip()
+    or SMART_UPDATE_MODEL
+)
+
+
+def _resolve_smart_update_model(label: str | None) -> str:
+    label_l = (label or "").strip().lower()
+    if label_l in {"facts_extract", "rich_facts_extract"}:
+        return SMART_UPDATE_FACTS_MODEL
+    if (
+        label_l == "split_description_writer"
+        or label_l == "fact_first_desc"
+        or label_l.endswith(":fact_first_desc")
+    ):
+        return SMART_UPDATE_WRITER_MODEL
+    return SMART_UPDATE_MODEL
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
     os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -5739,6 +5768,7 @@ async def _ask_gemma_json_unbounded(
     max_tries = max(1, min(max_tries, 5))
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
+    model = _resolve_smart_update_model(label)
     schema_text = json.dumps(schema, ensure_ascii=False)
     full_prompt = (
         f"{prompt}\n\n"
@@ -5772,6 +5802,7 @@ async def _ask_gemma_json_unbounded(
     trace_record = _start_llm_trace_record(
         "json",
         label,
+        model=model,
         max_tokens=max_tokens,
         native_schema_enabled=native_schema_enabled,
         prompt_schema_fallback_enabled=prompt_schema_fallback_enabled,
@@ -5789,7 +5820,7 @@ async def _ask_gemma_json_unbounded(
                 logger.info(
                     "smart_update: gemma json_call label=%s model=%s max_tokens=%s attempt=%d/%d",
                     label,
-                    SMART_UPDATE_MODEL,
+                    model,
                     max_tokens,
                     attempt,
                     max_tries,
@@ -5797,7 +5828,7 @@ async def _ask_gemma_json_unbounded(
                 if native_schema_enabled:
                     try:
                         raw_native, _usage = await client.generate_content_async(
-                            model=SMART_UPDATE_MODEL,
+                            model=model,
                             prompt=native_prompt,
                             generation_config=native_gen_cfg,
                             max_output_tokens=max_tokens,
@@ -5837,7 +5868,7 @@ async def _ask_gemma_json_unbounded(
                 while True:
                     try:
                         raw, _usage = await client.generate_content_async(
-                            model=SMART_UPDATE_MODEL,
+                            model=model,
                             prompt=full_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
@@ -5901,7 +5932,7 @@ async def _ask_gemma_json_unbounded(
                 while True:
                     try:
                         raw_fix, _usage = await client.generate_content_async(
-                            model=SMART_UPDATE_MODEL,
+                            model=model,
                             prompt=fix_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
@@ -6008,8 +6039,8 @@ async def _ask_gemma_json_unbounded(
                 {
                     "severity": "warning",
                     "consumer": "smart_update",
-                    "requested_model": SMART_UPDATE_MODEL,
-                    "model": SMART_UPDATE_MODEL,
+                    "requested_model": model,
+                    "model": model,
                     "attempt_no": max_tries,
                     "max_retries": max_tries,
                     "next_model": "gpt-4o",
@@ -6081,10 +6112,12 @@ async def _ask_gemma_text_unbounded(
     max_tries = max(1, min(max_tries, 5))
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
+    model = _resolve_smart_update_model(label)
     last_exc: Exception | None = None
     trace_record = _start_llm_trace_record(
         "text",
         label,
+        model=model,
         max_tokens=max_tokens,
         temperature=temperature,
     )
@@ -6101,7 +6134,7 @@ async def _ask_gemma_text_unbounded(
                 logger.info(
                     "smart_update: gemma text_call label=%s model=%s max_tokens=%s temperature=%s attempt=%d/%d",
                     label,
-                    SMART_UPDATE_MODEL,
+                    model,
                     max_tokens,
                     temperature,
                     attempt,
@@ -6110,7 +6143,7 @@ async def _ask_gemma_text_unbounded(
                 while True:
                     try:
                         raw, _usage = await client.generate_content_async(
-                            model=SMART_UPDATE_MODEL,
+                            model=model,
                             prompt=prompt,
                             generation_config={"temperature": temperature},
                             max_output_tokens=max_tokens,
@@ -6194,8 +6227,8 @@ async def _ask_gemma_text_unbounded(
                 {
                     "severity": "warning",
                     "consumer": "smart_update",
-                    "requested_model": SMART_UPDATE_MODEL,
-                    "model": SMART_UPDATE_MODEL,
+                    "requested_model": model,
+                    "model": model,
                     "attempt_no": max_tries,
                     "max_retries": max_tries,
                     "next_model": "gpt-4o",
