@@ -193,16 +193,16 @@ def _resolve_smart_update_model(label: str | None) -> str:
         or label_l.endswith(":fact_first_desc")
     ):
         return SMART_UPDATE_WRITER_MODEL
-    # Bundle stages do extraction *and* writing in a single LLM call:
-    #   - ``create_bundle``       — new-event create on the legacy path
-    #   - ``match_create_bundle`` — match-or-create bundle (active by default)
-    #   - ``merge``               — update of an existing event (legacy merge)
-    # All three return the public description + short_description + facts in
-    # one shot, so they are exactly the "fact extraction + text writing"
-    # surface the user asked us to cover. Route them to the writer model so
-    # both halves of the work land on Gemini Flash Lite.
-    if label_l in {"create_bundle", "match_create_bundle", "merge"}:
-        return SMART_UPDATE_WRITER_MODEL
+    # Note: legacy bundle stages (``create_bundle`` / ``match_create_bundle``
+    # / ``merge``) are intentionally *not* routed to Gemini because they pack
+    # title + description + facts + short_description + search_digest into
+    # one LLM call. Routing them to Lite would expand the user-approved
+    # surface beyond "fact extraction + text writing" and burn the Lite RPD
+    # budget on derived fields that Gemma 4 handles compactly. To put
+    # extraction + writer on Gemini *without* dragging derived fields along,
+    # enable ``SMART_UPDATE_G4_SPLIT_CREATE=1`` so the bundle is split into
+    # ``rich_facts_extract`` (Gemini), ``split_description_writer`` (Gemini)
+    # and ``split_derived_fields`` (Gemma).
     return SMART_UPDATE_MODEL
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
     os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
