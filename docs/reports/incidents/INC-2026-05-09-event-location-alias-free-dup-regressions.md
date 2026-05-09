@@ -157,8 +157,10 @@ Working hypotheses until replay confirms the exact source path:
 
 - deployed SHA: —
 - deploy path: —
+- prevention commit: `5032a06f` (`origin/main`, not deployed yet)
 - regression checks:
   - `.venv/bin/python -m pytest tests/test_smart_event_update_location_aliases.py -q` -> `4 passed`
+  - `.venv/bin/python -m pytest tests/test_smart_event_update_location_aliases.py tests/test_tg_monitor_gemma4_contract.py -q` -> `27 passed`
   - `python3 -m py_compile location_reference.py kaggle/TelegramMonitor/telegram_monitor.py`
   - `git diff --check`
 - post-deploy verification: —
