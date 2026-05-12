@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -96,10 +96,19 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `c38432b3d4d21b35f773b40a0e657c300c0d8748`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1068`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE6J59N9ZAW0QAJ5THMGSHB`
 - regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` -> `22 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1068`, service check passing.
+  - Production handler contains `TEXT_REWRITE_MODEL = "gemini-3.1-flash-lite"` and fail-closed rewrite logging.
+  - Production renderer raises `LLM scene_lines are required; deterministic text splitting is disabled`.
+  - Runtime file logging remains enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`.
+  - Fresh `/kenigsberg` smoke still required before closure: expected `text=llm_gemini_lite` or fail-closed operator message, never `text=fallback`.
 
 ## Prevention
 

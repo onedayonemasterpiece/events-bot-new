@@ -107,6 +107,12 @@ Production `/kenigsberg` appeared silent to the operator because the command han
   - Production code contains `TEXT_REWRITE_TIMEOUT_SECONDS = 45.0` and `kenigsberg: launch accepted`.
   - Runtime file logging remains enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`.
 
+Follow-up hardening deployed for `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality`:
+
+- deployed SHA: `c38432b3d4d21b35f773b40a0e657c300c0d8748`
+- Fly release: `v1068`
+- behavior update: rewrite now uses `gemini-3.1-flash-lite` and fails closed instead of deterministic fallback.
+
 ## Prevention
 
 - Manual operator commands that may call external providers must acknowledge receipt before the first slow network call.
