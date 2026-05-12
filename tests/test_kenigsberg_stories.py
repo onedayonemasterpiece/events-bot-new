@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import sys
-from types import SimpleNamespace
-
 import pytest
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
@@ -148,6 +144,27 @@ def test_admin_assist_canonicalizes_direct_kenigsberg_ban_request(monkeypatch) -
 
 def test_kenigsberg_command_canonicalizes_reordered_ban_args() -> None:
     assert kenigsberg_stories_cmd._canonicalize_ban_args("#4 бан 4-6") == "ban #4 4-6"
+
+
+def test_admin_assist_routes_kenigsberg_bans_list_request(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin_assist_cmd,
+        "require_main_attr",
+        lambda name: "/vk_misses" if name == "VK_MISS_REVIEW_COMMAND" else None,
+    )
+
+    proposals = admin_assist_cmd._heuristic_proposals("kenigsberg покажи список банов")
+
+    assert proposals is not None
+    assert proposals[0].action_id == "kenigsberg"
+    assert admin_assist_cmd._build_command_text(
+        proposals[0].action_id,
+        proposals[0].args,
+    ) == "/kenigsberg bans"
+
+
+def test_kenigsberg_command_canonicalizes_bans_list_args() -> None:
+    assert kenigsberg_stories_cmd._canonicalize_ban_args("покажи список банов") == "bans"
 
 
 def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
@@ -324,79 +341,26 @@ def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
     assert cues[-1]["end"] > 14.0
 
 
-def test_renderer_requires_llm_scene_lines() -> None:
+def test_renderer_requires_payload_scene_lines() -> None:
     with pytest.raises(RuntimeError, match="scene_lines are required"):
         renderer.payload_scene_lines({}, "fallback thought", 6)
 
 
-def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
-    payload = kenigsberg_stories_cmd._validate_story_text_payload(
-        {
-            "hook": "Университет как каркас города",
-            "scene_lines": [
-                "Альбертина держалась на классической модели",
-                "Четыре факультета собирали знание в систему",
-            ],
-        },
-        "Альбертина была устроена по классической университетской модели.",
+def test_kenigsberg_story_text_uses_thoughts_md_without_rewrite() -> None:
+    thought = (
+        "1724 год подарил Кёнигсбергу два символа сразу. "
+        "В этот год три города объединились в единый Кёнигсберг, "
+        "и в тот же год родился Иммануил Кант."
     )
 
-    assert payload["source"] == "llm"
-    assert payload["hook"] == "Университет как каркас города"
-    assert payload["scene_lines"][1].startswith("Четыре факультета")
+    payload = kenigsberg_stories_cmd._prepare_story_text_from_thought(thought)
 
-
-@pytest.mark.asyncio
-async def test_kenigsberg_story_text_rewrite_uses_gemini_lite(monkeypatch) -> None:
-    calls: list[str] = []
-
-    class LiteGoogleAIClient:
-        def __init__(self, **kwargs) -> None:
-            pass
-
-        async def generate_content_async(self, **kwargs):
-            calls.append(kwargs["model"])
-            return (
-                '{"hook":"Короткий hook","scene_lines":["Первый цельный смысл","Второй цельный смысл"],"caption":""}',
-                {},
-            )
-
-    monkeypatch.setitem(
-        sys.modules,
-        "google_ai",
-        SimpleNamespace(GoogleAIClient=LiteGoogleAIClient, SecretsProvider=lambda: object()),
-    )
-
-    payload = await kenigsberg_stories_cmd._rewrite_thought_for_story(
-        "Альбертина была устроена по классической университетской модели."
-    )
-
-    assert calls == ["gemini-3.1-flash-lite"]
-    assert payload["source"] == "llm_gemini_lite"
-    assert payload["scene_lines"] == ["Первый цельный смысл", "Второй цельный смысл"]
-
-
-@pytest.mark.asyncio
-async def test_kenigsberg_story_text_rewrite_times_out_fail_closed(monkeypatch) -> None:
-    class SlowGoogleAIClient:
-        def __init__(self, **kwargs) -> None:
-            pass
-
-        async def generate_content_async(self, **kwargs):
-            await asyncio.sleep(1)
-            return "{}", {}
-
-    monkeypatch.setitem(
-        sys.modules,
-        "google_ai",
-        SimpleNamespace(GoogleAIClient=SlowGoogleAIClient, SecretsProvider=lambda: object()),
-    )
-    monkeypatch.setattr(kenigsberg_stories_cmd, "TEXT_REWRITE_TIMEOUT_SECONDS", 0.01)
-
-    with pytest.raises(kenigsberg_stories_cmd.StoryTextRewriteError):
-        await kenigsberg_stories_cmd._rewrite_thought_for_story(
-            "Альбертина была устроена по классической университетской модели."
-        )
+    assert payload["source"] == "thoughts_md"
+    assert payload["scene_lines"] == [
+        "1724 год подарил Кёнигсбергу два символа сразу.",
+        "В этот год три города объединились в единый Кёнигсберг, и в тот же год родился Иммануил Кант.",
+    ]
+    assert payload["hook"] == "1724 год подарил Кёнигсбергу два символа сразу."
 
 
 def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:
@@ -418,3 +382,42 @@ def test_renderer_blends_transition_frames() -> None:
 
     assert blended.getpixel((0, 0))[0] > 0
     assert blended.getpixel((0, 0))[2] > 0
+
+
+def test_renderer_extracts_cfr_segment_frames_and_pads_short_decode(monkeypatch, tmp_path) -> None:
+    calls: list[list[str]] = []
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"stub")
+
+    def fake_run(cmd: list[str]):
+        calls.append(cmd)
+        out_pattern = cmd[-1]
+        out_dir = renderer.Path(out_pattern).parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (renderer.W, renderer.H), (10, 20, 30)).save(out_dir / "source_00001.jpg")
+        Image.new("RGB", (renderer.W, renderer.H), (20, 30, 40)).save(out_dir / "source_00002.jpg")
+        return object()
+
+    monkeypatch.setattr(renderer, "run", fake_run)
+
+    frames, meta = renderer.extract_segment_frames(
+        {
+            "source_path": str(source),
+            "source_file": source.name,
+            "source_start": 1.25,
+            "timeline_start": 0.0,
+            "timeline_end": 0.133,
+        },
+        tmp_path / "segment",
+        frame_count=4,
+        crop_px=96,
+    )
+
+    assert len(frames) == 4
+    assert meta["decode_strategy"] == "ffmpeg_cfr_30fps"
+    assert meta["decoded_frame_count"] == 2
+    assert meta["pad_frame_count"] == 2
+    assert "-vf" in calls[0]
+    vf = calls[0][calls[0].index("-vf") + 1]
+    assert "fps=30" in vf
+    assert "crop=iw:if(gt(ih\\,96)\\,ih-96\\,ih):0:0" in vf

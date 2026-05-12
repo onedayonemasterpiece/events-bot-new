@@ -6,7 +6,7 @@ Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
 Closed: —
 Owners: Codex
-Related incidents: `INC-2026-05-12-kenigsberg-command-silent-during-gemma-retry`, `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals`
+Related incidents: `INC-2026-05-12-kenigsberg-command-silent-during-gemma-retry`, `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals`, `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy`
 Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -48,7 +48,7 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 
 ### Treat as regression guard when
 
-- Changing Kenigsberg text rewrite model selection.
+- Changing Kenigsberg text preparation/source selection.
 - Changing `/kenigsberg` launch flow around text preparation.
 - Changing renderer `payload_scene_lines` or any text fallback logic.
 
@@ -61,11 +61,10 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 
 ### Mandatory checks before closure or deploy
 
-- Text rewrite uses `gemini-3.1-flash-lite` as the direct primary model.
-- No Gemma 4 call is made by the Kenigsberg text rewrite step.
-- LLM result must include a hook and at least two scene lines.
-- If LLM text preparation fails, `/kenigsberg` must answer the operator and not launch Kaggle.
-- Renderer must fail if `scene_lines` are absent instead of splitting thought text deterministically.
+- Kenigsberg publication text is prepared from curated `thoughts.md` entries without an LLM rewrite.
+- The prepared payload must include `text_source=thoughts_md`, `hook`, and explicit `scene_lines`.
+- The screen split may only segment the curated text for readability; it must not paraphrase, remove dates/names/facts, or change punctuation.
+- Renderer must fail if `scene_lines` are absent instead of splitting thought text on Kaggle.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.
 
@@ -75,24 +74,25 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 - Fly release/version evidence.
 - Test output.
 - Post-deploy `/healthz`.
-- Fresh `/kenigsberg` smoke evidence showing `text=llm_gemini_lite` or a fail-closed operator message, never `text=fallback`.
+- Fresh `/kenigsberg` smoke evidence showing `text=thoughts_md`, never `text=fallback` or `text=llm_gemini_lite`.
 
 ## Immediate Mitigation
 
-- Remove deterministic story text fallback from the launch path.
-- Switch the rewrite model from Gemma 4 to `gemini-3.1-flash-lite`.
-- Make the renderer require LLM-provided `scene_lines`.
+- Remove deterministic story text fallback from the Kaggle render path.
+- Make `thoughts.md` the final editorial source for publication copy.
+- Make the renderer require server-provided `scene_lines`.
 
 ## Corrective Actions
 
-- Add tests that assert the rewrite calls only `gemini-3.1-flash-lite`.
-- Add tests that assert timeout fails closed.
+- Add tests that assert Kenigsberg story text payloads use `source=thoughts_md`.
+- Add tests that assert `/a` and direct command routing do not fall back to malformed Kenigsberg text/ban commands.
 - Add tests that assert missing renderer `scene_lines` raises.
 
 ## Follow-up Actions
 
 - [ ] Review the next successful generated story for text pacing before enabling scheduled production.
 - [ ] Consider adding a stored `text_review` field to the manifest if manual curation becomes necessary.
+- [ ] Supersede the remaining `gemini-3.1-flash-lite` evidence below after deploying the final-copy path from `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy`.
 
 ## Release And Closure Evidence
 
@@ -105,10 +105,10 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 - post-deploy verification:
   - `/healthz` returned `ok=true`, `ready=true`, no issues.
   - Fly machine `48e42d5b714228` is `started`, release `v1068`, service check passing.
-  - Production handler contains `TEXT_REWRITE_MODEL = "gemini-3.1-flash-lite"` and fail-closed rewrite logging.
-  - Production renderer raises `LLM scene_lines are required; deterministic text splitting is disabled`.
+  - This old release evidence is superseded by `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy`: the current desired production path is `text=thoughts_md` with no text rewrite model.
+  - Current renderer error contract should be `Payload scene_lines are required; Kaggle text fallback is disabled`.
   - Runtime file logging remains enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`.
-  - Fresh `/kenigsberg` smoke still required before closure: expected `text=llm_gemini_lite` or fail-closed operator message, never `text=fallback`.
+  - Fresh `/kenigsberg` smoke evidence now belongs to the superseding incident and must show `text=thoughts_md`, never `text=fallback` or `text=llm_gemini_lite`.
 
 ## Prevention
 

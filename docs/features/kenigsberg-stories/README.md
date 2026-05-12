@@ -90,7 +90,7 @@ MVP должен быть sibling product к CherryFlash, а не новым н�
 Variation points for this product:
 
 - video source is historical footage dataset, not event posters;
-- text source is `thoughts.md` + LLM rewrite, not `/popular_posts`;
+- text source is the curated final wording in `thoughts.md`, not `/popular_posts` and not an LLM rewrite;
 - scene cadence is beat-driven, not fixed CherryFlash scene timing;
 - target test channel is `@keniggpt`;
 - production Business/story target is `@mostvkenig` after explicit user signal;
@@ -103,10 +103,7 @@ Variation points for this product:
 3. Server selects only run metadata that must live outside Kaggle:
    - one thought from the shuffle-bag;
    - deterministic seed / issue id.
-4. LLM rewrites the selected thought into:
-   - `hook`;
-   - `scene_lines[]`, each short enough for stripe typography;
-   - optional `caption` / metadata for logs.
+4. Server takes the selected `thoughts.md` entry as final copy and only splits it into readable `scene_lines[]` without rewording, deleting facts, or changing punctuation.
 5. Server creates a per-run Kaggle dataset:
    - payload;
    - selected thought metadata;
@@ -212,13 +209,15 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
-- before Kaggle launch the bot sends an immediate operator ack, then runs a separate `gemini-3.1-flash-lite` text rewrite step that turns the selected `thoughts.md` entry into `hook` + `scene_lines`; if the LLM step fails, exceeds its hard timeout, or returns fewer than two coherent scene lines, the release fails closed and Kaggle is not launched;
+- before Kaggle launch the bot sends an immediate operator ack, then derives `hook` + `scene_lines` from the selected `thoughts.md` entry without calling an LLM; `text_source=thoughts_md` means the file is treated as final editorial copy;
 - recent source segments from registered issue manifests are passed into the next run as temporary exclusions, so the same source video may still be reused but not the same recently published source time range;
 - the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
 - Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
 - music selection happens inside the Kaggle renderer from the configured instrumental whitelist; the selected `music_start` and `music_end` must both stay inside the allowed range and be written to the manifest/render log.
-- deterministic text splitting is disabled for generation; `scene_lines` must come from the server-side LLM rewrite payload.
+- Kaggle rendering still requires explicit `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle.
+- source scene clips are decoded through ffmpeg into constant `30fps` `720x1280` frame sequences before overlays/transitions are applied; the renderer must not fill normal source-fps gaps by repeating the last OpenCV frame at the end of a scene.
+- status updates and Kenigsberg state writes retry short SQLite locks so heavy VK imports do not leave a completed Kaggle run stuck in local `RENDERING`.
 
 Notebook guardrail:
 
@@ -352,7 +351,7 @@ Important boundary:
 2. For production `@mostvkenig`, is the required Business connection already cached with `can_manage_stories=True`, or should the implementation include an operator preflight/check command before launch?
 3. Should `/kenigsberg` be admin-only and visible in the same admin command family as `/v`, or available to a narrower allowlist?
 4. How many thoughts should the initial `thoughts.md` contain before production: the provided 18 are enough for MVP, but scheduled daily use needs a larger pool.
-5. Should the LLM rewrite preserve exact historical dates in every issue, or may it turn a fact into a more atmospheric hook when the source thought is factual?
+5. Should future editorial changes keep all story copy fully manual in `thoughts.md`, or should an optional LLM suggestion mode exist outside the publication path?
 6. What is the desired cadence after production approval: daily, weekdays only, several times per week, or manually curated?
 7. What is the acceptable max render time on CPU before the schedule is considered unsafe?
 8. Should winter dataset be a normal random period or seasonal-weighted only around winter dates?
@@ -362,9 +361,10 @@ Important boundary:
 ## Pitfalls
 
 - Beat detection can overfit weak or rubato music. MVP should prefer stable, logged heuristics over fragile downbeat perfection.
-- `15-20` seconds plus two outro screens may exceed the emotional pacing if the thought is too long; the LLM stage must be allowed to split or compress.
+- `15-20` seconds plus two outro screens may exceed the emotional pacing if the thought is too long; final `thoughts.md` entries should be edited to fit the format because the publication path no longer rewrites them.
 - Kaggle dataset mounts can lag or keep stale sources; reuse CherryFlash dataset readiness and kernel response validation.
 - Story publish can fail after successful render due to missing Business rights; required targets should preflight before expensive render when production mode is on.
 - New videos/music added to Kaggle datasets can change file order. Selection must be manifest-based and logged, not dependent on notebook filesystem order.
 - Video bans require precise timeline mapping. Without persisted per-scene source coordinates, `/a бан ...` cannot be implemented correctly later.
 - Cropping out `VEO` by height changes source composition; text/watermark safe zones need visual smoke screenshots.
+- Source clips can be lower-fps or variable-fps. If the renderer reads them sequentially into a fixed `30fps` output, scene tails may freeze; keep CFR extraction as the source-frame contract.

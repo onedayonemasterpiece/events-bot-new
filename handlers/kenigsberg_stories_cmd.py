@@ -53,11 +53,8 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
-TEXT_REWRITE_TIMEOUT_SECONDS = 45.0
-TEXT_REWRITE_MODEL = "gemini-3.1-flash-lite"
 
-
-class StoryTextRewriteError(RuntimeError):
+class StoryTextPreparationError(RuntimeError):
     pass
 
 
@@ -97,9 +94,15 @@ def _canonicalize_ban_args(args: str) -> str:
     text = " ".join(str(args or "").split())
     if not text:
         return ""
+    lowered = text.casefold()
+    if any(word in lowered for word in ("покажи", "список", "вывед", "list")) and (
+        "бан" in lowered or "ban" in lowered
+    ):
+        return "bans"
+    if lowered in {"бан", "ban"}:
+        return "ban"
     if re.match(r"^(?:ban|бан)\b", text, flags=re.IGNORECASE):
         return text
-    lowered = text.casefold()
     if "бан" not in lowered and "ban" not in lowered:
         return text
     issue_match = re.search(r"#?\s*(\d+)", text)
@@ -112,123 +115,51 @@ def _canonicalize_ban_args(args: str) -> str:
     return text
 
 
-def _extract_json_object(text: str) -> dict | None:
-    cleaned = str(text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", cleaned).replace("```", "")
-    cleaned = cleaned.strip()
-    for candidate in (cleaned, cleaned[cleaned.find("{") : cleaned.rfind("}") + 1]):
-        if not candidate:
+def _split_final_thought_text(thought_text: str) -> list[str]:
+    """Split the curated thought into readable screens without rewriting it."""
+    text = " ".join(str(thought_text or "").split())
+    if not text:
+        return []
+
+    sentence_parts = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", text)
+        if item.strip()
+    ]
+    if len(sentence_parts) >= 2:
+        return sentence_parts[:5]
+
+    # Long one-sentence thoughts still need breathing room on screen. Split on
+    # strong punctuation, preserving the punctuation on the preceding part.
+    parts: list[str] = []
+    current = ""
+    for token in re.split(r"([:;—])", text):
+        if not token:
             continue
-        try:
-            parsed = json.loads(candidate)
-        except Exception:
+        if token in {":", ";", "—"}:
+            current = f"{current}{token}".strip()
             continue
-        if isinstance(parsed, dict):
-            return parsed
-    return None
+        candidate = f"{current} {token}".strip() if current else token.strip()
+        if len(candidate) > 90 and current:
+            parts.append(current)
+            current = token.strip()
+        else:
+            current = candidate
+    if current:
+        parts.append(current)
+    return [part for part in parts if part][:5] or [text]
 
 
-def _validate_story_text_payload(data: dict | None, thought_text: str, *, source: str = "llm") -> dict:
-    if not isinstance(data, dict):
-        raise StoryTextRewriteError("LLM did not return a JSON object")
-    hook = " ".join(str(data.get("hook") or "").split())[:96]
-    if not hook:
-        raise StoryTextRewriteError("LLM returned an empty hook")
-    raw_lines = data.get("scene_lines")
-    lines: list[str] = []
-    if isinstance(raw_lines, list):
-        for item in raw_lines:
-            line = " ".join(str(item or "").split())
-            if line:
-                lines.append(line[:120])
-    if len(lines) < 2:
-        raise StoryTextRewriteError("LLM returned fewer than 2 scene lines")
-    max_lines = 5 if len(str(thought_text or "").split()) > 48 else 3
+def _prepare_story_text_from_thought(thought_text: str) -> dict:
+    lines = _split_final_thought_text(thought_text)
+    if not lines:
+        raise StoryTextPreparationError("empty thought text")
     return {
-        "hook": hook,
-        "scene_lines": lines[:max_lines],
-        "caption": " ".join(str(data.get("caption") or "").split())[:240],
-        "source": source,
+        "hook": lines[0][:96],
+        "scene_lines": lines,
+        "caption": thought_text[:240],
+        "source": "thoughts_md",
     }
-
-
-async def _rewrite_thought_for_story(thought_text: str) -> dict:
-    prompt = (
-        "Ты редактор короткой исторической сторис «Мост в Кёнигсберг».\n"
-        "Сделай отдельную смысловую нарезку текста для 15-20 секунд видео.\n"
-        "Опирайся ТОЛЬКО на исходную мысль, не добавляй фактов, дат, имён или выводов.\n"
-        "Нужно: сильный лаконичный hook и 2-5 коротких фраз для экранных stripe-надписей.\n"
-        "Если мысль короткая, лучше 2-3 цельных смысловых экрана, не растягивай её искусственно.\n"
-        "Фразы должны читаться глазами спокойно, без обрывов словосочетаний и без разрыва смысла между экранами.\n"
-        "Не удаляй ключевые существительные: если перечисляешь факультеты, слово «факультет» или «факультеты» должно остаться.\n"
-        "Сохраняй естественные знаки препинания, если они помогают чтению. Не делай телеграфный список из одних прилагательных.\n"
-        "Каждая фраза до 75 символов, лучше 35-60. Стиль: умно, сдержанно, без кликбейта.\n"
-        "Ответ строго JSON без markdown: {\"hook\":\"...\",\"scene_lines\":[\"...\"],\"caption\":\"...\"}\n\n"
-        f"Исходная мысль: {thought_text}\n"
-    )
-    try:
-        from google_ai import GoogleAIClient, SecretsProvider
-
-        supabase = None
-        incident_notifier = None
-        try:
-            supabase = require_main_attr("get_supabase_client")()
-        except Exception:
-            supabase = None
-        try:
-            incident_notifier = require_main_attr("notify_llm_incident")
-        except Exception:
-            incident_notifier = None
-        client = GoogleAIClient(
-            supabase_client=supabase,
-            secrets_provider=SecretsProvider(),
-            consumer="kenigsberg_stories",
-            incident_notifier=incident_notifier,
-        )
-        attempts = [(TEXT_REWRITE_MODEL, "llm_gemini_lite", TEXT_REWRITE_TIMEOUT_SECONDS)]
-        last_exc: Exception | None = None
-        for model, source, timeout_seconds in attempts:
-            try:
-                raw, _usage = await asyncio.wait_for(
-                    client.generate_content_async(
-                        model=model,
-                        prompt=prompt,
-                        generation_config={"temperature": 0.35},
-                        max_output_tokens=900,
-                    ),
-                    timeout=timeout_seconds,
-                )
-                result = _validate_story_text_payload(
-                    _extract_json_object(raw),
-                    thought_text,
-                    source=source,
-                )
-                logger.info(
-                    "kenigsberg: story text rewrite source=%s model=%s hook=%s lines=%s",
-                    result.get("source"),
-                    model,
-                    result.get("hook"),
-                    result.get("scene_lines"),
-                )
-                return result
-            except Exception as exc:
-                last_exc = exc
-                logger.warning(
-                    "kenigsberg: story text rewrite attempt failed source=%s model=%s err_type=%s err=%s",
-                    source,
-                    model,
-                    type(exc).__name__,
-                    exc,
-                )
-        raise StoryTextRewriteError("all LLM story text rewrite attempts failed") from last_exc
-    except Exception as exc:
-        logger.warning(
-            "kenigsberg: story text rewrite failed closed err_type=%s err=%s",
-            type(exc).__name__,
-            exc,
-        )
-        raise StoryTextRewriteError("story text rewrite failed") from exc
 
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
@@ -371,13 +302,40 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     existing = None
     async with db.get_session() as session:
         result = await session.execute(
-            select(VideoAnnounceSession).where(
-                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
+            select(VideoAnnounceSession)
+            .where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING,
+                VideoAnnounceSession.profile_key == KENIGSBERG_PROFILE_KEY,
             )
+            .order_by(VideoAnnounceSession.id.desc())
+            .limit(1)
         )
         existing = result.scalar_one_or_none()
     if existing:
-        await message.answer(f"Сессия #{existing.id} уже рендерится, дождитесь завершения.")
+        kaggle_state = ""
+        kernel_ref = str(existing.kaggle_kernel_ref or "").strip()
+        if kernel_ref and not kernel_ref.startswith("local:"):
+            try:
+                status = await asyncio.to_thread(KaggleClient().get_kernel_status, kernel_ref)
+                raw_status = str(status.get("status") or "").strip()
+                if raw_status:
+                    kaggle_state = f" Kaggle={raw_status}."
+            except Exception:
+                logger.warning(
+                    "kenigsberg: failed to fetch active session kaggle status session=%s",
+                    existing.id,
+                    exc_info=True,
+                )
+        if "complete" in kaggle_state.casefold():
+            await message.answer(
+                f"Сессия #{existing.id} уже завершилась на Kaggle, бот забирает и публикует результат."
+                f"{kaggle_state} Дождитесь сообщения с видео/логами."
+            )
+        else:
+            await message.answer(
+                f"Сессия #{existing.id} ещё обрабатывается.{kaggle_state} "
+                "Новый Kenigsberg запуск начнётся после финализации текущего."
+            )
         return
 
     test_chat_id = await _resolve_channel_id(db, "keniggpt")
@@ -391,7 +349,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     state = await load_state(db)
     thought_text = str(thought.get("text") or "")
     await message.answer(
-        f"Kenigsberg #{issue_number}: принял команду, готовлю текст и Kaggle, "
+        f"Kenigsberg #{issue_number}: принял команду, готовлю Kaggle, "
         f"thought={thought.get('id') or '-'} / {thoughts_count}."
     )
     logger.info(
@@ -402,8 +360,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         message.from_user.id if message.from_user else None,
     )
     try:
-        story_text = await _rewrite_thought_for_story(thought_text)
-    except StoryTextRewriteError as exc:
+        story_text = _prepare_story_text_from_thought(thought_text)
+    except StoryTextPreparationError as exc:
         logger.warning(
             "kenigsberg: launch aborted issue=%s thought=%s reason=%s",
             issue_number,
@@ -411,8 +369,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             exc,
         )
         await message.answer(
-            f"Kenigsberg #{issue_number}: не смог подготовить текст через LLM, "
-            "Kaggle не запускаю. Попробуйте ещё раз позже."
+            f"Kenigsberg #{issue_number}: не нашёл текст мысли в thoughts.md, Kaggle не запускаю."
         )
         return
     payload = {

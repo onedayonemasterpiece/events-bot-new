@@ -18,12 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy.md`
+  - Scope: Kenigsberg manual `/kenigsberg` launch blocking, Kaggle post-processing status transitions, SQLite-lock retry around video session/status writes, `/a` list-bans routing, final-copy handling from `thoughts.md`, and source-video CFR frame extraction.
+  - Must not regress: a completed Kaggle run must not leave `/kenigsberg` blocked behind a misleading generic “рендерится” message; SQLite locks during heavy imports must be retried for Kenigsberg state/status writes; story text must be copied from curated `thoughts.md` entries and only split into readable screens without LLM rewriting; source scenes must not be extended by visibly repeating the last decoded source frame.
 - `INC-2026-05-12-kenigsberg-assist-ban-routing-and-dominant-range.md`
   - Scope: `/a` Kenigsberg action routing, direct `/kenigsberg` ban argument parsing, and generated-timeline-to-source ban mapping.
   - Must not regress: natural/direct forms such as `Kenigsberg #4 бан 4-6` must execute as `/kenigsberg ban #4 4-6`; one operator range in whole seconds must create one source ban for the dominant source segment by overlap, not all edge-overlapped segments.
 - `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality.md`
-  - Scope: Kenigsberg server-side text rewrite, LLM model choice for `hook` / `scene_lines`, fallback policy, and Kaggle renderer text input contract.
-  - Must not regress: generated story text must come from the LLM rewrite payload; deterministic text splitting must not be used for publication; `gemini-3.1-flash-lite` is the primary rewrite model; if the LLM cannot produce at least two coherent scene lines, `/kenigsberg` must fail closed before Kaggle launch.
+  - Scope: Kenigsberg story text source, fallback policy, and Kaggle renderer text input contract.
+  - Must not regress: generated story text must not use the old low-quality fallback; current publication text must come from curated `thoughts.md` entries as final copy, with server-side readable splitting into `scene_lines`; Kaggle must still require explicit `scene_lines` instead of slicing raw text.
 - `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals.md`
   - Scope: Kenigsberg renderer music selection, `MUSIC_RANGES`, audio encoding duration, and manifest/render-log music metadata.
   - Must not regress: selected audio for the full encoded story, including outro, must stay inside a configured instrumental range; unlisted or too-short tracks must be skipped/fail closed; manifest/log evidence must include selected music start/end and allowed range.

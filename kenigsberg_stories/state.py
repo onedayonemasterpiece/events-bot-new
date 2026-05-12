@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import secrets
@@ -94,12 +95,23 @@ async def load_state(db: Any) -> dict[str, Any]:
 
 async def save_state(db: Any, state: dict[str, Any]) -> None:
     payload = json.dumps(state, ensure_ascii=False, sort_keys=True)
-    async with db.raw_conn() as conn:
-        await conn.execute(
-            "INSERT OR REPLACE INTO setting(key, value) VALUES(?, ?)",
-            (STATE_SETTING_KEY, payload),
-        )
-        await conn.commit()
+    last_exc: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            async with db.raw_conn() as conn:
+                await conn.execute(
+                    "INSERT OR REPLACE INTO setting(key, value) VALUES(?, ?)",
+                    (STATE_SETTING_KEY, payload),
+                )
+                await conn.commit()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if "database is locked" not in str(exc).casefold() or attempt >= 5:
+                raise
+            await asyncio.sleep(0.25 * attempt)
+    if last_exc:
+        raise last_exc
 
 
 def _intersect(a: SecondRange, b_start: float, b_end: float) -> SecondRange | None:

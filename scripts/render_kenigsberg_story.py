@@ -435,6 +435,72 @@ def cover_resize(frame: Any) -> Image.Image:
     return src.crop((left, top, left + W, top + H))
 
 
+def extract_segment_frames(
+    segment: dict[str, Any],
+    segment_dir: Path,
+    *,
+    frame_count: int,
+    crop_px: int,
+) -> tuple[list[Path], dict[str, Any]]:
+    """Decode a source segment as CFR 30fps frames for stable story timing."""
+    if segment_dir.exists():
+        shutil.rmtree(segment_dir)
+    segment_dir.mkdir(parents=True, exist_ok=True)
+    source_start = float(segment["source_start"])
+    duration = max(0.05, float(segment["timeline_end"]) - float(segment["timeline_start"]))
+    filters: list[str] = []
+    if crop_px > 0:
+        crop_h = f"if(gt(ih\\,{crop_px})\\,ih-{crop_px}\\,ih)"
+        filters.append(f"crop=iw:{crop_h}:0:0")
+    filters.extend(
+        [
+            f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos",
+            f"crop={W}:{H}",
+            "setsar=1",
+            f"fps={FPS}",
+        ]
+    )
+    pattern = segment_dir / "source_%05d.jpg"
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{source_start:.3f}",
+            "-i",
+            str(segment["source_path"]),
+            "-t",
+            f"{duration + (1.0 / FPS):.3f}",
+            "-vf",
+            ",".join(filters),
+            "-an",
+            "-frames:v",
+            str(frame_count),
+            "-q:v",
+            "3",
+            str(pattern),
+        ]
+    )
+    frames = sorted(segment_dir.glob("source_*.jpg"))
+    decoded_count = len(frames)
+    if not frames:
+        raise RuntimeError(f"Could not decode source frames from {segment['source_file']}")
+    pad_count = 0
+    while len(frames) < frame_count:
+        pad_count += 1
+        dest = segment_dir / f"source_{len(frames) + 1:05d}.jpg"
+        shutil.copy2(frames[-1], dest)
+        frames.append(dest)
+    if len(frames) > frame_count:
+        frames = frames[:frame_count]
+    return frames, {
+        "decoded_frame_count": decoded_count,
+        "expected_frame_count": frame_count,
+        "pad_frame_count": pad_count,
+        "decode_strategy": "ffmpeg_cfr_30fps",
+    }
+
+
 def split_scene_lines(thought: str, count: int) -> list[str]:
     text = " ".join(str(thought or "").split())
     if not text:
@@ -482,7 +548,7 @@ def payload_scene_lines(payload: dict[str, Any], fallback_thought: str, count: i
         ]
         if lines:
             return lines[: max(1, count)]
-    raise RuntimeError("LLM scene_lines are required; deterministic text splitting is disabled")
+    raise RuntimeError("Payload scene_lines are required; Kaggle text fallback is disabled")
 
 
 def scene_text_for_segment(lines: list[str], seg_idx: int, total_segments: int) -> str:
@@ -712,24 +778,35 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
     frame_no = 1
     transition_tail: list[Image.Image] = []
     for seg_idx, segment in enumerate(segments):
-        cap = cv2.VideoCapture(segment["source_path"])
-        cap.set(cv2.CAP_PROP_POS_MSEC, float(segment["source_start"]) * 1000.0)
         frame_count = max(1, int(round((segment["timeline_end"] - segment["timeline_start"]) * FPS)))
+        source_frames, decode_meta = extract_segment_frames(
+            segment,
+            out_dir / f"_segment_{seg_idx + 1:02d}",
+            frame_count=frame_count,
+            crop_px=crop_px,
+        )
+        segment.update(decode_meta)
+        if decode_meta["pad_frame_count"]:
+            log(
+                "Segment decode padded frames: "
+                + json.dumps(
+                    {
+                        "segment": segment["index"],
+                        "source_file": segment["source_file"],
+                        "decoded": decode_meta["decoded_frame_count"],
+                        "expected": decode_meta["expected_frame_count"],
+                        "padded": decode_meta["pad_frame_count"],
+                    },
+                    ensure_ascii=False,
+                )
+            )
         midpoint = (float(segment["timeline_start"]) + float(segment["timeline_end"])) / 2.0
         active_midpoint = text_cue_at(text_cues, midpoint)
         segment["text"] = active_midpoint[0] if active_midpoint else ""
-        last_frame = None
         segment_tail: list[Image.Image] = []
         for local_frame in range(frame_count):
-            ok, frame = cap.read()
-            if ok:
-                last_frame = frame
-            elif last_frame is not None:
-                frame = last_frame
-            else:
-                raise RuntimeError(f"Could not read frame from {segment['source_file']}")
-            frame = crop_veo_bottom(frame, crop_px)
-            image = cover_resize(frame)
+            with Image.open(source_frames[local_frame]) as src_image:
+                image = src_image.convert("RGBA")
             timeline_t = float(segment["timeline_start"]) + (local_frame / FPS)
             active_text = text_cue_at(text_cues, timeline_t)
             if active_text:
@@ -743,7 +820,6 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
                 segment_tail.pop(0)
             image.convert("RGB").save(out_dir / f"frame_{frame_no:05d}.jpg", quality=92)
             frame_no += 1
-        cap.release()
         transition_tail = segment_tail
     outro_screens = [
         ["МОСТ", "В КЁНИГСБЕРГ"],

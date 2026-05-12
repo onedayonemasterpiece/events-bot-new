@@ -533,21 +533,38 @@ async def _update_status(
     error: str | None = None,
     video_url: str | None = None,
 ) -> VideoAnnounceSession | None:
-    async with db.get_session() as session:
-        obj = await session.get(VideoAnnounceSession, session_id)
-        if not obj:
-            return None
-        obj.status = status
-        if status in {VideoAnnounceSessionStatus.DONE, VideoAnnounceSessionStatus.FAILED}:
-            obj.finished_at = datetime.now(timezone.utc)
-        if status == VideoAnnounceSessionStatus.PUBLISHED_TEST and obj.published_at is None:
-            obj.published_at = datetime.now(timezone.utc)
-        if video_url:
-            obj.video_url = video_url
-        obj.error = error
-        await session.commit()
-        await session.refresh(obj)
-        return obj
+    last_exc: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            async with db.get_session() as session:
+                obj = await session.get(VideoAnnounceSession, session_id)
+                if not obj:
+                    return None
+                obj.status = status
+                if status in {VideoAnnounceSessionStatus.DONE, VideoAnnounceSessionStatus.FAILED}:
+                    obj.finished_at = datetime.now(timezone.utc)
+                if status == VideoAnnounceSessionStatus.PUBLISHED_TEST and obj.published_at is None:
+                    obj.published_at = datetime.now(timezone.utc)
+                if video_url:
+                    obj.video_url = video_url
+                obj.error = error
+                await session.commit()
+                await session.refresh(obj)
+                return obj
+        except Exception as exc:
+            last_exc = exc
+            if "database is locked" not in str(exc).casefold() or attempt >= 5:
+                raise
+            logger.warning(
+                "video_announce: retrying status update after sqlite lock session=%s status=%s attempt=%s",
+                session_id,
+                status,
+                attempt,
+            )
+            await asyncio.sleep(0.3 * attempt)
+    if last_exc:
+        raise last_exc
+    return None
 
 
 async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) -> None:

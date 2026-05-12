@@ -817,9 +817,15 @@ def _canonicalize_kenigsberg_args_text(value: str) -> str:
     text = " ".join(str(value or "").split())
     if not text:
         return ""
+    lowered = text.casefold()
+    if any(word in lowered for word in ("покажи", "список", "вывед", "list")) and (
+        "бан" in lowered or "ban" in lowered
+    ):
+        return "bans"
+    if "статус" in lowered or lowered == "status":
+        return "status"
     if re.match(r"^(?:ban|бан)\b", text, flags=re.IGNORECASE):
         return text
-    lowered = text.casefold()
     if "бан" not in lowered and "ban" not in lowered:
         return text
     issue_match = re.search(r"#?\s*(\d+)", text)

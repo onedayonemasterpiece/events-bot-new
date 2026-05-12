@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
-from db import Database
+from db import Database, close_known_databases
 from models import User, VideoAnnounceSession, VideoAnnounceSessionStatus
 import video_announce.poller as poller_module
 
@@ -16,6 +17,12 @@ class _DummyBot:
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> None:  # noqa: ARG002
         self.messages.append((chat_id, text))
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _close_databases_after_test():
+    yield
+    await close_known_databases()
 
 
 @pytest.mark.asyncio
