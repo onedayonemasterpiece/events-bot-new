@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -109,10 +109,21 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `f37afd1c666a62662c07d4d0e0b2d3266eb10058`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-f37afd1c` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly release: `v1070`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KREP0GFHWRCMXNJ3QNR1NF47`, machine `48e42d5b714228` started with `1/1` checks passing.
 - regression checks:
+  - `python3 -m py_compile scripts/render_kenigsberg_story.py handlers/kenigsberg_stories_cmd.py handlers/admin_assist_cmd.py kenigsberg_stories/state.py video_announce/poller.py tests/test_kenigsberg_stories.py tests/test_video_announce_poller.py`
+  - `timeout 30 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py` -> `31 passed in 1.48s`
 - post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/handlers/kenigsberg_stories_cmd.py` contains `thoughts_md` and no `TEXT_REWRITE_MODEL` / `_rewrite_thought_for_story`.
+  - Production `/app/scripts/render_kenigsberg_story.py` contains `ffmpeg_cfr_30fps` and `Payload scene_lines are required`.
+  - Production `/app/docs/features/kenigsberg-stories/thoughts.md` contains the local edited entries for Кнайпхоф and Девау.
+  - Production DB `/data/db.sqlite` latest Kenigsberg sessions `#265`, `#264`, `#263` are `PUBLISHED_TEST`; no stale latest `RENDERING` Kenigsberg session was present at verification time.
+  - Kenigsberg state after deploy: `next_issue=11`, `bans=3`, `used_thought_ids=10`.
+- live smoke:
+  - Not run by Codex to avoid publishing a new `@keniggpt` story without an explicit operator `/kenigsberg` command after deploy.
 
 ## Prevention
 
