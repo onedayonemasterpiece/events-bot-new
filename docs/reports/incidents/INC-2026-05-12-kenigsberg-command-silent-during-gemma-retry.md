@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-command-silent-during-gemma-retry
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -95,10 +95,17 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `748ca42cff63d7eb4c1de23fe4c9db3531d15049`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1067`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE4WWNCQ8EXSBAJSK1F6PX6`
 - regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` -> `20 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1067`, service check passing.
+  - Production code contains `TEXT_REWRITE_TIMEOUT_SECONDS = 45.0` and `kenigsberg: launch accepted`.
+  - Runtime file logging remains enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`.
 
 ## Prevention
 

@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -94,10 +94,17 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `748ca42cff63d7eb4c1de23fe4c9db3531d15049`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1067`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE4WWNCQ8EXSBAJSK1F6PX6`
 - regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` -> `20 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1067`, service check passing.
+  - Production renderer contains the strict `choose_music(...) -> tuple[Path, float, float, dict[str, Any]]` path, the fail-closed `"No audio track has an allowed instrumental range..."` error, and manifest fields `music_end` / `music_allowed_range`.
+  - Fresh `/kenigsberg` smoke still required before closing: the next manifest must show `music_start <= music_end <= music_allowed_range.end`.
 
 ## Prevention
 
