@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-winter-dataset-not-mounted
 
-Status: open
+Status: monitoring
 Severity: sev3
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -89,10 +89,18 @@ The second production `/kenigsberg` smoke progressed past the notebook syntax fa
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `f4559c0b5b33f92d4b9072fdcea5665a61863d09`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1065`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRDTETS62172WHNWW4F844G3`
 - regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py`
+  - `python3 -m json.tool kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_kaggle_client.py tests/test_video_announce_story_publish.py` -> `24 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1065`, service check passing.
+  - Production env check: `KENIGSBERG_STORIES_PERIODS=1919-1940`, `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`, `KENIGSBERG_STORIES_TEST_CHAT_ID=-1002210431821`.
+  - Kenigsberg MVP state reset after failed smoke: `next_issue=1`, `used_thought_ids=[]`, `issues={}`.
 
 ## Prevention
 
