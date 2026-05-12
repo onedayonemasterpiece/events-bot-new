@@ -139,6 +139,7 @@ Initial command set:
 - `/kenigsberg` — start a manual Kaggle generation when `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`.
 - `/kenigsberg status` — show next issue number, thought-pool status, known issues and ban count.
 - `/kenigsberg bans` — list source-video bans.
+- `/kenigsberg unlock` — mark the latest stuck Kenigsberg `local:*` pre-handoff session as `FAILED` so a new manual run can start.
 - `/kenigsberg ban #15 1-3, 7, 16-17` — map seconds from generated issue `#15` back to source-video coordinates and ban them for future cuts.
 - `/kenigsberg bans reset` — clear bans for testing.
 
@@ -218,6 +219,7 @@ Current MVP implementation:
 - Kaggle rendering still requires explicit `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle.
 - source scene clips are decoded through ffmpeg into constant `30fps` `720x1280` frame sequences before overlays/transitions are applied; the renderer must not fill normal source-fps gaps by repeating the last OpenCV frame at the end of a scene.
 - status updates and Kenigsberg state writes retry short SQLite locks so heavy VK imports do not leave a completed Kaggle run stuck in local `RENDERING`.
+- Kaggle handoff writes (`RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and fail-close updates) retry transient SQLite locks; stale `local:KoenigsbergStories` sessions older than the handoff grace window are auto-failed on the next `/kenigsberg`, and can also be manually cleared with `/kenigsberg unlock`.
 
 Notebook guardrail:
 

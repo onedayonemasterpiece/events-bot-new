@@ -11,7 +11,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/run
 
 ## Summary
 
-During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`.
+During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`.
 
 ## User / Business Impact
 
@@ -20,6 +20,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - A natural `/a` request for the ban list fell through to command help.
 - Text in generated stories could still differ from the locally edited `thoughts.md` because the server rewrite step transformed the selected thought before Kaggle.
 - Some generated scenes visibly paused near their beginning/end because the renderer filled fixed `30fps` output tails with repeated frames when source clips had lower or variable frame rates.
+- Session `#266` blocked the next manual `/kenigsberg` until startup recovery failed it after the local handoff grace window; the operator had no explicit command to clear the stuck pre-handoff row.
 
 ## Detection
 
@@ -34,6 +35,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - 2026-05-12 17:31 UTC — operator retried `/kenigsberg`; bot reported session `#265` as still rendering.
 - 2026-05-12 17:34 UTC — recovery poller downloaded output, registered manifest, and published test video successfully.
 - 2026-05-12 17:40 UTC — incident fix started.
+- 2026-05-12 18:27 UTC — Kenigsberg `#11`, session `#266`, created dataset `zigomaro/kenigsberg-session-266-1778610442` and bound `zigomaro/koenigsberg-stories`, then hit SQLite lock while writing `kaggle_dataset`/`kaggle_kernel_ref`.
+- 2026-05-12 18:37 UTC — operator retried `/kenigsberg`; local row still said `RENDERING + local:KoenigsbergStories`.
+- 2026-05-12 18:41 UTC — startup/recovery path marked session `#266` `FAILED` as a stale local handoff.
 
 ## Root Cause
 
@@ -43,6 +47,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 4. `/a` direct-command parsing won over the Kenigsberg heuristic and did not canonicalize natural ban-list phrases.
 5. The text contract had drifted: the implementation still rewrote curated `thoughts.md` entries, while the product now wants `thoughts.md` to contain final publication wording.
 6. The renderer read source videos sequentially with OpenCV while writing a fixed `30fps` output. For lower-fps/VFR sources this could exhaust the selected source frames before the target scene duration and then repeat `last_frame`, creating visible freezes.
+7. Kenigsberg launch handoff writes still used single-attempt SQLAlchemy commits for `RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and the fail-close path. A lock after successful Kaggle binding therefore stranded a local pseudo-ref row that neither the poller nor operator could use.
 
 ## Contributing Factors
 
@@ -58,6 +63,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Changing `video_announce` session status persistence around Kaggle completion.
 - Changing Kenigsberg `thoughts.md` text preparation or `/a` Kenigsberg command routing.
 - Changing Kenigsberg source-video decoding, frame-rate conversion, or transition assembly.
+- Changing Kenigsberg local-to-Kaggle handoff persistence or manual stuck-session controls.
 
 ### Affected surfaces
 
@@ -78,6 +84,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - New story text payloads use `text_source=thoughts_md`.
 - Kaggle renderer still requires explicit `scene_lines` in `payload.json`.
 - Source scenes are extracted as constant `30fps` frames before overlays and must not rely on repeating OpenCV `last_frame` to reach scene duration.
+- Kenigsberg launch handoff writes retry SQLite locks, and stale `local:KoenigsbergStories` rows can be cleared by `/kenigsberg unlock` or auto-failed on the next `/kenigsberg` after the handoff grace window.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py` passes.
 - Production `/healthz` is green after deploy.
 
@@ -92,13 +99,16 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 ## Immediate Mitigation
 
 - Session `#265` already recovered and published through the existing recovery poller.
+- Session `#266` was already failed by startup recovery after the local-handoff grace window; no publishable output can be downloaded from that row because the real Kaggle metadata was not persisted.
 - Code fix narrows and improves active-session reporting, removes the LLM rewrite from Kenigsberg story text, and adds SQLite-lock retries around the fragile writes.
 - Scene decoding now uses ffmpeg CFR `30fps` extraction per source segment before text/watermark/transitions are applied.
+- Kenigsberg now exposes `/kenigsberg unlock` for local pre-handoff rows and auto-fails stale local handoffs on the next `/kenigsberg`.
 
 ## Corrective Actions
 
 - Add tests for natural ban-list routing and final-copy text preparation.
 - Add a test for CFR segment-frame extraction and short-decode padding metadata.
+- Add a test for stale local handoff detection.
 - Update Kenigsberg documentation to make `thoughts.md` the final editorial source.
 - Commit and deploy the current local `thoughts.md` changes with the code fix.
 

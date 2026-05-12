@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 import pytest
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
@@ -361,6 +364,35 @@ def test_kenigsberg_story_text_uses_thoughts_md_without_rewrite() -> None:
         "В этот год три города объединились в единый Кёнигсберг, и в тот же год родился Иммануил Кант.",
     ]
     assert payload["hook"] == "1724 год подарил Кёнигсбергу два символа сразу."
+
+
+def test_kenigsberg_detects_stale_local_handoff_session() -> None:
+    now = datetime(2026, 5, 12, 18, 42, tzinfo=timezone.utc)
+    stale = SimpleNamespace(
+        kaggle_kernel_ref="local:KoenigsbergStories",
+        kaggle_dataset=None,
+        started_at=now - timedelta(
+            minutes=kenigsberg_stories_cmd.VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES,
+            seconds=1,
+        ),
+        created_at=None,
+    )
+    fresh = SimpleNamespace(
+        kaggle_kernel_ref="local:KoenigsbergStories",
+        kaggle_dataset=None,
+        started_at=now - timedelta(minutes=1),
+        created_at=None,
+    )
+    handed_off = SimpleNamespace(
+        kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+        kaggle_dataset="zigomaro/kenigsberg-session-266-1778610442",
+        started_at=now - timedelta(hours=1),
+        created_at=None,
+    )
+
+    assert kenigsberg_stories_cmd._is_stale_local_handoff(stale, now=now) is True
+    assert kenigsberg_stories_cmd._is_stale_local_handoff(fresh, now=now) is False
+    assert kenigsberg_stories_cmd._is_stale_local_handoff(handed_off, now=now) is False
 
 
 def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:

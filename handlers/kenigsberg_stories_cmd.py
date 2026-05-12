@@ -9,7 +9,7 @@ import secrets
 import shutil
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from aiogram import Router, types
@@ -36,6 +36,7 @@ from video_announce.kaggle_client import (
     await_kernel_dataset_sources,
 )
 from video_announce.poller import (
+    VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
     remember_status_message,
     start_kernel_poller_task,
@@ -56,6 +57,103 @@ KAGGLE_BIND_WAIT_SECONDS = max(
 
 class StoryTextPreparationError(RuntimeError):
     pass
+
+
+def _is_sqlite_locked(exc: Exception) -> bool:
+    return "database is locked" in str(exc).casefold()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _is_local_kernel_ref(kernel_ref: str | None) -> bool:
+    return str(kernel_ref or "").strip().startswith("local:")
+
+
+def _is_stale_local_handoff(
+    session_obj: VideoAnnounceSession,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    if not _is_local_kernel_ref(session_obj.kaggle_kernel_ref):
+        return False
+    if session_obj.kaggle_dataset:
+        return False
+    reference = _as_utc(session_obj.started_at) or _as_utc(session_obj.created_at)
+    if reference is None:
+        return False
+    now_utc = _as_utc(now) or datetime.now(timezone.utc)
+    deadline = reference + timedelta(minutes=VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES)
+    return now_utc >= deadline
+
+
+async def _update_video_session_with_retry(db, session_id: int, mutate) -> VideoAnnounceSession | None:
+    last_exc: Exception | None = None
+    for attempt in range(1, 8):
+        try:
+            async with db.get_session() as session:
+                fresh = await session.get(VideoAnnounceSession, session_id)
+                if not fresh:
+                    return None
+                mutate(fresh)
+                session.add(fresh)
+                await session.commit()
+                await session.refresh(fresh)
+                return fresh
+        except Exception as exc:
+            last_exc = exc
+            if not _is_sqlite_locked(exc) or attempt >= 7:
+                raise
+            logger.warning(
+                "kenigsberg: retrying video session update after sqlite lock session=%s attempt=%s",
+                session_id,
+                attempt,
+            )
+            await asyncio.sleep(0.35 * attempt)
+    if last_exc:
+        raise last_exc
+    return None
+
+
+async def _mark_session_failed_with_retry(
+    db,
+    session_id: int,
+    *,
+    error: str,
+) -> VideoAnnounceSession | None:
+    def mutate(obj: VideoAnnounceSession) -> None:
+        obj.status = VideoAnnounceSessionStatus.FAILED
+        obj.error = error
+        obj.finished_at = datetime.now(timezone.utc)
+
+    return await _update_video_session_with_retry(db, session_id, mutate)
+
+
+async def _mark_session_rendering_with_retry(db, session_id: int) -> VideoAnnounceSession | None:
+    def mutate(obj: VideoAnnounceSession) -> None:
+        obj.status = VideoAnnounceSessionStatus.RENDERING
+        obj.started_at = datetime.now(timezone.utc)
+
+    return await _update_video_session_with_retry(db, session_id, mutate)
+
+
+async def _persist_kaggle_handoff_with_retry(
+    db,
+    session_id: int,
+    *,
+    dataset_id: str,
+    kernel_ref: str,
+) -> VideoAnnounceSession | None:
+    def mutate(obj: VideoAnnounceSession) -> None:
+        obj.kaggle_dataset = dataset_id
+        obj.kaggle_kernel_ref = kernel_ref
+
+    return await _update_video_session_with_retry(db, session_id, mutate)
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -192,6 +290,39 @@ async def _handle_ban_command(message: types.Message, args: str) -> None:
     await message.answer("\n".join(lines))
 
 
+async def _handle_unlock_command(message: types.Message) -> None:
+    db = require_main_attr("get_db")()
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(VideoAnnounceSession)
+            .where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING,
+                VideoAnnounceSession.profile_key == KENIGSBERG_PROFILE_KEY,
+            )
+            .order_by(VideoAnnounceSession.id.desc())
+            .limit(1)
+        )
+        existing = result.scalar_one_or_none()
+    if not existing:
+        await message.answer("Активной Kenigsberg-сессии в RENDERING нет.")
+        return
+    if not _is_local_kernel_ref(existing.kaggle_kernel_ref) or existing.kaggle_dataset:
+        await message.answer(
+            f"Сессия #{existing.id} уже передана в Kaggle ({existing.kaggle_kernel_ref or 'kernel неизвестен'}). "
+            "Такую сессию вручную не снимаю, дождитесь poller/status."
+        )
+        return
+    failed = await _mark_session_failed_with_retry(
+        db,
+        existing.id,
+        error="manual unlock: stale Kenigsberg local handoff; rerun allowed",
+    )
+    await message.answer(
+        f"Снял зависшую pre-handoff Kenigsberg-сессию #{existing.id}: "
+        f"{failed.status if failed else 'FAILED'}. Можно запускать /kenigsberg заново."
+    )
+
+
 async def _handle_launch(message: types.Message) -> None:
     db = require_main_attr("get_db")()
     thoughts = load_thoughts()
@@ -312,31 +443,55 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         )
         existing = result.scalar_one_or_none()
     if existing:
-        kaggle_state = ""
-        kernel_ref = str(existing.kaggle_kernel_ref or "").strip()
-        if kernel_ref and not kernel_ref.startswith("local:"):
-            try:
-                status = await asyncio.to_thread(KaggleClient().get_kernel_status, kernel_ref)
-                raw_status = str(status.get("status") or "").strip()
-                if raw_status:
-                    kaggle_state = f" Kaggle={raw_status}."
-            except Exception:
-                logger.warning(
-                    "kenigsberg: failed to fetch active session kaggle status session=%s",
-                    existing.id,
-                    exc_info=True,
-                )
-        if "complete" in kaggle_state.casefold():
-            await message.answer(
-                f"Сессия #{existing.id} уже завершилась на Kaggle, бот забирает и публикует результат."
-                f"{kaggle_state} Дождитесь сообщения с видео/логами."
+        if _is_stale_local_handoff(existing):
+            failed = await _mark_session_failed_with_retry(
+                db,
+                existing.id,
+                error="stale Kenigsberg local handoff; auto-failed before rerun",
             )
+            logger.warning(
+                "kenigsberg: auto-failed stale local handoff session=%s before rerun",
+                existing.id,
+            )
+            await message.answer(
+                f"Снял зависшую pre-handoff сессию #{existing.id}"
+                + (f" ({failed.status})." if failed else ".")
+                + " Запускаю новый Kenigsberg render."
+            )
+            existing = None
+        if existing is None:
+            pass
         else:
-            await message.answer(
-                f"Сессия #{existing.id} ещё обрабатывается.{kaggle_state} "
-                "Новый Kenigsberg запуск начнётся после финализации текущего."
-            )
-        return
+            kaggle_state = ""
+            kernel_ref = str(existing.kaggle_kernel_ref or "").strip()
+            if kernel_ref and not kernel_ref.startswith("local:"):
+                try:
+                    status = await asyncio.to_thread(KaggleClient().get_kernel_status, kernel_ref)
+                    raw_status = str(status.get("status") or "").strip()
+                    if raw_status:
+                        kaggle_state = f" Kaggle={raw_status}."
+                except Exception:
+                    logger.warning(
+                        "kenigsberg: failed to fetch active session kaggle status session=%s",
+                        existing.id,
+                        exc_info=True,
+                    )
+            if "complete" in kaggle_state.casefold():
+                await message.answer(
+                    f"Сессия #{existing.id} уже завершилась на Kaggle, бот забирает и публикует результат."
+                    f"{kaggle_state} Дождитесь сообщения с видео/логами."
+                )
+            else:
+                local_hint = (
+                    " Это pre-handoff local-сессия; если она зависнет, используйте /kenigsberg unlock."
+                    if _is_local_kernel_ref(existing.kaggle_kernel_ref)
+                    else ""
+                )
+                await message.answer(
+                    f"Сессия #{existing.id} ещё обрабатывается.{kaggle_state} "
+                    f"Новый Kenigsberg запуск начнётся после финализации текущего.{local_hint}"
+                )
+            return
 
     test_chat_id = await _resolve_channel_id(db, "keniggpt")
     if not test_chat_id:
@@ -423,14 +578,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     )
     client = KaggleClient()
     try:
-        async with db.get_session() as session:
-            fresh = await session.get(VideoAnnounceSession, obj.id)
-            fresh.status = VideoAnnounceSessionStatus.RENDERING
-            fresh.started_at = datetime.now(timezone.utc)
-            session.add(fresh)
-            await session.commit()
-            await session.refresh(fresh)
-            obj = fresh
+        obj = await _mark_session_rendering_with_retry(db, obj.id) or obj
         dataset_id = await _create_kenigsberg_dataset(db, session_id=obj.id, payload=payload)
         await await_dataset_ready(
             client,
@@ -451,22 +599,18 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             timeout_seconds=KAGGLE_BIND_WAIT_SECONDS,
             poll_interval_seconds=10,
         )
-        async with db.get_session() as session:
-            fresh = await session.get(VideoAnnounceSession, obj.id)
-            fresh.kaggle_dataset = dataset_id
-            fresh.kaggle_kernel_ref = kernel_ref
-            session.add(fresh)
-            await session.commit()
-            await session.refresh(fresh)
-            obj = fresh
+        obj = await _persist_kaggle_handoff_with_retry(
+            db,
+            obj.id,
+            dataset_id=dataset_id,
+            kernel_ref=kernel_ref,
+        ) or obj
     except Exception as exc:
-        async with db.get_session() as session:
-            fresh = await session.get(VideoAnnounceSession, obj.id)
-            if fresh:
-                fresh.status = VideoAnnounceSessionStatus.FAILED
-                fresh.error = f"kaggle launch failed: {type(exc).__name__}: {exc}"
-                session.add(fresh)
-                await session.commit()
+        await _mark_session_failed_with_retry(
+            db,
+            obj.id,
+            error=f"kaggle launch failed: {type(exc).__name__}: {exc}",
+        )
         await message.answer(f"Kenigsberg #{issue_number}: не удалось запустить Kaggle: {type(exc).__name__}: {exc}")
         return
 
@@ -517,6 +661,9 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
         await reset_bans(db)
         await message.answer("Баны Kenigsberg Stories сброшены.")
         return
+    if lowered in {"unlock", "cancel", "снять", "сбросить сессию", "cancel stuck"}:
+        await _handle_unlock_command(message)
+        return
     if lowered.startswith("ban") or lowered.startswith("бан"):
         tail = re.sub(r"^(?:ban|бан)\s*", "", args, flags=re.I).strip()
         await _handle_ban_command(message, tail)
@@ -527,6 +674,7 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
         "/kenigsberg\n"
         "/kenigsberg status\n"
         "/kenigsberg bans\n"
+        "/kenigsberg unlock\n"
         "/kenigsberg ban #15 1-3, 7, 16-17\n"
         "/kenigsberg bans reset"
     )
