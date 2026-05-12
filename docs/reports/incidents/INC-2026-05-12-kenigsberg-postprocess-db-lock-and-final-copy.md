@@ -109,9 +109,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ## Release And Closure Evidence
 
-- deployed SHA: `f37afd1c666a62662c07d4d0e0b2d3266eb10058`
+- deployed SHA: `37311d3c0e767abd368ece2ea929d6041de56886`
 - deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-f37afd1c` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
-- Fly release: `v1070`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KREP0GFHWRCMXNJ3QNR1NF47`, machine `48e42d5b714228` started with `1/1` checks passing.
+- Fly release: `v1071`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KREPDH8NVKNNFAYVQMETAXP5`, machine `48e42d5b714228` started with `1/1` checks passing.
 - regression checks:
   - `python3 -m py_compile scripts/render_kenigsberg_story.py handlers/kenigsberg_stories_cmd.py handlers/admin_assist_cmd.py kenigsberg_stories/state.py video_announce/poller.py tests/test_kenigsberg_stories.py tests/test_video_announce_poller.py`
   - `timeout 30 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py` -> `31 passed in 1.48s`
