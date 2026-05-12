@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-12-kenigsberg-notebook-escaped-newlines.md`
+  - Scope: `kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`, `/kenigsberg` manual Kaggle launch, and notebook packaging for `zigomaro/koenigsberg-stories`.
+  - Must not regress: Kenigsberg notebook code-cell source entries must contain real line breaks, not literal `\\n`; every code cell must compile locally before deploy; a failed first-cell Papermill `SyntaxError` is a release blocker for the manual MVP path.
 - `INC-2026-05-11-zoo-lecture-premium-emoji-and-bullet-block-truncation.md`
   - Scope: `kaggle/TelegramMonitor/telegram_monitor.py::strip_custom_emoji_entities` and the new helper `_custom_emoji_fallback_is_meaningful` (Unicode pictograph classification); `smart_event_update.py::rich_facts_extract` `program_or_examples` rule; production event 4798; Kaggle TelegramMonitor kernel deploy path.
   - Must not regress: a `MessageEntityCustomEmoji` range whose Unicode fallback is a real pictograph (`🆓`, `🎟`, `📅`, etc. — Pictographs / Enclosed Alphanumerics / Misc Symbols / Dingbats / Misc Technical / Geometric Shapes blocks) must NOT be replaced by spaces; PUA / non-pictograph placeholders must still be replaced to keep entity offsets stable; the `program_or_examples` rule must explicitly enumerate common Russian lecture bullet-block headers (`О чём поговорим`, `Правда ли, что`, `Темы`, `Вопросы`, `В программе`, `Что обсудим`, `План встречи`) and forbid collapsing multi-bullet blocks into one summary fact.

@@ -211,6 +211,10 @@ Current MVP implementation:
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
 
+Notebook guardrail:
+
+- `tests/test_kenigsberg_notebook.py` must pass before deploy: it parses `kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`, rejects literal escaped newlines in code-cell source, and compiles every code cell. This protects the `INC-2026-05-12-kenigsberg-notebook-escaped-newlines` regression where Kaggle failed in cell 1 before rendering.
+
 ### Later: `gemma4_clip_judge_v2`
 
 Gemma 4 can be added as a judge after `heuristic_v1` produces a small candidate set. The proposed contract:
