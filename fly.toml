@@ -41,6 +41,7 @@ app = "events-bot-new-wngqia"
   V_POPULAR_REVIEW_TZ = "Europe/Kaliningrad"
   V_POPULAR_REVIEW_TIME_LOCAL = "10:15"
   KENIGSBERG_STORIES_KAGGLE_ENABLED = "1"
+  KENIGSBERG_STORIES_PERIODS = "1919-1940"
   VIDEO_KAGGLE_TIMEOUT_MINUTES = "225"
   # CrumpleVideo stories are enabled in prod and guarded by /healthz.
   VIDEO_ANNOUNCE_STORY_ENABLED = "1"

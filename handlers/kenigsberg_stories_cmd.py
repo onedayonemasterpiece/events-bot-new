@@ -50,6 +50,10 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
+PERIOD_DATASETS = {
+    "1919-1940": "zigomaro/koenigsberg19191940",
+    "winter": "zigomaro/koenigsberg-winter",
+}
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -82,6 +86,16 @@ def _extract_ban_args(args: str) -> tuple[int | None, str]:
     tail = text[issue_match.end() :].strip()
     tail = re.sub(r"^(?:бан|bans?|отрезк(?:и|ов)?|секунд(?:ы)?)\s*", "", tail, flags=re.I).strip()
     return issue_number, tail
+
+
+def _enabled_periods() -> list[str]:
+    raw = os.getenv("KENIGSBERG_STORIES_PERIODS", "1919-1940")
+    periods = [
+        item.strip()
+        for item in raw.split(",")
+        if item.strip() in PERIOD_DATASETS
+    ]
+    return periods or ["1919-1940"]
 
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
@@ -234,12 +248,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     thought = await choose_next_thought(db)
     seed = int(time.time()) + issue_number
     rng = Random(seed)
-    period_key = rng.choice(["1919-1940", "winter"])
-    dataset = (
-        "zigomaro/koenigsberg-winter"
-        if period_key == "winter"
-        else "zigomaro/koenigsberg19191940"
-    )
+    period_key = rng.choice(_enabled_periods())
+    dataset = PERIOD_DATASETS[period_key]
     state = await load_state(db)
     payload = {
         "issue_number": issue_number,

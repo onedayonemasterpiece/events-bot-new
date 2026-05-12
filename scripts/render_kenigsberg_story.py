@@ -90,6 +90,10 @@ def find_dataset_dir(input_root: Path, aliases: list[str]) -> Path | None:
     return None
 
 
+def mounted_input_dirs(input_root: Path) -> list[str]:
+    return sorted(item.name for item in input_root.iterdir() if item.is_dir()) if input_root.exists() else []
+
+
 def iter_files(root: Path, exts: set[str]) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.casefold() in exts)
 
@@ -471,10 +475,15 @@ def main() -> None:
         else find_dataset_dir(input_root, ["koenigsberg19191940", "19191940"])
     )
     if video_dir is None:
-        raise RuntimeError(f"Video dataset for period={period_key!r} is not mounted")
+        raise RuntimeError(
+            f"Video dataset for period={period_key!r} is not mounted; "
+            f"available_inputs={mounted_input_dirs(input_root)}"
+        )
     music_dir = find_dataset_dir(input_root, ["koenigsberg-music", "music"])
     if music_dir is None:
-        raise RuntimeError("Music dataset is not mounted")
+        raise RuntimeError(
+            f"Music dataset is not mounted; available_inputs={mounted_input_dirs(input_root)}"
+        )
     music, music_start, total_duration = choose_music(music_dir, rng)
     frames_dir = working / "kenigsberg_frames"
     if frames_dir.exists():

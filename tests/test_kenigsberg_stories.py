@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from handlers import admin_assist_cmd
+from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
     SecondRange,
     format_bans_report,
@@ -109,3 +109,15 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     )
 
     assert segments[0]["source_start"] >= 9.0
+
+
+def test_enabled_periods_default_to_stable_1919_dataset(monkeypatch) -> None:
+    monkeypatch.delenv("KENIGSBERG_STORIES_PERIODS", raising=False)
+
+    assert kenigsberg_stories_cmd._enabled_periods() == ["1919-1940"]
+
+
+def test_enabled_periods_can_opt_in_winter(monkeypatch) -> None:
+    monkeypatch.setenv("KENIGSBERG_STORIES_PERIODS", "winter, 1919-1940, unknown")
+
+    assert kenigsberg_stories_cmd._enabled_periods() == ["winter", "1919-1940"]

@@ -210,6 +210,7 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
+- production MVP period selection is temporarily restricted to `1919-1940` via `KENIGSBERG_STORIES_PERIODS=1919-1940`; `winter` should be re-enabled only after verifying the Kaggle mount for `zigomaro/koenigsberg-winter`.
 
 Notebook guardrail:
 
