@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-assist-ban-routing-and-dominant-range
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories manual ban controls
 Opened: 2026-05-12
@@ -91,10 +91,20 @@ The operator asked `/a Kenigsberg #4 бан 4-6`. Admin assistant treated `Kenig
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `116625b40f20bc76e0aa0a17a7834993afd9acba`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1069`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE7PN25EWPMSWRY5ZK6W9BB`
 - regression checks:
+  - `python3 -m py_compile handlers/admin_assist_cmd.py handlers/kenigsberg_stories_cmd.py kenigsberg_stories/state.py`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` -> `25 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1069`, service check passing.
+  - Production code contains Kenigsberg arg canonicalization and dominant source-segment mapping.
+  - Production DB `/data/db.sqlite` had Kenigsberg issues `['2', '3', '4']` and zero bans before repair.
+  - Applied the intended missed ban for issue `#4`, requested generated range `4.0-6.0`; stored one dominant source ban:
+    `zigomaro/koenigsberg-winter`, source file `___ 9872354.mp4`, source `3.524-5.098s`, generated overlap `4.426-6.000s`, reason `operator_retry_after_assist_routing_fix`.
+  - Post-repair production verification returned `ban_count=1` with that exact dominant-source ban as the latest stored row.
 
 ## Prevention
 
