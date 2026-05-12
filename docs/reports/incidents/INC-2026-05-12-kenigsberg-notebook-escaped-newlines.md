@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-notebook-escaped-newlines
 
-Status: open
+Status: monitoring
 Severity: sev3
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -23,6 +23,7 @@ The first production `/kenigsberg` smoke reached Kaggle but `zigomaro/koenigsber
 
 - Detected by the operator from Kaggle logs and the bot status message on 2026-05-12.
 - Production runtime file mirror was not needed for root cause because the Kaggle notebook log contained the exact syntax error.
+- Runtime file mirror check after hotfix deploy: `RUNTIME_LOG_DIR=/data/runtime_logs` exists with rotated files; current env did not explicitly set `ENABLE_RUNTIME_FILE_LOGGING`.
 
 ## Timeline
 
@@ -85,10 +86,17 @@ The first production `/kenigsberg` smoke reached Kaggle but `zigomaro/koenigsber
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `cd88a24494610da70caedbfb8e5d797603c768db`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1064`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRDSJAF879N2K0ER51XGCQE9`
 - regression checks:
+  - `python3 -m json.tool kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`
+  - `python3 -m py_compile scripts/render_kenigsberg_story.py handlers/kenigsberg_stories_cmd.py video_announce/kaggle_client.py video_announce/poller.py`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_notebook.py tests/test_kenigsberg_stories.py tests/test_kaggle_client.py tests/test_video_announce_story_publish.py` -> `22 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1064`, service check passing.
+  - Production env check: `KENIGSBERG_STORIES_TEST_CHAT_ID=-1002210431821`, `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`, `KAGGLE_USERNAME=zigomaro`.
 
 ## Prevention
 
