@@ -1,0 +1,271 @@
+# Мост в Кёнигсберг / Story Generator
+
+> **Status:** MVP spec / Not implemented
+> **Scope:** Kaggle-based Telegram Story generator for the `Мост в Кёнигсберг` history channel family. The implementation must reuse the CherryFlash runtime, Kaggle upload, native story encoding, and story publish helper wherever possible.
+
+## Как я понял задачу
+
+Нужно быстро запустить MVP генератора коротких исторических сторис: вертикальный ролик `720x1280`, примерно `15-20` секунд основного монтажа плюс outro, без звука из исходных видео, с музыкой из отдельного Kaggle dataset и публикацией в Telegram Stories.
+
+Первые тестовые публикации идут в `https://t.me/keniggpt`. После отдельного сигнала о production-переходе автопубликация должна перейти на сторис канала `https://t.me/mostvkenig`.
+
+Каждый выпуск:
+
+- выбирает один исторический период / dataset;
+- берет случайный набор видео из этого периода в случайном порядке;
+- выбирает одну мудрую мысль без повторов, пока пул не исчерпан;
+- пересказывает ее в сильный, но лаконичный hook;
+- раскладывает мысль на `4-6` сцен, при необходимости чуть больше, если музыка и текст требуют более мелкой нарезки;
+- подбирает музыкальный участок без слов;
+- режет видео по сильным долям / длине ритма;
+- делает плавные переходы на `2-3` кадра;
+- поверх основного ролика показывает нижний centered watermark `Мост в Кёнигсберг`;
+- в конце показывает два outro-экрана:
+  - `Мост в Кёнигсберг`
+  - `Знай прошлое — строй будущее`
+
+Текстовая анимация должна быть в BBC-подобной типографике: stripe-блоки выровнены по левому краю, stripes появляются слева направо, затем текст выезжает снизу внутри каждого stripe вверх; исчезновение идет в том же порядке, быстрее, через ease.
+
+## Canonical assets
+
+### Video datasets
+
+- `zigomaro/koenigsberg19191940` — период `1919-1940`.
+- `zigomaro/koenigsberg-winter` — отдельный зимний dataset; если выбран он, все сцены берутся только из него.
+
+Новые datasets могут добавляться позже. Генератор не должен иметь hardcoded списка файлов: при каждом запуске он читает актуальные mounted dataset files и включает новые видео в выборку.
+
+### Music dataset
+
+- `zigomaro/koenigsberg-music`
+
+Начальный whitelist участков без слов:
+
+| Track | Allowed instrumental ranges |
+| --- | --- |
+| `The promise.flac` | `3:44-4:26`, `6:42-end` |
+| `Wyatt Earth` | `0:00-1:48` |
+| `Save Me` | `0:00-0:38` |
+| `Manuela` | `3:03-3:37` |
+| `One Truth` | `1:36-1:50` |
+| `Terminal` | `3:40-4:26` |
+| `Elegy` | `6:18-6:46` |
+
+Музыка выбирается случайно, но с низкой вероятностью повтора прошлого выпуска. История использования треков должна деприоритизировать recent picks на `2-4` недели, но не банить навсегда.
+
+### Thoughts source
+
+Канонический список исходных мыслей: `docs/features/kenigsberg-stories/thoughts.md`.
+
+Пул должен работать как shuffle-bag: мысль не повторяется, пока все мысли не были использованы. После полного цикла bag сбрасывается и начинается новый круг.
+
+## Reuse from CherryFlash
+
+MVP должен быть sibling product к CherryFlash, а не новым независимым механизмом.
+
+Переиспользовать напрямую:
+
+- Kaggle session dataset pattern из CherryFlash:
+  - per-run dataset `kenigsberg-session-*`;
+  - `payload.json`;
+  - `bundle_manifest.json`;
+  - runtime scripts/assets копируются в dataset, а не подтягиваются из внешнего repo в notebook.
+- Kernel handoff / polling / error diagnostics из `video_announce.scenario`.
+- `telegram_story_native_hevc_720p_v1` encoding contract:
+  - `720x1280`;
+  - H.265 / HEVC in MP4;
+  - AAC audio `48kHz`;
+  - story-safe size under Bot API limit.
+- Shared Kaggle story helper:
+  - `kaggle/CrumpleVideo/story_publish.py` mounted as `kaggle_common/story_publish.py`.
+- Business Stories publish path from `docs/features/telegram-business-stories/README.md`.
+- CherryFlash lessons:
+  - fail early if dataset assets are missing;
+  - inspect Kaggle `SaveKernel` response fields, not only absence of exception;
+  - CPU fallback is acceptable after GPU debugging;
+  - runtime logs must expose enough non-secret evidence to diagnose story publish.
+
+Variation points for this product:
+
+- video source is historical footage dataset, not event posters;
+- text source is `thoughts.md` + LLM rewrite, not `/popular_posts`;
+- scene cadence is beat-driven, not fixed CherryFlash scene timing;
+- target test channel is `@keniggpt`;
+- production Business/story target is `@mostvkenig` after explicit user signal;
+- outro text and stripe animation are product-specific.
+
+## MVP pipeline
+
+1. Operator runs `/kenigsberg`.
+2. Bot creates a `kenigsberg_story` generation session.
+3. Server selects:
+   - one dataset period;
+   - one thought from the shuffle-bag;
+   - one music track and one allowed instrumental range, with recent-repeat penalty.
+4. LLM rewrites the selected thought into:
+   - `hook`;
+   - `scene_lines[]`, each short enough for stripe typography;
+   - optional `caption` / metadata for logs.
+5. Server creates a per-run Kaggle dataset:
+   - payload;
+   - selected thought metadata;
+   - story publish config/secrets if story publish is enabled;
+   - runtime scripts;
+   - no raw secrets in logs or docs.
+6. Kaggle runtime:
+   - discovers actual videos in the selected dataset;
+   - probes durations and dimensions;
+   - applies bottom crop to remove the `VEO` mark without scaling;
+   - chooses a usable music subrange;
+   - detects beats / downbeats;
+   - builds single-beat and double-beat scene slots;
+   - chooses source video subclips that avoid banned source ranges;
+   - renders text stripes, watermark, transitions, and two-screen outro;
+   - encodes final story video.
+7. Story helper publishes the generated result.
+8. Server persists generation history:
+   - issue number (`kenigsberg #N`);
+   - selected dataset / source file / source start-end per scene;
+   - generated-video timeline start-end per scene;
+   - selected thought id;
+   - music track/range/start-end;
+   - story publish result.
+
+## Beat and cut contract
+
+The preferred MVP implementation on Kaggle:
+
+- Use `librosa` for beat tracking and onset strength:
+  - load only the allowed instrumental ranges;
+  - compute tempo and beat frames;
+  - score candidate windows by stable tempo, stronger onset envelope, and enough beats for `15-20` seconds.
+- If downbeat detection is unreliable, treat the strongest beat in each local measure as the visual cut anchor rather than overfitting a fragile music-theory model.
+- Build a rhythm grid:
+  - first scene change after one single interval;
+  - later slots randomly use `1x` and `2x` beat spans;
+  - target approximately four double-span equivalents before outro.
+- Transitions are short crossfades / eased opacity blends of `2-3` frames, centered on beat anchors where possible.
+- Video source clips may start at a random offset if there is enough usable duration until the chosen cut end.
+
+Fallback for MVP if beat detection fails:
+
+- use the whitelisted music range;
+- estimate tempo from the median beat interval;
+- generate a deterministic `1x/2x` grid inside `15-20` seconds;
+- log the fallback reason in the session manifest.
+
+## Typography contract
+
+Main scene text:
+
+- left-aligned stripe group;
+- all stripes share the same left edge;
+- each stripe appears left-to-right;
+- text moves from the bottom edge of its stripe upward into position;
+- disappearance repeats the same order, faster;
+- use ease functions, not linear motion;
+- keep lines short and avoid text spilling outside the stripe at `720x1280`.
+
+Outro:
+
+- no bottom watermark during final phrases;
+- two sequential screens:
+  - screen 1: `Мост в Кёнигсберг`;
+  - screen 2: `Знай прошлое — строй будущее`;
+- animation may reuse CherryFlash `brand_outro` mechanics, but text, alignment and timing follow this feature's stripe grammar.
+
+## Watermark and crop
+
+- During all non-outro scenes show `Мост в Кёнигсберг` at the bottom center.
+- The watermark is a copy-protection mark, not a subtitle; it must stay readable but secondary.
+- Source videos are prepared for story canvas at `720p`.
+- Bottom `VEO` text is removed by cropping height, not scaling the video. The render should compose from the cropped source into the story canvas.
+
+Open implementation detail: exact bottom crop in pixels should be measured from the actual dataset files during the first Kaggle smoke and then stored as config, because the datasets may not all carry the mark at identical height.
+
+## Bans and generation history
+
+Command `/a` must support banning bad source fragments after a generated issue is reviewed.
+
+Examples:
+
+- `в выпуске kenigsberg #15 бан 1-3, 7, 16-17`
+- `покажи баны`
+- `сбрось баны` for testing
+
+The user provides seconds in the generated video timeline. The system must:
+
+1. find issue `#15`;
+2. map each generated-video second range to the scene segments active at those seconds;
+3. convert that generated range to source video coordinates using the persisted source file and source start;
+4. store banned source ranges in DB;
+5. exclude future random source cuts that overlap banned ranges.
+
+Allowed behavior after a ban:
+
+- use the same source video before or after the banned source range;
+- use other videos from the same dataset normally.
+
+The ban model must store at least:
+
+- dataset slug / period;
+- source file path inside dataset;
+- source start/end seconds;
+- reason / issue id;
+- created_at;
+- optional reset/test flag.
+
+## Scheduling
+
+Manual `/kenigsberg` comes first.
+
+Scheduled production must be added only after test approval. The time slot should avoid other heavy operations:
+
+- avoid CherryFlash scheduled render window;
+- avoid Telegram Monitoring / guide monitoring Kaggle windows;
+- avoid daily imports or Smart Update heavy windows;
+- prefer a slot after observing actual GPU and CPU runtime in test mode.
+
+Debug phase uses Kaggle GPU. After the rendering path is stable, production should switch to CPU unless measured CPU runtime makes the slot unsafe.
+
+## Telegram publish contract
+
+Testing:
+
+- publish to `@keniggpt`;
+- story publication should use the existing native story helper path.
+
+Production:
+
+- only after separate user signal;
+- publish stories for `@mostvkenig`;
+- keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
+- never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.
+
+Important boundary:
+
+- Business Stories use Bot API `postStory` and encrypted `business_connection_id`.
+- Do not repurpose `TELEGRAM_AUTH_BUNDLE_E2E` or `TELEGRAM_AUTH_BUNDLE_S22` for Business story publishing.
+
+## Open questions
+
+1. What exact Telegram surface should receive test stories: ordinary channel post to `@keniggpt`, Telegram story on a Business-connected account associated with `@keniggpt`, or both?
+2. For production `@mostvkenig`, is the required Business connection already cached with `can_manage_stories=True`, or should the implementation include an operator preflight/check command before launch?
+3. Should `/kenigsberg` be admin-only and visible in the same admin command family as `/v`, or available to a narrower allowlist?
+4. How many thoughts should the initial `thoughts.md` contain before production: the provided 18 are enough for MVP, but scheduled daily use needs a larger pool.
+5. Should the LLM rewrite preserve exact historical dates in every issue, or may it turn a fact into a more atmospheric hook when the source thought is factual?
+6. What is the desired cadence after production approval: daily, weekdays only, several times per week, or manually curated?
+7. What is the acceptable max render time on CPU before the schedule is considered unsafe?
+8. Should winter dataset be a normal random period or seasonal-weighted only around winter dates?
+9. What exact bottom crop removes `VEO` across the first two datasets? This needs measurement on real samples.
+10. Do we need a visible issue number on the final video or only in logs/admin messages?
+
+## Pitfalls
+
+- Beat detection can overfit weak or rubato music. MVP should prefer stable, logged heuristics over fragile downbeat perfection.
+- `15-20` seconds plus two outro screens may exceed the emotional pacing if the thought is too long; the LLM stage must be allowed to split or compress.
+- Kaggle dataset mounts can lag or keep stale sources; reuse CherryFlash dataset readiness and kernel response validation.
+- Story publish can fail after successful render due to missing Business rights; required targets should preflight before expensive render when production mode is on.
+- New videos/music added to Kaggle datasets can change file order. Selection must be manifest-based and logged, not dependent on notebook filesystem order.
+- Video bans require precise timeline mapping. Without persisted per-scene source coordinates, `/a бан ...` cannot be implemented correctly later.
+- Cropping out `VEO` by height changes source composition; text/watermark safe zones need visual smoke screenshots.

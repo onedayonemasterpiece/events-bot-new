@@ -184,6 +184,15 @@ features:
       - telegram_business.py
       - main.py
       - main_part2.py
+  kenigsberg_stories:
+    status: planned
+    docs: docs/features/kenigsberg-stories/README.md
+    thoughts: docs/features/kenigsberg-stories/thoughts.md
+    entrypoints:
+      - main.py
+      - main_part2.py
+      - video_announce/scenario.py
+      - kaggle/CherryFlash/
   ticket_sites_queue:
     status: implemented
     docs: docs/features/ticket-sites-queue/README.md

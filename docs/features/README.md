@@ -7,6 +7,7 @@
 - `docs/features/digests/README.md` — дайджесты (подборки/превью/публикация)
 - `docs/features/crumple-video/README.md` — видео-анонсы `/v` (CrumpleVideo)
 - `docs/features/cherryflash/README.md` — CherryFlash / Popular Video Afisha (story-first daily popularity-driven video announce)
+- `docs/features/kenigsberg-stories/README.md` — генератор исторических Telegram Stories `Мост в Кёнигсберг` (MVP spec)
 - `docs/features/source-parsing/README.md` — извлечение/парсинг событий из внешних источников (в т.ч. `/parse`)
 - `docs/features/tourist-label/README.md` — туристическая метка (ручная разметка + экспорт)
 - `docs/features/llm-gateway/README.md` — управление лимитами Google AI (Gemma/Gemini) и ретраи
