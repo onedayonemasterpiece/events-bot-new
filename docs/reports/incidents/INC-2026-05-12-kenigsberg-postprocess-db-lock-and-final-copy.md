@@ -126,6 +126,26 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ## Release And Closure Evidence
 
+### 2026-05-12 source anti-repeat + story-readiness deploy
+
+- deployed SHA: `89325c8b5e1e9e3e6f07e6f75b5a9f16f4411b93`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-89325c8b` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly release: `v1072`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRESXGQ6NJYWNYSP8J2B6HR4`, machine `48e42d5b714228` started with `1/1` checks passing.
+- regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py video_announce/story_publish.py tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_story_publish.py tests/test_telegram_business.py main.py main_part2.py`
+  - `timeout 60 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegram_business.py` -> `50 passed in 1.45s`
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/scripts/render_kenigsberg_story.py` contains `reason: current_generation`, confirming the per-run source-range exclusion code is deployed.
+  - Production `/app/handlers/kenigsberg_stories_cmd.py` contains `KENIGSBERG_STORIES_PRODUCTION_ENABLED` and production story status reporting.
+  - Production `/app/kaggle/KoenigsbergStories/koenigsberg_stories.ipynb` contains notebook version `v3-mvp-heuristic-render-story-ready`.
+  - Production read-only story readiness check: `KENIGSBERG_STORIES_PRODUCTION_ENABLED` is false; `VIDEO_ANNOUNCE_STORY_ENABLED` is true; webhook has Business updates and `pending_update_count=0`; encrypted Business cache has selected story-capable targets; no Kenigsberg session is currently `RENDERING`.
+  - `@keniggpt` exists in the channel table; `@mostvkenig` is not required by the default production story path because Kenigsberg uses an explicit peer override instead of `main_chat_id` DB resolution.
+- live smoke:
+  - Not run by Codex to avoid publishing a new `@keniggpt` story or `@mostvkenig` story without an explicit operator command.
+
+### 2026-05-12 final-copy + postprocess deploy
+
 - deployed SHA: `37311d3c0e767abd368ece2ea929d6041de56886`
 - deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-f37afd1c` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
 - Fly release: `v1071`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KREPDH8NVKNNFAYVQMETAXP5`, machine `48e42d5b714228` started with `1/1` checks passing.
