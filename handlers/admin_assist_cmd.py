@@ -308,6 +308,17 @@ def _allowed_actions() -> dict[str, dict[str, Any]]:
             "args_schema": {},
             "examples": ["сделай видео анонс", "видеоанонс", "ролик по событиям"],
         },
+        "kenigsberg": {
+            "command": "/kenigsberg",
+            "risk": "mutating",
+            "desc": "Управление генератором сторис «Мост в Кёнигсберг»: запуск, статус и баны отрезков.",
+            "args_schema": {"args_text": {"type": "args_text", "required": False}},
+            "examples": [
+                "запусти kenigsberg",
+                "покажи баны kenigsberg",
+                "в выпуске kenigsberg #15 бан 1-3, 7, 16-17",
+            ],
+        },
         "3di": {
             "command": "/3di",
             "risk": "mutating",
@@ -930,6 +941,42 @@ def _heuristic_proposals(request_text: str) -> list[_ActionProposal] | None:
 
     if any(phrase in t for phrase in ("видео анонс", "видеоанонс", "video announce", "ролик по событиям")):
         return [_ActionProposal(action_id="v", args={}, confidence=0.94)]
+
+    if "kenigsberg" in t or "кенигсберг" in t or "кёнигсберг" in t:
+        if "бан" in t or "ban" in t:
+            issue = _extract_first_int(t, max_value=1_000_000)
+            if issue is not None:
+                ranges_match = re.search(
+                    r"(?:бан|ban)\s+(.+)$",
+                    request_text,
+                    flags=re.IGNORECASE,
+                )
+                ranges_text = ranges_match.group(1).strip() if ranges_match else ""
+                if ranges_text:
+                    return [
+                        _ActionProposal(
+                            action_id="kenigsberg",
+                            args={"args_text": f"ban #{issue} {ranges_text}"},
+                            confidence=0.98,
+                        )
+                    ]
+            if any(phrase in t for phrase in ("покажи", "список", "вывед", "list")):
+                return [
+                    _ActionProposal(
+                        action_id="kenigsberg",
+                        args={"args_text": "bans"},
+                        confidence=0.96,
+                    )
+                ]
+        if "статус" in t or "status" in t:
+            return [
+                _ActionProposal(
+                    action_id="kenigsberg",
+                    args={"args_text": "status"},
+                    confidence=0.96,
+                )
+            ]
+        return [_ActionProposal(action_id="kenigsberg", args={}, confidence=0.94)]
 
     if any(phrase in t for phrase in ("3д", "3d", "превью 3д", "preview 3d")):
         return [_ActionProposal(action_id="3di", args={}, confidence=0.94)]

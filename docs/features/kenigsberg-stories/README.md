@@ -1,6 +1,6 @@
 # Мост в Кёнигсберг / Story Generator
 
-> **Status:** MVP spec / Not implemented
+> **Status:** MVP command scaffold / Kaggle render not implemented
 > **Scope:** Kaggle-based Telegram Story generator for the `Мост в Кёнигсберг` history channel family. The implementation must reuse the CherryFlash runtime, Kaggle upload, native story encoding, and story publish helper wherever possible.
 
 ## Как я понял задачу
@@ -131,6 +131,32 @@ Variation points for this product:
    - music track/range/start-end;
    - story publish result.
 
+## Operator commands
+
+`/kenigsberg` is the explicit command surface for this product. It is superadmin-only.
+
+Initial command set:
+
+- `/kenigsberg` — start a manual generation when Kaggle launch is enabled.
+- `/kenigsberg status` — show next issue number, thought-pool status, known issues and ban count.
+- `/kenigsberg bans` — list source-video bans.
+- `/kenigsberg ban #15 1-3, 7, 16-17` — map seconds from generated issue `#15` back to source-video coordinates and ban them for future cuts.
+- `/kenigsberg bans reset` — clear bans for testing.
+
+`/a` is the natural-language control layer over the same command surface, not a separate state machine. The assistant must route requests such as:
+
+- `в выпуске kenigsberg #15 бан 1-3, 7, 16-17`
+- `покажи баны kenigsberg`
+- `статус kenigsberg`
+
+into concrete commands and ask for confirmation before execution:
+
+- `/kenigsberg ban #15 1-3, 7, 16-17`
+- `/kenigsberg bans`
+- `/kenigsberg status`
+
+This keeps the risky operation auditable: the user sees the exact command before `/a` executes it.
+
 ## Beat and cut contract
 
 The preferred MVP implementation on Kaggle:
@@ -153,6 +179,48 @@ Fallback for MVP if beat detection fails:
 - estimate tempo from the median beat interval;
 - generate a deterministic `1x/2x` grid inside `15-20` seconds;
 - log the fallback reason in the session manifest.
+
+## Video cut selection strategy
+
+The user preference is for a neural model to choose the most successful source-video fragment after the videos are selected. The implementation should support that as a later strategy, but it is not the fastest safe MVP path.
+
+### MVP: `heuristic_v1`
+
+For the first working generation, choose source cuts with deterministic, logged heuristics:
+
+- probe every candidate video with `ffprobe`;
+- crop out bottom `VEO` area before composing;
+- reject fragments that overlap stored source bans;
+- reject fragments with black frames, very low sharpness, or too little motion;
+- prefer fragments with enough duration for `1x` or `2x` beat slots;
+- apply a recent-use penalty for source files and source ranges used in the last `2-4` weeks;
+- write every chosen segment into the issue manifest with:
+  - dataset;
+  - source file;
+  - source start/end;
+  - generated timeline start/end;
+  - selection score and reject reasons for near misses.
+
+This can be implemented quickly inside Kaggle with `ffmpeg`/`ffprobe`, optional `opencv-python`, and simple scoring. It also gives `/a` bans the exact mapping they need.
+
+### Later: `gemma4_clip_judge_v2`
+
+Gemma 4 can be added as a judge after `heuristic_v1` produces a small candidate set. The proposed contract:
+
+1. Deterministic sampler extracts thumbnails / short contact sheets for candidate windows.
+2. Gemma 4 receives only a small set of candidate previews plus the thought/hook and returns structured scores:
+   - visual appeal;
+   - historical mood fit;
+   - text-safe negative space;
+   - no obvious watermark/defect;
+   - reason.
+3. The allocator still enforces hard constraints:
+   - no source-ban overlap;
+   - no recent-window repeat;
+   - enough duration;
+   - crop-safe composition.
+
+Do not make Gemma 4 scan all raw videos in the MVP. That would require video sampling, thumbnail packaging, quota budgeting, latency control, and fallback logic before the first story can be tested. The fast path is to ship `heuristic_v1`, preserve manifests, and add Gemma as a reranker once real generated issues show where the heuristic is weak.
 
 ## Typography contract
 
@@ -185,7 +253,7 @@ Open implementation detail: exact bottom crop in pixels should be measured from 
 
 ## Bans and generation history
 
-Command `/a` must support banning bad source fragments after a generated issue is reviewed.
+Command `/a` must support banning bad source fragments after a generated issue is reviewed by routing the request to `/kenigsberg ban ...`.
 
 Examples:
 
@@ -214,6 +282,12 @@ The ban model must store at least:
 - reason / issue id;
 - created_at;
 - optional reset/test flag.
+
+Current implementation state:
+
+- ban parsing and generated-timeline-to-source mapping are implemented in `kenigsberg_stories.state`;
+- state is stored in `setting.kenigsberg_stories_state` as JSON for MVP speed;
+- a dedicated SQL table is still the expected production hardening step once the generation manifest shape stabilizes.
 
 ## Scheduling
 

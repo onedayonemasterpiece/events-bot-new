@@ -27,6 +27,7 @@
 - «Покажи свежие импортированные события» → `/recent_imports`
 - «Поставь таймзону +02:00» → `/tz +02:00`
 - «Открой Telegram Monitoring» → `/tg`
+- «в выпуске kenigsberg #15 бан 1-3, 7, 16-17» → `/kenigsberg ban #15 1-3, 7, 16-17`
 
 Нечёткие запросы (ожидается **clarify** или несколько вариантов):
 
@@ -76,7 +77,7 @@
 
 Текущее покрытие `/a`: allowlist синхронизирован с зарегистрированными slash-командами
 бота, включая служебные команды вроде `/rebuild_event`, `/telegraph_cache_stats`,
-`/telegraph_cache_sanitize`, `/ik_poster`, `/assist_cancel` и stateful `/cancel`.
+`/telegraph_cache_sanitize`, `/ik_poster`, `/kenigsberg`, `/assist_cancel` и stateful `/cancel`.
 Если появляется новая команда, тест `tests/test_admin_assist_cmd.py` должен падать,
 пока её не добавят в allowlist ассистента.
 

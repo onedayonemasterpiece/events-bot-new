@@ -191,6 +191,8 @@ features:
     entrypoints:
       - main.py
       - main_part2.py
+      - handlers/kenigsberg_stories_cmd.py
+      - kenigsberg_stories/state.py
       - video_announce/scenario.py
       - kaggle/CherryFlash/
   ticket_sites_queue:
