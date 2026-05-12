@@ -18,12 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality.md`
+  - Scope: Kenigsberg server-side text rewrite, LLM model choice for `hook` / `scene_lines`, fallback policy, and Kaggle renderer text input contract.
+  - Must not regress: generated story text must come from the LLM rewrite payload; deterministic text splitting must not be used for publication; `gemini-3.1-flash-lite` is the primary rewrite model; if the LLM cannot produce at least two coherent scene lines, `/kenigsberg` must fail closed before Kaggle launch.
 - `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals.md`
   - Scope: Kenigsberg renderer music selection, `MUSIC_RANGES`, audio encoding duration, and manifest/render-log music metadata.
   - Must not regress: selected audio for the full encoded story, including outro, must stay inside a configured instrumental range; unlisted or too-short tracks must be skipped/fail closed; manifest/log evidence must include selected music start/end and allowed range.
 - `INC-2026-05-12-kenigsberg-command-silent-during-gemma-retry.md`
   - Scope: `/kenigsberg` manual command handler, pre-Kaggle Gemma 4 text rewrite, operator acknowledgements, and production runtime-log evidence for Kenigsberg launches.
-  - Must not regress: `/kenigsberg` must send an operator-visible acknowledgement before any slow LLM/provider/Kaggle work; Gemma rewrite must have a hard timeout and deterministic fallback; production evidence for a command run must include either immediate ack logs or a clear handler error.
+  - Must not regress: `/kenigsberg` must send an operator-visible acknowledgement before any slow LLM/provider/Kaggle work; text rewrite must have a hard timeout and fail closed without deterministic splitting; production evidence for a command run must include either immediate ack logs or a clear handler error.
 - `INC-2026-05-12-kenigsberg-winter-dataset-not-mounted.md`
   - Scope: Kenigsberg period selection in `scripts/render_kenigsberg_story.py`, server payload construction in `handlers/kenigsberg_stories_cmd.py`, and Kaggle dataset mounts for `zigomaro/koenigsberg-stories`.
   - Must not regress: the server must not preselect period/dataset or add env switches for dataset choice; the Kaggle renderer must randomly select from actually mounted video datasets, including nested layouts such as `/kaggle/input/datasets/...`; missing video/music dataset errors must include mounted `/kaggle/input` directory names.

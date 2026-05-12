@@ -274,6 +274,11 @@ def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
     assert cues[-1]["end"] > 14.0
 
 
+def test_renderer_requires_llm_scene_lines() -> None:
+    with pytest.raises(RuntimeError, match="scene_lines are required"):
+        renderer.payload_scene_lines({}, "fallback thought", 6)
+
+
 def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
     payload = kenigsberg_stories_cmd._validate_story_text_payload(
         {
@@ -292,7 +297,37 @@ def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
 
 
 @pytest.mark.asyncio
-async def test_kenigsberg_story_text_rewrite_times_out_to_fallback(monkeypatch) -> None:
+async def test_kenigsberg_story_text_rewrite_uses_gemini_lite(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class LiteGoogleAIClient:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs["model"])
+            return (
+                '{"hook":"Короткий hook","scene_lines":["Первый цельный смысл","Второй цельный смысл"],"caption":""}',
+                {},
+            )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "google_ai",
+        SimpleNamespace(GoogleAIClient=LiteGoogleAIClient, SecretsProvider=lambda: object()),
+    )
+
+    payload = await kenigsberg_stories_cmd._rewrite_thought_for_story(
+        "Альбертина была устроена по классической университетской модели."
+    )
+
+    assert calls == ["gemini-3.1-flash-lite"]
+    assert payload["source"] == "llm_gemini_lite"
+    assert payload["scene_lines"] == ["Первый цельный смысл", "Второй цельный смысл"]
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_story_text_rewrite_times_out_fail_closed(monkeypatch) -> None:
     class SlowGoogleAIClient:
         def __init__(self, **kwargs) -> None:
             pass
@@ -308,12 +343,10 @@ async def test_kenigsberg_story_text_rewrite_times_out_to_fallback(monkeypatch) 
     )
     monkeypatch.setattr(kenigsberg_stories_cmd, "TEXT_REWRITE_TIMEOUT_SECONDS", 0.01)
 
-    payload = await kenigsberg_stories_cmd._rewrite_thought_for_story(
-        "Альбертина была устроена по классической университетской модели."
-    )
-
-    assert payload["source"] == "fallback"
-    assert payload["hook"].startswith("Альбертина")
+    with pytest.raises(kenigsberg_stories_cmd.StoryTextRewriteError):
+        await kenigsberg_stories_cmd._rewrite_thought_for_story(
+            "Альбертина была устроена по классической университетской модели."
+        )
 
 
 def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:

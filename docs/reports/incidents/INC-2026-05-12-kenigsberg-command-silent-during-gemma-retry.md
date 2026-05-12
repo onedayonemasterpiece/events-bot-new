@@ -6,7 +6,7 @@ Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
 Closed: —
 Owners: Codex
-Related incidents: `INC-2026-05-12-kenigsberg-winter-dataset-not-mounted`, `INC-2026-05-12-kenigsberg-notebook-escaped-newlines`
+Related incidents: `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality`, `INC-2026-05-12-kenigsberg-winter-dataset-not-mounted`, `INC-2026-05-12-kenigsberg-notebook-escaped-newlines`
 Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -49,7 +49,7 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 ### Treat as regression guard when
 
 - Changing `/kenigsberg` command flow.
-- Changing Kenigsberg text rewrite, Gemma model, or fallback policy.
+- Changing Kenigsberg text rewrite, model choice, or fallback policy.
 - Moving slow Kaggle/dataset/LLM work earlier in the handler.
 
 ### Affected surfaces
@@ -61,9 +61,9 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 
 ### Mandatory checks before closure or deploy
 
-- `/kenigsberg` sends an acknowledgement before Gemma/Kaggle slow work.
-- Gemma rewrite has a hard timeout and deterministic fallback.
-- Regression test covers timeout-to-fallback behavior.
+- `/kenigsberg` sends an acknowledgement before LLM/Kaggle slow work.
+- Text rewrite has a hard timeout and fail-closed behavior.
+- Regression test covers timeout-to-fail-closed behavior.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.
 - Runtime logs after deploy show the new code is present and file logging is enabled.
@@ -78,20 +78,20 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 
 ## Immediate Mitigation
 
-- Send an immediate Telegram acknowledgement after reserving the issue/thought and before calling Gemma.
-- Add a Kenigsberg rewrite timeout and fallback to deterministic splitting.
+- Send an immediate Telegram acknowledgement after reserving the issue/thought and before calling the rewrite LLM.
+- Add a Kenigsberg rewrite timeout; follow-up incident `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality` removes deterministic fallback.
 - Add a launch-accepted log with issue, thought, chat and user ids.
 
 ## Corrective Actions
 
 - Patch `_launch_kaggle_generation` to acknowledge command acceptance before text rewrite.
-- Wrap the Gemma call with `asyncio.wait_for(..., timeout=45.0)`.
-- Add a unit test that simulates a slow Google AI client and asserts fallback text is returned.
+- Wrap the rewrite LLM call with `asyncio.wait_for(..., timeout=45.0)`.
+- Add a unit test that simulates a slow Google AI client and asserts fail-closed behavior.
 
 ## Follow-up Actions
 
 - [ ] Consider adding a lightweight operator metric for command acknowledgement latency across long-running admin commands.
-- [ ] After the MVP stabilizes, decide whether Gemma text rewrite should run in a background task before session creation or remain inline after the immediate ack.
+- [ ] After the MVP stabilizes, decide whether text rewrite should run in a background task before session creation or remain inline after the immediate ack.
 
 ## Release And Closure Evidence
 
@@ -110,4 +110,4 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 ## Prevention
 
 - Manual operator commands that may call external providers must acknowledge receipt before the first slow network call.
-- Kenigsberg LLM quality improvements must preserve fail-open deterministic fallback for story text.
+- Kenigsberg LLM quality improvements must preserve fail-closed behavior for unavailable or invalid story text.

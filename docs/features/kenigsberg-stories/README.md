@@ -212,12 +212,13 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
-- before Kaggle launch the bot sends an immediate operator ack, then runs a separate Gemma 4 text rewrite step that turns the selected `thoughts.md` entry into `hook` + `scene_lines`; if the LLM step fails or exceeds its hard timeout, the renderer falls back to deterministic splitting and records the source in payload/manifest;
+- before Kaggle launch the bot sends an immediate operator ack, then runs a separate `gemini-3.1-flash-lite` text rewrite step that turns the selected `thoughts.md` entry into `hook` + `scene_lines`; if the LLM step fails, exceeds its hard timeout, or returns fewer than two coherent scene lines, the release fails closed and Kaggle is not launched;
 - recent source segments from registered issue manifests are passed into the next run as temporary exclusions, so the same source video may still be reused but not the same recently published source time range;
 - the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
 - Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
 - music selection happens inside the Kaggle renderer from the configured instrumental whitelist; the selected `music_start` and `music_end` must both stay inside the allowed range and be written to the manifest/render log.
+- deterministic text splitting is disabled for generation; `scene_lines` must come from the server-side LLM rewrite payload.
 
 Notebook guardrail:
 

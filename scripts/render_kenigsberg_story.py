@@ -482,7 +482,7 @@ def payload_scene_lines(payload: dict[str, Any], fallback_thought: str, count: i
         ]
         if lines:
             return lines[: max(1, count)]
-    return split_scene_lines(fallback_thought, count)
+    raise RuntimeError("LLM scene_lines are required; deterministic text splitting is disabled")
 
 
 def scene_text_for_segment(lines: list[str], seg_idx: int, total_segments: int) -> str:

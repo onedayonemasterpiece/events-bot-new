@@ -54,6 +54,11 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
 TEXT_REWRITE_TIMEOUT_SECONDS = 45.0
+TEXT_REWRITE_MODEL = "gemini-3.1-flash-lite"
+
+
+class StoryTextRewriteError(RuntimeError):
+    pass
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -105,38 +110,12 @@ def _extract_json_object(text: str) -> dict | None:
     return None
 
 
-def _fallback_story_text(thought_text: str) -> dict:
-    text = " ".join(str(thought_text or "").split())
-    sentences = [
-        item.strip(" .")
-        for item in re.split(r"(?<=[.!?])\s+", text)
-        if item.strip(" .")
-    ]
-    if not sentences:
-        sentences = ["Кёнигсберг помнит больше, чем кажется"]
-    lines: list[str] = []
-    for sentence in sentences:
-        words = sentence.split()
-        if len(words) <= 7:
-            lines.append(sentence)
-        else:
-            for i in range(0, len(words), 5):
-                piece = " ".join(words[i : i + 5]).strip(" .")
-                if piece:
-                    lines.append(piece)
-    return {
-        "hook": sentences[0][:80],
-        "scene_lines": lines[:6],
-        "caption": "",
-        "source": "fallback",
-    }
-
-
-def _validate_story_text_payload(data: dict | None, thought_text: str) -> dict:
-    fallback = _fallback_story_text(thought_text)
+def _validate_story_text_payload(data: dict | None, thought_text: str, *, source: str = "llm") -> dict:
     if not isinstance(data, dict):
-        return fallback
+        raise StoryTextRewriteError("LLM did not return a JSON object")
     hook = " ".join(str(data.get("hook") or "").split())[:96]
+    if not hook:
+        raise StoryTextRewriteError("LLM returned an empty hook")
     raw_lines = data.get("scene_lines")
     lines: list[str] = []
     if isinstance(raw_lines, list):
@@ -144,13 +123,14 @@ def _validate_story_text_payload(data: dict | None, thought_text: str) -> dict:
             line = " ".join(str(item or "").split())
             if line:
                 lines.append(line[:120])
-    if not lines:
-        lines = list(fallback["scene_lines"])
+    if len(lines) < 2:
+        raise StoryTextRewriteError("LLM returned fewer than 2 scene lines")
+    max_lines = 5 if len(str(thought_text or "").split()) > 48 else 3
     return {
-        "hook": hook or fallback["hook"],
-        "scene_lines": lines[:6],
+        "hook": hook,
+        "scene_lines": lines[:max_lines],
         "caption": " ".join(str(data.get("caption") or "").split())[:240],
-        "source": "llm" if isinstance(data, dict) else "fallback",
+        "source": source,
     }
 
 
@@ -159,8 +139,9 @@ async def _rewrite_thought_for_story(thought_text: str) -> dict:
         "Ты редактор короткой исторической сторис «Мост в Кёнигсберг».\n"
         "Сделай отдельную смысловую нарезку текста для 15-20 секунд видео.\n"
         "Опирайся ТОЛЬКО на исходную мысль, не добавляй фактов, дат, имён или выводов.\n"
-        "Нужно: сильный лаконичный hook и 4-6 коротких фраз для экранных stripe-надписей.\n"
-        "Фразы должны читаться глазами спокойно, без обрывов словосочетаний.\n"
+        "Нужно: сильный лаконичный hook и 2-5 коротких фраз для экранных stripe-надписей.\n"
+        "Если мысль короткая, лучше 2-3 цельных смысловых экрана, не растягивай её искусственно.\n"
+        "Фразы должны читаться глазами спокойно, без обрывов словосочетаний и без разрыва смысла между экранами.\n"
         "Не удаляй ключевые существительные: если перечисляешь факультеты, слово «факультет» или «факультеты» должно остаться.\n"
         "Сохраняй естественные знаки препинания, если они помогают чтению. Не делай телеграфный список из одних прилагательных.\n"
         "Каждая фраза до 75 символов, лучше 35-60. Стиль: умно, сдержанно, без кликбейта.\n"
@@ -186,26 +167,49 @@ async def _rewrite_thought_for_story(thought_text: str) -> dict:
             consumer="kenigsberg_stories",
             incident_notifier=incident_notifier,
         )
-        raw, _usage = await asyncio.wait_for(
-            client.generate_content_async(
-                model="models/gemma-4-31b-it",
-                prompt=prompt,
-                generation_config={"temperature": 0.35},
-                max_output_tokens=900,
-            ),
-            timeout=TEXT_REWRITE_TIMEOUT_SECONDS,
-        )
-        result = _validate_story_text_payload(_extract_json_object(raw), thought_text)
-        logger.info(
-            "kenigsberg: story text rewrite source=%s hook=%s lines=%s",
-            result.get("source"),
-            result.get("hook"),
-            result.get("scene_lines"),
-        )
-        return result
+        attempts = [(TEXT_REWRITE_MODEL, "llm_gemini_lite", TEXT_REWRITE_TIMEOUT_SECONDS)]
+        last_exc: Exception | None = None
+        for model, source, timeout_seconds in attempts:
+            try:
+                raw, _usage = await asyncio.wait_for(
+                    client.generate_content_async(
+                        model=model,
+                        prompt=prompt,
+                        generation_config={"temperature": 0.35},
+                        max_output_tokens=900,
+                    ),
+                    timeout=timeout_seconds,
+                )
+                result = _validate_story_text_payload(
+                    _extract_json_object(raw),
+                    thought_text,
+                    source=source,
+                )
+                logger.info(
+                    "kenigsberg: story text rewrite source=%s model=%s hook=%s lines=%s",
+                    result.get("source"),
+                    model,
+                    result.get("hook"),
+                    result.get("scene_lines"),
+                )
+                return result
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "kenigsberg: story text rewrite attempt failed source=%s model=%s err_type=%s err=%s",
+                    source,
+                    model,
+                    type(exc).__name__,
+                    exc,
+                )
+        raise StoryTextRewriteError("all LLM story text rewrite attempts failed") from last_exc
     except Exception as exc:
-        logger.warning("kenigsberg: story text rewrite fallback err=%s", exc)
-        return _fallback_story_text(thought_text)
+        logger.warning(
+            "kenigsberg: story text rewrite failed closed err_type=%s err=%s",
+            type(exc).__name__,
+            exc,
+        )
+        raise StoryTextRewriteError("story text rewrite failed") from exc
 
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
@@ -378,7 +382,20 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         message.chat.id if message.chat else None,
         message.from_user.id if message.from_user else None,
     )
-    story_text = await _rewrite_thought_for_story(thought_text)
+    try:
+        story_text = await _rewrite_thought_for_story(thought_text)
+    except StoryTextRewriteError as exc:
+        logger.warning(
+            "kenigsberg: launch aborted issue=%s thought=%s reason=%s",
+            issue_number,
+            thought.get("id") or "",
+            exc,
+        )
+        await message.answer(
+            f"Kenigsberg #{issue_number}: не смог подготовить текст через LLM, "
+            "Kaggle не запускаю. Попробуйте ещё раз позже."
+        )
+        return
     payload = {
         "issue_number": issue_number,
         "seed": seed,
