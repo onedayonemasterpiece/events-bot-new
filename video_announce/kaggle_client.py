@@ -88,12 +88,16 @@ def _dataset_slug_tail(dataset_slug: str) -> str:
     return str(dataset_slug or "").strip().split("/", 1)[-1].casefold()
 
 
-def _is_cherryflash_session_dataset(dataset_slug: str) -> bool:
-    return _dataset_slug_tail(dataset_slug).startswith("cherryflash-session-")
+def _is_ephemeral_session_dataset(dataset_slug: str) -> bool:
+    tail = _dataset_slug_tail(dataset_slug)
+    return tail.startswith("cherryflash-session-") or tail.startswith(
+        "kenigsberg-session-"
+    )
 
 
-def _is_cherryflash_kernel_id(kernel_id: str | None) -> bool:
-    return str(kernel_id or "").strip().casefold().endswith("/cherryflash")
+def _is_session_kernel_id(kernel_id: str | None) -> bool:
+    lowered = str(kernel_id or "").strip().casefold()
+    return lowered.endswith("/cherryflash") or lowered.endswith("/koenigsberg-stories")
 
 
 def _is_gpu_quota_error(message: str) -> bool:
@@ -760,7 +764,7 @@ class KaggleClient:
                     meta_data["id"] = new_id
             
             # Set dataset sources for this session while preserving static inputs.
-            # CherryFlash must not keep old per-run session datasets attached:
+            # Session kernels must not keep old per-run datasets attached:
             # Kaggle can otherwise execute a stale mounted bundle while the
             # server records a fresh handoff.
             requested_sources = (
@@ -773,11 +777,11 @@ class KaggleClient:
                 for item in (meta_data.get("dataset_sources") or [])
                 if str(item).strip()
             ]
-            if _is_cherryflash_kernel_id(str(meta_data.get("id") or "")):
+            if _is_session_kernel_id(str(meta_data.get("id") or "")):
                 existing_sources = [
                     item
                     for item in existing_sources
-                    if not _is_cherryflash_session_dataset(item)
+                    if not _is_ephemeral_session_dataset(item)
                 ]
             for dataset_slug in requested_sources:
                 dataset_slug = str(dataset_slug).strip()
@@ -816,7 +820,7 @@ class KaggleClient:
                 meta_data,
                 allow_cpu_fallback=(
                     is_local
-                    and str(meta_data.get("id") or "").strip().casefold().endswith("/cherryflash")
+                    and _is_session_kernel_id(str(meta_data.get("id") or ""))
                 ),
             )
             result_ref = str(

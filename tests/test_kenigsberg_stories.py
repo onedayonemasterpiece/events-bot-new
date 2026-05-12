@@ -7,6 +7,7 @@ from kenigsberg_stories.state import (
     map_generated_range_to_source,
     parse_second_ranges,
 )
+from scripts import render_kenigsberg_story as renderer
 
 
 def test_parse_second_ranges_accepts_single_seconds_and_ranges() -> None:
@@ -90,3 +91,21 @@ def test_admin_assist_routes_kenigsberg_ban_request(monkeypatch) -> None:
         proposals[0].action_id,
         proposals[0].args,
     ) == "/kenigsberg ban #15 1-3, 7, 16-17"
+
+
+def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
+    video = tmp_path / "devau.mp4"
+    video.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 12.0)
+
+    segments = renderer.pick_video_segments(
+        [video],
+        [(0.0, 2.0)],
+        rng=renderer.random.Random(1),
+        dataset_slug="zigomaro/koenigsberg19191940",
+        crop_px=96,
+        source_bans=[{"source_file": "devau.mp4", "source_start": 0.0, "source_end": 9.0}],
+    )
+
+    assert segments[0]["source_start"] >= 9.0

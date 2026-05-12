@@ -1,22 +1,55 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import re
+import shutil
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from random import Random
 
 from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
+from sqlalchemy import select
 
 from kenigsberg_stories.state import (
+    KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
+    choose_next_thought,
     format_bans_report,
     load_state,
     load_thoughts,
     parse_second_ranges,
+    reserve_issue_number,
     reset_bans,
 )
+from models import Channel, VideoAnnounceSession, VideoAnnounceSessionStatus
 from runtime import require_main_attr
+from video_announce.kaggle_client import (
+    KaggleClient,
+    await_dataset_ready,
+    await_kernel_dataset_sources,
+)
+from video_announce.poller import (
+    VIDEO_KAGGLE_TIMEOUT_MINUTES,
+    remember_status_message,
+    start_kernel_poller_task,
+    update_status_message,
+)
 
 kenigsberg_stories_router = Router(name="kenigsberg_stories")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+KAGGLE_READY_WAIT_SECONDS = max(
+    30,
+    int(os.getenv("KENIGSBERG_KAGGLE_READY_WAIT_SECONDS", "180")),
+)
+KAGGLE_BIND_WAIT_SECONDS = max(
+    10,
+    int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
+)
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -82,6 +115,7 @@ async def _handle_ban_command(message: types.Message, args: str) -> None:
 
 
 async def _handle_launch(message: types.Message) -> None:
+    db = require_main_attr("get_db")()
     thoughts = load_thoughts()
     if not _launch_enabled():
         await message.answer(
@@ -95,9 +129,223 @@ async def _handle_launch(message: types.Message) -> None:
             "/kenigsberg bans reset"
         )
         return
+    await _launch_kaggle_generation(message, db, thoughts_count=len(thoughts))
+
+
+async def _resolve_channel_id(db, username: str) -> int | None:
+    raw_env = (os.getenv("KENIGSBERG_STORIES_TEST_CHAT_ID") or "").strip()
+    if raw_env:
+        try:
+            return int(raw_env)
+        except ValueError:
+            pass
+    normalized = username.strip().lstrip("@").casefold()
+    async with db.get_session() as session:
+        result = await session.execute(select(Channel))
+        for channel in result.scalars().all():
+            if str(channel.username or "").strip().lstrip("@").casefold() == normalized:
+                return int(channel.channel_id)
+    return None
+
+
+def _copy_required_assets(tmp_path: Path) -> None:
+    files = [
+        (PROJECT_ROOT / "scripts" / "render_kenigsberg_story.py", "scripts/render_kenigsberg_story.py"),
+    ]
+    for name in ("Cygre-Regular.ttf", "Cygre-Medium.ttf", "Cygre-SemiBold.ttf", "Cygre-Bold.ttf"):
+        files.append(
+            (
+                PROJECT_ROOT / "kaggle" / "CherryFlash" / "assets" / "ro_znanie_fonts" / name,
+                f"assets/ro_znanie_fonts/{name}",
+            )
+        )
+    for src, rel in files:
+        if not src.exists():
+            raise RuntimeError(f"Missing Kenigsberg runtime asset: {src}")
+        dest = tmp_path / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+
+
+async def _create_kenigsberg_dataset(db, *, session_id: int, payload: dict) -> str:
+    username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    if not username:
+        raise RuntimeError("KAGGLE_USERNAME not set")
+    run_suffix = f"{session_id}-{int(time.time())}"
+    dataset_id = f"{username}/kenigsberg-session-{run_suffix}"
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        (tmp_path / "dataset-metadata.json").write_text(
+            json.dumps(
+                {
+                    "title": f"Kenigsberg Story Session {session_id}",
+                    "id": dataset_id,
+                    "licenses": [{"name": "CC0-1.0"}],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / "payload.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        _copy_required_assets(tmp_path)
+        (tmp_path / "bundle_manifest.json").write_text(
+            json.dumps(
+                {
+                    "session_id": session_id,
+                    "mode": KENIGSBERG_PROFILE_KEY,
+                    "files": sorted(
+                        str(path.relative_to(tmp_path))
+                        for path in tmp_path.rglob("*")
+                        if path.is_file()
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        await asyncio.to_thread(KaggleClient().create_dataset, tmp_path)
+    return dataset_id
+
+
+async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_count: int) -> None:
+    existing = None
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(VideoAnnounceSession).where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
+            )
+        )
+        existing = result.scalar_one_or_none()
+    if existing:
+        await message.answer(f"Сессия #{existing.id} уже рендерится, дождитесь завершения.")
+        return
+
+    test_chat_id = await _resolve_channel_id(db, "keniggpt")
+    if not test_chat_id:
+        await message.answer("Не найден test target @keniggpt в таблице channel и KENIGSBERG_STORIES_TEST_CHAT_ID.")
+        return
+
+    issue_number = await reserve_issue_number(db)
+    thought = await choose_next_thought(db)
+    seed = int(time.time()) + issue_number
+    rng = Random(seed)
+    period_key = rng.choice(["1919-1940", "winter"])
+    dataset = (
+        "zigomaro/koenigsberg-winter"
+        if period_key == "winter"
+        else "zigomaro/koenigsberg19191940"
+    )
+    state = await load_state(db)
+    payload = {
+        "issue_number": issue_number,
+        "seed": seed,
+        "profile_key": KENIGSBERG_PROFILE_KEY,
+        "period_key": period_key,
+        "dataset": dataset,
+        "thought_id": thought.get("id") or "",
+        "thought_text": thought.get("text") or "",
+        "crop_bottom_px": int(os.getenv("KENIGSBERG_STORIES_CROP_BOTTOM_PX", "96")),
+        "source_bans": state.get("source_bans") or [],
+        "target": "https://t.me/keniggpt",
+        "strategy": "heuristic_v1",
+    }
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key=KENIGSBERG_PROFILE_KEY,
+            selection_params=payload,
+            test_chat_id=test_chat_id,
+            main_chat_id=None,
+            kaggle_kernel_ref="local:KoenigsbergStories",
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+
+    status_message = await update_status_message(
+        message.bot,
+        obj,
+        {},
+        chat_id=message.chat.id,
+        allow_send=True,
+        note="Kenigsberg: готовим Kaggle",
+    )
+    status_chat_id = status_message[0] if status_message else message.chat.id
+    status_message_id = status_message[1] if status_message else None
+    if status_message:
+        remember_status_message(obj.id, status_chat_id, status_message_id)
+
     await message.answer(
-        "Kaggle launch для Kenigsberg Stories ещё не включён в этом safety-слое. "
-        "Следующий шаг: подключить per-run dataset + kernel handoff после отдельного подтверждения."
+        f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period={period_key}, "
+        f"thought={thought.get('id') or '-'} / {thoughts_count}."
+    )
+    client = KaggleClient()
+    try:
+        async with db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, obj.id)
+            fresh.status = VideoAnnounceSessionStatus.RENDERING
+            fresh.started_at = datetime.now(timezone.utc)
+            session.add(fresh)
+            await session.commit()
+            await session.refresh(fresh)
+            obj = fresh
+        dataset_id = await _create_kenigsberg_dataset(db, session_id=obj.id, payload=payload)
+        await await_dataset_ready(
+            client,
+            dataset_id,
+            timeout_seconds=KAGGLE_READY_WAIT_SECONDS,
+            poll_interval_seconds=5,
+            expected_files=["payload.json", "scripts/render_kenigsberg_story.py"],
+        )
+        kernel_ref = await asyncio.to_thread(
+            client.deploy_kernel_update,
+            "local:KoenigsbergStories",
+            [dataset_id],
+        )
+        await await_kernel_dataset_sources(
+            client,
+            kernel_ref,
+            [dataset_id],
+            timeout_seconds=KAGGLE_BIND_WAIT_SECONDS,
+            poll_interval_seconds=10,
+        )
+        async with db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, obj.id)
+            fresh.kaggle_dataset = dataset_id
+            fresh.kaggle_kernel_ref = kernel_ref
+            session.add(fresh)
+            await session.commit()
+            await session.refresh(fresh)
+            obj = fresh
+    except Exception as exc:
+        async with db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, obj.id)
+            if fresh:
+                fresh.status = VideoAnnounceSessionStatus.FAILED
+                fresh.error = f"kaggle launch failed: {type(exc).__name__}: {exc}"
+                session.add(fresh)
+                await session.commit()
+        await message.answer(f"Kenigsberg #{issue_number}: не удалось запустить Kaggle: {type(exc).__name__}: {exc}")
+        return
+
+    start_kernel_poller_task(
+        db,
+        client,
+        obj,
+        bot=message.bot,
+        notify_chat_id=message.chat.id,
+        test_chat_id=test_chat_id,
+        main_chat_id=None,
+        status_chat_id=status_chat_id,
+        status_message_id=status_message_id,
+        poll_interval=45,
+        timeout_minutes=VIDEO_KAGGLE_TIMEOUT_MINUTES,
+        dataset_slug=obj.kaggle_dataset,
     )
 
 

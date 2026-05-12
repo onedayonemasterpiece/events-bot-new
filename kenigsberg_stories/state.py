@@ -201,3 +201,42 @@ def load_thoughts(path: Path = THOUGHTS_PATH) -> list[dict[str, str]]:
             continue
         thoughts.append({"id": match.group(1), "text": match.group(2)})
     return thoughts
+
+
+async def reserve_issue_number(db: Any) -> int:
+    state = await load_state(db)
+    issue_number = int(state.get("next_issue") or 1)
+    state["next_issue"] = issue_number + 1
+    await save_state(db, state)
+    return issue_number
+
+
+async def choose_next_thought(db: Any, *, thoughts_path: Path = THOUGHTS_PATH) -> dict[str, str]:
+    thoughts = load_thoughts(thoughts_path)
+    if not thoughts:
+        return {"id": "", "text": ""}
+    state = await load_state(db)
+    used = {str(item) for item in (state.get("used_thought_ids") or [])}
+    available = [item for item in thoughts if str(item["id"]) not in used]
+    if not available:
+        used = set()
+        available = list(thoughts)
+    # Stable pseudo-random enough for MVP and reproducible from state size.
+    index = (len(used) * 7 + int(state.get("next_issue") or 1)) % len(available)
+    chosen = available[index]
+    state["used_thought_ids"] = [*sorted(used, key=lambda x: int(x) if x.isdigit() else x), chosen["id"]]
+    await save_state(db, state)
+    return chosen
+
+
+async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:
+    issue_number = int(manifest.get("issue_number") or 0)
+    if issue_number <= 0:
+        return
+    state = await load_state(db)
+    issues = state.setdefault("issues", {})
+    issues[str(issue_number)] = {
+        **manifest,
+        "registered_at": _utc_now_iso(),
+    }
+    await save_state(db, state)

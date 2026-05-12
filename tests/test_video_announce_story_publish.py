@@ -40,6 +40,7 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
         {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
         {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
         {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
+        {"peer": "@catwithbag", "delay_seconds": 600, "mode": "repost_previous"},
     ]
 
 

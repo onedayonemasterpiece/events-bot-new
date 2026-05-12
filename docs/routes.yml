@@ -185,7 +185,7 @@ features:
       - main.py
       - main_part2.py
   kenigsberg_stories:
-    status: planned
+    status: mvp
     docs: docs/features/kenigsberg-stories/README.md
     thoughts: docs/features/kenigsberg-stories/thoughts.md
     entrypoints:
@@ -193,6 +193,10 @@ features:
       - main_part2.py
       - handlers/kenigsberg_stories_cmd.py
       - kenigsberg_stories/state.py
+      - kaggle/KoenigsbergStories/
+      - scripts/render_kenigsberg_story.py
+      - video_announce/kaggle_client.py
+      - video_announce/poller.py
       - video_announce/scenario.py
       - kaggle/CherryFlash/
   ticket_sites_queue:

@@ -458,6 +458,40 @@ def _load_story_report(path: Path | None) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+async def _maybe_register_kenigsberg_manifest(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+    output_files: list[Path],
+) -> None:
+    if str(session_obj.profile_key or "") != "kenigsberg_story":
+        return
+    manifest_path = next(
+        (path for path in output_files if path.name == "kenigsberg_issue_manifest.json"),
+        None,
+    )
+    if manifest_path is None or not manifest_path.exists():
+        logger.warning(
+            "video_announce: kenigsberg manifest missing session=%s",
+            session_obj.id,
+        )
+        return
+    try:
+        from kenigsberg_stories.state import register_issue_manifest
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        await register_issue_manifest(db, manifest)
+        logger.info(
+            "video_announce: registered kenigsberg issue manifest session=%s issue=%s",
+            session_obj.id,
+            manifest.get("issue_number"),
+        )
+    except Exception:
+        logger.exception(
+            "video_announce: failed to register kenigsberg manifest session=%s",
+            session_obj.id,
+        )
+
+
 def _story_failure_message(report: dict | None) -> str | None:
     if not report or report.get("ok") is True:
         return None
@@ -913,6 +947,7 @@ async def run_kernel_poller(
         log_files = _find_logs(output_files)
         story_report_path = _find_story_report(output_files)
         story_report = _load_story_report(story_report_path)
+        await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         if not video_path:
             logger.warning(
                 "video_announce: no video in output session=%s files=%s",

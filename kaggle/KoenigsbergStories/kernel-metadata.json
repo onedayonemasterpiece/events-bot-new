@@ -1,0 +1,18 @@
+{
+  "id": "zigomaro/koenigsberg-stories",
+  "title": "Koenigsberg Stories",
+  "code_file": "koenigsberg_stories.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/koenigsberg19191940",
+    "zigomaro/koenigsberg-winter",
+    "zigomaro/koenigsberg-music"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "slug": "koenigsberg-stories"
+}

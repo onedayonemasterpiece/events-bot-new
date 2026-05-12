@@ -215,6 +215,74 @@ def test_deploy_kernel_update_retries_without_gpu_on_cherryflash_quota(monkeypat
     assert push_gpu_flags == [True, False]
 
 
+def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "KoenigsbergStories"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/koenigsberg-stories",
+  "title": "Koenigsberg Stories",
+  "code_file": "koenigsberg_stories.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": []
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "koenigsberg_stories.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+
+    class Response:
+        def __init__(self, *, ref="", version_number=0, error=""):
+            self.ref = ref
+            self.versionNumber = version_number
+            self.error = error
+            self.invalidDatasetSources: list[str] = []
+
+    push_gpu_flags: list[bool] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            push_gpu_flags.append(bool(meta.get("enable_gpu")))
+            if len(push_gpu_flags) == 1:
+                return Response(error="Maximum weekly GPU quota of 30.00 hours reached.")
+            return Response(ref="/code/zigomaro/koenigsberg-stories", version_number=3)
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {
+            "path": str(kernel_dir),
+            "slug": "koenigsberg-stories",
+            "id": kernel_ref,
+        },
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "zigomaro/koenigsberg-stories",
+        ["zigomaro/kenigsberg-session-1-1777298000"],
+    )
+
+    assert result == "zigomaro/koenigsberg-stories"
+    assert push_gpu_flags == [True, False]
+
+
 def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
@@ -345,4 +413,78 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     assert pushed_sources == [
         "zigomaro/crumple-video-story-secrets-cipher",
         "zigomaro/cherryflash-session-219-1777298000",
+    ]
+
+
+def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "KoenigsbergStories"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/koenigsberg-stories",
+  "title": "Koenigsberg Stories",
+  "code_file": "koenigsberg_stories.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/kenigsberg-session-99-1777189467",
+    "zigomaro/koenigsberg19191940",
+    "zigomaro/koenigsberg-winter",
+    "zigomaro/koenigsberg-music"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "koenigsberg_stories.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_sources: list[str] = []
+
+    class Response:
+        ref = "/code/zigomaro/koenigsberg-stories"
+        versionNumber = 7
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            pushed_sources.extend(meta["dataset_sources"])
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {
+            "path": str(kernel_dir),
+            "slug": "koenigsberg-stories",
+            "id": kernel_ref,
+        },
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "zigomaro/koenigsberg-stories",
+        ["zigomaro/kenigsberg-session-100-1777298000"],
+    )
+
+    assert result == "zigomaro/koenigsberg-stories"
+    assert pushed_sources == [
+        "zigomaro/koenigsberg19191940",
+        "zigomaro/koenigsberg-winter",
+        "zigomaro/koenigsberg-music",
+        "zigomaro/kenigsberg-session-100-1777298000",
     ]

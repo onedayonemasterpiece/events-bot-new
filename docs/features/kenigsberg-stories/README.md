@@ -1,6 +1,6 @@
 # Мост в Кёнигсберг / Story Generator
 
-> **Status:** MVP command scaffold / Kaggle render not implemented
+> **Status:** MVP manual Kaggle render ready / Scheduled production not enabled
 > **Scope:** Kaggle-based Telegram Story generator for the `Мост в Кёнигсберг` history channel family. The implementation must reuse the CherryFlash runtime, Kaggle upload, native story encoding, and story publish helper wherever possible.
 
 ## Как я понял задачу
@@ -137,7 +137,7 @@ Variation points for this product:
 
 Initial command set:
 
-- `/kenigsberg` — start a manual generation when Kaggle launch is enabled.
+- `/kenigsberg` — start a manual Kaggle generation when `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`.
 - `/kenigsberg status` — show next issue number, thought-pool status, known issues and ban count.
 - `/kenigsberg bans` — list source-video bans.
 - `/kenigsberg ban #15 1-3, 7, 16-17` — map seconds from generated issue `#15` back to source-video coordinates and ban them for future cuts.
@@ -186,7 +186,7 @@ The user preference is for a neural model to choose the most successful source-v
 
 ### MVP: `heuristic_v1`
 
-For the first working generation, choose source cuts with deterministic, logged heuristics:
+For the first working generation, source cuts are chosen with deterministic, logged heuristics:
 
 - probe every candidate video with `ffprobe`;
 - crop out bottom `VEO` area before composing;
@@ -202,6 +202,14 @@ For the first working generation, choose source cuts with deterministic, logged 
   - selection score and reject reasons for near misses.
 
 This can be implemented quickly inside Kaggle with `ffmpeg`/`ffprobe`, optional `opencv-python`, and simple scoring. It also gives `/a` bans the exact mapping they need.
+
+Current MVP implementation:
+
+- bot command: `handlers/kenigsberg_stories_cmd.py`;
+- Kaggle kernel: `kaggle/KoenigsbergStories/`;
+- renderer: `scripts/render_kenigsberg_story.py`;
+- test publication target: `@keniggpt` through the existing video poller;
+- output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
 
 ### Later: `gemma4_clip_judge_v2`
 
