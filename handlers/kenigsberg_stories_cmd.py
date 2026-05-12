@@ -93,6 +93,25 @@ def _extract_ban_args(args: str) -> tuple[int | None, str]:
     return issue_number, tail
 
 
+def _canonicalize_ban_args(args: str) -> str:
+    text = " ".join(str(args or "").split())
+    if not text:
+        return ""
+    if re.match(r"^(?:ban|бан)\b", text, flags=re.IGNORECASE):
+        return text
+    lowered = text.casefold()
+    if "бан" not in lowered and "ban" not in lowered:
+        return text
+    issue_match = re.search(r"#?\s*(\d+)", text)
+    range_match = re.search(r"(?:бан|ban)\s+(.+)$", text, flags=re.IGNORECASE)
+    if issue_match and range_match:
+        issue = int(issue_match.group(1))
+        ranges_text = range_match.group(1).strip()
+        if ranges_text:
+            return f"ban #{issue} {ranges_text}"
+    return text
+
+
 def _extract_json_object(text: str) -> dict | None:
     cleaned = str(text or "").strip()
     if cleaned.startswith("```"):
@@ -515,6 +534,7 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
     if not await _require_superadmin(message):
         return
     args = (command.args or "").strip()
+    args = _canonicalize_ban_args(args)
     lowered = args.casefold()
     db = require_main_attr("get_db")()
 

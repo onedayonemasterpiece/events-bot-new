@@ -289,9 +289,10 @@ The user provides seconds in the generated video timeline. The system must:
 
 1. find issue `#15`;
 2. map each generated-video second range to the scene segments active at those seconds;
-3. convert that generated range to source video coordinates using the persisted source file and source start;
-4. store banned source ranges in DB;
-5. exclude future random source cuts that overlap banned ranges.
+3. choose one dominant scene segment per requested range by maximum overlap, treating tiny edge overlaps from whole-second input as operator imprecision;
+4. convert that selected generated range to source video coordinates using the persisted source file and source start;
+5. store banned source ranges in DB;
+6. exclude future random source cuts that overlap banned ranges.
 
 Allowed behavior after a ban:
 

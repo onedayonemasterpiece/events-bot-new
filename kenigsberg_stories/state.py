@@ -114,8 +114,13 @@ def map_generated_range_to_source(
     issue: dict[str, Any],
     generated_range: SecondRange,
 ) -> list[dict[str, Any]]:
-    """Map generated-video seconds back to source-video seconds using issue segments."""
-    mapped: list[dict[str, Any]] = []
+    """Map generated-video seconds to the one dominant source-video segment.
+
+    Operator ranges are entered in whole seconds while scene cuts can happen on
+    fractional beat boundaries. Treat small edge overlaps as input imprecision:
+    one requested range should create one source ban, chosen by maximum overlap.
+    """
+    candidates: list[tuple[float, float, dict[str, Any]]] = []
     for segment in issue.get("segments") or []:
         if not isinstance(segment, dict):
             continue
@@ -125,19 +130,32 @@ def map_generated_range_to_source(
         if overlap is None:
             continue
         source_start = float(segment.get("source_start") or 0.0)
-        mapped.append(
-            {
-                "dataset": str(segment.get("dataset") or issue.get("dataset") or "").strip(),
-                "source_file": str(segment.get("source_file") or "").strip(),
-                "source_start": round(source_start + (overlap.start - timeline_start), 3),
-                "source_end": round(source_start + (overlap.end - timeline_start), 3),
-                "issue_number": int(issue.get("issue_number") or 0),
-                "generated_start": overlap.start,
-                "generated_end": overlap.end,
-                "created_at": _utc_now_iso(),
-            }
+        overlap_len = overlap.end - overlap.start
+        requested_midpoint = (generated_range.start + generated_range.end) / 2.0
+        midpoint_inside = 1.0 if timeline_start <= requested_midpoint < timeline_end else 0.0
+        candidates.append(
+            (
+                overlap_len,
+                midpoint_inside,
+                {
+                    "dataset": str(segment.get("dataset") or issue.get("dataset") or "").strip(),
+                    "source_file": str(segment.get("source_file") or "").strip(),
+                    "source_start": round(source_start + (overlap.start - timeline_start), 3),
+                    "source_end": round(source_start + (overlap.end - timeline_start), 3),
+                    "issue_number": int(issue.get("issue_number") or 0),
+                    "generated_start": overlap.start,
+                    "generated_end": overlap.end,
+                    "requested_generated_start": generated_range.start,
+                    "requested_generated_end": generated_range.end,
+                    "created_at": _utc_now_iso(),
+                },
+            )
         )
-    return [item for item in mapped if item["dataset"] and item["source_file"]]
+    if not candidates:
+        return []
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    item = candidates[0][2]
+    return [item] if item["dataset"] and item["source_file"] else []
 
 
 async def apply_generated_timeline_bans(

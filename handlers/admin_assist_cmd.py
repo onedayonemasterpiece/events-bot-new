@@ -803,12 +803,33 @@ def _build_command_text(action_id: str, args: dict[str, Any]) -> str:
         args_text = "queue"
     if action_id == "trace" and not args_text:
         raise ValueError("trace args_text is required")
+    if action_id == "kenigsberg" and args_text:
+        args_text = _canonicalize_kenigsberg_args_text(args_text)
     if args_text:
         args_text = _sanitize_args_text(args_text)
         return f"{cmd} {args_text}".strip()
     if args_text_required:
         raise ValueError(f"{action_id} args_text is required")
     return cmd
+
+
+def _canonicalize_kenigsberg_args_text(value: str) -> str:
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    if re.match(r"^(?:ban|бан)\b", text, flags=re.IGNORECASE):
+        return text
+    lowered = text.casefold()
+    if "бан" not in lowered and "ban" not in lowered:
+        return text
+    issue_match = re.search(r"#?\s*(\d+)", text)
+    range_match = re.search(r"(?:бан|ban)\s+(.+)$", text, flags=re.IGNORECASE)
+    if issue_match and range_match:
+        issue = int(issue_match.group(1))
+        ranges_text = range_match.group(1).strip()
+        if ranges_text:
+            return f"ban #{issue} {ranges_text}"
+    return text
 
 
 def _risk_label(value: str) -> str:

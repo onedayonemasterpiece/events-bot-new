@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-12-kenigsberg-assist-ban-routing-and-dominant-range.md`
+  - Scope: `/a` Kenigsberg action routing, direct `/kenigsberg` ban argument parsing, and generated-timeline-to-source ban mapping.
+  - Must not regress: natural/direct forms such as `Kenigsberg #4 бан 4-6` must execute as `/kenigsberg ban #4 4-6`; one operator range in whole seconds must create one source ban for the dominant source segment by overlap, not all edge-overlapped segments.
 - `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality.md`
   - Scope: Kenigsberg server-side text rewrite, LLM model choice for `hook` / `scene_lines`, fallback policy, and Kaggle renderer text input contract.
   - Must not regress: generated story text must come from the LLM rewrite payload; deterministic text splitting must not be used for publication; `gemini-3.1-flash-lite` is the primary rewrite model; if the LLM cannot produce at least two coherent scene lines, `/kenigsberg` must fail closed before Kaggle launch.

@@ -27,7 +27,7 @@ def test_parse_second_ranges_accepts_single_seconds_and_ranges() -> None:
     ]
 
 
-def test_map_generated_ban_ranges_back_to_source_segments() -> None:
+def test_map_generated_ban_range_back_to_dominant_source_segment() -> None:
     issue = {
         "issue_number": 15,
         "dataset": "zigomaro/koenigsberg19191940",
@@ -51,15 +51,44 @@ def test_map_generated_ban_ranges_back_to_source_segments() -> None:
         ],
     }
 
-    mapped = map_generated_range_to_source(issue, SecondRange(3.0, 7.0))
+    mapped = map_generated_range_to_source(issue, SecondRange(3.0, 6.5))
 
     assert [
         (item["source_file"], item["source_start"], item["source_end"])
         for item in mapped
     ] == [
         ("devau.mp4", 15.0, 17.0),
-        ("kneiphof.mp4", 40.0, 42.0),
     ]
+
+
+def test_map_integer_ban_range_ignores_small_edge_overlap() -> None:
+    issue = {
+        "issue_number": 4,
+        "dataset": "zigomaro/koenigsberg19191940",
+        "segments": [
+            {
+                "timeline_start": 0.0,
+                "timeline_end": 5.7,
+                "dataset": "zigomaro/koenigsberg19191940",
+                "source_file": "main.mp4",
+                "source_start": 10.0,
+            },
+            {
+                "timeline_start": 5.7,
+                "timeline_end": 9.0,
+                "dataset": "zigomaro/koenigsberg19191940",
+                "source_file": "edge.mp4",
+                "source_start": 40.0,
+            },
+        ],
+    }
+
+    mapped = map_generated_range_to_source(issue, SecondRange(4.0, 6.0))
+
+    assert len(mapped) == 1
+    assert mapped[0]["source_file"] == "main.mp4"
+    assert mapped[0]["source_start"] == 14.0
+    assert mapped[0]["source_end"] == 15.7
 
 
 def test_format_bans_report_lists_recent_source_bans() -> None:
@@ -98,6 +127,27 @@ def test_admin_assist_routes_kenigsberg_ban_request(monkeypatch) -> None:
         proposals[0].action_id,
         proposals[0].args,
     ) == "/kenigsberg ban #15 1-3, 7, 16-17"
+
+
+def test_admin_assist_canonicalizes_direct_kenigsberg_ban_request(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin_assist_cmd,
+        "require_main_attr",
+        lambda name: "/vk_misses" if name == "VK_MISS_REVIEW_COMMAND" else None,
+    )
+
+    proposals = admin_assist_cmd._heuristic_proposals("Kenigsberg #4 бан 4-6")
+
+    assert proposals is not None
+    assert proposals[0].action_id == "kenigsberg"
+    assert admin_assist_cmd._build_command_text(
+        proposals[0].action_id,
+        proposals[0].args,
+    ) == "/kenigsberg ban #4 4-6"
+
+
+def test_kenigsberg_command_canonicalizes_reordered_ban_args() -> None:
+    assert kenigsberg_stories_cmd._canonicalize_ban_args("#4 бан 4-6") == "ban #4 4-6"
 
 
 def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
