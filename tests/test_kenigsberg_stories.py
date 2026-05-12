@@ -192,6 +192,46 @@ def test_renderer_beat_slots_vary_by_seed() -> None:
     assert a != b
 
 
+def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    track = music_dir / "The Promise.flac"
+    track.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 266.0)
+    selected, start, duration, meta = renderer.choose_music(
+        music_dir,
+        renderer.random.Random(1),
+    )
+
+    assert selected == track
+    assert duration == renderer.MAIN_DURATION + 2 * renderer.OUTRO_SCREEN_DURATION
+    assert start + duration <= meta["allowed_end"]
+    assert meta["allowed_start"] == 224.0
+
+
+def test_renderer_music_selection_rejects_unlisted_tracks(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    (music_dir / "unknown-vocal.flac").write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 120.0)
+
+    with pytest.raises(RuntimeError, match="allowed instrumental range"):
+        renderer.choose_music(music_dir, renderer.random.Random(1))
+
+
+def test_renderer_music_selection_rejects_ranges_shorter_than_full_story(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    (music_dir / "One Truth.flac").write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 120.0)
+
+    with pytest.raises(RuntimeError, match="long enough for the full story"):
+        renderer.choose_music(music_dir, renderer.random.Random(1))
+
+
 def test_renderer_splits_thought_without_repeating_last_line() -> None:
     lines = renderer.split_scene_lines(
         "Альбертина была устроена по классической университетской модели. "

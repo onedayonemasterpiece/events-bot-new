@@ -53,6 +53,8 @@
 
 Музыка выбирается случайно, но с низкой вероятностью повтора прошлого выпуска. История использования треков должна деприоритизировать recent picks на `2-4` недели, но не банить навсегда.
 
+Allowed instrumental ranges are hard constraints for the full encoded story, including outro. A track without a configured matching range, or a range shorter than the final video duration, must be skipped/fail closed instead of falling back to the whole track.
+
 ### Thoughts source
 
 Канонический список исходных мыслей: `docs/features/kenigsberg-stories/thoughts.md`.
@@ -215,6 +217,7 @@ Current MVP implementation:
 - the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
 - Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
+- music selection happens inside the Kaggle renderer from the configured instrumental whitelist; the selected `music_start` and `music_end` must both stay inside the allowed range and be written to the manifest/render log.
 
 Notebook guardrail:
 

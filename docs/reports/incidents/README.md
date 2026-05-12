@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals.md`
+  - Scope: Kenigsberg renderer music selection, `MUSIC_RANGES`, audio encoding duration, and manifest/render-log music metadata.
+  - Must not regress: selected audio for the full encoded story, including outro, must stay inside a configured instrumental range; unlisted or too-short tracks must be skipped/fail closed; manifest/log evidence must include selected music start/end and allowed range.
 - `INC-2026-05-12-kenigsberg-command-silent-during-gemma-retry.md`
   - Scope: `/kenigsberg` manual command handler, pre-Kaggle Gemma 4 text rewrite, operator acknowledgements, and production runtime-log evidence for Kenigsberg launches.
   - Must not regress: `/kenigsberg` must send an operator-visible acknowledgement before any slow LLM/provider/Kaggle work; Gemma rewrite must have a hard timeout and deterministic fallback; production evidence for a command run must include either immediate ack logs or a clear handler error.

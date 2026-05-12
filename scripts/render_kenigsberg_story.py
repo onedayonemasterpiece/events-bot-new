@@ -33,7 +33,7 @@ VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 AUDIO_EXTS = {".flac", ".mp3", ".wav", ".m4a", ".aac", ".ogg"}
 
 MUSIC_RANGES = {
-    "the promise.flac": [(224.0, 266.0), (402.0, None)],
+    "the promise": [(224.0, 266.0), (402.0, None)],
     "wyatt earth": [(0.0, 108.0)],
     "save me": [(0.0, 38.0)],
     "manuela": [(183.0, 217.0)],
@@ -162,6 +162,20 @@ def choose_video_dataset(input_root: Path, rng: random.Random) -> tuple[Path, st
 
 def iter_files(root: Path, exts: set[str]) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.casefold() in exts)
+
+
+def normalize_music_key(value: str) -> str:
+    stem = Path(value).stem if Path(value).suffix else value
+    return re.sub(r"[^0-9a-zа-яё]+", " ", stem.casefold()).strip()
+
+
+def allowed_music_ranges(track: Path) -> list[tuple[float, float | None]]:
+    track_key = normalize_music_key(track.name)
+    for configured_key, ranges in MUSIC_RANGES.items():
+        key = normalize_music_key(configured_key)
+        if track_key == key or key in track_key:
+            return ranges
+    return []
 
 
 def font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -523,24 +537,37 @@ def text_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[str, flo
     return None
 
 
-def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, float]:
+def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, float, dict[str, Any]]:
     tracks = iter_files(music_dir, AUDIO_EXTS)
     if not tracks:
         raise RuntimeError(f"No audio tracks found in {music_dir}")
+    total_duration = MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION
     rng.shuffle(tracks)
+    skipped: list[str] = []
     for track in tracks:
-        key = track.stem.casefold()
-        key_with_ext = track.name.casefold()
-        ranges = MUSIC_RANGES.get(key_with_ext) or MUSIC_RANGES.get(key) or [(0.0, None)]
+        ranges = allowed_music_ranges(track)
+        if not ranges:
+            skipped.append(f"{track.name}: no_allowed_range")
+            continue
         duration = ffprobe_duration(track)
         for start, end in ranges:
             usable_end = duration if end is None else min(duration, end)
-            if usable_end - start >= MAIN_DURATION:
-                max_start = usable_end - MAIN_DURATION
+            if usable_end - start >= total_duration:
+                max_start = usable_end - total_duration
                 selected_start = start if max_start <= start else rng.uniform(start, max_start)
-                return track, round(selected_start, 3), MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION
-    fallback = tracks[0]
-    return fallback, 0.0, min(max(MAIN_DURATION, ffprobe_duration(fallback)), MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION)
+                selected_start = round(selected_start, 3)
+                return track, selected_start, total_duration, {
+                    "allowed_start": start,
+                    "allowed_end": usable_end,
+                    "allowed_end_is_track_end": end is None,
+                    "selected_end": round(selected_start + total_duration, 3),
+                    "track_duration": duration,
+                }
+        skipped.append(f"{track.name}: ranges_too_short_for_{total_duration:.1f}s")
+    raise RuntimeError(
+        "No audio track has an allowed instrumental range long enough for the full story; "
+        f"required_duration={total_duration:.1f}s skipped={skipped[:20]}"
+    )
 
 
 def beat_slots(duration: float, rng: random.Random) -> list[tuple[float, float]]:
@@ -835,7 +862,7 @@ def main() -> None:
         raise RuntimeError(
             f"Music dataset is not mounted; available_inputs={mounted_input_dirs(input_root)}"
         )
-    music, music_start, total_duration = choose_music(music_dir, rng)
+    music, music_start, total_duration, music_meta = choose_music(music_dir, rng)
     frames_dir = working / "kenigsberg_frames"
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
@@ -855,6 +882,12 @@ def main() -> None:
         "thought_text": str(payload.get("thought_text") or ""),
         "music_file": music.name,
         "music_start": music_start,
+        "music_end": music_meta.get("selected_end"),
+        "music_allowed_range": {
+            "start": music_meta.get("allowed_start"),
+            "end": music_meta.get("allowed_end"),
+            "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
+        },
         "total_duration": total_duration,
         "strategy": "heuristic_v1",
         "frame_count": frame_count,
@@ -878,6 +911,13 @@ def main() -> None:
             "file": music.name,
             "path": str(music),
             "start": music_start,
+            "end": music_meta.get("selected_end"),
+            "allowed_range": {
+                "start": music_meta.get("allowed_start"),
+                "end": music_meta.get("allowed_end"),
+                "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
+            },
+            "track_duration": music_meta.get("track_duration"),
             "duration": total_duration,
         },
         "text": {
@@ -907,7 +947,8 @@ def main() -> None:
         "# Kenigsberg Story\n\n"
         f"- Issue: #{manifest['issue_number']}\n"
         f"- Period: {period_key}\n"
-        f"- Music: {music.name} @ {music_start:.2f}s\n"
+        f"- Music: {music.name} @ {music_start:.2f}-{float(music_meta.get('selected_end') or 0.0):.2f}s "
+        f"(allowed {float(music_meta.get('allowed_start') or 0.0):.2f}-{float(music_meta.get('allowed_end') or 0.0):.2f}s)\n"
         f"- Thought: {manifest['thought_text']}\n"
         f"- Segments: {len(segments)}\n",
         encoding="utf-8",
@@ -919,6 +960,8 @@ def main() -> None:
                 "period": period_key,
                 "music": music.name,
                 "music_start": music_start,
+                "music_end": music_meta.get("selected_end"),
+                "music_allowed_range": manifest["music_allowed_range"],
                 "segments": len(segments),
                 "frames": frame_count,
                 "output_size_bytes": manifest["output_size_bytes"],
