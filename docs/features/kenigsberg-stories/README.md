@@ -98,10 +98,9 @@ Variation points for this product:
 
 1. Operator runs `/kenigsberg`.
 2. Bot creates a `kenigsberg_story` generation session.
-3. Server selects:
-   - one dataset period;
+3. Server selects only run metadata that must live outside Kaggle:
    - one thought from the shuffle-bag;
-   - one music track and one allowed instrumental range, with recent-repeat penalty.
+   - deterministic seed / issue id.
 4. LLM rewrites the selected thought into:
    - `hook`;
    - `scene_lines[]`, each short enough for stripe typography;
@@ -113,7 +112,8 @@ Variation points for this product:
    - runtime scripts;
    - no raw secrets in logs or docs.
 6. Kaggle runtime:
-   - discovers actual videos in the selected dataset;
+   - discovers mounted video datasets and randomly selects one available period inside Kaggle;
+   - discovers actual videos in that dataset;
    - probes durations and dimensions;
    - applies bottom crop to remove the `VEO` mark without scaling;
    - chooses a usable music subrange;
@@ -210,7 +210,10 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
-- production MVP period selection is temporarily restricted to `1919-1940` via `KENIGSBERG_STORIES_PERIODS=1919-1940`; `winter` should be re-enabled only after verifying the Kaggle mount for `zigomaro/koenigsberg-winter`.
+- before Kaggle launch the bot runs a separate Gemma 4 text rewrite step that turns the selected `thoughts.md` entry into `hook` + `scene_lines`; if the LLM step fails, the renderer falls back to deterministic splitting and records the source in payload/manifest;
+- the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
+- Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
+- period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
 
 Notebook guardrail:
 
@@ -244,8 +247,9 @@ Main scene text:
 - each stripe appears left-to-right;
 - text moves from the bottom edge of its stripe upward into position;
 - disappearance repeats the same order, faster;
-- use ease functions, not linear motion;
+- use ease functions with visible inertia, not linear motion: stripe reveal uses an eased/back motion, text reveal starts only after the stripe is substantially visible, and exit uses a faster eased reverse motion;
 - keep lines short and avoid text spilling outside the stripe at `720x1280`.
+- text timing is independent from source-video segment timing. Video cuts follow the music grid; text cues follow comfortable reading durations across the main `15-20` second story.
 
 Outro:
 
@@ -253,7 +257,9 @@ Outro:
 - two sequential screens:
   - screen 1: `Мост в Кёнигсберг`;
   - screen 2: `Знай прошлое — строй будущее`;
-- animation may reuse CherryFlash `brand_outro` mechanics, but text, alignment and timing follow this feature's stripe grammar.
+- animation reuses the CherryFlash `brand_outro` mechanics: black background, yellow strip blocks, large condensed uppercase type, alternating side slide-in, exponential ease and short fade-in. Kenigsberg adapts the copy into two screens:
+  - `МОСТ` / `В КЁНИГСБЕРГ`;
+  - `ЗНАЙ ПРОШЛОЕ` / `СТРОЙ БУДУЩЕЕ`.
 
 ## Watermark and crop
 

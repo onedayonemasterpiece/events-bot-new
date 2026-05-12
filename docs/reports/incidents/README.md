@@ -19,8 +19,8 @@
 ## Активные regression contracts
 
 - `INC-2026-05-12-kenigsberg-winter-dataset-not-mounted.md`
-  - Scope: Kenigsberg period selection in `handlers/kenigsberg_stories_cmd.py`, renderer dataset diagnostics in `scripts/render_kenigsberg_story.py`, `fly.toml` `KENIGSBERG_STORIES_PERIODS`, and Kaggle dataset mounts for `zigomaro/koenigsberg-stories`.
-  - Must not regress: production MVP period selection must default to only `1919-1940`; `winter` must be explicit opt-in via `KENIGSBERG_STORIES_PERIODS` until its Kaggle mount is verified; missing video/music dataset errors must include mounted `/kaggle/input` directory names.
+  - Scope: Kenigsberg period selection in `scripts/render_kenigsberg_story.py`, server payload construction in `handlers/kenigsberg_stories_cmd.py`, and Kaggle dataset mounts for `zigomaro/koenigsberg-stories`.
+  - Must not regress: the server must not preselect period/dataset or add env switches for dataset choice; the Kaggle renderer must randomly select from actually mounted video datasets, including nested layouts such as `/kaggle/input/datasets/...`; missing video/music dataset errors must include mounted `/kaggle/input` directory names.
 - `INC-2026-05-12-kenigsberg-notebook-escaped-newlines.md`
   - Scope: `kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`, `/kenigsberg` manual Kaggle launch, and notebook packaging for `zigomaro/koenigsberg-stories`.
   - Must not regress: Kenigsberg notebook code-cell source entries must contain real line breaks, not literal `\\n`; every code cell must compile locally before deploy; a failed first-cell Papermill `SyntaxError` is a release blocker for the manual MVP path.

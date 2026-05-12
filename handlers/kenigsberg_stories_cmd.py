@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
+import secrets
 import shutil
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from random import Random
 
 from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
@@ -41,6 +42,7 @@ from video_announce.poller import (
 )
 
 kenigsberg_stories_router = Router(name="kenigsberg_stories")
+logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KAGGLE_READY_WAIT_SECONDS = max(
     30,
@@ -50,10 +52,6 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
-PERIOD_DATASETS = {
-    "1919-1940": "zigomaro/koenigsberg19191940",
-    "winter": "zigomaro/koenigsberg-winter",
-}
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -88,14 +86,119 @@ def _extract_ban_args(args: str) -> tuple[int | None, str]:
     return issue_number, tail
 
 
-def _enabled_periods() -> list[str]:
-    raw = os.getenv("KENIGSBERG_STORIES_PERIODS", "1919-1940")
-    periods = [
-        item.strip()
-        for item in raw.split(",")
-        if item.strip() in PERIOD_DATASETS
+def _extract_json_object(text: str) -> dict | None:
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", cleaned).replace("```", "")
+    cleaned = cleaned.strip()
+    for candidate in (cleaned, cleaned[cleaned.find("{") : cleaned.rfind("}") + 1]):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _fallback_story_text(thought_text: str) -> dict:
+    text = " ".join(str(thought_text or "").split())
+    sentences = [
+        item.strip(" .")
+        for item in re.split(r"(?<=[.!?])\s+", text)
+        if item.strip(" .")
     ]
-    return periods or ["1919-1940"]
+    if not sentences:
+        sentences = ["Кёнигсберг помнит больше, чем кажется"]
+    lines: list[str] = []
+    for sentence in sentences:
+        words = sentence.split()
+        if len(words) <= 7:
+            lines.append(sentence)
+        else:
+            for i in range(0, len(words), 5):
+                piece = " ".join(words[i : i + 5]).strip(" .")
+                if piece:
+                    lines.append(piece)
+    return {
+        "hook": sentences[0][:80],
+        "scene_lines": lines[:6],
+        "caption": "",
+        "source": "fallback",
+    }
+
+
+def _validate_story_text_payload(data: dict | None, thought_text: str) -> dict:
+    fallback = _fallback_story_text(thought_text)
+    if not isinstance(data, dict):
+        return fallback
+    hook = " ".join(str(data.get("hook") or "").split())[:96]
+    raw_lines = data.get("scene_lines")
+    lines: list[str] = []
+    if isinstance(raw_lines, list):
+        for item in raw_lines:
+            line = " ".join(str(item or "").split())
+            if line:
+                lines.append(line[:120])
+    if not lines:
+        lines = list(fallback["scene_lines"])
+    return {
+        "hook": hook or fallback["hook"],
+        "scene_lines": lines[:6],
+        "caption": " ".join(str(data.get("caption") or "").split())[:240],
+        "source": "llm" if isinstance(data, dict) else "fallback",
+    }
+
+
+async def _rewrite_thought_for_story(thought_text: str) -> dict:
+    prompt = (
+        "Ты редактор короткой исторической сторис «Мост в Кёнигсберг».\n"
+        "Сделай отдельную смысловую нарезку текста для 15-20 секунд видео.\n"
+        "Опирайся ТОЛЬКО на исходную мысль, не добавляй фактов, дат, имён или выводов.\n"
+        "Нужно: сильный лаконичный hook и 4-6 коротких фраз для экранных stripe-надписей.\n"
+        "Фразы должны читаться глазами спокойно, без обрывов словосочетаний.\n"
+        "Каждая фраза до 70 символов, лучше 35-55. Стиль: умно, сдержанно, без кликбейта.\n"
+        "Ответ строго JSON без markdown: {\"hook\":\"...\",\"scene_lines\":[\"...\"],\"caption\":\"...\"}\n\n"
+        f"Исходная мысль: {thought_text}\n"
+    )
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+
+        supabase = None
+        incident_notifier = None
+        try:
+            supabase = require_main_attr("get_supabase_client")()
+        except Exception:
+            supabase = None
+        try:
+            incident_notifier = require_main_attr("notify_llm_incident")
+        except Exception:
+            incident_notifier = None
+        client = GoogleAIClient(
+            supabase_client=supabase,
+            secrets_provider=SecretsProvider(),
+            consumer="kenigsberg_stories",
+            incident_notifier=incident_notifier,
+        )
+        raw, _usage = await client.generate_content_async(
+            model="models/gemma-4-31b-it",
+            prompt=prompt,
+            generation_config={"temperature": 0.35},
+            max_output_tokens=900,
+        )
+        result = _validate_story_text_payload(_extract_json_object(raw), thought_text)
+        logger.info(
+            "kenigsberg: story text rewrite source=%s hook=%s lines=%s",
+            result.get("source"),
+            result.get("hook"),
+            result.get("scene_lines"),
+        )
+        return result
+    except Exception as exc:
+        logger.warning("kenigsberg: story text rewrite fallback err=%s", exc)
+        return _fallback_story_text(thought_text)
 
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
@@ -165,6 +268,14 @@ async def _resolve_channel_id(db, username: str) -> int | None:
 def _copy_required_assets(tmp_path: Path) -> None:
     files = [
         (PROJECT_ROOT / "scripts" / "render_kenigsberg_story.py", "scripts/render_kenigsberg_story.py"),
+        (
+            PROJECT_ROOT / "docs" / "features" / "kenigsberg-stories" / "thoughts.md",
+            "docs/features/kenigsberg-stories/thoughts.md",
+        ),
+        (
+            PROJECT_ROOT / "kaggle" / "CherryFlash" / "video_announce" / "assets" / "BebasNeue-Bold.ttf",
+            "assets/BebasNeue-Bold.ttf",
+        ),
     ]
     for name in ("Cygre-Regular.ttf", "Cygre-Medium.ttf", "Cygre-SemiBold.ttf", "Cygre-Bold.ttf"):
         files.append(
@@ -246,19 +357,20 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
 
     issue_number = await reserve_issue_number(db)
     thought = await choose_next_thought(db)
-    seed = int(time.time()) + issue_number
-    rng = Random(seed)
-    period_key = rng.choice(_enabled_periods())
-    dataset = PERIOD_DATASETS[period_key]
+    seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
     state = await load_state(db)
+    thought_text = str(thought.get("text") or "")
+    story_text = await _rewrite_thought_for_story(thought_text)
     payload = {
         "issue_number": issue_number,
         "seed": seed,
         "profile_key": KENIGSBERG_PROFILE_KEY,
-        "period_key": period_key,
-        "dataset": dataset,
         "thought_id": thought.get("id") or "",
-        "thought_text": thought.get("text") or "",
+        "thought_text": thought_text,
+        "hook": story_text.get("hook") or "",
+        "scene_lines": story_text.get("scene_lines") or [],
+        "caption": story_text.get("caption") or "",
+        "text_source": story_text.get("source") or "",
         "crop_bottom_px": int(os.getenv("KENIGSBERG_STORIES_CROP_BOTTOM_PX", "96")),
         "source_bans": state.get("source_bans") or [],
         "target": "https://t.me/keniggpt",
@@ -291,7 +403,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         remember_status_message(obj.id, status_chat_id, status_message_id)
 
     await message.answer(
-        f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period={period_key}, "
+        f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period=auto, "
         f"thought={thought.get('id') or '-'} / {thoughts_count}."
     )
     client = KaggleClient()

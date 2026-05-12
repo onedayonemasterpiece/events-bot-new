@@ -1,6 +1,6 @@
 # INC-2026-05-12-kenigsberg-winter-dataset-not-mounted
 
-Status: monitoring
+Status: open
 Severity: sev3
 Service: Kenigsberg Stories manual Kaggle MVP
 Opened: 2026-05-12
@@ -34,7 +34,7 @@ The second production `/kenigsberg` smoke progressed past the notebook syntax fa
 
 1. MVP period selection treated `winter` as equally eligible before any successful Kaggle mount smoke for that dataset.
 2. Kaggle did not expose a `koenigsberg-winter` input directory to the runtime for session `#254`.
-3. The renderer failed closed, which is correct for production isolation, but the selector should not have chosen an unverified period for the first MVP smoke.
+3. The renderer failed closed, which is correct for production isolation, but the server should not have selected any period at all; the Kaggle runtime should choose randomly from mounted inputs.
 
 ## Contributing Factors
 
@@ -58,8 +58,8 @@ The second production `/kenigsberg` smoke progressed past the notebook syntax fa
 
 ### Mandatory checks before closure or deploy
 
-- Period selection defaults to only `1919-1940`.
-- `winter` can only be selected by explicit `KENIGSBERG_STORIES_PERIODS=winter,...`.
+- Server payload must not contain a preselected period/dataset.
+- Kaggle runtime chooses randomly from actually mounted video datasets.
 - Renderer errors include `available_inputs=[...]` when an expected dataset is missing.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.
@@ -68,19 +68,19 @@ The second production `/kenigsberg` smoke progressed past the notebook syntax fa
 
 - Deployed SHA reachable from `origin/main`.
 - Fly release/version evidence.
-- Post-deploy env evidence for `KENIGSBERG_STORIES_PERIODS=1919-1940`.
+- Post-deploy evidence that `KENIGSBERG_STORIES_PERIODS` is absent.
 - Fresh `/kenigsberg` smoke evidence.
 
 ## Immediate Mitigation
 
-- Restrict default production period selection to `1919-1940`.
-- Keep `winter` as an explicit opt-in via `KENIGSBERG_STORIES_PERIODS` after its Kaggle mount is verified.
+- Remove server-side period selection and the `KENIGSBERG_STORIES_PERIODS` env switch.
+- Move random period selection into the Kaggle renderer based on actually mounted video datasets.
 - Add mounted-input diagnostics to renderer dataset-missing errors.
 
 ## Corrective Actions
 
-- Add `_enabled_periods()` with safe default.
-- Add tests for default period selection and explicit winter opt-in.
+- Add recursive discovery for Kaggle layouts such as `/kaggle/input/datasets/...`.
+- Add tests for nested Kaggle dataset discovery and random selection across mounted video datasets.
 
 ## Follow-up Actions
 
@@ -101,6 +101,8 @@ The second production `/kenigsberg` smoke progressed past the notebook syntax fa
   - Fly machine `48e42d5b714228` is `started`, release `v1065`, service check passing.
   - Production env check: `KENIGSBERG_STORIES_PERIODS=1919-1940`, `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`, `KENIGSBERG_STORIES_TEST_CHAT_ID=-1002210431821`.
   - Kenigsberg MVP state reset after failed smoke: `next_issue=1`, `used_thought_ids=[]`, `issues={}`.
+
+Superseded by follow-up fix: `KENIGSBERG_STORIES_PERIODS` must be removed entirely; the renderer chooses from mounted datasets inside Kaggle.
 
 ## Prevention
 

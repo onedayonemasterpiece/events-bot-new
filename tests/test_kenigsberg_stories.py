@@ -8,6 +8,7 @@ from kenigsberg_stories.state import (
     parse_second_ranges,
 )
 from scripts import render_kenigsberg_story as renderer
+from PIL import Image, ImageDraw
 
 
 def test_parse_second_ranges_accepts_single_seconds_and_ranges() -> None:
@@ -111,13 +112,102 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     assert segments[0]["source_start"] >= 9.0
 
 
-def test_enabled_periods_default_to_stable_1919_dataset(monkeypatch) -> None:
-    monkeypatch.delenv("KENIGSBERG_STORIES_PERIODS", raising=False)
+def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:
+    dataset_dir = tmp_path / "datasets" / "zigomaro" / "koenigsberg19191940"
+    dataset_dir.mkdir(parents=True)
+    video = dataset_dir / "devau.mp4"
+    video.write_bytes(b"stub")
 
-    assert kenigsberg_stories_cmd._enabled_periods() == ["1919-1940"]
+    selected, period_key, dataset_slug = renderer.choose_video_dataset(
+        tmp_path,
+        renderer.random.Random(1),
+    )
+
+    assert selected == dataset_dir
+    assert period_key == "1919-1940"
+    assert dataset_slug == "zigomaro/koenigsberg19191940"
 
 
-def test_enabled_periods_can_opt_in_winter(monkeypatch) -> None:
-    monkeypatch.setenv("KENIGSBERG_STORIES_PERIODS", "winter, 1919-1940, unknown")
+def test_renderer_randomly_selects_from_mounted_video_datasets(tmp_path) -> None:
+    first = tmp_path / "datasets" / "koenigsberg19191940"
+    second = tmp_path / "datasets" / "koenigsberg-winter"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    (first / "a.mp4").write_bytes(b"stub")
+    (second / "b.mp4").write_bytes(b"stub")
 
-    assert kenigsberg_stories_cmd._enabled_periods() == ["winter", "1919-1940"]
+    seen = {
+        renderer.choose_video_dataset(tmp_path, renderer.random.Random(seed))[1]
+        for seed in range(1, 12)
+    }
+
+    assert seen == {"1919-1940", "winter"}
+
+
+def test_renderer_splits_thought_without_repeating_last_line() -> None:
+    lines = renderer.split_scene_lines(
+        "Альбертина была устроена по классической университетской модели. "
+        "В ней действовали богословский, юридический, медицинский и философский факультеты.",
+        7,
+    )
+
+    assert len(lines) >= 3
+    assert len(lines) == len(set(line.casefold() for line in lines))
+    assert any("Альбертина" in line for line in lines)
+    assert any("философский" in line for line in lines)
+    draw = ImageDraw.Draw(Image.new("RGBA", (renderer.W, renderer.H)))
+    fnt = renderer.font(44)
+    assert all(
+        len(renderer.wrap_text(line, draw, fnt, renderer.W - 120)) <= 4
+        for line in lines
+    )
+
+
+def test_renderer_distributes_short_story_lines_across_all_segments() -> None:
+    assigned = [
+        renderer.scene_text_for_segment(["first", "second"], idx, 6)
+        for idx in range(6)
+    ]
+
+    assert assigned == ["first", "first", "first", "second", "second", "second"]
+
+
+def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
+    lines = renderer.payload_scene_lines(
+        {"scene_lines": ["Первый смысловой экран", "Второй смысловой экран"]},
+        "fallback thought",
+        6,
+    )
+    cues = renderer.build_text_cues(lines, 18.0)
+
+    assert lines == ["Первый смысловой экран", "Второй смысловой экран"]
+    assert len(cues) == 2
+    assert cues[0]["start"] < cues[0]["end"] < cues[1]["start"] < cues[1]["end"]
+
+
+def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
+    payload = kenigsberg_stories_cmd._validate_story_text_payload(
+        {
+            "hook": "Университет как каркас города",
+            "scene_lines": [
+                "Альбертина держалась на классической модели",
+                "Четыре факультета собирали знание в систему",
+            ],
+        },
+        "Альбертина была устроена по классической университетской модели.",
+    )
+
+    assert payload["source"] == "llm"
+    assert payload["hook"] == "Университет как каркас города"
+    assert payload["scene_lines"][1].startswith("Четыре факультета")
+
+
+def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:
+    frame = renderer.draw_cherryflash_outro_screen(
+        1.4,
+        ["МОСТ", "В КЁНИГСБЕРГ"],
+        sides=["left", "right"],
+    )
+
+    assert frame.getpixel((0, 0)) == (*renderer.OUTRO_BG, 255)
+    assert frame.size == (renderer.W, renderer.H)
