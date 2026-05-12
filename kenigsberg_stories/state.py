@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -221,12 +222,62 @@ async def choose_next_thought(db: Any, *, thoughts_path: Path = THOUGHTS_PATH) -
     if not available:
         used = set()
         available = list(thoughts)
-    # Stable pseudo-random enough for MVP and reproducible from state size.
-    index = (len(used) * 7 + int(state.get("next_issue") or 1)) % len(available)
+    index = secrets.randbelow(len(available))
     chosen = available[index]
     state["used_thought_ids"] = [*sorted(used, key=lambda x: int(x) if x.isdigit() else x), chosen["id"]]
     await save_state(db, state)
     return chosen
+
+
+def recent_source_exclusions(
+    state: dict[str, Any],
+    *,
+    max_age_days: int = 28,
+    max_segments: int = 250,
+) -> list[dict[str, Any]]:
+    issues = state.get("issues") if isinstance(state.get("issues"), dict) else {}
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(max_age_days)))
+    items: list[tuple[datetime, dict[str, Any]]] = []
+    for issue in issues.values():
+        if not isinstance(issue, dict):
+            continue
+        raw_registered = str(issue.get("registered_at") or "").strip()
+        try:
+            registered_at = datetime.fromisoformat(raw_registered)
+        except Exception:
+            registered_at = datetime.now(timezone.utc)
+        if registered_at.tzinfo is None:
+            registered_at = registered_at.replace(tzinfo=timezone.utc)
+        if registered_at < cutoff:
+            continue
+        issue_number = int(issue.get("issue_number") or 0)
+        for segment in issue.get("segments") or []:
+            if not isinstance(segment, dict):
+                continue
+            dataset = str(segment.get("dataset") or issue.get("dataset") or "").strip()
+            source_file = str(segment.get("source_file") or "").strip()
+            if not dataset or not source_file:
+                continue
+            source_start = float(segment.get("source_start") or 0.0)
+            source_end = float(segment.get("source_end") or 0.0)
+            if source_end <= source_start:
+                continue
+            items.append(
+                (
+                    registered_at,
+                    {
+                        "dataset": dataset,
+                        "source_file": source_file,
+                        "source_start": round(source_start, 3),
+                        "source_end": round(source_end, 3),
+                        "issue_number": issue_number,
+                        "created_at": registered_at.isoformat(),
+                        "reason": "recent_generation",
+                    },
+                )
+            )
+    items.sort(key=lambda item: item[0], reverse=True)
+    return [item for _registered_at, item in items[:max_segments]]
 
 
 async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:

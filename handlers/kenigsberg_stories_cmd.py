@@ -24,6 +24,7 @@ from kenigsberg_stories.state import (
     load_state,
     load_thoughts,
     parse_second_ranges,
+    recent_source_exclusions,
     reserve_issue_number,
     reset_bans,
 )
@@ -159,7 +160,9 @@ async def _rewrite_thought_for_story(thought_text: str) -> dict:
         "Опирайся ТОЛЬКО на исходную мысль, не добавляй фактов, дат, имён или выводов.\n"
         "Нужно: сильный лаконичный hook и 4-6 коротких фраз для экранных stripe-надписей.\n"
         "Фразы должны читаться глазами спокойно, без обрывов словосочетаний.\n"
-        "Каждая фраза до 70 символов, лучше 35-55. Стиль: умно, сдержанно, без кликбейта.\n"
+        "Не удаляй ключевые существительные: если перечисляешь факультеты, слово «факультет» или «факультеты» должно остаться.\n"
+        "Сохраняй естественные знаки препинания, если они помогают чтению. Не делай телеграфный список из одних прилагательных.\n"
+        "Каждая фраза до 75 символов, лучше 35-60. Стиль: умно, сдержанно, без кликбейта.\n"
         "Ответ строго JSON без markdown: {\"hook\":\"...\",\"scene_lines\":[\"...\"],\"caption\":\"...\"}\n\n"
         f"Исходная мысль: {thought_text}\n"
     )
@@ -372,7 +375,10 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         "caption": story_text.get("caption") or "",
         "text_source": story_text.get("source") or "",
         "crop_bottom_px": int(os.getenv("KENIGSBERG_STORIES_CROP_BOTTOM_PX", "96")),
-        "source_bans": state.get("source_bans") or [],
+        "source_bans": [
+            *(state.get("source_bans") or []),
+            *recent_source_exclusions(state),
+        ],
         "target": "https://t.me/keniggpt",
         "strategy": "heuristic_v1",
     }
@@ -490,7 +496,8 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
             f"launch_enabled={_launch_enabled()}\n"
             f"next_issue=#{state.get('next_issue', 1)}\n"
             f"thoughts={len(thoughts)} used={len(state.get('used_thought_ids') or [])}\n"
-            f"issues={len(state.get('issues') or {})} bans={len(state.get('source_bans') or [])}"
+            f"issues={len(state.get('issues') or {})} bans={len(state.get('source_bans') or [])} "
+            f"recent_exclusions={len(recent_source_exclusions(state))}"
         )
         return
     if lowered in {"bans", "bans list", "покажи баны", "список банов"}:

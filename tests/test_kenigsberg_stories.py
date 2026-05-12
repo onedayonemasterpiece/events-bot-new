@@ -6,6 +6,7 @@ from kenigsberg_stories.state import (
     format_bans_report,
     map_generated_range_to_source,
     parse_second_ranges,
+    recent_source_exclusions,
 )
 from scripts import render_kenigsberg_story as renderer
 from PIL import Image, ImageDraw
@@ -112,6 +113,41 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     assert segments[0]["source_start"] >= 9.0
 
 
+def test_recent_source_exclusions_use_previous_issue_segments() -> None:
+    exclusions = recent_source_exclusions(
+        {
+            "issues": {
+                "15": {
+                    "issue_number": 15,
+                    "registered_at": "2026-05-12T10:00:00+00:00",
+                    "dataset": "zigomaro/koenigsberg19191940",
+                    "segments": [
+                        {
+                            "dataset": "zigomaro/koenigsberg19191940",
+                            "source_file": "devau.mp4",
+                            "source_start": 12.0,
+                            "source_end": 14.5,
+                        }
+                    ],
+                }
+            }
+        },
+        max_age_days=3650,
+    )
+
+    assert exclusions == [
+        {
+            "dataset": "zigomaro/koenigsberg19191940",
+            "source_file": "devau.mp4",
+            "source_start": 12.0,
+            "source_end": 14.5,
+            "issue_number": 15,
+            "created_at": "2026-05-12T10:00:00+00:00",
+            "reason": "recent_generation",
+        }
+    ]
+
+
 def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:
     dataset_dir = tmp_path / "datasets" / "zigomaro" / "koenigsberg19191940"
     dataset_dir.mkdir(parents=True)
@@ -142,6 +178,13 @@ def test_renderer_randomly_selects_from_mounted_video_datasets(tmp_path) -> None
     }
 
     assert seen == {"1919-1940", "winter"}
+
+
+def test_renderer_beat_slots_vary_by_seed() -> None:
+    a = renderer.beat_slots(18.0, renderer.random.Random(1))
+    b = renderer.beat_slots(18.0, renderer.random.Random(2))
+
+    assert a != b
 
 
 def test_renderer_splits_thought_without_repeating_last_line() -> None:
@@ -183,6 +226,7 @@ def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
     assert lines == ["Первый смысловой экран", "Второй смысловой экран"]
     assert len(cues) == 2
     assert cues[0]["start"] < cues[0]["end"] < cues[1]["start"] < cues[1]["end"]
+    assert cues[-1]["end"] > 14.0
 
 
 def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
@@ -211,3 +255,13 @@ def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:
 
     assert frame.getpixel((0, 0)) == (*renderer.OUTRO_BG, 255)
     assert frame.size == (renderer.W, renderer.H)
+
+
+def test_renderer_blends_transition_frames() -> None:
+    previous = Image.new("RGBA", (2, 2), (255, 0, 0, 255))
+    current = Image.new("RGBA", (2, 2), (0, 0, 255, 255))
+
+    blended = renderer.blend_transition_frame(current, [previous, previous], 0)
+
+    assert blended.getpixel((0, 0))[0] > 0
+    assert blended.getpixel((0, 0))[2] > 0

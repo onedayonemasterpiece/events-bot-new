@@ -211,6 +211,7 @@ Current MVP implementation:
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
 - before Kaggle launch the bot runs a separate Gemma 4 text rewrite step that turns the selected `thoughts.md` entry into `hook` + `scene_lines`; if the LLM step fails, the renderer falls back to deterministic splitting and records the source in payload/manifest;
+- recent source segments from registered issue manifests are passed into the next run as temporary exclusions, so the same source video may still be reused but not the same recently published source time range;
 - the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
 - Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.

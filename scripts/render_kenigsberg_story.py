@@ -24,6 +24,7 @@ H = 1280
 FPS = 30
 MAIN_DURATION = 18.0
 OUTRO_SCREEN_DURATION = 3.5
+TRANSITION_FRAMES = 2
 WATERMARK_TEXT = "Мост в Кёнигсберг"
 OUTRO_BG = (0, 0, 0)
 OUTRO_STRIP = (241, 228, 75)
@@ -390,6 +391,18 @@ def draw_watermark(image: Image.Image) -> None:
     draw.text((x, y), WATERMARK_TEXT, font=fnt, fill=(255, 255, 255, 188))
 
 
+def blend_transition_frame(
+    image: Image.Image,
+    transition_tail: list[Image.Image],
+    local_frame: int,
+) -> Image.Image:
+    if local_frame >= TRANSITION_FRAMES or not transition_tail:
+        return image
+    prev_idx = min(local_frame, len(transition_tail) - 1)
+    alpha = ease_in_out_cubic((local_frame + 1) / (TRANSITION_FRAMES + 1))
+    return Image.blend(transition_tail[prev_idx], image, alpha)
+
+
 def crop_veo_bottom(frame: Any, crop_px: int) -> Any:
     if crop_px <= 0:
         return frame
@@ -485,7 +498,7 @@ def build_text_cues(lines: list[str], total_duration: float) -> list[dict[str, A
         total = sum(durations) + gap * max(0, len(durations) - 1)
     extra = max(0.0, available - total)
     if durations:
-        add = min(0.45, extra / len(durations))
+        add = extra / len(durations)
         durations = [dur + add for dur in durations]
     cues: list[dict[str, Any]] = []
     cursor = start
@@ -531,15 +544,20 @@ def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, floa
 
 
 def beat_slots(duration: float, rng: random.Random) -> list[tuple[float, float]]:
-    # MVP fallback grid: musical enough for first smoke, replaced by librosa in v1.1.
-    base = rng.choice([1.75, 2.0, 2.25])
+    # MVP fallback grid: varied enough for smoke; replaced by librosa in v1.1.
+    base = rng.uniform(1.62, 2.32)
     starts = [0.0]
     t = base
     while t < duration - 0.5:
         starts.append(t)
-        t += base * rng.choice([1, 2])
+        span = rng.choices([1, 1.5, 2, 2.5], weights=[0.34, 0.22, 0.34, 0.10], k=1)[0]
+        t += base * span + rng.uniform(-0.08, 0.08)
     starts.append(duration)
-    return [(starts[i], starts[i + 1]) for i in range(len(starts) - 1) if starts[i + 1] - starts[i] >= 0.45]
+    return [
+        (round(starts[i], 3), round(starts[i + 1], 3))
+        for i in range(len(starts) - 1)
+        if starts[i + 1] - starts[i] >= 0.45
+    ]
 
 
 def normalize_source_bans(raw: Any, *, dataset_slug: str = "") -> dict[str, list[dict[str, Any]]]:
@@ -665,6 +683,7 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     frame_no = 1
+    transition_tail: list[Image.Image] = []
     for seg_idx, segment in enumerate(segments):
         cap = cv2.VideoCapture(segment["source_path"])
         cap.set(cv2.CAP_PROP_POS_MSEC, float(segment["source_start"]) * 1000.0)
@@ -673,6 +692,7 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
         active_midpoint = text_cue_at(text_cues, midpoint)
         segment["text"] = active_midpoint[0] if active_midpoint else ""
         last_frame = None
+        segment_tail: list[Image.Image] = []
         for local_frame in range(frame_count):
             ok, frame = cap.read()
             if ok:
@@ -685,16 +705,19 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
             image = cover_resize(frame)
             timeline_t = float(segment["timeline_start"]) + (local_frame / FPS)
             active_text = text_cue_at(text_cues, timeline_t)
-            if local_frame < 3 and frame_no > 1:
-                overlay = Image.new("RGBA", (W, H), (0, 0, 0, int(120 * (1 - local_frame / 3))))
-                image.alpha_composite(overlay)
             if active_text:
                 text, cue_t, cue_duration = active_text
                 draw_stripes(image, text, t=cue_t, scene_duration=cue_duration)
             draw_watermark(image)
+            if seg_idx > 0:
+                image = blend_transition_frame(image, transition_tail, local_frame)
+            segment_tail.append(image.copy())
+            if len(segment_tail) > TRANSITION_FRAMES:
+                segment_tail.pop(0)
             image.convert("RGB").save(out_dir / f"frame_{frame_no:05d}.jpg", quality=92)
             frame_no += 1
         cap.release()
+        transition_tail = segment_tail
     outro_screens = [
         ["МОСТ", "В КЁНИГСБЕРГ"],
         ["ЗНАЙ ПРОШЛОЕ", "СТРОЙ БУДУЩЕЕ"],
@@ -806,6 +829,7 @@ def main() -> None:
     rng = random.Random(seed)
     video_dir, period_key, dataset_slug = choose_video_dataset(input_root, rng)
     log(f"Selected video dataset: period={period_key} path={video_dir}")
+    mounted_video_files = iter_files(video_dir, VIDEO_EXTS)
     music_dir = find_dataset_dir(input_root, ["koenigsberg-music", "music"])
     if music_dir is None:
         raise RuntimeError(
@@ -847,7 +871,8 @@ def main() -> None:
             "period_key": period_key,
             "dataset": dataset_slug,
             "path": str(video_dir),
-            "video_count": len(iter_files(video_dir, VIDEO_EXTS)),
+            "video_count": len(mounted_video_files),
+            "video_files_sample": [path.name for path in mounted_video_files[:30]],
         },
         "selected_music": {
             "file": music.name,
