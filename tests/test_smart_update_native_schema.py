@@ -245,6 +245,141 @@ async def test_g4_split_create_rich_facts_extracts_sectioned_payload(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_title(monkeypatch):
+    """Regression for INC kraftmarket39/219 (event 4759): the source post had
+    explicit "О спикере: Андрей Анисимов — главный архитектор Калининграда",
+    but rich_facts_extract collapsed it to an impersonal "профессиональная
+    позиция спикера..." sentence, deleting both name and job title. The
+    people_org_facts rule must explicitly forbid that collapse.
+    """
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Лекция о градостроительных решениях."],'
+                '"program_or_examples":[],'
+                '"context_methodology_facts":[],'
+                '"people_org_facts":[],'
+                '"logistics_facts":[],'
+                '"uncertain_or_drop":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kraftmarket39/219",
+        source_text=(
+            "9.07 Лекция главного архитектора Калининграда:\n"
+            "«Влияние планировочных решений на качество жизни на примере старого и нового Калининграда»\n\n"
+            "О спикере\n"
+            "Андрей Анисимов — главный архитектор Калининграда, работающий с вопросами "
+            "архитектурного регулирования, городской среды и визуального облика города."
+        ),
+        title="Влияние планировочных решений на качество жизни на примере старого и нового Калининграда",
+        date="2026-07-09",
+        time="18:30",
+        location_name="Историко-художественный музей",
+        location_address="Клиническая 21",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    su.reset_smart_update_llm_trace()
+    await su._llm_extract_candidate_facts(candidate)
+    prompt = client.calls[0]["prompt"]
+
+    # Named-speaker rule must be present and must explicitly forbid the
+    # impersonal "профессиональная позиция спикера" collapse that broke 4759.
+    assert "ИМЯ" in prompt and "ДОЛЖНОСТЬ" in prompt
+    assert "главный архитектор" in prompt
+    assert "О спикере" in prompt
+    assert "профессиональная позиция спикера" in prompt
+    assert "одном именованном факте" in prompt.casefold() or "одном именованном" in prompt
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_prompt_requires_bullet_preservation(monkeypatch):
+    """Regression for INC-2026-05-11-zoo-lecture (event 4798): the source post
+    had two distinct bullet blocks (`О чём поговорим` with 3 items and
+    `Правда ли, что` with 2 items), but `rich_facts_extract` collapsed each
+    block to one bullet, losing 3/5 facts and producing a meaningless short
+    description. The program_or_examples rule must explicitly forbid that
+    collapse.
+    """
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Лекция о зоопарке."],'
+                '"program_or_examples":[],'
+                '"context_methodology_facts":[],'
+                '"people_org_facts":[],'
+                '"logistics_facts":[],'
+                '"uncertain_or_drop":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kraftmarket39/example",
+        source_text=(
+            "26.06 Зоопарку — быть!\n\n"
+            "О чём поговорим\n"
+            " Когда и почему возник зоопарк.\n"
+            " Животные – первые обитатели Калининградского зоопарка.\n"
+            " Калининградский зоопарк – место просвещения и культуры.\n\n"
+            "Правда ли, что\n"
+            " Выживший при штурме Кёнигсберга бегемот Ганс.\n"
+            " Животные ручные и их можно гладить и кормить.\n"
+        ),
+        title="Зоопарку — быть!",
+        date="2026-06-26",
+        time="18:30",
+        location_name="Историко-художественный музей",
+        city="Калининград",
+        event_type="lecture",
+    )
+
+    su.reset_smart_update_llm_trace()
+    await su._llm_extract_candidate_facts(candidate)
+    prompt = client.calls[0]["prompt"]
+
+    assert "О чём поговорим" in prompt
+    assert "Правда ли, что" in prompt
+    assert "КАЖДЫЙ bullet" in prompt
+    assert "ОТДЕЛЬНЫМ фактом" in prompt
+    assert "не сворачивай" in prompt.casefold() or "не сворачивай" in prompt
+
+
+def test_g4_rich_facts_flatten_preserves_named_speaker_fact():
+    """Named-speaker fact returned in people_org_facts must survive the flat
+    facts pipeline without being dropped or normalised away. Companion to the
+    prompt-level rule above: if Gemma produces the right fact, it must reach
+    facts_text_clean intact.
+    """
+    payload = {
+        "public_core_facts": ["Лекция о градостроительных решениях."],
+        "program_or_examples": [],
+        "context_methodology_facts": [],
+        "people_org_facts": ["Лектор: Андрей Анисимов, главный архитектор Калининграда."],
+        "logistics_facts": [],
+        "uncertain_or_drop": [],
+    }
+
+    flat = su._flatten_g4_rich_facts_payload(payload)
+
+    assert any(
+        "Андрей Анисимов" in item and "главный архитектор" in item for item in flat
+    ), flat
+
+
+@pytest.mark.asyncio
 async def test_g4_split_create_rich_facts_keeps_prompt_schema_fallback(monkeypatch):
     client = _FakeGemmaClient(
         [

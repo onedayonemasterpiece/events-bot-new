@@ -469,8 +469,46 @@ _GIVEAWAY_RE = re.compile(r"\b(розыгрыш|разыгрыва\w*|розыг
 _TICKETS_RE = re.compile(r"\b(билет\w*|пригласительн\w*|абонемент\w*)\b", re.IGNORECASE)
 
 
+def _custom_emoji_fallback_is_meaningful(span_text: str) -> bool:
+    """Return True if the Unicode fallback inside a custom-emoji range carries
+    semantic meaning for downstream LLMs (a real pictograph emoji), False if
+    it is a generic placeholder (`?`, PUA, control char) that the channel
+    author chose just to occupy the byte range.
+
+    We treat Unicode Symbols & Pictographs (U+1F300..U+1FAFF), Misc Symbols
+    (U+2600..U+27BF), Dingbats (U+2700..U+27BF), Enclosed Alphanumerics
+    (U+1F100..U+1F1FF), and the typical free/info icons (🆓 U+1F193, 🎟 U+1F39F,
+    📅 U+1F4C5, etc.) as meaningful. Everything else, including PUA
+    (U+E000..U+F8FF) and ASCII placeholders, is dropped.
+    """
+    if not span_text:
+        return False
+    for ch in span_text:
+        cp = ord(ch)
+        if 0x1F300 <= cp <= 0x1FAFF:
+            return True
+        if 0x1F100 <= cp <= 0x1F1FF:
+            return True
+        if 0x2600 <= cp <= 0x27BF:
+            return True
+        if 0x2300 <= cp <= 0x23FF:
+            return True
+        if 0x25A0 <= cp <= 0x25FF:
+            return True
+    return False
+
+
 def strip_custom_emoji_entities(text: str, entities) -> str:
-    # Remove Telegram custom emoji ranges using UTF-16 offsets (Telethon API).
+    """Remove Telegram custom-emoji ranges using UTF-16 offsets (Telethon API),
+    but preserve the Unicode fallback when it is a real pictograph emoji.
+
+    Why preserve the fallback: a channel author who picks `🆓` as the fallback
+    for a premium custom emoji is using it as a semantic free-attendance
+    marker. Stripping the range to spaces deletes that signal and downstream
+    LLM cannot see that the event is free (see INC-2026-05-11-zoo-lecture-…).
+    For generic / PUA placeholders the strip behaviour stays the same so
+    weird non-emoji glyphs do not pollute the LLM input.
+    """
     if not text or not entities:
         return text or ''
     safe = add_surrogate(text)
@@ -498,8 +536,14 @@ def strip_custom_emoji_entities(text: str, entities) -> str:
     for start, end in merged:
         if start > last:
             out.append(safe[last:start])
-        # Keep length stable for other entity offsets: replace removed range with spaces.
-        out.append(' ' * max(0, end - start))
+        span_text = safe[start:end]
+        # Preserve the Unicode fallback when it is a real pictograph emoji;
+        # otherwise replace the range with spaces to keep length stable for
+        # other entity offsets.
+        if _custom_emoji_fallback_is_meaningful(del_surrogate(span_text)):
+            out.append(span_text)
+        else:
+            out.append(' ' * max(0, end - start))
         last = max(last, end)
     out.append(safe[last:])
     return del_surrogate(''.join(out))

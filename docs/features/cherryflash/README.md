@@ -684,6 +684,7 @@ This section captures the latest intro-direction request as an explicit delta to
     - first upload to `@kenigevents`;
     - then after `600` seconds repost to `@lovekenig`;
     - then after another `600` seconds repost to `@loving_guide39`;
+    - then after another `600` seconds repost to `@catwithbag`;
     - then each configured encrypted Telegram Business target is posted through Bot API `postStory` after its own `600` second delay, without writing account usernames, user ids, or `business_connection_id` into code/docs/config artifacts.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
   - Business targets are mandatory for a configured CherryFlash fanout: they must be marked `blocking=true` and `required=true`, and their encrypted Bot API secrets must be co-located with the session `story_publish.json` inside the same `cherryflash-session-*` dataset so Kaggle cannot preflight against stale static story secrets.
@@ -746,7 +747,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
-- [ ] Story autopublish publishes the current ordered fanout `@kenigevents -> @lovekenig -> @loving_guide39 -> encrypted Telegram Business targets` through the shared helper path, preserving `600` second spacing between all targets.
+- [ ] Story autopublish publishes the current ordered fanout `@kenigevents -> @lovekenig -> @loving_guide39 -> @catwithbag -> encrypted Telegram Business targets` through the shared helper path, preserving `600` second spacing between all targets.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
 - [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 

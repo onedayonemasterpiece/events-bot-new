@@ -39,6 +39,79 @@ def test_tg_monitor_script_blocks_social_links_as_source_websites() -> None:
     assert "_is_disallowed_source_website_url" in source
 
 
+def test_strip_custom_emoji_preserves_meaningful_unicode_fallback() -> None:
+    """Regression for INC-2026-05-11-zoo-lecture (event 4798):
+
+    A channel post used 4 premium custom-emoji glyphs with `\U0001F193` as the
+    Unicode fallback to indicate free attendance. The previous
+    `strip_custom_emoji_entities` replaced the entire entity range with
+    spaces, deleting the free-attendance signal so `is_free=False` for the
+    downstream event. The new behaviour must keep the Unicode fallback when
+    it falls into a real pictograph Unicode block.
+    """
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    assert "_custom_emoji_fallback_is_meaningful" in source
+    # The new helper must check the actual pictograph Unicode blocks.
+    assert "0x1F300" in source and "0x1FAFF" in source
+    assert "0x1F100" in source and "0x1F1FF" in source
+    assert "0x2600" in source and "0x27BF" in source
+    # The strip function must consult the helper and only replace with spaces
+    # when the fallback is NOT meaningful.
+    assert "if _custom_emoji_fallback_is_meaningful" in source
+    # The space replacement must now sit under the `else:` branch of the
+    # meaningful-fallback check, not as an unconditional next statement.
+    branch = source[source.index("if _custom_emoji_fallback_is_meaningful"):]
+    branch = branch[: branch.index("last = max(last, end)")]
+    assert "out.append(span_text)" in branch
+    assert "else:" in branch
+    assert "out.append(' ' * max(0, end - start))" in branch
+
+
+def test_strip_custom_emoji_behaviour_via_exec() -> None:
+    """Lightweight functional check: extract the strip helper pair from the
+    Kaggle source and exec them in an isolated namespace with thin stubs for
+    Telethon's surrogate helpers and `MessageEntityCustomEmoji`. Verifies that
+    a meaningful Unicode fallback is preserved while a PUA fallback is still
+    stripped to a space.
+    """
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    # Pull out exactly the two function definitions.
+    start = source.index("def _custom_emoji_fallback_is_meaningful")
+    end = source.index("def is_ticket_giveaway")
+    block = source[start:end]
+
+    ns: dict = {}
+    # Thin stubs that match the behaviour we rely on (UTF-16 surrogate roundtrip).
+    def add_surrogate(s: str) -> str:
+        return s.encode("utf-16-le").decode("utf-16-le", errors="ignore")
+
+    def del_surrogate(s: str) -> str:
+        return s
+
+    class _Entity:
+        def __init__(self, offset: int, length: int) -> None:
+            self.offset = offset
+            self.length = length
+
+    ns["add_surrogate"] = add_surrogate
+    ns["del_surrogate"] = del_surrogate
+    ns["MessageEntityCustomEmoji"] = _Entity
+    exec(compile(block, "<strip>", "exec"), ns)
+
+    strip_fn = ns["strip_custom_emoji_entities"]
+
+    # Single 🆓 (free) at offset 0, length 2 in UTF-16 (one surrogate pair).
+    free_text = "\U0001F193, по регистрации"
+    ent_free = _Entity(0, 2)
+    assert strip_fn(free_text, [ent_free]) == free_text  # preserved
+
+    # PUA fallback at offset 0, length 1.
+    pua_text = " регистрация"
+    ent_pua = _Entity(0, 1)
+    out = strip_fn(pua_text, [ent_pua])
+    assert out == " " + pua_text[1:], out  # replaced with space
+
+
 def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
 

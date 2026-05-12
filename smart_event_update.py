@@ -738,6 +738,57 @@ def _append_missing_small_list(
 _HEADING_LINE_RE = re.compile(r"(?m)^#{1,6}\s+\S")
 
 
+_INLINE_HEADING_RE = re.compile(r"(?<!^)(?<!\n)\s*(?=#{1,6}\s)")
+_SINGLE_NL_BEFORE_HEADING_RE = re.compile(r"(?<!\n)\n(?=#{1,6}\s)")
+_HEADING_INLINE_BODY_RE = re.compile(r"(?m)^(#{1,6}\s+)([^\n]+)$")
+
+
+def _ensure_markdown_headings_break(text: str | None) -> str | None:
+    """Make sure every Markdown heading starts a fresh paragraph.
+
+    Lite-class LLMs (e.g. ``gemini-3.1-flash-lite`` running the
+    ``split_description_writer`` / ``fact_first_desc`` stages) sometimes
+    emit headings inline with the surrounding prose, e.g.
+
+        ``...привычного исполнителя. ### Концепция постановки В центре...``
+
+    The Telegraph render pipeline only treats ``###`` as a heading when it
+    starts a line and is preceded by a blank line — otherwise it leaks back
+    into the body and the public page shows one wall of text without any
+    section breaks (observed for event 4757, 2026-05-09). This helper:
+
+    1. Inserts ``\\n\\n`` before any inline ``###`` / ``##`` heading marker.
+    2. Promotes a single ``\\n`` before a heading to a blank line.
+    3. If a heading line carries an obviously merged body sentence (heading
+       text terminator + space + capital word), splits the body off. The
+       split is conservative — if no terminator is found we keep the line
+       intact rather than guess where the heading ends.
+    """
+    if not text:
+        return text
+    out = text
+    out = _INLINE_HEADING_RE.sub("\n\n", out)
+    out = _SINGLE_NL_BEFORE_HEADING_RE.sub("\n\n", out)
+
+    def _split_heading_body(match: re.Match[str]) -> str:
+        prefix = match.group(1)
+        body = match.group(2)
+        sm = re.search(r"^([^.!?:\n]{3,80}?[.!?:])\s+([А-ЯA-ZЁ].*)$", body)
+        if not sm:
+            return match.group(0)
+        heading_text = sm.group(1).rstrip(" .:!?").strip()
+        if not heading_text:
+            return match.group(0)
+        body_text = sm.group(2).strip()
+        if not body_text:
+            return match.group(0)
+        return f"{prefix}{heading_text}\n\n{body_text}"
+
+    out = _HEADING_INLINE_BODY_RE.sub(_split_heading_body, out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out
+
+
 def _ensure_minimal_description_headings(text: str | None) -> str | None:
     raw = (text or "").strip()
     if not raw:
@@ -6919,8 +6970,22 @@ async def _llm_extract_candidate_facts(
             "Секции:\n"
             "- public_core_facts: суть события, формат, цель, что будет происходить, что получает/делает участник.\n"
             "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
-            "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры.\n"
-            "- program_or_examples: ВСЕ списки, примеры, пункты программы, интересы, темы, произведения; длинные перечисления не сворачивай.\n"
+            "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры. "
+            "Если у спикера/лектора/ведущего/гостя/автора в источнике явно указаны ИМЯ и ДОЛЖНОСТЬ/РЕГАЛИИ "
+            "(главный архитектор, профессор, режиссёр-постановщик, кандидат наук, художественный руководитель, "
+            "член Союза и т.п.) — сохрани их в ОДНОМ именованном факте вида "
+            "`Лектор: Андрей Анисимов, главный архитектор Калининграда`. "
+            "НЕ сворачивай `<Имя>, <должность>` в обезличенное `профессиональная позиция спикера…` "
+            "или `спикер представит позицию…`: имя и должность — критическая для лекций/дискуссий информация. "
+            "Если в источнике есть выделенная секция `О спикере`/`Лектор:`/`Спикер:`/`Ведущий:`/`Автор:` — "
+            "верни именованный факт обязательно (опускай только если ни имени, ни должности в этой секции нет).\n"
+            "- program_or_examples: ВСЕ списки, примеры, пункты программы, интересы, темы, произведения; длинные перечисления не сворачивай. "
+            "Если в источнике есть выделенный bullet-блок под заголовком типа `О чём поговорим`/`Правда ли, что`/"
+            "`Темы`/`Вопросы`/`В программе`/`Что обсудим`/`План встречи` — КАЖДЫЙ bullet под таким заголовком "
+            "должен стать ОТДЕЛЬНЫМ фактом (с сохранением имён собственных, цифр, кавычек). Не сворачивай 3-5 "
+            "bullet'ов в один summary-факт. Если в источнике 3 bullet'а под `О чём поговорим` — верни 3 факта; "
+            "если 2 bullet'а под `Правда ли, что` — верни 2 факта. Это lecture/discussion structure, и потеря "
+            "bullet'ов делает description бессмысленным.\n"
             "- logistics_facts: дата/время/площадка/адрес/город/билеты/регистрация/цены/возраст/Пушкинская карта.\n"
             "- uncertain_or_drop: шум, CTA, промо, неуверенные или не относящиеся к конкретному событию строки.\n\n"
             "Правила полноты:\n"

@@ -8843,6 +8843,59 @@ def _event_parse_extract_json(text: str) -> Any | None:
     return None
 
 
+_EVENT_PARSE_BARE_TITLE_RE = re.compile(
+    r"^[\W_]*"
+    r"(?:концерт|спектакль|лекция|мастер[\s-]?класс|экскурсия|выставка|"
+    r"кинопоказ|воркшоп|ярмарка|встреча|фестиваль|семинар|лекторий)"
+    r"\s*[—\-–]\s*"
+    r".+?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _event_parse_title_looks_bare(title: str | None) -> bool:
+    """Detect titles shaped like the master-prompt-forbidden `<event_type> — <venue>`.
+
+    Matches `Концерт — Бар Бастион`, `Спектакль — Музыкальный театр`,
+    `Лекция — Музей янтаря`. Does NOT match a title that puts the programme
+    name in quotes (`Концерт «Скитальцы»` / `Спектакль «Жили они долго и
+    счастливо»` are valid because the proper name sits in quotes).
+    Reference: docs/llm/prompts.md line 58 forbids this fallback.
+    """
+    if not title:
+        return False
+    cleaned = str(title).strip()
+    if not cleaned:
+        return False
+    if not _EVENT_PARSE_BARE_TITLE_RE.match(cleaned):
+        return False
+    # A quoted programme name is the canonical "non-bare" shape — preserve it.
+    if "«" in cleaned or "»" in cleaned or '"' in cleaned:
+        return False
+    return True
+
+
+def _event_parse_defender_check(events: Sequence[dict[str, Any]] | None) -> list[str]:
+    """Return the list of human-readable defender reasons for a parsed list.
+
+    A non-empty result means a Gemma 4 output matches a known "principal
+    failure" pattern that warrants re-calling the same stage on a stronger
+    model. Keep checks deterministic and cheap; never escalate on a soft
+    smell, only on patterns that are explicitly forbidden by the master
+    prompt or by an open incident contract.
+    """
+    if not events:
+        return []
+    reasons: list[str] = []
+    for idx, ev in enumerate(events):
+        if not isinstance(ev, dict):
+            continue
+        title = str(ev.get("title") or "")
+        if _event_parse_title_looks_bare(title):
+            reasons.append(f"events[{idx}].title_bare:{title}")
+    return reasons
+
+
 def _event_parse_normalize_parsed_events(data: Any) -> ParsedEvents:
     festival = None
     if isinstance(data, dict):
@@ -9288,7 +9341,7 @@ async def parse_event_via_llm(
                 )
 
     try:
-        return await asyncio.wait_for(
+        result = await asyncio.wait_for(
             _parse_event_via_gemma(
                 text,
                 source_channel,
@@ -9309,6 +9362,50 @@ async def parse_event_via_llm(
         raise RuntimeError(
             f"event_parse Gemma wall-clock timeout after {cap_sec:.0f}s"
         ) from exc
+
+    # Defender + escalation: when Gemma's output matches a known "principal
+    # failure" pattern that is explicitly forbidden by the master prompt
+    # (currently only the bare `<event_type> — <venue>` title fallback —
+    # see INC-2026-05-11-bar-bastion-stochastic-title-fallback-and-semantic-dup),
+    # re-call the same stage on the escalation model. Disabled when the
+    # caller already pre-routed (`gemma_model` in extra) or when the escalation
+    # model is empty.
+    if "gemma_model" not in extra:
+        escalation_model = (
+            os.getenv("EVENT_PARSE_DEFENDER_ESCALATION_MODEL", "gemini-3.1-flash-lite") or ""
+        ).strip()
+        if escalation_model:
+            defender_reasons = _event_parse_defender_check(result)
+            if defender_reasons:
+                logging.info(
+                    "event_parse: defender flagged source_channel=%s reasons=%s; escalating primary=%s",
+                    source_channel,
+                    defender_reasons,
+                    escalation_model,
+                )
+                extra["gemma_model"] = escalation_model
+                try:
+                    return await asyncio.wait_for(
+                        _parse_event_via_gemma(
+                            text,
+                            source_channel,
+                            festival_names=festival_names,
+                            festival_alias_pairs=festival_alias_pairs,
+                            poster_texts=poster_texts,
+                            poster_summary=poster_summary,
+                            **extra,
+                        ),
+                        timeout=cap_sec,
+                    )
+                except asyncio.TimeoutError:
+                    logging.warning(
+                        "event_parse: defender escalation timed out cap_sec=%.1f source_channel=%s; "
+                        "returning original Gemma output",
+                        cap_sec,
+                        source_channel,
+                    )
+                    # Fall through to return the un-escalated result.
+    return result
 
 
 async def parse_event_via_4o(
