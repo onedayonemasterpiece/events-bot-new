@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import sys
+from types import SimpleNamespace
+
+import pytest
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
     SecondRange,
@@ -244,6 +249,31 @@ def test_kenigsberg_story_text_validator_accepts_llm_json_lines() -> None:
     assert payload["source"] == "llm"
     assert payload["hook"] == "Университет как каркас города"
     assert payload["scene_lines"][1].startswith("Четыре факультета")
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_story_text_rewrite_times_out_to_fallback(monkeypatch) -> None:
+    class SlowGoogleAIClient:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        async def generate_content_async(self, **kwargs):
+            await asyncio.sleep(1)
+            return "{}", {}
+
+    monkeypatch.setitem(
+        sys.modules,
+        "google_ai",
+        SimpleNamespace(GoogleAIClient=SlowGoogleAIClient, SecretsProvider=lambda: object()),
+    )
+    monkeypatch.setattr(kenigsberg_stories_cmd, "TEXT_REWRITE_TIMEOUT_SECONDS", 0.01)
+
+    payload = await kenigsberg_stories_cmd._rewrite_thought_for_story(
+        "Альбертина была устроена по классической университетской модели."
+    )
+
+    assert payload["source"] == "fallback"
+    assert payload["hook"].startswith("Альбертина")
 
 
 def test_renderer_cherryflash_style_outro_keeps_black_background() -> None:

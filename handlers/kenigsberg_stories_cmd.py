@@ -53,6 +53,7 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
+TEXT_REWRITE_TIMEOUT_SECONDS = 45.0
 
 
 async def _require_superadmin(message: types.Message) -> bool:
@@ -185,11 +186,14 @@ async def _rewrite_thought_for_story(thought_text: str) -> dict:
             consumer="kenigsberg_stories",
             incident_notifier=incident_notifier,
         )
-        raw, _usage = await client.generate_content_async(
-            model="models/gemma-4-31b-it",
-            prompt=prompt,
-            generation_config={"temperature": 0.35},
-            max_output_tokens=900,
+        raw, _usage = await asyncio.wait_for(
+            client.generate_content_async(
+                model="models/gemma-4-31b-it",
+                prompt=prompt,
+                generation_config={"temperature": 0.35},
+                max_output_tokens=900,
+            ),
+            timeout=TEXT_REWRITE_TIMEOUT_SECONDS,
         )
         result = _validate_story_text_payload(_extract_json_object(raw), thought_text)
         logger.info(
@@ -363,6 +367,17 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
     state = await load_state(db)
     thought_text = str(thought.get("text") or "")
+    await message.answer(
+        f"Kenigsberg #{issue_number}: принял команду, готовлю текст и Kaggle, "
+        f"thought={thought.get('id') or '-'} / {thoughts_count}."
+    )
+    logger.info(
+        "kenigsberg: launch accepted issue=%s thought=%s chat_id=%s user_id=%s",
+        issue_number,
+        thought.get("id") or "",
+        message.chat.id if message.chat else None,
+        message.from_user.id if message.from_user else None,
+    )
     story_text = await _rewrite_thought_for_story(thought_text)
     payload = {
         "issue_number": issue_number,
@@ -410,7 +425,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
 
     await message.answer(
         f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period=auto, "
-        f"thought={thought.get('id') or '-'} / {thoughts_count}."
+        f"thought={thought.get('id') or '-'} / {thoughts_count}, "
+        f"text={story_text.get('source') or 'unknown'}."
     )
     client = KaggleClient()
     try:
