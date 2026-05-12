@@ -92,7 +92,7 @@ A 2026-05-11 probe of `parse_event_via_llm` on the unchanged master prompt repro
 
 ## Release And Closure Evidence
 
-- deployed SHA: <to be filled when fix is merged and deployed>.
+- deployed SHA: `a1d48da3` (events-bot-new-wngqia v1061, deployed 2026-05-12 05:48 UTC).
 - deploy path: regular `main` → fly deploy.
 - regression checks: `pytest tests/test_prompt_json.py -q` (`5 passed`).
 - post-deploy verification: re-imported event 4687 must show `location_name` derived from the meeting-point landmark or be empty (with `city="Калининград"`).

@@ -92,7 +92,7 @@ Pure prompt-side mitigation is insufficient for stochastic Gemma 4 lapses on wel
 
 ## Release And Closure Evidence
 
-- deployed SHA: <to be filled at deploy time>.
+- deployed SHA: `a1d48da3` (events-bot-new-wngqia v1061, deployed 2026-05-12 05:48 UTC).
 - deploy path: regular `main` → fly deploy.
 - regression checks: `pytest tests/test_prompt_json.py -q` (`9 passed`).
 - post-deploy verification: production runtime logs should occasionally show `event_parse: defender flagged … reasons=['events[0].title_bare:Концерт — Бар Бастион'] … escalating primary=gemini-3.1-flash-lite` and the resulting events should have grounded titles, not the bare template.

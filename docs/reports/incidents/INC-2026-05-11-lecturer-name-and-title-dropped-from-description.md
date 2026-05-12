@@ -69,7 +69,7 @@ Production event `4759` («Влияние планировочных решен�
 
 ### Required evidence
 
-- deployed SHA: <to be filled after the fix is back-merged into `main` and deployed>.
+- deployed SHA: `a1d48da3` (events-bot-new-wngqia v1061, deployed 2026-05-12 05:48 UTC).
 - regression checks: `tests/test_smart_update_native_schema.py` 20 tests pass locally on `.venv/bin/pytest` 8.1.1.
 - production data evidence: `event_source_fact` for re-imported 4759 must include an explicit `Лектор: Андрей Анисимов, главный архитектор Калининграда` (or equivalent named fact) and the new public Telegraph card must mention both name and title.
 

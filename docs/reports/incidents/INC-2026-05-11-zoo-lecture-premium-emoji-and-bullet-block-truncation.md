@@ -97,7 +97,7 @@ Bug 2 is a Gemma 4 `rich_facts_extract` truncation: the `program_or_examples` ru
 
 ## Release And Closure Evidence
 
-- deployed SHA: <to be filled at deploy time>.
+- deployed SHA: `a1d48da3` (events-bot-new-wngqia v1061, deployed 2026-05-12 05:48 UTC). Note: the Kaggle TelegramMonitor kernel still needs its own re-deploy for the `strip_custom_emoji_entities` change to reach the Kaggle-side ingest path.
 - deploy paths: Fly main (for the prompt change); Kaggle TelegramMonitor kernel deploy (for the strip-function change).
 - regression checks: `pytest tests/test_tg_monitor_gemma4_contract.py tests/test_smart_update_native_schema.py tests/test_prompt_json.py -q` (55 passed locally).
 - post-deploy verification: re-imported event 4798 must show `is_free=true` and the full bullet content in the description.
