@@ -11,7 +11,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/run
 
 ## Summary
 
-During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`.
+During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`. Subsequent visual review showed the same source fragment could reappear later in the same generated story because per-run segment selection avoided only recent files, not already selected source-time ranges.
 
 ## User / Business Impact
 
@@ -21,6 +21,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Text in generated stories could still differ from the locally edited `thoughts.md` because the server rewrite step transformed the selected thought before Kaggle.
 - Some generated scenes visibly paused near their beginning/end because the renderer filled fixed `30fps` output tails with repeated frames when source clips had lower or variable frame rates.
 - Session `#266` blocked the next manual `/kenigsberg` until startup recovery failed it after the local handoff grace window; the operator had no explicit command to clear the stuck pre-handoff row.
+- The operator saw repeated scene material inside one issue, making different generations feel less random and cheaper than intended.
 
 ## Detection
 
@@ -48,6 +49,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 5. The text contract had drifted: the implementation still rewrote curated `thoughts.md` entries, while the product now wants `thoughts.md` to contain final publication wording.
 6. The renderer read source videos sequentially with OpenCV while writing a fixed `30fps` output. For lower-fps/VFR sources this could exhaust the selected source frames before the target scene duration and then repeat `last_frame`, creating visible freezes.
 7. Kenigsberg launch handoff writes still used single-attempt SQLAlchemy commits for `RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and the fail-close path. A lock after successful Kaggle binding therefore stranded a local pseudo-ref row that neither the poller nor operator could use.
+8. `pick_video_segments` prevented only immediate file repetition. It did not mark source intervals already selected in the current generation, so the same source video could later be chosen with an overlapping or near-adjacent offset.
 
 ## Contributing Factors
 
@@ -63,6 +65,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Changing `video_announce` session status persistence around Kaggle completion.
 - Changing Kenigsberg `thoughts.md` text preparation or `/a` Kenigsberg command routing.
 - Changing Kenigsberg source-video decoding, frame-rate conversion, or transition assembly.
+- Changing Kenigsberg source-video selection, randomization, or source-range exclusion logic.
 - Changing Kenigsberg local-to-Kaggle handoff persistence or manual stuck-session controls.
 
 ### Affected surfaces
@@ -84,8 +87,10 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - New story text payloads use `text_source=thoughts_md`.
 - Kaggle renderer still requires explicit `scene_lines` in `payload.json`.
 - Source scenes are extracted as constant `30fps` frames before overlays and must not rely on repeating OpenCV `last_frame` to reach scene duration.
+- Source segment selection avoids persistent bans, recent source exclusions, and overlapping/near-adjacent source intervals already chosen in the same generated issue.
+- `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include the seed and rhythm slots used for the run.
 - Kenigsberg launch handoff writes retry SQLite locks, and stale `local:KoenigsbergStories` rows can be cleared by `/kenigsberg unlock` or auto-failed on the next `/kenigsberg` after the handoff grace window.
-- `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py` passes.
+- `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` passes.
 - Production `/healthz` is green after deploy.
 
 ### Required evidence
@@ -103,12 +108,14 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Code fix narrows and improves active-session reporting, removes the LLM rewrite from Kenigsberg story text, and adds SQLite-lock retries around the fragile writes.
 - Scene decoding now uses ffmpeg CFR `30fps` extraction per source segment before text/watermark/transitions are applied.
 - Kenigsberg now exposes `/kenigsberg unlock` for local pre-handoff rows and auto-fails stale local handoffs on the next `/kenigsberg`.
+- Scene selection now keeps a per-run in-memory ban map with a small margin around each chosen source interval, so a source file can be reused only on a genuinely different available interval.
 
 ## Corrective Actions
 
 - Add tests for natural ban-list routing and final-copy text preparation.
 - Add a test for CFR segment-frame extraction and short-decode padding metadata.
 - Add a test for stale local handoff detection.
+- Add tests for per-run unused-file preference and overlapping source-range avoidance.
 - Update Kenigsberg documentation to make `thoughts.md` the final editorial source.
 - Commit and deploy the current local `thoughts.md` changes with the code fix.
 

@@ -22,7 +22,7 @@
   - для CherryFlash encrypted story secrets должны лежать в том же `cherryflash-session-*` dataset, что и `story_publish.json`, чтобы Kaggle не смонтировал устаревшую статическую версию secrets dataset;
   - выбранные Business targets для CherryFlash являются `blocking=true` и `required=true`: если secret отсутствует или права уже недоступны, notebook должен упасть на preflight до дорогого рендера, а не публиковать неполный fanout;
   - CherryFlash и `/check_business` обязаны передавать `post_to_chat_page=true` в Bot API `postStory`, чтобы story была видима на странице Business account, а не только как текущая активная сторис;
-  - по умолчанию Business targets разрешены только для CherryFlash modes `popular_review,cherryflash_libsvtav1` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
+  - по умолчанию Business targets разрешены для CherryFlash modes `popular_review,cherryflash_libsvtav1` и для production-ready Kenigsberg mode `kenigsberg_story` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
 
 ## Operator commands

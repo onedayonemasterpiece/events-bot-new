@@ -700,15 +700,24 @@ def pick_video_segments(
     segments = []
     recent: list[Path] = []
     normalized_bans = normalize_source_bans(source_bans, dataset_slug=dataset_slug)
+    run_bans: dict[str, list[dict[str, Any]]] = {}
+    run_margin = 0.75
     for idx, (timeline_start, timeline_end) in enumerate(slots):
         dur = timeline_end - timeline_start
-        pool = [path for path in usable if path not in recent[-2:]] or usable
+        unused_pool = [path for path in usable if path not in recent]
+        pool = unused_pool or [path for path in usable if path not in recent[-2:]] or usable
         selected: tuple[Path, float] | None = None
         for _ in range(80):
             path = rng.choice(pool)
             max_start = max(0.0, durations[path] - dur - 0.2)
             source_start = rng.uniform(0.0, max_start) if max_start > 0 else 0.0
-            if not overlaps_ban(path.name, source_start, source_start + dur, normalized_bans):
+            source_end = source_start + dur
+            if not overlaps_ban(path.name, source_start, source_end, normalized_bans) and not overlaps_ban(
+                path.name,
+                source_start,
+                source_end,
+                run_bans,
+            ):
                 selected = (path, source_start)
                 break
         if selected is None:
@@ -716,7 +725,13 @@ def pick_video_segments(
                 max_start = max(0.0, durations[path] - dur - 0.2)
                 candidate = 0.0
                 while candidate <= max_start:
-                    if not overlaps_ban(path.name, candidate, candidate + dur, normalized_bans):
+                    candidate_end = candidate + dur
+                    if not overlaps_ban(path.name, candidate, candidate_end, normalized_bans) and not overlaps_ban(
+                        path.name,
+                        candidate,
+                        candidate_end,
+                        run_bans,
+                    ):
                         selected = (path, candidate)
                         break
                     candidate += 0.5
@@ -740,6 +755,13 @@ def pick_video_segments(
                 "strategy": "heuristic_v1",
             }
         )
+        run_bans.setdefault(path.name, []).append(
+            {
+                "source_start": max(0.0, source_start - run_margin),
+                "source_end": min(durations[path], source_start + dur + run_margin),
+                "reason": "current_generation",
+            }
+        )
         recent.append(path)
     return segments
 
@@ -751,6 +773,16 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
     videos = iter_files(video_dir, VIDEO_EXTS)
     rng.shuffle(videos)
     slots = beat_slots(MAIN_DURATION, rng)
+    log(
+        "Rhythm slots: "
+        + json.dumps(
+            {
+                "seed": payload.get("seed"),
+                "slots": slots,
+            },
+            ensure_ascii=False,
+        )
+    )
     segments = pick_video_segments(
         videos,
         slots,
@@ -965,6 +997,7 @@ def main() -> None:
             "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
         },
         "total_duration": total_duration,
+        "seed": int(payload.get("seed") or 0),
         "strategy": "heuristic_v1",
         "frame_count": frame_count,
         "preview_frames": preview_frames,
@@ -972,6 +1005,10 @@ def main() -> None:
         "scene_lines": render_payload.get("scene_lines") or [],
         "text_cues": render_payload.get("text_cues") or [],
         "segments": segments,
+        "rhythm_slots": [
+            [segment["timeline_start"], segment["timeline_end"]]
+            for segment in segments
+        ],
         "output": out_path.name,
         "output_size_bytes": out_path.stat().st_size if out_path.exists() else 0,
     }
@@ -1004,6 +1041,7 @@ def main() -> None:
             "text_cues": manifest["text_cues"],
         },
         "segments": segments,
+        "rhythm_slots": manifest["rhythm_slots"],
         "output": {
             "file": out_path.name,
             "size_bytes": manifest["output_size_bytes"],

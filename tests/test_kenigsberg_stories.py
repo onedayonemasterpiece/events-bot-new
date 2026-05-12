@@ -188,6 +188,45 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     assert segments[0]["source_start"] >= 9.0
 
 
+def test_renderer_prefers_unused_video_files_within_one_story(monkeypatch, tmp_path) -> None:
+    videos = []
+    for name in ("a.mp4", "b.mp4", "c.mp4"):
+        path = tmp_path / name
+        path.write_bytes(b"stub")
+        videos.append(path)
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 12.0)
+
+    segments = renderer.pick_video_segments(
+        videos,
+        [(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)],
+        rng=renderer.random.Random(7),
+        dataset_slug="zigomaro/koenigsberg19191940",
+        crop_px=96,
+        source_bans=[],
+    )
+
+    assert len({segment["source_file"] for segment in segments}) == 3
+
+
+def test_renderer_avoids_overlapping_source_ranges_within_one_story(monkeypatch, tmp_path) -> None:
+    video = tmp_path / "devau.mp4"
+    video.write_bytes(b"stub")
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 20.0)
+
+    segments = renderer.pick_video_segments(
+        [video],
+        [(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)],
+        rng=renderer.random.Random(1),
+        dataset_slug="zigomaro/koenigsberg19191940",
+        crop_px=96,
+        source_bans=[],
+    )
+
+    ranges = sorted((segment["source_start"], segment["source_end"]) for segment in segments)
+    assert all(left_end + 0.74 <= right_start for (_, left_end), (right_start, _) in zip(ranges, ranges[1:]))
+
+
 def test_recent_source_exclusions_use_previous_issue_segments() -> None:
     exclusions = recent_source_exclusions(
         {
@@ -453,3 +492,26 @@ def test_renderer_extracts_cfr_segment_frames_and_pads_short_decode(monkeypatch,
     vf = calls[0][calls[0].index("-vf") + 1]
     assert "fps=30" in vf
     assert "crop=iw:if(gt(ih\\,96)\\,ih-96\\,ih):0:0" in vf
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile(monkeypatch):
+    captured = {}
+
+    async def fake_build_story_publish_config(db, *, main_chat_id, selection_params, selected_event_dates):
+        captured["db"] = db
+        captured["main_chat_id"] = main_chat_id
+        captured["selection_params"] = selection_params
+        captured["selected_event_dates"] = selected_event_dates
+        return {"targets": selection_params["story_targets_override"]}
+
+    monkeypatch.setattr(kenigsberg_stories_cmd, "build_story_publish_config", fake_build_story_publish_config)
+
+    config = await kenigsberg_stories_cmd._build_production_story_config(db=object())
+
+    assert config == {"targets": kenigsberg_stories_cmd._kenigsberg_story_targets_override()}
+    params = captured["selection_params"]
+    assert params["mode"] == "kenigsberg_story"
+    assert params["story_publish_mode"] == "video"
+    assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
+    assert params["story_targets_override"][0]["peer"] == "@mostvkenig"

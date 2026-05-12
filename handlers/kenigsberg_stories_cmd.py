@@ -42,6 +42,13 @@ from video_announce.poller import (
     start_kernel_poller_task,
     update_status_message,
 )
+from video_announce.story_publish import (
+    STORY_PUBLISH_CIPHER_FILENAME,
+    STORY_PUBLISH_CONFIG_FILENAME,
+    STORY_PUBLISH_KEY_FILENAME,
+    build_story_publish_config,
+    write_story_secret_files,
+)
 
 kenigsberg_stories_router = Router(name="kenigsberg_stories")
 logger = logging.getLogger(__name__)
@@ -175,6 +182,49 @@ async def _require_superadmin(message: types.Message) -> bool:
 def _launch_enabled() -> bool:
     raw = (os.getenv("KENIGSBERG_STORIES_KAGGLE_ENABLED") or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
+
+
+def _production_story_enabled() -> bool:
+    raw = (os.getenv("KENIGSBERG_STORIES_PRODUCTION_ENABLED") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _kenigsberg_story_targets_override() -> list[dict[str, object]]:
+    raw = (os.getenv("KENIGSBERG_STORIES_STORY_TARGETS_JSON") or "").strip()
+    if raw:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise RuntimeError("KENIGSBERG_STORIES_STORY_TARGETS_JSON must be a JSON list")
+        return parsed
+    return [
+        {
+            "peer": "@mostvkenig",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "required": True,
+            "label": "@mostvkenig",
+        }
+    ]
+
+
+async def _build_production_story_config(db) -> dict | None:
+    story_selection_params = {
+        "mode": KENIGSBERG_PROFILE_KEY,
+        "story_publish_enabled": True,
+        "story_publish_mode": "video",
+        "story_upload_profile": "telegram_story_native_hevc_720p_v1",
+        "story_targets_override": _kenigsberg_story_targets_override(),
+        "story_caption": "",
+    }
+    business_targets_override = (os.getenv("KENIGSBERG_STORIES_STORY_BUSINESS_TARGETS") or "").strip()
+    if business_targets_override:
+        story_selection_params["story_business_targets"] = business_targets_override
+    return await build_story_publish_config(
+        db,
+        main_chat_id=None,
+        selection_params=story_selection_params,
+        selected_event_dates=None,
+    )
 
 
 def _extract_ban_args(args: str) -> tuple[int | None, str]:
@@ -368,6 +418,10 @@ def _copy_required_assets(tmp_path: Path) -> None:
             PROJECT_ROOT / "kaggle" / "CherryFlash" / "video_announce" / "assets" / "BebasNeue-Bold.ttf",
             "assets/BebasNeue-Bold.ttf",
         ),
+        (
+            PROJECT_ROOT / "kaggle" / "CrumpleVideo" / "story_publish.py",
+            "kaggle_common/story_publish.py",
+        ),
     ]
     for name in ("Cygre-Regular.ttf", "Cygre-Medium.ttf", "Cygre-SemiBold.ttf", "Cygre-Bold.ttf"):
         files.append(
@@ -384,7 +438,13 @@ def _copy_required_assets(tmp_path: Path) -> None:
         shutil.copy2(src, dest)
 
 
-async def _create_kenigsberg_dataset(db, *, session_id: int, payload: dict) -> str:
+async def _create_kenigsberg_dataset(
+    db,
+    *,
+    session_id: int,
+    payload: dict,
+    story_config: dict | None = None,
+) -> str:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME not set")
@@ -409,6 +469,12 @@ async def _create_kenigsberg_dataset(db, *, session_id: int, payload: dict) -> s
             encoding="utf-8",
         )
         _copy_required_assets(tmp_path)
+        if story_config is not None:
+            (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
+                json.dumps(story_config, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            write_story_secret_files(tmp_path)
         (tmp_path / "bundle_manifest.json").write_text(
             json.dumps(
                 {
@@ -544,7 +610,27 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         ],
         "target": "https://t.me/keniggpt",
         "strategy": "heuristic_v1",
+        "story_publish_requested": False,
     }
+    story_config: dict | None = None
+    if _production_story_enabled():
+        try:
+            story_config = await _build_production_story_config(db)
+        except Exception as exc:
+            logger.exception("kenigsberg: failed to build production story config")
+            await message.answer(
+                f"Kenigsberg #{issue_number}: production story publishing включён, "
+                f"но preflight config не собрался: {type(exc).__name__}: {exc}"
+            )
+            return
+        if not story_config:
+            await message.answer(
+                f"Kenigsberg #{issue_number}: production story publishing включён, "
+                "но story_publish.json не удалось собрать. Kaggle не запускаю."
+            )
+            return
+        payload["story_publish_requested"] = True
+        payload["production_target"] = "https://t.me/mostvkenig"
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.SELECTED,
@@ -579,13 +665,28 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     client = KaggleClient()
     try:
         obj = await _mark_session_rendering_with_retry(db, obj.id) or obj
-        dataset_id = await _create_kenigsberg_dataset(db, session_id=obj.id, payload=payload)
+        dataset_id = await _create_kenigsberg_dataset(
+            db,
+            session_id=obj.id,
+            payload=payload,
+            story_config=story_config,
+        )
+        expected_files = ["payload.json", "scripts/render_kenigsberg_story.py"]
+        if story_config is not None:
+            expected_files.extend(
+                [
+                    STORY_PUBLISH_CONFIG_FILENAME,
+                    STORY_PUBLISH_CIPHER_FILENAME,
+                    STORY_PUBLISH_KEY_FILENAME,
+                    "kaggle_common/story_publish.py",
+                ]
+            )
         await await_dataset_ready(
             client,
             dataset_id,
             timeout_seconds=KAGGLE_READY_WAIT_SECONDS,
             poll_interval_seconds=5,
-            expected_files=["payload.json", "scripts/render_kenigsberg_story.py"],
+            expected_files=expected_files,
         )
         kernel_ref = await asyncio.to_thread(
             client.deploy_kernel_update,
@@ -648,6 +749,7 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
         await message.answer(
             "Kenigsberg Stories\n"
             f"launch_enabled={_launch_enabled()}\n"
+            f"production_story_enabled={_production_story_enabled()}\n"
             f"next_issue=#{state.get('next_issue', 1)}\n"
             f"thoughts={len(thoughts)} used={len(state.get('used_thought_ids') or [])}\n"
             f"issues={len(state.get('issues') or {})} bans={len(state.get('source_bans') or [])} "

@@ -197,6 +197,44 @@ async def test_business_story_targets_are_cherryflash_scoped(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_business_story_targets_are_allowed_for_kenigsberg(monkeypatch, tmp_path):
+    target = tmp_path / "business.enc.json"
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.delenv("VIDEO_ANNOUNCE_STORY_BUSINESS_TARGETS", raising=False)
+    monkeypatch.delenv("VIDEO_ANNOUNCE_STORY_BUSINESS_MODES", raising=False)
+    monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+        )
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "mode": "kenigsberg_story",
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_targets_override": [
+                {"peer": "@mostvkenig", "delay_seconds": 0, "mode": "upload"},
+            ],
+            "story_business_targets": ["@story_owner_fixture"],
+        },
+    )
+
+    assert config is not None
+    assert config["targets"][-1]["transport"] == "telegram_business"
+    assert config["targets"][-1]["required"] is True
+
+
+@pytest.mark.asyncio
 async def test_build_story_publish_config_preserves_self_blocking_target(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
     monkeypatch.setenv(
