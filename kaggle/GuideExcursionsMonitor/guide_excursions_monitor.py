@@ -137,9 +137,17 @@ from telethon.sessions import StringSession  # noqa: E402
 
 DEFAULT_GUIDE_MONITORING_MODEL = "models/gemma-4-31b-it"
 DEFAULT_GUIDE_MONITORING_SCREEN_MODEL = "models/gemma-4-31b-it"
+# Tier-1 announce/block extraction is routed to gemini-3.1-flash-lite by
+# default, mirroring the Smart Update facts_extract migration: extraction
+# completeness is a known quality bottleneck (GE-EVAL-02 reportage-tail miss)
+# and Lite's 500 RPD/key cap is comfortable at current guide-track load
+# (~20-30 extract calls/day). Screen, dedup, route_weaver enrich and other
+# stages intentionally stay on Gemma 4 so the Lite RPD budget is not burned
+# on classifier-style work.
+DEFAULT_GUIDE_MONITORING_EXTRACT_MODEL = "models/gemini-3.1-flash-lite"
 MODEL = DEFAULT_GUIDE_MONITORING_MODEL
 SCREEN_MODEL = DEFAULT_GUIDE_MONITORING_SCREEN_MODEL
-EXTRACT_MODEL = DEFAULT_GUIDE_MONITORING_MODEL
+EXTRACT_MODEL = DEFAULT_GUIDE_MONITORING_EXTRACT_MODEL
 GOOGLE_KEY_ENV = "GOOGLE_API_KEY2"
 GOOGLE_FALLBACK_KEY_ENV = "GOOGLE_API_KEY"
 GOOGLE_ACCOUNT_ENV = "GOOGLE_API_LOCALNAME2"
@@ -216,7 +224,9 @@ def refresh_runtime_settings() -> None:
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
     SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
-    EXTRACT_MODEL = (os.getenv("GUIDE_MONITORING_EXTRACT_MODEL") or MODEL).strip()
+    EXTRACT_MODEL = (
+        os.getenv("GUIDE_MONITORING_EXTRACT_MODEL") or DEFAULT_GUIDE_MONITORING_EXTRACT_MODEL
+    ).strip()
     GOOGLE_KEY_ENV = (os.getenv("GUIDE_MONITORING_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY2").strip() or "GOOGLE_API_KEY2"
     GOOGLE_ACCOUNT_ENV = (os.getenv("GUIDE_MONITORING_GOOGLE_ACCOUNT_ENV") or "GOOGLE_API_LOCALNAME2").strip() or "GOOGLE_API_LOCALNAME2"
     try:

@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 GUIDE_DIGEST_WRITER_ENABLED = (
     (os.getenv("GUIDE_DIGEST_WRITER_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-GUIDE_DIGEST_WRITER_MODEL = (os.getenv("GUIDE_DIGEST_WRITER_MODEL") or "gemma-4-31b").strip() or "gemma-4-31b"
+GUIDE_DIGEST_WRITER_MODEL = (
+    os.getenv("GUIDE_DIGEST_WRITER_MODEL") or "gemini-3.1-flash-lite"
+).strip() or "gemini-3.1-flash-lite"
 GUIDE_DIGEST_WRITER_GOOGLE_KEY_ENV = (
     os.getenv("GUIDE_DIGEST_WRITER_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY2"
 ).strip() or "GOOGLE_API_KEY2"
