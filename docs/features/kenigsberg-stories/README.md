@@ -55,6 +55,14 @@
 
 Allowed instrumental ranges are hard constraints for the full encoded story, including outro. A track without a configured matching range, or a range shorter than the final video duration, must be skipped/fail closed instead of falling back to the whole track.
 
+Если в `zigomaro/koenigsberg-music` добавляются новые треки, они попадут в ротацию только вместе с разрешенными безголосыми диапазонами. Диапазоны можно держать в dataset-файле `music_ranges.json` или `kenigsberg_music_ranges.json`:
+
+```json
+{"tracks":{"Fresh Track.flac":[["0:10","0:50"],{"start":"1:20","end":"1:55"}]}}
+```
+
+Это сознательная граница: неизвестный трек без whitelist-диапазона не должен случайно попасть в историю целиком или с голосом.
+
 ### Thoughts source
 
 Канонический список исходных мыслей: `docs/features/kenigsberg-stories/thoughts.md`.
@@ -224,10 +232,10 @@ Current MVP implementation:
 - Kaggle output keeps the final MP4, `kenigsberg_issue_manifest.json`, detailed `kenigsberg_render_log.json`, runtime bundle and three preview frames only; the full rendered frame sequence is deleted after encoding so output download is deterministic and small.
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
 - music selection happens inside the Kaggle renderer from the configured instrumental whitelist; the selected `music_start` and `music_end` must both stay inside the allowed range and be written to the manifest/render log.
-- recent music windows from registered issue manifests are passed into the next Kaggle run and used as penalties: the renderer first avoids overlapping recent windows, then avoids the same recent track when another eligible track exists. This is a temporary anti-repeat window, not a permanent ban.
-- whitelisted instrumental ranges remain hard bounds, but the renderer also computes a best-effort `voice_risk` score for candidate windows and prefers lower-risk fragments when a range contains non-lexical voice/vocalization. Voice analysis is a scoring signal only; if it cannot run, the renderer still stays inside the whitelist and logs the fallback.
+- recent music windows from registered issue manifests are passed into the next Kaggle run and used as tiered selection constraints, not only a small score nudge: the renderer first searches for a non-overlapping, non-recent-track, low-voice-risk candidate; only if no such candidate exists does it step down through fresh-track, non-overlap, low-voice, and finally emergency pools. Same-track fatigue grows with recent issue proximity and recent use count so a track like `The Promise` cannot keep winning simply because its raw `voice_risk` score is slightly lower.
+- whitelisted instrumental ranges remain hard bounds, but the renderer also computes a best-effort `voice_risk` score for candidate windows and prefers lower-risk fragments when a range contains non-lexical voice/vocalization. Voice analysis is a strong selector input plus logged diagnostic (`music_selection_tier`, `same_track_issue_gap`, `track_fatigue`, `tracks_with_allowed_ranges`); if it cannot run, the renderer still stays inside the whitelist and logs the fallback.
 - rhythm slots are seeded from the per-run payload seed and recorded into `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` so repeated cadence bugs can be audited from Kaggle output.
-- Kaggle rendering still requires explicit validated `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle, and it must reject overlong unsplit lines.
+- Kaggle rendering still requires explicit validated `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle. Visual stripe wrapping may use up to 7 rows on the vertical canvas when needed, but it must never silently truncate the tail of a line.
 - source scene clips are decoded through ffmpeg into constant `30fps` `720x1280` frame sequences before overlays/transitions are applied; the renderer must not fill normal source-fps gaps by repeating the last OpenCV frame at the end of a scene.
 - status updates and Kenigsberg state writes retry short SQLite locks so heavy VK imports do not leave a completed Kaggle run stuck in local `RENDERING`.
 - Kaggle handoff writes (`RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and fail-close updates) retry transient SQLite locks; stale `local:KoenigsbergStories` sessions older than the handoff grace window are auto-failed on the next `/kenigsberg`, and can also be manually cleared with `/kenigsberg unlock`.
@@ -268,6 +276,7 @@ Main scene text:
 - disappearance repeats the same order, faster;
 - use ease functions with visible inertia, not linear motion: stripe reveal uses an eased/back motion, text reveal starts only after the stripe is substantially visible, and exit uses a faster eased reverse motion;
 - keep lines short and avoid text spilling outside the stripe at `720x1280`.
+- prefer `3-4` readable stripe rows per text screen; allow up to `7` rows for long curated phrases when that preserves the exact thought. Cutting text with `lines[:N]` or any other silent truncation is forbidden.
 - text timing is independent from source-video segment timing. Video cuts follow the music grid; text cues follow comfortable reading durations across the main `15-20` second story.
 
 Outro:

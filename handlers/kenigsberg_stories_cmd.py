@@ -314,7 +314,7 @@ def _validate_llm_scene_lines(thought_text: str, lines: list[str]) -> list[str]:
         raise StoryTextPreparationError("LLM returned no scene lines")
     if _normalize_story_copy(" ".join(clean)) != thought_normalized:
         raise StoryTextPreparationError("LLM scene split changed the thought text")
-    too_long = [line for line in clean if len(line) > 118 or len(line.split()) > 19]
+    too_long = [line for line in clean if len(line) > 160 or len(line.split()) > 34]
     if too_long:
         raise StoryTextPreparationError("LLM scene split returned an overlong screen")
     if len(clean) > 8:

@@ -548,6 +548,59 @@ def test_renderer_music_selection_prefers_lower_voice_risk(monkeypatch, tmp_path
 
     assert selected == low_voice
     assert meta["voice_risk"] == 0.05
+    assert meta["music_selection_tier"] == "clean_fresh_low_voice"
+
+
+def test_renderer_music_selection_uses_track_fatigue_when_everything_is_recent(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    overused = music_dir / "The Promise.flac"
+    older = music_dir / "Wyatt Earth.flac"
+    overused.write_bytes(b"stub")
+    older.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 500.0)
+    monkeypatch.setattr(
+        renderer,
+        "estimate_voice_risk",
+        lambda path, start, duration: 0.05 if "Promise" in path.name else 0.2,
+    )
+
+    selected, _start, _duration, meta = renderer.choose_music(
+        music_dir,
+        renderer.random.Random(4),
+        recent_music=[
+            {"file": "The Promise.flac", "start": 224.0, "end": 249.0, "issue_number": 31},
+            {"file": "The Promise.flac", "start": 402.0, "end": 427.0, "issue_number": 30},
+            {"file": "The Promise.flac", "start": 233.0, "end": 258.0, "issue_number": 29},
+            {"file": "Wyatt Earth.flac", "start": 0.0, "end": 25.0, "issue_number": 20},
+        ],
+    )
+
+    assert selected == older
+    assert meta["recent_same_track"] is True
+    assert meta["same_track_issue_gap"] >= 10
+
+
+def test_renderer_music_selection_reads_dataset_range_manifest(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    new_track = music_dir / "Fresh Track.flac"
+    new_track.write_bytes(b"stub")
+    (music_dir / "music_ranges.json").write_text(
+        '{"tracks":{"Fresh Track.flac":[["0:10","0:50"]]}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 100.0)
+    monkeypatch.setattr(renderer, "estimate_voice_risk", lambda path, start, duration: 0.1)
+
+    selected, start, duration, meta = renderer.choose_music(music_dir, renderer.random.Random(1))
+
+    assert selected == new_track
+    assert 10.0 <= start <= 25.0
+    assert duration == renderer.MAIN_DURATION + 2 * renderer.OUTRO_SCREEN_DURATION
+    assert meta["range_manifest_loaded"] is True
 
 
 def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
@@ -600,6 +653,34 @@ def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
     assert len(cues) == 2
     assert cues[0]["start"] < cues[0]["end"] < cues[1]["start"] < cues[1]["end"]
     assert cues[-1]["end"] > 14.0
+
+
+def test_renderer_wrap_text_does_not_truncate_tail() -> None:
+    probe = Image.new("RGBA", (renderer.W, renderer.H))
+    draw = renderer.ImageDraw.Draw(probe)
+    text = (
+        "дорожные принадлежности, детскую и мужскую одежду, "
+        "а рядом — «приданое для невест»"
+    )
+
+    lines = renderer.wrap_text(text, draw, renderer.font(44), max_width=renderer.W - 120)
+
+    assert "невест" in " ".join(lines)
+    assert len(lines) > 4
+
+
+def test_renderer_stripe_layout_allows_seven_visual_lines_without_loss() -> None:
+    probe = Image.new("RGBA", (renderer.W, renderer.H))
+    draw = renderer.ImageDraw.Draw(probe)
+    text = (
+        "дорожные принадлежности, детскую и мужскую одежду, а рядом — "
+        "«приданое для невест», потому что каталог говорил языком города."
+    )
+
+    _font, lines, _stripe_h, _gap = renderer.stripe_text_layout(text, draw)
+
+    assert "невест" in " ".join(lines)
+    assert 4 < len(lines) <= renderer.MAX_STRIPE_LINES
 
 
 def test_renderer_rejects_overlong_payload_line_instead_of_splitting_on_kaggle() -> None:

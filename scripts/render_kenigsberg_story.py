@@ -39,6 +39,7 @@ OUTRO_TEXT = (16, 14, 14)
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 AUDIO_EXTS = {".flac", ".mp3", ".wav", ".m4a", ".aac", ".ogg"}
 MIN_STRONG_MAIN_DURATION = 15.0
+MAX_STRIPE_LINES = 7
 
 MUSIC_RANGES = {
     "the promise": [(224.0, 266.0), (402.0, None)],
@@ -177,8 +178,75 @@ def normalize_music_key(value: str) -> str:
     return re.sub(r"[^0-9a-zа-яё]+", " ", stem.casefold()).strip()
 
 
-def allowed_music_ranges(track: Path) -> list[tuple[float, float | None]]:
+def parse_music_range_time(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().casefold()
+    if not text or text in {"end", "конец", "track_end"}:
+        return None
+    parts = text.split(":")
+    if len(parts) == 1:
+        return float(parts[0])
+    seconds = 0.0
+    for part in parts:
+        seconds = seconds * 60.0 + float(part)
+    return seconds
+
+
+def parse_music_ranges_payload(raw_ranges: Any) -> list[tuple[float, float | None]]:
+    ranges: list[tuple[float, float | None]] = []
+    if not isinstance(raw_ranges, list):
+        return ranges
+    for item in raw_ranges:
+        try:
+            if isinstance(item, dict):
+                start = parse_music_range_time(item.get("start", 0.0)) or 0.0
+                end = parse_music_range_time(item.get("end"))
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                start = parse_music_range_time(item[0]) or 0.0
+                end = parse_music_range_time(item[1])
+            else:
+                continue
+        except Exception:
+            continue
+        if end is not None and end <= start:
+            continue
+        ranges.append((round(start, 3), None if end is None else round(end, 3)))
+    return ranges
+
+
+def load_music_range_manifest(music_dir: Path) -> dict[str, list[tuple[float, float | None]]]:
+    manifest: dict[str, list[tuple[float, float | None]]] = {}
+    for name in ("kenigsberg_music_ranges.json", "music_ranges.json"):
+        path = music_dir / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            log(f"Music range manifest {path.name} could not be read: {type(exc).__name__}: {exc}")
+            continue
+        tracks = data.get("tracks", data) if isinstance(data, dict) else {}
+        if not isinstance(tracks, dict):
+            continue
+        for track_name, raw_ranges in tracks.items():
+            ranges = parse_music_ranges_payload(raw_ranges)
+            if ranges:
+                manifest[normalize_music_key(str(track_name))] = ranges
+    return manifest
+
+
+def allowed_music_ranges(
+    track: Path,
+    range_manifest: dict[str, list[tuple[float, float | None]]] | None = None,
+) -> list[tuple[float, float | None]]:
     track_key = normalize_music_key(track.name)
+    for configured_key, ranges in (range_manifest or {}).items():
+        key = normalize_music_key(configured_key)
+        if track_key == key or key in track_key:
+            return ranges
     for configured_key, ranges in MUSIC_RANGES.items():
         key = normalize_music_key(configured_key)
         if track_key == key or key in track_key:
@@ -236,7 +304,32 @@ def wrap_text(text: str, draw: ImageDraw.ImageDraw, fnt: ImageFont.ImageFont, ma
             current = word
     if current:
         lines.append(current)
-    return lines[:4]
+    return lines
+
+
+def stripe_text_layout(
+    text: str,
+    draw: ImageDraw.ImageDraw,
+    *,
+    max_lines: int = MAX_STRIPE_LINES,
+) -> tuple[ImageFont.ImageFont, list[str], int, int]:
+    max_width = W - 120
+    for size in range(44, 29, -2):
+        headline_font = font(size)
+        lines = wrap_text(text, draw, headline_font, max_width=max_width)
+        if not lines:
+            return headline_font, [], 0, 0
+        stripe_h = max(48, int(size * 1.42))
+        gap = max(6, int(size * 0.16))
+        total_h = len(lines) * stripe_h + max(0, len(lines) - 1) * gap
+        if len(lines) <= max_lines and total_h <= 540:
+            return headline_font, lines, stripe_h, gap
+    min_font = font(30)
+    lines = wrap_text(text, draw, min_font, max_width=max_width)
+    raise RuntimeError(
+        "Kenigsberg text screen is too dense for stripe typography: "
+        f"wrapped_lines={len(lines)} max_lines={max_lines} text={text!r}"
+    )
 
 
 def ease_out_cubic(t: float) -> float:
@@ -304,12 +397,9 @@ def draw_stripes(
     scene_duration: float,
 ) -> None:
     draw = ImageDraw.Draw(image, "RGBA")
-    headline_font = font(44)
-    lines = wrap_text(text, draw, headline_font, max_width=W - 120)
+    headline_font, lines, stripe_h, gap = stripe_text_layout(text, draw)
     if not lines:
         return
-    stripe_h = 62
-    gap = 8
     x0 = 54
     y0 = 300
     stripe_in_duration = 0.72
@@ -328,7 +418,9 @@ def draw_stripes(
         if visible_w <= 1:
             continue
         draw.rectangle((x0, y, x0 + visible_w, y + stripe_h), fill=(241, 228, 75, 230))
-        text_y_final = y + 8
+        bbox = headline_font.getbbox(line)
+        text_h = bbox[3] - bbox[1]
+        text_y_final = int(y + (stripe_h - text_h) / 2 - bbox[1])
         text_y = text_y_final + int((1.0 - min(1.0, max(0.0, text_p))) * stripe_h) + int(out_p * 28)
         mask = Image.new("L", image.size, 0)
         md = ImageDraw.Draw(mask)
@@ -532,7 +624,7 @@ def payload_scene_lines(payload: dict[str, Any], fallback_thought: str, count: i
                 continue
             lines.append(line)
         if lines:
-            too_long = [line for line in lines if len(line) > 118 or len(line.split()) > 19]
+            too_long = [line for line in lines if len(line) > 160 or len(line.split()) > 34]
             if too_long:
                 raise RuntimeError("Payload scene_lines contain overlong screens; LLM split is required")
             return lines
@@ -675,10 +767,12 @@ def choose_music(
     rng.shuffle(tracks)
     skipped: list[str] = []
     recent = _recent_music_items(recent_music or [])
+    latest_recent_issue = max((int(item.get("issue_number") or 0) for item in recent), default=0)
+    range_manifest = load_music_range_manifest(music_dir)
     candidates: list[dict[str, Any]] = []
     for track in tracks:
         track_has_candidate = False
-        ranges = allowed_music_ranges(track)
+        ranges = allowed_music_ranges(track, range_manifest)
         if not ranges:
             skipped.append(f"{track.name}: no_allowed_range")
             continue
@@ -696,6 +790,12 @@ def choose_music(
                     recent_same_track = [
                         item for item in recent if _music_names_match(track.name, str(item.get("file") or ""))
                     ]
+                    latest_same_issue = max(
+                        (int(item.get("issue_number") or 0) for item in recent_same_track),
+                        default=0,
+                    )
+                    issue_gap = max(0, latest_recent_issue - latest_same_issue)
+                    same_track_count = len(recent_same_track)
                     overlaps_recent = any(
                         _music_ranges_overlap(
                             selected_start,
@@ -706,6 +806,11 @@ def choose_music(
                         for item in recent_same_track
                     )
                     voice_risk = estimate_voice_risk(track, selected_start, total_duration)
+                    track_fatigue = (
+                        max(0, 6 - issue_gap) * 5.0 if latest_same_issue else 0.0
+                    ) + min(8, same_track_count) * 1.35
+                    overlap_penalty = 35.0 if overlaps_recent else 0.0
+                    voice_penalty = max(0.0, voice_risk - 0.58) * 9.0
                     candidates.append(
                         {
                             "track": track,
@@ -717,12 +822,17 @@ def choose_music(
                             "track_duration": duration,
                             "voice_risk": voice_risk,
                             "recent_same_track": bool(recent_same_track),
+                            "recent_same_track_count": same_track_count,
+                            "latest_same_track_issue": latest_same_issue,
+                            "same_track_issue_gap": issue_gap,
+                            "track_fatigue": round(track_fatigue, 4),
                             "overlaps_recent": overlaps_recent,
                             "score": (
                                 rng.random()
-                                + voice_risk * 4.0
-                                + (20.0 if overlaps_recent else 0.0)
-                                + (3.0 if recent_same_track else 0.0)
+                                + voice_risk * 2.0
+                                + voice_penalty
+                                + overlap_penalty
+                                + track_fatigue
                             ),
                         }
                     )
@@ -730,13 +840,39 @@ def choose_music(
         if not track_has_candidate:
             skipped.append(f"{track.name}: ranges_too_short_for_{total_duration:.1f}s")
     if candidates:
+        clean = [
+            item
+            for item in candidates
+            if not item["overlaps_recent"]
+            and not item["recent_same_track"]
+            and float(item.get("voice_risk") or 0.0) <= 0.68
+        ]
+        fresh_track = [
+            item for item in candidates if not item["overlaps_recent"] and not item["recent_same_track"]
+        ]
+        low_voice_non_overlap = [
+            item for item in candidates if not item["overlaps_recent"] and float(item.get("voice_risk") or 0.0) <= 0.68
+        ]
         non_overlapping = [item for item in candidates if not item["overlaps_recent"]]
-        pool = non_overlapping or candidates
-        if any(not item["recent_same_track"] for item in pool):
-            pool = [item for item in pool if not item["recent_same_track"]]
-        low_voice = [item for item in pool if float(item.get("voice_risk") or 0.0) <= 0.68]
-        if low_voice:
+        low_voice = [item for item in candidates if float(item.get("voice_risk") or 0.0) <= 0.68]
+        if clean:
+            pool = clean
+            selection_tier = "clean_fresh_low_voice"
+        elif fresh_track:
+            pool = fresh_track
+            selection_tier = "fresh_track_voice_fallback"
+        elif low_voice_non_overlap:
+            pool = low_voice_non_overlap
+            selection_tier = "same_track_low_voice_non_overlap_fallback"
+        elif non_overlapping:
+            pool = non_overlapping
+            selection_tier = "non_overlap_voice_fallback"
+        elif low_voice:
             pool = low_voice
+            selection_tier = "overlap_low_voice_emergency"
+        else:
+            pool = candidates
+            selection_tier = "full_emergency"
         selected = min(pool, key=lambda item: float(item["score"]))
         track = selected["track"]
         return track, float(selected["start"]), total_duration, {
@@ -747,9 +883,18 @@ def choose_music(
             "track_duration": selected["track_duration"],
             "voice_risk": selected["voice_risk"],
             "music_selection_score": round(float(selected["score"]), 4),
+            "music_selection_tier": selection_tier,
             "recent_same_track": bool(selected["recent_same_track"]),
+            "recent_same_track_count": selected["recent_same_track_count"],
+            "latest_same_track_issue": selected["latest_same_track_issue"],
+            "same_track_issue_gap": selected["same_track_issue_gap"],
+            "track_fatigue": selected["track_fatigue"],
             "overlaps_recent": bool(selected["overlaps_recent"]),
             "candidate_count": len(candidates),
+            "pool_count": len(pool),
+            "tracks_with_allowed_ranges": len({str(item["track"]) for item in candidates}),
+            "range_manifest_loaded": bool(range_manifest),
+            "skipped_audio_count": len(skipped),
         }
     raise RuntimeError(
         "No audio track has an allowed instrumental range long enough for the full story; "
@@ -1291,6 +1436,18 @@ def main() -> None:
         rng,
         recent_music=payload.get("recent_music") or [],
     )
+    log(
+        "Selected music: "
+        f"file={music.name} start={music_start:.3f} end={float(music_meta.get('selected_end') or music_start + total_duration):.3f} "
+        f"tier={music_meta.get('music_selection_tier')} voice_risk={float(music_meta.get('voice_risk') or 0.0):.3f} "
+        f"same_track_count={music_meta.get('recent_same_track_count')} "
+        f"same_track_gap={music_meta.get('same_track_issue_gap')} "
+        f"overlaps_recent={music_meta.get('overlaps_recent')} "
+        f"candidate_count={music_meta.get('candidate_count')} pool_count={music_meta.get('pool_count')} "
+        f"tracks_with_ranges={music_meta.get('tracks_with_allowed_ranges')} "
+        f"range_manifest_loaded={music_meta.get('range_manifest_loaded')} "
+        f"skipped_audio={music_meta.get('skipped_audio_count')}"
+    )
     rhythm_slots, rhythm_meta = beat_slots(
         MAIN_DURATION,
         rng,
@@ -1329,9 +1486,18 @@ def main() -> None:
         "music_voice_risk": music_meta.get("voice_risk"),
         "music_selection": {
             "score": music_meta.get("music_selection_score"),
+            "tier": music_meta.get("music_selection_tier"),
             "candidate_count": music_meta.get("candidate_count"),
+            "pool_count": music_meta.get("pool_count"),
+            "tracks_with_allowed_ranges": music_meta.get("tracks_with_allowed_ranges"),
             "recent_same_track": music_meta.get("recent_same_track"),
+            "recent_same_track_count": music_meta.get("recent_same_track_count"),
+            "latest_same_track_issue": music_meta.get("latest_same_track_issue"),
+            "same_track_issue_gap": music_meta.get("same_track_issue_gap"),
+            "track_fatigue": music_meta.get("track_fatigue"),
             "overlaps_recent": music_meta.get("overlaps_recent"),
+            "range_manifest_loaded": music_meta.get("range_manifest_loaded"),
+            "skipped_audio_count": music_meta.get("skipped_audio_count"),
         },
         "total_duration": total_duration,
         "main_duration": main_duration,
@@ -1373,9 +1539,18 @@ def main() -> None:
             "duration": total_duration,
             "voice_risk": music_meta.get("voice_risk"),
             "selection_score": music_meta.get("music_selection_score"),
+            "selection_tier": music_meta.get("music_selection_tier"),
             "candidate_count": music_meta.get("candidate_count"),
+            "pool_count": music_meta.get("pool_count"),
+            "tracks_with_allowed_ranges": music_meta.get("tracks_with_allowed_ranges"),
             "recent_same_track": music_meta.get("recent_same_track"),
+            "recent_same_track_count": music_meta.get("recent_same_track_count"),
+            "latest_same_track_issue": music_meta.get("latest_same_track_issue"),
+            "same_track_issue_gap": music_meta.get("same_track_issue_gap"),
+            "track_fatigue": music_meta.get("track_fatigue"),
             "overlaps_recent": music_meta.get("overlaps_recent"),
+            "range_manifest_loaded": music_meta.get("range_manifest_loaded"),
+            "skipped_audio_count": music_meta.get("skipped_audio_count"),
         },
         "text": {
             "thought_id": manifest["thought_id"],
