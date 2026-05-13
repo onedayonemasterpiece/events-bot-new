@@ -107,6 +107,24 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 
 ## Release And Closure Evidence
 
+### 2026-05-13 repeat / voice-risk follow-up
+
+- deployed SHA: `e4978a83e9b4c384cad9879f211563f51ef49d2e`
+- deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
+- Fly release: `v1083`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRH348YJ0DM9232JBSB054VV`
+- regression checks:
+  - `python3 -m py_compile kenigsberg_stories/state.py handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py tests/test_kenigsberg_stories.py`
+  - `git diff --check`
+  - `.venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `58 passed`
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Fly machine `48e42d5b714228` is `started`, release `v1083`, service check passing.
+  - Production code contains `recent_music_exclusions` and renderer manifest field `music_voice_risk`.
+  - Production `thoughts.md` contains the latest operator-provided entries through `#36`.
+- fresh smoke still required before closing: the next `/kenigsberg` issue should show `kenigsberg_render_log.json.selected_music.voice_risk`, `recent_same_track`, and `overlaps_recent`; adjacent runs should not repeat an overlapping same-track segment when alternatives are available.
+
+### 2026-05-12 strict whitelist fix
+
 - deployed SHA: `748ca42cff63d7eb4c1de23fe4c9db3531d15049`
 - deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
 - Fly release: `v1067`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE4WWNCQ8EXSBAJSK1F6PX6`
