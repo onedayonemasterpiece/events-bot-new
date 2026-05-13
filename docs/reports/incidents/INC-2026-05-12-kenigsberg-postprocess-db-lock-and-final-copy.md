@@ -175,6 +175,23 @@ Later on 2026-05-13, Kenigsberg issue `#25`, session `#279`, failed inside Kaggl
 
 ## Release And Closure Evidence
 
+### 2026-05-13 soft source exclusions deploy
+
+- deployed SHA: `4dc3f36e96ec6dcf513a421a5d9c8ad91e8f72a4`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-4dc3f36e` -> `flyctl deploy --remote-only`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRH4SJ6SB4X12TJE79MVQ3J8`, machine `48e42d5b714228`, Fly version `1084`, checks `1/1` passing.
+- failure evidence:
+  - Session `#279`, issue `#25`, Kaggle output log in `artifacts/codex/kenigsberg-session-279/koenigsberg-stories.log` showed `RuntimeError: No source segment can avoid bans for slot 2`.
+  - Downloaded payload had valid `scene_lines` and recent history, so the failure was isolated to source segment selection.
+- regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py kenigsberg_stories/state.py scripts/render_kenigsberg_story.py tests/test_kenigsberg_stories.py`
+  - `git diff --check`
+  - `timeout 180 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `59 passed in 1.19s`
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - Production renderer contains `split_hard_soft_source_bans` and `source_soft_repeat_fallback`.
+  - Fresh `/kenigsberg` smoke still required before closing: a winter/small-dataset run should render instead of failing when recent source exclusions cover the first-choice windows.
+
 ### 2026-05-13 profile-scoped rendering lock deploy
 
 - deployed SHA: `a0fd0df0c35e506744a6c9636761a9e8e997b237`
