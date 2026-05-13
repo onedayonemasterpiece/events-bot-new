@@ -11,11 +11,14 @@ from kenigsberg_stories.state import (
     SecondRange,
     choose_next_thought,
     format_bans_report,
+    load_state,
     map_generated_range_to_source,
     parse_second_ranges,
     recent_music_exclusions,
     recent_source_exclusions,
     register_issue_manifest,
+    reset_recent_usage_windows,
+    save_state,
 )
 from scripts import render_kenigsberg_story as renderer
 
@@ -394,6 +397,77 @@ async def test_thought_is_marked_used_only_after_successful_manifest(monkeypatch
     assert state["used_thought_ids"] == ["1"]
 
 
+@pytest.mark.asyncio
+async def test_reset_recent_usage_windows_preserves_bans_and_issue_history(tmp_path) -> None:
+    class RawConn:
+        def __init__(self, outer):
+            self.outer = outer
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def execute(self, query, params=()):
+            if query.lstrip().upper().startswith("SELECT"):
+                return SimpleNamespace(fetchone=lambda: self.outer._fetchone())
+            key, value = params
+            self.outer.store[key] = value
+            return SimpleNamespace(fetchone=lambda: None)
+
+        async def commit(self):
+            return None
+
+    class FakeDb:
+        def __init__(self):
+            self.store = {}
+
+        def raw_conn(self):
+            return RawConn(self)
+
+        async def _fetchone(self):
+            value = self.store.get("kenigsberg_stories_state")
+            return (value,) if value is not None else None
+
+    db = FakeDb()
+    state = {
+        "version": 1,
+        "next_issue": 33,
+        "used_thought_ids": ["1"],
+        "recent_music": [{"file": "The Promise.flac", "start": 1, "end": 2}],
+        "recent_sources": [{"source_file": "x.mp4"}],
+        "issues": {
+            "1": {
+                "issue_number": 1,
+                "registered_at": "2026-05-13T10:00:00+00:00",
+                "segments": [
+                    {
+                        "dataset": "zigomaro/koenigsberg19191940",
+                        "source_file": "x.mp4",
+                        "source_start": 1,
+                        "source_end": 2,
+                    }
+                ],
+                "selected_music": {"file": "The Promise.flac", "start": 1, "end": 2},
+            }
+        },
+        "source_bans": [{"source_file": "banned.mp4", "source_start": 3, "source_end": 4}],
+    }
+    await save_state(db, state)
+
+    reset_state = await reset_recent_usage_windows(db)
+    loaded = await load_state(db)
+
+    assert loaded["source_bans"] == state["source_bans"]
+    assert loaded["issues"] == state["issues"]
+    assert loaded["recent_music"] == []
+    assert loaded["recent_sources"] == []
+    assert reset_state["recent_usage_reset_at"]
+    assert recent_source_exclusions(loaded) == []
+    assert recent_music_exclusions(loaded) == []
+
+
 def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:
     dataset_dir = tmp_path / "datasets" / "zigomaro" / "koenigsberg19191940"
     dataset_dir.mkdir(parents=True)
@@ -424,6 +498,23 @@ def test_renderer_randomly_selects_from_mounted_video_datasets(tmp_path) -> None
     }
 
     assert seen == {"1919-1940", "winter"}
+
+
+def test_renderer_weights_video_dataset_selection_by_video_count(tmp_path) -> None:
+    first = tmp_path / "datasets" / "koenigsberg19191940"
+    second = tmp_path / "datasets" / "koenigsberg-winter"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    for idx in range(10):
+        (first / f"a{idx}.mp4").write_bytes(b"stub")
+    (second / "b.mp4").write_bytes(b"stub")
+
+    selected = [
+        renderer.choose_video_dataset(tmp_path, renderer.random.Random(seed))[1]
+        for seed in range(1, 301)
+    ]
+
+    assert selected.count("1919-1940") > selected.count("winter") * 5
 
 
 def test_renderer_rhythm_slots_land_on_strong_beats_and_vary_by_seed() -> None:
@@ -976,7 +1067,7 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_pro
 
     config = await kenigsberg_stories_cmd._build_production_story_config(db=object())
 
-    assert config == {"targets": kenigsberg_stories_cmd._kenigsberg_story_targets_override()}
+    assert config == {"targets": kenigsberg_stories_cmd._kenigsberg_story_targets()}
     params = captured["selection_params"]
     assert params["mode"] == "kenigsberg_story"
     assert params["story_publish_mode"] == "video"

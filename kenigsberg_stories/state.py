@@ -36,6 +36,7 @@ def _empty_state() -> dict[str, Any]:
         "used_thought_ids": [],
         "recent_music": [],
         "recent_sources": [],
+        "recent_usage_reset_at": None,
         "issues": {},
         "source_bans": [],
     }
@@ -201,6 +202,28 @@ async def reset_bans(db: Any) -> None:
     await save_state(db, state)
 
 
+async def reset_recent_usage_windows(db: Any) -> dict[str, Any]:
+    state = await load_state(db)
+    state["recent_music"] = []
+    state["recent_sources"] = []
+    state["recent_usage_reset_at"] = _utc_now_iso()
+    await save_state(db, state)
+    return state
+
+
+def _recent_usage_reset_at(state: dict[str, Any]) -> datetime | None:
+    raw = str(state.get("recent_usage_reset_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def format_bans_report(state: dict[str, Any]) -> str:
     bans = state.get("source_bans") or []
     if not bans:
@@ -263,6 +286,7 @@ def recent_source_exclusions(
 ) -> list[dict[str, Any]]:
     issues = state.get("issues") if isinstance(state.get("issues"), dict) else {}
     cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(max_age_days)))
+    reset_at = _recent_usage_reset_at(state)
     items: list[tuple[datetime, dict[str, Any]]] = []
     for issue in issues.values():
         if not isinstance(issue, dict):
@@ -275,6 +299,8 @@ def recent_source_exclusions(
         if registered_at.tzinfo is None:
             registered_at = registered_at.replace(tzinfo=timezone.utc)
         if registered_at < cutoff:
+            continue
+        if reset_at is not None and registered_at <= reset_at:
             continue
         issue_number = int(issue.get("issue_number") or 0)
         for segment in issue.get("segments") or []:
@@ -313,6 +339,7 @@ def recent_music_exclusions(
     max_items: int = 80,
 ) -> list[dict[str, Any]]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(max_age_days)))
+    reset_at = _recent_usage_reset_at(state)
     items: list[tuple[datetime, dict[str, Any]]] = []
 
     def add_item(raw: dict[str, Any], *, issue_number: int = 0, registered_at: datetime | None = None) -> None:
@@ -338,6 +365,8 @@ def recent_music_exclusions(
         if created.tzinfo is None:
             created = created.replace(tzinfo=timezone.utc)
         if created < cutoff:
+            return
+        if reset_at is not None and created <= reset_at:
             return
         items.append(
             (

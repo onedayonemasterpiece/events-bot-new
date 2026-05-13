@@ -145,10 +145,20 @@ def choose_video_dataset(input_root: Path, rng: random.Random) -> tuple[Path, st
     options = []
     for spec in VIDEO_DATASETS:
         path = find_dataset_dir(input_root, list(spec["aliases"]))
-        if path and iter_files(path, VIDEO_EXTS):
-            options.append((path, str(spec["period_key"]), str(spec["dataset"])))
+        if path:
+            video_count = len(iter_files(path, VIDEO_EXTS))
+            if video_count > 0:
+                options.append((path, str(spec["period_key"]), str(spec["dataset"]), video_count))
     if options:
-        return rng.choice(options)
+        total = sum(item[3] for item in options)
+        threshold = rng.uniform(0, float(total))
+        cursor = 0.0
+        for path, period_key, dataset_slug, video_count in options:
+            cursor += float(video_count)
+            if threshold <= cursor:
+                return path, period_key, dataset_slug
+        path, period_key, dataset_slug, _video_count = options[-1]
+        return path, period_key, dataset_slug
 
     datasets_root = input_root / "datasets"
     scan_root = datasets_root if datasets_root.exists() else input_root

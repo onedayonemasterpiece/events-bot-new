@@ -320,6 +320,88 @@ async def _run_scheduled_popular_review(
     )
 
 
+async def _run_scheduled_kenigsberg_story(
+    db,
+    bot,
+    *,
+    startup_catchup: bool = False,
+) -> None:
+    from handlers.kenigsberg_stories_cmd import launch_scheduled_kenigsberg_story
+
+    ops_details: dict[str, Any] = {
+        "profile_key": "kenigsberg_story",
+        "target": "https://t.me/mostvkenig",
+        "startup_catchup": bool(startup_catchup),
+    }
+    ops_run_id = await start_ops_run(
+        db,
+        kind="kenigsberg_story",
+        trigger="scheduled",
+        operator_id=0,
+        details=ops_details,
+    )
+    target_chat_id = await resolve_superadmin_chat_id(db)
+    if not target_chat_id or bot is None:
+        logging.warning(
+            "SCHED skipping kenigsberg_story: missing target_chat_id=%s or bot=%s",
+            target_chat_id,
+            bot is not None,
+        )
+        ops_details["skip_reason"] = "missing_target_chat_or_bot"
+        await finish_ops_run(
+            db,
+            run_id=ops_run_id,
+            status="skipped",
+            details=ops_details,
+        )
+        return
+
+    try:
+        session_id = await launch_scheduled_kenigsberg_story(
+            db,
+            bot,
+            notify_chat_id=int(target_chat_id),
+            trigger="startup_catchup" if startup_catchup else "scheduled",
+        )
+        if session_id is None:
+            ops_details["skip_reason"] = "active_or_not_started"
+            await finish_ops_run(
+                db,
+                run_id=ops_run_id,
+                status="skipped",
+                details=ops_details,
+            )
+            return
+        ops_details["session_id"] = int(session_id)
+        launch_state = await _video_session_launch_state(db, int(session_id))
+        ops_details.update(launch_state)
+        if not _video_session_has_remote_handoff(launch_state):
+            reason = (
+                "Kenigsberg did not reach confirmed Kaggle handoff: "
+                f"status={launch_state.get('session_status') or '-'} "
+                f"dataset={launch_state.get('kaggle_dataset') or '-'} "
+                f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
+            )
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
+    except Exception as exc:
+        ops_details["error"] = str(exc) or type(exc).__name__
+        await finish_ops_run(
+            db,
+            run_id=ops_run_id,
+            status="failed",
+            details=ops_details,
+        )
+        raise
+
+    await finish_ops_run(
+        db,
+        run_id=ops_run_id,
+        status="success",
+        details=ops_details,
+    )
+
+
 def _cron_from_local(
     time_raw: str,
     tz_name: str,
@@ -630,6 +712,53 @@ async def _popular_review_session_exists_today(
     return False
 
 
+async def _kenigsberg_story_session_exists_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> bool:
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = 'kenigsberg_story'
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    for status, dataset, kernel_ref, selection_params_raw in rows:
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("trigger") or "").strip() not in {"scheduled", "startup_catchup"}:
+            continue
+        if not bool(params.get("story_publish_requested")):
+            continue
+        if _video_session_has_remote_handoff(
+            {
+                "session_status": status,
+                "kaggle_dataset": dataset,
+                "kaggle_kernel_ref": kernel_ref,
+            }
+        ):
+            return True
+    return False
+
+
 async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     enabled, video_tz_name, video_time_raw, profile_key, video_test_mode = _video_tomorrow_schedule_settings()
     if not enabled:
@@ -737,6 +866,48 @@ async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
         now_local.isoformat(),
     )
     await _run_scheduled_popular_review(db, bot, startup_catchup=True)
+    return True
+
+
+async def _maybe_catch_up_kenigsberg_story_on_startup(db: Any, bot: Any) -> bool:
+    tz_name = "Europe/Kaliningrad"
+    time_raw = "20:10"
+    tz = _safe_zoneinfo(tz_name, label="KENIGSBERG_STORY_TZ")
+    hour_local, minute_local = _parse_hhmm(
+        time_raw,
+        default_hour=20,
+        default_minute=10,
+        label="KENIGSBERG_STORY_TIME_LOCAL",
+    )
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local,
+        minute=minute_local,
+        second=0,
+        microsecond=0,
+    )
+    if now_local <= scheduled_local + timedelta(seconds=30):
+        return False
+
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    if await _kenigsberg_story_session_exists_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+    ):
+        logging.info(
+            "SCHED startup catchup skip kenigsberg_story: confirmed scheduled story handoff already exists today"
+        )
+        return False
+
+    logging.warning(
+        "SCHED startup catchup dispatching missed kenigsberg_story slot scheduled_local=%s now_local=%s",
+        scheduled_local.isoformat(),
+        now_local.isoformat(),
+    )
+    await _run_scheduled_kenigsberg_story(db, bot, startup_catchup=True)
     return True
 
 
@@ -853,6 +1024,7 @@ def runtime_health_status() -> dict[str, Any]:
     payload: dict[str, Any] = {
         "scheduler": "missing" if scheduler is None else "unknown",
         "video_tomorrow": "disabled",
+        "kenigsberg_story_daily": "disabled" if os.getenv("DEV_MODE") == "1" else "unknown",
     }
     if scheduler is None:
         if enabled:
@@ -864,6 +1036,19 @@ def runtime_health_status() -> dict[str, Any]:
     except Exception:
         running = False
     payload["scheduler"] = "ok" if running else "stopped"
+
+    if os.getenv("DEV_MODE") != "1":
+        try:
+            kenigsberg_job = scheduler.get_job("kenigsberg_story_daily")
+        except Exception:
+            payload["kenigsberg_story_daily"] = "lookup_error"
+        else:
+            next_run = _job_next_run(kenigsberg_job) if kenigsberg_job else None
+            payload["kenigsberg_story_daily"] = "ok" if next_run is not None else "missing"
+            if next_run is not None:
+                payload["kenigsberg_story_daily_next_run"] = (
+                    next_run.isoformat() if hasattr(next_run, "isoformat") else str(next_run)
+                )
 
     if not enabled:
         return payload
@@ -1035,6 +1220,7 @@ async def _run_video_tomorrow_startup_checks(db: Any, bot: Any) -> None:
     if not forced:
         await _maybe_catch_up_video_tomorrow_on_startup(db, bot)
     await _maybe_catch_up_popular_review_on_startup(db, bot)
+    await _maybe_catch_up_kenigsberg_story_on_startup(db, bot)
 
 
 class BatchProgress:
@@ -2219,6 +2405,41 @@ def startup(
             "video_popular_review",
             "ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1",
         )
+
+    if is_prod:
+        async def kenigsberg_story_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await _run_scheduled_kenigsberg_story(
+                db_obj,
+                bot_obj,
+            )
+
+        kenigsberg_hour, kenigsberg_minute = _cron_from_local(
+            "20:10",
+            "Europe/Kaliningrad",
+            default_hour="18",
+            default_minute="10",
+            label="KENIGSBERG_STORY_TIME_LOCAL",
+        )
+        _register_job(
+            "kenigsberg_story_daily",
+            _job_wrapper("kenigsberg_story_daily", kenigsberg_story_scheduler, notify_skip=_notify_admin_skip),
+            "cron",
+            id="kenigsberg_story_daily",
+            hour=kenigsberg_hour,
+            minute=kenigsberg_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=1800,
+        )
+    else:
+        logging.info("SCHED skipping kenigsberg_story_daily outside production")
 
     enable_general_stats = _env_enabled("ENABLE_GENERAL_STATS", default=False)
     if enable_general_stats:

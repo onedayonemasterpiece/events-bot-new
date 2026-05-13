@@ -182,23 +182,7 @@ async def _require_superadmin(message: types.Message) -> bool:
     return True
 
 
-def _launch_enabled() -> bool:
-    raw = (os.getenv("KENIGSBERG_STORIES_KAGGLE_ENABLED") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
-def _production_story_enabled() -> bool:
-    raw = (os.getenv("KENIGSBERG_STORIES_PRODUCTION_ENABLED") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
-def _kenigsberg_story_targets_override() -> list[dict[str, object]]:
-    raw = (os.getenv("KENIGSBERG_STORIES_STORY_TARGETS_JSON") or "").strip()
-    if raw:
-        parsed = json.loads(raw)
-        if not isinstance(parsed, list):
-            raise RuntimeError("KENIGSBERG_STORIES_STORY_TARGETS_JSON must be a JSON list")
-        return parsed
+def _kenigsberg_story_targets() -> list[dict[str, object]]:
     return [
         {
             "peer": "@mostvkenig",
@@ -216,7 +200,7 @@ async def _build_production_story_config(db) -> dict | None:
         "story_publish_enabled": True,
         "story_publish_mode": "video",
         "story_upload_profile": "telegram_story_native_hevc_720p_v1",
-        "story_targets_override": _kenigsberg_story_targets_override(),
+        "story_targets_override": _kenigsberg_story_targets(),
         "story_caption": "",
     }
     business_targets_override = (os.getenv("KENIGSBERG_STORIES_STORY_BUSINESS_TARGETS") or "").strip()
@@ -554,19 +538,15 @@ async def _handle_unlock_command(message: types.Message) -> None:
 async def _handle_launch(message: types.Message) -> None:
     db = require_main_attr("get_db")()
     thoughts = load_thoughts()
-    if not _launch_enabled():
-        await message.answer(
-            "Kenigsberg Stories MVP подготовлен, но Kaggle запуск сейчас выключен.\n"
-            "Флаг: KENIGSBERG_STORIES_KAGGLE_ENABLED=1.\n"
-            f"Мыслей в пуле: {len(thoughts)}.\n\n"
-            "Доступно:\n"
-            "/kenigsberg status\n"
-            "/kenigsberg bans\n"
-            "/kenigsberg ban #15 1-3, 7, 16-17\n"
-            "/kenigsberg bans reset"
-        )
-        return
-    await _launch_kaggle_generation(message, db, thoughts_count=len(thoughts))
+    await _launch_kaggle_generation(
+        message,
+        db,
+        thoughts_count=len(thoughts),
+        bot=message.bot,
+        notify_chat_id=message.chat.id,
+        operator_user_id=message.from_user.id if message.from_user else None,
+        trigger="manual",
+    )
 
 
 async def _run_launch_in_background(message: types.Message) -> None:
@@ -691,7 +671,37 @@ async def _create_kenigsberg_dataset(
     return dataset_id
 
 
-async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_count: int) -> None:
+async def _send_launch_message(bot, chat_id: int | None, text: str) -> None:
+    if chat_id is None:
+        logger.info("kenigsberg: %s", text)
+        return
+    await bot.send_message(int(chat_id), text, disable_web_page_preview=True)
+
+
+async def _launch_kaggle_generation(
+    message: types.Message | None,
+    db,
+    *,
+    thoughts_count: int,
+    bot=None,
+    notify_chat_id: int | None = None,
+    operator_user_id: int | None = None,
+    trigger: str = "manual",
+) -> int | None:
+    if message is not None:
+        bot = bot or message.bot
+        notify_chat_id = notify_chat_id if notify_chat_id is not None else message.chat.id
+        operator_user_id = (
+            operator_user_id
+            if operator_user_id is not None
+            else (message.from_user.id if message.from_user else None)
+        )
+    if bot is None:
+        raise RuntimeError("Kenigsberg launch requires bot instance")
+
+    async def notify(text: str) -> None:
+        await _send_launch_message(bot, notify_chat_id, text)
+
     existing = None
     async with db.get_session() as session:
         result = await session.execute(
@@ -715,7 +725,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
                 "kenigsberg: auto-failed stale local handoff session=%s before rerun",
                 existing.id,
             )
-            await message.answer(
+            await notify(
                 f"Снял зависшую pre-handoff сессию #{existing.id}"
                 + (f" ({failed.status})." if failed else ".")
                 + " Запускаю новый Kenigsberg render."
@@ -739,7 +749,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
                         exc_info=True,
                     )
             if "complete" in kaggle_state.casefold():
-                await message.answer(
+                await notify(
                     f"Сессия #{existing.id} уже завершилась на Kaggle, бот забирает и публикует результат."
                     f"{kaggle_state} Дождитесь сообщения с видео/логами."
                 )
@@ -749,23 +759,20 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
                     if _is_local_kernel_ref(existing.kaggle_kernel_ref)
                     else ""
                 )
-                await message.answer(
+                await notify(
                     f"Сессия #{existing.id} ещё обрабатывается.{kaggle_state} "
                     f"Новый Kenigsberg запуск начнётся после финализации текущего.{local_hint}"
                 )
-            return
+            return None
 
-    test_chat_id = await _resolve_channel_id(db, "keniggpt")
-    if not test_chat_id:
-        await message.answer("Не найден test target @keniggpt в таблице channel и KENIGSBERG_STORIES_TEST_CHAT_ID.")
-        return
+    test_chat_id = None
 
     issue_number = await reserve_issue_number(db)
     thought = await choose_next_thought(db)
     seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
     state = await load_state(db)
     thought_text = str(thought.get("text") or "")
-    await message.answer(
+    await notify(
         f"Kenigsberg #{issue_number}: принял команду, готовлю Kaggle, "
         f"thought={thought.get('id') or '-'} / {thoughts_count}."
     )
@@ -773,8 +780,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         "kenigsberg: launch accepted issue=%s thought=%s chat_id=%s user_id=%s",
         issue_number,
         thought.get("id") or "",
-        message.chat.id if message.chat else None,
-        message.from_user.id if message.from_user else None,
+        notify_chat_id,
+        operator_user_id,
     )
     try:
         story_text = await _prepare_story_text_from_thought(thought_text)
@@ -785,11 +792,11 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             thought.get("id") or "",
             exc,
         )
-        await message.answer(
+        await notify(
             f"Kenigsberg #{issue_number}: LLM не подготовила безопасную смысловую нарезку текста, "
             "Kaggle не запускаю."
         )
-        return
+        return None
     payload = {
         "issue_number": issue_number,
         "seed": seed,
@@ -809,29 +816,28 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             *recent_source_exclusions(state),
         ],
         "recent_music": recent_music_exclusions(state),
-        "target": "https://t.me/keniggpt",
+        "target": "https://t.me/mostvkenig",
         "strategy": "heuristic_v1",
-        "story_publish_requested": False,
+        "trigger": trigger,
+        "story_publish_requested": True,
+        "production_target": "https://t.me/mostvkenig",
     }
     story_config: dict | None = None
-    if _production_story_enabled():
-        try:
-            story_config = await _build_production_story_config(db)
-        except Exception as exc:
-            logger.exception("kenigsberg: failed to build production story config")
-            await message.answer(
-                f"Kenigsberg #{issue_number}: production story publishing включён, "
-                f"но preflight config не собрался: {type(exc).__name__}: {exc}"
-            )
-            return
-        if not story_config:
-            await message.answer(
-                f"Kenigsberg #{issue_number}: production story publishing включён, "
-                "но story_publish.json не удалось собрать. Kaggle не запускаю."
-            )
-            return
-        payload["story_publish_requested"] = True
-        payload["production_target"] = "https://t.me/mostvkenig"
+    try:
+        story_config = await _build_production_story_config(db)
+    except Exception as exc:
+        logger.exception("kenigsberg: failed to build production story config")
+        await notify(
+            f"Kenigsberg #{issue_number}: production story publishing включён, "
+            f"но preflight config не собрался: {type(exc).__name__}: {exc}"
+        )
+        return None
+    if not story_config:
+        await notify(
+            f"Kenigsberg #{issue_number}: production story publishing включён, "
+            "но story_publish.json не удалось собрать. Kaggle не запускаю."
+        )
+        return None
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.SELECTED,
@@ -846,19 +852,19 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         await session.refresh(obj)
 
     status_message = await update_status_message(
-        message.bot,
+        bot,
         obj,
         {},
-        chat_id=message.chat.id,
+        chat_id=notify_chat_id,
         allow_send=True,
         note="Kenigsberg: готовим Kaggle",
     )
-    status_chat_id = status_message[0] if status_message else message.chat.id
+    status_chat_id = status_message[0] if status_message else notify_chat_id
     status_message_id = status_message[1] if status_message else None
     if status_message:
         remember_status_message(obj.id, status_chat_id, status_message_id)
 
-    await message.answer(
+    await notify(
         f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period=auto, "
         f"thought={thought.get('id') or '-'} / {thoughts_count}, "
         f"text={story_text.get('source') or 'unknown'}"
@@ -914,15 +920,15 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             obj.id,
             error=f"kaggle launch failed: {type(exc).__name__}: {exc}",
         )
-        await message.answer(f"Kenigsberg #{issue_number}: не удалось запустить Kaggle: {type(exc).__name__}: {exc}")
-        return
+        await notify(f"Kenigsberg #{issue_number}: не удалось запустить Kaggle: {type(exc).__name__}: {exc}")
+        return None
 
     start_kernel_poller_task(
         db,
         client,
         obj,
-        bot=message.bot,
-        notify_chat_id=message.chat.id,
+        bot=bot,
+        notify_chat_id=notify_chat_id,
         test_chat_id=test_chat_id,
         main_chat_id=None,
         status_chat_id=status_chat_id,
@@ -931,6 +937,28 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         timeout_minutes=VIDEO_KAGGLE_TIMEOUT_MINUTES,
         dataset_slug=obj.kaggle_dataset,
     )
+    return int(obj.id)
+
+
+async def launch_scheduled_kenigsberg_story(
+    db,
+    bot,
+    *,
+    notify_chat_id: int | None,
+    trigger: str = "scheduled",
+) -> int | None:
+    if _KENIGSBERG_LAUNCH_LOCK.locked():
+        raise RuntimeError("Kenigsberg launch preflight is already running")
+    async with _KENIGSBERG_LAUNCH_LOCK:
+        return await _launch_kaggle_generation(
+            None,
+            db,
+            thoughts_count=len(load_thoughts()),
+            bot=bot,
+            notify_chat_id=notify_chat_id,
+            operator_user_id=0,
+            trigger=trigger,
+        )
 
 
 @kenigsberg_stories_router.message(Command("kenigsberg"))
@@ -959,8 +987,8 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
         thoughts = load_thoughts()
         await message.answer(
             "Kenigsberg Stories\n"
-            f"launch_enabled={_launch_enabled()}\n"
-            f"production_story_enabled={_production_story_enabled()}\n"
+            "launch=enabled_in_code\n"
+            "production_story=enabled_in_code\n"
             f"next_issue=#{state.get('next_issue', 1)}\n"
             f"thoughts={len(thoughts)} used={len(state.get('used_thought_ids') or [])}\n"
             f"issues={len(state.get('issues') or {})} bans={len(state.get('source_bans') or [])} "

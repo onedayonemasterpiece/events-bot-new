@@ -35,6 +35,8 @@
 
 Новые datasets могут добавляться позже. Генератор не должен иметь hardcoded списка файлов: при каждом запуске он читает актуальные mounted dataset files и включает новые видео в выборку.
 
+Dataset period selection is weighted by the current number of video files inside each mounted dataset. On 2026-05-13 the latest Kaggle dataset counts were `koenigsberg19191940=20` and `koenigsberg-winter=19`, so the effective probabilities were about `51.3%` / `48.7%`; the distribution will automatically shift as more footage is added.
+
 ### Music dataset
 
 - `zigomaro/koenigsberg-music`
@@ -144,8 +146,8 @@ Variation points for this product:
 
 Initial command set:
 
-- `/kenigsberg` — start a manual Kaggle generation when `KENIGSBERG_STORIES_KAGGLE_ENABLED=1`.
-- `/kenigsberg status` — show launch flag, production story flag, next issue number, thought-pool status, known issues and ban count.
+- `/kenigsberg` — start a manual production Kaggle generation; production story publishing is enabled in code, not by a feature ENV flag.
+- `/kenigsberg status` — show next issue number, thought-pool status, known issues and ban count.
 - `/kenigsberg bans` — list source-video bans.
 - `/kenigsberg unlock` — mark the latest stuck Kenigsberg `local:*` pre-handoff session as `FAILED` so a new manual run can start.
 - `/kenigsberg ban #15 1-3, 7, 16-17` — map seconds from generated issue `#15` back to source-video coordinates and ban them for future cuts.
@@ -340,9 +342,9 @@ Current implementation state:
 
 ## Scheduling
 
-Manual `/kenigsberg` comes first.
+Manual `/kenigsberg` came first during MVP testing.
 
-Scheduled production must be added only after test approval. The candidate daily slot is `21:20 Europe/Kaliningrad` (`18:20 UTC`): it is after the observed guide-monitoring recovery window, after the 18:30-ish VK auto-import bursts, and well away from the CherryFlash morning slot. On the eventual production-enable command, start with one compensating manual production run before enabling the recurring schedule.
+Scheduled production is enabled after the 2026-05-13 approval. The daily slot is `20:10 Europe/Kaliningrad` (`18:10 UTC`): the job is `kenigsberg_story_daily`, publishes a production story to `@mostvkenig`, and is intentionally not behind `KENIGSBERG_STORIES_*_ENABLED` feature flags. Startup catch-up runs the same production launch if the app restarts after today's slot and no scheduled production Kenigsberg handoff exists for the local day.
 
 The time slot should avoid other heavy operations:
 
@@ -357,19 +359,17 @@ Debug phase uses Kaggle GPU. After the rendering path is stable, production shou
 
 Testing:
 
-- publish to `@keniggpt`;
-- current manual test path posts the generated MP4 to `@keniggpt` through the existing video poller.
+- historical MVP tests published generated MP4s to `@keniggpt`;
+- current manual `/kenigsberg` uses the same production story publishing path as the scheduler and sends operational copies/logs only to the operator/superadmin chat.
 
 Production:
 
-- only after separate user signal;
 - publish stories for `@mostvkenig`;
-- `KENIGSBERG_STORIES_PRODUCTION_ENABLED=1` is the production switch. When it is off, the per-run dataset contains no `story_publish.json` and the Kaggle notebook renders only.
-- when the production switch is on, Kenigsberg reuses the same shared Kaggle story helper as CherryFlash:
+- Kenigsberg reuses the same shared Kaggle story helper as CherryFlash:
   - `kaggle/CrumpleVideo/story_publish.py` is bundled as `kaggle_common/story_publish.py`;
   - `story_publish.json`, `story_publish.enc`, and `story_publish.key` are written into the same `kenigsberg-session-*` dataset;
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
-- primary Telegram story target defaults to direct story upload to `@mostvkenig`; override with `KENIGSBERG_STORIES_STORY_TARGETS_JSON` if the channel needs the CherryFlash-style `me` upload plus `repost_previous` fanout shape.
+- primary Telegram story target is direct story upload to `@mostvkenig`;
 - backup Business story targets are selected from the encrypted Business cache through the shared `video_announce.story_publish` contract; `kenigsberg_story` is in the default Business-mode allowlist, and `KENIGSBERG_STORIES_STORY_BUSINESS_TARGETS` can narrow the selector.
 - keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
 - never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.
@@ -378,8 +378,12 @@ Readiness check on 2026-05-12:
 
 - production webhook allowed updates include `business_connection`, `business_message`, and `edited_business_message`;
 - Business cache contains story-capable selected targets, reported only by short hashes in ops evidence;
-- `VIDEO_ANNOUNCE_STORY_ENABLED=1` is present in production, but `KENIGSBERG_STORIES_PRODUCTION_ENABLED` is unset, so Kenigsberg production story publishing is not active;
+- `VIDEO_ANNOUNCE_STORY_ENABLED=1` is present in production and Kenigsberg story publishing is active by code path;
 - `@mostvkenig` is not required in the local `channel` table for the default story override because the story helper resolves the explicit peer string. If a future path uses `main_chat_id` DB resolution instead, add the channel row first.
+
+Production reset on approval:
+
+- before the first production compensation run, preserve `source_bans` and issue history, but set `recent_usage_reset_at` and clear `recent_music` / `recent_sources`. This keeps explicit `/a` bans hard while dropping MVP-test recency pressure from source and music selection.
 
 Important boundary:
 
