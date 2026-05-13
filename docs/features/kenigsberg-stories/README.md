@@ -178,12 +178,13 @@ The preferred MVP implementation on Kaggle:
   - after the first strong beat, every scene cut must land on a detected strong-beat anchor;
   - later slots randomly use only `1x` and `2x` strong-beat spans;
   - target approximately four double-span equivalents before outro;
-  - the main montage must end on a detected strong beat before outro. Do not pad the final visual slot to an arbitrary fixed `18.0s` boundary.
-- Render logs and manifests must include both raw detected `beat_times` and selected `strong_beat_times`, so a generated issue can be audited against the real music segment.
+  - if the strong-beat grid reaches a reasonable story length, the main montage ends on the detected strong beat before outro;
+  - if detected strong beats stop too early, preserve the established target story length with a logged target-duration fallback instead of publishing a sharply shortened clip.
+- Render logs and manifests must include both raw detected `beat_times`, selected `strong_beat_times`, `rhythm_end_mode`, and any `fallback_reason`, so a generated issue can be audited against the real music segment.
 - Transitions are short crossfades / eased opacity blends of `2-3` frames, centered on beat anchors where possible.
 - Video source clips may start at a random offset if there is enough usable duration until the chosen cut end.
 
-If beat detection fails or does not produce enough strong-beat anchors, generation must fail before publishing. A fake/random timing grid is forbidden because it breaks the rhythm contract.
+If beat detection fails or does not produce enough strong-beat anchors, the renderer may use an approximate timing grid to avoid blocking publication, but this must be explicit in the render metadata via `rhythm_end_mode=approximate_fallback` and `fallback_reason`. The fallback is a resilience path, not the preferred rhythm contract.
 
 ## Video cut selection strategy
 

@@ -38,6 +38,7 @@ OUTRO_STRIP = (241, 228, 75)
 OUTRO_TEXT = (16, 14, 14)
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 AUDIO_EXTS = {".flac", ".mp3", ".wav", ".m4a", ".aac", ".ogg"}
+MIN_STRONG_MAIN_DURATION = 15.0
 
 MUSIC_RANGES = {
     "the promise": [(224.0, 266.0), (402.0, None)],
@@ -653,7 +654,29 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, target))
         current = target
         idx = target_idx + 1
+    if current < min(MIN_STRONG_MAIN_DURATION, duration - 0.5) and duration - current >= 0.45:
+        # Keep the MVP resilient: when the detected strong-beat sequence is too
+        # short, preserve the established story length instead of publishing a
+        # sharply shortened clip. The manifest marks this as a target-duration
+        # fallback so it is visible in audit logs.
+        slots.append((current, duration))
     return [(round(start, 3), round(end, 3)) for start, end in slots]
+
+
+def approximate_rhythm_slots(duration: float, rng: random.Random) -> list[tuple[float, float]]:
+    slots: list[tuple[float, float]] = []
+    current = 0.0
+    base_interval = rng.uniform(1.62, 2.12)
+    while duration - current >= 0.45:
+        span = rng.choices([1, 2], weights=[0.58, 0.42], k=1)[0]
+        target = min(duration, current + base_interval * span)
+        if duration - target < 0.6:
+            target = duration
+        if target - current < 0.45:
+            break
+        slots.append((round(current, 3), round(target, 3)))
+        current = target
+    return slots
 
 
 def detect_strong_beats(
@@ -729,8 +752,22 @@ def beat_slots(
 ) -> tuple[list[tuple[float, float]], dict[str, Any]]:
     if music_path is None:
         raise RuntimeError("music_path is required for beat-synced Kenigsberg rhythm slots")
-    strong_beats, meta = detect_strong_beats(music_path, music_start, duration)
-    slots = rhythm_slots_from_strong_beats(strong_beats, duration, rng)
+    try:
+        strong_beats, meta = detect_strong_beats(music_path, music_start, duration)
+        slots = rhythm_slots_from_strong_beats(strong_beats, duration, rng)
+        last_end = slots[-1][1] if slots else 0.0
+        ends_on_strong = any(abs(last_end - beat) <= 0.025 for beat in strong_beats)
+        meta["rhythm_end_mode"] = "strong_beat" if ends_on_strong else "target_duration_fallback"
+        if not ends_on_strong:
+            meta["fallback_reason"] = "strong_beats_ended_before_target_duration"
+    except Exception as exc:
+        slots = approximate_rhythm_slots(duration, rng)
+        meta = {
+            "rhythm_end_mode": "approximate_fallback",
+            "fallback_reason": f"{type(exc).__name__}: {exc}",
+            "beat_times": [],
+            "strong_beat_times": [],
+        }
     meta["slots"] = slots
     return slots, meta
 

@@ -108,9 +108,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Kaggle renderer still requires explicit `scene_lines` in `payload.json`.
 - Kaggle renderer rejects overlong unsplit `scene_lines` instead of slicing them locally.
 - Scene timeline slots are derived from detected strong-beat anchors in the selected audio: first slot may be partial to the first strong beat; subsequent slots are random `1x` or `2x` strong-beat spans.
-- If beat detection fails or returns too few strong-beat anchors, render fails instead of using a fake/random grid.
-- The main montage ends on a detected strong-beat anchor before outro; the renderer must not append a final arbitrary-duration visual slot just to reach a fixed `18.0s` boundary.
-- `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include both raw `beat_times` and selected `strong_beat_times` for rhythm audit against the actual selected music segment.
+- If beat detection works and reaches a reasonable story length, the main montage ends on a detected strong-beat anchor before outro.
+- If detected strong beats stop too early or beat detection fails, the renderer preserves an acceptable story duration with an explicit logged fallback instead of publishing a sharply shortened clip or blocking the whole run.
+- `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include raw `beat_times`, selected `strong_beat_times`, `rhythm_end_mode`, and any `fallback_reason` for rhythm audit against the actual selected music segment.
 - The lower source edge is masked after composition with `KENIGSBERG_STORIES_BOTTOM_MASK_PX` so thin grey/light-text source strips are hidden before watermark/export.
 - Source scenes are extracted as constant `30fps` frames before overlays and must not rely on repeating OpenCV `last_frame` to reach scene duration.
 - Source segment selection avoids persistent bans, recent source exclusions, and overlapping/near-adjacent source intervals already chosen in the same generated issue.
@@ -139,7 +139,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Scene selection now keeps a per-run in-memory ban map with a small margin around each chosen source interval, so a source file can be reused only on a genuinely different available interval.
 - Notebook story helper import is now gated by the actual presence of `story_publish.json`; Telethon/requests/cryptography are installed for the future production-story path but are not required for disabled story publishing.
 - Thought shuffle-bag consumption moved from pre-render selection to successful manifest registration.
-- Rhythm slotting now keeps the main montage boundary on detected strong beats; it no longer pads the final scene to an arbitrary fixed `18.0s` duration, and stores raw/selected beat anchors in the render metadata.
+- Rhythm slotting now prefers detected strong-beat boundaries, preserves story length when the detected grid is too short, and stores raw/selected beat anchors plus fallback metadata in the render metadata.
 
 ## Corrective Actions
 

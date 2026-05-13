@@ -388,13 +388,21 @@ def test_renderer_rhythm_slots_land_on_strong_beats_and_vary_by_seed() -> None:
             assert round(end - start, 2) in {2.0, 4.0}
 
 
-def test_renderer_rhythm_slots_end_on_last_available_strong_beat_without_padding() -> None:
+def test_renderer_rhythm_slots_keep_target_duration_when_strong_beats_end_too_early() -> None:
     strong_beats = [0.72, 2.72, 4.72, 6.72, 8.72, 10.72]
 
     slots = renderer.rhythm_slots_from_strong_beats(strong_beats, 18.0, renderer.random.Random(1))
 
-    assert slots[-1][1] == 10.72
-    assert slots[-1][1] in strong_beats
+    assert slots[-2][1] == 10.72
+    assert slots[-1] == (10.72, 18.0)
+
+
+def test_renderer_approximate_rhythm_slots_cover_target_duration() -> None:
+    slots = renderer.approximate_rhythm_slots(18.0, renderer.random.Random(1))
+
+    assert slots[0][0] == 0.0
+    assert slots[-1][1] == 18.0
+    assert all(end > start for start, end in slots)
 
 
 def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypatch, tmp_path) -> None:
