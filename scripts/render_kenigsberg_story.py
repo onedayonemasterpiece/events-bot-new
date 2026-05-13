@@ -641,7 +641,6 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, first))
         current = first
         idx = 1
-    min_main_duration = max(12.0, min(15.0, duration - 1.0))
     while idx < len(anchors) and duration - current >= 0.6:
         span = rng.choices([1, 2], weights=[0.56, 0.44], k=1)[0]
         target_idx = min(len(anchors) - 1, idx + span - 1)
@@ -654,11 +653,6 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, target))
         current = target
         idx = target_idx + 1
-    if current < min_main_duration:
-        raise RuntimeError(
-            "Rhythm grid ended too early before a strong-beat main duration "
-            f"current={current:.3f} min={min_main_duration:.3f}"
-        )
     return [(round(start, 3), round(end, 3)) for start, end in slots]
 
 
