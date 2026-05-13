@@ -61,10 +61,10 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 
 ### Mandatory checks before closure or deploy
 
-- Kenigsberg publication text is prepared from curated `thoughts.md` entries without an LLM rewrite.
-- The prepared payload must include `text_source=thoughts_md`, `hook`, and explicit `scene_lines`.
-- The screen split may only segment the curated text for readability; it must not paraphrase, remove dates/names/facts, or change punctuation.
-- Renderer must fail if `scene_lines` are absent instead of splitting thought text on Kaggle.
+- Kenigsberg publication text is prepared from curated `thoughts.md` entries without an LLM rewrite; the LLM may only choose semantic screen boundaries.
+- The prepared payload must include `text_source=thoughts_md_llm_split`, `hook`, and explicit validated `scene_lines`.
+- The screen split may only segment the curated text for readability; it must not paraphrase, remove dates/names/facts, change punctuation, or drop the tail.
+- Renderer must fail if `scene_lines` are absent or overlong instead of splitting thought text on Kaggle.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.
 
@@ -74,7 +74,7 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 - Fly release/version evidence.
 - Test output.
 - Post-deploy `/healthz`.
-- Fresh `/kenigsberg` smoke evidence showing `text=thoughts_md`, never `text=fallback` or `text=llm_gemini_lite`.
+- Fresh `/kenigsberg` smoke evidence showing `text=thoughts_md_llm_split`, never `text=fallback` or a rewrite source.
 
 ## Immediate Mitigation
 
@@ -84,7 +84,7 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 
 ## Corrective Actions
 
-- Add tests that assert Kenigsberg story text payloads use `source=thoughts_md`.
+- Add tests that assert Kenigsberg story text payloads use `source=thoughts_md_llm_split` and fail if the split drops any source text.
 - Add tests that assert `/a` and direct command routing do not fall back to malformed Kenigsberg text/ban commands.
 - Add tests that assert missing renderer `scene_lines` raises.
 
@@ -105,10 +105,10 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 - post-deploy verification:
   - `/healthz` returned `ok=true`, `ready=true`, no issues.
   - Fly machine `48e42d5b714228` is `started`, release `v1068`, service check passing.
-  - This old release evidence is superseded by `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy`: the current desired production path is `text=thoughts_md` with no text rewrite model.
+  - This old release evidence is superseded by `INC-2026-05-12-kenigsberg-postprocess-db-lock-and-final-copy`: the current desired production path is `text=thoughts_md_llm_split`, where the LLM splits but does not rewrite the curated copy.
   - Current renderer error contract should be `Payload scene_lines are required; Kaggle text fallback is disabled`.
   - Runtime file logging remains enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`.
-  - Fresh `/kenigsberg` smoke evidence now belongs to the superseding incident and must show `text=thoughts_md`, never `text=fallback` or `text=llm_gemini_lite`.
+  - Fresh `/kenigsberg` smoke evidence now belongs to the superseding incident and must show `text=thoughts_md_llm_split`, never `text=fallback` or a rewrite source.
 
 ## Prevention
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
     SecondRange,
@@ -15,7 +17,6 @@ from kenigsberg_stories.state import (
     register_issue_manifest,
 )
 from scripts import render_kenigsberg_story as renderer
-from PIL import Image, ImageDraw
 
 
 def test_parse_second_ranges_accepts_single_seconds_and_ranges() -> None:
@@ -333,11 +334,19 @@ def test_renderer_randomly_selects_from_mounted_video_datasets(tmp_path) -> None
     assert seen == {"1919-1940", "winter"}
 
 
-def test_renderer_beat_slots_vary_by_seed() -> None:
-    a = renderer.beat_slots(18.0, renderer.random.Random(1))
-    b = renderer.beat_slots(18.0, renderer.random.Random(2))
+def test_renderer_rhythm_slots_land_on_strong_beats_and_vary_by_seed() -> None:
+    strong_beats = [0.72, 2.72, 4.72, 6.72, 8.72, 10.72, 12.72, 14.72, 16.72]
+    a = renderer.rhythm_slots_from_strong_beats(strong_beats, 18.0, renderer.random.Random(1))
+    b = renderer.rhythm_slots_from_strong_beats(strong_beats, 18.0, renderer.random.Random(2))
 
     assert a != b
+    for slots in (a, b):
+        assert slots[0][0] == 0.0
+        assert slots[0][1] == 0.72
+        for start, end in slots[1:-1]:
+            assert start in strong_beats
+            assert end in strong_beats
+            assert round(end - start, 2) in {2.0, 4.0}
 
 
 def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypatch, tmp_path) -> None:
@@ -380,25 +389,6 @@ def test_renderer_music_selection_rejects_ranges_shorter_than_full_story(monkeyp
         renderer.choose_music(music_dir, renderer.random.Random(1))
 
 
-def test_renderer_splits_thought_without_repeating_last_line() -> None:
-    lines = renderer.split_scene_lines(
-        "Альбертина была устроена по классической университетской модели. "
-        "В ней действовали богословский, юридический, медицинский и философский факультеты.",
-        7,
-    )
-
-    assert len(lines) >= 3
-    assert len(lines) == len(set(line.casefold() for line in lines))
-    assert any("Альбертина" in line for line in lines)
-    assert any("философский" in line for line in lines)
-    draw = ImageDraw.Draw(Image.new("RGBA", (renderer.W, renderer.H)))
-    fnt = renderer.font(44)
-    assert all(
-        len(renderer.wrap_text(line, draw, fnt, renderer.W - 120)) <= 4
-        for line in lines
-    )
-
-
 def test_renderer_distributes_short_story_lines_across_all_segments() -> None:
     assigned = [
         renderer.scene_text_for_segment(["first", "second"], idx, 6)
@@ -422,26 +412,100 @@ def test_renderer_uses_payload_scene_lines_for_independent_text_cues() -> None:
     assert cues[-1]["end"] > 14.0
 
 
+def test_renderer_rejects_overlong_payload_line_instead_of_splitting_on_kaggle() -> None:
+    thought = (
+        "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера, "
+        "и на волне страха люди верили даже самым невероятным слухам "
+        "и даже подозревали Фридриха Вильгельма Бесселя с его "
+        "«серебряными шарами» и обсерваторией в каких-то тёмных опытах."
+    )
+
+    with pytest.raises(RuntimeError, match="LLM split is required"):
+        renderer.payload_scene_lines({"scene_lines": [thought]}, "fallback thought", 6)
+
+
 def test_renderer_requires_payload_scene_lines() -> None:
     with pytest.raises(RuntimeError, match="scene_lines are required"):
         renderer.payload_scene_lines({}, "fallback thought", 6)
 
 
-def test_kenigsberg_story_text_uses_thoughts_md_without_rewrite() -> None:
+def test_kenigsberg_story_text_uses_llm_split_without_rewrite(monkeypatch) -> None:
     thought = (
         "1724 год подарил Кёнигсбергу два символа сразу. "
         "В этот год три города объединились в единый Кёнигсберг, "
         "и в тот же год родился Иммануил Кант."
     )
 
-    payload = kenigsberg_stories_cmd._prepare_story_text_from_thought(thought)
+    async def fake_split(text: str) -> dict:
+        assert text == thought
+        return {
+            "hook": "1724 год подарил Кёнигсбергу два символа сразу.",
+            "scene_lines": [
+                "1724 год подарил Кёнигсбергу два символа сразу.",
+                "В этот год три города объединились в единый Кёнигсберг, и в тот же год родился Иммануил Кант.",
+            ],
+        }
 
-    assert payload["source"] == "thoughts_md"
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_ask_story_text_split_llm", fake_split)
+    payload = asyncio.run(kenigsberg_stories_cmd._prepare_story_text_from_thought(thought))
+
+    assert payload["source"] == "thoughts_md_llm_split"
     assert payload["scene_lines"] == [
         "1724 год подарил Кёнигсбергу два символа сразу.",
         "В этот год три города объединились в единый Кёнигсберг, и в тот же год родился Иммануил Кант.",
     ]
     assert payload["hook"] == "1724 год подарил Кёнигсбергу два символа сразу."
+
+
+def test_kenigsberg_long_single_sentence_thought_requires_llm_semantic_split(monkeypatch) -> None:
+    thought = (
+        "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера, "
+        "и на волне страха люди верили даже самым невероятным слухам "
+        "и даже подозревали Фридриха Вильгельма Бесселя с его "
+        "«серебряными шарами» и обсерваторией в каких-то тёмных опытах."
+    )
+
+    async def fake_split(text: str) -> dict:
+        assert text == thought
+        return {
+            "hook": "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,",
+            "scene_lines": [
+                "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,",
+                "и на волне страха люди верили даже самым невероятным слухам",
+                "и даже подозревали Фридриха Вильгельма Бесселя с его «серебряными шарами»",
+                "и обсерваторией в каких-то тёмных опытах.",
+            ],
+        }
+
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_ask_story_text_split_llm", fake_split)
+    payload = asyncio.run(kenigsberg_stories_cmd._prepare_story_text_from_thought(thought))
+
+    assert payload["source"] == "thoughts_md_llm_split"
+    assert payload["scene_lines"] == [
+        "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,",
+        "и на волне страха люди верили даже самым невероятным слухам",
+        "и даже подозревали Фридриха Вильгельма Бесселя с его «серебряными шарами»",
+        "и обсерваторией в каких-то тёмных опытах.",
+    ]
+    assert " ".join(payload["scene_lines"]) == thought
+    assert payload["hook"] == "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,"
+
+
+def test_kenigsberg_story_text_fails_when_llm_drops_tail(monkeypatch) -> None:
+    thought = (
+        "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера, "
+        "и на волне страха люди верили даже самым невероятным слухам."
+    )
+
+    async def fake_split(_text: str) -> dict:
+        return {
+            "hook": "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,",
+            "scene_lines": ["Говорят, летом 1831 года в Кёнигсберге вспыхнула холера,"],
+        }
+
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_ask_story_text_split_llm", fake_split)
+    with pytest.raises(kenigsberg_stories_cmd.StoryTextPreparationError, match="changed"):
+        asyncio.run(kenigsberg_stories_cmd._prepare_story_text_from_thought(thought))
 
 
 def test_kenigsberg_detects_stale_local_handoff_session() -> None:
@@ -492,6 +556,18 @@ def test_renderer_blends_transition_frames() -> None:
 
     assert blended.getpixel((0, 0))[0] > 0
     assert blended.getpixel((0, 0))[2] > 0
+
+
+def test_renderer_masks_bottom_source_strip() -> None:
+    image = Image.new("RGBA", (renderer.W, renderer.H), (180, 180, 180, 255))
+    draw = renderer.ImageDraw.Draw(image, "RGBA")
+    draw.rectangle((0, renderer.H - 34, renderer.W, renderer.H), fill=(90, 90, 90, 255))
+    draw.text((20, renderer.H - 30), "VEO watermark", fill=(245, 245, 245, 255))
+
+    renderer.mask_bottom_source_strip(image, 34)
+
+    assert image.getpixel((20, renderer.H - 20))[:3] != (245, 245, 245)
+    assert image.getpixel((20, renderer.H - 20))[:3] == image.getpixel((renderer.W - 20, renderer.H - 20))[:3]
 
 
 def test_renderer_extracts_cfr_segment_frames_and_pads_short_decode(monkeypatch, tmp_path) -> None:

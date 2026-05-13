@@ -263,50 +263,130 @@ def _canonicalize_ban_args(args: str) -> str:
     return text
 
 
-def _split_final_thought_text(thought_text: str) -> list[str]:
-    """Split the curated thought into readable screens without rewriting it."""
-    text = " ".join(str(thought_text or "").split())
-    if not text:
-        return []
-
-    sentence_parts = [
-        item.strip()
-        for item in re.split(r"(?<=[.!?])\s+", text)
-        if item.strip()
-    ]
-    if len(sentence_parts) >= 2:
-        return sentence_parts[:5]
-
-    # Long one-sentence thoughts still need breathing room on screen. Split on
-    # strong punctuation, preserving the punctuation on the preceding part.
-    parts: list[str] = []
-    current = ""
-    for token in re.split(r"([:;—])", text):
-        if not token:
-            continue
-        if token in {":", ";", "—"}:
-            current = f"{current}{token}".strip()
-            continue
-        candidate = f"{current} {token}".strip() if current else token.strip()
-        if len(candidate) > 90 and current:
-            parts.append(current)
-            current = token.strip()
-        else:
-            current = candidate
-    if current:
-        parts.append(current)
-    return [part for part in parts if part][:5] or [text]
+def _normalize_story_copy(text: str) -> str:
+    return " ".join(str(text or "").split())
 
 
-def _prepare_story_text_from_thought(thought_text: str) -> dict:
-    lines = _split_final_thought_text(thought_text)
-    if not lines:
+def _extract_json_object(text: str) -> dict | None:
+    raw = str(text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", raw).replace("```", "").strip()
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        pass
+    match = re.search(r"\{.*\}", raw, flags=re.S)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _validate_llm_scene_lines(thought_text: str, lines: list[str]) -> list[str]:
+    thought_normalized = _normalize_story_copy(thought_text)
+    clean = [_normalize_story_copy(line) for line in lines if _normalize_story_copy(line)]
+    if not thought_normalized:
         raise StoryTextPreparationError("empty thought text")
+    if not clean:
+        raise StoryTextPreparationError("LLM returned no scene lines")
+    if _normalize_story_copy(" ".join(clean)) != thought_normalized:
+        raise StoryTextPreparationError("LLM scene split changed the thought text")
+    too_long = [line for line in clean if len(line) > 118 or len(line.split()) > 19]
+    if too_long:
+        raise StoryTextPreparationError("LLM scene split returned an overlong screen")
+    if len(clean) > 8:
+        raise StoryTextPreparationError("LLM scene split returned too many screens")
+    return clean
+
+
+async def _ask_story_text_split_llm(thought_text: str) -> dict:
+    model = (os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_MODEL") or "gemini-3.1-flash-lite").strip()
+    if not model:
+        raise StoryTextPreparationError("KENIGSBERG_STORIES_TEXT_SPLIT_MODEL is empty")
+    timeout = max(8.0, float(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_TIMEOUT_SEC", "40") or "40"))
+    attempts = max(1, min(4, int(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS", "3") or "3")))
+    provider_timeout = max(
+        5.0,
+        min(
+            timeout - 2.0,
+            float(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_PROVIDER_TIMEOUT_SEC", "30") or "30"),
+        ),
+    )
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+
+        supabase = require_main_attr("get_supabase_client")()
+        incident_notifier = require_main_attr("notify_llm_incident")
+        client = GoogleAIClient(
+            supabase_client=supabase,
+            secrets_provider=SecretsProvider(),
+            consumer="kenigsberg_stories",
+            incident_notifier=incident_notifier,
+        )
+        client.max_retries = max(
+            1,
+            min(2, int(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_PROVIDER_RETRIES", "1") or "1")),
+        )
+        client.provider_timeout_seconds = provider_timeout
+    except Exception as exc:
+        raise StoryTextPreparationError(f"LLM client unavailable: {exc}") from exc
+    prompt = (
+        "Раздели готовый русский текст для Telegram Story на смысловые экраны.\n"
+        "Не переписывай: нельзя менять, удалять или добавлять слова, даты, имена, кавычки и пунктуацию.\n"
+        "Верни JSON: {\"scene_lines\":[...],\"hook\":\"...\"}. hook ровно равен первой scene_line.\n"
+        "Склейка scene_lines через один пробел должна дословно дать исходный текст.\n"
+        "Нужно 1-6 экранов, каждый желательно до 15 слов.\n\n"
+        f"Текст: {thought_text}"
+    )
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            raw, _usage = await asyncio.wait_for(
+                client.generate_content_async(
+                    model=model,
+                    prompt=prompt,
+                    generation_config={"temperature": 0, "response_mime_type": "application/json"},
+                    max_output_tokens=500,
+                ),
+                timeout=timeout,
+            )
+            data = _extract_json_object(raw or "")
+            if data is not None:
+                return data
+            last_error = StoryTextPreparationError("LLM scene split returned invalid JSON")
+        except Exception as exc:
+            last_error = exc
+        if attempt < attempts:
+            logger.warning(
+                "kenigsberg: text split LLM attempt failed attempt=%s/%s err=%r",
+                attempt,
+                attempts,
+                last_error,
+            )
+            await asyncio.sleep(0.8 * attempt)
+    raise StoryTextPreparationError(f"LLM scene split failed: {last_error!r}") from last_error
+
+
+async def _prepare_story_text_from_thought(thought_text: str) -> dict:
+    if not _normalize_story_copy(thought_text):
+        raise StoryTextPreparationError("empty thought text")
+    data = await _ask_story_text_split_llm(thought_text)
+    raw_lines = data.get("scene_lines") if isinstance(data, dict) else None
+    if not isinstance(raw_lines, list):
+        raise StoryTextPreparationError("LLM scene split returned no scene_lines list")
+    lines = _validate_llm_scene_lines(thought_text, [str(item or "") for item in raw_lines])
+    hook = _normalize_story_copy(data.get("hook") or lines[0])
+    if hook != lines[0]:
+        raise StoryTextPreparationError("LLM hook must equal first scene line")
     return {
-        "hook": lines[0][:96],
+        "hook": hook,
         "scene_lines": lines,
         "caption": thought_text[:240],
-        "source": "thoughts_md",
+        "source": "thoughts_md_llm_split",
     }
 
 
@@ -581,7 +661,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         message.from_user.id if message.from_user else None,
     )
     try:
-        story_text = _prepare_story_text_from_thought(thought_text)
+        story_text = await _prepare_story_text_from_thought(thought_text)
     except StoryTextPreparationError as exc:
         logger.warning(
             "kenigsberg: launch aborted issue=%s thought=%s reason=%s",
@@ -590,7 +670,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             exc,
         )
         await message.answer(
-            f"Kenigsberg #{issue_number}: не нашёл текст мысли в thoughts.md, Kaggle не запускаю."
+            f"Kenigsberg #{issue_number}: LLM не подготовила безопасную смысловую нарезку текста, "
+            "Kaggle не запускаю."
         )
         return
     payload = {
@@ -604,6 +685,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         "caption": story_text.get("caption") or "",
         "text_source": story_text.get("source") or "",
         "crop_bottom_px": int(os.getenv("KENIGSBERG_STORIES_CROP_BOTTOM_PX", "96")),
+        "bottom_mask_px": int(os.getenv("KENIGSBERG_STORIES_BOTTOM_MASK_PX", "34")),
         "source_bans": [
             *(state.get("source_bans") or []),
             *recent_source_exclusions(state),

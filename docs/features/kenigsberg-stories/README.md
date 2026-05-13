@@ -103,7 +103,7 @@ Variation points for this product:
 3. Server selects only run metadata that must live outside Kaggle:
    - one thought from the shuffle-bag;
    - deterministic seed / issue id.
-4. Server takes the selected `thoughts.md` entry as final copy and only splits it into readable `scene_lines[]` without rewording, deleting facts, or changing punctuation.
+4. Server takes the selected `thoughts.md` entry as final copy and asks the text LLM to split it into readable `scene_lines[]` without rewording, deleting facts, dropping the tail, or changing punctuation. If the LLM split is unavailable or fails validation, generation fails before Kaggle.
 5. Server creates a per-run Kaggle dataset:
    - payload;
    - selected thought metadata;
@@ -167,18 +167,14 @@ The preferred MVP implementation on Kaggle:
   - score candidate windows by stable tempo, stronger onset envelope, and enough beats for `15-20` seconds.
 - If downbeat detection is unreliable, treat the strongest beat in each local measure as the visual cut anchor rather than overfitting a fragile music-theory model.
 - Build a rhythm grid:
-  - first scene change after one single interval;
-  - later slots randomly use `1x` and `2x` beat spans;
+  - the selected audio range may start before a strong beat, so the first visual slot may be partial from audio start to the first detected strong beat;
+  - after the first strong beat, every scene cut must land on a detected strong-beat anchor;
+  - later slots randomly use only `1x` and `2x` strong-beat spans;
   - target approximately four double-span equivalents before outro.
 - Transitions are short crossfades / eased opacity blends of `2-3` frames, centered on beat anchors where possible.
 - Video source clips may start at a random offset if there is enough usable duration until the chosen cut end.
 
-Fallback for MVP if beat detection fails:
-
-- use the whitelisted music range;
-- estimate tempo from the median beat interval;
-- generate a deterministic `1x/2x` grid inside `15-20` seconds;
-- log the fallback reason in the session manifest.
+If beat detection fails or does not produce enough strong-beat anchors, generation must fail before publishing. A fake/random timing grid is forbidden because it breaks the rhythm contract.
 
 ## Video cut selection strategy
 
@@ -210,7 +206,8 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
-- before Kaggle launch the bot sends an immediate operator ack, then derives `hook` + `scene_lines` from the selected `thoughts.md` entry without calling an LLM; `text_source=thoughts_md` means the file is treated as final editorial copy;
+- before Kaggle launch the bot sends an immediate operator ack, then calls the text LLM only for semantic screen boundaries; `text_source=thoughts_md_llm_split` means the file is treated as final editorial copy and the LLM is allowed to split only, not rewrite;
+- LLM split validation requires that joining `scene_lines` with spaces exactly recreates the selected `thoughts.md` entry after whitespace normalization; overlong lines, missing tails, extra words, changed punctuation, or invalid JSON fail the generation before Kaggle;
 - recent source segments from registered issue manifests are passed into the next run as temporary exclusions, so the same source video may still be reused but not the same recently published source time range;
 - within one generated story the renderer keeps a per-run source-range exclusion map, so if the same source video must be reused it cannot reuse an overlapping or near-adjacent source interval from an earlier scene in the same issue;
 - the per-run bundle includes the canonical `thoughts.md` for auditability, while the selected thought text is also copied into `payload.json`;
@@ -218,7 +215,7 @@ Current MVP implementation:
 - period/dataset selection happens inside the Kaggle renderer from actually mounted inputs; the server must not preselect a period or add env switches for dataset choice.
 - music selection happens inside the Kaggle renderer from the configured instrumental whitelist; the selected `music_start` and `music_end` must both stay inside the allowed range and be written to the manifest/render log.
 - rhythm slots are seeded from the per-run payload seed and recorded into `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` so repeated cadence bugs can be audited from Kaggle output.
-- Kaggle rendering still requires explicit `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle.
+- Kaggle rendering still requires explicit validated `scene_lines` in `payload.json`; it must not fall back to slicing raw text on Kaggle, and it must reject overlong unsplit lines.
 - source scene clips are decoded through ffmpeg into constant `30fps` `720x1280` frame sequences before overlays/transitions are applied; the renderer must not fill normal source-fps gaps by repeating the last OpenCV frame at the end of a scene.
 - status updates and Kenigsberg state writes retry short SQLite locks so heavy VK imports do not leave a completed Kaggle run stuck in local `RENDERING`.
 - Kaggle handoff writes (`RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and fail-close updates) retry transient SQLite locks; stale `local:KoenigsbergStories` sessions older than the handoff grace window are auto-failed on the next `/kenigsberg`, and can also be manually cleared with `/kenigsberg unlock`.
@@ -276,6 +273,7 @@ Outro:
 - The watermark is a copy-protection mark, not a subtitle; it must stay readable but secondary.
 - Source videos are prepared for story canvas at `720p`.
 - Bottom `VEO` text is removed by cropping height, not scaling the video. The render should compose from the cropped source into the story canvas.
+- Some source clips also carry a thin grey bottom strip with light text near the lower black/grey edge. After composition, the renderer masks the bottom `KENIGSBERG_STORIES_BOTTOM_MASK_PX` pixels (default `34`) with a dark/sampled edge color before watermark/text export so this strip is not visible in the story.
 
 Open implementation detail: exact bottom crop in pixels should be measured from the actual dataset files during the first Kaggle smoke and then stored as config, because the datasets may not all carry the mark at identical height.
 

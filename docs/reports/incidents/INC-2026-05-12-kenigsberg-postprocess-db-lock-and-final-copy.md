@@ -11,7 +11,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/run
 
 ## Summary
 
-During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`. Subsequent visual review showed the same source fragment could reappear later in the same generated story because per-run segment selection avoided only recent files, not already selected source-time ranges. Session `#267` then failed before rendering because the story-ready notebook imported the shared story helper during a normal test run without `story_publish.json`; the helper imports Telethon, which was not installed in the Kenigsberg Kaggle notebook environment.
+During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`. Subsequent visual review showed the same source fragment could reappear later in the same generated story because per-run segment selection avoided only recent files, not already selected source-time ranges. Session `#267` then failed before rendering because the story-ready notebook imported the shared story helper during a normal test run without `story_publish.json`; the helper imports Telethon, which was not installed in the Kenigsberg Kaggle notebook environment. Kenigsberg `#13` exposed a final-copy splitting regression: the launch path stopped using an LLM for semantic screen boundaries, sent a long one-sentence thought as one `scene_lines` item, and only the beginning stayed visible while the semantic tail never appeared as separate screens. Visual review also showed scene changes did not reliably land on music beats because the renderer used a seeded pseudo-rhythm grid instead of analyzing the selected audio.
 
 ## User / Business Impact
 
@@ -24,6 +24,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - The operator saw repeated scene material inside one issue, making different generations feel less random and cheaper than intended.
 - Session `#267` did not render or publish because a disabled production-story path still executed its helper import in Kaggle.
 - The failed `#267` run selected `thought=1`; failed renders must not consume thoughts from the no-repeat pool.
+- Kenigsberg `#13` published with a long thought cut mid-sense: the first fragment stayed on screen and the remaining words were not shown as readable follow-up screens.
+- Scene cuts could look detached from the music because timing was random-ish rather than derived from detected strong beats.
+- Some generated clips could still show a thin grey/light-text source strip along the lower edge after the existing bottom crop.
 
 ## Detection
 
@@ -43,6 +46,8 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - 2026-05-12 18:41 UTC — startup/recovery path marked session `#266` `FAILED` as a stale local handoff.
 - 2026-05-12 19:23 UTC — Kenigsberg `#12`, session `#267`, failed in Kaggle cell 2.
 - 2026-05-13 UTC — direct Kaggle logs for `zigomaro/koenigsberg-stories` showed `ModuleNotFoundError: No module named 'telethon'` from `/kaggle/working/story_publish.py` before `render_kenigsberg_story.py` started.
+- 2026-05-13 UTC — operator reviewed Kenigsberg `#13` and reported thought `25` stopped after “даже самым”, with the rest of the sentence absent from the visible story text.
+- 2026-05-13 UTC — code review confirmed `beat_slots` used `rng.uniform(1.62, 2.32)` and random spans instead of `librosa` beat/onset analysis.
 
 ## Root Cause
 
@@ -56,6 +61,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 8. `pick_video_segments` prevented only immediate file repetition. It did not mark source intervals already selected in the current generation, so the same source video could later be chosen with an overlapping or near-adjacent offset.
 9. The story-ready notebook copied and imported `kaggle_common/story_publish.py` unconditionally. Test runs do not include `story_publish.json`, but the import still required Telethon and failed before the renderer could start.
 10. `choose_next_thought` wrote `used_thought_ids` before successful render completion, so any failed run could remove a thought from the publication shuffle-bag even though it was never actually published.
+11. The text pipeline regressed from LLM semantic splitting to deterministic/sentence splitting. This violated the earlier no-fallback contract and allowed a long one-sentence thought to reach Kaggle as one screen.
+12. `payload_scene_lines` trusted server-provided lines and did not reject overlong unsplit screens.
+13. `beat_slots` was still an MVP pseudo-grid (`rng.uniform` base interval + random spans), not a `librosa`-derived grid anchored to strong musical beats.
 
 ## Contributing Factors
 
@@ -75,6 +83,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Changing Kenigsberg local-to-Kaggle handoff persistence or manual stuck-session controls.
 - Changing Kenigsberg notebook production-story helper import/preflight behavior.
 - Changing Kenigsberg thought-pool reservation/consumption semantics.
+- Changing Kenigsberg final-copy screen splitting or renderer `payload_scene_lines`.
+- Changing Kenigsberg rhythm-grid construction, music analysis, or scene timeline slotting.
+- Changing Kenigsberg bottom crop or lower-edge masking.
 
 ### Affected surfaces
 
@@ -92,8 +103,13 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - If an active Kenigsberg session has Kaggle `COMPLETE`, operator feedback says it is finalizing/downloading/publishing, not simply “rendering”.
 - Session status updates and Kenigsberg state writes retry transient SQLite lock errors.
 - `/a kenigsberg покажи список банов` resolves to `/kenigsberg bans`.
-- New story text payloads use `text_source=thoughts_md`.
+- New story text payloads use `text_source=thoughts_md_llm_split`.
+- Long one-sentence `thoughts.md` entries are split by the text LLM into readable screens without rewriting or losing words; invalid/missing LLM splits fail generation before Kaggle.
 - Kaggle renderer still requires explicit `scene_lines` in `payload.json`.
+- Kaggle renderer rejects overlong unsplit `scene_lines` instead of slicing them locally.
+- Scene timeline slots are derived from detected strong-beat anchors in the selected audio: first slot may be partial to the first strong beat; subsequent slots are random `1x` or `2x` strong-beat spans.
+- If beat detection fails or returns too few strong-beat anchors, render fails instead of using a fake/random grid.
+- The lower source edge is masked after composition with `KENIGSBERG_STORIES_BOTTOM_MASK_PX` so thin grey/light-text source strips are hidden before watermark/export.
 - Source scenes are extracted as constant `30fps` frames before overlays and must not rely on repeating OpenCV `last_frame` to reach scene duration.
 - Source segment selection avoids persistent bans, recent source exclusions, and overlapping/near-adjacent source intervals already chosen in the same generated issue.
 - `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include the seed and rhythm slots used for the run.
@@ -130,6 +146,8 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Add tests for per-run unused-file preference and overlapping source-range avoidance.
 - Add a notebook guardrail test that `story_publish_requested` is computed before helper import and that the helper is imported only behind that gate.
 - Add a state test proving thought selection alone does not mutate `used_thought_ids`, while successful manifest registration does.
+- Add regression tests for LLM-only long single-sentence final-copy splitting, invalid LLM tail loss, overlong payload rejection in the renderer, and strong-beat rhythm slot construction.
+- Add a regression test for lower-edge source strip masking.
 - Update Kenigsberg documentation to make `thoughts.md` the final editorial source.
 - Commit and deploy the current local `thoughts.md` changes with the code fix.
 
@@ -200,4 +218,4 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 ## Prevention
 
 - Treat Kaggle `COMPLETE` plus local `RENDERING` as an operator-visible finalization state.
-- Keep publication copy deterministic and auditable by shipping exactly the curated `thoughts.md` entry plus non-semantic screen splitting.
+- Keep publication copy auditable by shipping exactly the curated `thoughts.md` entry plus LLM-only semantic screen splitting that is validated against the original text before Kaggle.

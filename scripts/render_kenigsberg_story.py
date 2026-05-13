@@ -18,6 +18,13 @@ try:
 except Exception:  # pragma: no cover - Kaggle installs it in the notebook.
     cv2 = None
 
+try:
+    import librosa
+    import numpy as np
+except Exception:  # pragma: no cover - Kaggle installs it in the notebook.
+    librosa = None
+    np = None
+
 
 W = 720
 H = 1280
@@ -405,6 +412,19 @@ def draw_watermark(image: Image.Image) -> None:
     draw.text((x, y), WATERMARK_TEXT, font=fnt, fill=(255, 255, 255, 188))
 
 
+def mask_bottom_source_strip(image: Image.Image, mask_px: int) -> None:
+    if mask_px <= 0:
+        return
+    mask_px = max(1, min(mask_px, H // 8))
+    y0 = H - mask_px
+    sample_top = max(0, y0 - 28)
+    sample = image.crop((0, sample_top, W, y0)).resize((1, 1), Image.Resampling.BILINEAR)
+    r, g, b, *_ = sample.getpixel((0, 0))
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    fill = (int(r), int(g), int(b), 255) if luminance < 72 else (16, 16, 16, 255)
+    ImageDraw.Draw(image, "RGBA").rectangle((0, y0, W, H), fill=fill)
+
+
 def blend_transition_frame(
     image: Image.Image,
     transition_tail: list[Image.Image],
@@ -501,53 +521,20 @@ def extract_segment_frames(
     }
 
 
-def split_scene_lines(thought: str, count: int) -> list[str]:
-    text = " ".join(str(thought or "").split())
-    if not text:
-        return ["Кёнигсберг помнит больше, чем кажется."]
-    text = re.sub(
-        r"^(?:а\s+вы\s+знали\??|знали\s+ли\s+вы,\s+что|возможно\s+вы\s+не\s+знали,?|сегодня\s+вы\s+узнаете,\s+что|теперь\s+вы\s+будете\s+знать,\s+что)\s+",
-        "",
-        text,
-        flags=re.I,
-    ).strip()
-    raw_parts: list[str] = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        raw_parts.extend(part.strip(" .") for part in re.split(r"\s+[—:]\s+", sentence) if part.strip())
-    parts: list[str] = []
-    for part in raw_parts:
-        words = part.split()
-        if len(words) <= 7:
-            parts.append(part)
-            continue
-        chunk = 5
-        for i in range(0, len(words), chunk):
-            piece = " ".join(words[i : i + chunk]).strip()
-            if piece:
-                parts.append(piece)
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for part in parts:
-        key = part.casefold()
-        if key and key not in seen:
-            cleaned.append(part)
-            seen.add(key)
-    return cleaned[: max(1, count)]
-
-
 def payload_scene_lines(payload: dict[str, Any], fallback_thought: str, count: int) -> list[str]:
     raw = payload.get("scene_lines")
     if isinstance(raw, list):
-        lines = [
-            " ".join(str(item or "").split())
-            for item in raw
-            if " ".join(str(item or "").split())
-        ]
+        lines: list[str] = []
+        for item in raw:
+            line = " ".join(str(item or "").split())
+            if not line:
+                continue
+            lines.append(line)
         if lines:
-            return lines[: max(1, count)]
+            too_long = [line for line in lines if len(line) > 118 or len(line.split()) > 19]
+            if too_long:
+                raise RuntimeError("Payload scene_lines contain overlong screens; LLM split is required")
+            return lines
     raise RuntimeError("Payload scene_lines are required; Kaggle text fallback is disabled")
 
 
@@ -636,21 +623,116 @@ def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, floa
     )
 
 
-def beat_slots(duration: float, rng: random.Random) -> list[tuple[float, float]]:
-    # MVP fallback grid: varied enough for smoke; replaced by librosa in v1.1.
-    base = rng.uniform(1.62, 2.32)
-    starts = [0.0]
-    t = base
-    while t < duration - 0.5:
-        starts.append(t)
-        span = rng.choices([1, 1.5, 2, 2.5], weights=[0.34, 0.22, 0.34, 0.10], k=1)[0]
-        t += base * span + rng.uniform(-0.08, 0.08)
-    starts.append(duration)
-    return [
-        (round(starts[i], 3), round(starts[i + 1], 3))
-        for i in range(len(starts) - 1)
-        if starts[i + 1] - starts[i] >= 0.45
+def rhythm_slots_from_strong_beats(
+    strong_beats: list[float],
+    duration: float,
+    rng: random.Random,
+) -> list[tuple[float, float]]:
+    anchors = [beat for beat in strong_beats if 0.35 <= beat < duration - 0.25]
+    if len(anchors) < 4:
+        raise RuntimeError("Not enough strong beats to build a rhythm grid")
+    slots: list[tuple[float, float]] = []
+    current = 0.0
+    idx = 0
+    # First change may be a partial interval from the selected audio start to
+    # the first detected strong beat; all later changes land on strong beats.
+    first = anchors[0]
+    if first - current >= 0.45:
+        slots.append((current, first))
+        current = first
+        idx = 1
+    while idx < len(anchors) and duration - current >= 0.6:
+        span = rng.choices([1, 2], weights=[0.56, 0.44], k=1)[0]
+        target_idx = min(len(anchors) - 1, idx + span - 1)
+        target = anchors[target_idx]
+        if target - current < 0.45:
+            idx += 1
+            continue
+        if duration - target < 0.6:
+            break
+        slots.append((current, target))
+        current = target
+        idx = target_idx + 1
+    if duration - current >= 0.45:
+        slots.append((current, duration))
+    return [(round(start, 3), round(end, 3)) for start, end in slots]
+
+
+def detect_strong_beats(
+    music_path: Path,
+    music_start: float,
+    duration: float,
+) -> tuple[list[float], dict[str, Any]]:
+    if librosa is None or np is None:
+        raise RuntimeError("librosa is required for Kenigsberg beat-synced scene cuts")
+    pad = 0.25
+    y, sr = librosa.load(
+        str(music_path),
+        sr=22050,
+        mono=True,
+        offset=max(0.0, music_start - pad),
+        duration=duration + pad + 0.75,
+    )
+    if y is None or len(y) < sr:
+        raise RuntimeError("Could not load enough audio for beat detection")
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, onset_envelope=onset_env, units="frames")
+    beat_frames = np.asarray(beat_frames, dtype=int)
+    if beat_frames.size < 6:
+        raise RuntimeError("Beat detection returned too few beats")
+    beat_times_all = librosa.frames_to_time(beat_frames, sr=sr)
+    beat_pairs: list[tuple[float, float]] = []
+    for frame, absolute_time in zip(beat_frames, beat_times_all):
+        rel_time = float(absolute_time - pad)
+        if not (0.0 < rel_time < duration):
+            continue
+        strength_idx = min(max(int(frame), 0), len(onset_env) - 1)
+        beat_pairs.append((rel_time, float(onset_env[strength_idx])))
+    if len(beat_pairs) < 6:
+        raise RuntimeError("Beat detection returned too few in-range beats")
+    beat_times = [item[0] for item in beat_pairs]
+    beat_strengths = [item[1] for item in beat_pairs]
+    intervals = np.diff(np.asarray(beat_times, dtype=float))
+    median_interval = float(np.median(intervals)) if intervals.size else 0.0
+    if median_interval <= 0:
+        raise RuntimeError("Beat detection returned invalid beat intervals")
+    beats_per_strong = max(1, min(4, int(round(1.85 / median_interval))))
+    offset_scores: list[tuple[float, int]] = []
+    for offset in range(beats_per_strong):
+        strengths = beat_strengths[offset::beats_per_strong]
+        if strengths:
+            offset_scores.append((float(np.mean(strengths)), offset))
+    strong_offset = max(offset_scores)[1] if offset_scores else 0
+    strong_beats = [
+        beat
+        for idx, beat in enumerate(beat_times)
+        if idx % beats_per_strong == strong_offset
     ]
+    meta = {
+        "tempo_bpm": float(np.asarray(tempo).reshape(-1)[0]) if np.asarray(tempo).size else float(tempo),
+        "beat_count": len(beat_times),
+        "strong_beat_count": len(strong_beats),
+        "median_beat_interval": round(median_interval, 4),
+        "beats_per_strong": beats_per_strong,
+        "strong_offset": strong_offset,
+        "first_strong_beat": round(strong_beats[0], 3) if strong_beats else None,
+    }
+    return strong_beats, meta
+
+
+def beat_slots(
+    duration: float,
+    rng: random.Random,
+    *,
+    music_path: Path | None = None,
+    music_start: float = 0.0,
+) -> tuple[list[tuple[float, float]], dict[str, Any]]:
+    if music_path is None:
+        raise RuntimeError("music_path is required for beat-synced Kenigsberg rhythm slots")
+    strong_beats, meta = detect_strong_beats(music_path, music_start, duration)
+    slots = rhythm_slots_from_strong_beats(strong_beats, duration, rng)
+    meta["slots"] = slots
+    return slots, meta
 
 
 def normalize_source_bans(raw: Any, *, dataset_slug: str = "") -> dict[str, list[dict[str, Any]]]:
@@ -766,19 +848,26 @@ def pick_video_segments(
     return segments
 
 
-def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: random.Random) -> list[dict[str, Any]]:
+def render_frames(
+    payload: dict[str, Any],
+    video_dir: Path,
+    out_dir: Path,
+    rng: random.Random,
+    slots: list[tuple[float, float]],
+) -> list[dict[str, Any]]:
     if cv2 is None:
         raise RuntimeError("opencv-python is not installed")
     crop_px = int(payload.get("crop_bottom_px") or 96)
+    bottom_mask_px = int(payload.get("bottom_mask_px") or 34)
     videos = iter_files(video_dir, VIDEO_EXTS)
     rng.shuffle(videos)
-    slots = beat_slots(MAIN_DURATION, rng)
     log(
         "Rhythm slots: "
         + json.dumps(
             {
                 "seed": payload.get("seed"),
                 "slots": slots,
+                "rhythm_meta": payload.get("rhythm_meta") or {},
             },
             ensure_ascii=False,
         )
@@ -844,6 +933,7 @@ def render_frames(payload: dict[str, Any], video_dir: Path, out_dir: Path, rng: 
             if active_text:
                 text, cue_t, cue_duration = active_text
                 draw_stripes(image, text, t=cue_t, scene_duration=cue_duration)
+            mask_bottom_source_strip(image, bottom_mask_px)
             draw_watermark(image)
             if seg_idx > 0:
                 image = blend_transition_frame(image, transition_tail, local_frame)
@@ -971,12 +1061,19 @@ def main() -> None:
             f"Music dataset is not mounted; available_inputs={mounted_input_dirs(input_root)}"
         )
     music, music_start, total_duration, music_meta = choose_music(music_dir, rng)
+    rhythm_slots, rhythm_meta = beat_slots(
+        MAIN_DURATION,
+        rng,
+        music_path=music,
+        music_start=music_start,
+    )
     frames_dir = working / "kenigsberg_frames"
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
     render_payload = dict(payload)
     render_payload["dataset"] = dataset_slug
-    segments = render_frames(render_payload, video_dir, frames_dir, rng)
+    render_payload["rhythm_meta"] = rhythm_meta
+    segments = render_frames(render_payload, video_dir, frames_dir, rng, rhythm_slots)
     out_path = working / "kenigsberg_story_final.mp4"
     encode_video(frames_dir, music, music_start, total_duration, out_path)
     preview_frames = export_preview_frames(frames_dir, working)
@@ -1005,6 +1102,7 @@ def main() -> None:
         "scene_lines": render_payload.get("scene_lines") or [],
         "text_cues": render_payload.get("text_cues") or [],
         "segments": segments,
+        "rhythm_meta": rhythm_meta,
         "rhythm_slots": [
             [segment["timeline_start"], segment["timeline_end"]]
             for segment in segments
@@ -1041,6 +1139,7 @@ def main() -> None:
             "text_cues": manifest["text_cues"],
         },
         "segments": segments,
+        "rhythm_meta": rhythm_meta,
         "rhythm_slots": manifest["rhythm_slots"],
         "output": {
             "file": out_path.name,
