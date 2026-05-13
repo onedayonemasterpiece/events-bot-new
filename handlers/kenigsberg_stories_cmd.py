@@ -188,7 +188,8 @@ def _kenigsberg_story_targets() -> list[dict[str, object]]:
             "peer": "@mostvkenig",
             "delay_seconds": 0,
             "mode": "upload",
-            "required": True,
+            "blocking": False,
+            "required": False,
             "label": "@mostvkenig",
         }
     ]
@@ -203,9 +204,6 @@ async def _build_production_story_config(db) -> dict | None:
         "story_targets_override": _kenigsberg_story_targets(),
         "story_caption": "",
     }
-    business_targets_override = (os.getenv("KENIGSBERG_STORIES_STORY_BUSINESS_TARGETS") or "").strip()
-    if business_targets_override:
-        story_selection_params["story_business_targets"] = business_targets_override
     return await build_story_publish_config(
         db,
         main_chat_id=None,

@@ -1073,3 +1073,5 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_pro
     assert params["story_publish_mode"] == "video"
     assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
     assert params["story_targets_override"][0]["peer"] == "@mostvkenig"
+    assert params["story_targets_override"][0]["blocking"] is False
+    assert params["story_targets_override"][0]["required"] is False

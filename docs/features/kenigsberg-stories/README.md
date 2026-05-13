@@ -369,8 +369,8 @@ Production:
   - `kaggle/CrumpleVideo/story_publish.py` is bundled as `kaggle_common/story_publish.py`;
   - `story_publish.json`, `story_publish.enc`, and `story_publish.key` are written into the same `kenigsberg-session-*` dataset;
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
-- primary Telegram story target is direct story upload to `@mostvkenig`;
-- backup Business story targets are selected from the encrypted Business cache through the shared `video_announce.story_publish` contract; `kenigsberg_story` is in the default Business-mode allowlist, and `KENIGSBERG_STORIES_STORY_BUSINESS_TARGETS` can narrow the selector.
+- direct Telegram story upload to `@mostvkenig` is configured as best-effort fanout: Telegram may reject it with `BOOSTS_REQUIRED` even when the user account is an admin, so it must not block render/publish;
+- required production story targets are the selected Business story targets from the encrypted Business cache through the shared `video_announce.story_publish` contract; `kenigsberg_story` is in the default Business-mode allowlist and the selector comes from the runtime DB setting `video_announce_story_business_targets`, not a Kenigsberg-specific ENV key.
 - keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
 - never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.
 
@@ -380,6 +380,7 @@ Readiness check on 2026-05-12:
 - Business cache contains story-capable selected targets, reported only by short hashes in ops evidence;
 - `VIDEO_ANNOUNCE_STORY_ENABLED=1` is present in production and Kenigsberg story publishing is active by code path;
 - `@mostvkenig` is not required in the local `channel` table for the default story override because the story helper resolves the explicit peer string. If a future path uses `main_chat_id` DB resolution instead, add the channel row first.
+- 2026-05-13 production catch-up showed direct `@mostvkenig` Telethon story preflight returning `BOOSTS_REQUIRED`; Business targets passed preflight, so Kenigsberg now treats direct channel upload as non-blocking and uses Business targets as the required production gate.
 
 Production reset on approval:
 
