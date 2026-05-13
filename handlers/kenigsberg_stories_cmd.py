@@ -25,6 +25,7 @@ from kenigsberg_stories.state import (
     load_thoughts,
     parse_second_ranges,
     recent_source_exclusions,
+    recent_music_exclusions,
     reserve_issue_number,
     reset_bans,
 )
@@ -807,6 +808,7 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
             *(state.get("source_bans") or []),
             *recent_source_exclusions(state),
         ],
+        "recent_music": recent_music_exclusions(state),
         "target": "https://t.me/keniggpt",
         "strategy": "heuristic_v1",
         "story_publish_requested": False,

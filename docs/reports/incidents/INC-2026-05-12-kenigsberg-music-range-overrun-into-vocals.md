@@ -11,12 +11,13 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/rel
 
 ## Summary
 
-The test publication at `https://t.me/keniggpt/1944` contained vocals because the renderer allowed the audio extraction to run past the configured instrumental whitelist range. The whitelist was intended to cover only no-vocal fragments and must be enforced for the full generated story, including outro.
+The test publication at `https://t.me/keniggpt/1944` contained vocals because the renderer allowed the audio extraction to run past the configured instrumental whitelist range. Later test sessions `#276` / `#277` stayed inside the whitelist but repeated the same overlapping `The Promise` window back-to-back and hit a vocalized fragment inside the allowed range. The whitelist remains the hard safety boundary, and recent-window avoidance plus best-effort voice-risk scoring are required so test renders do not keep selecting the same problematic musical phrase.
 
 ## User / Business Impact
 
 - A visible test story in `@keniggpt` violated the content contract and used an undesired vocal fragment.
 - The MVP became unsafe to rerun until audio range enforcement was fixed.
+- Repeated same-track/overlapping music in adjacent test issues made the MVP feel repetitive even when the range was technically allowed.
 - Production `@mostvkenig` auto-publishing was not enabled, so the impact stayed in the test channel.
 
 ## Detection
@@ -30,17 +31,21 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - 2026-05-12 13:00 UTC — story was published to `@keniggpt`.
 - 2026-05-12 13:10 UTC — operator reported vocals outside the allowed range.
 - 2026-05-12 13:15 UTC — root cause identified in `scripts/render_kenigsberg_story.py::choose_music`.
+- 2026-05-13 15:51 UTC — operator reported sessions `#276` / `#277` using the same audio track and overlapping vocalized range in adjacent renders.
 
 ## Root Cause
 
 1. `choose_music` required `usable_end - start >= MAIN_DURATION` and picked `music_start <= allowed_end - MAIN_DURATION`.
 2. `encode_video` then extracted `total_duration = MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION`, so the final outro audio could extend beyond `allowed_end`.
 3. If a track name did not match `MUSIC_RANGES`, the renderer fell back to `(0.0, None)`, which was unsafe for a dataset containing tracks with vocals.
+4. After the first strict-range fix, `kenigsberg_stories_state.recent_music` was not populated and the next payload did not include historical issue music, so the renderer had no memory that `The Promise` had just been used.
+5. The configured no-word whitelist can still include non-lexical voice/vocalization; MVP had no scoring signal to prefer instrumental-sounding subwindows within the same allowed range.
 
 ## Contributing Factors
 
 - The first MVP manifest logged only `music_start` and total duration, not `music_end` or the matched allowed range.
 - The whitelist was documented but not pinned by tests as a hard full-story constraint.
+- Music history was present in issue manifests, but not converted into the next run's selection payload.
 
 ## Automation Contract
 
@@ -49,6 +54,7 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - Changing `MUSIC_RANGES`.
 - Changing story duration or outro duration.
 - Changing `choose_music` or `encode_video`.
+- Changing `register_issue_manifest`, `recent_music_exclusions`, or payload fields used by the renderer.
 - Adding new tracks to `zigomaro/koenigsberg-music`.
 
 ### Affected surfaces
@@ -63,9 +69,12 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - Unit test proves `music_start + total_duration <= allowed_end`.
 - Unit test proves unlisted tracks are skipped/fail closed.
 - Unit test proves too-short whitelisted ranges are rejected for the full story.
+- Unit test proves recent issue music history is exported as `recent_music`.
+- Unit test proves the renderer avoids a recent overlapping same-track window when another whitelisted track is available.
+- Unit test proves lower `voice_risk` candidates are preferred when other hard constraints are equal.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.
-- Fresh `/kenigsberg` smoke manifest includes `music_end` inside `music_allowed_range`.
+- Fresh `/kenigsberg` smoke manifest includes `music_end` inside `music_allowed_range` plus `music_voice_risk` / repeat flags.
 
 ### Required evidence
 
@@ -80,17 +89,21 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - Enforce the configured instrumental range against the full encoded story duration.
 - Remove whole-track fallback for unlisted music.
 - Add music start/end/allowed-range fields to `kenigsberg_issue_manifest.json` and `kenigsberg_render_log.json`.
+- Persist selected music windows into Kenigsberg state and pass recent music into each Kaggle payload.
+- Score candidate windows with recent-track/recent-overlap penalties and a best-effort voice-risk analyzer.
 
 ## Corrective Actions
 
 - Update `choose_music` to require `MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION` inside the allowed range.
 - Add robust normalized name matching so `The Promise.flac` still maps to the configured `the promise` range.
 - Add regression tests for allowed range containment, unlisted tracks, and short ranges.
+- Add regression tests for recent music history export, repeat avoidance, and voice-risk preference.
 
 ## Follow-up Actions
 
 - [ ] Review `zigomaro/koenigsberg-music` filenames and expand `MUSIC_RANGES` with any newly added tracks before enabling them.
 - [ ] Consider moving music range configuration to a versioned manifest file in the music dataset once the library grows.
+- [ ] After the next successful test issue, inspect `kenigsberg_render_log.json.selected_music` for `voice_risk`, `recent_same_track`, and `overlaps_recent`.
 
 ## Release And Closure Evidence
 

@@ -13,6 +13,7 @@ from kenigsberg_stories.state import (
     format_bans_report,
     map_generated_range_to_source,
     parse_second_ranges,
+    recent_music_exclusions,
     recent_source_exclusions,
     register_issue_manifest,
 )
@@ -443,6 +444,85 @@ def test_renderer_music_selection_rejects_ranges_shorter_than_full_story(monkeyp
 
     with pytest.raises(RuntimeError, match="long enough for the full story"):
         renderer.choose_music(music_dir, renderer.random.Random(1))
+
+
+def test_renderer_music_selection_avoids_recent_overlapping_track(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    recent_track = music_dir / "The Promise.flac"
+    fresh_track = music_dir / "Wyatt Earth.flac"
+    recent_track.write_bytes(b"stub")
+    fresh_track.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 500.0)
+    monkeypatch.setattr(renderer, "estimate_voice_risk", lambda path, start, duration: 0.0)
+
+    selected, _start, _duration, meta = renderer.choose_music(
+        music_dir,
+        renderer.random.Random(1),
+        recent_music=[
+            {
+                "file": "01 - The Promise.flac",
+                "start": 224.0,
+                "end": 260.0,
+                "issue_number": 22,
+            }
+        ],
+    )
+
+    assert selected == fresh_track
+    assert meta["recent_same_track"] is False
+    assert meta["overlaps_recent"] is False
+
+
+def test_renderer_music_selection_prefers_lower_voice_risk(monkeypatch, tmp_path) -> None:
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    high_voice = music_dir / "The Promise.flac"
+    low_voice = music_dir / "Wyatt Earth.flac"
+    high_voice.write_bytes(b"stub")
+    low_voice.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 500.0)
+    monkeypatch.setattr(
+        renderer,
+        "estimate_voice_risk",
+        lambda path, start, duration: 0.92 if "Promise" in path.name else 0.05,
+    )
+
+    selected, _start, _duration, meta = renderer.choose_music(music_dir, renderer.random.Random(2))
+
+    assert selected == low_voice
+    assert meta["voice_risk"] == 0.05
+
+
+def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
+    state = {
+        "recent_music": [],
+        "issues": {
+            "22": {
+                "issue_number": 22,
+                "registered_at": "2026-05-13T12:00:00+00:00",
+                "selected_music": {
+                    "file": "01 - The Promise.flac",
+                    "start": 233.41,
+                    "end": 257.738,
+                },
+            }
+        },
+    }
+
+    recent = recent_music_exclusions(state, max_age_days=30)
+
+    assert recent == [
+        {
+            "file": "01 - The Promise.flac",
+            "start": 233.41,
+            "end": 257.738,
+            "issue_number": 22,
+            "created_at": "2026-05-13T12:00:00+00:00",
+        }
+    ]
 
 
 def test_renderer_distributes_short_story_lines_across_all_segments() -> None:

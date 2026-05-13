@@ -591,14 +591,93 @@ def text_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[str, flo
     return None
 
 
-def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, float, dict[str, Any]]:
+def _music_names_match(left: str, right: str) -> bool:
+    left_key = normalize_music_key(left)
+    right_key = normalize_music_key(right)
+    return bool(left_key and right_key and (left_key in right_key or right_key in left_key))
+
+
+def _music_ranges_overlap(start: float, end: float, recent_start: float, recent_end: float, *, margin: float = 4.0) -> bool:
+    return max(start, recent_start - margin) < min(end, recent_end + margin)
+
+
+def _recent_music_items(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        file_name = str(item.get("file") or item.get("music_file") or "").strip()
+        if not file_name:
+            continue
+        try:
+            start = float(item.get("start") if item.get("start") is not None else item.get("music_start") or 0.0)
+            end = float(item.get("end") if item.get("end") is not None else item.get("music_end") or 0.0)
+        except Exception:
+            continue
+        if end <= start:
+            continue
+        items.append({"file": file_name, "start": start, "end": end, "issue_number": item.get("issue_number")})
+    return items
+
+
+def estimate_voice_risk(track: Path, start: float, duration: float) -> float:
+    if os.getenv("KENIGSBERG_STORIES_MUSIC_VOICE_ANALYSIS", "1").strip() in {"0", "false", "False"}:
+        return 0.0
+    if librosa is None or np is None:
+        return 0.0
+    try:
+        sample_duration = min(12.0, max(6.0, duration * 0.45))
+        sample_start = max(0.0, start + max(0.0, duration - sample_duration) * 0.5)
+        y, sr = librosa.load(str(track), sr=16000, mono=True, offset=sample_start, duration=sample_duration)
+        if y is None or len(y) < sr:
+            return 0.0
+        y = np.asarray(y, dtype=float)
+        rms = librosa.feature.rms(y=y)[0]
+        if not rms.size or float(np.max(rms)) <= 1e-5:
+            return 0.0
+        harmonic, percussive = librosa.effects.hpss(y)
+        harmonic_energy = float(np.mean(np.abs(harmonic)))
+        percussive_energy = float(np.mean(np.abs(percussive))) + 1e-8
+        harmonic_ratio = harmonic_energy / (harmonic_energy + percussive_energy)
+        stft = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
+        pitches, magnitudes = librosa.piptrack(S=stft, sr=sr, fmin=90, fmax=700)
+        max_magnitudes = magnitudes.max(axis=0) if magnitudes.size else np.asarray([])
+        if not max_magnitudes.size:
+            pitched_ratio = 0.0
+        else:
+            threshold = max(float(np.percentile(max_magnitudes, 70)) * 0.55, 1e-6)
+            pitched_ratio = float(np.mean(max_magnitudes > threshold))
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+        total_energy = float(np.sum(stft)) + 1e-8
+        vocal_band = (freqs >= 180) & (freqs <= 3400)
+        vocal_band_ratio = float(np.sum(stft[vocal_band, :]) / total_energy) if stft.size else 0.0
+        flatness = librosa.feature.spectral_flatness(S=stft)[0]
+        tonal_score = max(0.0, 1.0 - float(np.median(flatness)) * 8.0)
+        risk = (0.36 * pitched_ratio) + (0.28 * harmonic_ratio) + (0.24 * vocal_band_ratio) + (0.12 * tonal_score)
+        return round(max(0.0, min(1.0, risk)), 4)
+    except Exception as exc:
+        log(f"Music voice risk analysis failed for {track.name}: {type(exc).__name__}: {exc}")
+        return 0.0
+
+
+def choose_music(
+    music_dir: Path,
+    rng: random.Random,
+    *,
+    recent_music: list[dict[str, Any]] | None = None,
+) -> tuple[Path, float, float, dict[str, Any]]:
     tracks = iter_files(music_dir, AUDIO_EXTS)
     if not tracks:
         raise RuntimeError(f"No audio tracks found in {music_dir}")
     total_duration = MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION
     rng.shuffle(tracks)
     skipped: list[str] = []
+    recent = _recent_music_items(recent_music or [])
+    candidates: list[dict[str, Any]] = []
     for track in tracks:
+        track_has_candidate = False
         ranges = allowed_music_ranges(track)
         if not ranges:
             skipped.append(f"{track.name}: no_allowed_range")
@@ -608,16 +687,70 @@ def choose_music(music_dir: Path, rng: random.Random) -> tuple[Path, float, floa
             usable_end = duration if end is None else min(duration, end)
             if usable_end - start >= total_duration:
                 max_start = usable_end - total_duration
-                selected_start = start if max_start <= start else rng.uniform(start, max_start)
-                selected_start = round(selected_start, 3)
-                return track, selected_start, total_duration, {
-                    "allowed_start": start,
-                    "allowed_end": usable_end,
-                    "allowed_end_is_track_end": end is None,
-                    "selected_end": round(selected_start + total_duration, 3),
-                    "track_duration": duration,
-                }
-        skipped.append(f"{track.name}: ranges_too_short_for_{total_duration:.1f}s")
+                starts = [start] if max_start <= start else [rng.uniform(start, max_start) for _ in range(6)]
+                if max_start > start:
+                    starts.extend([start, max_start])
+                for selected_start in starts:
+                    selected_start = round(selected_start, 3)
+                    selected_end = round(selected_start + total_duration, 3)
+                    recent_same_track = [
+                        item for item in recent if _music_names_match(track.name, str(item.get("file") or ""))
+                    ]
+                    overlaps_recent = any(
+                        _music_ranges_overlap(
+                            selected_start,
+                            selected_end,
+                            float(item.get("start") or 0.0),
+                            float(item.get("end") or 0.0),
+                        )
+                        for item in recent_same_track
+                    )
+                    voice_risk = estimate_voice_risk(track, selected_start, total_duration)
+                    candidates.append(
+                        {
+                            "track": track,
+                            "start": selected_start,
+                            "end": selected_end,
+                            "allowed_start": start,
+                            "allowed_end": usable_end,
+                            "allowed_end_is_track_end": end is None,
+                            "track_duration": duration,
+                            "voice_risk": voice_risk,
+                            "recent_same_track": bool(recent_same_track),
+                            "overlaps_recent": overlaps_recent,
+                            "score": (
+                                rng.random()
+                                + voice_risk * 4.0
+                                + (20.0 if overlaps_recent else 0.0)
+                                + (3.0 if recent_same_track else 0.0)
+                            ),
+                        }
+                    )
+                    track_has_candidate = True
+        if not track_has_candidate:
+            skipped.append(f"{track.name}: ranges_too_short_for_{total_duration:.1f}s")
+    if candidates:
+        non_overlapping = [item for item in candidates if not item["overlaps_recent"]]
+        pool = non_overlapping or candidates
+        if any(not item["recent_same_track"] for item in pool):
+            pool = [item for item in pool if not item["recent_same_track"]]
+        low_voice = [item for item in pool if float(item.get("voice_risk") or 0.0) <= 0.68]
+        if low_voice:
+            pool = low_voice
+        selected = min(pool, key=lambda item: float(item["score"]))
+        track = selected["track"]
+        return track, float(selected["start"]), total_duration, {
+            "allowed_start": selected["allowed_start"],
+            "allowed_end": selected["allowed_end"],
+            "allowed_end_is_track_end": selected["allowed_end_is_track_end"],
+            "selected_end": selected["end"],
+            "track_duration": selected["track_duration"],
+            "voice_risk": selected["voice_risk"],
+            "music_selection_score": round(float(selected["score"]), 4),
+            "recent_same_track": bool(selected["recent_same_track"]),
+            "overlaps_recent": bool(selected["overlaps_recent"]),
+            "candidate_count": len(candidates),
+        }
     raise RuntimeError(
         "No audio track has an allowed instrumental range long enough for the full story; "
         f"required_duration={total_duration:.1f}s skipped={skipped[:20]}"
@@ -1099,7 +1232,11 @@ def main() -> None:
         raise RuntimeError(
             f"Music dataset is not mounted; available_inputs={mounted_input_dirs(input_root)}"
         )
-    music, music_start, total_duration, music_meta = choose_music(music_dir, rng)
+    music, music_start, total_duration, music_meta = choose_music(
+        music_dir,
+        rng,
+        recent_music=payload.get("recent_music") or [],
+    )
     rhythm_slots, rhythm_meta = beat_slots(
         MAIN_DURATION,
         rng,
@@ -1134,6 +1271,13 @@ def main() -> None:
             "start": music_meta.get("allowed_start"),
             "end": music_meta.get("allowed_end"),
             "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
+        },
+        "music_voice_risk": music_meta.get("voice_risk"),
+        "music_selection": {
+            "score": music_meta.get("music_selection_score"),
+            "candidate_count": music_meta.get("candidate_count"),
+            "recent_same_track": music_meta.get("recent_same_track"),
+            "overlaps_recent": music_meta.get("overlaps_recent"),
         },
         "total_duration": total_duration,
         "main_duration": main_duration,
@@ -1173,6 +1317,11 @@ def main() -> None:
             },
             "track_duration": music_meta.get("track_duration"),
             "duration": total_duration,
+            "voice_risk": music_meta.get("voice_risk"),
+            "selection_score": music_meta.get("music_selection_score"),
+            "candidate_count": music_meta.get("candidate_count"),
+            "recent_same_track": music_meta.get("recent_same_track"),
+            "overlaps_recent": music_meta.get("overlaps_recent"),
         },
         "text": {
             "thought_id": manifest["thought_id"],
@@ -1204,7 +1353,10 @@ def main() -> None:
         f"- Issue: #{manifest['issue_number']}\n"
         f"- Period: {period_key}\n"
         f"- Music: {music.name} @ {music_start:.2f}-{float(music_meta.get('selected_end') or 0.0):.2f}s "
-        f"(allowed {float(music_meta.get('allowed_start') or 0.0):.2f}-{float(music_meta.get('allowed_end') or 0.0):.2f}s)\n"
+        f"(allowed {float(music_meta.get('allowed_start') or 0.0):.2f}-{float(music_meta.get('allowed_end') or 0.0):.2f}s, "
+        f"voice_risk={float(music_meta.get('voice_risk') or 0.0):.2f}, "
+        f"recent_same_track={bool(music_meta.get('recent_same_track'))}, "
+        f"overlaps_recent={bool(music_meta.get('overlaps_recent'))})\n"
         f"- Thought: {manifest['thought_text']}\n"
         f"- Segments: {len(segments)}\n",
         encoding="utf-8",
@@ -1218,6 +1370,10 @@ def main() -> None:
                 "music_start": music_start,
                 "music_end": music_meta.get("selected_end"),
                 "music_allowed_range": manifest["music_allowed_range"],
+                "music_voice_risk": music_meta.get("voice_risk"),
+                "music_selection_score": music_meta.get("music_selection_score"),
+                "music_recent_same_track": music_meta.get("recent_same_track"),
+                "music_overlaps_recent": music_meta.get("overlaps_recent"),
                 "segments": len(segments),
                 "frames": frame_count,
                 "output_size_bytes": manifest["output_size_bytes"],

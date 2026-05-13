@@ -306,6 +306,82 @@ def recent_source_exclusions(
     return [item for _registered_at, item in items[:max_segments]]
 
 
+def recent_music_exclusions(
+    state: dict[str, Any],
+    *,
+    max_age_days: int = 28,
+    max_items: int = 80,
+) -> list[dict[str, Any]]:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(max_age_days)))
+    items: list[tuple[datetime, dict[str, Any]]] = []
+
+    def add_item(raw: dict[str, Any], *, issue_number: int = 0, registered_at: datetime | None = None) -> None:
+        file_name = str(raw.get("file") or raw.get("music_file") or "").strip()
+        if not file_name:
+            return
+        try:
+            start = float(raw.get("start") if raw.get("start") is not None else raw.get("music_start") or 0.0)
+            end = float(raw.get("end") if raw.get("end") is not None else raw.get("music_end") or 0.0)
+        except Exception:
+            return
+        if end <= start:
+            return
+        created = registered_at
+        raw_created = str(raw.get("created_at") or "").strip()
+        if created is None and raw_created:
+            try:
+                created = datetime.fromisoformat(raw_created)
+            except Exception:
+                created = None
+        if created is None:
+            created = datetime.now(timezone.utc)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if created < cutoff:
+            return
+        items.append(
+            (
+                created,
+                {
+                    "file": file_name,
+                    "start": round(start, 3),
+                    "end": round(end, 3),
+                    "issue_number": int(raw.get("issue_number") or issue_number or 0),
+                    "created_at": created.isoformat(),
+                },
+            )
+        )
+
+    for raw in state.get("recent_music") or []:
+        if isinstance(raw, dict):
+            add_item(raw)
+
+    issues = state.get("issues") if isinstance(state.get("issues"), dict) else {}
+    for issue in issues.values():
+        if not isinstance(issue, dict):
+            continue
+        raw_registered = str(issue.get("registered_at") or "").strip()
+        try:
+            registered_at = datetime.fromisoformat(raw_registered)
+        except Exception:
+            registered_at = datetime.now(timezone.utc)
+        if registered_at.tzinfo is None:
+            registered_at = registered_at.replace(tzinfo=timezone.utc)
+        selected = issue.get("selected_music")
+        if isinstance(selected, dict):
+            add_item(selected, issue_number=int(issue.get("issue_number") or 0), registered_at=registered_at)
+        else:
+            add_item(issue, issue_number=int(issue.get("issue_number") or 0), registered_at=registered_at)
+
+    dedup: dict[tuple[str, float, float], tuple[datetime, dict[str, Any]]] = {}
+    for created, item in items:
+        key = (str(item.get("file") or ""), float(item.get("start") or 0.0), float(item.get("end") or 0.0))
+        if key not in dedup or created > dedup[key][0]:
+            dedup[key] = (created, item)
+    ordered = sorted(dedup.values(), key=lambda item: item[0], reverse=True)
+    return [item for _created, item in ordered[:max_items]]
+
+
 async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:
     issue_number = int(manifest.get("issue_number") or 0)
     if issue_number <= 0:
@@ -324,4 +400,23 @@ async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:
                 *sorted(used, key=lambda x: int(x) if x.isdigit() else x),
                 thought_id,
             ]
+    music_file = str(manifest.get("music_file") or "").strip()
+    try:
+        music_start = float(manifest.get("music_start") or 0.0)
+        music_end = float(manifest.get("music_end") or 0.0)
+    except Exception:
+        music_start = music_end = 0.0
+    if music_file and music_end > music_start:
+        recent_music = [item for item in (state.get("recent_music") or []) if isinstance(item, dict)]
+        recent_music.insert(
+            0,
+            {
+                "file": music_file,
+                "start": round(music_start, 3),
+                "end": round(music_end, 3),
+                "issue_number": issue_number,
+                "created_at": _utc_now_iso(),
+            },
+        )
+        state["recent_music"] = recent_music[:80]
     await save_state(db, state)
