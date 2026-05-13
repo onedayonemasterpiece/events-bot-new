@@ -158,6 +158,27 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ## Release And Closure Evidence
 
+### 2026-05-13 LLM split + beat-sync + lower-edge mask deploy
+
+- deployed SHA: `4e23f2836eaa41d1549354d60b056a0d59816afc`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-4e23f283` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRG3ZR30X6VHHQ7H07009XN2`, machine `48e42d5b714228`, Fly status `started`, checks `1/1` passing.
+- regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py guide_excursions/digest_writer.py guide_excursions/kaggle_service.py kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py`
+  - `timeout 90 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `49 passed in 1.34s`
+  - local real-LLM smoke against all `26` `thoughts.md` entries with `gemini-3.1-flash-lite` -> `ALL_OK`; saved under `artifacts/codex/kenigsberg-text-split-smoke/results-bounded.json` (not committed).
+- long-copy validation:
+  - Thought `25` now splits into four semantic screens and preserves the full source text, including the Bessel / observatory tail.
+  - Invalid or missing LLM splits now fail before Kaggle instead of falling back to deterministic slicing.
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/handlers/kenigsberg_stories_cmd.py` contains `thoughts_md_llm_split`.
+  - Production `/app/scripts/render_kenigsberg_story.py` contains `detect_strong_beats` and `mask_bottom_source_strip`.
+  - Production env contains `KENIGSBERG_STORIES_TEXT_SPLIT_MODEL=gemini-3.1-flash-lite`, `KENIGSBERG_STORIES_BOTTOM_MASK_PX=34`, `GUIDE_MONITORING_EXTRACT_MODEL=models/gemini-3.1-flash-lite`, and `GUIDE_DIGEST_WRITER_MODEL=gemini-3.1-flash-lite`.
+  - Production guide monitoring/digest code contains Gemini-lite defaults, carrying the parallel Opus guide-monitoring update into the deployed image.
+- live smoke:
+  - Not run by Codex to avoid publishing a new `@keniggpt` story without an explicit operator `/kenigsberg` command.
+
 ### 2026-05-13 story-helper import gate deploy
 
 - deployed SHA: `39386e29f0dd4e0e1a63fe6cf3d643d562c6304c`
