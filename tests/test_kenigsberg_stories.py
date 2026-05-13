@@ -559,6 +559,40 @@ async def test_kenigsberg_text_split_disables_google_fallback(monkeypatch) -> No
     assert captured["generate"]["model"] == "gemini-3.1-flash-lite"
 
 
+def test_kenigsberg_text_split_falls_back_to_4o_when_gemini_split_is_invalid(monkeypatch) -> None:
+    thought = "Кнайпхоф был островом, но не окраиной. Он стал ключевой частью Кёнигсберга."
+
+    async def fake_primary(_text: str) -> dict:
+        return {
+            "hook": "Кнайпхоф был островом, но не окраиной.",
+            "scene_lines": ["Кнайпхоф был островом, но не окраиной."],
+        }
+
+    async def fake_ask_4o(*args, **kwargs):  # noqa: ANN002, ANN003
+        assert kwargs["model"] == "gpt-4o"
+        assert kwargs["meta"]["consumer"] == "kenigsberg_stories"
+        assert kwargs["meta"]["stage"] == "text_split_4o_fallback"
+        return (
+            '{"hook":"Кнайпхоф был островом, но не окраиной.",'
+            '"scene_lines":["Кнайпхоф был островом, но не окраиной.",'
+            '"Он стал ключевой частью Кёнигсберга."]}'
+        )
+
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_ask_story_text_split_llm", fake_primary)
+    monkeypatch.setattr(
+        kenigsberg_stories_cmd,
+        "require_main_attr",
+        lambda name: fake_ask_4o if name == "ask_4o" else None,
+    )
+
+    payload = asyncio.run(kenigsberg_stories_cmd._prepare_story_text_from_thought(thought))
+
+    assert payload["source"] == "thoughts_md_llm_split"
+    assert payload["text_model"] == "gpt-4o"
+    assert payload["text_fallback_from"] == "gemini-3.1-flash-lite"
+    assert " ".join(payload["scene_lines"]) == thought
+
+
 def test_kenigsberg_long_single_sentence_thought_requires_llm_semantic_split(monkeypatch) -> None:
     thought = (
         "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера, "
@@ -594,6 +628,7 @@ def test_kenigsberg_long_single_sentence_thought_requires_llm_semantic_split(mon
 
 
 def test_kenigsberg_story_text_fails_when_llm_drops_tail(monkeypatch) -> None:
+    monkeypatch.setenv("KENIGSBERG_STORIES_TEXT_SPLIT_FALLBACK_4O_MODEL", "")
     thought = (
         "Говорят, летом 1831 года в Кёнигсберге вспыхнула холера, "
         "и на волне страха люди верили даже самым невероятным слухам."

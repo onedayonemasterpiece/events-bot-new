@@ -355,14 +355,7 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
         client.provider_timeout_seconds = provider_timeout
     except Exception as exc:
         raise StoryTextPreparationError(f"LLM client unavailable: {exc}") from exc
-    prompt = (
-        "Раздели готовый русский текст для Telegram Story на смысловые экраны.\n"
-        "Не переписывай: нельзя менять, удалять или добавлять слова, даты, имена, кавычки и пунктуацию.\n"
-        "Верни JSON: {\"scene_lines\":[...],\"hook\":\"...\"}. hook ровно равен первой scene_line.\n"
-        "Склейка scene_lines через один пробел должна дословно дать исходный текст.\n"
-        "Нужно 1-6 экранов, каждый желательно до 15 слов.\n\n"
-        f"Текст: {thought_text}"
-    )
+    prompt = _story_text_split_prompt(thought_text)
     last_error: Exception | None = None
     retry_delays = _text_split_retry_delays(attempts)
     for attempt in range(1, attempts + 1):
@@ -400,10 +393,49 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
     raise StoryTextPreparationError(f"LLM scene split failed: {last_error!r}") from last_error
 
 
-async def _prepare_story_text_from_thought(thought_text: str) -> dict:
-    if not _normalize_story_copy(thought_text):
-        raise StoryTextPreparationError("empty thought text")
-    data = await _ask_story_text_split_llm(thought_text)
+def _story_text_split_prompt(thought_text: str) -> str:
+    return (
+        "Раздели готовый русский текст для Telegram Story на смысловые экраны.\n"
+        "Не переписывай: нельзя менять, удалять или добавлять слова, даты, имена, кавычки и пунктуацию.\n"
+        "Верни JSON: {\"scene_lines\":[...],\"hook\":\"...\"}. hook ровно равен первой scene_line.\n"
+        "Склейка scene_lines через один пробел должна дословно дать исходный текст.\n"
+        "Нужно 1-6 экранов, каждый желательно до 15 слов.\n\n"
+        f"Текст: {thought_text}"
+    )
+
+
+def _text_split_fallback_4o_model() -> str:
+    return (os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_FALLBACK_4O_MODEL") or "gpt-4o").strip()
+
+
+async def _ask_story_text_split_4o(thought_text: str) -> dict:
+    model = _text_split_fallback_4o_model()
+    if not model:
+        raise StoryTextPreparationError("4o text split fallback is disabled")
+    timeout = max(8.0, float(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_4O_TIMEOUT_SEC", "45") or "45"))
+    ask_4o = require_main_attr("ask_4o")
+    raw = await asyncio.wait_for(
+        ask_4o(
+            _story_text_split_prompt(thought_text),
+            system_prompt=(
+                "Ты аккуратный редактор титров. Возвращай только JSON. "
+                "Нельзя переписывать исходный текст, только расставлять границы экранов."
+            ),
+            response_format={"type": "json_object"},
+            max_tokens=500,
+            model=model,
+            meta={"consumer": "kenigsberg_stories", "stage": "text_split_4o_fallback"},
+            temperature=0.0,
+        ),
+        timeout=timeout,
+    )
+    data = _extract_json_object(raw or "")
+    if data is None:
+        raise StoryTextPreparationError("4o scene split returned invalid JSON")
+    return data
+
+
+def _build_story_text_payload(thought_text: str, data: dict, *, text_model: str, fallback_from: str = "") -> dict:
     raw_lines = data.get("scene_lines") if isinstance(data, dict) else None
     if not isinstance(raw_lines, list):
         raise StoryTextPreparationError("LLM scene split returned no scene_lines list")
@@ -411,12 +443,48 @@ async def _prepare_story_text_from_thought(thought_text: str) -> dict:
     hook = _normalize_story_copy(data.get("hook") or lines[0])
     if hook != lines[0]:
         raise StoryTextPreparationError("LLM hook must equal first scene line")
-    return {
+    payload = {
         "hook": hook,
         "scene_lines": lines,
         "caption": thought_text[:240],
         "source": "thoughts_md_llm_split",
+        "text_model": text_model,
     }
+    if fallback_from:
+        payload["text_fallback_from"] = fallback_from
+    return payload
+
+
+async def _prepare_story_text_from_thought(thought_text: str) -> dict:
+    if not _normalize_story_copy(thought_text):
+        raise StoryTextPreparationError("empty thought text")
+    primary_model = (os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_MODEL") or "gemini-3.1-flash-lite").strip()
+    try:
+        data = await _ask_story_text_split_llm(thought_text)
+        return _build_story_text_payload(thought_text, data, text_model=primary_model)
+    except Exception as primary_exc:
+        fallback_model = _text_split_fallback_4o_model()
+        if not fallback_model:
+            raise StoryTextPreparationError(f"LLM scene split failed: {primary_exc!r}") from primary_exc
+        logger.warning(
+            "kenigsberg: primary text split failed; trying 4o fallback primary_model=%s fallback_model=%s err=%r",
+            primary_model,
+            fallback_model,
+            primary_exc,
+        )
+        try:
+            data = await _ask_story_text_split_4o(thought_text)
+            return _build_story_text_payload(
+                thought_text,
+                data,
+                text_model=fallback_model,
+                fallback_from=primary_model,
+            )
+        except Exception as fallback_exc:
+            raise StoryTextPreparationError(
+                f"LLM scene split failed: primary={primary_exc!r}; fallback={fallback_exc!r}"
+            ) from fallback_exc
+
 
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
@@ -731,6 +799,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
         "scene_lines": story_text.get("scene_lines") or [],
         "caption": story_text.get("caption") or "",
         "text_source": story_text.get("source") or "",
+        "text_model": story_text.get("text_model") or "",
+        "text_fallback_from": story_text.get("text_fallback_from") or "",
         "crop_bottom_px": int(os.getenv("KENIGSBERG_STORIES_CROP_BOTTOM_PX", "96")),
         "bottom_mask_px": int(os.getenv("KENIGSBERG_STORIES_BOTTOM_MASK_PX", "34")),
         "source_bans": [
@@ -789,7 +859,8 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
     await message.answer(
         f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period=auto, "
         f"thought={thought.get('id') or '-'} / {thoughts_count}, "
-        f"text={story_text.get('source') or 'unknown'}."
+        f"text={story_text.get('source') or 'unknown'}"
+        f"{'/' + str(story_text.get('text_model')) if story_text.get('text_model') else ''}."
     )
     client = KaggleClient()
     try:

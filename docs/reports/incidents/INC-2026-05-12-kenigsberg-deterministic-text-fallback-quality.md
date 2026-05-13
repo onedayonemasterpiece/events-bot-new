@@ -64,6 +64,7 @@ Kenigsberg issue `#3` launched with `text=fallback` after the LLM rewrite timed 
 - Kenigsberg publication text is prepared from curated `thoughts.md` entries without an LLM rewrite; the LLM may only choose semantic screen boundaries.
 - The prepared payload must include `text_source=thoughts_md_llm_split`, `hook`, and explicit validated `scene_lines`.
 - The screen split may only segment the curated text for readability; it must not paraphrase, remove dates/names/facts, change punctuation, or drop the tail.
+- If Gemini lite cannot produce a validated semantic split, the only allowed availability fallback is an explicit `gpt-4o` split call through `ask_4o`; deterministic splitting and Gemma 4 fallback remain forbidden for this text path.
 - Renderer must fail if `scene_lines` are absent or overlong instead of splitting thought text on Kaggle.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
 - Production `/healthz` remains green after deploy.

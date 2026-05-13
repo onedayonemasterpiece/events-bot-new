@@ -17,6 +17,8 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 
 Later the same day, issue `#15` showed that the Kenigsberg text split used the shared GoogleAI fallback chain: Gemini lite returned `503`, the global fallback tried Gemma 4, and both incidents were shown to the operator even though a later Gemini-lite retry produced valid `scene_lines` and the story published. Kenigsberg text splitting is quality-sensitive and should not silently fall back to Gemma 4; it should retry Gemini lite with bounded Kenigsberg-specific delays and fail before Kaggle if no valid split is produced.
 
+On 2026-05-13 16:51-16:52 Europe/Kaliningrad, the fail-closed path became too brittle for manual MVP testing: issues `#17` and `#18` both acknowledged the command but stopped before Kaggle because Gemini lite did not produce a validated safe semantic split. The revised contract keeps Gemini lite as primary, still forbids Gemma 4 for this path, but allows one explicit `gpt-4o` fallback through the existing OpenAI `ask_4o` path before failing closed.
+
 ## User / Business Impact
 
 - The operator could not tell whether `/kenigsberg` was accepted.
@@ -24,6 +26,7 @@ Later the same day, issue `#15` showed that the Kenigsberg text split used the s
 - Existing public event surfaces stayed available; impact was limited to the new Kenigsberg manual generation command.
 - The operator could not test the current rendered-story iteration because no new generation session was created after the 2026-05-13 14:34 Europe/Kaliningrad command window.
 - The operator saw `kenigsberg_stories` LLM incidents for both Gemini lite and Gemma 4 and could not tell whether generation proceeded with or without a valid text split.
+- Two consecutive manual launches stopped before Kaggle when Gemini lite did not return a validated split, making the MVP hard to test despite the rest of the render path being available.
 
 ## Detection
 
@@ -51,6 +54,7 @@ Later the same day, issue `#15` showed that the Kenigsberg text split used the s
 3. A retryable provider overload made the command look unhandled for more than two minutes.
 4. The later LLM split fix still left the manual command handler awaiting the whole launch preflight/handoff path inside the Telegram update handler after the first acknowledgement point, so any blocking before that point remained operator-visible as silence.
 5. The Kenigsberg text-split code instantiated the shared `GoogleAIClient` without disabling `GOOGLE_AI_FALLBACK_MODELS`, so a Gemini-lite outage could automatically call Gemma 4 despite the product requirement to avoid Gemma 4 for this text path.
+6. The subsequent Gemini-only fail-closed mitigation protected text quality but had no high-quality fallback, so transient Gemini-lite failures or invalid splits blocked manual testing entirely.
 
 ## Contributing Factors
 
@@ -81,7 +85,8 @@ Later the same day, issue `#15` showed that the Kenigsberg text split used the s
 - CherryFlash/CrumpleVideo/default video sessions do not block `/kenigsberg`; only `profile_key="kenigsberg_story"` active sessions are considered.
 - Kenigsberg text split does not use shared GoogleAI fallback models; `client.fallback_models` is empty for `consumer=kenigsberg_stories`.
 - Kenigsberg text split does not emit global Telegram LLM incidents on intermediate provider failures; the command reports its own final fail-closed status if all retries fail.
-- Kenigsberg text split retries only Gemini lite according to `KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS` and `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`.
+- Kenigsberg text split retries Gemini lite according to `KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS` and `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`.
+- If Gemini lite does not return a validated split, Kenigsberg may make one explicit `gpt-4o` fallback call through `ask_4o`; it must not use Gemma 4 or the shared `GOOGLE_AI_FALLBACK_MODELS` chain for this path.
 - Text rewrite has a hard timeout and fail-closed behavior.
 - Regression test covers timeout-to-fail-closed behavior.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
@@ -103,6 +108,7 @@ Later the same day, issue `#15` showed that the Kenigsberg text split used the s
 - Add a launch-accepted log with issue, thought, chat and user ids.
 - Move the long manual launch preflight/Kaggle handoff into a background task after an immediate acknowledgement.
 - Disable the shared model fallback chain and global LLM incident notifier for Kenigsberg text splitting; rely on Kenigsberg-specific retries and final operator status.
+- Add an explicit `gpt-4o` fallback for text-boundary splitting after Gemini-lite output fails provider or validation checks; keep validation identical and fail before Kaggle if both paths fail.
 
 ## Corrective Actions
 

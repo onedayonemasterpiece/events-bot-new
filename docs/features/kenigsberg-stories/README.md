@@ -103,7 +103,7 @@ Variation points for this product:
 3. Server selects only run metadata that must live outside Kaggle:
    - one thought from the shuffle-bag;
    - deterministic seed / issue id.
-4. Server takes the selected `thoughts.md` entry as final copy and asks Gemini lite to split it into readable `scene_lines[]` without rewording, deleting facts, dropping the tail, or changing punctuation. This step retries only the configured Gemini-lite model (`KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS`, `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`) and must not use the global `GOOGLE_AI_FALLBACK_MODELS` Gemma fallback. If the split is unavailable or fails validation, generation fails before Kaggle.
+4. Server takes the selected `thoughts.md` entry as final copy and asks Gemini lite to split it into readable `scene_lines[]` without rewording, deleting facts, dropping the tail, or changing punctuation. This step retries only the configured Gemini-lite model (`KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS`, `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`) and must not use the global `GOOGLE_AI_FALLBACK_MODELS` Gemma fallback. If Gemini lite does not return a validated split, the server makes one explicit fallback call to `KENIGSBERG_STORIES_TEXT_SPLIT_FALLBACK_4O_MODEL` (`gpt-4o` by default) through the existing `ask_4o` path. If both models fail validation, generation fails before Kaggle.
 5. Server creates a per-run Kaggle dataset:
    - payload;
    - selected thought metadata;
@@ -216,7 +216,7 @@ Current MVP implementation:
 - renderer: `scripts/render_kenigsberg_story.py`;
 - test publication target: `@keniggpt` through the existing video poller;
 - output manifest: `kenigsberg_issue_manifest.json`, imported by `video_announce.poller` into `setting.kenigsberg_stories_state`.
-- before Kaggle launch the bot sends an immediate operator ack, then calls the text LLM only for semantic screen boundaries; `text_source=thoughts_md_llm_split` means the file is treated as final editorial copy and the LLM is allowed to split only, not rewrite;
+- before Kaggle launch the bot sends an immediate operator ack, then calls the text LLM only for semantic screen boundaries; `text_source=thoughts_md_llm_split` means the file is treated as final editorial copy and the LLM is allowed to split only, not rewrite; Gemini lite is primary, and `gpt-4o` is the explicit fallback for this small text-boundary task;
 - LLM split validation requires that joining `scene_lines` with spaces exactly recreates the selected `thoughts.md` entry after whitespace normalization; overlong lines, missing tails, extra words, changed punctuation, or invalid JSON fail the generation before Kaggle;
 - recent source segments from registered issue manifests are passed into the next run as temporary exclusions, so the same source video may still be reused but not the same recently published source time range;
 - within one generated story the renderer keeps a per-run source-range exclusion map, so if the same source video must be reused it cannot reuse an overlapping or near-adjacent source interval from an earlier scene in the same issue;

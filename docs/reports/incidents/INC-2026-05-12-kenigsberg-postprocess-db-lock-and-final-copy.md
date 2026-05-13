@@ -104,7 +104,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Session status updates and Kenigsberg state writes retry transient SQLite lock errors.
 - `/a kenigsberg покажи список банов` resolves to `/kenigsberg bans`.
 - New story text payloads use `text_source=thoughts_md_llm_split`.
-- Long one-sentence `thoughts.md` entries are split by the text LLM into readable screens without rewriting or losing words; invalid/missing LLM splits fail generation before Kaggle.
+- Long one-sentence `thoughts.md` entries are split by the text LLM into readable screens without rewriting or losing words; Gemini lite is primary, `gpt-4o` may be used as the explicit validated fallback, and invalid/missing splits after both paths fail generation before Kaggle.
 - Kaggle renderer still requires explicit `scene_lines` in `payload.json`.
 - Kaggle renderer rejects overlong unsplit `scene_lines` instead of slicing them locally.
 - Scene timeline slots are derived from detected strong-beat anchors in the selected audio: first slot may be partial to the first strong beat; subsequent slots are random `1x` or `2x` strong-beat spans.
