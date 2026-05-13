@@ -7,10 +7,12 @@ import pytest
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
     SecondRange,
+    choose_next_thought,
     format_bans_report,
     map_generated_range_to_source,
     parse_second_ranges,
     recent_source_exclusions,
+    register_issue_manifest,
 )
 from scripts import render_kenigsberg_story as renderer
 from PIL import Image, ImageDraw
@@ -260,6 +262,43 @@ def test_recent_source_exclusions_use_previous_issue_segments() -> None:
             "reason": "recent_generation",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_thought_is_marked_used_only_after_successful_manifest(monkeypatch, tmp_path) -> None:
+    thoughts_path = tmp_path / "thoughts.md"
+    thoughts_path.write_text("1. First\n2. Second\n", encoding="utf-8")
+    state = {"used_thought_ids": [], "issues": {}}
+    saved: list[dict] = []
+
+    async def fake_load_state(db):  # noqa: ANN001
+        return dict(state)
+
+    async def fake_save_state(db, value):  # noqa: ANN001
+        state.clear()
+        state.update(value)
+        saved.append(dict(value))
+
+    monkeypatch.setattr("kenigsberg_stories.state.load_state", fake_load_state)
+    monkeypatch.setattr("kenigsberg_stories.state.save_state", fake_save_state)
+    monkeypatch.setattr("kenigsberg_stories.state.secrets.randbelow", lambda n: 0)
+
+    chosen = await choose_next_thought(object(), thoughts_path=thoughts_path)
+
+    assert chosen["id"] == "1"
+    assert state["used_thought_ids"] == []
+    assert saved == []
+
+    await register_issue_manifest(
+        object(),
+        {
+            "issue_number": 12,
+            "thought_id": "1",
+            "segments": [],
+        },
+    )
+
+    assert state["used_thought_ids"] == ["1"]
 
 
 def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:

@@ -250,13 +250,9 @@ async def choose_next_thought(db: Any, *, thoughts_path: Path = THOUGHTS_PATH) -
     used = {str(item) for item in (state.get("used_thought_ids") or [])}
     available = [item for item in thoughts if str(item["id"]) not in used]
     if not available:
-        used = set()
         available = list(thoughts)
     index = secrets.randbelow(len(available))
-    chosen = available[index]
-    state["used_thought_ids"] = [*sorted(used, key=lambda x: int(x) if x.isdigit() else x), chosen["id"]]
-    await save_state(db, state)
-    return chosen
+    return available[index]
 
 
 def recent_source_exclusions(
@@ -320,4 +316,12 @@ async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:
         **manifest,
         "registered_at": _utc_now_iso(),
     }
+    thought_id = str(manifest.get("thought_id") or "").strip()
+    if thought_id:
+        used = [str(item) for item in (state.get("used_thought_ids") or []) if str(item).strip()]
+        if thought_id not in set(used):
+            state["used_thought_ids"] = [
+                *sorted(used, key=lambda x: int(x) if x.isdigit() else x),
+                thought_id,
+            ]
     await save_state(db, state)

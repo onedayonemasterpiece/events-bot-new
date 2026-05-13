@@ -59,7 +59,7 @@ Allowed instrumental ranges are hard constraints for the full encoded story, inc
 
 Канонический список исходных мыслей: `docs/features/kenigsberg-stories/thoughts.md`.
 
-Пул должен работать как shuffle-bag: мысль не повторяется, пока все мысли не были использованы. После полного цикла bag сбрасывается и начинается новый круг.
+Пул должен работать как shuffle-bag: мысль не повторяется, пока все мысли не были использованы. После полного цикла bag сбрасывается и начинается новый круг. Мысль считается использованной только после успешной регистрации `kenigsberg_issue_manifest.json`; failed Kaggle launch/render не должен вынимать мысль из пула.
 
 ## Reuse from CherryFlash
 

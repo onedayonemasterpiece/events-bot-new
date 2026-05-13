@@ -23,6 +23,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Session `#266` blocked the next manual `/kenigsberg` until startup recovery failed it after the local handoff grace window; the operator had no explicit command to clear the stuck pre-handoff row.
 - The operator saw repeated scene material inside one issue, making different generations feel less random and cheaper than intended.
 - Session `#267` did not render or publish because a disabled production-story path still executed its helper import in Kaggle.
+- The failed `#267` run selected `thought=1`; failed renders must not consume thoughts from the no-repeat pool.
 
 ## Detection
 
@@ -54,6 +55,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 7. Kenigsberg launch handoff writes still used single-attempt SQLAlchemy commits for `RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and the fail-close path. A lock after successful Kaggle binding therefore stranded a local pseudo-ref row that neither the poller nor operator could use.
 8. `pick_video_segments` prevented only immediate file repetition. It did not mark source intervals already selected in the current generation, so the same source video could later be chosen with an overlapping or near-adjacent offset.
 9. The story-ready notebook copied and imported `kaggle_common/story_publish.py` unconditionally. Test runs do not include `story_publish.json`, but the import still required Telethon and failed before the renderer could start.
+10. `choose_next_thought` wrote `used_thought_ids` before successful render completion, so any failed run could remove a thought from the publication shuffle-bag even though it was never actually published.
 
 ## Contributing Factors
 
@@ -72,6 +74,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Changing Kenigsberg source-video selection, randomization, or source-range exclusion logic.
 - Changing Kenigsberg local-to-Kaggle handoff persistence or manual stuck-session controls.
 - Changing Kenigsberg notebook production-story helper import/preflight behavior.
+- Changing Kenigsberg thought-pool reservation/consumption semantics.
 
 ### Affected surfaces
 
@@ -96,6 +99,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include the seed and rhythm slots used for the run.
 - Kenigsberg launch handoff writes retry SQLite locks, and stale `local:KoenigsbergStories` rows can be cleared by `/kenigsberg unlock` or auto-failed on the next `/kenigsberg` after the handoff grace window.
 - Kenigsberg notebook imports/preflights `story_publish.py` only when `story_publish.json` exists; normal manual test renders without production story config must not import the helper.
+- Selected thoughts are marked used only after a successful issue manifest is registered; failed Kaggle runs must not consume `used_thought_ids`.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` passes.
 - Production `/healthz` is green after deploy.
 
@@ -116,6 +120,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Kenigsberg now exposes `/kenigsberg unlock` for local pre-handoff rows and auto-fails stale local handoffs on the next `/kenigsberg`.
 - Scene selection now keeps a per-run in-memory ban map with a small margin around each chosen source interval, so a source file can be reused only on a genuinely different available interval.
 - Notebook story helper import is now gated by the actual presence of `story_publish.json`; Telethon/requests/cryptography are installed for the future production-story path but are not required for disabled story publishing.
+- Thought shuffle-bag consumption moved from pre-render selection to successful manifest registration.
 
 ## Corrective Actions
 
@@ -124,6 +129,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Add a test for stale local handoff detection.
 - Add tests for per-run unused-file preference and overlapping source-range avoidance.
 - Add a notebook guardrail test that `story_publish_requested` is computed before helper import and that the helper is imported only behind that gate.
+- Add a state test proving thought selection alone does not mutate `used_thought_ids`, while successful manifest registration does.
 - Update Kenigsberg documentation to make `thoughts.md` the final editorial source.
 - Commit and deploy the current local `thoughts.md` changes with the code fix.
 
