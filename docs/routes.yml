@@ -78,6 +78,7 @@ sections:
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
+      promo_campaigns: docs/backlog/features/promo-campaigns/README.md
     linear:
       - docs/backlog/linear/EVE-11-llm-rate-limits.md
       - docs/backlog/linear/EVE-54-kaggle-secrets.md

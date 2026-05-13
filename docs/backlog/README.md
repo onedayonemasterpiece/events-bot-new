@@ -12,6 +12,7 @@
 - CherryFlash / Popular Video Afisha (популярные события / `Быстрый обзор`): `docs/backlog/features/cherryflash/README.md`
   - strict shot reference for `Мобильная лента`: `docs/reference/09bc959616262101b9cd310629f08b84.jpg`
 - Guide excursions monitoring (экскурсии гидов): `docs/backlog/features/guide-excursions-monitoring/README.md`
+- Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 
 ## Implemented (для ориентира)
 
