@@ -229,6 +229,7 @@ Current MVP implementation:
 - source scene clips are decoded through ffmpeg into constant `30fps` `720x1280` frame sequences before overlays/transitions are applied; the renderer must not fill normal source-fps gaps by repeating the last OpenCV frame at the end of a scene.
 - status updates and Kenigsberg state writes retry short SQLite locks so heavy VK imports do not leave a completed Kaggle run stuck in local `RENDERING`.
 - Kaggle handoff writes (`RENDERING`, `kaggle_dataset`, `kaggle_kernel_ref`, and fail-close updates) retry transient SQLite locks; stale `local:KoenigsbergStories` sessions older than the handoff grace window are auto-failed on the next `/kenigsberg`, and can also be manually cleared with `/kenigsberg unlock`.
+- Kenigsberg active render locking is profile-scoped: a running CrumpleVideo/default render must not block `/kenigsberg`, but a second Kenigsberg render is still rejected until the first Kenigsberg session finishes or is unlocked.
 
 Notebook guardrail:
 

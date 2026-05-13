@@ -1758,7 +1758,14 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_videoannounce_session_status_created_at ON videoannounce_session(status, created_at)"
             )
             await conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ux_videoannounce_session_rendering ON videoannounce_session(status) WHERE status = 'RENDERING'"
+                "DROP INDEX IF EXISTS ux_videoannounce_session_rendering"
+            )
+            await conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_videoannounce_session_rendering_profile
+                ON videoannounce_session(COALESCE(profile_key, 'default'))
+                WHERE status = 'RENDERING'
+                """
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_videoannounce_item_session ON videoannounce_item(session_id)"

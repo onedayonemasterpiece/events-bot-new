@@ -13,6 +13,8 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/run
 
 During manual testing, `/kenigsberg` reported that session `#265` was still rendering even though Kaggle had already reached `COMPLETE`. The completed output eventually published, but the operator-facing state was misleading while heavy VK auto-import work held SQLite locks. The same test window also showed `/a kenigsberg покажи список банов` being routed as `/kenigsberg покажи список банов` instead of `/kenigsberg bans`, confirmed that story text should now be treated as final curated copy from `thoughts.md`, not rewritten by an LLM, and exposed visible scene freezes in Kenigsberg `#10`. A later run, session `#266`, reached Kaggle dataset/kernel binding but failed to persist the real Kaggle metadata because SQLite was locked, leaving the row as `RENDERING + local:KoenigsbergStories`. Subsequent visual review showed the same source fragment could reappear later in the same generated story because per-run segment selection avoided only recent files, not already selected source-time ranges. Session `#267` then failed before rendering because the story-ready notebook imported the shared story helper during a normal test run without `story_publish.json`; the helper imports Telethon, which was not installed in the Kenigsberg Kaggle notebook environment. Kenigsberg `#13` exposed a final-copy splitting regression: the launch path stopped using an LLM for semantic screen boundaries, sent a long one-sentence thought as one `scene_lines` item, and only the beginning stayed visible while the semantic tail never appeared as separate screens. Visual review also showed scene changes did not reliably land on music beats because the renderer used a seeded pseudo-rhythm grid instead of analyzing the selected audio.
 
+On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` and `#20` reached text preparation but failed before Kaggle with `sqlite3.IntegrityError: UNIQUE constraint failed: videoannounce_session.status` when their sessions were moved from `SELECTED` to `RENDERING`. The table still had a global partial unique index on `status='RENDERING'`, even though Kenigsberg launch gating had already been changed to be profile-scoped.
+
 ## User / Business Impact
 
 - The operator could not confidently start the next Kenigsberg test run.
@@ -27,6 +29,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 - Kenigsberg `#13` published with a long thought cut mid-sense: the first fragment stayed on screen and the remaining words were not shown as readable follow-up screens.
 - Scene cuts could look detached from the music because timing was random-ish rather than derived from detected strong beats.
 - Some generated clips could still show a thin grey/light-text source strip along the lower edge after the existing bottom crop.
+- Kenigsberg could not launch concurrently with an unrelated CrumpleVideo render, despite the desired profile-scoped launch contract.
 
 ## Detection
 
@@ -64,6 +67,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 11. The text pipeline regressed from LLM semantic splitting to deterministic/sentence splitting. This violated the earlier no-fallback contract and allowed a long one-sentence thought to reach Kaggle as one screen.
 12. `payload_scene_lines` trusted server-provided lines and did not reject overlong unsplit screens.
 13. `beat_slots` was still an MVP pseudo-grid (`rng.uniform` base interval + random spans), not a `librosa`-derived grid anchored to strong musical beats.
+14. SQLite schema still enforced `ux_videoannounce_session_rendering ON videoannounce_session(status) WHERE status='RENDERING'`, a global one-render limit that contradicted the later Kenigsberg profile-scoped gate.
 
 ## Contributing Factors
 
@@ -100,6 +104,7 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 ### Mandatory checks before closure or deploy
 
 - `/kenigsberg` active-session gate is scoped to `profile_key="kenigsberg_story"`.
+- The SQLite unique rendering guard is scoped by `COALESCE(profile_key, 'default')`, so Kenigsberg can render while CrumpleVideo/default is rendering, but two Kenigsberg renders cannot run at once.
 - If an active Kenigsberg session has Kaggle `COMPLETE`, operator feedback says it is finalizing/downloading/publishing, not simply “rendering”.
 - Session status updates and Kenigsberg state writes retry transient SQLite lock errors.
 - `/a kenigsberg покажи список банов` resolves to `/kenigsberg bans`.

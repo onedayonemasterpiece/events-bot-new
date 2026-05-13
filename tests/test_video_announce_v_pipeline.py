@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from db import Database
 from main import LOCAL_TZ
@@ -50,6 +51,37 @@ class _DummyCallback:
 
     async def answer(self, text: str, show_alert: bool = False) -> None:
         self.answers.append((text, show_alert))
+
+
+@pytest.mark.asyncio
+async def test_rendering_unique_index_is_scoped_by_profile(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="default",
+            )
+        )
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="kenigsberg_story",
+            )
+        )
+        await session.commit()
+
+    async with db.get_session() as session:
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="kenigsberg_story",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
 
 
 @pytest.mark.asyncio

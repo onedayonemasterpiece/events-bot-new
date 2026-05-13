@@ -453,8 +453,8 @@ class VideoAnnounceSession(SQLModel, table=True):
     __table_args__ = (
         Index("ix_videoannounce_session_status_created_at", "status", "created_at"),
         Index(
-            "ux_videoannounce_session_rendering",
-            "status",
+            "ux_videoannounce_session_rendering_profile",
+            text("COALESCE(profile_key, 'default')"),
             unique=True,
             sqlite_where=text("status = 'RENDERING'"),
         ),

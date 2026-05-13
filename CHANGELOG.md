@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Incident / Kenigsberg concurrent render gate**: replaced the global SQLite `RENDERING` uniqueness guard on `videoannounce_session.status` with a profile-scoped guard (`COALESCE(profile_key, 'default')`) so Kenigsberg can launch while an unrelated CrumpleVideo/default render is running, while still preventing two simultaneous Kenigsberg renders.
 - **Incident / Kenigsberg text split 4o fallback**: kept Gemini lite as the primary semantic screen-split model for curated `thoughts.md` entries, but added an explicit validated `gpt-4o` fallback through `ask_4o` when Gemini lite fails provider checks or returns an invalid split. The path still disables shared Google/Gemma fallback and still fails before Kaggle if both models cannot preserve the source text exactly.
 - **Kenigsberg Stories / rhythm resilience**: adjusted the beat-synced timing upgrade so strong-beat endings are preferred when the detected grid reaches a normal story length, but short/failed beat analysis falls back to an explicit target-duration timing path instead of publishing sharply shortened clips or blocking the render.
 - **Kenigsberg Stories / rhythm audit and outro boundary**: tightened beat-synced montage construction so the main video now ends on a detected strong beat before the outro instead of padding the last scene to an arbitrary `18.0s` boundary. The manifest/render log now include raw detected `beat_times` and selected `strong_beat_times` so future issues can be audited against the actual selected music segment.
