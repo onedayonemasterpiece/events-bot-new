@@ -161,6 +161,22 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ## Release And Closure Evidence
 
+### 2026-05-13 rhythm resilience deploy
+
+- deployed SHA: `45614329d4f17cc202a5e8c7646ef0cd2b1d237c`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-45614329` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRGVETEM3CKMVTGVFGQP4WEW`, machine `48e42d5b714228`, Fly version `1080`, checks `1/1` passing.
+- regression checks:
+  - `python3 -m py_compile scripts/render_kenigsberg_story.py tests/test_kenigsberg_stories.py`
+  - `timeout 90 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `54 passed in 1.25s`
+- rhythm behavior:
+  - Strong-beat endings remain preferred when detected anchors reach a normal story length.
+  - If strong-beat anchors stop too early, the renderer keeps the established target duration through `rhythm_end_mode=target_duration_fallback` instead of publishing a sharply shortened story.
+  - If beat detection itself fails, the renderer uses `rhythm_end_mode=approximate_fallback` and records `fallback_reason`.
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/scripts/render_kenigsberg_story.py` contains `rhythm_end_mode`, `approximate_rhythm_slots`, and `MIN_STRONG_MAIN_DURATION`.
+
 ### 2026-05-13 LLM split + beat-sync + lower-edge mask deploy
 
 - deployed SHA: `4e23f2836eaa41d1549354d60b056a0d59816afc`
