@@ -1,10 +1,10 @@
 # INC-2026-05-13 Kenigsberg Production Story BOOSTS_REQUIRED
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Kenigsberg Stories production story publishing
 Opened: 2026-05-13
-Closed: —
+Closed: 2026-05-13
 Owners: Codex
 Related incidents: `INC-2026-04-26-crumple-story-required-channel-fanout`, `INC-2026-05-12-kenigsberg-music-range-overrun-into-vocals`
 Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/features/telegram-business-stories/README.md`
@@ -38,6 +38,7 @@ The first Kenigsberg production catch-up after enabling the daily `20:10 Europe/
 - 2026-05-13 21:21 UTC: compensation `issue #44`, session `#297`, published to the shared Business allowlist, which was the wrong product surface.
 - 2026-05-13 21:xx UTC: mistaken Business stories from session `#297` were deleted with Bot API `deleteStory`.
 - 2026-05-13 21:xx UTC: fix changes Kenigsberg targets to required self-account upload plus best-effort `@mostvkenig` repost, with `story_business_targets=[]`.
+- 2026-05-13 22:03 UTC: after the channel received an additional boost, compensation session `#299`, issue `#46`, published successfully both to the required self-account story and to `@mostvkenig` via `repost_previous`.
 
 ## Root Cause
 
@@ -97,7 +98,7 @@ The first Kenigsberg production catch-up after enabling the daily `20:10 Europe/
 
 ## Follow-up Actions
 
-- [ ] Decide whether `@mostvkenig` needs Telegram boosts or another channel-native story mechanism; self-account story publishing remains the required fallback meanwhile.
+- [x] `@mostvkenig` received a boost and passed live story repost during compensation session `#299`.
 
 ## Release And Closure Evidence
 
@@ -113,6 +114,8 @@ The first Kenigsberg production catch-up after enabling the daily `20:10 Europe/
   - Mistaken Business stories from issue `#44` were deleted via Bot API `deleteStory` with `ok=true` for both affected short-hash targets.
   - Compensation session `#298`, issue `#45`, completed `PUBLISHED_TEST`; `story_publish_report.json` has `required_ok=true`, self-account story publish `ok=true`, and `@mostvkenig` best-effort repost still blocked by Telegram `BOOSTS_REQUIRED`.
   - Issue `#45` selected `05 - Save Me.flac`; `The Promise` did not repeat, and the previous `The Promise` window remains in effective `recent_music`.
+  - Post-boost compensation session `#299`, issue `#46`, completed `PUBLISHED_TEST`; `story_publish_report.json` has `ok=true`, `required_ok=true`, `fanout_ok=true`, self-account `story_id=20`, and `@mostvkenig` `repost_previous` `story_id=6`.
+  - Issue `#46` selected `02 - Wyatt Earth.flac`, `43.365-67.135s`, so the compensation did not repeat `The Promise`.
 
 ## Prevention
 
