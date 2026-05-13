@@ -107,6 +107,21 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 
 ## Release And Closure Evidence
 
+### 2026-05-13 background launch handoff deploy
+
+- deployed SHA: `9fb954134063a2f895429cb07a193322a9f2c43e`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-9fb95413` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRGSSWT538D9HDXGXDE27MK2`, machine `48e42d5b714228`, Fly version `1076`, checks `1/1` passing.
+- regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py tests/test_kenigsberg_stories.py`
+  - `timeout 90 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `50 passed in 1.26s`
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/handlers/kenigsberg_stories_cmd.py` contains `_run_launch_in_background`, `_KENIGSBERG_LAUNCH_LOCK`, and the immediate `Kenigsberg: команду получил...` acknowledgement.
+  - Production DB evidence before the fix showed no `kenigsberg_story` sessions after `2026-05-13 12:00:00 UTC`; only stale `default` `CREATED` video rows were present, confirming the failure was before Kenigsberg session creation.
+- live smoke:
+  - Not run by Codex to avoid publishing a new `@keniggpt` story without an explicit operator `/kenigsberg` command.
+
 - deployed SHA: `748ca42cff63d7eb4c1de23fe4c9db3531d15049`
 - deploy path: manual `flyctl deploy --remote-only` from clean detached worktree at `origin/main`
 - Fly release: `v1067`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRE4WWNCQ8EXSBAJSK1F6PX6`
