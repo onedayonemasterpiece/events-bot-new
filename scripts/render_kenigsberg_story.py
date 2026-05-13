@@ -944,7 +944,7 @@ def split_hard_soft_source_bans(
     for source_file, file_bans in bans.items():
         for ban in file_bans:
             reason = str(ban.get("reason") or "").strip()
-            target = soft if reason in {"recent_generation", "current_generation"} else hard
+            target = soft if reason == "recent_generation" else hard
             target.setdefault(source_file, []).append(ban)
     return hard, soft
 
@@ -972,9 +972,15 @@ def pick_video_segments(
         dur = timeline_end - timeline_start
         unused_pool = [path for path in usable if path not in recent]
         pool = unused_pool or [path for path in usable if path not in recent[-2:]] or usable
-        selected: tuple[Path, float, bool, bool] | None = None
+        selected: tuple[Path, float, bool, bool, str] | None = None
 
-        def try_pick(candidate_pool: list[Path], *, avoid_soft: bool) -> tuple[Path, float, bool, bool] | None:
+        def try_pick(
+            candidate_pool: list[Path],
+            *,
+            avoid_recent: bool,
+            avoid_current: bool,
+            mode: str,
+        ) -> tuple[Path, float, bool, bool, str] | None:
             for _ in range(80):
                 path = rng.choice(candidate_pool)
                 max_start = max(0.0, durations[path] - dur - 0.2)
@@ -984,9 +990,11 @@ def pick_video_segments(
                     continue
                 overlaps_soft = overlaps_ban(path.name, source_start, source_end, soft_bans)
                 overlaps_run = overlaps_ban(path.name, source_start, source_end, run_bans)
-                if avoid_soft and (overlaps_soft or overlaps_run):
+                if avoid_recent and overlaps_soft:
                     continue
-                return (path, source_start, overlaps_soft, overlaps_run)
+                if avoid_current and overlaps_run:
+                    continue
+                return (path, source_start, overlaps_soft, overlaps_run, mode)
 
             for path in candidate_pool:
                 max_start = max(0.0, durations[path] - dur - 0.2)
@@ -998,23 +1006,29 @@ def pick_video_segments(
                         continue
                     overlaps_soft = overlaps_ban(path.name, candidate, candidate_end, soft_bans)
                     overlaps_run = overlaps_ban(path.name, candidate, candidate_end, run_bans)
-                    if avoid_soft and (overlaps_soft or overlaps_run):
+                    if avoid_recent and overlaps_soft:
                         candidate += 0.5
                         continue
-                    return (path, candidate, overlaps_soft, overlaps_run)
+                    if avoid_current and overlaps_run:
+                        candidate += 0.5
+                        continue
+                    return (path, candidate, overlaps_soft, overlaps_run, mode)
                     candidate += 0.5
             return None
 
-        selected = try_pick(pool, avoid_soft=True)
+        selected = try_pick(pool, avoid_recent=True, avoid_current=True, mode="fresh")
         if selected is None:
             fallback_pool = pool if pool == usable else usable
-            selected = try_pick(fallback_pool, avoid_soft=False)
+            selected = try_pick(fallback_pool, avoid_recent=False, avoid_current=True, mode="recent_soft_fallback")
+        if selected is None:
+            fallback_pool = pool if pool == usable else usable
+            selected = try_pick(fallback_pool, avoid_recent=False, avoid_current=False, mode="current_emergency_fallback")
         if selected is None:
             raise RuntimeError(f"No source segment can avoid bans for slot {idx + 1}")
-        path, source_start, overlaps_soft_ban, overlaps_run_ban = selected
+        path, source_start, overlaps_soft_ban, overlaps_run_ban, selection_mode = selected
         if overlaps_soft_ban or overlaps_run_ban:
             log(
-                "Source segment soft-repeat fallback: "
+                "Source segment repeat fallback: "
                 + json.dumps(
                     {
                         "slot": idx + 1,
@@ -1023,6 +1037,7 @@ def pick_video_segments(
                         "source_end": round(source_start + dur, 3),
                         "overlaps_recent_generation": overlaps_soft_ban,
                         "overlaps_current_generation": overlaps_run_ban,
+                        "selection_mode": selection_mode,
                     },
                     ensure_ascii=False,
                 )
@@ -1043,6 +1058,7 @@ def pick_video_segments(
                 "source_soft_repeat_fallback": bool(overlaps_soft_ban or overlaps_run_ban),
                 "source_overlaps_recent_generation": bool(overlaps_soft_ban),
                 "source_overlaps_current_generation": bool(overlaps_run_ban),
+                "source_selection_mode": selection_mode,
             }
         )
         run_bans.setdefault(path.name, []).append(
