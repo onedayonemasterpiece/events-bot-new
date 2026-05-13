@@ -226,6 +226,7 @@ Current MVP implementation:
 Notebook guardrail:
 
 - `tests/test_kenigsberg_notebook.py` must pass before deploy: it parses `kaggle/KoenigsbergStories/koenigsberg_stories.ipynb`, rejects literal escaped newlines in code-cell source, and compiles every code cell. This protects the `INC-2026-05-12-kenigsberg-notebook-escaped-newlines` regression where Kaggle failed in cell 1 before rendering.
+- The shared `kaggle_common/story_publish.py` helper is bundled for the future production-story path, but the notebook must import/preflight it only when `story_publish.json` is present. Normal manual `@keniggpt` test renders do not need Telethon or story secrets and must not fail because story publishing is disabled.
 
 ### Later: `gemma4_clip_judge_v2`
 
