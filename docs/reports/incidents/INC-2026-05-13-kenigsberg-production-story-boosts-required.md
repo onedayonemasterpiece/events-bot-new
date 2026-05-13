@@ -101,10 +101,18 @@ The first Kenigsberg production catch-up after enabling the daily `20:10 Europe/
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `f6f387284665c4c69a5ee1dcf2401a725d1ea705`
+- deploy path: manual `flyctl deploy --remote-only` from `origin/main`
+- Fly release: machine version `1089`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRHM6SPGCGC10KPH4Z24Y4WX`
+- regression checks:
+  - `.venv/bin/python -m compileall -q handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py kenigsberg_stories/state.py scheduling.py`
+  - `.venv/bin/pytest tests/test_kenigsberg_stories.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_notebook.py -q` -> `61 passed`
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`, next run `2026-05-14T18:10:00+00:00`.
+  - Production story config emits only `me` blocking/required and `@mostvkenig` best-effort `repost_previous`; no Business targets are selected.
+  - Mistaken Business stories from issue `#44` were deleted via Bot API `deleteStory` with `ok=true` for both affected short-hash targets.
+  - Compensation session `#298`, issue `#45`, completed `PUBLISHED_TEST`; `story_publish_report.json` has `required_ok=true`, self-account story publish `ok=true`, and `@mostvkenig` best-effort repost still blocked by Telegram `BOOSTS_REQUIRED`.
+  - Issue `#45` selected `05 - Save Me.flac`; `The Promise` did not repeat, and the previous `The Promise` window remains in effective `recent_music`.
 
 ## Prevention
 

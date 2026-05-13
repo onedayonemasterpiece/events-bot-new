@@ -125,6 +125,17 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
   - Production `thoughts.md` contains the latest operator-provided entries through `#36`.
 - fresh smoke still required before closing: the next `/kenigsberg` issue should show `kenigsberg_render_log.json.selected_music.voice_risk`, `recent_same_track`, and `overlaps_recent`; adjacent runs should not repeat an overlapping same-track segment when alternatives are available.
 
+### 2026-05-13 production Promise vocalise follow-up
+
+- deployed SHA: `f6f387284665c4c69a5ee1dcf2401a725d1ea705`
+- regression checks:
+  - `.venv/bin/python -m compileall -q handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py kenigsberg_stories/state.py scheduling.py`
+  - `.venv/bin/pytest tests/test_kenigsberg_stories.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_notebook.py -q` -> `61 passed`
+- corrective evidence:
+  - `MUSIC_RANGES["the promise"]` no longer includes the repeated `3:44-4:26` window.
+  - Production state keeps issue `#44` `The Promise` window in effective `recent_music` after text/source usage reset.
+  - Compensation issue `#45` did not repeat `The Promise`; it selected `05 - Save Me.flac`.
+
 ### 2026-05-12 strict whitelist fix
 
 - deployed SHA: `748ca42cff63d7eb4c1de23fe4c9db3531d15049`
