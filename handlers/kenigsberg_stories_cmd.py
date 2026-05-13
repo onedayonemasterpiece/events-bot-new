@@ -53,6 +53,8 @@ from video_announce.story_publish import (
 kenigsberg_stories_router = Router(name="kenigsberg_stories")
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_KENIGSBERG_LAUNCH_LOCK = asyncio.Lock()
+_KENIGSBERG_LAUNCH_TASKS: set[asyncio.Task] = set()
 KAGGLE_READY_WAIT_SECONDS = max(
     30,
     int(os.getenv("KENIGSBERG_KAGGLE_READY_WAIT_SECONDS", "180")),
@@ -471,6 +473,24 @@ async def _handle_launch(message: types.Message) -> None:
     await _launch_kaggle_generation(message, db, thoughts_count=len(thoughts))
 
 
+async def _run_launch_in_background(message: types.Message) -> None:
+    if _KENIGSBERG_LAUNCH_LOCK.locked():
+        await message.answer(
+            "Kenigsberg: предыдущий запуск ещё проходит preflight/Kaggle handoff. "
+            "Если он зависнет до создания сессии, команда вернёт ошибку отдельным сообщением."
+        )
+        return
+    async with _KENIGSBERG_LAUNCH_LOCK:
+        try:
+            await _handle_launch(message)
+        except Exception as exc:
+            logger.exception("kenigsberg: background launch crashed")
+            try:
+                await message.answer(f"Kenigsberg: запуск сорвался до Kaggle: {type(exc).__name__}: {exc}")
+            except Exception:
+                logger.exception("kenigsberg: failed to notify operator about launch crash")
+
+
 async def _resolve_channel_id(db, username: str) -> int | None:
     raw_env = (os.getenv("KENIGSBERG_STORIES_TEST_CHAT_ID") or "").strip()
     if raw_env:
@@ -815,16 +835,25 @@ async def _launch_kaggle_generation(message: types.Message, db, *, thoughts_coun
 
 @kenigsberg_stories_router.message(Command("kenigsberg"))
 async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None:
-    if not await _require_superadmin(message):
-        return
     args = (command.args or "").strip()
     args = _canonicalize_ban_args(args)
     lowered = args.casefold()
-    db = require_main_attr("get_db")()
+    is_launch = not args or lowered in {"start", "run", "generate", "сгенерируй", "запуск"}
 
-    if not args or lowered in {"start", "run", "generate", "сгенерируй", "запуск"}:
-        await _handle_launch(message)
+    if is_launch:
+        await message.answer(
+            "Kenigsberg: команду получил. Проверяю доступ и состояние запуска; "
+            "следующие статусы придут отдельными сообщениями."
+        )
+    if not await _require_superadmin(message):
         return
+
+    if is_launch:
+        task = asyncio.create_task(_run_launch_in_background(message))
+        _KENIGSBERG_LAUNCH_TASKS.add(task)
+        task.add_done_callback(_KENIGSBERG_LAUNCH_TASKS.discard)
+        return
+    db = require_main_attr("get_db")()
     if lowered in {"status", "статус"}:
         state = await load_state(db)
         thoughts = load_thoughts()

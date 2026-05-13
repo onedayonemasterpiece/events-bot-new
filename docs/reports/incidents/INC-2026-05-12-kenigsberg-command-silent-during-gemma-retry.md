@@ -13,11 +13,14 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/run
 
 Production `/kenigsberg` appeared silent to the operator because the command handler did slow pre-launch work before sending any Telegram acknowledgement. The selected thought was sent to Gemma 4, the provider returned `503 UNAVAILABLE`, the client retried, and the update was only marked handled after 142 seconds.
 
+On 2026-05-13 the same operator-facing symptom reappeared after the LLM split migration: commands sent around 14:34 Europe/Kaliningrad did not create new `kenigsberg_story` rows and did not produce visible operator status. The immediate fix keeps the current text path intact but changes the launch contract: `/kenigsberg` acknowledges immediately before admin/DB preflight and runs the long preflight/Kaggle handoff in a background task after authorization.
+
 ## User / Business Impact
 
 - The operator could not tell whether `/kenigsberg` was accepted.
 - A manual MVP path looked broken even though the handler eventually launched Kaggle.
 - Existing public event surfaces stayed available; impact was limited to the new Kenigsberg manual generation command.
+- The operator could not test the current rendered-story iteration because no new generation session was created after the 2026-05-13 14:34 Europe/Kaliningrad command window.
 
 ## Detection
 
@@ -32,12 +35,16 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 - 2026-05-12 12:57:52 UTC — retry succeeded and text rewrite completed.
 - 2026-05-12 12:58:20 UTC — Telegram update finished after 142 seconds and Kaggle was launched.
 - 2026-05-12 13:00 UTC — incident triage started from production runtime logs.
+- 2026-05-13 12:34 UTC — operator sent `/kenigsberg`; no new `kenigsberg_story` session was created after this timestamp.
+- 2026-05-13 13:01-13:26 UTC — operator saw many unrelated LLM incident warnings from `event_parse`, `event_topics`, and `smart_update`, making it unclear whether Kenigsberg had started.
+- 2026-05-13 UTC — production DB check confirmed no `kenigsberg_story` sessions after `2026-05-13 12:00:00 UTC`; only stale `default` `CREATED` video rows were present, which must not block Kenigsberg.
 
 ## Root Cause
 
 1. `_launch_kaggle_generation` called `_rewrite_thought_for_story` before sending any operator-visible message.
 2. `_rewrite_thought_for_story` delegated to the shared Google AI client without a Kenigsberg-specific hard wall-clock cap.
 3. A retryable provider overload made the command look unhandled for more than two minutes.
+4. The later LLM split fix still left the manual command handler awaiting the whole launch preflight/handoff path inside the Telegram update handler after the first acknowledgement point, so any blocking before that point remained operator-visible as silence.
 
 ## Contributing Factors
 
@@ -62,6 +69,10 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 ### Mandatory checks before closure or deploy
 
 - `/kenigsberg` sends an acknowledgement before LLM/Kaggle slow work.
+- `/kenigsberg` returns from the Telegram update quickly after scheduling the launch background task.
+- The background launch path catches pre-Kaggle exceptions and reports them to the operator.
+- A concurrent Kenigsberg handoff reports an explicit “previous launch is in preflight/handoff” message instead of going silent.
+- CherryFlash/CrumpleVideo/default video sessions do not block `/kenigsberg`; only `profile_key="kenigsberg_story"` active sessions are considered.
 - Text rewrite has a hard timeout and fail-closed behavior.
 - Regression test covers timeout-to-fail-closed behavior.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
@@ -81,6 +92,7 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 - Send an immediate Telegram acknowledgement after reserving the issue/thought and before calling the rewrite LLM.
 - Add a Kenigsberg rewrite timeout; follow-up incident `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality` removes deterministic fallback.
 - Add a launch-accepted log with issue, thought, chat and user ids.
+- Move the long manual launch preflight/Kaggle handoff into a background task after an immediate acknowledgement.
 
 ## Corrective Actions
 

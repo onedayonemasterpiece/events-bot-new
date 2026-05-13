@@ -173,6 +173,37 @@ def test_kenigsberg_command_canonicalizes_bans_list_args() -> None:
     assert kenigsberg_stories_cmd._canonicalize_ban_args("покажи список банов") == "bans"
 
 
+@pytest.mark.asyncio
+async def test_kenigsberg_launch_command_acknowledges_before_background(monkeypatch) -> None:
+    answers: list[str] = []
+    background_started = asyncio.Event()
+
+    class FakeMessage:
+        from_user = SimpleNamespace(id=1)
+        chat = SimpleNamespace(id=2)
+
+        async def answer(self, text: str):  # noqa: ANN001
+            answers.append(text)
+            return SimpleNamespace(chat=SimpleNamespace(id=2), message_id=len(answers))
+
+    async def fake_require_superadmin(message):  # noqa: ANN001
+        return True
+
+    async def fake_background(message):  # noqa: ANN001
+        background_started.set()
+
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_require_superadmin", fake_require_superadmin)
+    monkeypatch.setattr(kenigsberg_stories_cmd, "_run_launch_in_background", fake_background)
+
+    await kenigsberg_stories_cmd.cmd_kenigsberg(FakeMessage(), SimpleNamespace(args=None))
+
+    assert answers == [
+        "Kenigsberg: команду получил. Проверяю доступ и состояние запуска; "
+        "следующие статусы придут отдельными сообщениями."
+    ]
+    await asyncio.wait_for(background_started.wait(), timeout=1)
+
+
 def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     video = tmp_path / "devau.mp4"
     video.write_bytes(b"stub")

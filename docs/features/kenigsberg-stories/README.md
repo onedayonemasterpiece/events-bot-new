@@ -157,6 +157,13 @@ into concrete commands and ask for confirmation before execution:
 
 This keeps the risky operation auditable: the user sees the exact command before `/a` executes it.
 
+Manual launch UX contract:
+
+- `/kenigsberg` must answer immediately before admin/DB preflight, before checking active video sessions, preparing text, creating a Kaggle dataset, or calling Kaggle.
+- The long preflight/Kaggle handoff runs in a background task and reports follow-up statuses as separate messages.
+- The active-session gate is scoped only to `profile_key=kenigsberg_story`; CherryFlash, CrumpleVideo, and stale default video sessions must not block a manual Kenigsberg launch.
+- If another Kenigsberg launch is already in the preflight/handoff section, the second command gets an explicit message instead of going silent.
+
 ## Beat and cut contract
 
 The preferred MVP implementation on Kaggle:
