@@ -142,12 +142,12 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 ### 2026-05-13 story-helper import gate deploy
 
-- deployed SHA: `bf238b14d6cc342ccb0b13f339a92e1efdfe3686`
-- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-bf238b14` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
-- Fly release: `v1073`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRFXK1XG5YTYYWAM8WK4KAWT`, machine `48e42d5b714228` started with `1/1` checks passing.
+- deployed SHA: `39386e29f0dd4e0e1a63fe6cf3d643d562c6304c`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-new-deploy-39386e29` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly release: `v1074`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRFXX99MS6DBWC6KMH2FGSXD`, machine `48e42d5b714228` started with `1/1` checks passing.
 - regression checks:
-  - `python3 -m py_compile tests/test_kenigsberg_notebook.py handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py video_announce/story_publish.py`
-  - `timeout 60 .venv/bin/pytest -q tests/test_kenigsberg_notebook.py tests/test_kenigsberg_stories.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py` -> `45 passed in 1.25s`
+  - `python3 -m py_compile kenigsberg_stories/state.py tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py handlers/kenigsberg_stories_cmd.py scripts/render_kenigsberg_story.py video_announce/story_publish.py`
+  - `timeout 60 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py` -> `46 passed in 1.27s`
 - Kaggle failure evidence:
   - Direct Kaggle logs for `zigomaro/koenigsberg-stories` / session `#267` showed `ModuleNotFoundError: No module named 'telethon'` at `from story_publish import preflight_story_publish_from_kaggle, publish_story_from_kaggle` before `render_kenigsberg_story.py` started.
   - Saved minimal evidence locally under `artifacts/codex/kenigsberg-session-267/` (not committed).
@@ -155,7 +155,9 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
   - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
   - Production notebook contains `story_publish_ready = ensure_story_publish_helper(work) if story_publish_requested else False`.
   - Production notebook installs `telethon`, `requests`, and `cryptography` for the future production-story path.
+  - Production `kenigsberg_stories/state.py` contains `return available[index]`, confirming thought selection no longer writes `used_thought_ids` before render success.
   - Production `docs/features/kenigsberg-stories/thoughts.md` contains operator-added entries `19..26`.
+  - Production state was corrected for the failed `#267`: unpublished `thought_id=1` was removed from `used_thought_ids`; issue `#12` is absent because no successful manifest was registered.
 - live smoke:
   - Not run by Codex to avoid publishing a new `@keniggpt` story without an explicit operator `/kenigsberg` command.
 
