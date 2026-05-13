@@ -123,6 +123,24 @@ On 2026-05-13 16:51-16:52 Europe/Kaliningrad, the fail-closed path became too br
 
 ## Release And Closure Evidence
 
+### 2026-05-13 explicit 4o text-split fallback deploy
+
+- deployed SHA: `ab04288480dbeeddfef544373f0d168a8e6bdbf8`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-ab042884` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRGXQPME4GZ4TAZZ1J3MYSNE`, machine `48e42d5b714228`, Fly version `1081`, checks `1/1` passing.
+- production evidence for the failing command window:
+  - Runtime file mirror was enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, `RUNTIME_LOG_BASENAME=events-bot.log`, `RUNTIME_LOG_RETENTION_HOURS=24`.
+  - Issue `#18` failed before Kaggle because Gemini lite was invoked correctly as `provider_model_name=models/gemini-3.1-flash-lite` and returned provider `503 UNAVAILABLE`.
+- regression checks:
+  - `python3 -m py_compile handlers/kenigsberg_stories_cmd.py tests/test_kenigsberg_stories.py`
+  - `timeout 90 .venv/bin/pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py` -> `55 passed in 1.60s`
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production `/app/handlers/kenigsberg_stories_cmd.py` contains `text_split_4o_fallback` and the `primary text split failed; trying 4o fallback` log path.
+  - Production `/app/fly.toml` contains `KENIGSBERG_STORIES_TEXT_SPLIT_FALLBACK_4O_MODEL = "gpt-4o"`.
+- live smoke:
+  - Not run by Codex to avoid publishing a new `@keniggpt` story without an explicit operator `/kenigsberg` command.
+
 ### 2026-05-13 background launch handoff deploy
 
 - deployed SHA: `9fb954134063a2f895429cb07a193322a9f2c43e`
