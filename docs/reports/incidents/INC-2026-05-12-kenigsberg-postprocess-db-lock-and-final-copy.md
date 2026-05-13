@@ -166,6 +166,22 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 
 ## Release And Closure Evidence
 
+### 2026-05-13 profile-scoped rendering lock deploy
+
+- deployed SHA: `a0fd0df0c35e506744a6c9636761a9e8e997b237`
+- deploy path: `origin/main` -> clean detached worktree at `/tmp/events-bot-deploy-a0fd0df0` -> `flyctl deploy --remote-only -a events-bot-new-wngqia --config fly.toml`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KRGYNPSZ8JHRC6KJF2SPQW0Q`, machine `48e42d5b714228`, Fly version `1082`, checks `1/1` passing.
+- failure evidence:
+  - Issues `#19` / `#20`, sessions `#273` / `#274`, failed before Kaggle on `sqlite3.IntegrityError: UNIQUE constraint failed: videoannounce_session.status` while CrumpleVideo session `#272` was `RENDERING`.
+  - Root cause was the old global partial index `ux_videoannounce_session_rendering ON videoannounce_session(status) WHERE status='RENDERING'`.
+- regression checks:
+  - `python3 -m py_compile db.py models.py tests/test_video_announce_v_pipeline.py`
+  - `timeout 120 .venv/bin/pytest -q tests/test_video_announce_v_pipeline.py::test_rendering_unique_index_is_scoped_by_profile tests/test_kenigsberg_stories.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_notebook.py` -> `56 passed in 1.60s`
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues.
+  - Production SQLite now has only `ux_videoannounce_session_rendering_profile` with SQL `CREATE UNIQUE INDEX ux_videoannounce_session_rendering_profile ON videoannounce_session(COALESCE(profile_key, 'default')) WHERE status = 'RENDERING'`.
+  - Production DB check showed sessions `#273` / `#274` are `FAILED`, and active CrumpleVideo session `#272` remains `RENDERING` with `profile_key='default'`, which no longer blocks a future Kenigsberg `RENDERING` session.
+
 ### 2026-05-13 rhythm resilience deploy
 
 - deployed SHA: `45614329d4f17cc202a5e8c7646ef0cd2b1d237c`
