@@ -177,7 +177,9 @@ The preferred MVP implementation on Kaggle:
   - the selected audio range may start before a strong beat, so the first visual slot may be partial from audio start to the first detected strong beat;
   - after the first strong beat, every scene cut must land on a detected strong-beat anchor;
   - later slots randomly use only `1x` and `2x` strong-beat spans;
-  - target approximately four double-span equivalents before outro.
+  - target approximately four double-span equivalents before outro;
+  - the main montage must end on a detected strong beat before outro. Do not pad the final visual slot to an arbitrary fixed `18.0s` boundary.
+- Render logs and manifests must include both raw detected `beat_times` and selected `strong_beat_times`, so a generated issue can be audited against the real music segment.
 - Transitions are short crossfades / eased opacity blends of `2-3` frames, centered on beat anchors where possible.
 - Video source clips may start at a random offset if there is enough usable duration until the chosen cut end.
 

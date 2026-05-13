@@ -641,6 +641,7 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, first))
         current = first
         idx = 1
+    min_main_duration = max(12.0, min(15.0, duration - 1.0))
     while idx < len(anchors) and duration - current >= 0.6:
         span = rng.choices([1, 2], weights=[0.56, 0.44], k=1)[0]
         target_idx = min(len(anchors) - 1, idx + span - 1)
@@ -653,8 +654,11 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, target))
         current = target
         idx = target_idx + 1
-    if duration - current >= 0.45:
-        slots.append((current, duration))
+    if current < min_main_duration:
+        raise RuntimeError(
+            "Rhythm grid ended too early before a strong-beat main duration "
+            f"current={current:.3f} min={min_main_duration:.3f}"
+        )
     return [(round(start, 3), round(end, 3)) for start, end in slots]
 
 
@@ -716,6 +720,8 @@ def detect_strong_beats(
         "beats_per_strong": beats_per_strong,
         "strong_offset": strong_offset,
         "first_strong_beat": round(strong_beats[0], 3) if strong_beats else None,
+        "beat_times": [round(beat, 3) for beat in beat_times],
+        "strong_beat_times": [round(beat, 3) for beat in strong_beats],
     }
     return strong_beats, meta
 
@@ -880,9 +886,10 @@ def render_frames(
         crop_px=crop_px,
         source_bans=payload.get("source_bans") or {},
     )
+    main_duration = float(slots[-1][1]) if slots else MAIN_DURATION
     thought = str(payload.get("thought_text") or "").strip()
     lines = payload_scene_lines(payload, thought, max(4, min(7, len(segments))))
-    text_cues = build_text_cues(lines, MAIN_DURATION)
+    text_cues = build_text_cues(lines, main_duration)
     log(
         "Story text: "
         + json.dumps(
@@ -958,6 +965,7 @@ def render_frames(
             image.convert("RGB").save(out_dir / f"frame_{frame_no:05d}.jpg", quality=92)
             frame_no += 1
     payload["text_cues"] = text_cues
+    payload["main_duration"] = main_duration
     return segments
 
 
@@ -1074,6 +1082,9 @@ def main() -> None:
     render_payload["dataset"] = dataset_slug
     render_payload["rhythm_meta"] = rhythm_meta
     segments = render_frames(render_payload, video_dir, frames_dir, rng, rhythm_slots)
+    main_duration = float(render_payload.get("main_duration") or MAIN_DURATION)
+    total_duration = main_duration + 2 * OUTRO_SCREEN_DURATION
+    music_meta["selected_end"] = round(music_start + total_duration, 3)
     out_path = working / "kenigsberg_story_final.mp4"
     encode_video(frames_dir, music, music_start, total_duration, out_path)
     preview_frames = export_preview_frames(frames_dir, working)
@@ -1094,6 +1105,7 @@ def main() -> None:
             "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
         },
         "total_duration": total_duration,
+        "main_duration": main_duration,
         "seed": int(payload.get("seed") or 0),
         "strategy": "heuristic_v1",
         "frame_count": frame_count,

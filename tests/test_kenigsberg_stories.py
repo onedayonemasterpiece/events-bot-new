@@ -380,10 +380,19 @@ def test_renderer_rhythm_slots_land_on_strong_beats_and_vary_by_seed() -> None:
     for slots in (a, b):
         assert slots[0][0] == 0.0
         assert slots[0][1] == 0.72
-        for start, end in slots[1:-1]:
+        assert slots[-1][1] in strong_beats
+        assert slots[-1][1] < 18.0
+        for start, end in slots[1:]:
             assert start in strong_beats
             assert end in strong_beats
             assert round(end - start, 2) in {2.0, 4.0}
+
+
+def test_renderer_rhythm_slots_fail_instead_of_clipping_final_scene() -> None:
+    strong_beats = [0.72, 2.72, 4.72, 6.72, 8.72, 10.72]
+
+    with pytest.raises(RuntimeError, match="ended too early"):
+        renderer.rhythm_slots_from_strong_beats(strong_beats, 18.0, renderer.random.Random(1))
 
 
 def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypatch, tmp_path) -> None:
