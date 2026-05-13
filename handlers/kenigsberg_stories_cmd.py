@@ -185,9 +185,17 @@ async def _require_superadmin(message: types.Message) -> bool:
 def _kenigsberg_story_targets() -> list[dict[str, object]]:
     return [
         {
-            "peer": "@mostvkenig",
+            "peer": "me",
             "delay_seconds": 0,
             "mode": "upload",
+            "blocking": True,
+            "required": True,
+            "label": "primary_story_account",
+        },
+        {
+            "peer": "@mostvkenig",
+            "delay_seconds": 0,
+            "mode": "repost_previous",
             "blocking": False,
             "required": False,
             "label": "@mostvkenig",
@@ -202,6 +210,7 @@ async def _build_production_story_config(db) -> dict | None:
         "story_publish_mode": "video",
         "story_upload_profile": "telegram_story_native_hevc_720p_v1",
         "story_targets_override": _kenigsberg_story_targets(),
+        "story_business_targets": [],
         "story_caption": "",
     }
     return await build_story_publish_config(

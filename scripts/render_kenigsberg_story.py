@@ -42,7 +42,7 @@ MIN_STRONG_MAIN_DURATION = 15.0
 MAX_STRIPE_LINES = 7
 
 MUSIC_RANGES = {
-    "the promise": [(224.0, 266.0), (402.0, None)],
+    "the promise": [(402.0, None)],
     "wyatt earth": [(0.0, 108.0)],
     "save me": [(0.0, 38.0)],
     "manuela": [(183.0, 217.0)],
@@ -868,12 +868,12 @@ def choose_music(
         if clean:
             pool = clean
             selection_tier = "clean_fresh_low_voice"
-        elif fresh_track:
-            pool = fresh_track
-            selection_tier = "fresh_track_voice_fallback"
         elif low_voice_non_overlap:
             pool = low_voice_non_overlap
             selection_tier = "same_track_low_voice_non_overlap_fallback"
+        elif fresh_track:
+            pool = fresh_track
+            selection_tier = "fresh_track_voice_fallback"
         elif non_overlapping:
             pool = non_overlapping
             selection_tier = "non_overlap_voice_fallback"

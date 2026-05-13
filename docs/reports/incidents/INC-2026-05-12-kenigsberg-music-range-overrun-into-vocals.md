@@ -91,6 +91,7 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - Add music start/end/allowed-range fields to `kenigsberg_issue_manifest.json` and `kenigsberg_render_log.json`.
 - Persist selected music windows into Kenigsberg state and pass recent music into each Kaggle payload.
 - Score candidate windows with recent-track/recent-overlap penalties and a best-effort voice-risk analyzer.
+- Remove the problematic first `The Promise` whitelist range (`3:44-4:26`) after repeated production/test selections with vocalized audio; keep only the later configured `The Promise` range unless a future manual audit approves another instrumental window.
 
 ## Corrective Actions
 
@@ -98,6 +99,7 @@ The test publication at `https://t.me/keniggpt/1944` contained vocals because th
 - Add robust normalized name matching so `The Promise.flac` still maps to the configured `the promise` range.
 - Add regression tests for allowed range containment, unlisted tracks, and short ranges.
 - Add regression tests for recent music history export, repeat avoidance, and voice-risk preference.
+- Prefer low-voice non-overlapping candidates before falling back to high-voice fresh-track candidates, so "new track" status cannot beat an obviously vocalized window when a cleaner already-used track exists.
 
 ## Follow-up Actions
 

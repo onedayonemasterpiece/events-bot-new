@@ -557,7 +557,7 @@ def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypa
     track = music_dir / "The Promise.flac"
     track.write_bytes(b"stub")
 
-    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 266.0)
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 500.0)
     selected, start, duration, meta = renderer.choose_music(
         music_dir,
         renderer.random.Random(1),
@@ -566,7 +566,7 @@ def test_renderer_music_selection_stays_inside_allowed_full_story_range(monkeypa
     assert selected == track
     assert duration == renderer.MAIN_DURATION + 2 * renderer.OUTRO_SCREEN_DURATION
     assert start + duration <= meta["allowed_end"]
-    assert meta["allowed_start"] == 224.0
+    assert meta["allowed_start"] == 402.0
 
 
 def test_renderer_music_selection_rejects_unlisted_tracks(monkeypatch, tmp_path) -> None:
@@ -1072,6 +1072,11 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_pro
     assert params["mode"] == "kenigsberg_story"
     assert params["story_publish_mode"] == "video"
     assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
-    assert params["story_targets_override"][0]["peer"] == "@mostvkenig"
-    assert params["story_targets_override"][0]["blocking"] is False
-    assert params["story_targets_override"][0]["required"] is False
+    assert params["story_business_targets"] == []
+    assert params["story_targets_override"][0]["peer"] == "me"
+    assert params["story_targets_override"][0]["blocking"] is True
+    assert params["story_targets_override"][0]["required"] is True
+    assert params["story_targets_override"][1]["peer"] == "@mostvkenig"
+    assert params["story_targets_override"][1]["mode"] == "repost_previous"
+    assert params["story_targets_override"][1]["blocking"] is False
+    assert params["story_targets_override"][1]["required"] is False
