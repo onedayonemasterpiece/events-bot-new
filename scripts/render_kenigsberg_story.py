@@ -936,6 +936,19 @@ def overlaps_ban(source_file: str, start: float, end: float, bans: dict[str, lis
     return False
 
 
+def split_hard_soft_source_bans(
+    bans: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
+    hard: dict[str, list[dict[str, Any]]] = {}
+    soft: dict[str, list[dict[str, Any]]] = {}
+    for source_file, file_bans in bans.items():
+        for ban in file_bans:
+            reason = str(ban.get("reason") or "").strip()
+            target = soft if reason in {"recent_generation", "current_generation"} else hard
+            target.setdefault(source_file, []).append(ban)
+    return hard, soft
+
+
 def pick_video_segments(
     videos: list[Path],
     slots: list[tuple[float, float]],
@@ -952,46 +965,68 @@ def pick_video_segments(
     segments = []
     recent: list[Path] = []
     normalized_bans = normalize_source_bans(source_bans, dataset_slug=dataset_slug)
+    hard_bans, soft_bans = split_hard_soft_source_bans(normalized_bans)
     run_bans: dict[str, list[dict[str, Any]]] = {}
     run_margin = 0.75
     for idx, (timeline_start, timeline_end) in enumerate(slots):
         dur = timeline_end - timeline_start
         unused_pool = [path for path in usable if path not in recent]
         pool = unused_pool or [path for path in usable if path not in recent[-2:]] or usable
-        selected: tuple[Path, float] | None = None
-        for _ in range(80):
-            path = rng.choice(pool)
-            max_start = max(0.0, durations[path] - dur - 0.2)
-            source_start = rng.uniform(0.0, max_start) if max_start > 0 else 0.0
-            source_end = source_start + dur
-            if not overlaps_ban(path.name, source_start, source_end, normalized_bans) and not overlaps_ban(
-                path.name,
-                source_start,
-                source_end,
-                run_bans,
-            ):
-                selected = (path, source_start)
-                break
-        if selected is None:
-            for path in pool:
+        selected: tuple[Path, float, bool, bool] | None = None
+
+        def try_pick(candidate_pool: list[Path], *, avoid_soft: bool) -> tuple[Path, float, bool, bool] | None:
+            for _ in range(80):
+                path = rng.choice(candidate_pool)
+                max_start = max(0.0, durations[path] - dur - 0.2)
+                source_start = rng.uniform(0.0, max_start) if max_start > 0 else 0.0
+                source_end = source_start + dur
+                if overlaps_ban(path.name, source_start, source_end, hard_bans):
+                    continue
+                overlaps_soft = overlaps_ban(path.name, source_start, source_end, soft_bans)
+                overlaps_run = overlaps_ban(path.name, source_start, source_end, run_bans)
+                if avoid_soft and (overlaps_soft or overlaps_run):
+                    continue
+                return (path, source_start, overlaps_soft, overlaps_run)
+
+            for path in candidate_pool:
                 max_start = max(0.0, durations[path] - dur - 0.2)
                 candidate = 0.0
                 while candidate <= max_start:
                     candidate_end = candidate + dur
-                    if not overlaps_ban(path.name, candidate, candidate_end, normalized_bans) and not overlaps_ban(
-                        path.name,
-                        candidate,
-                        candidate_end,
-                        run_bans,
-                    ):
-                        selected = (path, candidate)
-                        break
+                    if overlaps_ban(path.name, candidate, candidate_end, hard_bans):
+                        candidate += 0.5
+                        continue
+                    overlaps_soft = overlaps_ban(path.name, candidate, candidate_end, soft_bans)
+                    overlaps_run = overlaps_ban(path.name, candidate, candidate_end, run_bans)
+                    if avoid_soft and (overlaps_soft or overlaps_run):
+                        candidate += 0.5
+                        continue
+                    return (path, candidate, overlaps_soft, overlaps_run)
                     candidate += 0.5
-                if selected is not None:
-                    break
+            return None
+
+        selected = try_pick(pool, avoid_soft=True)
+        if selected is None:
+            fallback_pool = pool if pool == usable else usable
+            selected = try_pick(fallback_pool, avoid_soft=False)
         if selected is None:
             raise RuntimeError(f"No source segment can avoid bans for slot {idx + 1}")
-        path, source_start = selected
+        path, source_start, overlaps_soft_ban, overlaps_run_ban = selected
+        if overlaps_soft_ban or overlaps_run_ban:
+            log(
+                "Source segment soft-repeat fallback: "
+                + json.dumps(
+                    {
+                        "slot": idx + 1,
+                        "source_file": path.name,
+                        "source_start": round(source_start, 3),
+                        "source_end": round(source_start + dur, 3),
+                        "overlaps_recent_generation": overlaps_soft_ban,
+                        "overlaps_current_generation": overlaps_run_ban,
+                    },
+                    ensure_ascii=False,
+                )
+            )
         segments.append(
             {
                 "index": idx + 1,
@@ -1005,6 +1040,9 @@ def pick_video_segments(
                 "crop_bottom_px": crop_px,
                 "score": 1.0,
                 "strategy": "heuristic_v1",
+                "source_soft_repeat_fallback": bool(overlaps_soft_ban or overlaps_run_ban),
+                "source_overlaps_recent_generation": bool(overlaps_soft_ban),
+                "source_overlaps_current_generation": bool(overlaps_run_ban),
             }
         )
         run_bans.setdefault(path.name, []).append(

@@ -15,6 +15,8 @@ During manual testing, `/kenigsberg` reported that session `#265` was still rend
 
 On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` and `#20` reached text preparation but failed before Kaggle with `sqlite3.IntegrityError: UNIQUE constraint failed: videoannounce_session.status` when their sessions were moved from `SELECTED` to `RENDERING`. The table still had a global partial unique index on `status='RENDERING'`, even though Kenigsberg launch gating had already been changed to be profile-scoped.
 
+Later on 2026-05-13, Kenigsberg issue `#25`, session `#279`, failed inside Kaggle with `RuntimeError: No source segment can avoid bans for slot 2`. The render had selected the winter dataset, and recent source exclusions from previous issues plus current-generation anti-repeat were treated as hard constraints instead of preferences. Persistent operator `/a` bans must remain hard, but recent-generation exclusions must degrade gracefully so a small dataset can still produce a test story.
+
 ## User / Business Impact
 
 - The operator could not confidently start the next Kenigsberg test run.
@@ -30,6 +32,7 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 - Scene cuts could look detached from the music because timing was random-ish rather than derived from detected strong beats.
 - Some generated clips could still show a thin grey/light-text source strip along the lower edge after the existing bottom crop.
 - Kenigsberg could not launch concurrently with an unrelated CrumpleVideo render, despite the desired profile-scoped launch contract.
+- Session `#279` failed after 78s of Kaggle work because soft recent source exclusions were enforced as hard bans, so no test video was published.
 
 ## Detection
 
@@ -51,6 +54,8 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 - 2026-05-13 UTC — direct Kaggle logs for `zigomaro/koenigsberg-stories` showed `ModuleNotFoundError: No module named 'telethon'` from `/kaggle/working/story_publish.py` before `render_kenigsberg_story.py` started.
 - 2026-05-13 UTC — operator reviewed Kenigsberg `#13` and reported thought `25` stopped after “даже самым”, with the rest of the sentence absent from the visible story text.
 - 2026-05-13 UTC — code review confirmed `beat_slots` used `rng.uniform(1.62, 2.32)` and random spans instead of `librosa` beat/onset analysis.
+- 2026-05-13 16:56 UTC — operator launched Kenigsberg `#25`, session `#279`.
+- 2026-05-13 16:58 UTC — direct Kaggle output/log download showed `RuntimeError: No source segment can avoid bans for slot 2`; payload contained 15 `recent_music` items and valid `scene_lines`, so the failure was source-video selection, not LLM or music.
 
 ## Root Cause
 
@@ -68,6 +73,7 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 12. `payload_scene_lines` trusted server-provided lines and did not reject overlong unsplit screens.
 13. `beat_slots` was still an MVP pseudo-grid (`rng.uniform` base interval + random spans), not a `librosa`-derived grid anchored to strong musical beats.
 14. SQLite schema still enforced `ux_videoannounce_session_rendering ON videoannounce_session(status) WHERE status='RENDERING'`, a global one-render limit that contradicted the later Kenigsberg profile-scoped gate.
+15. `pick_video_segments` merged persistent `/a` source bans and `recent_generation` source exclusions into one hard ban map. In a smaller dataset, especially winter, that allowed recent-use preference to block rendering entirely.
 
 ## Contributing Factors
 
@@ -119,6 +125,7 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 - The lower source edge is masked after composition with `KENIGSBERG_STORIES_BOTTOM_MASK_PX` so thin grey/light-text source strips are hidden before watermark/export.
 - Source scenes are extracted as constant `30fps` frames before overlays and must not rely on repeating OpenCV `last_frame` to reach scene duration.
 - Source segment selection avoids persistent bans, recent source exclusions, and overlapping/near-adjacent source intervals already chosen in the same generated issue.
+- Persistent `/a` source bans remain hard exclusions, but `reason=recent_generation` and current-generation anti-repeat are soft preferences. If no fully fresh segment exists, the renderer logs/records a soft-repeat fallback instead of failing the story.
 - `kenigsberg_issue_manifest.json` / `kenigsberg_render_log.json` include the seed and rhythm slots used for the run.
 - Kenigsberg launch handoff writes retry SQLite locks, and stale `local:KoenigsbergStories` rows can be cleared by `/kenigsberg unlock` or auto-failed on the next `/kenigsberg` after the handoff grace window.
 - Kenigsberg notebook imports/preflights `story_publish.py` only when `story_publish.json` exists; normal manual test renders without production story config must not import the helper.
@@ -145,6 +152,7 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 - Notebook story helper import is now gated by the actual presence of `story_publish.json`; Telethon/requests/cryptography are installed for the future production-story path but are not required for disabled story publishing.
 - Thought shuffle-bag consumption moved from pre-render selection to successful manifest registration.
 - Rhythm slotting now prefers detected strong-beat boundaries, preserves story length when the detected grid is too short, and stores raw/selected beat anchors plus fallback metadata in the render metadata.
+- Source segment selection now treats recent issue exclusions and current-generation anti-repeat as soft constraints while keeping operator bans hard, so session `#279` class failures do not block testing.
 
 ## Corrective Actions
 
@@ -156,6 +164,7 @@ On 2026-05-13, while a CrumpleVideo render was running, Kenigsberg issues `#19` 
 - Add a state test proving thought selection alone does not mutate `used_thought_ids`, while successful manifest registration does.
 - Add regression tests for LLM-only long single-sentence final-copy splitting, invalid LLM tail loss, overlong payload rejection in the renderer, and strong-beat rhythm slot construction.
 - Add a regression test for lower-edge source strip masking.
+- Add a regression test that recent source exclusions are soft and cannot fail a render when the only available source segment overlaps recent history.
 - Update Kenigsberg documentation to make `thoughts.md` the final editorial source.
 - Commit and deploy the current local `thoughts.md` changes with the code fix.
 

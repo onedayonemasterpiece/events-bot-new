@@ -229,6 +229,34 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
     assert segments[0]["source_start"] >= 9.0
 
 
+def test_renderer_treats_recent_source_exclusions_as_soft(monkeypatch, tmp_path) -> None:
+    video = tmp_path / "winter.mp4"
+    video.write_bytes(b"stub")
+
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 5.0)
+
+    segments = renderer.pick_video_segments(
+        [video],
+        [(0.0, 2.0), (2.0, 4.0)],
+        rng=renderer.random.Random(1),
+        dataset_slug="zigomaro/koenigsberg-winter",
+        crop_px=96,
+        source_bans=[
+            {
+                "dataset": "zigomaro/koenigsberg-winter",
+                "source_file": "winter.mp4",
+                "source_start": 0.0,
+                "source_end": 5.0,
+                "reason": "recent_generation",
+            }
+        ],
+    )
+
+    assert len(segments) == 2
+    assert any(segment["source_soft_repeat_fallback"] for segment in segments)
+    assert any(segment["source_overlaps_recent_generation"] for segment in segments)
+
+
 def test_renderer_prefers_unused_video_files_within_one_story(monkeypatch, tmp_path) -> None:
     videos = []
     for name in ("a.mp4", "b.mp4", "c.mp4"):
