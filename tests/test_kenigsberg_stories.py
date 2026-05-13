@@ -173,6 +173,12 @@ def test_kenigsberg_command_canonicalizes_bans_list_args() -> None:
     assert kenigsberg_stories_cmd._canonicalize_ban_args("покажи список банов") == "bans"
 
 
+def test_kenigsberg_text_split_retry_delays_are_bounded(monkeypatch) -> None:
+    monkeypatch.setenv("KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC", "1, 4, bad, 99")
+
+    assert kenigsberg_stories_cmd._text_split_retry_delays(4) == [1.0, 4.0, 30.0]
+
+
 @pytest.mark.asyncio
 async def test_kenigsberg_launch_command_acknowledges_before_background(monkeypatch) -> None:
     answers: list[str] = []
@@ -486,6 +492,52 @@ def test_kenigsberg_story_text_uses_llm_split_without_rewrite(monkeypatch) -> No
         "В этот год три города объединились в единый Кёнигсберг, и в тот же год родился Иммануил Кант.",
     ]
     assert payload["hook"] == "1724 год подарил Кёнигсбергу два символа сразу."
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_text_split_disables_google_fallback(monkeypatch) -> None:
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):  # noqa: ANN001
+            self.fallback_models = ["gemma-4-31b-it"]
+            self.incident_notifications_enabled = True
+            self.max_retries = 99
+            self.provider_timeout_seconds = 99
+            captured["kwargs"] = kwargs
+            captured["client"] = self
+
+        async def generate_content_async(self, **kwargs):  # noqa: ANN001
+            captured["generate"] = kwargs
+            return (
+                '{"hook":"Один экран.","scene_lines":["Один экран."]}',
+                {},
+            )
+
+    class FakeSecretsProvider:
+        pass
+
+    monkeypatch.setattr(
+        kenigsberg_stories_cmd,
+        "require_main_attr",
+        lambda name: (lambda: object()) if name == "get_supabase_client" else None,
+    )
+    import types
+    import sys
+
+    fake_module = types.SimpleNamespace(
+        GoogleAIClient=lambda **kwargs: FakeClient(**kwargs),
+        SecretsProvider=FakeSecretsProvider,
+    )
+    monkeypatch.setitem(sys.modules, "google_ai", fake_module)
+
+    result = await kenigsberg_stories_cmd._ask_story_text_split_llm("Один экран.")
+
+    assert result["scene_lines"] == ["Один экран."]
+    assert captured["kwargs"]["incident_notifier"] is None
+    assert captured["client"].fallback_models == []
+    assert captured["client"].incident_notifications_enabled is False
+    assert captured["generate"]["model"] == "gemini-3.1-flash-lite"
 
 
 def test_kenigsberg_long_single_sentence_thought_requires_llm_semantic_split(monkeypatch) -> None:

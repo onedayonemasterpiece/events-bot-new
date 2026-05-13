@@ -288,6 +288,22 @@ def _extract_json_object(text: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def _text_split_retry_delays(attempts: int) -> list[float]:
+    raw = (os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC") or "2,6,12").strip()
+    delays: list[float] = []
+    for part in raw.split(","):
+        value = part.strip()
+        if not value:
+            continue
+        try:
+            delays.append(max(0.2, min(30.0, float(value))))
+        except Exception:
+            continue
+    while len(delays) < max(0, attempts - 1):
+        delays.append(float(2 * (len(delays) + 1)))
+    return delays
+
+
 def _validate_llm_scene_lines(thought_text: str, lines: list[str]) -> list[str]:
     thought_normalized = _normalize_story_copy(thought_text)
     clean = [_normalize_story_copy(line) for line in lines if _normalize_story_copy(line)]
@@ -322,13 +338,16 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
         from google_ai import GoogleAIClient, SecretsProvider
 
         supabase = require_main_attr("get_supabase_client")()
-        incident_notifier = require_main_attr("notify_llm_incident")
         client = GoogleAIClient(
             supabase_client=supabase,
             secrets_provider=SecretsProvider(),
             consumer="kenigsberg_stories",
-            incident_notifier=incident_notifier,
+            incident_notifier=None,
         )
+        # Kenigsberg text slicing is quality-sensitive: retry the selected
+        # Gemini-lite model, but do not transparently fall back to Gemma.
+        client.fallback_models = []
+        client.incident_notifications_enabled = False
         client.max_retries = max(
             1,
             min(2, int(os.getenv("KENIGSBERG_STORIES_TEXT_SPLIT_PROVIDER_RETRIES", "1") or "1")),
@@ -345,8 +364,16 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
         f"Текст: {thought_text}"
     )
     last_error: Exception | None = None
+    retry_delays = _text_split_retry_delays(attempts)
     for attempt in range(1, attempts + 1):
         try:
+            logger.info(
+                "kenigsberg: text split LLM attempt issue_text_len=%s attempt=%s/%s model=%s",
+                len(thought_text),
+                attempt,
+                attempts,
+                model,
+            )
             raw, _usage = await asyncio.wait_for(
                 client.generate_content_async(
                     model=model,
@@ -369,7 +396,7 @@ async def _ask_story_text_split_llm(thought_text: str) -> dict:
                 attempts,
                 last_error,
             )
-            await asyncio.sleep(0.8 * attempt)
+            await asyncio.sleep(retry_delays[attempt - 1])
     raise StoryTextPreparationError(f"LLM scene split failed: {last_error!r}") from last_error
 
 

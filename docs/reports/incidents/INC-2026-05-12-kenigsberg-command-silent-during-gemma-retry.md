@@ -15,12 +15,15 @@ Production `/kenigsberg` appeared silent to the operator because the command han
 
 On 2026-05-13 the same operator-facing symptom reappeared after the LLM split migration: commands sent around 14:34 Europe/Kaliningrad did not create new `kenigsberg_story` rows and did not produce visible operator status. The immediate fix keeps the current text path intact but changes the launch contract: `/kenigsberg` acknowledges immediately before admin/DB preflight and runs the long preflight/Kaggle handoff in a background task after authorization.
 
+Later the same day, issue `#15` showed that the Kenigsberg text split used the shared GoogleAI fallback chain: Gemini lite returned `503`, the global fallback tried Gemma 4, and both incidents were shown to the operator even though a later Gemini-lite retry produced valid `scene_lines` and the story published. Kenigsberg text splitting is quality-sensitive and should not silently fall back to Gemma 4; it should retry Gemini lite with bounded Kenigsberg-specific delays and fail before Kaggle if no valid split is produced.
+
 ## User / Business Impact
 
 - The operator could not tell whether `/kenigsberg` was accepted.
 - A manual MVP path looked broken even though the handler eventually launched Kaggle.
 - Existing public event surfaces stayed available; impact was limited to the new Kenigsberg manual generation command.
 - The operator could not test the current rendered-story iteration because no new generation session was created after the 2026-05-13 14:34 Europe/Kaliningrad command window.
+- The operator saw `kenigsberg_stories` LLM incidents for both Gemini lite and Gemma 4 and could not tell whether generation proceeded with or without a valid text split.
 
 ## Detection
 
@@ -38,6 +41,8 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 - 2026-05-13 12:34 UTC — operator sent `/kenigsberg`; no new `kenigsberg_story` session was created after this timestamp.
 - 2026-05-13 13:01-13:26 UTC — operator saw many unrelated LLM incident warnings from `event_parse`, `event_topics`, and `smart_update`, making it unclear whether Kenigsberg had started.
 - 2026-05-13 UTC — production DB check confirmed no `kenigsberg_story` sessions after `2026-05-13 12:00:00 UTC`; only stale `default` `CREATED` video rows were present, which must not block Kenigsberg.
+- 2026-05-13 13:55 UTC — issue `#15`, session `#271`, accepted. The first text-split call emitted `provider_error_fallback` from Gemini lite to Gemma 4, then `provider_error` from Gemma 4.
+- 2026-05-13 13:58 UTC — session `#271` completed as `PUBLISHED_TEST`; DB payload contained valid `text_source=thoughts_md_llm_split` and five `scene_lines`, confirming a later Gemini-lite attempt succeeded and Kaggle did not run without a split.
 
 ## Root Cause
 
@@ -45,6 +50,7 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 2. `_rewrite_thought_for_story` delegated to the shared Google AI client without a Kenigsberg-specific hard wall-clock cap.
 3. A retryable provider overload made the command look unhandled for more than two minutes.
 4. The later LLM split fix still left the manual command handler awaiting the whole launch preflight/handoff path inside the Telegram update handler after the first acknowledgement point, so any blocking before that point remained operator-visible as silence.
+5. The Kenigsberg text-split code instantiated the shared `GoogleAIClient` without disabling `GOOGLE_AI_FALLBACK_MODELS`, so a Gemini-lite outage could automatically call Gemma 4 despite the product requirement to avoid Gemma 4 for this text path.
 
 ## Contributing Factors
 
@@ -73,6 +79,9 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 - The background launch path catches pre-Kaggle exceptions and reports them to the operator.
 - A concurrent Kenigsberg handoff reports an explicit “previous launch is in preflight/handoff” message instead of going silent.
 - CherryFlash/CrumpleVideo/default video sessions do not block `/kenigsberg`; only `profile_key="kenigsberg_story"` active sessions are considered.
+- Kenigsberg text split does not use shared GoogleAI fallback models; `client.fallback_models` is empty for `consumer=kenigsberg_stories`.
+- Kenigsberg text split does not emit global Telegram LLM incidents on intermediate provider failures; the command reports its own final fail-closed status if all retries fail.
+- Kenigsberg text split retries only Gemini lite according to `KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS` and `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`.
 - Text rewrite has a hard timeout and fail-closed behavior.
 - Regression test covers timeout-to-fail-closed behavior.
 - `pytest -q tests/test_kenigsberg_stories.py tests/test_kenigsberg_notebook.py` passes.
@@ -93,6 +102,7 @@ On 2026-05-13 the same operator-facing symptom reappeared after the LLM split mi
 - Add a Kenigsberg rewrite timeout; follow-up incident `INC-2026-05-12-kenigsberg-deterministic-text-fallback-quality` removes deterministic fallback.
 - Add a launch-accepted log with issue, thought, chat and user ids.
 - Move the long manual launch preflight/Kaggle handoff into a background task after an immediate acknowledgement.
+- Disable the shared model fallback chain and global LLM incident notifier for Kenigsberg text splitting; rely on Kenigsberg-specific retries and final operator status.
 
 ## Corrective Actions
 

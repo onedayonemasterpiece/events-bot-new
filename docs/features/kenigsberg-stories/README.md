@@ -103,7 +103,7 @@ Variation points for this product:
 3. Server selects only run metadata that must live outside Kaggle:
    - one thought from the shuffle-bag;
    - deterministic seed / issue id.
-4. Server takes the selected `thoughts.md` entry as final copy and asks the text LLM to split it into readable `scene_lines[]` without rewording, deleting facts, dropping the tail, or changing punctuation. If the LLM split is unavailable or fails validation, generation fails before Kaggle.
+4. Server takes the selected `thoughts.md` entry as final copy and asks Gemini lite to split it into readable `scene_lines[]` without rewording, deleting facts, dropping the tail, or changing punctuation. This step retries only the configured Gemini-lite model (`KENIGSBERG_STORIES_TEXT_SPLIT_ATTEMPTS`, `KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC`) and must not use the global `GOOGLE_AI_FALLBACK_MODELS` Gemma fallback. If the split is unavailable or fails validation, generation fails before Kaggle.
 5. Server creates a per-run Kaggle dataset:
    - payload;
    - selected thought metadata;
