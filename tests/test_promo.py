@@ -119,3 +119,25 @@ async def test_create_event_promo_matches_only_future_events(tmp_path) -> None:
     assert target.target_type == "event"
     assert target.event_id == future_id
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_create_festival_promo_accepts_existing_future_event_festival_label(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 14, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_event("Future Labeled Festival Event", "2026-06-01", festival="80 историй о главном"))
+        await session.commit()
+
+    created = await create_festival_promo_campaign(
+        db,
+        festival_name="80 историй о главном",
+        ends_at=date(2026, 7, 18),
+        now_utc=now_utc,
+    )
+
+    assert created.status == "created"
+    assert created.campaign is not None
+    await db.close()

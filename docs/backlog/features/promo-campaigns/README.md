@@ -73,7 +73,8 @@ Status rules:
 ### Target
 
 Campaign targets resolve to real database rows. No abstract future festival may
-be promoted.
+be promoted; a festival target must be grounded either by an existing
+`festival` row or by existing future events with the same `event.festival` name.
 
 Supported target types:
 

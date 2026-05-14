@@ -24,8 +24,9 @@ implemented behavior contract.
 - `videoannounce_item` stores promo provenance:
   `promo_campaign_id`, `promo_activity_id`, `promo_placement_kind`.
 
-Targets are never abstract: a festival campaign is refused until the festival row
-exists and has future active non-silent events. Event/festival rotation uses only
+Targets are never abstract: a festival campaign is refused until the name is
+grounded by an existing `festival` row or by future active event rows whose
+`event.festival` already equals that name. Event/festival rotation uses only
 events whose start date is today or later.
 
 ## Operator Commands

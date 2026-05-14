@@ -224,13 +224,7 @@ async def create_festival_promo_campaign(
 
     async with db.get_session() as session:
         fest_res = await session.execute(select(Festival).where(Festival.name == name))
-        festival = fest_res.scalars().first()
-        if festival is None:
-            return PromoCreateResult(
-                None,
-                "missing_festival",
-                f"Не создал кампанию: фестиваль {name!r} должен уже существовать в системе.",
-            )
+        festival_exists = fest_res.scalars().first() is not None
         future_res = await session.execute(
             select(func.count())
             .select_from(Event)
@@ -241,6 +235,12 @@ async def create_festival_promo_campaign(
             .where(Event.silent.is_(False))
         )
         future_count = int(future_res.scalar() or 0)
+        if not festival_exists and future_count <= 0:
+            return PromoCreateResult(
+                None,
+                "missing_festival",
+                f"Не создал кампанию: фестиваль {name!r} должен уже существовать в системе.",
+            )
         if future_count <= 0:
             return PromoCreateResult(
                 None,
@@ -364,13 +364,6 @@ async def ensure_initial_80_stories_campaign(
         if existing is not None:
             return existing
 
-        festival_res = await session.execute(
-            select(Festival).where(Festival.name == INITIAL_80_STORIES_FESTIVAL)
-        )
-        if festival_res.scalars().first() is None:
-            logger.info("promo.seed skipped: festival missing name=%s", INITIAL_80_STORIES_FESTIVAL)
-            return None
-
         future_count_res = await session.execute(
             select(func.count())
             .select_from(Event)
@@ -383,7 +376,7 @@ async def ensure_initial_80_stories_campaign(
         future_count = int(future_count_res.scalar() or 0)
         if future_count <= 0:
             logger.info(
-                "promo.seed skipped: no future events festival=%s today=%s",
+                "promo.seed skipped: no future festival events name=%s today=%s",
                 INITIAL_80_STORIES_FESTIVAL,
                 today.isoformat(),
             )
