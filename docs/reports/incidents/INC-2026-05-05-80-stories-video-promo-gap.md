@@ -1,10 +1,10 @@
 # INC-2026-05-05 80 Stories Video Promo Gap
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Video announcements / festival visibility
 Opened: 2026-05-05
-Closed: —
+Closed: 2026-05-14
 Owners: events-bot
 Related incidents: `INC-2026-05-05-80-stories-source-coverage`, `INC-2026-04-27-cherryflash-missing-photo-urls`
 Related docs: `docs/features/cherryflash/README.md`, `docs/features/crumple-video/README.md`, `docs/features/festivals/README.md`
@@ -28,12 +28,22 @@ Events from `80 историй о главном` did not receive meaningful pro
 
 - 2026-03..2026-04: several festival rows were selected only in default failed/test sessions.
 - 2026-05-05: user reported no festival appearance in video announcements; investigation split this from the source coverage incident because product-level promotion will be handled by future `promo`.
+- 2026-05-14 09:05 UTC: scheduled CherryFlash session `#300` published two
+  promoted future `80 историй о главном` events to the viewer-facing target
+  `-1002210431821`; the legacy session status was `PUBLISHED_TEST`.
+- 2026-05-14: promo reporting was fixed to count scheduled viewer-facing
+  CherryFlash delivery as production exposure, while keeping failed/manual test
+  sessions excluded.
 
 ## Root Cause
 
-1. Video selectors are popularity/window driven and do not have a named-festival representation contract.
-2. No `promo` concept exists yet for editorially important events/festivals.
-3. Source coverage for the festival was incomplete, shrinking the candidate pool.
+1. Video selectors were popularity/window driven and did not have a
+   named-festival representation contract.
+2. The initial promo exposure reporter counted only `PUBLISHED_MAIN`, but the
+   scheduled CherryFlash validation target is stored by the legacy status
+   machine as `PUBLISHED_TEST` even when it is viewer-facing production output.
+3. Source coverage for the festival was initially incomplete, shrinking the
+   candidate pool.
 
 ## Automation Contract
 
@@ -68,25 +78,45 @@ Events from `80 историй о главном` did not receive meaningful pro
 
 ## Immediate Mitigation
 
-None. The user explicitly deferred product-level promotion to a future `promo` feature.
+Implemented the `promo` feature MVP and seeded the `80 историй о главном`
+campaign through 2026-07-18.
 
 ## Corrective Actions
 
-- Pending: repair source coverage first.
-- Pending: design `promo` as an explicit editorial mechanism rather than hardcoding this festival into video selectors.
+- Done: repair source coverage sufficiently for future active festival events
+  with renderable posters to exist in the candidate pool.
+- Done: implement `promo` as an explicit editorial mechanism rather than
+  hardcoding this festival into video selectors.
+- Done: record and report scheduled viewer-facing CherryFlash promo delivery.
 
 ## Follow-up Actions
 
-- [ ] After source backfill, rerun video inventory query for all future festival rows.
-- [ ] Define `promo` data model and selection contract.
-- [ ] Add operator-visible diagnostics for promoted/festival absence in CherryFlash.
+- [x] After source backfill, rerun video inventory query for all future festival rows.
+- [x] Define `promo` data model and selection contract.
+- [x] Add operator-visible diagnostics for promoted/festival absence in CherryFlash.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: investigation-only
-- post-deploy verification: —
+- deployed SHA: `81bb5096` (`Fix CherryFlash promo reporting and slot order`)
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia`, release
+  `v1093`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KRJY0FYSDVT4S3CPW4TEZH48`
+- regression checks:
+  - targeted pytest:
+    `tests/test_video_announce_popular_review.py tests/test_promo.py` -> `11 passed`;
+  - production query for CherryFlash session `#300`: promoted festival events
+    `#4798` at position `1` and `#4604` at position `2`, both future rows, both
+    `promo_campaign_id=1`;
+  - production selection dry-run after the fix interleaved promo with organic:
+    first promo at position `2`, second promo at position `4`.
+- post-deploy verification:
+  - `/healthz`: `{"ok": true, "ready": true, "db": "ok"}`;
+  - backfilled session `#300` through `record_video_promo_exposures`, adding
+    two `promo_exposure` rows with `publish_status=PUBLISHED_TEST`,
+    `public_target_count=1`, target chat `-1002210431821`;
+  - production `/promo report` equivalent now shows:
+    `видео-публикаций: 1; промо-показов: 2` and the publication line for
+    `14.05.2026 09:05 UTC`, `popular_review session #300`, positions `1, 2`.
 
 ## Prevention
 
