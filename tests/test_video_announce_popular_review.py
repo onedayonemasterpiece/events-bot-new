@@ -32,6 +32,56 @@ def _freeze_popular_posts_now(monkeypatch, now_utc: datetime) -> None:
     )
 
 
+def _pick_for_merge(event_id: int, *, promo: bool) -> popular_review_module.PopularReviewPick:
+    event = Event(
+        title=f"Event {event_id}",
+        description="Description",
+        short_description="Short",
+        search_digest="Digest",
+        source_text="source",
+        date="2026-06-01",
+        time="19:00",
+        location_name="Venue",
+        city="Калининград",
+        photo_urls=["https://example.com/poster.jpg"],
+        photo_count=1,
+    )
+    event.id = event_id
+    return popular_review_module.PopularReviewPick(
+        event=event,
+        score=999.0 if promo else 1.0,
+        source_window="promo" if promo else "24h",
+        source_post_url="",
+        source_label="promo" if promo else "organic",
+        anti_repeat_status="promo" if promo else "fresh",
+        description="Description",
+        promo_campaign_id=1 if promo else None,
+        promo_activity_id=1 if promo else None,
+        promo_placement_kind="general_boost" if promo else None,
+    )
+
+
+def test_popular_review_interleaves_promo_with_organic_first_or_second() -> None:
+    now_utc = datetime(2026, 5, 14, 8, 0, tzinfo=timezone.utc)
+    promo = [_pick_for_merge(1, promo=True), _pick_for_merge(2, promo=True)]
+    fresh = [_pick_for_merge(3, promo=False), _pick_for_merge(4, promo=False)]
+
+    selected = popular_review_module._merge_promo_and_fresh_picks(
+        promo,
+        fresh,
+        max_events=4,
+        now_utc=now_utc,
+    )
+
+    promo_positions = [
+        idx
+        for idx, pick in enumerate(selected, start=1)
+        if pick.promo_campaign_id is not None
+    ]
+    assert promo_positions[0] in {1, 2}
+    assert promo_positions != [1, 2]
+
+
 async def _seed_popular_post(
     db: Database,
     *,

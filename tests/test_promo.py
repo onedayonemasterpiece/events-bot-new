@@ -6,8 +6,18 @@ import pytest
 from sqlalchemy import select
 
 from db import Database
-from handlers.promo_cmd import _parse_until_date
-from models import Event, Festival, PromoActivity, PromoCampaign, PromoTarget
+from handlers.promo_cmd import _campaign_lines, _parse_until_date
+from models import (
+    Event,
+    Festival,
+    PromoActivity,
+    PromoCampaign,
+    PromoTarget,
+    VideoAnnounceItem,
+    VideoAnnounceItemStatus,
+    VideoAnnounceSession,
+    VideoAnnounceSessionStatus,
+)
 from promo import create_event_promo_campaign, create_festival_promo_campaign
 
 
@@ -140,4 +150,70 @@ async def test_create_festival_promo_accepts_existing_future_event_festival_labe
 
     assert created.status == "created"
     assert created.campaign is not None
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_report_counts_viewer_facing_cherryflash_test_status(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        campaign = PromoCampaign(
+            title="80 историй о главном / summer visibility",
+            status="active",
+            starts_at=datetime(2026, 5, 14, 7, 0, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 7, 18, 23, 59, tzinfo=timezone.utc),
+        )
+        event = _event("Заводы и пароходы", "2026-05-16", festival="80 историй о главном")
+        session.add_all([campaign, event])
+        await session.commit()
+        await session.refresh(campaign)
+        await session.refresh(event)
+        session.add(
+            PromoTarget(
+                campaign_id=int(campaign.id),
+                target_type="festival",
+                festival_name="80 историй о главном",
+            )
+        )
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface="video_general",
+                profile_key="popular_review",
+                max_per_publish=2,
+                enabled=True,
+            )
+        )
+        video_session = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review",
+            published_at=datetime(2026, 5, 14, 9, 5, tzinfo=timezone.utc),
+            test_chat_id=-1002210431821,
+            selection_params={"mode": "popular_review"},
+        )
+        session.add(video_session)
+        await session.commit()
+        await session.refresh(video_session)
+        session.add(
+            VideoAnnounceItem(
+                session_id=int(video_session.id),
+                event_id=int(event.id),
+                status=VideoAnnounceItemStatus.READY,
+                position=2,
+                promo_campaign_id=int(campaign.id),
+                promo_activity_id=1,
+                promo_placement_kind="general_boost",
+            )
+        )
+        await session.commit()
+
+    lines = await _campaign_lines(db, include_archived=True, include_details=True)
+    report = "\n\n".join(lines)
+
+    assert "видео-публикаций: 1; промо-показов: 1" in report
+    assert "session #" in report
+    assert "статус PUBLISHED_TEST" in report
+    assert "Заводы и пароходы" in report
     await db.close()

@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timezone
 
 from aiogram import Bot, types
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from db import Database
 from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
@@ -132,6 +132,103 @@ def _status_label(status: str) -> str:
     }.get(status, status)
 
 
+def _fmt_dt(value: object) -> str:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        raw = str(value or "").strip()
+        if not raw:
+            return "дата неизвестна"
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return raw
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+
+
+def _viewer_facing_video_status(status: str, profile_key: str | None) -> bool:
+    if status == "PUBLISHED_MAIN":
+        return True
+    profile = str(profile_key or "")
+    return status == "PUBLISHED_TEST" and (
+        profile == "popular_review" or profile.startswith("popular_review_")
+    )
+
+
+async def _video_publication_groups_for_campaign(
+    db: Database,
+    campaign: PromoCampaign,
+) -> list[dict[str, object]]:
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT
+                        vs.id AS session_id,
+                        vs.profile_key AS profile_key,
+                        vs.status AS status,
+                        COALESCE(vs.published_at, vs.finished_at, vs.started_at, vs.created_at) AS published_at,
+                        vs.test_chat_id AS test_chat_id,
+                        vs.main_chat_id AS main_chat_id,
+                        vi.event_id AS event_id,
+                        e.title AS title,
+                        e.date AS event_date,
+                        vi.position AS position
+                    FROM videoannounce_item vi
+                    JOIN videoannounce_session vs ON vs.id = vi.session_id
+                    JOIN event e ON e.id = vi.event_id
+                    WHERE vi.promo_campaign_id = :campaign_id
+                    ORDER BY published_at DESC, vs.id DESC, vi.position
+                    """
+                ),
+                {"campaign_id": int(campaign.id)},
+            )
+        ).mappings().all()
+
+    groups: dict[int, dict[str, object]] = {}
+    for row in rows:
+        status = str(row["status"] or "")
+        profile_key = str(row["profile_key"] or "")
+        if not _viewer_facing_video_status(status, profile_key):
+            continue
+        session_id = int(row["session_id"])
+        group = groups.setdefault(
+            session_id,
+            {
+                "session_id": session_id,
+                "profile_key": profile_key,
+                "status": status,
+                "published_at": row["published_at"],
+                "target_count": len(
+                    {
+                        int(value)
+                        for value in (row["test_chat_id"], row["main_chat_id"])
+                        if value is not None
+                    }
+                ),
+                "items": [],
+            },
+        )
+        group_items = group["items"]
+        assert isinstance(group_items, list)
+        group_items.append(
+            {
+                "event_id": int(row["event_id"]),
+                "title": str(row["title"] or ""),
+                "event_date": str(row["event_date"] or ""),
+                "position": int(row["position"] or 0),
+            }
+        )
+    return sorted(
+        groups.values(),
+        key=lambda item: str(item.get("published_at") or ""),
+        reverse=True,
+    )
+
+
 async def _future_count_for_campaign(db: Database, campaign: PromoCampaign) -> int:
     async with db.get_session() as session:
         target_res = await session.execute(
@@ -167,7 +264,12 @@ async def _future_count_for_campaign(db: Database, campaign: PromoCampaign) -> i
         return total
 
 
-async def _campaign_lines(db: Database, *, include_archived: bool = False) -> list[str]:
+async def _campaign_lines(
+    db: Database,
+    *,
+    include_archived: bool = False,
+    include_details: bool = False,
+) -> list[str]:
     async with db.get_session() as session:
         query = select(PromoCampaign).order_by(PromoCampaign.status, PromoCampaign.created_at)
         if not include_archived:
@@ -189,9 +291,11 @@ async def _campaign_lines(db: Database, *, include_archived: bool = False) -> li
                 select(func.count())
                 .select_from(PromoExposure)
                 .where(PromoExposure.campaign_id == campaign.id)
-                .where(PromoExposure.publish_status == "PUBLISHED_MAIN")
+                .where(PromoExposure.public_target_count > 0)
             )
-            public_exposures = int(exposure_res.scalar() or 0)
+            recorded_exposures = int(exposure_res.scalar() or 0)
+        video_groups = await _video_publication_groups_for_campaign(db, campaign)
+        video_show_count = sum(len(group.get("items") or []) for group in video_groups)
         activity_labels = ", ".join(
             filter(
                 None,
@@ -207,16 +311,41 @@ async def _campaign_lines(db: Database, *, include_archived: bool = False) -> li
             )
         )
         ends = campaign.ends_at.date().isoformat() if campaign.ends_at else "без срока"
-        lines.append(
-            "\n".join(
-                [
-                    f"#{campaign.id} <b>{html.escape(campaign.title)}</b>",
-                    f"Статус: {_status_label(campaign.status)}; до: {ends}",
-                    f"Будущих событий сейчас: {future_count}; публичных показов: {public_exposures}",
-                    f"Активности: {html.escape(activity_labels or '—')}",
-                ]
-            )
-        )
+        block = [
+            f"#{campaign.id} <b>{html.escape(campaign.title)}</b>",
+            f"Статус: {_status_label(campaign.status)}; до: {ends}",
+            (
+                f"Будущих событий сейчас: {future_count}; "
+                f"видео-публикаций: {len(video_groups)}; промо-показов: {video_show_count}"
+            ),
+            f"Активности: {html.escape(activity_labels or '—')}",
+        ]
+        if include_details and video_groups:
+            block.append("Публикации:")
+            for group in video_groups[:8]:
+                items = group.get("items") or []
+                positions = ", ".join(str(item["position"]) for item in items)
+                item_titles = "; ".join(
+                    f"#{item['event_id']} {item['title']} ({item['event_date']})"
+                    for item in items[:4]
+                )
+                if len(items) > 4:
+                    item_titles += f"; ещё {len(items) - 4}"
+                block.append(
+                    (
+                        f"• {_fmt_dt(group.get('published_at'))}: "
+                        f"{html.escape(str(group.get('profile_key') or 'video'))} "
+                        f"session #{group.get('session_id')}, "
+                        f"статус {html.escape(str(group.get('status') or ''))}, "
+                        f"каналов: {int(group.get('target_count') or 0)}, "
+                        f"поз.: {html.escape(positions)} — {html.escape(item_titles)}"
+                    )
+                )
+            if len(video_groups) > 8:
+                block.append(f"• … ещё {len(video_groups) - 8}")
+        elif include_details and recorded_exposures:
+            block.append(f"Записанных exposure rows: {recorded_exposures}")
+        lines.append("\n".join(block))
     return lines
 
 
@@ -253,7 +382,7 @@ async def handle_promo_command(message: types.Message, db: Database, bot: Bot) -
 
     if lowered in {"report", "отчет", "отчёт"}:
         lines = ["<b>Промо-отчёт</b>", ""]
-        lines.extend(await _campaign_lines(db, include_archived=True))
+        lines.extend(await _campaign_lines(db, include_archived=True, include_details=True))
         await bot.send_message(message.chat.id, "\n\n".join(lines), parse_mode="HTML")
         return
 

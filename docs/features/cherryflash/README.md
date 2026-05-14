@@ -82,12 +82,21 @@
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;
   - active `promo` campaigns can inject up to two eligible `video_general`
-    events into the `popular_review` candidate list before organic popularity
-    picks; this path keeps the same future-date and renderable-poster gates and
-    writes promo provenance to `videoannounce_item`;
+    events into the `popular_review` candidate list and interleave them with
+    organic popularity picks; unless a future named-slot rule explicitly asks
+    for the first slot, the first promo item starts in position 1 or 2 by stable
+    daily choice and two promo items should not occupy positions 1 and 2
+    together when an organic event is available;
+  - this path keeps the same future-date and renderable-poster gates and writes
+    promo provenance to `videoannounce_item`;
   - festival promo rotation considers only future events and orders candidates
-    by public `PUBLISHED_MAIN` exposure count, with a stable daily shuffle among
-    equally exposed rows;
+    by viewer-facing exposure count, with a stable daily shuffle among equally
+    exposed rows;
+  - scheduled CherryFlash publication to the viewer-facing validation target can
+    still be stored as `PUBLISHED_TEST` by the legacy session status machine;
+    promo reporting and exposure recording treat that scheduled target as a
+    real production-facing video show, while generic failed/manual test sessions
+    remain excluded from public exposure;
   - CherryFlash selection is `future-start-only`: events whose `start date` is already before the current local day must not appear in the ribbon/date strip even if they still have a later `end_date`;
   - intro comes from the new `Мобильная лента` / `MobileFeed Intro` 3D block;
   - main 2D scene flow follows `kaggle/VideoAfisha/video_afisha.ipynb`;

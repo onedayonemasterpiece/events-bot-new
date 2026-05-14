@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -68,6 +69,59 @@ class PopularReviewSelection:
     @property
     def event_ids(self) -> list[int]:
         return [int(item.event.id) for item in self.picks if item.event.id is not None]
+
+
+def _promo_starts_first(promo_picks: list[PopularReviewPick], *, now_utc: datetime) -> bool:
+    ids = ",".join(
+        str(int(pick.event.id))
+        for pick in promo_picks
+        if pick.event.id is not None
+    )
+    seed = f"{now_utc.date().isoformat()}|{ids}"
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return int(digest[:2], 16) % 2 == 0
+
+
+def _merge_promo_and_fresh_picks(
+    promo_picks: list[PopularReviewPick],
+    fresh: list[PopularReviewPick],
+    *,
+    max_events: int,
+    now_utc: datetime,
+) -> list[PopularReviewPick]:
+    selected: list[PopularReviewPick] = []
+    selected_event_ids: set[int] = set()
+
+    def add_pick(pick: PopularReviewPick | None) -> None:
+        if pick is None or len(selected) >= max_events:
+            return
+        event_id = int(pick.event.id)
+        if event_id in selected_event_ids:
+            return
+        selected.append(pick)
+        selected_event_ids.add(event_id)
+
+    if promo_picks and fresh:
+        promo_first = _promo_starts_first(promo_picks, now_utc=now_utc)
+        promo_idx = 0
+        fresh_idx = 0
+        if promo_first:
+            add_pick(promo_picks[promo_idx])
+            promo_idx += 1
+        while len(selected) < max_events and (fresh_idx < len(fresh) or promo_idx < len(promo_picks)):
+            if fresh_idx < len(fresh):
+                add_pick(fresh[fresh_idx])
+                fresh_idx += 1
+            if promo_idx < len(promo_picks):
+                add_pick(promo_picks[promo_idx])
+                promo_idx += 1
+        return selected
+
+    for candidate in [*promo_picks, *fresh]:
+        add_pick(candidate)
+        if len(selected) >= max_events:
+            break
+    return selected
 
 
 def _parse_iso_date(raw: str | None) -> date | None:
@@ -520,24 +574,12 @@ async def build_popular_review_selection(
             )
         )
 
-    selected: list[PopularReviewPick] = []
-    selected_event_ids: set[int] = set()
-    for candidate in promo_picks:
-        event_id = int(candidate.event.id)
-        if event_id in selected_event_ids:
-            continue
-        if len(selected) >= max_events:
-            break
-        selected.append(candidate)
-        selected_event_ids.add(event_id)
-    for candidate in fresh:
-        event_id = int(candidate.event.id)
-        if event_id in selected_event_ids:
-            continue
-        if len(selected) >= max_events:
-            break
-        selected.append(candidate)
-        selected_event_ids.add(event_id)
+    selected = _merge_promo_and_fresh_picks(
+        promo_picks,
+        fresh,
+        max_events=max_events,
+        now_utc=now_utc,
+    )
 
     if len(selected) < min_events:
         raise RuntimeError(

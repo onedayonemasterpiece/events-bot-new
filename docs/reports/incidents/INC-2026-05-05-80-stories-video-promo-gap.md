@@ -53,7 +53,11 @@ Events from `80 историй о главном` did not receive meaningful pro
 ### Mandatory checks before closure or deploy
 
 - Query festival rows joined to `videoannounce_item` by profile/status.
-- Do not count `FAILED` or `PUBLISHED_TEST` sessions as public exposure.
+- Do not count `FAILED` sessions or generic manual/test `PUBLISHED_TEST`
+  sessions as public exposure.
+- Treat the scheduled CherryFlash viewer-facing target as production exposure
+  even while the legacy session status is stored as `PUBLISHED_TEST`; evidence
+  must include the target chat and selected promoted item positions.
 - Once `promo` exists, prove a promoted festival/event can enter the video candidate set.
 
 ### Required evidence

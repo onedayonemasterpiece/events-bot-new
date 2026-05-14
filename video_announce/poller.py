@@ -40,6 +40,11 @@ _status_locks: dict[int, asyncio.Lock] = {}
 _poller_tasks: dict[int, asyncio.Task] = {}
 
 
+def _is_viewer_facing_cherryflash_publish(session_obj: VideoAnnounceSession | None) -> bool:
+    profile_key = str(getattr(session_obj, "profile_key", "") or "")
+    return profile_key == "popular_review" or profile_key.startswith("popular_review_")
+
+
 def _read_positive_int(env_key: str, default: int) -> int:
     raw_value = os.getenv(env_key)
     if raw_value is None:
@@ -625,6 +630,41 @@ async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) 
         )
 
 
+async def _record_viewer_facing_test_promo_exposures(
+    db: Database,
+    session_obj: VideoAnnounceSession | None,
+    *,
+    target_chat_id: int | None,
+) -> None:
+    if not session_obj or not target_chat_id:
+        return
+    if not _is_viewer_facing_cherryflash_publish(session_obj):
+        return
+    published_at = session_obj.published_at
+    if not isinstance(published_at, datetime):
+        published_at = datetime.now(timezone.utc)
+    try:
+        count = await record_video_promo_exposures(
+            db,
+            session_id=int(session_obj.id),
+            publish_status=VideoAnnounceSessionStatus.PUBLISHED_TEST.value,
+            published_at=published_at,
+            public_target_count=1,
+            public_targets=[{"kind": "viewer_facing_cherryflash_target", "chat_id": int(target_chat_id)}],
+        )
+        if count:
+            logger.info(
+                "video_announce: recorded viewer-facing CherryFlash promo exposures session_id=%s count=%s",
+                session_obj.id,
+                count,
+            )
+    except Exception:
+        logger.exception(
+            "video_announce: failed to record viewer-facing CherryFlash promo exposures session_id=%s",
+            getattr(session_obj, "id", None),
+        )
+
+
 async def _send_logs(bot, chat_id: int, files: list[Path], *, caption: str | None = None) -> None:
     for file in files:
         try:
@@ -1121,6 +1161,11 @@ async def run_kernel_poller(
             db,
             session_obj.id,
             status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+        )
+        await _record_viewer_facing_test_promo_exposures(
+            db,
+            session_obj,
+            target_chat_id=target_test,
         )
         if session_obj:
             await update_status_message(

@@ -20,7 +20,9 @@ implemented behavior contract.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`.
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
-  rows when a promoted video item reaches `PUBLISHED_MAIN`.
+  rows when a promoted video item reaches a viewer-facing publication target:
+  `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
+  the legacy video-announcement status machine as `PUBLISHED_TEST`.
 - `videoannounce_item` stores promo provenance:
   `promo_campaign_id`, `promo_activity_id`, `promo_placement_kind`.
 
@@ -36,7 +38,9 @@ events whose start date is today or later.
 - `/promo seed80` explicitly creates/returns the initial campaign for
   `80 историй о главном` through 2026-07-18.
 - `/promo report` lists all campaigns, including archived, with current future
-  event count and public video exposure count.
+  event count, video publication count, promo-show count, and per-session
+  CherryFlash publication details: date/time, profile, session id, stored
+  status, target count, positions, and event ids/titles.
 - `/promo add festival НАЗВАНИЕ [до ДАТА]` creates an active festival campaign.
 - `/promo add event ПРИМЕРНОЕ НАЗВАНИЕ [до ДАТА]` finds a future event and
   creates an active event campaign. If several future events are too similar,
@@ -67,17 +71,23 @@ CherryFlash (`popular_review`) calls the promo resolver after collecting normal
 popular-post candidates. General promo:
 
 - can add up to two eligible promoted events per CherryFlash release;
-- is placed before organic popularity picks;
+- is interleaved with organic popularity picks;
+- starts the first promo item in position 1 or 2 by stable daily choice unless a
+  future named-slot rule explicitly requests the first slot;
+- avoids filling positions 1 and 2 with two promo items when an organic event is
+  available;
 - does not bypass future-date checks;
 - does not bypass renderable-poster checks;
 - stores promo provenance on `VideoAnnounceItem`;
-- uses festival rotation by public `PUBLISHED_MAIN` exposure count and stable
-  daily shuffle among equally exposed future events.
+- uses festival rotation by viewer-facing exposure count and stable daily
+  shuffle among equally exposed future events.
 
 This directly covers the regression contract from
 `INC-2026-05-05-80-stories-video-promo-gap`: a promoted future festival event
 can enter the video candidate set, while failed/test sessions are not counted as
-public exposure.
+public exposure. The scheduled `@keniggpt` CherryFlash target is an exception to
+the old status wording: it is viewer-facing production output even when the row
+status is `PUBLISHED_TEST`, so it is reported and recorded as a promo show.
 
 ## Daily Marker
 
@@ -94,6 +104,7 @@ activation.
 - Telegraph month/weekend activities are stored for campaigns, but page-render
   adapters are still pending.
 - Named video slots are part of the design, not the MVP.
-- `/promo report` currently counts public `PUBLISHED_MAIN` video exposure rows;
-  story target fanout details can be expanded from `story_publish_report.json`
-  in a later pass.
+- `/promo report` reconstructs viewer-facing CherryFlash publications from
+  `videoannounce_session`/`videoannounce_item` and uses `promo_exposure` as the
+  normalized audit trail. Story target fanout details can be expanded from
+  `story_publish_report.json` in a later pass.
