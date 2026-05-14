@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from db import Database
 from models import (
     Event,
     EventSource,
+    Festival,
+    PromoCampaign,
     TelegramPostMetric,
     TelegramScannedMessage,
     TelegramSource,
@@ -18,6 +21,15 @@ from models import (
 )
 from video_announce.popular_review import build_popular_review_selection
 from video_announce import popular_review as popular_review_module
+from handlers import popular_posts_cmd as popular_posts_module
+
+
+def _freeze_popular_posts_now(monkeypatch, now_utc: datetime) -> None:
+    monkeypatch.setattr(
+        popular_posts_module,
+        "_utc_now_ts",
+        lambda: int(now_utc.timestamp()),
+    )
 
 
 async def _seed_popular_post(
@@ -94,10 +106,11 @@ async def _seed_recent_cherryflash_item(
 
 
 @pytest.mark.asyncio
-async def test_popular_review_cooldown_excludes_recent_published_selection(tmp_path):
+async def test_popular_review_cooldown_excludes_recent_published_selection(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now_utc = datetime(2026, 4, 22, 8, 0, tzinfo=timezone.utc)
+    _freeze_popular_posts_now(monkeypatch, now_utc)
 
     async with db.get_session() as session:
         source = TelegramSource(username="popular", title="Popular")
@@ -163,13 +176,15 @@ async def test_popular_review_cooldown_excludes_recent_published_selection(tmp_p
     assert set(selection.event_ids) == {int(fresh_one.id), int(fresh_two.id)}
     assert int(repeated.id) not in selection.event_ids
     assert all(meta["anti_repeat_status"] == "fresh" for meta in selection.trace.values())
+    await db.close()
 
 
 @pytest.mark.asyncio
-async def test_popular_review_raises_instead_of_repeat_fill_when_cooldown_leaves_too_few(tmp_path):
+async def test_popular_review_raises_instead_of_repeat_fill_when_cooldown_leaves_too_few(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now_utc = datetime(2026, 4, 22, 8, 0, tzinfo=timezone.utc)
+    _freeze_popular_posts_now(monkeypatch, now_utc)
 
     async with db.get_session() as session:
         source = TelegramSource(username="popular", title="Popular")
@@ -255,6 +270,7 @@ async def test_popular_review_raises_instead_of_repeat_fill_when_cooldown_leaves
             candidate_limit=10,
             now_utc=now_utc,
         )
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -262,6 +278,7 @@ async def test_popular_review_persists_rehydrated_photo_urls(tmp_path, monkeypat
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now_utc = datetime(2026, 4, 27, 7, 0, tzinfo=timezone.utc)
+    _freeze_popular_posts_now(monkeypatch, now_utc)
 
     async def fake_rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
         if str(source_post_url or "").endswith("/1"):
@@ -371,6 +388,7 @@ async def test_popular_review_persists_rehydrated_photo_urls(tmp_path, monkeypat
     assert persisted is not None
     assert persisted.photo_urls == ["https://example.com/rehydrated.jpg"]
     assert persisted.photo_count == 1
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -411,3 +429,80 @@ async def test_popular_review_skips_rehydrated_event_when_persist_fails(monkeypa
     urls = await popular_review_module._ensure_renderable_photo_urls(event, db=object())
 
     assert urls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_review_seeded_promo_uses_only_future_festival_events(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 13, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="80 историй о главном"))
+        past = Event(
+            title="Past 80 Stories",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            festival="80 историй о главном",
+            source_text="source",
+            date="2026-05-01",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/past.jpg"],
+            photo_count=1,
+        )
+        future_one = Event(
+            title="Future 80 Stories One",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            festival="80 историй о главном",
+            source_text="source",
+            date="2026-06-01",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/future-one.jpg"],
+            photo_count=1,
+        )
+        future_two = Event(
+            title="Future 80 Stories Two",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            festival="80 историй о главном",
+            source_text="source",
+            date="2026-06-02",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/future-two.jpg"],
+            photo_count=1,
+        )
+        session.add_all([past, future_one, future_two])
+        await session.commit()
+        for event in (past, future_one, future_two):
+            await session.refresh(event)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=3,
+        min_events=1,
+        anti_repeat_days=7,
+        candidate_limit=10,
+        now_utc=now_utc,
+    )
+
+    assert int(past.id) not in selection.event_ids
+    assert set(selection.event_ids) == {int(future_one.id), int(future_two.id)}
+    assert all(row.mandatory for row in selection.ranked)
+    assert all(row.promo_campaign_id for row in selection.ranked)
+    assert all(selection.trace[event_id]["source_window"] == "promo" for event_id in selection.event_ids)
+
+    async with db.get_session() as session:
+        campaigns = (await session.execute(select(PromoCampaign))).scalars().all()
+    assert len(campaigns) == 1
+    assert campaigns[0].status == "active"
+    await db.close()

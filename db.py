@@ -1700,6 +1700,76 @@ class Database:
                 )
                 """
             )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_campaign(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    goal_comment TEXT,
+                    starts_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    ends_at TIMESTAMP,
+                    total_exposure_goal INTEGER,
+                    daily_exposure_cap INTEGER,
+                    sponsorship_disclosure TEXT,
+                    created_by BIGINT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    archived_at TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_target(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    target_type TEXT NOT NULL,
+                    event_id INTEGER,
+                    festival_name TEXT,
+                    query_text TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(campaign_id) REFERENCES promo_campaign(id) ON DELETE CASCADE,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_activity(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    surface TEXT NOT NULL,
+                    profile_key TEXT,
+                    slot INTEGER,
+                    max_per_publish INTEGER NOT NULL DEFAULT 1,
+                    target_exposure_goal INTEGER,
+                    daily_cap INTEGER,
+                    selection_policy TEXT NOT NULL DEFAULT 'diverse_shuffle',
+                    enabled BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(campaign_id) REFERENCES promo_campaign(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_campaign_status_dates ON promo_campaign(status, starts_at, ends_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_target_campaign ON promo_target(campaign_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_target_event ON promo_target(event_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_target_festival ON promo_target(festival_name)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_activity_campaign ON promo_activity(campaign_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_activity_surface_profile ON promo_activity(surface, profile_key, enabled)"
+            )
             await _add_column(conn, "videoannounce_session", "profile_key TEXT")
             await _add_column(conn, "videoannounce_session", "selection_params JSON")
             await _add_column(conn, "videoannounce_session", "test_chat_id BIGINT")
@@ -1741,6 +1811,9 @@ class Database:
             await _add_column(
                 conn, "videoannounce_item", "include_count INTEGER NOT NULL DEFAULT 0"
             )
+            await _add_column(conn, "videoannounce_item", "promo_campaign_id INTEGER")
+            await _add_column(conn, "videoannounce_item", "promo_activity_id INTEGER")
+            await _add_column(conn, "videoannounce_item", "promo_placement_kind TEXT")
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS videoannounce_eventhit(
@@ -1798,6 +1871,40 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_videoannounce_llm_trace_session ON videoannounce_llm_trace(session_id)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_exposure(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    activity_id INTEGER,
+                    event_id INTEGER NOT NULL,
+                    surface TEXT NOT NULL,
+                    placement_kind TEXT NOT NULL,
+                    video_session_id INTEGER,
+                    video_item_id INTEGER,
+                    position INTEGER,
+                    publish_status TEXT NOT NULL,
+                    public_target_count INTEGER NOT NULL DEFAULT 0,
+                    public_targets_json JSON NOT NULL DEFAULT '[]',
+                    period_start TIMESTAMP,
+                    period_end TIMESTAMP,
+                    published_at TIMESTAMP,
+                    details_json JSON NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(campaign_id) REFERENCES promo_campaign(id),
+                    FOREIGN KEY(activity_id) REFERENCES promo_activity(id),
+                    FOREIGN KEY(event_id) REFERENCES event(id),
+                    FOREIGN KEY(video_session_id) REFERENCES videoannounce_session(id),
+                    FOREIGN KEY(video_item_id) REFERENCES videoannounce_item(id)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_exposure_campaign_published ON promo_exposure(campaign_id, published_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_exposure_event_surface ON promo_exposure(event_id, surface, published_at)"
             )
 
             await conn.commit()

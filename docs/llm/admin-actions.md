@@ -23,6 +23,7 @@ provided by the runtime allowlist.
   - requests about **warming / sanitizing / repairing Telegraph cache** → prefer `telegraph_cache_sanitize`;
   - requests about **ImageKit / Smart crop / GenFill poster processing** → prefer `ik_poster`;
   - requests about **forced rebuild of a specific event** (`пересобери событие 123`) → prefer `rebuild_event`.
+  - requests about **promo / продвижение / promoted festival or event** → prefer `promo`.
 - Important list-vs-aggregate distinction:
   - if the user asks for a **list / rows / какие события / список событий**, do not route to `general_stats`;
   - if the user asks **сколько / статистика / отчёт / сводка**, prefer aggregate commands such as `general_stats` or `stats`.

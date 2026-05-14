@@ -30,6 +30,7 @@ from models import (
     VideoAnnounceSession,
     VideoAnnounceSessionStatus,
 )
+from promo import record_video_promo_exposures
 from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient
 
 logger = logging.getLogger(__name__)
@@ -568,12 +569,13 @@ async def _update_status(
 
 
 async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) -> None:
+    published_at = datetime.now(timezone.utc)
     async with db.get_session() as session:
         fresh = await session.get(VideoAnnounceSession, session_obj.id)
         if not fresh:
             return
         fresh.status = VideoAnnounceSessionStatus.PUBLISHED_MAIN
-        fresh.published_at = datetime.now(timezone.utc)
+        fresh.published_at = published_at
         res = await session.execute(
             select(VideoAnnounceItem).where(VideoAnnounceItem.session_id == session_obj.id)
         )
@@ -601,6 +603,26 @@ async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) 
                 )
         session.add(fresh)
         await session.commit()
+    try:
+        count = await record_video_promo_exposures(
+            db,
+            session_id=int(session_obj.id),
+            publish_status=VideoAnnounceSessionStatus.PUBLISHED_MAIN.value,
+            published_at=published_at,
+            public_target_count=1,
+            public_targets=[{"kind": "main_channel"}],
+        )
+        if count:
+            logger.info(
+                "video_announce: recorded promo exposures session_id=%s count=%s",
+                session_obj.id,
+                count,
+            )
+    except Exception:
+        logger.exception(
+            "video_announce: failed to record promo exposures session_id=%s",
+            session_obj.id,
+        )
 
 
 async def _send_logs(bot, chat_id: int, files: list[Path], *, caption: str | None = None) -> None:

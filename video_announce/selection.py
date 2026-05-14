@@ -990,6 +990,9 @@ async def prepare_session_items(
                 llm_reason=r.reason,
                 is_mandatory=r.mandatory,
                 include_count=getattr(event, "video_include_count", 0) or 0,
+                promo_campaign_id=r.promo_campaign_id,
+                promo_activity_id=r.promo_activity_id,
+                promo_placement_kind=r.promo_placement_kind,
             )
 
             # Validate about text logic

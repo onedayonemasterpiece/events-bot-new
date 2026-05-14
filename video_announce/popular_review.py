@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 
 from handlers.popular_posts_cmd import _load_top_items, _resolve_telegraph_map
 from models import Event, VideoAnnounceItem, VideoAnnounceSession, VideoAnnounceSessionStatus
+from promo import resolve_video_promo_candidates
 from .custom_types import RankedEvent
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,9 @@ class PopularReviewPick:
     source_label: str
     anti_repeat_status: str
     description: str
+    promo_campaign_id: int | None = None
+    promo_activity_id: int | None = None
+    promo_placement_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -362,6 +366,7 @@ async def _collect_popular_hits(
     db,
     *,
     candidate_limit: int,
+    today: date,
 ) -> list[dict[str, Any]]:
     ordered_hits: list[dict[str, Any]] = []
     seen_event_ids: set[int] = set()
@@ -377,7 +382,11 @@ async def _collect_popular_hits(
             for item in items
             if str(getattr(item, "post_url", "") or "").strip()
         ]
-        telegraph_map, _matched = await _resolve_telegraph_map(db, source_urls=source_urls)
+        telegraph_map, _matched = await _resolve_telegraph_map(
+            db,
+            source_urls=source_urls,
+            today=today,
+        )
         for item in items:
             post_url = str(getattr(item, "post_url", "") or "").strip()
             if not post_url:
@@ -423,7 +432,11 @@ async def build_popular_review_selection(
         anti_repeat_days=anti_repeat_days,
         now_utc=now_utc,
     )
-    ordered_hits = await _collect_popular_hits(db, candidate_limit=candidate_limit)
+    ordered_hits = await _collect_popular_hits(
+        db,
+        candidate_limit=candidate_limit,
+        today=today,
+    )
     events_map = await _load_events_map(
         db,
         [int(item["event_id"]) for item in ordered_hits],
@@ -464,11 +477,67 @@ async def build_popular_review_selection(
         )
         fresh.append(pick)
 
+    promo_picks: list[PopularReviewPick] = []
+    try:
+        promo_candidates = await resolve_video_promo_candidates(
+            db,
+            profile_key=POPULAR_REVIEW_PROFILE,
+            now_utc=now_utc,
+        )
+    except Exception:
+        logger.exception("video_announce.popular_review: failed to resolve promo candidates")
+        promo_candidates = []
+    for candidate in promo_candidates:
+        event = candidate.event
+        event_id = int(event.id) if event.id is not None else None
+        if event_id is None:
+            continue
+        if not _starts_today_or_in_future(event, today=today):
+            logger.info(
+                "video_announce.popular_review: skipped promo event in the past event_id=%s",
+                event_id,
+            )
+            continue
+        photo_urls = await _ensure_renderable_photo_urls(event, db=db)
+        if not photo_urls:
+            logger.info(
+                "video_announce.popular_review: skipped promo event without renderable posters event_id=%s",
+                event_id,
+            )
+            continue
+        promo_picks.append(
+            PopularReviewPick(
+                event=event,
+                score=999.0,
+                source_window="promo",
+                source_post_url=getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None) or "",
+                source_label="promo",
+                anti_repeat_status="promo",
+                description=preferred_scene_description(event),
+                promo_campaign_id=candidate.campaign_id,
+                promo_activity_id=candidate.activity_id,
+                promo_placement_kind=candidate.placement_kind,
+            )
+        )
+
     selected: list[PopularReviewPick] = []
-    for candidate in fresh:
+    selected_event_ids: set[int] = set()
+    for candidate in promo_picks:
+        event_id = int(candidate.event.id)
+        if event_id in selected_event_ids:
+            continue
         if len(selected) >= max_events:
             break
         selected.append(candidate)
+        selected_event_ids.add(event_id)
+    for candidate in fresh:
+        event_id = int(candidate.event.id)
+        if event_id in selected_event_ids:
+            continue
+        if len(selected) >= max_events:
+            break
+        selected.append(candidate)
+        selected_event_ids.add(event_id)
 
     if len(selected) < min_events:
         raise RuntimeError(
@@ -489,10 +558,13 @@ async def build_popular_review_selection(
                     f"popular_review:{pick.source_window}"
                     + (f" {pick.source_label}" if pick.source_label else "")
                 ),
-                mandatory=False,
+                mandatory=bool(pick.promo_campaign_id),
                 selected=True,
                 selected_reason=pick.source_window,
                 description=pick.description,
+                promo_campaign_id=pick.promo_campaign_id,
+                promo_activity_id=pick.promo_activity_id,
+                promo_placement_kind=pick.promo_placement_kind,
             )
         )
         trace[event_id] = {
@@ -502,6 +574,14 @@ async def build_popular_review_selection(
             "source_label": pick.source_label,
             "anti_repeat_status": pick.anti_repeat_status,
         }
+        if pick.promo_campaign_id:
+            trace[event_id].update(
+                {
+                    "promo_campaign_id": pick.promo_campaign_id,
+                    "promo_activity_id": pick.promo_activity_id,
+                    "promo_placement_kind": pick.promo_placement_kind,
+                }
+            )
 
     logger.info(
         "video_announce.popular_review selected=%s windows=%s",

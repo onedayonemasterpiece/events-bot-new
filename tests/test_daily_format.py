@@ -54,6 +54,20 @@ def test_format_event_daily_prefers_telegraph_for_vk_source_url() -> None:
     assert '<a href="https://telegra.ph/source">' in rendered
 
 
+def test_format_event_daily_promo_highlight_uses_subtle_marker() -> None:
+    event = make_event()
+
+    rendered = main.format_event_daily(event, promo_highlight=True)
+    inline = main.format_event_daily_inline(event, promo_highlight=True)
+
+    assert "<b>✨ " in rendered
+    assert "Event</b>" in rendered
+    assert inline.startswith("01.01 ✨ ")
+    assert "Event" in inline
+    assert "promo" not in rendered.casefold()
+    assert "promo" not in inline.casefold()
+
+
 def test_format_event_daily_handles_timezone_aware_added_at() -> None:
     event = make_event(
         added_at=datetime(2024, 1, 2, 12, tzinfo=timezone.utc),

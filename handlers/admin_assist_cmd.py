@@ -452,6 +452,17 @@ def _allowed_actions() -> dict[str, dict[str, Any]]:
             "args_schema": {},
             "examples": ["ежедневные анонсы", "управление daily", "daily"],
         },
+        "promo": {
+            "command": "/promo",
+            "risk": "mutating",
+            "desc": "Открыть промо-кампании, отчёт или завести тестовое промо 80 историй.",
+            "args_schema": {"args_text": {"type": "args_text", "required": False}},
+            "examples": [
+                "покажи промо",
+                "продвигай события фестиваля 80 историй о главном до 18 июля",
+                "отчёт по промо",
+            ],
+        },
         "fest_queue": {
             "command": "/fest_queue",
             "risk": "mutating",
@@ -939,6 +950,26 @@ def _heuristic_proposals(request_text: str) -> list[_ActionProposal] | None:
     )
     if is_popular_posts_stats:
         return [_ActionProposal(action_id="popular_posts", args={}, confidence=0.95)]
+
+    is_promo_intent = any(
+        phrase in t
+        for phrase in (
+            "промо",
+            "продвигай",
+            "продвинь",
+            "продвижение",
+            "добавь в промо",
+        )
+    )
+    if is_promo_intent:
+        args_text = ""
+        if "отчет" in t or "отчёт" in t:
+            args_text = "report"
+        elif "80" in t or "восемьдесят" in t:
+            args_text = "seed80"
+        else:
+            args_text = _trim_one_line(request_text, max_len=_ASSIST_MAX_ARGS_LEN)
+        return [_ActionProposal(action_id="promo", args={"args_text": args_text}, confidence=0.94)]
 
     event_id = _extract_first_int(t)
 

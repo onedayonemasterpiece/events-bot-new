@@ -3079,6 +3079,7 @@ async def build_daily_posts(
     now: datetime | None = None,
 ) -> list[tuple[str, types.InlineKeyboardMarkup | None]]:
     from models import Event, WeekendPage, MonthPage, Festival
+    from promo import resolve_surface_promo_event_ids
 
     def _is_sold_out_status(value: str | None) -> bool:
         text = (value or "").strip().casefold()
@@ -3091,6 +3092,11 @@ async def build_daily_posts(
     if now is None:
         now = datetime.now(tz)
     today = now.date()
+    promo_highlight_ids = await resolve_surface_promo_event_ids(
+        db,
+        surface="daily_highlight",
+        now_utc=now.astimezone(timezone.utc),
+    )
     yesterday_utc = recent_cutoff(tz, now)
     fest_map: dict[str, Festival] = {}
     recent_festival_entries: list[str] = []
@@ -3310,6 +3316,7 @@ async def build_daily_posts(
                 lines2.append(
                     format_event_daily_inline(
                         e,
+                        promo_highlight=e.id is not None and int(e.id) in promo_highlight_ids,
                         partner_creator_ids=partner_creator_ids,
                     )
                 )
@@ -3327,6 +3334,7 @@ async def build_daily_posts(
             lines2.append(
                 format_event_daily(
                     e,
+                    promo_highlight=e.id is not None and int(e.id) in promo_highlight_ids,
                     weekend_url=w_url,
                     festival=fest_map.get((e.festival or "").casefold()),
                     partner_creator_ids=partner_creator_ids,
@@ -3403,10 +3411,16 @@ async def build_daily_sections_vk(
     now: datetime | None = None,
 ) -> tuple[str, str]:
     from models import User
+    from promo import resolve_surface_promo_event_ids
 
     if now is None:
         now = datetime.now(tz)
     today = now.date()
+    promo_highlight_ids = await resolve_surface_promo_event_ids(
+        db,
+        surface="daily_highlight",
+        now_utc=now.astimezone(timezone.utc),
+    )
     yesterday_utc = recent_cutoff(tz, now)
     fest_map: dict[str, Festival] = {}
     async with db.get_session() as session:
@@ -3612,6 +3626,7 @@ async def build_daily_sections_vk(
         lines2.append(
             format_event_vk(
                 e,
+                promo_highlight=e.id is not None and int(e.id) in promo_highlight_ids,
                 weekend_url=w_url,
                 festival=fest_map.get((e.festival or "").casefold()),
                 partner_creator_ids=partner_creator_ids,
@@ -17406,6 +17421,16 @@ def create_app() -> web.Application:
     async def daily_wrapper(message: types.Message):
         await handle_daily(message, db, bot)
 
+    async def promo_wrapper(message: types.Message):
+        async with db.get_session() as session:
+            user = await session.get(User, message.from_user.id)
+            if not has_admin_access(user):
+                await bot.send_message(message.chat.id, "Not authorized")
+                return
+        from handlers.promo_cmd import handle_promo_command
+
+        await handle_promo_command(message, db, bot)
+
     async def images_wrapper(message: types.Message):
         await handle_images(message, db, bot)
 
@@ -17887,6 +17912,7 @@ def create_app() -> web.Application:
     dp.message.register(channels_wrapper, Command("channels"))
     dp.message.register(reg_daily_wrapper, Command("regdailychannels"))
     dp.message.register(daily_wrapper, Command("daily"))
+    dp.message.register(promo_wrapper, Command("promo"))
     dp.message.register(exhibitions_wrapper, Command("exhibitions"))
     dp.message.register(digest_wrapper, Command("digest"))
     dp.callback_query.register(

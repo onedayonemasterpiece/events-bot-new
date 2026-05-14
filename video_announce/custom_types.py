@@ -29,6 +29,9 @@ class RankedEvent:
     description: str | None = None
     poster_ocr_text: str | None = None
     poster_ocr_title: str | None = None
+    promo_campaign_id: int | None = None
+    promo_activity_id: int | None = None
+    promo_placement_kind: str | None = None
 
 
 @dataclass

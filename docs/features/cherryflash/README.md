@@ -81,6 +81,13 @@
   - if CherryFlash fails or leaves no local-day `ops_run` because SQLite reports `database or disk is full`, treat it as `INC-2026-05-05-cherryflash-disk-full`: collect Fly `/data` evidence, restore free space and SQLite write health first, verify `/healthz`, then perform the same-day compensating CherryFlash run and collect dataset/kernel/story evidence.
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;
+  - active `promo` campaigns can inject up to two eligible `video_general`
+    events into the `popular_review` candidate list before organic popularity
+    picks; this path keeps the same future-date and renderable-poster gates and
+    writes promo provenance to `videoannounce_item`;
+  - festival promo rotation considers only future events and orders candidates
+    by public `PUBLISHED_MAIN` exposure count, with a stable daily shuffle among
+    equally exposed rows;
   - CherryFlash selection is `future-start-only`: events whose `start date` is already before the current local day must not appear in the ribbon/date strip even if they still have a later `end_date`;
   - intro comes from the new `Мобильная лента` / `MobileFeed Intro` 3D block;
   - main 2D scene flow follows `kaggle/VideoAfisha/video_afisha.ipynb`;

@@ -275,6 +275,7 @@ async def _resolve_telegraph_map(
     db: Database,
     *,
     source_urls: list[str],
+    today: date | None = None,
 ) -> tuple[dict[str, _EventLinks], set[str]]:
     """Map post_url -> event links bundle (Telegraph URL + title + event id).
 
@@ -398,7 +399,7 @@ async def _resolve_telegraph_map(
             logger.debug("popular_posts: failed to fetch events for telegraph map", exc_info=True)
             return {}, set()
 
-        current_day = _local_today()
+        current_day = today or _local_today()
         active_id_to_ref: dict[int, _EventRef] = {}
         active_event_ids: set[int] = set()
         for ev in events:

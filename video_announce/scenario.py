@@ -2260,7 +2260,7 @@ class VideoAnnounceScenario:
             emoji = self._normalize_emoji(ev.emoji)
             date_label = self._format_event_schedule(ev, params)
             include_count = getattr(ev, "video_include_count", 0) or 0
-            promo_marker = " · 🔥PROMO" if (r and r.mandatory) or include_count > 0 else ""
+            promo_marker = " · ✨" if (r and r.promo_campaign_id) else ""
             score = f" · {r.score:.1f}" if r and r.score is not None else ""
             reason = f" · {html.escape(r.reason[:140])}" if r and r.reason else ""
             ranking_label = f"#{r.position}" if r else "—"
@@ -2651,6 +2651,9 @@ class VideoAnnounceScenario:
                 item.llm_reason = r.reason
                 item.is_mandatory = r.mandatory
                 item.include_count = getattr(r.event, "video_include_count", 0) or 0
+                item.promo_campaign_id = r.promo_campaign_id
+                item.promo_activity_id = r.promo_activity_id
+                item.promo_placement_kind = r.promo_placement_kind
                 about_text = normalize_about_with_fallback(
                     r.about,
                     ocr_text=r.poster_ocr_text,
@@ -2759,7 +2762,7 @@ class VideoAnnounceScenario:
             include_count = item.include_count or getattr(ev, "video_include_count", 0) or 0
             if include_count > 0:
                 pin = f" 📌{include_count}"
-            promo_marker = " 🔥PROMO" if item.is_mandatory or include_count > 0 else ""
+            promo_marker = " ✨" if item.promo_campaign_id else ""
             score = f" · {item.llm_score:.1f}" if item.llm_score is not None else ""
             reason = (
                 f" · {html.escape(item.llm_reason[:140])}"

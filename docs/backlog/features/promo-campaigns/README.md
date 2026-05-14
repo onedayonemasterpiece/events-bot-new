@@ -1,6 +1,6 @@
 # Promo Campaigns
 
-> Status: designed / not implemented
+> Status: design reference; MVP implemented in `docs/features/promo-campaigns/README.md`
 >
 > Scope: editorial promotion campaigns for specific future events or existing
 > festival event sets across video announcements, daily announcements, and

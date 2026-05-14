@@ -169,6 +169,19 @@ features:
       - handlers/admin_assist_cmd.py
       - main.py
       - main_part2.py
+  promo_campaigns:
+    status: mvp
+    docs: docs/features/promo-campaigns/README.md
+    design: docs/backlog/features/promo-campaigns/README.md
+    entrypoints:
+      - promo.py
+      - handlers/promo_cmd.py
+      - handlers/admin_assist_cmd.py
+      - video_announce/popular_review.py
+      - video_announce/selection.py
+      - video_announce/poller.py
+      - main.py
+      - main_part2.py
   telegram_monitoring:
     status: implemented
     docs: docs/features/telegram-monitoring/README.md

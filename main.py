@@ -2728,6 +2728,11 @@ HELP_COMMANDS = [
         "roles": {"superadmin"},
     },
     {
+        "usage": "/promo [report|seed80|add festival ...|add event ...|pause ID|start ID|archive ID]",
+        "desc": "Manage editorial promo campaigns and reports",
+        "roles": {"superadmin"},
+    },
+    {
         "usage": "/images",
         "desc": "Toggle uploading photos to Catbox",
         "roles": {"superadmin"},
@@ -19390,6 +19395,7 @@ def format_event_md(
 def format_event_vk(
     e: Event,
     highlight: bool = False,
+    promo_highlight: bool = False,
     weekend_url: str | None = None,
     festival: Festival | None = None,
     partner_creator_ids: Collection[int] | None = None,
@@ -19399,6 +19405,8 @@ def format_event_vk(
     prefix = ""
     if highlight:
         prefix += "\U0001f449 "
+    if promo_highlight:
+        prefix += "✨ "
     if is_recent(e):
         prefix += "\U0001f6a9 "
     title_text_raw, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
@@ -19537,6 +19545,7 @@ def format_event_vk(
 def format_event_daily(
     e: Event,
     highlight: bool = False,
+    promo_highlight: bool = False,
     weekend_url: str | None = None,
     festival: Festival | None = None,
     partner_creator_ids: Collection[int] | None = None,
@@ -19600,6 +19609,8 @@ def format_event_daily(
     prefix = ""
     if highlight:
         prefix += "\U0001f449 "
+    if promo_highlight:
+        prefix += "✨ "
     if is_recent(e):
         prefix += "\U0001f6a9 "
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
@@ -19704,6 +19715,7 @@ def format_event_daily(
 
 def format_event_daily_inline(
     e: Event,
+    promo_highlight: bool = False,
     partner_creator_ids: Collection[int] | None = None,
 ) -> str:
     """Return a compact single-line HTML representation for daily lists."""
@@ -19723,6 +19735,8 @@ def format_event_daily_inline(
             formatted_date = date_part
 
     markers: list[str] = []
+    if promo_highlight:
+        markers.append("✨")
     if is_recent(e):
         markers.append("\U0001f6a9")
     if e.is_free:

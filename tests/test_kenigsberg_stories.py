@@ -173,6 +173,60 @@ def test_admin_assist_routes_kenigsberg_bans_list_request(monkeypatch) -> None:
     ) == "/kenigsberg bans"
 
 
+def test_admin_assist_routes_promo_seed80_request(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin_assist_cmd,
+        "require_main_attr",
+        lambda name: "/vk_misses" if name == "VK_MISS_REVIEW_COMMAND" else None,
+    )
+
+    proposals = admin_assist_cmd._heuristic_proposals(
+        'продвигай события фестиваля "80 историй о главном" до 18 июля'
+    )
+
+    assert proposals is not None
+    assert proposals[0].action_id == "promo"
+    assert admin_assist_cmd._build_command_text(
+        proposals[0].action_id,
+        proposals[0].args,
+    ) == "/promo seed80"
+
+
+def test_admin_assist_routes_promo_report_request(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin_assist_cmd,
+        "require_main_attr",
+        lambda name: "/vk_misses" if name == "VK_MISS_REVIEW_COMMAND" else None,
+    )
+
+    proposals = admin_assist_cmd._heuristic_proposals("покажи отчёт по промо за вчера")
+
+    assert proposals is not None
+    assert proposals[0].action_id == "promo"
+    assert admin_assist_cmd._build_command_text(
+        proposals[0].action_id,
+        proposals[0].args,
+    ) == "/promo report"
+
+
+def test_admin_assist_routes_generic_festival_promo_request(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin_assist_cmd,
+        "require_main_attr",
+        lambda name: "/vk_misses" if name == "VK_MISS_REVIEW_COMMAND" else None,
+    )
+
+    request = "продвигай события фестиваля Кантата"
+    proposals = admin_assist_cmd._heuristic_proposals(request)
+
+    assert proposals is not None
+    assert proposals[0].action_id == "promo"
+    assert admin_assist_cmd._build_command_text(
+        proposals[0].action_id,
+        proposals[0].args,
+    ) == f"/promo {request}"
+
+
 def test_kenigsberg_command_canonicalizes_bans_list_args() -> None:
     assert kenigsberg_stories_cmd._canonicalize_ban_args("покажи список банов") == "bans"
 
