@@ -31,6 +31,12 @@ class PartnerTrack:
     intro_kicker: str
     intro_screen_top: str
     business_selector_setting_key: str
+    # Default selector used when the operator has not overridden the Setting
+    # row. Matched by ``telegram_business._selector_match`` against cached
+    # Business connections — accepts a ``@username`` form and is compared
+    # case-insensitively. Operator can still override at runtime by writing the
+    # corresponding Setting row.
+    default_business_selector: str = ""
 
 
 PARTNER_ECO_NATURE = PartnerTrack(
@@ -45,6 +51,7 @@ PARTNER_ECO_NATURE = PartnerTrack(
     intro_kicker="ПРИРОДА И ЭКОЛОГИЯ",
     intro_screen_top="природа и экология",
     business_selector_setting_key="partner_track_eco_business_selector",
+    default_business_selector="@yasonneolga",
 )
 
 
@@ -60,6 +67,7 @@ PARTNER_REGION_EAST = PartnerTrack(
     intro_kicker="ВОСТОК\nКАЛИНИНГРАДСКОЙ\nОБЛАСТИ",
     intro_screen_top="восток калининградской области",
     business_selector_setting_key="partner_track_east_business_selector",
+    default_business_selector="@natakkaz",
 )
 
 

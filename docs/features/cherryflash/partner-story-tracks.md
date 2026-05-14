@@ -380,15 +380,13 @@ source_audit:
 - [ ] Parallel CherryFlash partner runs cannot detach or overwrite each other's Kaggle session datasets, kernels, or story secrets. Mitigated by serialization: the existing `has_rendering()` guard serializes any RENDERING session across the bot, so partner tracks cannot run concurrently with each other or with base CherryFlash. Full per-run kernel isolation (separate kernel slug or per-run kernel copy) is still deferred.
 - [x] Successful partner runs publish to Telegram Business Stories with `post_to_chat_page=true`. Inherited from the existing Bot API `postStory` call in `kaggle/CrumpleVideo/story_publish.py`.
 
-### Operator setup required before first run
+### What has to happen before first run
 
-For each partner track, the operator must:
+Most of the wiring is done in code — each `PartnerTrack` carries a `default_business_selector` (`@yasonneolga` for eco, `@natakkaz` for east) that is used automatically when the operator has not overridden the corresponding `Setting` row. The pipeline runs `load_business_story_targets(selector_raw=selector)` as a preflight and only proceeds when at least one cached Business connection matches.
 
-1. Trigger `/check_business` on the partner account so the bot caches the encrypted Business connection. The cache row is keyed by `connection_hash` (also stores `user_hash` and `username_hash`).
-2. Save the partner selector to the corresponding setting row using the same value form accepted by `telegram_business.load_business_story_targets`. A `@username` selector is accepted and matched against the lowercased cached username. Example payloads (operator-only, not committed):
-   - `partner_track_eco_business_selector` → `@<eco_partner_handle>`
-   - `partner_track_east_business_selector` → `@<east_partner_handle>`
-3. Launch the partner track from `/v`. If the setting is missing, the bot replies with a clear setup instruction and aborts before render.
+The single thing the bot cannot do for itself is the partner's one-time consent on the Telegram side: the partner must add the bot to **Telegram → Settings → Business → Chatbots** and grant story-publishing rights. As soon as that happens, Telegram pushes a `business_connection` update, the bot caches the encrypted connection, and the partner track works without any further operator action.
+
+Optional operator override: writing the `Setting` row `partner_track_eco_business_selector` or `partner_track_east_business_selector` replaces the in-code default — useful for testing against a different Business account without redeploying.
 
 ### Delete-bad-publication contract
 

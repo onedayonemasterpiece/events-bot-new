@@ -39,7 +39,10 @@ from main import (
     set_setting_value,
 )
 from main import _delete_business_story  # type: ignore  # noqa: E402
-from telegram_business import load_cached_business_connections
+from telegram_business import (
+    load_business_story_targets,
+    load_cached_business_connections,
+)
 from net import http_call
 from .about import normalize_about_with_fallback
 from .finalize import prepare_final_texts
@@ -1419,7 +1422,10 @@ class VideoAnnounceScenario:
         raw = await get_setting_value(
             self.db, partner_track.business_selector_setting_key
         )
-        return (raw or "").strip()
+        value = (raw or "").strip()
+        if value:
+            return value
+        return (partner_track.default_business_selector or "").strip()
 
     def _partner_track_selection_params(
         self, partner_track: PartnerTrack, *, business_selector: str
@@ -1662,11 +1668,41 @@ class VideoAnnounceScenario:
             await self.bot.send_message(
                 self.chat_id,
                 (
-                    f"Партнёрский трек «{partner_track.display_name}» не настроен: "
-                    f"в settings отсутствует ключ "
-                    f"`{partner_track.business_selector_setting_key}` "
-                    "(используйте /check_business чтобы выбрать партнёрский Business-target "
-                    "и сохранить selector через /settings)."
+                    f"Партнёрский трек «{partner_track.display_name}» не имеет business "
+                    "selector ни в коде, ни в settings — нечем адресовать публикацию."
+                ),
+            )
+            return None
+        # Pre-flight: confirm the selector resolves to a cached Business
+        # connection. If the partner has not yet added the bot to their
+        # Telegram Business, we cannot publish — only the partner human can
+        # complete that step from their Telegram client.
+        try:
+            resolved_targets = await asyncio.to_thread(
+                load_business_story_targets, selector_raw=business_selector
+            )
+        except Exception as exc:
+            logger.exception(
+                "video_announce.partner_tracks: business target preflight crashed track=%s",
+                partner_track.track_id,
+            )
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}»: не удалось "
+                    f"проверить Business-кэш ({type(exc).__name__}: {exc})"
+                ),
+            )
+            return None
+        if not resolved_targets:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}»: в Business-кэше "
+                    f"нет подключения с подходящим selector ({business_selector}). "
+                    "Партнёру нужно один раз добавить бота в Telegram → Настройки → "
+                    "Business → Чат-боты и включить право публиковать сторис; после "
+                    "этого бот сам поймает business_connection и трек заработает."
                 ),
             )
             return None

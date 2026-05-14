@@ -73,6 +73,12 @@ def test_partner_tracks_have_intro_kicker_and_screen_top():
         assert track.business_selector_setting_key.startswith("partner_track_")
 
 
+def test_partner_tracks_carry_default_business_selector():
+    # Ensures the pipeline never has to fall back to operator-only setup.
+    for track in PARTNER_TRACKS:
+        assert track.default_business_selector.startswith("@"), track.track_id
+
+
 # ---------------------------------------------------------------------------
 # kaliningrad_region_east — deterministic geo filter
 # ---------------------------------------------------------------------------
