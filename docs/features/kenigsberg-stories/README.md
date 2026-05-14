@@ -344,7 +344,7 @@ Current implementation state:
 
 Manual `/kenigsberg` came first during MVP testing.
 
-Scheduled production is enabled after the 2026-05-13 approval. The daily slot is `20:10 Europe/Kaliningrad` (`18:10 UTC`): the job is `kenigsberg_story_daily`, publishes a production story to `@mostvkenig`, and is intentionally not behind `KENIGSBERG_STORIES_*_ENABLED` feature flags. Startup catch-up runs the same production launch if the app restarts after today's slot and no scheduled production Kenigsberg handoff exists for the local day.
+Scheduled production is enabled after the 2026-05-13 approval. The daily slot is `19:30 Europe/Kaliningrad` (`17:30 UTC`): the job is `kenigsberg_story_daily`, publishes a production story to `@mostvkenig`, and is intentionally not behind `KENIGSBERG_STORIES_*_ENABLED` feature flags. Startup catch-up runs the same production launch if the app restarts after today's slot and no scheduled production Kenigsberg handoff exists for the local day. The slot was moved from `20:10` to `19:30` on 2026-05-14 to clear a daily double-peak with `guide_excursions_full` (`20:10 local`) and to give the partner-track east slot (`18:30 local`) a clean 60-minute runway before render.
 
 The time slot should avoid other heavy operations:
 

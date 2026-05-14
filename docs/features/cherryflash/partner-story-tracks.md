@@ -396,6 +396,28 @@ Optional operator override: writing the `Setting` row `partner_track_eco_busines
 
 `partner_eco_nature_001` renders intro with kicker `ПРИРОДА И ЭКОЛОГИЯ` (2D phone) / `природа и экология` (3D phone screen-top). `partner_region_east_001` uses `ВОСТОК\nКАЛИНИНГРАДСКОЙ\nОБЛАСТИ` / `восток калининградской области`. Plumbed through `selection_params["variant_overrides"]` → `selection_manifest.variant.{kicker,screen_top}` → `scripts/render_mobilefeed_intro_still.py::_default_variants`.
 
+### Scheduling
+
+Both partner tracks publish daily at fixed `Europe/Kaliningrad` local slots picked from a log-based analysis of existing heavy jobs:
+
+| Track | Local slot | Why this slot |
+|---|---|---|
+| `partner_eco_nature_001` | `12:30` | After base CherryFlash `10:15` finishes (≈60 min runway on CPU), before `source_parsing_day` `14:15`. ~100 min clean window. |
+| `partner_region_east_001` | `18:30` | After `video_tomorrow` `16:45` finishes (≈60 min runway on CPU), before the next heavy peak. ~100 min clean window. |
+
+To clear a daily double-peak at `20:10` (`guide_excursions_full` + `kenigsberg_story_daily`), the Kenigsberg slot was moved from `20:10` to `19:30 local` on 2026-05-14.
+
+Cron jobs `video_partner_track_eco` / `video_partner_track_east` invoke `_run_scheduled_partner_track`. A per-track watchdog (`video_partner_track_<eco|east>_watchdog`) runs every 10 minutes and re-launches the partner pipeline if today's slot was missed (no confirmed Kaggle handoff for today's `target_date` under the partner `profile_key`). Retries stop at hard local deadline `22:00` so nothing publishes overnight. Anti-repeat (`POPULAR_REVIEW_ANTI_REPEAT_DAYS` scoped by `profile_key`) keeps re-runs idempotent.
+
+The schedule is intentionally **not gated by feature flags** — the user explicitly asked to remove `ENABLE_V_*_SCHEDULED` flags as failure points. Only per-slot times can be moved without redeploy:
+
+- `V_PARTNER_TRACK_ECO_TIME_LOCAL` (default `12:30`)
+- `V_PARTNER_TRACK_EAST_TIME_LOCAL` (default `18:30`)
+
+### Telegram-session isolation
+
+Partner-track publication does not load any Telethon session. The kernel-side helper publishes only through Bot API `postStory(business_connection_id, ...)` against the encrypted Business target, so partner tracks cannot contend with the base CherryFlash channel-chain or Kenigsberg primary upload for the shared `TELEGRAM_AUTH_BUNDLE_S22`. A second Telegram session is not required for the eco/east tracks; failures of one partner connection (e.g. `@natakkaz` has not granted story rights yet) cannot block the other partner track because per-session `selection_params["story_business_targets"]` is the only selector consulted at publish time.
+
 ### Leading-emoji title fix
 
 Event titles starting with an emoji (e.g. `🎸 Концерт …`) used to render as a `.notdef` box because the CherryFlash title font (Bebas Neue) has no emoji coverage. `scripts/render_cherryflash_full.py::_strip_leading_emoji` removes the leading emoji/pictograph run + trailing whitespace before `RenderScene.title` is built; inline emoji inside the title are preserved. A real emoji-fallback rasterizer can replace the strip later without changing the title contract.

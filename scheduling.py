@@ -320,6 +320,105 @@ async def _run_scheduled_popular_review(
     )
 
 
+async def _run_scheduled_partner_track(
+    db,
+    bot,
+    partner_track_id: str,
+    *,
+    startup_catchup: bool = False,
+) -> None:
+    """Scheduled launch for a single CherryFlash partner track.
+
+    Mirrors `_run_scheduled_popular_review` but parameterised on the
+    partner track. Runs through the same `VideoAnnounceScenario` pipeline
+    so partner anti-repeat (`profile_key=popular_review_<track>`) and the
+    parallel-safety guard (`has_rendering()`) apply automatically.
+    """
+    from video_announce.scenario import VideoAnnounceScenario
+    from video_announce.partner_tracks import get_partner_track
+
+    partner_track = get_partner_track(partner_track_id)
+    if partner_track is None:
+        logging.warning(
+            "SCHED partner_track unknown track_id=%s — skipping", partner_track_id
+        )
+        return
+
+    ops_details: dict[str, Any] = {
+        "profile_key": partner_track.profile_key,
+        "partner_track_id": partner_track.track_id,
+        "startup_catchup": bool(startup_catchup),
+    }
+    ops_run_id = await start_ops_run(
+        db,
+        kind=f"video_partner_{partner_track.callback_action}",
+        trigger="scheduled",
+        operator_id=0,
+        details=ops_details,
+    )
+    target_chat_id = await resolve_superadmin_chat_id(db)
+    if not target_chat_id or bot is None:
+        logging.warning(
+            "SCHED skipping video_partner_%s: missing target_chat_id=%s or bot=%s",
+            partner_track.callback_action,
+            target_chat_id,
+            bot is not None,
+        )
+        ops_details["skip_reason"] = "missing_target_chat_or_bot"
+        await finish_ops_run(
+            db,
+            run_id=ops_run_id,
+            status="skipped",
+            details=ops_details,
+        )
+        return
+
+    try:
+        scenario = VideoAnnounceScenario(
+            db,
+            bot,
+            chat_id=int(target_chat_id),
+            user_id=int(target_chat_id),
+        )
+        session_id = await scenario.run_partner_track_pipeline(
+            partner_track, wait_for_handoff=True
+        )
+        if session_id is None:
+            reason = (
+                f"partner track {partner_track.track_id} did not create a session"
+            )
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
+        ops_details["session_id"] = int(session_id)
+        launch_state = await _video_session_launch_state(db, int(session_id))
+        ops_details.update(launch_state)
+        if not _video_session_has_remote_handoff(launch_state):
+            reason = (
+                f"partner track {partner_track.track_id} did not reach confirmed "
+                f"Kaggle handoff: status={launch_state.get('session_status') or '-'} "
+                f"dataset={launch_state.get('kaggle_dataset') or '-'} "
+                f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
+            )
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
+    except Exception as exc:
+        ops_details["error"] = str(exc) or type(exc).__name__
+        await finish_ops_run(
+            db,
+            run_id=ops_run_id,
+            status="failed",
+            details=ops_details,
+        )
+        raise
+
+    await finish_ops_run(
+        db,
+        run_id=ops_run_id,
+        status="success",
+        details=ops_details,
+    )
+
+
 async def _run_scheduled_kenigsberg_story(
     db,
     bot,
@@ -712,6 +811,59 @@ async def _popular_review_session_exists_today(
     return False
 
 
+async def _partner_track_session_exists_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    target_date: str,
+    profile_key: str,
+) -> bool:
+    """Return True if a partner-track session for `target_date` already reached
+    confirmed Kaggle handoff (so the watchdog must not re-launch it)."""
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = ?
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (
+                profile_key,
+                _utc_sql_text(day_start_utc),
+                _utc_sql_text(day_end_utc),
+            ),
+        )
+        rows = await cur.fetchall()
+    for status, dataset, kernel_ref, selection_params_raw in rows:
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() != target_date:
+            continue
+        if _video_session_has_remote_handoff(
+            {
+                "session_status": status,
+                "kaggle_dataset": dataset,
+                "kaggle_kernel_ref": kernel_ref,
+            }
+        ):
+            return True
+    return False
+
+
 async def _kenigsberg_story_session_exists_today(
     db: Any,
     *,
@@ -871,12 +1023,12 @@ async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
 
 async def _maybe_catch_up_kenigsberg_story_on_startup(db: Any, bot: Any) -> bool:
     tz_name = "Europe/Kaliningrad"
-    time_raw = "20:10"
+    time_raw = "19:30"
     tz = _safe_zoneinfo(tz_name, label="KENIGSBERG_STORY_TZ")
     hour_local, minute_local = _parse_hhmm(
         time_raw,
-        default_hour=20,
-        default_minute=10,
+        default_hour=19,
+        default_minute=30,
         label="KENIGSBERG_STORY_TIME_LOCAL",
     )
     now_utc = datetime.now(timezone.utc)
@@ -972,6 +1124,109 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
         profile_key=normalized_profile_key,
         test_mode=video_test_mode,
         startup_catchup=False,
+    )
+    return True
+
+
+# Partner-track scheduling: defaults are intentionally hard-coded — the user
+# explicitly asked NOT to gate this behind feature flags so the schedule cannot
+# silently regress to "off". Per-track times can still be moved via env override
+# without redeploy (V_PARTNER_TRACK_<NAME>_TIME_LOCAL).
+PARTNER_TRACK_TZ = "Europe/Kaliningrad"
+PARTNER_TRACK_DEFAULT_TIMES: dict[str, str] = {
+    "partner_eco_nature_001": "12:30",
+    "partner_region_east_001": "18:30",
+}
+# Hard deadline (local time): after this the watchdog stops retrying for today
+# and notifies the admin chat. Picked at 22:00 to leave a full hour after the
+# nominal east slot for CPU-fallback renders, while not bleeding into the next
+# day's slot.
+PARTNER_TRACK_RETRY_DEADLINE_LOCAL = "22:00"
+PARTNER_TRACK_WATCHDOG_GRACE_SECONDS = 60
+
+
+def _partner_track_time_local(partner_track_id: str) -> str:
+    env_key = {
+        "partner_eco_nature_001": "V_PARTNER_TRACK_ECO_TIME_LOCAL",
+        "partner_region_east_001": "V_PARTNER_TRACK_EAST_TIME_LOCAL",
+    }.get(partner_track_id)
+    if env_key:
+        raw = (os.getenv(env_key) or "").strip()
+        if raw:
+            return raw
+    return PARTNER_TRACK_DEFAULT_TIMES.get(partner_track_id, "12:00")
+
+
+async def maybe_dispatch_partner_track_watchdog(
+    db: Any, bot: Any, partner_track_id: str
+) -> bool:
+    """Re-dispatch a missed partner-track slot when render lane frees up.
+
+    Returns True iff a launch was actually attempted. Stops retrying for the
+    day after ``PARTNER_TRACK_RETRY_DEADLINE_LOCAL`` to avoid posting at
+    unreasonable hours. Anti-repeat by ``profile_key`` keeps re-runs idempotent.
+    """
+    try:
+        from video_announce.partner_tracks import get_partner_track
+    except Exception:
+        logging.exception(
+            "SCHED partner_track watchdog: import failed track=%s", partner_track_id
+        )
+        return False
+    partner_track = get_partner_track(partner_track_id)
+    if partner_track is None:
+        return False
+
+    tz = _safe_zoneinfo(PARTNER_TRACK_TZ, label="PARTNER_TRACK_TZ")
+    time_raw = _partner_track_time_local(partner_track_id)
+    hour_local, minute_local = _parse_hhmm(
+        time_raw,
+        default_hour=12,
+        default_minute=0,
+        label=f"V_PARTNER_TRACK_{partner_track.callback_action.upper()}_TIME_LOCAL",
+    )
+    deadline_hour, deadline_minute = _parse_hhmm(
+        PARTNER_TRACK_RETRY_DEADLINE_LOCAL,
+        default_hour=22,
+        default_minute=0,
+        label="PARTNER_TRACK_RETRY_DEADLINE_LOCAL",
+    )
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local, minute=minute_local, second=0, microsecond=0
+    )
+    deadline_local = now_local.replace(
+        hour=deadline_hour, minute=deadline_minute, second=0, microsecond=0
+    )
+    if now_local <= scheduled_local + timedelta(
+        seconds=PARTNER_TRACK_WATCHDOG_GRACE_SECONDS
+    ):
+        return False  # cron slot has not fired yet (or grace not elapsed)
+    if now_local > deadline_local:
+        return False  # missed slot for today; do not retry overnight
+
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    target_date = now_local.date().isoformat()
+    if await _partner_track_session_exists_today(
+        db,
+        day_start_utc=day_start_local.astimezone(timezone.utc),
+        day_end_utc=day_end_local.astimezone(timezone.utc),
+        target_date=target_date,
+        profile_key=partner_track.profile_key,
+    ):
+        return False
+
+    logging.error(
+        "SCHED partner_track watchdog dispatching missing slot track=%s "
+        "scheduled_local=%s now_local=%s",
+        partner_track.track_id,
+        scheduled_local.isoformat(),
+        now_local.isoformat(),
+    )
+    await _run_scheduled_partner_track(
+        db, bot, partner_track.track_id, startup_catchup=False
     )
     return True
 
@@ -2406,6 +2661,82 @@ def startup(
             "ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1",
         )
 
+    # CherryFlash partner tracks (eco / east). Intentionally always on:
+    # the user asked NOT to gate this behind a feature flag. Times still
+    # overridable via env without redeploy.
+    for partner_track_id, callback_action in (
+        ("partner_eco_nature_001", "eco"),
+        ("partner_region_east_001", "east"),
+    ):
+        track_time_raw = _partner_track_time_local(partner_track_id)
+        track_hour, track_minute = _cron_from_local(
+            track_time_raw,
+            PARTNER_TRACK_TZ,
+            default_hour="12" if callback_action == "eco" else "18",
+            default_minute="30",
+            label=f"V_PARTNER_TRACK_{callback_action.upper()}_TIME_LOCAL",
+        )
+        cron_job_id = f"video_partner_track_{callback_action}"
+
+        def _make_partner_cron(track_id: str):
+            async def _runner(
+                db_obj,
+                bot_obj,
+                *,
+                run_id: str | None = None,
+            ) -> None:
+                await _run_scheduled_partner_track(db_obj, bot_obj, track_id)
+
+            return _runner
+
+        def _make_partner_watchdog(track_id: str):
+            async def _watchdog(
+                db_obj,
+                bot_obj,
+                *,
+                run_id: str | None = None,
+            ) -> None:
+                await maybe_dispatch_partner_track_watchdog(
+                    db_obj, bot_obj, track_id
+                )
+
+            return _watchdog
+
+        _register_job(
+            cron_job_id,
+            _job_wrapper(
+                cron_job_id,
+                _make_partner_cron(partner_track_id),
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id=cron_job_id,
+            hour=track_hour,
+            minute=track_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
+        )
+        watchdog_job_id = f"{cron_job_id}_watchdog"
+        _register_job(
+            watchdog_job_id,
+            _job_wrapper(
+                watchdog_job_id,
+                _make_partner_watchdog(partner_track_id),
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id=watchdog_job_id,
+            minutes=10,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+        )
+
     if is_prod:
         async def kenigsberg_story_scheduler(
             db_obj,
@@ -2419,10 +2750,10 @@ def startup(
             )
 
         kenigsberg_hour, kenigsberg_minute = _cron_from_local(
-            "20:10",
+            "19:30",
             "Europe/Kaliningrad",
-            default_hour="18",
-            default_minute="10",
+            default_hour="17",
+            default_minute="30",
             label="KENIGSBERG_STORY_TIME_LOCAL",
         )
         _register_job(
