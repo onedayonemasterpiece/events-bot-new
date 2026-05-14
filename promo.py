@@ -100,6 +100,12 @@ def _event_is_promo_eligible(ev: Event, *, today: date, campaign: PromoCampaign)
     return True
 
 
+def _event_has_stored_poster(ev: Event) -> bool:
+    if int(getattr(ev, "photo_count", 0) or 0) > 0:
+        return True
+    return any(str(url or "").strip() for url in (getattr(ev, "photo_urls", None) or []))
+
+
 def _stable_shuffle_key(*parts: object) -> str:
     text = "|".join(str(part) for part in parts)
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
@@ -544,7 +550,13 @@ async def resolve_video_promo_candidates(
             campaign=campaign,
             today=today,
         )
-        events = [ev for ev in events if ev.id is not None and int(ev.id) not in used_event_ids]
+        events = [
+            ev
+            for ev in events
+            if ev.id is not None
+            and int(ev.id) not in used_event_ids
+            and _event_has_stored_poster(ev)
+        ]
         if not events:
             continue
         stats = await _load_public_exposure_stats(

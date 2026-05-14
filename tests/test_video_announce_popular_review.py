@@ -481,9 +481,23 @@ async def test_popular_review_seeded_promo_uses_only_future_festival_events(tmp_
             photo_urls=["https://example.com/future-two.jpg"],
             photo_count=1,
         )
-        session.add_all([past, future_one, future_two])
+        future_without_poster = Event(
+            title="Future 80 Stories Without Poster",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            festival="80 историй о главном",
+            source_text="source",
+            date="2026-06-03",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=[],
+            photo_count=0,
+        )
+        session.add_all([past, future_one, future_two, future_without_poster])
         await session.commit()
-        for event in (past, future_one, future_two):
+        for event in (past, future_one, future_two, future_without_poster):
             await session.refresh(event)
 
     selection = await build_popular_review_selection(
@@ -496,6 +510,7 @@ async def test_popular_review_seeded_promo_uses_only_future_festival_events(tmp_
     )
 
     assert int(past.id) not in selection.event_ids
+    assert int(future_without_poster.id) not in selection.event_ids
     assert set(selection.event_ids) == {int(future_one.id), int(future_two.id)}
     assert all(row.mandatory for row in selection.ranked)
     assert all(row.promo_campaign_id for row in selection.ranked)
