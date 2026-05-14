@@ -501,7 +501,10 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
 def _business_modes() -> set[str]:
     raw = (_get_env_value("VIDEO_ANNOUNCE_STORY_BUSINESS_MODES") or "").strip()
     if not raw:
-        raw = "popular_review,cherryflash_libsvtav1,kenigsberg_story"
+        raw = (
+            "popular_review,popular_review_eco,popular_review_east,"
+            "cherryflash_libsvtav1,kenigsberg_story"
+        )
     return {item.strip().casefold() for item in raw.split(",") if item.strip()}
 
 

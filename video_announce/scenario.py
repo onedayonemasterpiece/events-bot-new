@@ -1434,8 +1434,13 @@ class VideoAnnounceScenario:
         # Partner tracks publish only to the encrypted Business target — no
         # channel-chain fanout. We still go through the existing
         # `story_business_targets` resolution path (selector below).
+        # `mode` keeps the base `popular_review` value because
+        # `_business_targets_allowed_for_mode` in `video_announce/story_publish.py`
+        # uses this string to gate Business-target resolution. Partner-track
+        # identity travels separately via `partner_track_id` /
+        # `partner_profile_key`.
         params: dict[str, Any] = {
-            "mode": partner_track.profile_key,
+            "mode": POPULAR_REVIEW_PROFILE,
             "target_date": today.isoformat(),
             "primary_window_days": 0,
             "fallback_window_days": 0,
