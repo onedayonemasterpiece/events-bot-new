@@ -499,3 +499,123 @@ async def test_business_target_missing_secret_blocks_preflight(
     assert report["required_ok"] is False
     assert report["targets"][0]["ok"] is False
     assert "business connection secret is missing" in report["targets"][0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_story_publish_falls_back_to_secondary_peer_when_channel_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers={"peer:@mostvkenig"},
+        story_ids={
+            "peer:me": 500,
+            "peer:@loving_guide39": 501,
+            "peer:@jane_tour39": 502,
+        },
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {
+                    "peer": "@mostvkenig",
+                    "mode": "upload",
+                    "blocking": True,
+                    "required": True,
+                    "fallback_peer": "me",
+                },
+                {"peer": "@loving_guide39", "mode": "repost_previous"},
+                {"peer": "@jane_tour39", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["fanout_ok"] is True
+    primary = report["targets"][0]
+    assert primary["ok"] is True
+    assert primary["fallback_used"] is True
+    assert primary["primary_peer"] == "@mostvkenig"
+    assert primary["effective_peer"] == "me"
+    assert "BOOSTS_REQUIRED" in primary["primary_error"]
+    assert [item["effective_peer"] for item in report["targets"]] == [
+        "me",
+        "@loving_guide39",
+        "@jane_tour39",
+    ]
+    assert [item.get("story_id") for item in report["targets"]] == [500, 501, 502]
+    # downstream reposts forward from the effective (fallback) story
+    repost_request = client.sent_requests[1]
+    assert repost_request["fwd_from_id"] == "peer:me"
+    assert repost_request["fwd_from_story"] == 500
+
+
+@pytest.mark.asyncio
+async def test_story_publish_uses_primary_when_channel_publish_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers=set(),
+        story_ids={
+            "peer:@mostvkenig": 700,
+            "peer:@loving_guide39": 701,
+        },
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {
+                    "peer": "@mostvkenig",
+                    "mode": "upload",
+                    "blocking": True,
+                    "required": True,
+                    "fallback_peer": "me",
+                },
+                {"peer": "@loving_guide39", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    primary = report["targets"][0]
+    assert primary["effective_peer"] == "@mostvkenig"
+    assert primary.get("fallback_used") is not True
+    assert "primary_error" not in primary
+    repost_request = client.sent_requests[1]
+    assert repost_request["fwd_from_id"] == "peer:@mostvkenig"
+    assert repost_request["fwd_from_story"] == 700

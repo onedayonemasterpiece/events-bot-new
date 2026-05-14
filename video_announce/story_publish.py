@@ -40,6 +40,7 @@ class StoryTarget:
     transport: str = "telethon"
     business_connection_hash: str = ""
     user_hash: str = ""
+    fallback_peer: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -58,6 +59,8 @@ class StoryTarget:
             payload["business_connection_hash"] = self.business_connection_hash
         if self.user_hash:
             payload["user_hash"] = self.user_hash
+        if self.fallback_peer:
+            payload["fallback_peer"] = self.fallback_peer
         return payload
 
 
@@ -367,6 +370,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
     for idx, item in enumerate(payload):
         blocking: bool | None = None
         required = False
+        fallback_peer = ""
         if isinstance(item, str):
             peer = _normalize_peer(item)
             label = peer or f"extra-{idx + 1}"
@@ -393,6 +397,15 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 required = raw_required
             elif raw_required is not None:
                 raise RuntimeError(f"{env_key}[{idx}].required must be bool")
+            raw_fallback = item.get("fallback_peer")
+            if raw_fallback:
+                fallback_peer = _normalize_peer(str(raw_fallback))
+                if not fallback_peer:
+                    raise RuntimeError(f"{env_key}[{idx}].fallback_peer is invalid")
+                if mode != "upload":
+                    raise RuntimeError(
+                        f"{env_key}[{idx}].fallback_peer requires mode=upload"
+                    )
         else:
             raise RuntimeError(f"{env_key} items must be strings or objects")
         if not peer:
@@ -405,6 +418,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 mode=mode,
                 blocking=blocking,
                 required=required,
+                fallback_peer=fallback_peer,
             )
         )
     return targets
@@ -430,6 +444,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
     for idx, item in enumerate(payload):
         blocking: bool | None = None
         required = False
+        fallback_peer = ""
         if isinstance(item, str):
             peer = _normalize_peer(item)
             label = peer or f"override-{idx + 1}"
@@ -456,6 +471,15 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 required = raw_required
             elif raw_required is not None:
                 raise RuntimeError(f"{env_key}[{idx}].required must be bool")
+            raw_fallback = item.get("fallback_peer")
+            if raw_fallback:
+                fallback_peer = _normalize_peer(str(raw_fallback))
+                if not fallback_peer:
+                    raise RuntimeError(f"{env_key}[{idx}].fallback_peer is invalid")
+                if mode != "upload":
+                    raise RuntimeError(
+                        f"{env_key}[{idx}].fallback_peer requires mode=upload"
+                    )
         else:
             raise RuntimeError(f"{env_key}[{idx}] items must be strings or objects")
         if not peer:
@@ -468,6 +492,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 mode=mode,
                 blocking=blocking,
                 required=required,
+                fallback_peer=fallback_peer,
             )
         )
     return targets

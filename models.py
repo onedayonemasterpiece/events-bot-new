@@ -591,6 +591,12 @@ class VideoAnnounceSession(SQLModel, table=True):
     kaggle_kernel_ref: Optional[str] = None
     error: Optional[str] = None
     video_url: Optional[str] = None
+    partner_track_id: Optional[str] = None
+    partner_story_id: Optional[str] = None
+    partner_story_connection_hash: Optional[str] = None
+    partner_story_deleted_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
 
 
 class VideoAnnounceItemStatus(str, Enum):

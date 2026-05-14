@@ -369,8 +369,8 @@ Production:
   - `kaggle/CrumpleVideo/story_publish.py` is bundled as `kaggle_common/story_publish.py`;
   - `story_publish.json`, `story_publish.enc`, and `story_publish.key` are written into the same `kenigsberg-session-*` dataset;
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
-- required production story target is the configured Telethon story account itself (`peer=me` in `story_publish.json`);
-- `@mostvkenig` fanout is attempted as best-effort `repost_previous`: Telegram may reject channel story publishing with `BOOSTS_REQUIRED` even when the user account is an admin, so it must not block render/publish;
+- the required production story target is `@mostvkenig` with `fallback_peer=me`: the shared Kaggle story helper first attempts to publish the story as the channel `@mostvkenig` (so reposts show the channel as the author) and, if that attempt raises (e.g. Telegram returns `BOOSTS_REQUIRED` because channel-native story rights are not yet available), the helper transparently retries the same upload against `peer=me`. Either outcome counts as a successful blocking/required publish, and the resulting story id is what downstream `repost_previous` targets forward from;
+- after the primary story is live, the Kaggle helper reposts it to `@loving_guide39` and `@jane_tour39` as best-effort `repost_previous` targets with `600` second spacing (matching the CherryFlash fanout cadence); failures there do not block render/publish;
 - Kenigsberg must not use the shared Business story allowlist from video announcements. This is a separate history-channel product, not a partner video-announcement fanout; `story_business_targets` is forced to an empty list in code.
 - keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
 - never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.
@@ -380,7 +380,7 @@ Readiness check on 2026-05-12:
 - production webhook allowed updates include `business_connection`, `business_message`, and `edited_business_message`;
 - `VIDEO_ANNOUNCE_STORY_ENABLED=1` is present in production and Kenigsberg story publishing is active by code path;
 - `@mostvkenig` is not required in the local `channel` table for the default story override because the story helper resolves the explicit peer string. If a future path uses `main_chat_id` DB resolution instead, add the channel row first.
-- 2026-05-13 production catch-up showed direct `@mostvkenig` Telethon story preflight returning `BOOSTS_REQUIRED`. The next fix keeps the story on the configured Telethon account as the required target and treats `@mostvkenig` repost as best-effort until channel-native story rights are available.
+- 2026-05-13 production catch-up showed direct `@mostvkenig` Telethon story preflight returning `BOOSTS_REQUIRED`. As of 2026-05-14 the publish chain still tries the channel first (so reposts attribute to `@mostvkenig` when channel-native stories are available) but transparently falls back to `peer=me` on failure via the shared `fallback_peer` contract; downstream forwards to `@loving_guide39` / `@jane_tour39` follow whichever peer ended up hosting the primary story.
 
 Production reset on approval:
 

@@ -38,6 +38,8 @@ from main import (
     get_setting_value,
     set_setting_value,
 )
+from main import _delete_business_story  # type: ignore  # noqa: E402
+from telegram_business import load_cached_business_connections
 from net import http_call
 from .about import normalize_about_with_fallback
 from .finalize import prepare_final_texts
@@ -57,6 +59,17 @@ from .popular_review import (
     POPULAR_REVIEW_PROFILE,
     POPULAR_REVIEW_TARGET_USERNAME,
     build_popular_review_selection,
+)
+from .partner_tracks import (
+    PartnerTrack,
+    PARTNER_TRACKS,
+    get_partner_track,
+    get_partner_track_by_action,
+)
+from .partner_filters import (
+    classify_event_eco_prirodnaya,
+    classify_event_kaliningrad_region_east,
+    make_eco_gemma_llm_call,
 )
 from .story_publish import (
     STORY_PUBLISH_CIPHER_FILENAME,
@@ -1016,6 +1029,23 @@ class VideoAnnounceScenario:
                         ),
                     ]
                 )
+            for track in PARTNER_TRACKS:
+                keyboard.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=f"{track.button_emoji} {track.button_label}",
+                            callback_data=f"vidauto:partner:{track.callback_action}",
+                        )
+                    ]
+                )
+            keyboard.append(
+                [
+                    types.InlineKeyboardButton(
+                        text="🗑 Удалить неудачную партнёрскую публикацию",
+                        callback_data="vidauto:partner_delete_menu",
+                    )
+                ]
+            )
             for p in profiles:
                 if p.key == POPULAR_REVIEW_PROFILE:
                     continue
@@ -1350,6 +1380,373 @@ class VideoAnnounceScenario:
                 if str(item.username or "").strip().lstrip("@").casefold() == normalized:
                     return int(item.channel_id)
         return None
+
+    def _gemma_client_for_partner_filters(self):
+        try:
+            from google_ai import get_google_ai_client  # type: ignore
+
+            return get_google_ai_client()
+        except Exception:
+            try:
+                from google_ai.client import GoogleAIClient  # type: ignore
+
+                return GoogleAIClient()
+            except Exception:
+                logger.warning(
+                    "video_announce.partner_tracks: GoogleAI client unavailable; eco filter will mark events manual_review"
+                )
+                return None
+
+    def _build_event_filter_for_partner_track(self, partner_track: PartnerTrack):
+        if partner_track.geo_filter_id == "kaliningrad_region_east":
+            def _east_filter(event):
+                return classify_event_kaliningrad_region_east(event)
+
+            return _east_filter
+        if partner_track.content_filter_id == "eco_prirodnaya":
+            client = self._gemma_client_for_partner_filters()
+            llm_call = make_eco_gemma_llm_call(client)
+
+            async def _eco_filter(event):
+                return await classify_event_eco_prirodnaya(event, llm_call=llm_call)
+
+            return _eco_filter
+        return None
+
+    async def _resolve_partner_business_selector(
+        self, partner_track: PartnerTrack
+    ) -> str:
+        raw = await get_setting_value(
+            self.db, partner_track.business_selector_setting_key
+        )
+        return (raw or "").strip()
+
+    def _partner_track_selection_params(
+        self, partner_track: PartnerTrack, *, business_selector: str
+    ) -> dict[str, Any]:
+        today = datetime.now(LOCAL_TZ).date()
+        # Partner tracks publish only to the encrypted Business target — no
+        # channel-chain fanout. We still go through the existing
+        # `story_business_targets` resolution path (selector below).
+        params: dict[str, Any] = {
+            "mode": partner_track.profile_key,
+            "target_date": today.isoformat(),
+            "primary_window_days": 0,
+            "fallback_window_days": 0,
+            "candidate_limit": POPULAR_REVIEW_MAX_EVENTS,
+            "default_selected_min": 1,
+            "default_selected_max": POPULAR_REVIEW_MAX_EVENTS,
+            "render_scene_limit": POPULAR_REVIEW_MAX_EVENTS,
+            "selected_required_period": None,
+            "random_order": False,
+            "allow_empty_ocr": False,
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_upload_profile": "telegram_story_native_hevc_720p_v1",
+            "story_targets_override": [],
+            "story_business_targets": business_selector,
+            "intro_text": partner_track.intro_kicker,
+            "intro_text_valid": True,
+            "partner_track_id": partner_track.track_id,
+            "partner_profile_key": partner_track.profile_key,
+            "variant_overrides": {
+                "kicker": partner_track.intro_kicker,
+                "screen_top": partner_track.intro_screen_top,
+            },
+        }
+        return params
+
+    async def _last_partner_publication(
+        self, partner_track: PartnerTrack
+    ) -> VideoAnnounceSession | None:
+        async with self.db.get_session() as session:
+            res = await session.execute(
+                select(VideoAnnounceSession)
+                .where(VideoAnnounceSession.partner_track_id == partner_track.track_id)
+                .where(VideoAnnounceSession.partner_story_id.is_not(None))
+                .where(VideoAnnounceSession.partner_story_deleted_at.is_(None))
+                .order_by(VideoAnnounceSession.id.desc())
+                .limit(1)
+            )
+            return res.scalars().first()
+
+    async def show_partner_delete_menu(self) -> None:
+        if not await self.ensure_access():
+            return
+        keyboard: list[list[types.InlineKeyboardButton]] = []
+        body_lines: list[str] = [
+            "Какой партнёрский трек удалить? Будет снесена последняя успешная "
+            "Telegram Business story этого трека.",
+        ]
+        for track in PARTNER_TRACKS:
+            last = await self._last_partner_publication(track)
+            if last is None or not last.partner_story_id:
+                body_lines.append(
+                    f"• {track.button_emoji} {track.display_name} — нет публикаций для удаления"
+                )
+                continue
+            published = (
+                last.published_at.isoformat(timespec="minutes")
+                if last.published_at
+                else "?"
+            )
+            body_lines.append(
+                f"• {track.button_emoji} {track.display_name} — story_id={last.partner_story_id}, "
+                f"опубликовано {published}"
+            )
+            keyboard.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=f"🗑 {track.button_emoji} {track.button_label}",
+                        callback_data=f"vidauto:partner_delete:{track.callback_action}",
+                    )
+                ]
+            )
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text="Отмена",
+                    callback_data="vidstatus:refresh",
+                )
+            ]
+        )
+        markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        await self.bot.send_message(
+            self.chat_id, "\n".join(body_lines), reply_markup=markup
+        )
+
+    async def confirm_partner_story_delete(
+        self, partner_track: PartnerTrack
+    ) -> None:
+        if not await self.ensure_access():
+            return
+        last = await self._last_partner_publication(partner_track)
+        if last is None or not last.partner_story_id:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Для трека «{partner_track.display_name}» нет успешных Business "
+                "story-публикаций — удалять нечего.",
+            )
+            return
+        body = (
+            f"Подтверждение: удалить последнюю Business story трека "
+            f"«{partner_track.display_name}»?\n"
+            f"Сессия #{last.id}, story_id={last.partner_story_id}, "
+            f"опубликовано {last.published_at.isoformat(timespec='minutes') if last.published_at else '?'}.\n"
+            "Удаление отзовёт сторис у партнёрского аккаунта."
+        )
+        markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="✅ Да, удалить",
+                        callback_data=(
+                            f"vidauto:partner_delete_confirm:{partner_track.callback_action}"
+                        ),
+                    ),
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data="vidstatus:refresh",
+                    ),
+                ]
+            ]
+        )
+        await self.bot.send_message(self.chat_id, body, reply_markup=markup)
+
+    async def delete_last_partner_story(self, partner_track: PartnerTrack) -> None:
+        if not await self.ensure_access():
+            return
+        last = await self._last_partner_publication(partner_track)
+        if last is None or not last.partner_story_id:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Трек «{partner_track.display_name}»: ничего удалять.",
+            )
+            return
+        connection_hash = (last.partner_story_connection_hash or "").strip()
+        if not connection_hash:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Сессия #{last.id}: не сохранён business_connection_hash, удалить нельзя.",
+            )
+            return
+        try:
+            cached = await asyncio.to_thread(load_cached_business_connections)
+        except Exception:
+            logger.exception(
+                "video_announce.partner_delete: failed to load business cache"
+            )
+            await self.bot.send_message(
+                self.chat_id, "Не удалось прочитать Business-кэш"
+            )
+            return
+        match = next(
+            (
+                item
+                for item in cached
+                if str(item.get("connection_hash") or "").strip() == connection_hash
+            ),
+            None,
+        )
+        if not match:
+            await self.bot.send_message(
+                self.chat_id,
+                "Business-подключение не найдено в кэше — возможно, оно было отозвано.",
+            )
+            return
+        connection_id = str(match.get("connection_id") or "").strip()
+        if not connection_id:
+            await self.bot.send_message(
+                self.chat_id,
+                "В кэше нет business_connection_id для этого подключения.",
+            )
+            return
+        try:
+            response = await _delete_business_story(
+                bot=self.bot,
+                business_connection_id=connection_id,
+                story_id=last.partner_story_id,
+            )
+        except Exception as exc:
+            logger.exception(
+                "video_announce.partner_delete: deleteStory threw session=%s",
+                last.id,
+            )
+            await self.bot.send_message(
+                self.chat_id,
+                f"deleteStory выбросил ошибку: {type(exc).__name__}: {exc}",
+            )
+            return
+        if not bool(response.get("ok")):
+            description = str(response.get("description") or "").strip() or "unknown error"
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Telegram отказал в deleteStory для сессии #{last.id} "
+                    f"(story_id={last.partner_story_id}): {description}"
+                ),
+            )
+            return
+        now = datetime.now(timezone.utc)
+        async with self.db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, last.id)
+            if fresh is not None:
+                fresh.partner_story_deleted_at = now
+                session.add(fresh)
+                await session.commit()
+        await self.bot.send_message(
+            self.chat_id,
+            (
+                f"✅ Партнёрская сторис трека «{partner_track.display_name}» удалена "
+                f"(сессия #{last.id}, story_id={last.partner_story_id})."
+            ),
+        )
+
+    async def run_partner_track_pipeline(
+        self,
+        partner_track: PartnerTrack,
+        *,
+        wait_for_handoff: bool = False,
+    ) -> int | None:
+        if not await self.ensure_access():
+            return None
+        existing = await self.has_rendering()
+        if existing:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
+            )
+            return None
+        business_selector = await self._resolve_partner_business_selector(partner_track)
+        if not business_selector:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}» не настроен: "
+                    f"в settings отсутствует ключ "
+                    f"`{partner_track.business_selector_setting_key}` "
+                    "(используйте /check_business чтобы выбрать партнёрский Business-target "
+                    "и сохранить selector через /settings)."
+                ),
+            )
+            return None
+        event_filter = self._build_event_filter_for_partner_track(partner_track)
+        try:
+            selection = await build_popular_review_selection(
+                self.db,
+                max_events=POPULAR_REVIEW_MAX_EVENTS,
+                min_events=1,
+                anti_repeat_days=POPULAR_REVIEW_ANTI_REPEAT_DAYS,
+                profile_key=partner_track.profile_key,
+                event_filter=event_filter,
+                partner_track_id=partner_track.track_id,
+            )
+        except Exception as exc:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}»: не удалось собрать "
+                    f"валидный набор для публикации ({type(exc).__name__}: {exc})"
+                ),
+            )
+            return None
+        kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
+        if not kernel_ref:
+            await self.bot.send_message(
+                self.chat_id,
+                "Не удалось подобрать CherryFlash kernel для Kaggle",
+            )
+            return None
+        configured_test_chat_id, _configured_main_chat_id = await self._get_profile_channels(
+            POPULAR_REVIEW_PROFILE
+        )
+        test_chat_id = configured_test_chat_id or await self._resolve_channel_id_by_username(
+            POPULAR_REVIEW_TARGET_USERNAME
+        )
+        if not test_chat_id:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"CherryFlash: не найден preview channel @{POPULAR_REVIEW_TARGET_USERNAME} "
+                    "в таблице channel"
+                ),
+            )
+            return None
+        params = self._partner_track_selection_params(
+            partner_track, business_selector=business_selector
+        )
+        async with self.db.get_session() as session:
+            obj = VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.SELECTED,
+                profile_key=partner_track.profile_key,
+                selection_params=params,
+                test_chat_id=test_chat_id,
+                main_chat_id=None,
+                kaggle_kernel_ref=kernel_ref,
+                partner_track_id=partner_track.track_id,
+            )
+            session.add(obj)
+            await session.commit()
+            await session.refresh(obj)
+        await self._store_popular_review_selection(obj, selection=selection)
+        await self.bot.send_message(
+            self.chat_id,
+            (
+                f"Сессия #{obj.id} запущена: {partner_track.display_name} "
+                f"({partner_track.track_id}), {len(selection.event_ids)} событий, "
+                f"target=encrypted business selector. Kernel: {kernel_ref}"
+            ),
+        )
+        msg = await self.start_render(
+            obj.id,
+            message=None,
+            limit_scenes=len(selection.event_ids),
+            background=not wait_for_handoff,
+        )
+        if msg and msg != "Рендеринг запущен":
+            await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
+            return None
+        return int(obj.id)
 
     def _popular_review_selection_params(self) -> dict[str, Any]:
         today = datetime.now(LOCAL_TZ).date()
@@ -3549,9 +3946,21 @@ class VideoAnnounceScenario:
         else:
             ribbon_order = list(selected_event_ids)
         trace = selection_params.get("popular_review_trace") or {}
-        return {
+        variant_overrides_raw = selection_params.get("variant_overrides")
+        variant_overrides = (
+            {str(k): v for k, v in variant_overrides_raw.items()}
+            if isinstance(variant_overrides_raw, dict)
+            else {}
+        )
+        manifest_profile_key = str(
+            selection_params.get("profile_key")
+            or selection_params.get("partner_profile_key")
+            or POPULAR_REVIEW_PROFILE
+        )
+        partner_track_id = selection_params.get("partner_track_id")
+        manifest: dict[str, Any] = {
             "selection_source": "/popular_posts",
-            "selection_profile_key": POPULAR_REVIEW_PROFILE,
+            "selection_profile_key": manifest_profile_key,
             "test_publish_target": f"https://t.me/{POPULAR_REVIEW_TARGET_USERNAME}",
             "story_publish_enabled": bool(story_publish_enabled),
             "story_publish_mode": str(selection_params.get("story_publish_mode") or "video"),
@@ -3589,6 +3998,11 @@ class VideoAnnounceScenario:
                 for scene in primary_scenes
             ],
         }
+        if variant_overrides:
+            manifest["variant"] = variant_overrides
+        if partner_track_id:
+            manifest["partner_track_id"] = str(partner_track_id)
+        return manifest
 
     async def _create_cherryflash_dataset(
         self,

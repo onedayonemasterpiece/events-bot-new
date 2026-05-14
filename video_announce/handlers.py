@@ -180,6 +180,43 @@ async def handle_video_callback(
             await callback.answer("Запускаю CherryFlash…")
             await scenario.run_popular_review_pipeline()
             return
+        if action.startswith("partner:"):
+            from .partner_tracks import get_partner_track_by_action
+
+            partner_action = action.split(":", 1)[1]
+            track = get_partner_track_by_action(partner_action)
+            if track is None:
+                await callback.answer("Партнёрский трек не найден", show_alert=True)
+                return
+            await callback.answer(f"Запускаю {track.display_name}…")
+            await scenario.run_partner_track_pipeline(track)
+            return
+        if action == "partner_delete_menu":
+            await callback.answer("Открываю меню удаления…")
+            await scenario.show_partner_delete_menu()
+            return
+        if action.startswith("partner_delete:"):
+            from .partner_tracks import get_partner_track_by_action
+
+            partner_action = action.split(":", 1)[1]
+            track = get_partner_track_by_action(partner_action)
+            if track is None:
+                await callback.answer("Партнёрский трек не найден", show_alert=True)
+                return
+            await callback.answer("Запрос на удаление…")
+            await scenario.confirm_partner_story_delete(track)
+            return
+        if action.startswith("partner_delete_confirm:"):
+            from .partner_tracks import get_partner_track_by_action
+
+            partner_action = action.split(":", 1)[1]
+            track = get_partner_track_by_action(partner_action)
+            if track is None:
+                await callback.answer("Партнёрский трек не найден", show_alert=True)
+                return
+            await callback.answer("Удаляю последнюю публикацию…")
+            await scenario.delete_last_partner_story(track)
+            return
         await callback.answer("Неизвестное действие", show_alert=True)
         return
     if data.startswith("vidkstat:"):

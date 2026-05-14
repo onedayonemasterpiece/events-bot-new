@@ -1,6 +1,6 @@
 # CherryFlash Partner Story Tracks
 
-> **Status:** Product specification / not implemented in code yet  
+> **Status:** MVP implemented (2026-05-14) — `partner_eco_nature_001` and `partner_region_east_001` shipped through `/v`; remaining items (LLM-driven east geo classifier, per-run Kaggle isolation, source audit, scheduled runs) are tracked in the acceptance checklist below.
 > **Scope:** partner-specific CherryFlash story releases for Telegram Business accounts, where each partner can have its own event filter, geo filter, schedule, render profile, and Business Story target.
 
 ## Product goal
@@ -368,14 +368,36 @@ source_audit:
 
 ## Acceptance checklist
 
-- [ ] Partner tracks are represented by stable internal ids and never require raw Telegram handles in repo-visible files.
-- [ ] The first partner is represented as `partner_eco_nature_001` and resolves to the encrypted Business target supplied out-of-band.
-- [ ] `eco_prirodnaya` can classify events with `matched_categories`, `matched_keywords`, `popularity_score`, `views`, `likes`, `popularity_window`, `reason`, and `needs_manual_review`.
-- [ ] Partner-track semantic decisions are LLM-first, with Gemma 4/native JSON schema as the default structured classifier.
-- [ ] `kaliningrad_region_east` can classify event locations with `exclude_over_include` priority.
-- [ ] The CherryFlash operator UI has a direct `🍃 Эко-природная` launch button wired to `partner_eco_nature_001`.
-- [ ] East-region source-level guarantees are backed by a source audit, including Gumbinnen and any Farm Tyuniny source before use.
-- [ ] First generation/regeneration for a new partner track runs on Kaggle GPU.
-- [ ] Stable steady-state partner runs can run without GPU when validated.
-- [ ] Parallel CherryFlash partner runs cannot detach or overwrite each other's Kaggle session datasets, kernels, or story secrets.
-- [ ] Successful partner runs publish to Telegram Business Stories with `post_to_chat_page=true`.
+- [x] Partner tracks are represented by stable internal ids and never require raw Telegram handles in repo-visible files. Implemented in `video_announce/partner_tracks.py`; raw handles live only in operator-supplied `Setting` rows (`partner_track_eco_business_selector`, `partner_track_east_business_selector`).
+- [x] The first partner is represented as `partner_eco_nature_001` and resolves to the encrypted Business target supplied out-of-band. Resolution goes through `telegram_business.load_business_story_targets(selector_raw=<setting value>)`.
+- [x] `eco_prirodnaya` can classify events with `matched_categories`, `matched_keywords`, `popularity_score`, `views`, `likes`, `popularity_window`, `reason`, and `needs_manual_review`. Implemented in `video_announce/partner_filters.py::classify_event_eco_prirodnaya`; popularity fields ride in the existing `selection_params["popular_review_trace"]`.
+- [x] Partner-track semantic decisions are LLM-first, with Gemma 4/native JSON schema as the default structured classifier. `make_eco_gemma_llm_call()` ships `response_mime_type=application/json` + `response_schema` to `gemma-4-31b-it`; default model overridable via `PARTNER_FILTER_GEMMA_MODEL` env.
+- [x] `kaliningrad_region_east` can classify event locations with `exclude_over_include` priority. Deterministic classifier on `event.city`/`location_*`; `Родники` is explicitly excluded per spec.
+- [x] The CherryFlash operator UI has a direct `🍃 Природа и экология` launch button wired to `partner_eco_nature_001`, plus `🌾 Восток области` for `partner_region_east_001`.
+- [ ] East-region source-level guarantees are backed by a source audit, including Gumbinnen and any Farm Tyuniny source before use. Deferred: today the east filter goes purely through `event.location`.
+- [x] First generation/regeneration for a new partner track runs on Kaggle GPU. Inherited from the existing CherryFlash kernel deploy path; no change.
+- [x] Stable steady-state partner runs can run without GPU when validated. Inherited.
+- [ ] Parallel CherryFlash partner runs cannot detach or overwrite each other's Kaggle session datasets, kernels, or story secrets. Mitigated by serialization: the existing `has_rendering()` guard serializes any RENDERING session across the bot, so partner tracks cannot run concurrently with each other or with base CherryFlash. Full per-run kernel isolation (separate kernel slug or per-run kernel copy) is still deferred.
+- [x] Successful partner runs publish to Telegram Business Stories with `post_to_chat_page=true`. Inherited from the existing Bot API `postStory` call in `kaggle/CrumpleVideo/story_publish.py`.
+
+### Operator setup required before first run
+
+For each partner track, the operator must:
+
+1. Trigger `/check_business` on the partner account so the bot caches the encrypted Business connection. The cache row is keyed by `connection_hash` (also stores `user_hash` and `username_hash`).
+2. Save the partner selector to the corresponding setting row using the same value form accepted by `telegram_business.load_business_story_targets`. A `@username` selector is accepted and matched against the lowercased cached username. Example payloads (operator-only, not committed):
+   - `partner_track_eco_business_selector` → `@<eco_partner_handle>`
+   - `partner_track_east_business_selector` → `@<east_partner_handle>`
+3. Launch the partner track from `/v`. If the setting is missing, the bot replies with a clear setup instruction and aborts before render.
+
+### Delete-bad-publication contract
+
+`/v` → `🗑 Удалить неудачную партнёрскую публикацию` shows a per-track menu listing each partner's last persisted Telegram Business `story_id`. Selecting one asks for confirmation, then calls Bot API `deleteStory(business_connection_id, story_id)` through `main._delete_business_story`. Scope is partner-only (no channel-chain reversal). Persisted columns on `videoannounce_session`: `partner_track_id`, `partner_story_id`, `partner_story_connection_hash`, `partner_story_deleted_at`. Population happens in `video_announce/poller.py::_persist_partner_story_metadata` after the run finishes, by reading `story_publish_report.json` for the first ok `transport=telegram_business` target.
+
+### Intro labels per track
+
+`partner_eco_nature_001` renders intro with kicker `ПРИРОДА И ЭКОЛОГИЯ` (2D phone) / `природа и экология` (3D phone screen-top). `partner_region_east_001` uses `ВОСТОК\nКАЛИНИНГРАДСКОЙ\nОБЛАСТИ` / `восток калининградской области`. Plumbed through `selection_params["variant_overrides"]` → `selection_manifest.variant.{kicker,screen_top}` → `scripts/render_mobilefeed_intro_still.py::_default_variants`.
+
+### Leading-emoji title fix
+
+Event titles starting with an emoji (e.g. `🎸 Концерт …`) used to render as a `.notdef` box because the CherryFlash title font (Bebas Neue) has no emoji coverage. `scripts/render_cherryflash_full.py::_strip_leading_emoji` removes the leading emoji/pictograph run + trailing whitespace before `RenderScene.title` is built; inline emoji inside the title are preserved. A real emoji-fallback rasterizer can replace the strip later without changing the title contract.

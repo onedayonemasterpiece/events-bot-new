@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -288,6 +289,34 @@ def _build_outro_strip(
     return image
 
 
+# Strip leading characters the title font (Bebas Neue) cannot render. Bebas
+# Neue has no emoji/pictograph coverage, so a leading emoji rasterizes as
+# `.notdef` ("unknown glyph" / empty box) in the CherryFlash video title.
+# Until we ship a real emoji-fallback rasterizer, drop the leading emoji and
+# any trailing whitespace so the title reads cleanly.
+_LEADING_NON_TEXT_RE = re.compile(
+    r"^["
+    r"\U0001F300-\U0001FAFF"   # symbols & pictographs (incl. emoji)
+    r"\U0001F600-\U0001F6FF"   # emoticons / transport
+    r"\U0001F700-\U0001F77F"
+    r"\U00002600-\U000027BF"   # misc symbols & dingbats
+    r"\U0001F900-\U0001F9FF"   # supplemental symbols & pictographs
+    r"\U0001FA70-\U0001FAFF"
+    r"\U0001F1E6-\U0001F1FF"   # regional indicators (flags)
+    r"‍️"              # ZWJ + variation selector
+    r"]+\s*",
+    flags=re.UNICODE,
+)
+
+
+def _strip_leading_emoji(title: str) -> str:
+    raw = (title or "").strip()
+    if not raw:
+        return ""
+    cleaned = _LEADING_NON_TEXT_RE.sub("", raw, count=1)
+    return cleaned.strip()
+
+
 def _build_render_scenes(payload: dict) -> list[RenderScene]:
     scenes_data = payload.get("scenes") or []
     scenes: list[RenderScene] = []
@@ -314,7 +343,9 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
             RenderScene(
                 index=idx,
                 variant=scene_variant,
-                title=str(raw_scene.get("about") or raw_scene.get("title") or "").strip(),
+                title=_strip_leading_emoji(
+                    str(raw_scene.get("about") or raw_scene.get("title") or "")
+                ),
                 date_line=_format_display_date(
                     raw_scene.get("date_iso") or raw_scene.get("date"),
                     raw_scene.get("time"),

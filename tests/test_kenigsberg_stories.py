@@ -1127,10 +1127,19 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_pro
     assert params["story_publish_mode"] == "video"
     assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
     assert params["story_business_targets"] == []
-    assert params["story_targets_override"][0]["peer"] == "me"
-    assert params["story_targets_override"][0]["blocking"] is True
-    assert params["story_targets_override"][0]["required"] is True
-    assert params["story_targets_override"][1]["peer"] == "@mostvkenig"
-    assert params["story_targets_override"][1]["mode"] == "repost_previous"
-    assert params["story_targets_override"][1]["blocking"] is False
-    assert params["story_targets_override"][1]["required"] is False
+    overrides = params["story_targets_override"]
+    assert overrides[0]["peer"] == "@mostvkenig"
+    assert overrides[0]["mode"] == "upload"
+    assert overrides[0]["blocking"] is True
+    assert overrides[0]["required"] is True
+    assert overrides[0]["fallback_peer"] == "me"
+    assert overrides[1]["peer"] == "@loving_guide39"
+    assert overrides[1]["mode"] == "repost_previous"
+    assert overrides[1]["blocking"] is False
+    assert overrides[1]["required"] is False
+    assert overrides[1]["delay_seconds"] == 600
+    assert overrides[2]["peer"] == "@jane_tour39"
+    assert overrides[2]["mode"] == "repost_previous"
+    assert overrides[2]["blocking"] is False
+    assert overrides[2]["required"] is False
+    assert overrides[2]["delay_seconds"] == 600

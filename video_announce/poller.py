@@ -498,6 +498,67 @@ async def _maybe_register_kenigsberg_manifest(
         )
 
 
+def _extract_partner_story_metadata(
+    report: dict | None,
+) -> tuple[str | None, str | None]:
+    """Return ``(story_id, business_connection_hash)`` from a story-publish report.
+
+    Partner-track sessions publish through a single Telegram Business target,
+    so we look for the first Business target with a non-empty ``story_id``.
+    Returns ``(None, None)`` if nothing usable is present.
+    """
+    if not isinstance(report, dict):
+        return None, None
+    for item in report.get("targets") or []:
+        if not isinstance(item, dict):
+            continue
+        if not bool(item.get("ok")):
+            continue
+        transport = str(item.get("transport") or "").strip().lower()
+        if transport not in {"telegram_business", "business"}:
+            continue
+        story_id = item.get("story_id")
+        if story_id in (None, "", 0):
+            continue
+        connection_hash = (
+            item.get("business_connection_hash")
+            or item.get("connection_hash")
+            or ""
+        )
+        return str(story_id).strip(), str(connection_hash).strip() or None
+    return None, None
+
+
+async def _persist_partner_story_metadata(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+    report: dict | None,
+) -> None:
+    if not str(session_obj.partner_track_id or "").strip():
+        return
+    story_id, connection_hash = _extract_partner_story_metadata(report)
+    if not story_id:
+        return
+    async with db.get_session() as session:
+        fresh = await session.get(VideoAnnounceSession, session_obj.id)
+        if fresh is None:
+            return
+        fresh.partner_story_id = story_id
+        if connection_hash:
+            fresh.partner_story_connection_hash = connection_hash
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(fresh)
+        session_obj.partner_story_id = fresh.partner_story_id
+        session_obj.partner_story_connection_hash = fresh.partner_story_connection_hash
+    logger.info(
+        "video_announce: persisted partner story metadata session=%s track=%s story_id=%s",
+        session_obj.id,
+        session_obj.partner_track_id,
+        story_id,
+    )
+
+
 def _story_failure_message(report: dict | None) -> str | None:
     if not report or report.get("ok") is True:
         return None
@@ -1026,6 +1087,7 @@ async def run_kernel_poller(
         log_files = _find_logs(output_files)
         story_report_path = _find_story_report(output_files)
         story_report = _load_story_report(story_report_path)
+        await _persist_partner_story_metadata(db, session_obj, story_report)
         await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         if not video_path:
             logger.warning(

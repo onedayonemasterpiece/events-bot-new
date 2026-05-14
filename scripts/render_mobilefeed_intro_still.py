@@ -358,6 +358,9 @@ def _type_cluster(items: list[dict]) -> str:
     return " • ".join(labels)
 
 
+DEFAULT_INTRO_KICKER = "ПОПУЛЯРНОЕ"
+
+
 def _default_variants(
     *,
     scene_count: int,
@@ -366,12 +369,14 @@ def _default_variants(
     city_copy: str,
     screen_top: str,
     screen_bottom: str,
+    kicker: str = DEFAULT_INTRO_KICKER,
 ) -> tuple[Variant, ...]:
+    kicker_text = (kicker or DEFAULT_INTRO_KICKER).strip() or DEFAULT_INTRO_KICKER
     return (
         Variant(
             slug="v1_choose_event",
             title_lines=("ВЫБЕРИ", "СОБЫТИЕ"),
-            kicker="ПОПУЛЯРНОЕ",
+            kicker=kicker_text,
             date_copy=date_copy,
             period_copy=period_copy,
             city_copy=city_copy,
@@ -381,7 +386,7 @@ def _default_variants(
         Variant(
             slug="v2_dont_miss",
             title_lines=("ЧТО НЕ", "ПРОПУСТИТЬ"),
-            kicker="ПОПУЛЯРНОЕ",
+            kicker=kicker_text,
             date_copy=date_copy,
             period_copy=period_copy,
             city_copy=city_copy,
@@ -468,6 +473,7 @@ def _load_runtime_selection() -> tuple[dict[int, Poster], list[int], int, tuple[
             or f"{event_count_label(scene_count)}\n{type_cluster}"
         ),
         screen_bottom=str(variant_overrides.get("screen_bottom") or city_ui or "Калининград"),
+        kicker=str(variant_overrides.get("kicker") or DEFAULT_INTRO_KICKER),
     )
     return posters, ribbon_order, focus_event_id, variants, raw
 

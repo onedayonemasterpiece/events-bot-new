@@ -1777,6 +1777,14 @@ class Database:
             await _add_column(conn, "videoannounce_session", "published_at TIMESTAMP")
             await _add_column(conn, "videoannounce_session", "kaggle_dataset TEXT")
             await _add_column(conn, "videoannounce_session", "kaggle_kernel_ref TEXT")
+            await _add_column(conn, "videoannounce_session", "partner_track_id TEXT")
+            await _add_column(conn, "videoannounce_session", "partner_story_id TEXT")
+            await _add_column(
+                conn, "videoannounce_session", "partner_story_connection_hash TEXT"
+            )
+            await _add_column(
+                conn, "videoannounce_session", "partner_story_deleted_at TIMESTAMP"
+            )
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS videoannounce_item(

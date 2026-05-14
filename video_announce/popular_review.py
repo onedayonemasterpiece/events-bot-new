@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import logging
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
@@ -383,6 +384,7 @@ async def _load_recent_popular_review_hits(
     *,
     anti_repeat_days: int,
     now_utc: datetime,
+    profile_key: str = POPULAR_REVIEW_PROFILE,
 ) -> set[int]:
     threshold = now_utc - timedelta(days=max(1, anti_repeat_days))
     async with db.get_session() as session:
@@ -392,7 +394,7 @@ async def _load_recent_popular_review_hits(
                 VideoAnnounceSession,
                 VideoAnnounceItem.session_id == VideoAnnounceSession.id,
             )
-            .where(VideoAnnounceSession.profile_key == POPULAR_REVIEW_PROFILE)
+            .where(VideoAnnounceSession.profile_key == profile_key)
             .where(VideoAnnounceSession.status.in_(RECENT_PUBLISHED_VIDEO_SESSION_STATUSES))
             .where(VideoAnnounceItem.event_id.is_not(None))
             .where(
@@ -406,6 +408,14 @@ async def _load_recent_popular_review_hits(
             )
         )
         return {int(event_id) for event_id in result.scalars().all() if event_id is not None}
+
+
+async def _resolve_filter_decision(event_filter, event):
+    """Run a sync/async partner filter and return its FilterDecision."""
+    result = event_filter(event)
+    if inspect.isawaitable(result):
+        result = await result
+    return result
 
 
 async def _load_events_map(db, event_ids: list[int]) -> dict[int, Event]:
@@ -465,6 +475,9 @@ async def _collect_popular_hits(
     return ordered_hits
 
 
+EventFilterFn = Callable[[Event], "FilterDecision | Awaitable[FilterDecision]"]
+
+
 async def build_popular_review_selection(
     db,
     *,
@@ -473,6 +486,10 @@ async def build_popular_review_selection(
     anti_repeat_days: int = POPULAR_REVIEW_ANTI_REPEAT_DAYS,
     candidate_limit: int = POPULAR_REVIEW_CANDIDATE_LIMIT,
     now_utc: datetime | None = None,
+    profile_key: str = POPULAR_REVIEW_PROFILE,
+    event_filter: EventFilterFn | None = None,
+    partner_track_id: str | None = None,
+    admit_manual_review: bool = True,
 ) -> PopularReviewSelection:
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()
@@ -485,6 +502,7 @@ async def build_popular_review_selection(
         db,
         anti_repeat_days=anti_repeat_days,
         now_utc=now_utc,
+        profile_key=profile_key,
     )
     ordered_hits = await _collect_popular_hits(
         db,
@@ -497,6 +515,7 @@ async def build_popular_review_selection(
     )
 
     fresh: list[PopularReviewPick] = []
+    filter_trace: dict[int, dict[str, Any]] = {}
     for hit in ordered_hits:
         event_id = int(hit["event_id"])
         event = events_map.get(event_id)
@@ -520,6 +539,31 @@ async def build_popular_review_selection(
                 getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None) or "",
             )
             continue
+        if event_filter is not None:
+            decision = await _resolve_filter_decision(event_filter, event)
+            filter_trace[event_id] = {
+                "matched": decision.matched,
+                "needs_manual_review": decision.needs_manual_review,
+                "reason": decision.reason,
+                "extra": decision.extra,
+            }
+            if not decision.matched and not (admit_manual_review and decision.needs_manual_review):
+                logger.info(
+                    "video_announce.popular_review: skipped event by partner filter "
+                    "partner_track_id=%s event_id=%s reason=%s",
+                    partner_track_id,
+                    event_id,
+                    decision.reason,
+                )
+                continue
+            if decision.needs_manual_review and admit_manual_review:
+                logger.warning(
+                    "video_announce.popular_review: admitting manual_review event "
+                    "partner_track_id=%s event_id=%s reason=%s",
+                    partner_track_id,
+                    event_id,
+                    decision.reason,
+                )
         pick = PopularReviewPick(
             event=event,
             score=float(hit["score"]),
@@ -624,6 +668,9 @@ async def build_popular_review_selection(
                     "promo_placement_kind": pick.promo_placement_kind,
                 }
             )
+        partner_meta = filter_trace.get(event_id)
+        if partner_meta:
+            trace[event_id]["partner_filter"] = partner_meta
 
     logger.info(
         "video_announce.popular_review selected=%s windows=%s",

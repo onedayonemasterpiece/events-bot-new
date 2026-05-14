@@ -185,21 +185,30 @@ async def _require_superadmin(message: types.Message) -> bool:
 def _kenigsberg_story_targets() -> list[dict[str, object]]:
     return [
         {
-            "peer": "me",
+            "peer": "@mostvkenig",
             "delay_seconds": 0,
             "mode": "upload",
             "blocking": True,
             "required": True,
-            "label": "primary_story_account",
+            "label": "@mostvkenig",
+            "fallback_peer": "me",
         },
         {
-            "peer": "@mostvkenig",
-            "delay_seconds": 0,
+            "peer": "@loving_guide39",
+            "delay_seconds": 600,
             "mode": "repost_previous",
             "blocking": False,
             "required": False,
-            "label": "@mostvkenig",
-        }
+            "label": "@loving_guide39",
+        },
+        {
+            "peer": "@jane_tour39",
+            "delay_seconds": 600,
+            "mode": "repost_previous",
+            "blocking": False,
+            "required": False,
+            "label": "@jane_tour39",
+        },
     ]
 
 

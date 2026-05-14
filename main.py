@@ -12585,6 +12585,34 @@ async def handle_check_business_callback(
         )
 
 
+async def _delete_business_story(
+    *, bot: Bot, business_connection_id: str, story_id: int | str
+) -> dict:
+    """Call Bot API ``deleteStory`` for a Business-account story.
+
+    Returns the parsed JSON payload (Telegram's ``{ok: bool, ...}``).
+    """
+    import aiohttp
+
+    try:
+        story_id_int = int(story_id)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"invalid story_id={story_id!r}") from exc
+    form = aiohttp.FormData()
+    form.add_field("business_connection_id", business_connection_id)
+    form.add_field("story_id", str(story_id_int))
+    timeout = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(timeout=timeout) as s:
+        async with s.post(
+            f"https://api.telegram.org/bot{bot.token}/deleteStory", data=form
+        ) as resp:
+            try:
+                payload = await resp.json()
+            except Exception:
+                payload = {"ok": False, "description": await resp.text()}
+            return payload
+
+
 async def _post_business_story_photo(
     *, bot: Bot, business_connection_id: str, photo_bytes: bytes, filename: str
 ) -> dict:
