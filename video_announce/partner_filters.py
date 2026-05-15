@@ -9,11 +9,11 @@ Two filters live here today, one per partner track:
   Kaliningrad/Guryevsk.
 
 * ``eco_prirodnaya`` — LLM-first editorial filter on Gemma 4. The classifier
-  returns one of ``matched`` / ``manual_review`` / ``exclude``. For the
-  partner-track pipeline, ``manual_review`` is admitted with a warning and
-  ``exclude`` removes the candidate. Deterministic keyword recall is used only
-  as a fast pre-pass to skip events that are not even plausibly in scope, never
-  to override an LLM include.
+  returns one of ``matched`` / ``manual_review`` / ``exclude``. Scheduled
+  partner-track auto-publish runs must fail closed on ``manual_review`` after
+  bounded retries/fallbacks; deterministic keyword recall is used only as a
+  fast pre-pass to skip events that are not even plausibly in scope, never to
+  override an LLM include.
 """
 from __future__ import annotations
 
