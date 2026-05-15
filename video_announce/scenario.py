@@ -1049,6 +1049,14 @@ class VideoAnnounceScenario:
                     )
                 ]
             )
+            keyboard.append(
+                [
+                    types.InlineKeyboardButton(
+                        text="✨ Промо-кампании",
+                        callback_data="vidpromo:list",
+                    )
+                ]
+            )
             for p in profiles:
                 if p.key == POPULAR_REVIEW_PROFILE:
                     continue
@@ -1408,10 +1416,17 @@ class VideoAnnounceScenario:
             return _east_filter
         if partner_track.content_filter_id == "eco_prirodnaya":
             client = self._gemma_client_for_partner_filters()
+            from .partner_filters import make_eco_4o_fallback_llm_call
+
             llm_call = make_eco_gemma_llm_call(client)
+            fallback_llm_call = make_eco_4o_fallback_llm_call()
 
             async def _eco_filter(event):
-                return await classify_event_eco_prirodnaya(event, llm_call=llm_call)
+                return await classify_event_eco_prirodnaya(
+                    event,
+                    llm_call=llm_call,
+                    fallback_llm_call=fallback_llm_call,
+                )
 
             return _eco_filter
         return None
@@ -1721,6 +1736,7 @@ class VideoAnnounceScenario:
                 profile_key=partner_track.profile_key,
                 event_filter=event_filter,
                 partner_track_id=partner_track.track_id,
+                admit_manual_review=False,
             )
         except Exception as exc:
             await self.bot.send_message(

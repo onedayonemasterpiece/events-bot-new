@@ -647,10 +647,11 @@ async def build_story_publish_config(
     if not story_publish_enabled():
         return None
     selection_params = selection_params or {}
+    has_selection_targets_override = "story_targets_override" in selection_params
     targets = _parse_selection_targets(selection_params)
-    if not targets:
+    if not targets and not has_selection_targets_override:
         targets = _parse_story_targets_json()
-    if not targets:
+    if not targets and not has_selection_targets_override:
         main_target = await _resolve_main_target(db, main_chat_id)
         if main_target:
             targets.append(main_target)

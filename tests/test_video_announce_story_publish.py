@@ -161,6 +161,47 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
 
 
 @pytest.mark.asyncio
+async def test_empty_selection_override_blocks_global_channel_fanout(monkeypatch, tmp_path):
+    target = tmp_path / "business.enc.json"
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
+        '[{"peer":"me"},{"peer":"@kenigevents"},{"peer":"@lovekenig"}]',
+    )
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS", "1")
+    monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+        )
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "mode": "popular_review",
+            "story_publish_enabled": True,
+            "story_targets_override": [],
+            "story_business_targets": ["@story_owner_fixture"],
+        },
+        selected_event_dates=["2026-05-15"],
+    )
+
+    assert config is not None
+    assert [target["peer"] for target in config["targets"]] == [
+        config["targets"][0]["peer"]
+    ]
+    assert config["targets"][0]["transport"] == "telegram_business"
+
+
+@pytest.mark.asyncio
 async def test_business_story_targets_are_cherryflash_scoped(monkeypatch, tmp_path):
     target = tmp_path / "business.enc.json"
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")

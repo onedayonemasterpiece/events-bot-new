@@ -24,6 +24,10 @@
   - CherryFlash и `/check_business` обязаны передавать `post_to_chat_page=true` в Bot API `postStory`, чтобы story была видима на странице Business account, а не только как текущая активная сторис;
   - по умолчанию Business targets разрешены для CherryFlash modes `popular_review,cherryflash_libsvtav1` и для production-ready Kenigsberg mode `kenigsberg_story` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
+  - партнёрские CherryFlash-треки должны задавать явный
+    `story_targets_override=[]`: это означает отсутствие Telethon/channel
+    fanout и оставляет только `story_business_targets`. Такой пустой override
+    не должен падать обратно к глобальному `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`.
 
 ## Operator commands
 

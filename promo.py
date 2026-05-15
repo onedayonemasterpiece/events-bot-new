@@ -26,6 +26,13 @@ INITIAL_80_STORIES_FESTIVAL = "80 историй о главном"
 INITIAL_80_STORIES_TITLE = "80 историй о главном / summer visibility"
 INITIAL_80_STORIES_END_DATE = date(2026, 7, 18)
 DEFAULT_PROMO_DAYS = 90
+PROMO_PRIORITY_MIN = 0
+PROMO_PRIORITY_MAX = 3
+PROMO_DEFAULT_PRIORITY = 2
+INITIAL_80_STORIES_PRIORITY = 1
+VIDEO_PROMO_GLOBAL_MAX_PER_PUBLISH = 2
+PROMO_POLICY_GUARANTEED_ANY_POSITION = "guaranteed_any_position"
+PROMO_POLICY_DIVERSE_SHUFFLE = "diverse_shuffle"
 
 
 @dataclass(frozen=True)
@@ -35,6 +42,15 @@ class PromoCandidate:
     activity_id: int
     placement_kind: str
     reason: str
+    priority: int = PROMO_DEFAULT_PRIORITY
+
+
+def normalize_promo_priority(value: int | str | None) -> int:
+    try:
+        parsed = int(value) if value is not None else PROMO_DEFAULT_PRIORITY
+    except (TypeError, ValueError):
+        parsed = PROMO_DEFAULT_PRIORITY
+    return max(PROMO_PRIORITY_MIN, min(PROMO_PRIORITY_MAX, parsed))
 
 
 @dataclass(frozen=True)
@@ -149,6 +165,8 @@ async def _create_campaign_with_target(
     festival_name: str | None = None,
     query_text: str | None = None,
     max_per_publish: int = 1,
+    priority: int = PROMO_DEFAULT_PRIORITY,
+    video_selection_policy: str = PROMO_POLICY_DIVERSE_SHUFFLE,
     now_utc: datetime | None = None,
     created_by: int | None = None,
 ) -> PromoCampaign:
@@ -159,6 +177,7 @@ async def _create_campaign_with_target(
         goal_comment=goal_comment,
         starts_at=now_utc,
         ends_at=_campaign_end_dt(ends_at),
+        priority=normalize_promo_priority(priority),
         created_by=created_by,
     )
     async with db.get_session() as session:
@@ -182,28 +201,28 @@ async def _create_campaign_with_target(
                     surface="video_general",
                     profile_key="popular_review",
                     max_per_publish=max(1, min(int(max_per_publish), 2)),
-                    selection_policy="diverse_shuffle",
+                    selection_policy=video_selection_policy,
                     enabled=True,
                 ),
                 PromoActivity(
                     campaign_id=int(campaign.id),
                     surface="daily_highlight",
                     max_per_publish=max(1, min(int(max_per_publish), 2)),
-                    selection_policy="diverse_shuffle",
+                    selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
                     enabled=True,
                 ),
                 PromoActivity(
                     campaign_id=int(campaign.id),
                     surface="telegraph_month",
                     max_per_publish=max(1, min(int(max_per_publish), 2)),
-                    selection_policy="diverse_shuffle",
+                    selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
                     enabled=True,
                 ),
                 PromoActivity(
                     campaign_id=int(campaign.id),
                     surface="telegraph_weekend",
                     max_per_publish=max(1, min(int(max_per_publish), 2)),
-                    selection_policy="diverse_shuffle",
+                    selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
                     enabled=True,
                 ),
             ]
@@ -268,6 +287,7 @@ async def create_festival_promo_campaign(
         festival_name=name,
         query_text=name,
         max_per_publish=2,
+        priority=PROMO_DEFAULT_PRIORITY,
         now_utc=now_utc,
         created_by=created_by,
     )
@@ -342,6 +362,7 @@ async def create_event_promo_campaign(
         event_id=event_id,
         query_text=query,
         max_per_publish=1,
+        priority=PROMO_DEFAULT_PRIORITY,
         now_utc=now_utc,
         created_by=created_by,
     )
@@ -368,6 +389,29 @@ async def ensure_initial_80_stories_campaign(
         )
         existing = existing_res.scalars().first()
         if existing is not None:
+            changed = False
+            if normalize_promo_priority(getattr(existing, "priority", None)) != INITIAL_80_STORIES_PRIORITY:
+                existing.priority = INITIAL_80_STORIES_PRIORITY
+                changed = True
+            activity_res = await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == existing.id,
+                    PromoActivity.surface == "video_general",
+                    PromoActivity.profile_key == "popular_review",
+                )
+            )
+            for activity in activity_res.scalars().all():
+                if activity.selection_policy != PROMO_POLICY_GUARANTEED_ANY_POSITION:
+                    activity.selection_policy = PROMO_POLICY_GUARANTEED_ANY_POSITION
+                    changed = True
+                if int(activity.max_per_publish or 1) != 2:
+                    activity.max_per_publish = 2
+                    changed = True
+                session.add(activity)
+            if changed:
+                existing.updated_at = now_utc
+                session.add(existing)
+                await session.commit()
             return existing
 
         future_count_res = await session.execute(
@@ -397,6 +441,7 @@ async def ensure_initial_80_stories_campaign(
             ),
             starts_at=now_utc,
             ends_at=_campaign_end_dt(INITIAL_80_STORIES_END_DATE),
+            priority=INITIAL_80_STORIES_PRIORITY,
             created_by=created_by,
         )
         session.add(campaign)
@@ -414,28 +459,28 @@ async def ensure_initial_80_stories_campaign(
             surface="video_general",
             profile_key="popular_review",
             max_per_publish=2,
-            selection_policy="diverse_shuffle",
+            selection_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
             enabled=True,
         )
         daily = PromoActivity(
             campaign_id=int(campaign.id),
             surface="daily_highlight",
             max_per_publish=2,
-            selection_policy="diverse_shuffle",
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
             enabled=True,
         )
         telegraph_month = PromoActivity(
             campaign_id=int(campaign.id),
             surface="telegraph_month",
             max_per_publish=2,
-            selection_policy="diverse_shuffle",
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
             enabled=True,
         )
         telegraph_weekend = PromoActivity(
             campaign_id=int(campaign.id),
             surface="telegraph_weekend",
             max_per_publish=2,
-            selection_policy="diverse_shuffle",
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
             enabled=True,
         )
         session.add_all([target, popular_review, daily, telegraph_month, telegraph_weekend])
@@ -502,7 +547,7 @@ async def _load_public_exposure_stats(
             .where(PromoExposure.campaign_id == campaign_id)
             .where(PromoExposure.activity_id == activity_id)
             .where(PromoExposure.event_id.in_(ids))
-            .where(PromoExposure.publish_status == "PUBLISHED_MAIN")
+            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST")))
             .group_by(PromoExposure.event_id)
         )
         rows = res.all()
@@ -534,16 +579,20 @@ async def resolve_video_promo_candidates(
             .where(PromoActivity.enabled.is_(True))
             .where(PromoActivity.surface == surface)
             .where(or_(PromoActivity.profile_key.is_(None), PromoActivity.profile_key == profile_key))
-            .order_by(PromoCampaign.created_at, PromoActivity.id, PromoTarget.id)
+            .order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id, PromoTarget.id)
         )
         rows = list(res.all())
 
     result: list[PromoCandidate] = []
     used_event_ids: set[int] = set()
+    global_budget = VIDEO_PROMO_GLOBAL_MAX_PER_PUBLISH
     for campaign, activity, target in rows:
         if campaign.id is None or activity.id is None:
             continue
+        if len(result) >= global_budget:
+            break
         max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
+        max_per_publish = min(max_per_publish, global_budget - len(result))
         events = await _events_for_target(
             db,
             target=target,
@@ -575,6 +624,11 @@ async def resolve_video_promo_candidates(
             return (count, last_key, shuffle, start, time_value, int(ev.id))
 
         picked = sorted(events, key=sort_key)[:max_per_publish]
+        placement_kind = (
+            PROMO_POLICY_GUARANTEED_ANY_POSITION
+            if str(activity.selection_policy or "") == PROMO_POLICY_GUARANTEED_ANY_POSITION
+            else "general_boost"
+        )
         for ev in picked:
             if ev.id is None:
                 continue
@@ -584,11 +638,12 @@ async def resolve_video_promo_candidates(
                     event=ev,
                     campaign_id=int(campaign.id),
                     activity_id=int(activity.id),
-                    placement_kind="general_boost",
+                    placement_kind=placement_kind,
                     reason=(
                         f"promo:{surface}"
                         + (f":festival:{target.festival_name}" if target.festival_name else "")
                     ),
+                    priority=normalize_promo_priority(getattr(campaign, "priority", None)),
                 )
             )
     return result

@@ -92,6 +92,12 @@ def _merge_promo_and_fresh_picks(
 ) -> list[PopularReviewPick]:
     selected: list[PopularReviewPick] = []
     selected_event_ids: set[int] = set()
+    top_slot_promo = [
+        pick for pick in promo_picks if pick.promo_placement_kind != "guaranteed_any_position"
+    ]
+    guaranteed_anywhere = [
+        pick for pick in promo_picks if pick.promo_placement_kind == "guaranteed_any_position"
+    ]
 
     def add_pick(pick: PopularReviewPick | None) -> None:
         if pick is None or len(selected) >= max_events:
@@ -102,23 +108,56 @@ def _merge_promo_and_fresh_picks(
         selected.append(pick)
         selected_event_ids.add(event_id)
 
-    if promo_picks and fresh:
-        promo_first = _promo_starts_first(promo_picks, now_utc=now_utc)
+    def guarantee_pick(pick: PopularReviewPick) -> None:
+        if pick.event.id is None:
+            return
+        event_id = int(pick.event.id)
+        if event_id in selected_event_ids:
+            return
+        while len(selected) >= max_events and selected:
+            removable_idx = next(
+                (
+                    idx
+                    for idx in range(len(selected) - 1, -1, -1)
+                    if selected[idx].promo_placement_kind != "guaranteed_any_position"
+                ),
+                len(selected) - 1,
+            )
+            removed = selected.pop(removable_idx)
+            selected_event_ids.discard(int(removed.event.id))
+        add_pick(pick)
+
+    if top_slot_promo and fresh:
+        promo_first = _promo_starts_first(top_slot_promo, now_utc=now_utc)
         promo_idx = 0
         fresh_idx = 0
         if promo_first:
-            add_pick(promo_picks[promo_idx])
+            add_pick(top_slot_promo[promo_idx])
             promo_idx += 1
-        while len(selected) < max_events and (fresh_idx < len(fresh) or promo_idx < len(promo_picks)):
+        while len(selected) < max_events and (fresh_idx < len(fresh) or promo_idx < len(top_slot_promo)):
             if fresh_idx < len(fresh):
                 add_pick(fresh[fresh_idx])
                 fresh_idx += 1
-            if promo_idx < len(promo_picks):
-                add_pick(promo_picks[promo_idx])
+            if promo_idx < len(top_slot_promo):
+                add_pick(top_slot_promo[promo_idx])
                 promo_idx += 1
+        for candidate in guaranteed_anywhere:
+            guarantee_pick(candidate)
+        while len(selected) < max_events and fresh_idx < len(fresh):
+            add_pick(fresh[fresh_idx])
+            fresh_idx += 1
         return selected
 
-    for candidate in [*promo_picks, *fresh]:
+    if guaranteed_anywhere and fresh:
+        for candidate in fresh:
+            add_pick(candidate)
+            if len(selected) >= max_events:
+                break
+        for candidate in guaranteed_anywhere:
+            guarantee_pick(candidate)
+        return selected
+
+    for candidate in [*top_slot_promo, *guaranteed_anywhere, *fresh]:
         add_pick(candidate)
         if len(selected) >= max_events:
             break

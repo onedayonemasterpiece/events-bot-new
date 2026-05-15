@@ -1711,6 +1711,7 @@ class Database:
                     ends_at TIMESTAMP,
                     total_exposure_goal INTEGER,
                     daily_exposure_cap INTEGER,
+                    priority INTEGER NOT NULL DEFAULT 2,
                     sponsorship_disclosure TEXT,
                     created_by BIGINT,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1754,6 +1755,9 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_campaign_status_dates ON promo_campaign(status, starts_at, ends_at)"
+            )
+            await _add_column(
+                conn, "promo_campaign", "priority INTEGER NOT NULL DEFAULT 2"
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_target_campaign ON promo_target(campaign_id)"

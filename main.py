@@ -2728,8 +2728,8 @@ HELP_COMMANDS = [
         "roles": {"superadmin"},
     },
     {
-        "usage": "/promo [report|seed80|add festival ...|add event ...|pause ID|start ID|archive ID]",
-        "desc": "Manage editorial promo campaigns and reports",
+        "usage": "/promo [report|seed80|add festival ...|add event ...|pause ID|start ID|archive ID|priority ID 0..3]",
+        "desc": "Manage editorial promo campaigns, priorities and reports",
         "roles": {"superadmin"},
     },
     {

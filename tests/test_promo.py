@@ -18,7 +18,13 @@ from models import (
     VideoAnnounceSession,
     VideoAnnounceSessionStatus,
 )
-from promo import create_event_promo_campaign, create_festival_promo_campaign
+from promo import (
+    PROMO_POLICY_GUARANTEED_ANY_POSITION,
+    create_event_promo_campaign,
+    create_festival_promo_campaign,
+    ensure_initial_80_stories_campaign,
+    resolve_video_promo_candidates,
+)
 
 
 def _event(title: str, day: str, *, festival: str | None = None) -> Event:
@@ -150,6 +156,108 @@ async def test_create_festival_promo_accepts_existing_future_event_festival_labe
 
     assert created.status == "created"
     assert created.campaign is not None
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 14, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="80 историй о главном"))
+        session.add(_event("Future Labeled Festival Event", "2026-06-01", festival="80 историй о главном"))
+        await session.commit()
+
+    campaign = await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
+
+    assert campaign is not None
+    async with db.get_session() as session:
+        stored = await session.get(PromoCampaign, int(campaign.id))
+        activity = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign.id,
+                    PromoActivity.surface == "video_general",
+                )
+            )
+        ).scalars().one()
+    assert stored is not None
+    assert stored.priority == 1
+    assert activity.selection_policy == PROMO_POLICY_GUARANTEED_ANY_POSITION
+    assert activity.max_per_publish == 2
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_video_promo_resolver_uses_priority_and_global_budget(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 14, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        high = PromoCampaign(
+            title="high",
+            status="active",
+            priority=0,
+            starts_at=now_utc,
+            ends_at=datetime(2026, 7, 1, 23, 59, tzinfo=timezone.utc),
+        )
+        low = PromoCampaign(
+            title="low",
+            status="active",
+            priority=3,
+            starts_at=now_utc,
+            ends_at=datetime(2026, 7, 1, 23, 59, tzinfo=timezone.utc),
+        )
+        high_event = _event("High Event", "2026-06-01")
+        low_event = _event("Low Event", "2026-06-01")
+        session.add_all([high, low, high_event, low_event])
+        await session.commit()
+        await session.refresh(high)
+        await session.refresh(low)
+        await session.refresh(high_event)
+        await session.refresh(low_event)
+        session.add_all(
+            [
+                PromoTarget(
+                    campaign_id=int(high.id),
+                    target_type="event",
+                    event_id=int(high_event.id),
+                ),
+                PromoActivity(
+                    campaign_id=int(high.id),
+                    surface="video_general",
+                    profile_key="popular_review",
+                    max_per_publish=1,
+                    enabled=True,
+                ),
+                PromoTarget(
+                    campaign_id=int(low.id),
+                    target_type="event",
+                    event_id=int(low_event.id),
+                ),
+                PromoActivity(
+                    campaign_id=int(low.id),
+                    surface="video_general",
+                    profile_key="popular_review",
+                    max_per_publish=1,
+                    enabled=True,
+                ),
+            ]
+        )
+        await session.commit()
+
+    picks = await resolve_video_promo_candidates(
+        db,
+        profile_key="popular_review",
+        now_utc=now_utc,
+    )
+
+    assert [pick.event.title for pick in picks[:2]] == ["High Event", "Low Event"]
+    assert len(picks) <= 2
+    assert picks[0].priority == 0
     await db.close()
 
 

@@ -32,7 +32,12 @@ def _freeze_popular_posts_now(monkeypatch, now_utc: datetime) -> None:
     )
 
 
-def _pick_for_merge(event_id: int, *, promo: bool) -> popular_review_module.PopularReviewPick:
+def _pick_for_merge(
+    event_id: int,
+    *,
+    promo: bool,
+    placement_kind: str = "general_boost",
+) -> popular_review_module.PopularReviewPick:
     event = Event(
         title=f"Event {event_id}",
         description="Description",
@@ -57,7 +62,7 @@ def _pick_for_merge(event_id: int, *, promo: bool) -> popular_review_module.Popu
         description="Description",
         promo_campaign_id=1 if promo else None,
         promo_activity_id=1 if promo else None,
-        promo_placement_kind="general_boost" if promo else None,
+        promo_placement_kind=placement_kind if promo else None,
     )
 
 
@@ -80,6 +85,32 @@ def test_popular_review_interleaves_promo_with_organic_first_or_second() -> None
     ]
     assert promo_positions[0] in {1, 2}
     assert promo_positions != [1, 2]
+
+
+def test_popular_review_guaranteed_any_position_uses_tail_slots() -> None:
+    now_utc = datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc)
+    promo = [
+        _pick_for_merge(1, promo=True, placement_kind="guaranteed_any_position"),
+        _pick_for_merge(2, promo=True, placement_kind="guaranteed_any_position"),
+    ]
+    fresh = [
+        _pick_for_merge(3, promo=False),
+        _pick_for_merge(4, promo=False),
+        _pick_for_merge(5, promo=False),
+        _pick_for_merge(6, promo=False),
+        _pick_for_merge(7, promo=False),
+        _pick_for_merge(8, promo=False),
+    ]
+
+    selected = popular_review_module._merge_promo_and_fresh_picks(
+        promo,
+        fresh,
+        max_events=6,
+        now_utc=now_utc,
+    )
+
+    assert [pick.event.id for pick in selected[:4]] == [3, 4, 5, 6]
+    assert [pick.event.id for pick in selected[4:]] == [1, 2]
 
 
 async def _seed_popular_post(

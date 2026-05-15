@@ -456,6 +456,7 @@ class PromoCampaign(SQLModel, table=True):
     )
     total_exposure_goal: Optional[int] = None
     daily_exposure_cap: Optional[int] = None
+    priority: int = Field(default=2, sa_column=Column(SmallInteger, default=2))
     sponsorship_disclosure: Optional[str] = None
     created_by: Optional[int] = None
     created_at: datetime = Field(

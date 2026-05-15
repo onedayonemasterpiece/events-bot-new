@@ -15,7 +15,8 @@ implemented behavior contract.
 ## Data Model
 
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,
-  start/end dates, optional exposure caps/disclosure fields.
+  start/end dates, priority (`0..3`, where `0` is highest), optional exposure
+  caps/disclosure fields.
 - `promo_target`: either one real `event.id` or one existing `festival.name`.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`.
@@ -70,7 +71,10 @@ All `/a` actions still require operator confirmation.
 CherryFlash (`popular_review`) calls the promo resolver after collecting normal
 popular-post candidates. General promo:
 
-- can add up to two eligible promoted events per CherryFlash release;
+- has a global video promo budget of two events per CherryFlash release;
+- resolves campaigns by priority first (`0` highest, `3` lowest), then creation
+  order, so when many campaigns are active the two available video promo seats
+  go to the highest-priority eligible campaigns;
 - is interleaved with organic popularity picks;
 - starts the first promo item in position 1 or 2 by stable daily choice unless a
   future named-slot rule explicitly requests the first slot;
@@ -81,6 +85,15 @@ popular-post candidates. General promo:
 - stores promo provenance on `VideoAnnounceItem`;
 - uses festival rotation by viewer-facing exposure count and stable daily
   shuffle among equally exposed future events.
+
+`80 историй о главном` is the initial special policy:
+
+- campaign priority is `1`;
+- the video activity uses `selection_policy=guaranteed_any_position`;
+- it does not force slot 1 or 2;
+- it is guaranteed into CherryFlash at any available/lower position, replacing
+  tail organic items if the normal organic list is already full;
+- it may contribute up to two future events when the promo budget has room.
 
 This directly covers the regression contract from
 `INC-2026-05-05-80-stories-video-promo-gap`: a promoted future festival event
@@ -108,3 +121,6 @@ activation.
   `videoannounce_session`/`videoannounce_item` and uses `promo_exposure` as the
   normalized audit trail. Story target fanout details can be expanded from
   `story_publish_report.json` in a later pass.
+- `/promo` now sends an inline management keyboard with report, seed80,
+  pause/start/archive and priority buttons. The same menu is reachable from
+  `/v` through `✨ Промо-кампании`.

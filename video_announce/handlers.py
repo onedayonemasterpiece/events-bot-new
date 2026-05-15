@@ -162,6 +162,11 @@ async def handle_video_callback(
         return
     data = callback.data
     scenario = VideoAnnounceScenario(db, bot, callback.message.chat.id, callback.from_user.id)
+    if data.startswith("vidpromo:"):
+        from handlers.promo_cmd import handle_promo_callback
+
+        await handle_promo_callback(callback, db, bot)
+        return
     if data.startswith("vidauto:"):
         action = data.split(":", 1)[1]
         if action == "tomorrow":

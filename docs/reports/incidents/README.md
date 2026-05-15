@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-15-cherryflash-partner-fanout-promo-filter.md`
+  - Scope: CherryFlash partner Business-only story target resolution, eco/east partner auto-selection fail-closed behavior, eco classifier retry/4o fallback, and promo campaign priority / guaranteed-any-position video policy.
+  - Must not regress: partner tracks must not inherit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` or publish to `@kenigevents`/`@lovekenig`; an explicit empty `story_targets_override=[]` means no Telethon fanout; scheduled partner tracks must not publish `manual_review`/`llm_error` events; eco classification must retry Gemma and then use 4o fallback before failing closed; `80 историй о главном` must stay priority `1` and `guaranteed_any_position` instead of forced top-slot promo.
 - `INC-2026-05-13-kenigsberg-production-story-boosts-required.md`
   - Scope: Kenigsberg production story target config, direct `@mostvkenig` fanout, Business story target gate, and same-day startup catch-up.
   - Must not regress: direct `@mostvkenig` Telethon story upload must not be the required/blocking render gate while Telegram returns `BOOSTS_REQUIRED`; Kenigsberg must not inherit the shared video-announcement Business fanout; the required target is the configured self-account story, with `@mostvkenig` attempted only as best-effort `repost_previous`; after any failed same-day scheduled/catch-up production attempt, deploy closure requires a compensation rerun and terminal publish evidence.

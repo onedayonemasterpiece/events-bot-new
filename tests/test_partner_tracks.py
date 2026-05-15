@@ -176,6 +176,31 @@ async def test_eco_filter_llm_error_marks_manual_review():
 
 
 @pytest.mark.asyncio
+async def test_eco_filter_retries_and_uses_fallback(monkeypatch):
+    monkeypatch.setenv("PARTNER_FILTER_GEMMA_ATTEMPTS", "2")
+    calls = {"gemma": 0, "fallback": 0}
+
+    async def fake_llm(*_a, **_kw):
+        calls["gemma"] += 1
+        raise RuntimeError("provider down")
+
+    async def fake_fallback(*_a, **_kw):
+        calls["fallback"] += 1
+        return {"decision": "matched", "reason": "fallback accepted"}
+
+    event = _make_event(id=26, title="Эко-лекция о птицах")
+    decision = await classify_event_eco_prirodnaya(
+        event,
+        llm_call=fake_llm,
+        fallback_llm_call=fake_fallback,
+    )
+
+    assert calls == {"gemma": 2, "fallback": 1}
+    assert decision.matched is True
+    assert decision.reason == "fallback accepted"
+
+
+@pytest.mark.asyncio
 async def test_eco_filter_empty_event_returns_manual_review():
     async def fake_llm(*_a, **_kw):
         pytest.fail("LLM should not be called for empty event")

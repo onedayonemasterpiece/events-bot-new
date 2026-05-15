@@ -11,10 +11,12 @@ from db import Database
 from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
 from promo import (
     INITIAL_80_STORIES_FESTIVAL,
+    INITIAL_80_STORIES_PRIORITY,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     default_campaign_end,
     ensure_initial_80_stories_campaign,
+    normalize_promo_priority,
 )
 
 _RU_MONTHS = {
@@ -130,6 +132,90 @@ def _status_label(status: str) -> str:
         "paused": "пауза",
         "archived": "архив",
     }.get(status, status)
+
+
+def _promo_keyboard(campaigns: list[PromoCampaign]) -> types.InlineKeyboardMarkup:
+    keyboard: list[list[types.InlineKeyboardButton]] = [
+        [
+            types.InlineKeyboardButton(text="Отчёт", callback_data="vidpromo:report"),
+            types.InlineKeyboardButton(text="Seed 80", callback_data="vidpromo:seed80"),
+        ]
+    ]
+    for campaign in campaigns[:8]:
+        cid = int(campaign.id or 0)
+        if cid <= 0:
+            continue
+        status = str(campaign.status or "")
+        toggle_action = "pause" if status == "active" else "start"
+        toggle_label = "Пауза" if status == "active" else "Старт"
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"#{cid} {toggle_label}",
+                    callback_data=f"vidpromo:{toggle_action}:{cid}",
+                ),
+                types.InlineKeyboardButton(
+                    text="Архив",
+                    callback_data=f"vidpromo:archive:{cid}",
+                ),
+            ]
+        )
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"P{priority}",
+                    callback_data=f"vidpromo:priority:{cid}:{priority}",
+                )
+                for priority in range(0, 4)
+            ]
+        )
+    keyboard.append(
+        [types.InlineKeyboardButton(text="Обновить", callback_data="vidpromo:list")]
+    )
+    return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+async def _active_campaigns(db: Database, *, include_archived: bool = False) -> list[PromoCampaign]:
+    async with db.get_session() as session:
+        query = select(PromoCampaign).order_by(
+            PromoCampaign.priority,
+            PromoCampaign.status,
+            PromoCampaign.created_at,
+        )
+        if not include_archived:
+            query = query.where(PromoCampaign.status != "archived")
+        res = await session.execute(query)
+        return list(res.scalars().all())
+
+
+async def send_promo_menu(
+    db: Database,
+    bot: Bot,
+    chat_id: int,
+    *,
+    include_report: bool = False,
+) -> None:
+    await ensure_initial_80_stories_campaign(db)
+    campaigns = await _active_campaigns(db, include_archived=include_report)
+    lines = ["<b>Промо-кампании</b>", ""]
+    lines.extend(
+        await _campaign_lines(
+            db,
+            include_archived=include_report,
+            include_details=include_report,
+        )
+    )
+    lines.append("")
+    lines.append(
+        "Priority: 0 — высший, 3 — низкий. 80 историй держим на priority "
+        f"{INITIAL_80_STORIES_PRIORITY}."
+    )
+    await bot.send_message(
+        chat_id,
+        "\n\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=_promo_keyboard(campaigns),
+    )
 
 
 def _fmt_dt(value: object) -> str:
@@ -313,7 +399,11 @@ async def _campaign_lines(
         ends = campaign.ends_at.date().isoformat() if campaign.ends_at else "без срока"
         block = [
             f"#{campaign.id} <b>{html.escape(campaign.title)}</b>",
-            f"Статус: {_status_label(campaign.status)}; до: {ends}",
+            (
+                f"Статус: {_status_label(campaign.status)}; "
+                f"priority: {normalize_promo_priority(getattr(campaign, 'priority', None))}; "
+                f"до: {ends}"
+            ),
             (
                 f"Будущих событий сейчас: {future_count}; "
                 f"видео-публикаций: {len(video_groups)}; промо-показов: {video_show_count}"
@@ -363,27 +453,29 @@ async def _set_campaign_status(db: Database, campaign_id: int, status: str) -> b
         return True
 
 
+async def _set_campaign_priority(db: Database, campaign_id: int, priority: int) -> bool:
+    async with db.get_session() as session:
+        campaign = await session.get(PromoCampaign, campaign_id)
+        if campaign is None:
+            return False
+        campaign.priority = normalize_promo_priority(priority)
+        campaign.updated_at = datetime.now(timezone.utc)
+        session.add(campaign)
+        await session.commit()
+        return True
+
+
 async def handle_promo_command(message: types.Message, db: Database, bot: Bot) -> None:
     args = (message.text or "").split(maxsplit=1)
     arg_text = args[1].strip() if len(args) > 1 else ""
     lowered = arg_text.casefold()
 
     if not arg_text or lowered in {"list", "список"}:
-        await ensure_initial_80_stories_campaign(db)
-        lines = ["<b>Промо-кампании</b>", ""]
-        lines.extend(await _campaign_lines(db))
-        lines.append("")
-        lines.append(
-            "Команды: /promo report, /promo seed80, /promo add festival НАЗВАНИЕ, "
-            "/promo add event НАЗВАНИЕ, /promo pause ID, /promo start ID, /promo archive ID"
-        )
-        await bot.send_message(message.chat.id, "\n\n".join(lines), parse_mode="HTML")
+        await send_promo_menu(db, bot, message.chat.id)
         return
 
     if lowered in {"report", "отчет", "отчёт"}:
-        lines = ["<b>Промо-отчёт</b>", ""]
-        lines.extend(await _campaign_lines(db, include_archived=True, include_details=True))
-        await bot.send_message(message.chat.id, "\n\n".join(lines), parse_mode="HTML")
+        await send_promo_menu(db, bot, message.chat.id, include_report=True)
         return
 
     if lowered in {"seed80", "80", "80stories"}:
@@ -452,11 +544,89 @@ async def handle_promo_command(message: types.Message, db: Database, bot: Bot) -
         )
         return
 
+    if len(parts) == 3 and parts[0].casefold() in {"priority", "prio", "p"}:
+        try:
+            campaign_id = int(parts[1])
+            priority = normalize_promo_priority(parts[2])
+        except ValueError:
+            await bot.send_message(message.chat.id, "ID и priority должны быть числами.")
+            return
+        ok = await _set_campaign_priority(db, campaign_id, priority)
+        await bot.send_message(
+            message.chat.id,
+            f"Готово: #{campaign_id} priority → {priority}" if ok else "Кампания не найдена.",
+        )
+        return
+
     await bot.send_message(
         message.chat.id,
         (
             "Использование: /promo, /promo report, /promo seed80, "
             "/promo add festival НАЗВАНИЕ [до ДАТА], /promo add event НАЗВАНИЕ [до ДАТА], "
-            "/promo pause ID, /promo start ID, /promo archive ID"
+            "/promo pause ID, /promo start ID, /promo archive ID, /promo priority ID 0..3"
         ),
     )
+
+
+async def handle_promo_callback(callback: types.CallbackQuery, db: Database, bot: Bot) -> None:
+    async with db.get_session() as session:
+        from models import User
+        from main import has_admin_access
+
+        user = await session.get(User, callback.from_user.id)
+        if not has_admin_access(user):
+            await callback.answer("Not authorized", show_alert=True)
+            return
+    data = callback.data or ""
+    parts = data.split(":")
+    action = parts[1] if len(parts) > 1 else "list"
+    chat_id = callback.message.chat.id
+    if action in {"list", "menu"}:
+        await callback.answer("Промо")
+        await send_promo_menu(db, bot, chat_id)
+        return
+    if action == "report":
+        await callback.answer("Отчёт")
+        await send_promo_menu(db, bot, chat_id, include_report=True)
+        return
+    if action == "seed80":
+        campaign = await ensure_initial_80_stories_campaign(db)
+        await callback.answer("Seed 80")
+        if campaign is None:
+            await bot.send_message(
+                chat_id,
+                (
+                    f"Не создал кампанию: фестиваль {INITIAL_80_STORIES_FESTIVAL!r} "
+                    "должен существовать и иметь будущие события."
+                ),
+            )
+        else:
+            await bot.send_message(chat_id, f"Кампания готова: #{campaign.id} {campaign.title}")
+        return
+    if action in {"pause", "start", "archive"} and len(parts) >= 3:
+        try:
+            campaign_id = int(parts[2])
+        except ValueError:
+            await callback.answer("Некорректный ID", show_alert=True)
+            return
+        target_status = {
+            "pause": "paused",
+            "start": "active",
+            "archive": "archived",
+        }[action]
+        ok = await _set_campaign_status(db, campaign_id, target_status)
+        await callback.answer("Готово" if ok else "Не найдено", show_alert=not ok)
+        await send_promo_menu(db, bot, chat_id)
+        return
+    if action == "priority" and len(parts) >= 4:
+        try:
+            campaign_id = int(parts[2])
+            priority = normalize_promo_priority(parts[3])
+        except ValueError:
+            await callback.answer("Некорректные числа", show_alert=True)
+            return
+        ok = await _set_campaign_priority(db, campaign_id, priority)
+        await callback.answer(f"P{priority}" if ok else "Не найдено", show_alert=not ok)
+        await send_promo_menu(db, bot, chat_id)
+        return
+    await callback.answer("Неизвестное действие", show_alert=True)

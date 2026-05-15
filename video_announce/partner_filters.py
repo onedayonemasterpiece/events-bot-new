@@ -358,6 +358,7 @@ async def classify_event_eco_prirodnaya(
     event: Event,
     *,
     llm_call,
+    fallback_llm_call=None,
 ) -> FilterDecision:
     """Classify an event for the eco_prirodnaya partner filter.
 
@@ -377,19 +378,47 @@ async def classify_event_eco_prirodnaya(
             extra={"matched_keywords": [], "matched_categories": []},
         )
     has_hint = _has_keyword_hint(text)
-    try:
-        raw = await llm_call(ECO_SYSTEM_PROMPT, text, ECO_NATIVE_SCHEMA)
-    except Exception as exc:  # noqa: BLE001 — classifier is best-effort
-        logger.warning(
-            "video_announce.partner_filters: eco_prirodnaya LLM call failed event_id=%s err=%s",
-            event_id,
-            exc,
+    attempts = _read_positive_int_env(PARTNER_FILTER_GEMMA_ATTEMPTS_ENV, 2)
+    raw = None
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            raw = await llm_call(ECO_SYSTEM_PROMPT, text, ECO_NATIVE_SCHEMA)
+            break
+        except Exception as exc:  # noqa: BLE001 — transport errors are retried/fallbacked
+            last_exc = exc
+            logger.warning(
+                "video_announce.partner_filters: eco_prirodnaya LLM call failed event_id=%s attempt=%s/%s err=%s",
+                event_id,
+                attempt,
+                attempts,
+                exc,
+            )
+    if raw is None and fallback_llm_call is not None:
+        try:
+            raw = await fallback_llm_call(ECO_SYSTEM_PROMPT, text, ECO_NATIVE_SCHEMA)
+            logger.info(
+                "video_announce.partner_filters: eco_prirodnaya fallback LLM succeeded event_id=%s",
+                event_id,
+            )
+        except Exception as exc:  # noqa: BLE001 — final fail-closed decision below
+            last_exc = exc
+            logger.warning(
+                "video_announce.partner_filters: eco_prirodnaya fallback LLM failed event_id=%s err=%s",
+                event_id,
+                exc,
+            )
+    if raw is None:
+        reason = (
+            f"llm_error:{type(last_exc).__name__}"
+            if last_exc is not None
+            else "llm_error:unknown"
         )
         return FilterDecision(
             event_id=event_id,
             matched=False,
             needs_manual_review=True,
-            reason=f"llm_error:{type(exc).__name__}",
+            reason=reason,
             extra={"keyword_hint": has_hint},
         )
     payload = _parse_eco_response(raw)
@@ -418,6 +447,20 @@ async def classify_event_eco_prirodnaya(
 
 PARTNER_FILTER_GEMMA_MODEL_ENV = "PARTNER_FILTER_GEMMA_MODEL"
 PARTNER_FILTER_GEMMA_MODEL_DEFAULT = "gemma-4-31b-it"
+PARTNER_FILTER_GEMMA_ATTEMPTS_ENV = "PARTNER_FILTER_GEMMA_ATTEMPTS"
+PARTNER_FILTER_4O_FALLBACK_MODEL_ENV = "PARTNER_FILTER_4O_FALLBACK_MODEL"
+PARTNER_FILTER_4O_FALLBACK_MODEL_DEFAULT = "gpt-4o"
+
+
+def _read_positive_int_env(key: str, default: int) -> int:
+    raw = (os.getenv(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 def _strip_code_fence(text: str) -> str:
@@ -488,6 +531,41 @@ def make_eco_gemma_llm_call(gemma_client: Any | None):
         parsed = _extract_json_object(str(raw or ""))
         if parsed is None:
             raise RuntimeError("Gemma 4 returned non-JSON for eco classifier")
+        return parsed
+
+    return _call
+
+
+def make_eco_4o_fallback_llm_call():
+    """Return an async 4o fallback callable for one-off partner classification."""
+
+    model = (
+        os.getenv(PARTNER_FILTER_4O_FALLBACK_MODEL_ENV) or ""
+    ).strip() or PARTNER_FILTER_4O_FALLBACK_MODEL_DEFAULT
+
+    async def _call(system_prompt: str, user_text: str, schema: dict[str, Any]) -> dict[str, Any]:
+        from main import ask_4o  # Imported lazily to avoid a module import cycle.
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "EcoPartnerFilterDecision",
+                "schema": schema,
+                "strict": False,
+            },
+        }
+        raw = await ask_4o(
+            f"Событие:\n{user_text}",
+            system_prompt=system_prompt,
+            response_format=response_format,
+            max_tokens=512,
+            model=model,
+            meta={"feature": "cherryflash_partner_eco_filter"},
+            temperature=0.0,
+        )
+        parsed = _extract_json_object(str(raw or ""))
+        if parsed is None:
+            raise RuntimeError("4o returned non-JSON for eco classifier")
         return parsed
 
     return _call

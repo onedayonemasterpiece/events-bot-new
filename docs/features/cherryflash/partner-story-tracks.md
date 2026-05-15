@@ -83,6 +83,23 @@ Required parallel-safe contract:
 - session output must include `partner_track_id`, `content_filter_id`, `geo_filter_id`, `kaggle_kernel_ref`, and the exact session dataset slug.
 - `story_publish.json` and encrypted Business story secrets must remain co-located with the same session dataset as the render payload, so a parallel run cannot pick stale or cross-partner story secrets.
 
+## Production hardening: 2026-05-15 incident
+
+Regression contract: `docs/reports/incidents/INC-2026-05-15-cherryflash-partner-fanout-promo-filter.md`.
+
+Partner tracks are Business-only story publications. A partner run must never
+inherit the shared `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` chain used by base
+CherryFlash/CrumpleVideo. In `selection_params`, an explicit
+`story_targets_override=[]` means "no Telethon targets"; only
+`story_business_targets` may add targets for the partner track.
+
+Scheduled or direct one-click partner runs have no manual approval step, so
+`manual_review` filter decisions are fail-closed for publication. The eco
+classifier retries Gemma and then uses the configured 4o fallback for the small
+classification request; if all provider paths fail, the candidate is skipped
+rather than published. The watchdog may try a later run, but it must not fill
+the partner video with unrelated events after classifier errors.
+
 ## Selection policy
 
 Partner tracks are LLM-first editorial filters. Keyword lists and geo lists below are guardrails and audit aids, not a replacement for semantic classification.
