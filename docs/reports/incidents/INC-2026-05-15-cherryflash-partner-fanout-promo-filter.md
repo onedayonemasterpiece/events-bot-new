@@ -31,6 +31,7 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 - 2026-05-15 10:31 UTC: story config for session `#304` logged targets `['me', '@kenigevents', '@lovekenig', 'business:09729df38ffe']`.
 - 2026-05-15 11:20 UTC: session `#304` reached `PUBLISHED_TEST`.
 - 2026-05-15 11:25 UTC: operator reported wrong channel publication and bad eco selection.
+- 2026-05-15 12:10 UTC: follow-up deploy `f8ba897023d4d1f176b4b495fa5128341d24c77c` reached production with the partner/promo fixes plus CherryFlash festival-context video-card rendering. Per operator direction, no compensating CherryFlash rerun/catch-up was started.
 
 ## Root Cause
 
@@ -103,10 +104,16 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `f8ba897023d4d1f176b4b495fa5128341d24c77c`
+- deploy path: clean linked worktree `hotfix/INC-2026-05-15-cherryflash-partner-fanout-promo-filter`, pushed to `origin/main`, deployed with `flyctl deploy -a events-bot-new-wngqia`
+- regression checks:
+  - `python3 -m py_compile scripts/render_cherryflash_full.py scripts/render_mobilefeed_intro_scene1_approval.py video_announce/selection.py video_announce/scenario.py`
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_cherryflash_full_render.py tests/test_video_announce_selection.py tests/test_video_announce_v_pipeline.py tests/test_partner_tracks.py tests/test_video_announce_story_publish.py tests/test_promo.py tests/test_video_announce_popular_review.py` -> `85 passed`
+- post-deploy verification:
+  - Fly app image `events-bot-new-wngqia:deployment-01KRNRPJAQPYAFSF3RH0PWAPP8`
+  - Fly machine `48e42d5b714228`, version `1096`, state `started`, checks `1 passing`
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`
+  - webhook check was not available from this worktree because no `TELEGRAM_BOT_TOKEN` was present in local env; no publishing/rerun was attempted
 
 ## Prevention
 
