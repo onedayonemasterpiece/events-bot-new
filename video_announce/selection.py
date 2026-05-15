@@ -1291,6 +1291,7 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
             "event_id": ev.id,
             "title": (ev.title or "").strip(),
             "about": about_text,
+            "festival": (getattr(ev, "festival", None) or "").strip(),
             "description": item.final_description or "",
             "search_digest": getattr(ev, "search_digest", None) or "",
             "short_description": getattr(ev, "short_description", None) or "",
@@ -1327,6 +1328,7 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
                 {
                     "event_id": scene["event_id"],
                     "title": scene["title"],
+                    "festival": scene.get("festival") or "",
                     "description": extra_description,
                     "images": [images[1]],
                     "scene_variant": "followup_image",

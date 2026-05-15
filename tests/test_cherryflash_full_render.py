@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+os.environ.setdefault("BLENDER_BIN", shutil.which("true") or "/bin/true")
 
 from scripts import render_cherryflash_full as full
 
@@ -189,6 +193,65 @@ def test_build_render_scenes_formats_viewer_facing_date_and_location(
     scene = scenes[0]
     assert scene.date_line == "15 АПРЕЛЯ • 19:00"
     assert scene.location_line == "ЯНТАРЬ ХОЛЛ • СВЕТЛОГОРСК"
+
+
+def test_build_render_scenes_keeps_festival_as_separate_line(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_frame(tmp_path / "scene1.png", (255, 255, 255, 255))
+    _write_frame(tmp_path / "Final.png", (255, 255, 0, 255))
+
+    monkeypatch.setattr(full, "ROOT", tmp_path)
+
+    scenes = full._build_render_scenes(
+        {
+            "scenes": [
+                {
+                    "title": "Лекция про влияние планировочных решений",
+                    "about": "Лекция про город",
+                    "festival": "80 историй о главном",
+                    "date": "2026-05-15",
+                    "time": "19:00",
+                    "location_name": "Дом молодежи",
+                    "city": "Калининград",
+                    "images": ["scene1.png"],
+                }
+            ]
+        }
+    )
+
+    assert scenes[0].festival_line == "80 ИСТОРИЙ О ГЛАВНОМ"
+
+
+def test_primary_blocks_draw_festival_between_title_and_date(monkeypatch, tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def _fake_build_text_blocks(text, **kwargs):  # noqa: ANN001, ANN003
+        calls.append(text)
+        return [], int(kwargs["start_y"]) + 10
+
+    monkeypatch.setattr(full.approval, "_build_text_blocks", _fake_build_text_blocks)
+    scene = full.RenderScene(
+        index=1,
+        variant="primary",
+        title="Лекция про город",
+        date_line="15 МАЯ • 19:00",
+        location_line="ДОМ МОЛОДЕЖИ • КАЛИНИНГРАД",
+        description="",
+        image_path=tmp_path / "scene1.png",
+        start_local=0.0,
+        festival_line="80 ИСТОРИЙ О ГЛАВНОМ",
+    )
+
+    full._build_primary_blocks(scene)
+
+    assert calls == [
+        "Лекция про город",
+        "80 ИСТОРИЙ О ГЛАВНОМ",
+        "15 МАЯ • 19:00",
+        "ДОМ МОЛОДЕЖИ • КАЛИНИНГРАД",
+    ]
 
 
 def test_primary_geometry_advances_primary_drift_every_30fps_frame(

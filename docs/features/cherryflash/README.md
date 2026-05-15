@@ -102,6 +102,7 @@
   - main 2D scene flow follows `kaggle/VideoAfisha/video_afisha.ipynb`;
   - the runtime selection manifest for the intro must carry raw machine-readable event fields (`date_iso`, `time`, `city`, `location_name`) in addition to viewer-facing display text, so the intro date strip never falls back to the old sample April cluster when a real CherryFlash selection exists;
   - intro poster loading must accept both mounted local poster filenames and remote fallback candidates from the same selection manifest, because real CherryFlash runs may contain a mix of successfully prefetched posters and runtime-only remote poster URLs;
+  - event scenes must carry `event.festival` through `payload.json` and `assets/cherryflash_selection.json`; when present, the CherryFlash full-video renderer prints the festival name as a separate line between the event title and date/location lines, so festival program items such as `80 историй о главном` keep their festival context without bloating the event title;
   - the existing `CrumpleVideo` daily pipeline remains a separate product and must not be regressed by this work.
 
 ## Current state against the request

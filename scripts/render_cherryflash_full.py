@@ -14,23 +14,9 @@ from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw
 
-try:
-    from moviepy import AudioFileClip
-except ImportError:
-    from moviepy.audio.io.AudioFileClip import AudioFileClip
-
-try:
-    from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
-except ImportError:
-    MultiplyVolume = None
-
-try:
-    from moviepy.audio.fx.volumex import volumex as volumex_fx
-except ImportError:
-    try:
-        from moviepy.audio.fx.all import volumex as volumex_fx
-    except ImportError:
-        volumex_fx = None
+AudioFileClip = None
+MultiplyVolume = None
+volumex_fx = None
 
 
 def resolve_root() -> Path:
@@ -116,6 +102,7 @@ class RenderScene:
     description: str
     image_path: Path
     start_local: float
+    festival_line: str = ""
 
 
 def _ensure_dirs() -> None:
@@ -346,6 +333,7 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                 title=_strip_leading_emoji(
                     str(raw_scene.get("about") or raw_scene.get("title") or "")
                 ),
+                festival_line=_normalize_text(raw_scene.get("festival")).upper(),
                 date_line=_format_display_date(
                     raw_scene.get("date_iso") or raw_scene.get("date"),
                     raw_scene.get("time"),
@@ -367,6 +355,7 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                 index=len(scenes) + 1,
                 variant="brand_outro",
                 title="Полюбить Калининград Анонсы",
+                festival_line="",
                 date_line="",
                 location_line="",
                 description="",
@@ -464,6 +453,17 @@ def _build_primary_blocks(scene: RenderScene):
         start_y=SPLIT_Y + round(30 * scale),
     )
     blocks.extend(title_blocks)
+    if scene.festival_line:
+        festival_blocks, next_y = approval._build_text_blocks(
+            scene.festival_line,
+            font_path=PRIMARY_TITLE_FONT,
+            font_size=max(22, round(42 * scale)),
+            text_color=DETAIL_COLOR,
+            start_time=SCENE_TEXT_START + 0.15,
+            duration=approval.T_INFO + 1.0,
+            start_y=next_y + round(22 * scale),
+        )
+        blocks.extend(festival_blocks)
     date_blocks, next_y = approval._build_text_blocks(
         scene.date_line,
         font_path=PRIMARY_TITLE_FONT,
@@ -679,9 +679,9 @@ def _scale_audio_volume(audio: object, factor: float) -> object:
         return audio.with_volume_scaled(factor)
     if hasattr(audio, "volumex"):
         return audio.volumex(factor)
-    if MultiplyVolume is not None and hasattr(audio, "with_effects"):
+    if MultiplyVolume and hasattr(audio, "with_effects"):
         return audio.with_effects([MultiplyVolume(factor)])
-    if volumex_fx is not None:
+    if volumex_fx:
         if hasattr(audio, "fx"):
             return audio.fx(volumex_fx, factor)
         return volumex_fx(audio, factor)
@@ -690,6 +690,32 @@ def _scale_audio_volume(audio: object, factor: float) -> object:
         file=sys.stderr,
     )
     return audio
+
+
+def _load_moviepy_audio_clip():
+    global AudioFileClip, MultiplyVolume, volumex_fx
+    if AudioFileClip is None:
+        try:
+            from moviepy import AudioFileClip as audio_file_clip
+        except ImportError:
+            from moviepy.audio.io.AudioFileClip import AudioFileClip as audio_file_clip
+        AudioFileClip = audio_file_clip
+    if MultiplyVolume is None:
+        try:
+            from moviepy.audio.fx.MultiplyVolume import MultiplyVolume as multiply_volume
+        except ImportError:
+            multiply_volume = False
+        MultiplyVolume = multiply_volume
+    if volumex_fx is None:
+        try:
+            from moviepy.audio.fx.volumex import volumex as loaded_volumex
+        except ImportError:
+            try:
+                from moviepy.audio.fx.all import volumex as loaded_volumex
+            except ImportError:
+                loaded_volumex = False
+        volumex_fx = loaded_volumex
+    return AudioFileClip
 
 
 def _ffmpeg_bin() -> str:
@@ -740,7 +766,8 @@ def _encode_profile() -> dict[str, str | list[str]]:
 def _encode_video(*, final_frame: int, audio_shift_seconds: float) -> Path:
     # --- 1. Prepare trimmed + volume-scaled audio as a temp WAV ----------
     audio_path = _candidate_audio_path()
-    audio = AudioFileClip(str(audio_path))
+    audio_clip = _load_moviepy_audio_clip()
+    audio = audio_clip(str(audio_path))
     start_seconds = _audio_start_seconds(audio_path) + max(0.0, audio_shift_seconds)
     if audio.duration > start_seconds:
         if hasattr(audio, "subclipped"):

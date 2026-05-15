@@ -716,6 +716,7 @@ def test_build_cherryflash_selection_manifest_tolerates_missing_trace_entry():
                 {
                     "event_id": 101,
                     "title": "Event One",
+                    "festival": "80 историй о главном",
                     "date": "12 апреля",
                     "date_iso": "2026-04-12",
                     "time": "19:00",
@@ -754,6 +755,7 @@ def test_build_cherryflash_selection_manifest_tolerates_missing_trace_entry():
     assert manifest["ribbon_order"] == [202, 101]
     assert manifest["story_publish_enabled"] is False
     assert manifest["story_publish_mode"] == "video"
+    assert manifest["events"][0]["festival"] == "80 историй о главном"
     assert manifest["events"][0]["date"] == "2026-04-12"
     assert manifest["events"][0]["date_display"] == "12 апреля"
     assert manifest["events"][0]["time"] == "19:00"

@@ -4028,6 +4028,7 @@ class VideoAnnounceScenario:
                 {
                     "event_id": scene.get("event_id"),
                     "title": scene.get("title") or "",
+                    "festival": scene.get("festival") or "",
                     "date": scene.get("date_iso") or scene.get("date") or "",
                     "date_display": scene.get("date") or "",
                     "end_date": scene.get("end_date_iso") or "",

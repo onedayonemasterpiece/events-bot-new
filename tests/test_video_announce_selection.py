@@ -1,13 +1,14 @@
+import json
 from datetime import date, timezone
 from types import SimpleNamespace
 
 import pytest
 
 from db import Database
-from models import Event
+from models import Event, VideoAnnounceItem, VideoAnnounceSession
 import main
 from video_announce import selection
-from video_announce.custom_types import SelectionContext
+from video_announce.custom_types import RenderPayload, SelectionContext
 
 
 @pytest.mark.asyncio
@@ -41,6 +42,37 @@ async def test_fetch_candidates_includes_fair_and_schedule_text(tmp_path):
     assert any(e.id == fair_id for e in events)
     expected = f"по {main.format_day_pretty(date(2026, 1, 10))} с 10:00 до 17:30"
     assert schedule_map[fair_id] == expected
+
+
+def test_payload_as_json_includes_festival_line_for_cherryflash() -> None:
+    event = Event(
+        id=4759,
+        title="Лекция про влияние планировочных решений",
+        description="d",
+        date="2026-05-15",
+        time="19:00",
+        location_name="Дом молодежи",
+        city="Калининград",
+        festival="80 историй о главном",
+        photo_urls=["https://example.com/poster.jpg"],
+        photo_count=1,
+    )
+    session = VideoAnnounceSession(
+        id=304,
+        selection_params={"mode": "popular_review", "render_order": [4759]},
+    )
+    item = VideoAnnounceItem(
+        session_id=304,
+        event_id=4759,
+        position=1,
+        final_about="Лекция про город",
+        final_description="Почему планировка влияет на жизнь.",
+    )
+    payload = RenderPayload(session=session, items=[item], events=[event])
+
+    data = json.loads(selection.payload_as_json(payload, timezone.utc))
+
+    assert data["scenes"][0]["festival"] == "80 историй о главном"
 
 
 @pytest.mark.asyncio

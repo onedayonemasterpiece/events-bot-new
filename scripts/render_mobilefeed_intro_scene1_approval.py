@@ -12,24 +12,10 @@ from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
 
-try:
-    from moviepy import AudioFileClip, ImageSequenceClip
-except ImportError:
-    from moviepy.audio.io.AudioFileClip import AudioFileClip
-    from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
-
-try:
-    from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
-except ImportError:
-    MultiplyVolume = None
-
-try:
-    from moviepy.audio.fx.volumex import volumex as volumex_fx
-except ImportError:
-    try:
-        from moviepy.audio.fx.all import volumex as volumex_fx
-    except ImportError:
-        volumex_fx = None
+AudioFileClip = None
+ImageSequenceClip = None
+MultiplyVolume = None
+volumex_fx = None
 
 def resolve_root() -> Path:
     candidates = [
@@ -887,9 +873,9 @@ def scale_audio_volume(audio: object, factor: float) -> object:
         return audio.with_volume_scaled(factor)
     if hasattr(audio, "volumex"):
         return audio.volumex(factor)
-    if MultiplyVolume is not None and hasattr(audio, "with_effects"):
+    if MultiplyVolume and hasattr(audio, "with_effects"):
         return audio.with_effects([MultiplyVolume(factor)])
-    if volumex_fx is not None:
+    if volumex_fx:
         if hasattr(audio, "fx"):
             return audio.fx(volumex_fx, factor)
         return volumex_fx(audio, factor)
@@ -900,10 +886,42 @@ def scale_audio_volume(audio: object, factor: float) -> object:
     return audio
 
 
+def _load_moviepy_clips():
+    global AudioFileClip, ImageSequenceClip, MultiplyVolume, volumex_fx
+    if AudioFileClip is None or ImageSequenceClip is None:
+        try:
+            from moviepy import (
+                AudioFileClip as audio_file_clip,
+                ImageSequenceClip as image_sequence_clip,
+            )
+        except ImportError:
+            from moviepy.audio.io.AudioFileClip import AudioFileClip as audio_file_clip
+            from moviepy.video.io.ImageSequenceClip import ImageSequenceClip as image_sequence_clip
+        AudioFileClip = audio_file_clip
+        ImageSequenceClip = image_sequence_clip
+    if MultiplyVolume is None:
+        try:
+            from moviepy.audio.fx.MultiplyVolume import MultiplyVolume as multiply_volume
+        except ImportError:
+            multiply_volume = False
+        MultiplyVolume = multiply_volume
+    if volumex_fx is None:
+        try:
+            from moviepy.audio.fx.volumex import volumex as loaded_volumex
+        except ImportError:
+            try:
+                from moviepy.audio.fx.all import volumex as loaded_volumex
+            except ImportError:
+                loaded_volumex = False
+        volumex_fx = loaded_volumex
+    return AudioFileClip, ImageSequenceClip
+
+
 def encode_video(final_frame: int) -> Path:
+    audio_clip, image_sequence_clip = _load_moviepy_clips()
     frame_paths = [str(FRAMES_DIR / f"frame_{frame_num:04d}.png") for frame_num in range(1, final_frame + 1)]
-    clip = ImageSequenceClip(frame_paths, fps=FPS)
-    audio = AudioFileClip(str(AUDIO_PATH))
+    clip = image_sequence_clip(frame_paths, fps=FPS)
+    audio = audio_clip(str(AUDIO_PATH))
     if audio.duration > AUDIO_START_SEC:
         if hasattr(audio, "subclipped"):
             audio = audio.subclipped(AUDIO_START_SEC)
