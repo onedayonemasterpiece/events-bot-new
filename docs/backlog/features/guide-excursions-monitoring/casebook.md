@@ -48,6 +48,7 @@
 Дополнение после исходного deep scan:
 
 - `jeeptours39` добавлен в канонический monitoring seed по operator request от 2026-04-07; полный deep-scan review и метрики ещё pending, но runtime уже должен обрабатывать этот канал как branded off-road / jeep-tour source.
+- `kaliningradlibrary` добавлен в канонический monitoring seed по operator request от 2026-05-16; полный deep-scan review и метрики ещё pending, но runtime уже должен обрабатывать этот канал как institutional library source с широким books/history/events mix.
 
 ## 3. Уточнённая taxonomy источников
 
@@ -127,6 +128,7 @@
 
 - `ruin_keepers`
 - `jeeptours39`
+- `kaliningradlibrary`
 
 Признаки:
 
@@ -292,6 +294,15 @@
   - канал публикует branded off-road / jeep-tour выезды по Калининградской области, а не классические пешеходные экскурсии;
   - public digest должен сохранять `джип-тур` или нейтральные `выезд` / `поездка`, но не переименовывать такой формат в generic `экскурсию`;
   - посты про сборный выезд с датой, ценой и контактом записи считаются in-scope для occurrence discovery.
+
+### `kaliningradlibrary`
+
+- Archetype: `organization_with_tours`
+- Status: added to canonical monitoring seed on 2026-05-16 by operator request; detailed deep-scan metrics still pending.
+- Current operational assumption:
+  - канал принадлежит Калининградской областной научной библиотеке и смешивает книги, историю, события и институциональные объявления;
+  - in-scope только явные экскурсии, прогулки, краеведческие маршруты и guided visit formats с датой/записью/публичным участием;
+  - обычные лекции, книжные подборки, режим работы и generic events не должны материализоваться как guide occurrences без явного guided-tour signal.
 
 ### `twometerguide`
 

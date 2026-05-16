@@ -12,6 +12,18 @@ def test_canonical_guide_sources_include_murnikova_channel() -> None:
     assert source.source_kind == "guide_personal"
 
 
+def test_canonical_guide_sources_include_kaliningradlibrary_channel() -> None:
+    sources = canonical_guide_sources()
+    by_username = {source.username: source for source in sources}
+
+    assert "kaliningradlibrary" in by_username
+    source = by_username["kaliningradlibrary"]
+    assert source.profile_slug == "kaliningrad-library"
+    assert source.display_name == "Калининградская областная научная библиотека"
+    assert source.source_kind == "organization_with_tours"
+    assert source.flags == {"organization": True, "mixed_topic": True, "library": True}
+
+
 def test_canonical_guide_sources_are_normalized_unique_and_sorted() -> None:
     sources = canonical_guide_sources()
     usernames = [source.username for source in sources]

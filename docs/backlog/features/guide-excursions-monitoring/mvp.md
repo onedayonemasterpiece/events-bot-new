@@ -81,6 +81,7 @@ MVP считается успешным, если в тот же день пос
 | `excursions_profitour` | `excursion_operator` | `medium` | agency/operator, много school-group и `on_request` программ |
 | `ruin_keepers` | `organization_with_tours` | `medium` | heritage-organization, tours as one product line |
 | `jeeptours39` | `organization_with_tours` | `medium` | branded off-road / jeep-tour source, бывают сборные выезды |
+| `kaliningradlibrary` | `organization_with_tours` | `medium` | региональная библиотека, широкий books/history/events mix; мониторить экскурсии, прогулки и краеведческие туры |
 | `vkaliningrade` | `aggregator` | `medium` | fallback-aggregator, meeting-point updates |
 
 ### Обязательные source flags
@@ -91,6 +92,7 @@ MVP считается успешным, если в тот же день пос
 - `aggregator=true` для `vkaliningrade`
 - `organization=true` для `ruin_keepers`
 - `organization=true`, `offroad_tours=true` для `jeeptours39`
+- `organization=true`, `mixed_topic=true`, `library=true` для `kaliningradlibrary`
 - `caption_heavy=true` для `katimartihobby`
 - `promo_noise=true` для `valeravezet`
 - `collaboration_heavy=true` для `tanja_from_koenigsberg`, `amber_fringilla`

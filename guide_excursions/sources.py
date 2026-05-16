@@ -145,6 +145,20 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             ),
         ),
         GuideSourceSpec(
+            username="kaliningradlibrary",
+            profile_slug="kaliningrad-library",
+            profile_kind="organization",
+            display_name="Калининградская областная научная библиотека",
+            marketing_name="Калининградская областная научная библиотека",
+            source_kind="organization_with_tours",
+            trust_level="medium",
+            flags={"organization": True, "mixed_topic": True, "library": True},
+            notes=(
+                "Added from operator request on 2026-05-16; regional library channel with "
+                "books/history/events mix, monitored for guided tours and excursion-like walks."
+            ),
+        ),
+        GuideSourceSpec(
             username="excursions_profitour",
             profile_slug="profitur",
             profile_kind="operator",
