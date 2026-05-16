@@ -34,7 +34,8 @@ sources:
 
   - username: terkatalk
     trust_level: medium
-    notes: "агрегирует партнёрские события, но проводит и свои"
+    default_location: "Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград"
+    notes: "канал площадки Тёрка; default_location снимает прозовые fallbacks (INC-2026-05-16); агрегирует партнёрские события, но проводит и свои"
 
   - username: klassster
     trust_level: low

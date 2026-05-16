@@ -79,6 +79,10 @@ sections:
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       promo_campaigns: docs/backlog/features/promo-campaigns/README.md
+      afishathumb: docs/features/afishathumb/README.md
+      afishathumb_requirements: docs/backlog/features/afishathumb/afishathumb-requirements.md
+      afishathumb_reference: docs/backlog/features/afishathumb/afishathumb-ref.png
+      afishathumb_background: docs/backlog/features/afishathumb/fon.png
     linear:
       - docs/backlog/linear/EVE-11-llm-rate-limits.md
       - docs/backlog/linear/EVE-54-kaggle-secrets.md
@@ -87,6 +91,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_tg_location_prose_cityjazz_recurrence_2026_05_16: docs/reports/incidents/INC-2026-05-16-tg-location-prose-cityjazz-recurrence.md
     incident_cherryflash_partner_fanout_promo_filter_2026_05_15: docs/reports/incidents/INC-2026-05-15-cherryflash-partner-fanout-promo-filter.md
     incident_event_location_alias_free_dup_regressions_2026_05_09: docs/reports/incidents/INC-2026-05-09-event-location-alias-free-dup-regressions.md
     incident_vk_quality_false_skips_2026_05_08: docs/reports/incidents/INC-2026-05-08-vk-quality-false-skips.md

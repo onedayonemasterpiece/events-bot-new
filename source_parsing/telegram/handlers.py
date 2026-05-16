@@ -3638,6 +3638,71 @@ def _build_candidate(
     location_address = normalized_location_address
     city = normalized_city
 
+    # Final-stage prose gate (INC-2026-05-16).
+    # `_infer_location_from_text` / `_infer_city_from_location_string` are
+    # permissive: a sentence like "Это точка, после которой ты уже не тот же."
+    # gets accepted as candidate venue when the LLM extraction produced prose
+    # and `normalise_event_location_from_reference` finds no known venue in it.
+    # Only fire when normalisation did NOT resolve a canonical venue — a known
+    # venue from reference is authoritative even if its name contains characters
+    # the prose detector would otherwise flag (e.g. `Творческое пространство 12|55`).
+    if matched_venue is None:
+        if location_name and _looks_like_location_prose_fragment(location_name):
+            logger.warning(
+                "telegram: dropping prose location_name after recovery source=%s message_id=%s title=%r location=%r",
+                username,
+                message_id,
+                title,
+                location_name,
+            )
+            location_name = None
+            location_address = None
+        if location_address and _looks_like_location_prose_fragment(location_address):
+            logger.warning(
+                "telegram: dropping prose location_address after recovery source=%s message_id=%s title=%r address=%r",
+                username,
+                message_id,
+                title,
+                location_address,
+            )
+            location_address = None
+
+    # Known-venue grounding gate (INC-2026-05-16).
+    # When the LLM-extracted location matched a canonical venue from
+    # `docs/reference/locations.md`, require that the venue is mentioned in the
+    # source text or poster OCR. Without this, "Calling X is a known venue with
+    # the city Калининград" becomes a universal fallback that the LLM keeps
+    # picking for unrelated events (City Jazz Club / Bar Bastion family).
+    if (
+        matched_venue is not None
+        and location_name
+        and extracted_location
+        and not source.default_location
+        and _location_matches(extracted_location, location_name)
+    ):
+        grounding_parts = [str(message_text_s or event_source_text or "").strip()]
+        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+            if not isinstance(item, dict):
+                continue
+            for key in ("ocr_text", "ocr_title"):
+                chunk = str(item.get(key) or "").strip()
+                if chunk:
+                    grounding_parts.append(chunk)
+        if str(raw_excerpt or "").strip():
+            grounding_parts.append(str(raw_excerpt).strip())
+        grounding_text = "\n".join(part for part in grounding_parts if part).strip()
+        if grounding_text and not _location_is_grounded_in_text(location_name, grounding_text):
+            logger.warning(
+                "telegram: dropping ungrounded known venue source=%s message_id=%s title=%r location=%r address=%r",
+                username,
+                message_id,
+                title,
+                location_name,
+                location_address,
+            )
+            location_name = None
+            location_address = None
+
     # Extract a booking contact from the message when ticket_link is missing.
     if not ticket_link:
         inferred_from_links = _infer_ticket_link_from_message_links(_extract_message_links(message))

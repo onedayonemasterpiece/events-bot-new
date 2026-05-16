@@ -320,3 +320,106 @@ async def test_tg_build_candidate_normalizes_camember_reference_location():
     assert cand.location_name == "Сырный магазин Камамбер"
     assert cand.location_address == "Потемкина 20Б"
     assert cand.city == "Зеленоградск"
+
+
+# --- INC-2026-05-16 regressions ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_prose_inference_fallback_does_not_recreate_prose():
+    """terkatalk/4818 replay: prose-drop fallback must not re-pick a prose
+    sentence from `_infer_location_from_text` as the venue (INC-2026-05-16)."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="medium")
+    message = {
+        "source_username": "terkatalk",
+        "message_id": 4818,
+        "source_link": "https://t.me/terkatalk/4818",
+        "text": (
+            "16 мая | 18:00–21:00\n\n"
+            "Это не практика.\n"
+            "Это точка, после которой ты уже не тот же.\n\n"
+            "Ты можешь не верить в звук."
+        ),
+    }
+    event_data = {
+        "title": "Шаманское путешествие",
+        "date": "2026-05-16",
+        "time": "18:00",
+        "location_name": "после которой ты уже не тот же.",
+        "city": "Калининград",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name is None
+    assert cand.location_address is None
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_terkatalk_default_location_recovers_venue():
+    """Once terkatalk has the Тёрка default_location seeded, prose-drop
+    fallback should land on Пространство Тёрка (INC-2026-05-16)."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "terkatalk",
+        "message_id": 4859,
+        "source_link": "https://t.me/terkatalk/4859",
+        "text": (
+            "Приглашаю на терапевтическую встречу «Лабиринты Историй».\n\n"
+            "Игровое поле, кубик и 1200 случайно-неслучайных вопросов.\n\n"
+            "3300 рублей\n"
+            "4 часа"
+        ),
+    }
+    event_data = {
+        "title": "Лабиринты Историй",
+        "date": "2026-05-16",
+        "time": "16:00",
+        "location_name": "кубик и 1200 случайно-неслучайных вопросов.",
+        "city": "Калининград",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name == "Пространство Тёрка"
+    assert cand.location_address == "Пл. Победы 4 (1 под. 2 этаж)"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_rejects_ungrounded_known_venue_from_extraction():
+    """festdir/4357 replay: extraction picks Калининград Сити Джаз Клуб from the
+    reference list although the source post does not mention any venue. The
+    grounding gate must drop the unsupported known venue (INC-2026-05-16,
+    recurrence of INC-2026-04-29 bar-bastion-city-jazz)."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    message = {
+        "source_username": "festdir",
+        "message_id": 4357,
+        "source_link": "https://t.me/festdir/4357",
+        "text": (
+            "Внимание, Калининград! Кино снимается на ваших глазах\n\n"
+            "21 мая в городе пройдут съёмки масштабного исторического проекта.\n"
+            "Команда ищет соавторов — тех, кто войдёт в кадр.\n"
+            "Мы приглашаем актёров массовых сцен.\n"
+            "Кроме того, потребуются костюмы 1940-х годов.\n"
+            "🎬 Кинокомиссия Калининградской области"
+        ),
+    }
+    event_data = {
+        "title": "Съёмки исторического кинопроекта",
+        "date": "2026-05-21",
+        "time": "",
+        "location_name": "Калининград Сити Джаз Клуб",
+        "location_address": "Мира 33-35",
+        "city": "Калининград",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name is None
+    assert cand.location_address is None
