@@ -1,10 +1,10 @@
 # INC-2026-05-16 Telegram Location Prose Bypass + City Jazz Fallback Recurrence
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring import / Smart Update / public `/digest` + Telegraph cards
 Opened: 2026-05-16
-Closed: —
+Closed: 2026-05-16
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-05-09-event-location-alias-free-dup-regressions`, `INC-2026-04-29-bar-bastion-city-jazz-location`, `INC-2026-04-26-daily-location-fragments`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/llm/request-guide.md`
@@ -98,16 +98,18 @@ Operator review of the 2026-05-16 `/digest` surfaced five user-visible location 
 
 ## Follow-up Actions
 
-- [ ] After deploy, requeue Telegraph rebuild for the affected event ids and verify rendered cards.
+- [x] After deploy, requeue Telegraph rebuild for the affected event ids and verify rendered cards.
 - [ ] Audit other `telegram_source` rows with `enabled=1` and `default_location IS NULL`; flag candidates that map 1:1 to a venue in `locations.md`.
 - [ ] Add a Gemma 4 producer-side eval case from `terkatalk/4818` + `festdir/4357` source texts so the extraction prompt drift is caught before server-side fallbacks.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `30901ce6` (reachable from `origin/main`, push `02169a50..30901ce6`).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean `main`, image `events-bot-new-wngqia:deployment-01KRRN2P469E722TTZBKKP24BK`. Machine `48e42d5b714228` reached `started`; smoke + health checks passed. `/healthz` `ok=true, ready=true, db=ok` after deploy.
+- regression checks: `pytest tests/test_tg_candidate_location_grounding.py tests/test_smart_event_update_location_aliases.py tests/test_location_reference_bastion.py tests/test_daily_format.py tests/test_tg_monitor_gemma4_contract.py` → `54 passed` on `30901ce6`.
+- data repair (live, post-deploy via Fly SSH `python /tmp/repair.py`): event `4806` got `location_address='Железнодорожная 1'`; events `4694`/`4990` reassigned to `Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград`; event `3801` got `location_address='Ялтинская 20П'`; event `4991` set to `lifecycle_status='skipped'` (non-event casting call); `telegram_source.username='terkatalk'` has `default_location='Пространство Тёрка, …'` (also reachable via canonical YAML seed); `setting.video_announce_story_business_targets` extended to `["@jane_tour39", "@Tatiana_K_39", "@LANGEANNA"]` for the CherryFlash fanout addition shipped in the same release.
+- Telegraph rebuild: jobs `19482`..`19485` reached `done`. Public verification 2026-05-16: `https://telegra.ph/SHamanskoe-puteshestvie-05-07` and `https://telegra.ph/Labirinty-Istorij-05-15` render `📍 Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград`; `https://telegra.ph/Koncert-Melodii-lyubvi-05-11` renders `Театральная гостиная Солёная ворона, Железнодорожная 1, Зеленоградск`; `https://telegra.ph/Euphoria-Party-04-10` renders `СКЛАD, Ялтинская 20П, Калининград`.
+- post-deploy verification: `/healthz` `ok=true ready=true`, scheduler ok, no `issues` reported.
 
 ## Prevention
 
