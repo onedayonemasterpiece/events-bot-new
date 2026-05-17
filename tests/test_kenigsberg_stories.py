@@ -1110,11 +1110,19 @@ def test_renderer_extracts_cfr_segment_frames_and_pads_short_decode(monkeypatch,
 async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile(monkeypatch):
     captured = {}
 
-    async def fake_build_story_publish_config(db, *, main_chat_id, selection_params, selected_event_dates):
+    async def fake_build_story_publish_config(
+        db,
+        *,
+        main_chat_id,
+        selection_params,
+        selected_event_dates,
+        selected_event_cities=None,
+    ):
         captured["db"] = db
         captured["main_chat_id"] = main_chat_id
         captured["selection_params"] = selection_params
         captured["selected_event_dates"] = selected_event_dates
+        captured["selected_event_cities"] = selected_event_cities
         return {"targets": selection_params["story_targets_override"]}
 
     monkeypatch.setattr(kenigsberg_stories_cmd, "build_story_publish_config", fake_build_story_publish_config)

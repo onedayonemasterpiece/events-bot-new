@@ -864,6 +864,23 @@ class VideoAnnounceScenario:
             dates.append(normalized)
         return dates
 
+    async def _selected_event_cities(self, session_id: int) -> list[str]:
+        pairs = await self._load_items_with_events(session_id)
+        cities: list[str] = []
+        seen: set[str] = set()
+        for item, ev in pairs:
+            if item.status != VideoAnnounceItemStatus.READY:
+                continue
+            city = str(getattr(ev, "city", "") or "").lstrip("#").strip()
+            if not city:
+                continue
+            key = city.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cities.append(city)
+        return cities
+
     async def _validate_render_selection(self, session_obj: VideoAnnounceSession) -> str | None:
         ready_count = await self._count_ready_items(session_obj.id)
         if ready_count <= 0:
@@ -4121,11 +4138,13 @@ class VideoAnnounceScenario:
             story_publish_requested = bool(selection_params.get("story_publish_enabled"))
             if story_publish_requested:
                 selected_event_dates = await self._selected_event_dates(session_obj.id)
+                selected_event_cities = await self._selected_event_cities(session_obj.id)
                 story_config = await build_story_publish_config(
                     self.db,
                     main_chat_id=session_obj.main_chat_id,
                     selection_params=selection_params,
                     selected_event_dates=selected_event_dates,
+                    selected_event_cities=selected_event_cities,
                 )
                 if story_config:
                     (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
@@ -4295,11 +4314,13 @@ class VideoAnnounceScenario:
                 )
 
             selected_event_dates = await self._selected_event_dates(session_obj.id)
+            selected_event_cities = await self._selected_event_cities(session_obj.id)
             story_config = await build_story_publish_config(
                 self.db,
                 main_chat_id=session_obj.main_chat_id,
                 selection_params=selection_params if isinstance(selection_params, dict) else {},
                 selected_event_dates=selected_event_dates,
+                selected_event_cities=selected_event_cities,
             )
             if story_config:
                 (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(

@@ -416,6 +416,61 @@ def test_build_vk_source_message_converts_links():
     assert "билеты (http://pay)" in msg
 
 
+def test_build_vk_source_message_appends_announce_hashtags():
+    event = main.Event(
+        title="T",
+        description="",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+    )
+
+    msg = main.build_vk_source_message(event, "Описание")
+
+    assert (
+        "#анонс #анонс39 #кудапойтиКалининград #афишаКалининград "
+        "#Калининград #3июня #3_июня"
+    ) in msg
+    assert msg.endswith(main.VK_SOURCE_FOOTER)
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    event = main.Event(
+        title="Old",
+        description="",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_1"
+
+    existing = main.build_vk_source_message(event, "old text")
+
+    async def fake_vk_api(method, *_, **__):
+        return {"response": [{"text": existing}]}
+
+    edited = {}
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+        edited["text"] = message
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    event.title = "New"
+    await main.sync_vk_source_post(event, "new text", None, None, append_text=True)
+
+    msg = edited["text"]
+    assert msg.split().count("#анонс") == 1
+    assert "old text" in msg
+    assert "new text" in msg
+
+
 @pytest.mark.asyncio
 async def test_add_events_from_text_preserves_links(tmp_path: Path, monkeypatch):
     main.VK_AFISHA_GROUP_ID = ""

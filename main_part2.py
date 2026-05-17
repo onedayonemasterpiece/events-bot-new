@@ -3819,6 +3819,29 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     return lines
 
 
+def _vk_event_hashtag_line(event: Event) -> str:
+    from vk_hashtags import build_vk_event_hashtags, format_vk_hashtag_line
+
+    return format_vk_hashtag_line(build_vk_event_hashtags(event))
+
+
+def _strip_vk_source_tail_lines(lines: list[str]) -> list[str]:
+    from vk_hashtags import is_vk_announce_hashtag_line
+
+    out = list(lines)
+    while out and out[-1] == VK_BLANK_LINE:
+        out.pop()
+    if out and is_vk_announce_hashtag_line(out[-1]):
+        out.pop()
+    while out and out[-1] == VK_BLANK_LINE:
+        out.pop()
+    if out and out[-1].startswith("Добавить в календарь"):
+        out.pop()
+    while out and out[-1] == VK_BLANK_LINE:
+        out.pop()
+    return out
+
+
 def build_vk_source_message(
     event: Event,
     text: str,
@@ -3834,6 +3857,11 @@ def build_vk_source_message(
     lines.append(VK_BLANK_LINE)
     if calendar_url:
         lines.append(f"Добавить в календарь {calendar_url}")
+    hashtag_line = _vk_event_hashtag_line(event)
+    if hashtag_line:
+        if calendar_url:
+            lines.append(VK_BLANK_LINE)
+        lines.append(hashtag_line)
     lines.append(VK_SOURCE_FOOTER)
     return "\n".join(lines)
 
@@ -3955,10 +3983,7 @@ async def sync_vk_source_post(
                         break
                 i += 1
             lines = lines[i:]
-            if lines and lines[-1].startswith("Добавить в календарь"):
-                lines.pop()
-            while lines and lines[-1] == VK_BLANK_LINE:
-                lines.pop()
+            lines = _strip_vk_source_tail_lines(lines)
             texts.append("\n".join(lines).strip())
 
         text_clean = sanitize_for_vk(text).strip()
@@ -3980,6 +4005,11 @@ async def sync_vk_source_post(
                 new_lines.append(CONTENT_SEPARATOR)
         if calendar_line_value:
             new_lines.append(f"Добавить в календарь {calendar_line_value}")
+        hashtag_line = _vk_event_hashtag_line(event)
+        if hashtag_line:
+            if calendar_line_value:
+                new_lines.append(VK_BLANK_LINE)
+            new_lines.append(hashtag_line)
         new_lines.append(VK_SOURCE_FOOTER)
         new_message = "\n".join(new_lines)
         await edit_vk_post(

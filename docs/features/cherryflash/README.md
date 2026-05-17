@@ -705,6 +705,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - the shared helper supports `telethon`, `telegram_business`, `vk_wall`, and `vk_story` targets in one ordered queue;
   - the mixed queue uses `300` second per-target delays and relies on target order to maintain the required `600` seconds between VK story publications;
   - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall post; `vk_story` uploads via `stories.getVideoUploadServer` and finalizes with `stories.save`;
+  - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.

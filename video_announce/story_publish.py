@@ -15,6 +15,7 @@ from typing import Any
 from models import Channel, Setting
 from source_parsing.telegram.split_secrets import encrypt_secret
 from telegram_business import load_business_story_targets
+from vk_hashtags import build_vk_video_announce_caption
 from .kaggle_client import KaggleClient
 
 logger = logging.getLogger(__name__)
@@ -665,6 +666,7 @@ async def build_story_publish_config(
     main_chat_id: int | None,
     selection_params: dict[str, Any] | None = None,
     selected_event_dates: list[str] | None = None,
+    selected_event_cities: list[str] | None = None,
 ) -> dict[str, Any] | None:
     if not story_publish_enabled():
         return None
@@ -696,6 +698,19 @@ async def build_story_publish_config(
     caption = selection_params.get("story_caption")
     caption_text = str(caption).strip() if isinstance(caption, str) else ""
 
+    target_payloads = [target.as_dict() for target in targets]
+    vk_wall_caption = build_vk_video_announce_caption(
+        cities=selected_event_cities or [],
+        dates=selected_event_dates or [],
+        title=caption_text or "Видеоанонс",
+    )
+    for target_payload in target_payloads:
+        if target_payload.get("transport") != "vk_wall":
+            continue
+        current_caption = str(target_payload.get("caption") or "").strip()
+        if not current_caption or current_caption == "Видеоанонс":
+            target_payload["caption"] = vk_wall_caption
+
     config = {
         "version": 1,
         "mode": mode,
@@ -705,7 +720,7 @@ async def build_story_publish_config(
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,
         "vk_api_version": _get_env_value("VK_API_VERSION") or "5.199",
-        "targets": [target.as_dict() for target in targets],
+        "targets": target_payloads,
     }
     logger.info(
         "video_announce.story config mode=%s smoke_only=%s upload_profile=%s period_seconds=%s pinned=%s dates=%s targets=%s",

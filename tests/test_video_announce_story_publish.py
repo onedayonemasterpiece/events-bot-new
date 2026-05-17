@@ -83,10 +83,17 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         main_chat_id=None,
         selection_params=scenario._popular_review_selection_params(),
         selected_event_dates=["2026-05-17"],
+        selected_event_cities=["Калининград", "Светлогорск"],
     )
 
     assert config is not None
     assert config["targets"][0]["blocking"] is False
+    vk_wall_target = config["targets"][1]
+    assert vk_wall_target["caption"].startswith("Видеоанонс\n\n")
+    assert "#Калининград" in vk_wall_target["caption"]
+    assert "#Светлогорск" in vk_wall_target["caption"]
+    assert "#17мая" in vk_wall_target["caption"]
+    assert "#17_мая" in vk_wall_target["caption"]
     assert [
         (target["peer"], target.get("transport", "telethon"))
         for target in config["targets"]
