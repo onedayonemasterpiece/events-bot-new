@@ -4042,13 +4042,18 @@ async def edit_vk_post(
 
     main_owner_id = normalize_group_id(VK_MAIN_GROUP_ID)
     afisha_owner_id = normalize_group_id(VK_AFISHA_GROUP_ID)
+    events_owner_id = normalize_group_id(VK_EVENTS_GROUP_ID)
 
     use_internal_api = False
     edit_token: str | None = None
     edit_token_kind = "group"
 
     if owner_id_num is not None:
-        if owner_id_num == main_owner_id:
+        if owner_id_num == events_owner_id:
+            use_internal_api = True
+            edit_token = _vk_user_token()
+            edit_token_kind = "user"
+        elif owner_id_num == main_owner_id:
             use_internal_api = True
             if VK_TOKEN:
                 edit_token = VK_TOKEN
@@ -4060,7 +4065,7 @@ async def edit_vk_post(
     if edit_token is None:
         edit_token = _vk_user_token()
         edit_token_kind = "user"
-    else:
+    elif edit_token_kind != "user":
         edit_token_kind = "group"
     current: list[str] = []
     post_text = ""

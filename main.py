@@ -3762,6 +3762,9 @@ async def upload_vk_photo(
             actors = [VkActor(token_kind, token, f"{token_kind}:explicit")]
         else:
             actors = choose_vk_actor(owner_id, "photos.getWallUploadServer")
+            user_actors = [actor for actor in actors if actor.kind == "user"]
+            if user_actors:
+                actors = user_actors
         if not actors:
             raise VKAPIError(None, "VK token missing", method="photos.getWallUploadServer")
         if all(actor.kind == "group" for actor in actors):

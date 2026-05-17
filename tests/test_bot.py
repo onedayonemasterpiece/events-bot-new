@@ -10801,6 +10801,66 @@ async def test_edit_vk_post_preserves_photos(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_edit_vk_post_events_group_uses_user_token(monkeypatch):
+    captured = {}
+    api_calls: dict[str, dict[str, Any]] = {}
+
+    monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_TOKEN", None)
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "group-token")
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "user-token")
+
+    async def fake_vk_api(*args, **kwargs):  # pragma: no cover - should not be used
+        raise AssertionError("vk_api must not be used for managed event-group posts")
+
+    async def fake_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind=None,
+        skip_captcha=False,
+    ):
+        api_calls[method] = {
+            "params": params,
+            "token": token,
+            "token_kind": token_kind,
+            "skip_captcha": skip_captcha,
+        }
+        if method == "wall.getById":
+            return {
+                "response": [
+                    {
+                        "attachments": [
+                            {
+                                "type": "photo",
+                                "photo": {"owner_id": -231920894, "id": 10},
+                            }
+                        ]
+                    }
+                ]
+            }
+        if method == "wall.edit":
+            captured.update(params)
+            return {"response": 1}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_vk_api", fake_api)
+
+    await main.edit_vk_post("https://vk.com/wall-231920894_2", "msg")
+
+    assert captured.get("attachments") == "photo-231920894_10"
+    assert api_calls["wall.getById"]["token"] == "user-token"
+    assert api_calls["wall.getById"]["token_kind"] == "user"
+    assert api_calls["wall.edit"]["token"] == "user-token"
+    assert api_calls["wall.edit"]["token_kind"] == "user"
+
+
+@pytest.mark.asyncio
 async def test_edit_vk_post_add_photo(monkeypatch):
     captured = {}
     api_calls: dict[str, dict[str, Any]] = {}
