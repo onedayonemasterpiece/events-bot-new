@@ -128,6 +128,36 @@ async def _insert_partner_skip_ops_run(
             ),
         )
         await conn.commit()
+    return int(cur.lastrowid)
+
+
+async def _insert_partner_failed_ops_run(
+    db: Database,
+    *,
+    kind: str,
+    partner_track_id: str,
+    error: str,
+    started_at: str,
+) -> int:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            INSERT INTO ops_run(kind, trigger, started_at, finished_at, status, details_json)
+            VALUES(?, 'scheduled', ?, ?, 'failed', ?)
+            """,
+            (
+                kind,
+                started_at,
+                started_at,
+                json.dumps(
+                    {
+                        "partner_track_id": partner_track_id,
+                        "error": error,
+                    }
+                ),
+            ),
+        )
+        await conn.commit()
         return int(cur.lastrowid)
 
 
@@ -230,6 +260,37 @@ async def test_partner_east_watchdog_defers_after_two_missing_business_attempts(
         skip_reason="missing_business_target",
         started_at="2026-05-14 16:45:00",
     )
+
+    calls: list[str] = []
+
+    async def fake_run(_db, _bot, partner_track_id, **kwargs):
+        calls.append(partner_track_id)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_partner_track", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_partner_track_watchdog(
+        db, bot=object(), partner_track_id="partner_region_east_001"
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_partner_east_watchdog_defers_after_legacy_failed_no_session_attempts(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedPartnerEastEvening)
+    for started_at in ("2026-05-14 16:35:00", "2026-05-14 16:45:00"):
+        await _insert_partner_failed_ops_run(
+            db,
+            kind="video_partner_east",
+            partner_track_id="partner_region_east_001",
+            error="partner track partner_region_east_001 did not create a session",
+            started_at=started_at,
+        )
 
     calls: list[str] = []
 

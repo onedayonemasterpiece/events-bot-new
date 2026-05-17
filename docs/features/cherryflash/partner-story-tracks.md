@@ -119,7 +119,9 @@ For `partner_region_east_001`, a missing Telegram Business target is treated as
 a same-day defer signal after the scheduled attempt plus one watchdog retry.
 When the cached Business connection still cannot be resolved on the retry, the
 watchdog stops launching that track until the next scheduled local day instead
-of retrying every 10 minutes up to the 22:00 deadline.
+of retrying every 10 minutes up to the 22:00 deadline. The counter also treats
+legacy same-day `failed` no-session attempts as attempts, so a deploy in the
+middle of an already-running retry loop does not reset the budget.
 
 ## Selection policy
 

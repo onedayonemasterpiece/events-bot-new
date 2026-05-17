@@ -901,7 +901,7 @@ async def _partner_track_skip_attempts_today(
             WHERE kind = ?
               AND started_at >= ?
               AND started_at < ?
-              AND status = 'skipped'
+              AND status IN ('skipped', 'failed')
             ORDER BY id DESC
             """,
             (
@@ -925,8 +925,14 @@ async def _partner_track_skip_attempts_today(
             details = details_raw
         if str(details.get("partner_track_id") or "") != partner_track_id:
             continue
-        if str(details.get("skip_reason") or "") != skip_reason:
-            continue
+        item_skip_reason = str(details.get("skip_reason") or "")
+        item_error = str(details.get("error") or "")
+        if item_skip_reason != skip_reason:
+            # Compatibility with runs created before skip_reason persistence:
+            # they failed as generic no-session attempts after the same missing
+            # Business target preflight.
+            if "did not create a session" not in item_error:
+                continue
         if details.get("session_id"):
             continue
         count += 1
