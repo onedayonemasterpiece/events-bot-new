@@ -200,6 +200,7 @@ class _FakeStoryClient:
         self.boost_fail_peers = boost_fail_peers
         self.story_ids = story_ids
         self.sent_requests: list[dict[str, object]] = []
+        self.sent_files: list[dict[str, object]] = []
 
     async def get_me(self) -> SimpleNamespace:
         return SimpleNamespace(id=1, username="story", premium=True)
@@ -222,6 +223,10 @@ class _FakeStoryClient:
                 to_dict=lambda: {"story_id": self.story_ids[peer]},
             )
         raise AssertionError(f"Unexpected request: {request!r}")
+
+    async def send_file(self, peer, file, **kwargs):  # noqa: ANN001,ANN003
+        self.sent_files.append({"peer": peer, "file": file, **kwargs})
+        return SimpleNamespace(id=9001, to_dict=lambda: {"id": 9001})
 
 
 def _patch_story_request_types(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -499,6 +504,48 @@ async def test_business_target_missing_secret_blocks_preflight(
     assert report["required_ok"] is False
     assert report["targets"][0]["ok"] is False
     assert "business connection secret is missing" in report["targets"][0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_telegram_chat_target_posts_without_story_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(
+        boost_fail_peers={"peer:@keniggpt"},
+        story_ids={},
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {
+                    "peer": "@keniggpt",
+                    "label": "tg:@keniggpt:test-post",
+                    "transport": "telegram_chat",
+                    "caption": "Видеоанонс КОНБ",
+                    "blocking": True,
+                    "required": True,
+                },
+            ],
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][0]["transport"] == "telegram_chat"
+    assert report["targets"][0]["message_id"] == 9001
+    assert client.sent_requests == []
+    assert client.sent_files[0]["peer"] == "peer:@keniggpt"
+    assert client.sent_files[0]["caption"] == "Видеоанонс КОНБ"
 
 
 @pytest.mark.asyncio

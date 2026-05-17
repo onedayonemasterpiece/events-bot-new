@@ -1542,6 +1542,8 @@ class VideoAnnounceScenario:
         }
         if publish_mode == "business":
             params["story_business_targets"] = business_selector
+        else:
+            params["story_business_targets"] = ""
         if partner_track.outro:
             params["outro"] = dict(partner_track.outro)
         return params

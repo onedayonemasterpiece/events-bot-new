@@ -143,7 +143,8 @@ def test_konb_selection_params_use_test_story_target_not_business():
     assert params["partner_track_id"] == PARTNER_KONB_LIBRARY.track_id
     assert params["partner_publish_mode"] == "test"
     assert params["story_targets_override"][0]["peer"] == "@keniggpt"
-    assert "story_business_targets" not in params
+    assert params["story_targets_override"][0]["transport"] == "telegram_chat"
+    assert params["story_business_targets"] == ""
 
 
 def test_partner_modes_are_in_default_business_mode_whitelist():

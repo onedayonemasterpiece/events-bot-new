@@ -4,6 +4,7 @@ import pytest
 
 from video_announce.scenario import VideoAnnounceScenario
 from video_announce import story_publish
+from video_announce.partner_tracks import PARTNER_KONB_LIBRARY
 from telegram_business import cache_business_connection
 
 
@@ -263,6 +264,46 @@ async def test_empty_selection_override_blocks_global_channel_fanout(monkeypatch
         config["targets"][0]["peer"]
     ]
     assert config["targets"][0]["transport"] == "telegram_business"
+
+
+@pytest.mark.asyncio
+async def test_konb_test_config_posts_to_channel_and_does_not_inherit_business(
+    monkeypatch,
+    tmp_path,
+):
+    target = tmp_path / "business.enc.json"
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv("TELEGRAM_BUSINESS_CONNECTIONS_FILE", str(target))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "7910015203:test-token")
+    cache_business_connection(
+        Obj(
+            id="biz-connection-secret",
+            user=Obj(id=123456789, username="story_owner_fixture"),
+            user_chat_id=987654321,
+            date=1777194243,
+            is_enabled=True,
+            rights=Obj(can_manage_stories=True),
+        )
+    )
+
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+    params = scenario._partner_track_selection_params(
+        PARTNER_KONB_LIBRARY,
+        publish_mode="test",
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params=params,
+        selected_event_dates=["2026-05-18"],
+    )
+
+    assert config is not None
+    assert [(target["peer"], target.get("transport")) for target in config["targets"]] == [
+        ("@keniggpt", "telegram_chat")
+    ]
+    assert all(target.get("transport") != "telegram_business" for target in config["targets"])
 
 
 @pytest.mark.asyncio

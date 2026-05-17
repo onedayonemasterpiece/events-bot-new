@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-17-konb-cherryflash-test-story-preflight.md`
+  - Scope: CherryFlash `partner_konb_library_001` test/prod publish targets, Telegram channel-post test delivery, and prevention of inherited global Telegram Business fanout.
+  - Must not regress: КОНБ test mode must post the rendered video to `@keniggpt` as a normal Telegram channel post, not run Telegram channel story preflight; КОНБ test/prod modes must include only explicit КОНБ targets and must not inherit `setting.video_announce_story_business_targets`.
 - `INC-2026-05-17-eco-cherryflash-underfilled-event-recall.md`
   - Scope: CherryFlash `partner_eco_nature_001` candidate recall, recent popularity windows, same-day/future event-date recall, and eco LLM filter handoff.
   - Must not regress: a current/future eco/nature/local-history event with renderable media must not be invisible solely because its source post was published more than seven days earlier; event-date recall may widen candidates, but the existing `eco_prirodnaya` LLM filter must still own the semantic include/exclude decision before publication.

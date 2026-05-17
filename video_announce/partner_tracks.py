@@ -95,11 +95,13 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
     test_story_targets=(
         {
             "peer": "@keniggpt",
-            "label": "tg:@keniggpt:test",
+            "label": "tg:@keniggpt:test-post",
             "delay_seconds": 0,
             "mode": "upload",
+            "transport": "telegram_chat",
             "blocking": True,
             "required": True,
+            "caption": "Видеоанонс КОНБ",
         },
     ),
     prod_story_targets=(

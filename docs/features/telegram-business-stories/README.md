@@ -29,8 +29,9 @@
     fanout и оставляет только `story_business_targets`. Такой пустой override
     не должен падать обратно к глобальному `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`.
   - исключение: `partner_konb_library_001` стартует в `test` mode с явным
-    Telegram channel target `@keniggpt`, а в `prod` mode использует явные
-    Telegram/VK story targets; Business preflight для него не требуется.
+    Telegram channel-post target `@keniggpt`, а в `prod` mode использует
+    явные Telegram/VK story targets; Business preflight и глобальный Business
+    fanout для него не требуется.
 
 ## Operator commands
 

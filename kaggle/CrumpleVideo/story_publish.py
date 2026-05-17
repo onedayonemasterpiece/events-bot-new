@@ -569,6 +569,25 @@ def _extract_story_id(result: Any) -> int | None:
     return None
 
 
+def _extract_message_id(result: Any) -> int | None:
+    if isinstance(result, (list, tuple)) and result:
+        return _extract_message_id(result[0])
+    message_id = getattr(result, "id", None)
+    if message_id is not None:
+        try:
+            return int(message_id)
+        except Exception:
+            return None
+    if isinstance(result, dict):
+        for key in ("id", "message_id"):
+            if key in result:
+                try:
+                    return int(result[key])
+                except Exception:
+                    return None
+    return None
+
+
 def _json_default(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
@@ -1041,6 +1060,36 @@ async def _story_targets_report(
                     )
                 else:
                     log(f"✅ Business story preflight passed for {label}")
+                target_report["ok"] = True
+                report["targets"].append(target_report)
+                continue
+            if transport == "telegram_chat":
+                peer = await client.get_input_entity(peer_ref)
+                target_report["effective_peer"] = peer_ref
+                if media_path is not None:
+                    caption = str(
+                        target_cfg.get("caption") or config.get("caption") or ""
+                    ).strip()
+                    result = await client.send_file(
+                        peer,
+                        media_path,
+                        caption=caption or None,
+                        supports_streaming=True,
+                    )
+                    target_report["message_id"] = _extract_message_id(result)
+                    target_report["result"] = (
+                        result.to_dict() if hasattr(result, "to_dict") else str(result)
+                    )
+                    log(
+                        f"✅ Telegram chat post published to {label}"
+                        + (
+                            f" (message_id={target_report['message_id']})"
+                            if target_report.get("message_id") is not None
+                            else ""
+                        )
+                    )
+                else:
+                    log(f"✅ Telegram chat preflight passed for {label} (peer={peer_ref})")
                 target_report["ok"] = True
                 report["targets"].append(target_report)
                 continue

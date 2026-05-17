@@ -108,7 +108,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - duplicate prevention is based on remote handoff evidence: a matching session with a non-local kernel ref plus `cherryflash-session-*` dataset suppresses catch-up even if local status later drifts.
 - **CherryFlash partner tracks** – always-registered daily partner story tracks with per-track defaults and watchdog retry until `22:00 Europe/Kaliningrad`.
   - `partner_eco_nature_001`: `12:30 Europe/Kaliningrad` (`V_PARTNER_TRACK_ECO_TIME_LOCAL`);
-  - `partner_konb_library_001`: `12:50 Europe/Kaliningrad` (`V_PARTNER_TRACK_KONB_TIME_LOCAL`), defaulting to `test` publish mode (`@keniggpt`) until `setting.partner_track_konb_publish_mode=prod` is set;
+  - `partner_konb_library_001`: `12:50 Europe/Kaliningrad` (`V_PARTNER_TRACK_KONB_TIME_LOCAL`), defaulting to `test` publish mode (normal Telegram channel post to `@keniggpt`) until `setting.partner_track_konb_publish_mode=prod` is set;
   - `partner_region_east_001`: `18:30 Europe/Kaliningrad` (`V_PARTNER_TRACK_EAST_TIME_LOCAL`).
   - The КОНБ production fanout treats the Telegram channel story as best-effort, so `BOOSTS_REQUIRED` does not stop VK story publication.
   - The east-region track stops same-day watchdog launches after the scheduled attempt plus one retry when the Business story target is still missing from the encrypted cache; the next attempt is the next daily schedule.

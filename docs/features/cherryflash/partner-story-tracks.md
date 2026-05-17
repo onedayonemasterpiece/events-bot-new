@@ -264,11 +264,12 @@ Selection policy:
 
 - profile key: `popular_review_konb`;
 - track id: `partner_konb_library_001`;
-- default publish mode: `test`, publishing the first run to `https://t.me/keniggpt`;
+- default publish mode: `test`, publishing the first run to `https://t.me/keniggpt` as a normal Telegram channel post, not a channel story;
 - production publish mode is enabled by setting `partner_track_konb_publish_mode=prod`;
 - production story fanout: Telegram channel story `https://t.me/kaliningradlibrary` as best-effort/non-blocking, plus VK community story `https://vk.com/konb39` as required;
 - if Telegram channel boosts are insufficient, the Telegram target may fail locally while the VK story still runs and determines required publish success;
 - daily schedule: `12:50 Europe/Kaliningrad`, just after the eco/nature partner slot; if the render lane is still occupied, the partner watchdog retries later the same day until the shared 22:00 deadline.
+- КОНБ test/prod modes must not inherit global `video_announce_story_business_targets`; the only targets are the explicit КОНБ test/prod targets above.
 
 Ranking policy:
 

@@ -89,6 +89,7 @@ def test_partner_tracks_carry_default_business_selector():
 def test_konb_track_defaults_to_test_story_target():
     assert PARTNER_KONB_LIBRARY.default_publish_mode == "test"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["peer"] == "@keniggpt"
+    assert PARTNER_KONB_LIBRARY.test_story_targets[0]["transport"] == "telegram_chat"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[0]["peer"] == "@kaliningradlibrary"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_story"
     assert PARTNER_KONB_LIBRARY.outro["strip_color"] == "#780000"
