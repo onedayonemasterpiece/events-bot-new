@@ -321,6 +321,52 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_preserves_attachments_on_partial_reupload(
+    monkeypatch,
+):
+    sync_globals = main.sync_vk_source_post.__globals__
+    monkeypatch.setitem(sync_globals, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setitem(sync_globals, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setitem(sync_globals, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setitem(sync_globals, "VK_USER_TOKEN", "u")
+    monkeypatch.setitem(sync_globals, "VK_MAX_ATTACHMENTS", 10)
+
+    event = main.Event(
+        title="T",
+        description="",
+        date="2024-01-01",
+        time="00:00",
+        location_name="Place",
+        photo_urls=["http://img1", "http://img2"],
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_1"
+
+    async def fake_vk_api(method, params=None, db=None, bot=None, **kwargs):
+        if method == "wall.getById":
+            msg = main.build_vk_source_message(event, "old")
+            return {"response": [{"text": msg}]}
+        return {"response": {}}
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        return "ph1" if url.endswith("img1") else None
+
+    edited: dict[str, list[str] | None] = {}
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+        edited["attachments"] = attachments
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    url = await main.sync_vk_source_post(event, "new", None, None)
+
+    assert url == "https://vk.com/wall-1_1"
+    assert edited["attachments"] is None
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_creates_when_existing_vk_url_is_external(
     monkeypatch,
 ):

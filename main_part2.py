@@ -3861,10 +3861,18 @@ async def sync_vk_source_post(
             )
             festival = res.scalars().first()
 
+    existing_vk_post_url = (event.source_vk_post_url or "").strip()
+    if existing_vk_post_url:
+        ids = _vk_owner_and_post_id(existing_vk_post_url)
+        target_id = str(target_group_id).lstrip("-")
+        if not ids or str(abs(int(ids[0]))) != target_id:
+            existing_vk_post_url = ""
+
     attachments: list[str] | None = None
     if VK_PHOTOS_ENABLED and event.photo_urls:
         ids: list[str] = []
-        for url in event.photo_urls[:VK_MAX_ATTACHMENTS]:
+        photo_urls = event.photo_urls[:VK_MAX_ATTACHMENTS]
+        for url in photo_urls:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:
                 ids.append(photo_id)
@@ -3875,7 +3883,15 @@ async def sync_vk_source_post(
                 )
                 break
         if ids:
-            attachments = ids
+            if existing_vk_post_url and len(ids) < len(photo_urls):
+                logging.warning(
+                    "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
+                    event.id,
+                    len(ids),
+                    len(photo_urls),
+                )
+            else:
+                attachments = ids
 
     calendar_line_value: str | None = None
     previous_ics_url = event.ics_url
@@ -3896,13 +3912,6 @@ async def sync_vk_source_post(
             calendar_line_value = format_vk_short_url(short_ics[0])
         else:
             calendar_line_value = calendar_source_url
-
-    existing_vk_post_url = (event.source_vk_post_url or "").strip()
-    if existing_vk_post_url:
-        ids = _vk_owner_and_post_id(existing_vk_post_url)
-        target_id = str(target_group_id).lstrip("-")
-        if not ids or str(abs(int(ids[0]))) != target_id:
-            existing_vk_post_url = ""
 
     if existing_vk_post_url:
         await ensure_vk_short_ticket_link(
