@@ -301,11 +301,58 @@ def expose_links_for_vk(text_or_html: str) -> str:
     return text
 
 
+def _upper_vk_heading_text(value: str) -> str:
+    """Uppercase a heading label while keeping embedded URLs usable."""
+
+    parts = re.split(r"(https?://\S+)", value)
+    return "".join(
+        part if part.startswith(("http://", "https://")) else part.upper()
+        for part in parts
+    )
+
+
+def _format_vk_plain_headings(text: str) -> str:
+    """Render Markdown/HTML headings as VK-friendly plain text blocks."""
+
+    def clean_heading(value: str) -> str:
+        value = re.sub(r"<\s*br\s*/?\s*>", " ", value, flags=re.I)
+        value = re.sub(r"</?[^>]+>", "", value)
+        value = html.unescape(value)
+        value = re.sub(r"^[*_`~\s]+|[*_`~\s]+$", "", value)
+        value = re.sub(r"\s+", " ", value).strip(" #")
+        return _upper_vk_heading_text(value) if value else ""
+
+    def repl_html_heading(match: re.Match[str]) -> str:
+        heading = clean_heading(match.group(1))
+        return f"\n{heading}\n\n" if heading else "\n"
+
+    text = re.sub(
+        r"<\s*h[1-6]\b[^>]*>(.*?)<\s*/\s*h[1-6]\s*>",
+        repl_html_heading,
+        text,
+        flags=re.I | re.S,
+    )
+
+    out: list[str] = []
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        match = re.match(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if not match:
+            out.append(line)
+            continue
+        heading = clean_heading(match.group(1))
+        if not heading:
+            continue
+        out.append(heading)
+        out.append("")
+    return "\n".join(out)
+
+
 def sanitize_for_vk(text_or_html: str) -> str:
     """Expose links and strip unsupported HTML for VK posts."""
     s = expose_links_for_vk(text_or_html)
     s = html.unescape(s)
     s = s.replace("\xa0", " ")
+    s = _format_vk_plain_headings(s)
     s = re.sub(r"</?tg-(?:emoji|spoiler)[^>]*>", "", s, flags=re.I)
     s = re.sub(r"&lt;/?tg-(?:emoji|spoiler).*?&gt;", "", s, flags=re.I)
     s = re.sub(r"<\s*(?:b|strong)\s*>(.*?)<\s*/\s*(?:b|strong)\s*>", r"*\1*", s, flags=re.I | re.S)
