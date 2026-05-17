@@ -101,6 +101,36 @@ async def _insert_partner_session(
         return int(cur.lastrowid)
 
 
+async def _insert_partner_skip_ops_run(
+    db: Database,
+    *,
+    kind: str,
+    partner_track_id: str,
+    skip_reason: str,
+    started_at: str,
+) -> int:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            INSERT INTO ops_run(kind, trigger, started_at, finished_at, status, details_json)
+            VALUES(?, 'scheduled', ?, ?, 'skipped', ?)
+            """,
+            (
+                kind,
+                started_at,
+                started_at,
+                json.dumps(
+                    {
+                        "partner_track_id": partner_track_id,
+                        "skip_reason": skip_reason,
+                    }
+                ),
+            ),
+        )
+        await conn.commit()
+        return int(cur.lastrowid)
+
+
 @pytest.mark.asyncio
 async def test_partner_eco_watchdog_dispatches_after_missed_slot(
     tmp_path, monkeypatch
@@ -177,6 +207,43 @@ async def test_partner_east_watchdog_dispatches_after_missed_slot(
 
     assert dispatched is True
     assert calls == ["partner_region_east_001"]
+
+
+@pytest.mark.asyncio
+async def test_partner_east_watchdog_defers_after_two_missing_business_attempts(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedPartnerEastEvening)
+    await _insert_partner_skip_ops_run(
+        db,
+        kind="video_partner_east",
+        partner_track_id="partner_region_east_001",
+        skip_reason="missing_business_target",
+        started_at="2026-05-14 16:35:00",
+    )
+    await _insert_partner_skip_ops_run(
+        db,
+        kind="video_partner_east",
+        partner_track_id="partner_region_east_001",
+        skip_reason="missing_business_target",
+        started_at="2026-05-14 16:45:00",
+    )
+
+    calls: list[str] = []
+
+    async def fake_run(_db, _bot, partner_track_id, **kwargs):
+        calls.append(partner_track_id)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_partner_track", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_partner_track_watchdog(
+        db, bot=object(), partner_track_id="partner_region_east_001"
+    )
+
+    assert dispatched is False
+    assert calls == []
 
 
 @pytest.mark.asyncio
@@ -266,6 +333,9 @@ def test_partner_track_default_times():
         scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_eco_nature_001"] == "12:30"
     )
     assert (
+        scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_konb_library_001"] == "12:50"
+    )
+    assert (
         scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_region_east_001"] == "18:30"
     )
     assert scheduling.PARTNER_TRACK_TZ == "Europe/Kaliningrad"
@@ -276,3 +346,5 @@ def test_partner_track_time_env_override(monkeypatch):
     assert scheduling._partner_track_time_local("partner_eco_nature_001") == "13:45"
     monkeypatch.delenv("V_PARTNER_TRACK_ECO_TIME_LOCAL")
     assert scheduling._partner_track_time_local("partner_eco_nature_001") == "12:30"
+    monkeypatch.setenv("V_PARTNER_TRACK_KONB_TIME_LOCAL", "12:55")
+    assert scheduling._partner_track_time_local("partner_konb_library_001") == "12:55"

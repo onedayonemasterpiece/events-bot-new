@@ -23,7 +23,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from admin_chat import resolve_superadmin_chat_id
 from db import Database, close_known_databases
 from models import VideoAnnounceSession, VideoAnnounceSessionStatus
-from scheduling import _run_scheduled_popular_review
+from scheduling import _run_scheduled_partner_track, _run_scheduled_popular_review
+from video_announce.partner_tracks import get_partner_track
 
 
 logger = logging.getLogger("run_cherryflash_live")
@@ -50,11 +51,11 @@ def _validate_args(args: argparse.Namespace) -> None:
         )
 
 
-async def _max_popular_review_session_id(db: Database) -> int:
+async def _max_video_session_id(db: Database, *, profile_key: str) -> int:
     async with db.get_session() as session:
         result = await session.execute(
             select(func.max(VideoAnnounceSession.id)).where(
-                VideoAnnounceSession.profile_key == "popular_review"
+                VideoAnnounceSession.profile_key == profile_key
             )
         )
         value = result.scalar_one()
@@ -152,12 +153,18 @@ async def _run(args: argparse.Namespace) -> int:
     if not admin_chat_id:
         raise RuntimeError("Could not resolve superadmin chat id from DB/env")
 
+    partner_track = get_partner_track(args.partner_track) if args.partner_track else None
+    if args.partner_track and partner_track is None:
+        raise RuntimeError(f"Unknown partner track: {args.partner_track}")
+    profile_key = partner_track.profile_key if partner_track is not None else "popular_review"
+
     bot = Bot(bot_token)
-    before_id = await _max_popular_review_session_id(db)
+    before_id = await _max_video_session_id(db, profile_key=profile_key)
     logger.info(
-        "Starting CherryFlash live run from DB=%s admin_chat_id=%s previous_max_session_id=%s",
+        "Starting CherryFlash live run from DB=%s admin_chat_id=%s profile_key=%s previous_max_session_id=%s",
         db.path,
         admin_chat_id,
+        profile_key,
         before_id,
     )
 
@@ -178,10 +185,18 @@ async def _run(args: argparse.Namespace) -> int:
             )
 
     try:
-        await _run_scheduled_popular_review(db, bot, startup_catchup=False)
-        after_id = await _max_popular_review_session_id(db)
+        if partner_track is not None:
+            await _run_scheduled_partner_track(
+                db,
+                bot,
+                partner_track.track_id,
+                startup_catchup=False,
+            )
+        else:
+            await _run_scheduled_popular_review(db, bot, startup_catchup=False)
+        after_id = await _max_video_session_id(db, profile_key=profile_key)
         if after_id <= before_id:
-            logger.error("CherryFlash did not create a new popular_review session")
+            logger.error("CherryFlash did not create a new %s session", profile_key)
             return 1
 
         logger.info("CherryFlash created session #%s", after_id)
@@ -244,6 +259,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--force-reset-rendering",
         action="store_true",
         help="Reset the latest RENDERING video session to FAILED before starting CherryFlash.",
+    )
+    parser.add_argument(
+        "--partner-track",
+        default="",
+        help="Run a partner track by id instead of base CherryFlash.",
     )
     parser.set_defaults(wait=True)
     return parser

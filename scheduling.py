@@ -384,9 +384,27 @@ async def _run_scheduled_partner_track(
             partner_track, wait_for_handoff=True
         )
         if session_id is None:
+            skip_reason = str(
+                getattr(scenario, "last_partner_track_skip_reason", "") or ""
+            )
+            if (
+                partner_track.track_id == "partner_region_east_001"
+                and skip_reason == "missing_business_target"
+            ):
+                ops_details["skip_reason"] = skip_reason
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    details=ops_details,
+                )
+                return
             reason = (
                 f"partner track {partner_track.track_id} did not create a session"
             )
+            if skip_reason:
+                reason = f"{reason} (skip_reason={skip_reason})"
+                ops_details["skip_reason"] = skip_reason
             ops_details["error"] = reason
             raise RuntimeError(reason)
         ops_details["session_id"] = int(session_id)
@@ -864,6 +882,57 @@ async def _partner_track_session_exists_today(
     return False
 
 
+async def _partner_track_skip_attempts_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    kind: str,
+    partner_track_id: str,
+    skip_reason: str,
+) -> int:
+    if db is None or not hasattr(db, "raw_conn"):
+        return 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT details_json
+            FROM ops_run
+            WHERE kind = ?
+              AND started_at >= ?
+              AND started_at < ?
+              AND status = 'skipped'
+            ORDER BY id DESC
+            """,
+            (
+                kind,
+                _utc_sql_text(day_start_utc),
+                _utc_sql_text(day_end_utc),
+            ),
+        )
+        rows = await cur.fetchall()
+    count = 0
+    for (details_raw,) in rows:
+        details: dict[str, Any] = {}
+        if isinstance(details_raw, str) and details_raw.strip():
+            try:
+                parsed = json.loads(details_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                details = parsed
+        elif isinstance(details_raw, dict):
+            details = details_raw
+        if str(details.get("partner_track_id") or "") != partner_track_id:
+            continue
+        if str(details.get("skip_reason") or "") != skip_reason:
+            continue
+        if details.get("session_id"):
+            continue
+        count += 1
+    return count
+
+
 async def _kenigsberg_story_session_exists_today(
     db: Any,
     *,
@@ -1135,6 +1204,7 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
 PARTNER_TRACK_TZ = "Europe/Kaliningrad"
 PARTNER_TRACK_DEFAULT_TIMES: dict[str, str] = {
     "partner_eco_nature_001": "12:30",
+    "partner_konb_library_001": "12:50",
     "partner_region_east_001": "18:30",
 }
 # Hard deadline (local time): after this the watchdog stops retrying for today
@@ -1148,6 +1218,7 @@ PARTNER_TRACK_WATCHDOG_GRACE_SECONDS = 60
 def _partner_track_time_local(partner_track_id: str) -> str:
     env_key = {
         "partner_eco_nature_001": "V_PARTNER_TRACK_ECO_TIME_LOCAL",
+        "partner_konb_library_001": "V_PARTNER_TRACK_KONB_TIME_LOCAL",
         "partner_region_east_001": "V_PARTNER_TRACK_EAST_TIME_LOCAL",
     }.get(partner_track_id)
     if env_key:
@@ -1217,6 +1288,24 @@ async def maybe_dispatch_partner_track_watchdog(
         profile_key=partner_track.profile_key,
     ):
         return False
+
+    if partner_track.track_id == "partner_region_east_001":
+        missing_business_attempts = await _partner_track_skip_attempts_today(
+            db,
+            day_start_utc=day_start_local.astimezone(timezone.utc),
+            day_end_utc=day_end_local.astimezone(timezone.utc),
+            kind=f"video_partner_{partner_track.callback_action}",
+            partner_track_id=partner_track.track_id,
+            skip_reason="missing_business_target",
+        )
+        if missing_business_attempts >= 2:
+            logging.info(
+                "SCHED partner_track watchdog deferring until tomorrow track=%s "
+                "reason=missing_business_target attempts=%s",
+                partner_track.track_id,
+                missing_business_attempts,
+            )
+            return False
 
     logging.error(
         "SCHED partner_track watchdog dispatching missing slot track=%s "
@@ -2661,18 +2750,30 @@ def startup(
             "ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1",
         )
 
-    # CherryFlash partner tracks (eco / east). Intentionally always on:
+    # CherryFlash partner tracks. Intentionally always on:
     # the user asked NOT to gate this behind a feature flag. Times still
     # overridable via env without redeploy.
-    for partner_track_id, callback_action in (
-        ("partner_eco_nature_001", "eco"),
-        ("partner_region_east_001", "east"),
-    ):
+    try:
+        from video_announce.partner_tracks import PARTNER_TRACKS as _PARTNER_TRACKS
+
+        partner_track_schedule_items = [
+            (track.track_id, track.callback_action) for track in _PARTNER_TRACKS
+        ]
+    except Exception:
+        logging.exception(
+            "SCHED failed to import partner tracks; using fallback partner schedule"
+        )
+        partner_track_schedule_items = [
+            ("partner_eco_nature_001", "eco"),
+            ("partner_konb_library_001", "konb"),
+            ("partner_region_east_001", "east"),
+        ]
+    for partner_track_id, callback_action in partner_track_schedule_items:
         track_time_raw = _partner_track_time_local(partner_track_id)
         track_hour, track_minute = _cron_from_local(
             track_time_raw,
             PARTNER_TRACK_TZ,
-            default_hour="12" if callback_action == "eco" else "18",
+            default_hour="18" if callback_action == "east" else "12",
             default_minute="30",
             label=f"V_PARTNER_TRACK_{callback_action.upper()}_TIME_LOCAL",
         )

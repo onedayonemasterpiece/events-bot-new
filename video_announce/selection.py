@@ -1381,7 +1381,15 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
     }
 
     selection_meta = {}
-    for key in ("mode", "test", "is_test", "allow_empty_ocr"):
+    for key in (
+        "mode",
+        "test",
+        "is_test",
+        "allow_empty_ocr",
+        "partner_track_id",
+        "partner_profile_key",
+        "partner_publish_mode",
+    ):
         if key in selection_params:
             selection_meta[key] = selection_params.get(key)
 
@@ -1391,6 +1399,8 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
     }
     if selection_meta:
         obj["selection_params"] = selection_meta
+    if isinstance(selection_params.get("outro"), dict):
+        obj["outro"] = selection_params["outro"]
     return json.dumps(obj, ensure_ascii=False, indent=2)
 
 

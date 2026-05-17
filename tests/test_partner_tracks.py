@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from video_announce.partner_tracks import (
     PARTNER_ECO_NATURE,
+    PARTNER_KONB_LIBRARY,
     PARTNER_REGION_EAST,
     PARTNER_TRACKS,
     get_partner_track,
@@ -24,6 +25,7 @@ from video_announce.partner_filters import (
     FilterDecision,
     classify_event_eco_prirodnaya,
     classify_event_kaliningrad_region_east,
+    classify_event_konb_library,
 )
 
 
@@ -53,11 +55,14 @@ def _make_event(**kwargs):
 def test_partner_tracks_registry_lookups():
     assert PARTNER_ECO_NATURE.track_id == "partner_eco_nature_001"
     assert PARTNER_REGION_EAST.track_id == "partner_region_east_001"
+    assert PARTNER_KONB_LIBRARY.track_id == "partner_konb_library_001"
     assert get_partner_track(PARTNER_ECO_NATURE.track_id) is PARTNER_ECO_NATURE
     assert get_partner_track("unknown") is None
     assert get_partner_track_by_action("eco") is PARTNER_ECO_NATURE
     assert get_partner_track_by_action("east") is PARTNER_REGION_EAST
+    assert get_partner_track_by_action("konb") is PARTNER_KONB_LIBRARY
     assert get_partner_track_by_profile_key(PARTNER_ECO_NATURE.profile_key) is PARTNER_ECO_NATURE
+    assert get_partner_track_by_profile_key(PARTNER_KONB_LIBRARY.profile_key) is PARTNER_KONB_LIBRARY
 
 
 def test_partner_tracks_have_distinct_profile_keys():
@@ -70,13 +75,23 @@ def test_partner_tracks_have_intro_kicker_and_screen_top():
     for track in PARTNER_TRACKS:
         assert track.intro_kicker.strip()
         assert track.intro_screen_top.strip()
-        assert track.business_selector_setting_key.startswith("partner_track_")
+        if track.default_publish_mode == "business":
+            assert track.business_selector_setting_key.startswith("partner_track_")
 
 
 def test_partner_tracks_carry_default_business_selector():
     # Ensures the pipeline never has to fall back to operator-only setup.
     for track in PARTNER_TRACKS:
-        assert track.default_business_selector.startswith("@"), track.track_id
+        if track.default_publish_mode == "business":
+            assert track.default_business_selector.startswith("@"), track.track_id
+
+
+def test_konb_track_defaults_to_test_story_target():
+    assert PARTNER_KONB_LIBRARY.default_publish_mode == "test"
+    assert PARTNER_KONB_LIBRARY.test_story_targets[0]["peer"] == "@keniggpt"
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[0]["peer"] == "@kaliningradlibrary"
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_story"
+    assert PARTNER_KONB_LIBRARY.outro["strip_color"] == "#780000"
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +133,42 @@ def test_east_filter_exclude_overrides_include_in_compound_address():
     decision = classify_event_kaliningrad_region_east(event)
     assert decision.matched is False
     assert decision.reason.startswith("exclude:")
+
+
+# ---------------------------------------------------------------------------
+# konb_library — deterministic source/venue ownership filter
+# ---------------------------------------------------------------------------
+
+
+def test_konb_filter_matches_scientific_library_location():
+    event = _make_event(
+        id=30,
+        location_name="Научная библиотека, Мира 9, Калининград",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is True
+    assert decision.reason.startswith("location:")
+
+
+def test_konb_filter_matches_public_source():
+    event = _make_event(
+        id=31,
+        source_post_url="https://vk.com/wall-30777579_15208",
+        location_name="Калининград",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is True
+    assert decision.reason.startswith("source:")
+
+
+def test_konb_filter_rejects_other_library():
+    event = _make_event(
+        id=32,
+        location_name="Библиотека им. Лунина, Калинина 4, Черняховск",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is False
+    assert decision.reason == "not_konb_library"
 
 
 # ---------------------------------------------------------------------------

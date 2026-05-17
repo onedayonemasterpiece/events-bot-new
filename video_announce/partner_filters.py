@@ -14,6 +14,11 @@ Two filters live here today, one per partner track:
   bounded retries/fallbacks; deterministic keyword recall is used only as a
   fast pre-pass to skip events that are not even plausibly in scope, never to
   override an LLM include.
+
+* ``konb_library`` — deterministic venue/source ownership filter for the
+  Kaliningrad regional scientific library track. This is not a semantic topic
+  classifier: it only checks canonical venue/source evidence that the event
+  belongs to the library surface.
 """
 from __future__ import annotations
 
@@ -206,6 +211,93 @@ def classify_event_kaliningrad_region_east(event: Event) -> FilterDecision:
         matched=False,
         needs_manual_review=False,
         reason="not_in_east",
+        extra={},
+    )
+
+
+# ---------------------------------------------------------------------------
+# konb_library
+# ---------------------------------------------------------------------------
+
+
+KONB_LIBRARY_LOCATION_HINTS: tuple[str, ...] = (
+    "научная библиотека",
+    "областная научная библиотека",
+    "калининградская областная научная библиотека",
+    "коунб",
+    "конб",
+    "мира 9",
+)
+
+KONB_LIBRARY_SOURCE_HINTS: tuple[str, ...] = (
+    "kaliningradlibrary",
+    "wall-30777579_",
+    "vk.com/wall-30777579_",
+    "vk.com/konb39",
+    "konb39",
+)
+
+
+def _konb_text_parts(event: Event) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for label, attr in (
+        ("title", "title"),
+        ("description", "description"),
+        ("search_digest", "search_digest"),
+        ("short_description", "short_description"),
+        ("location_name", "location_name"),
+        ("location_address", "location_address"),
+        ("source_post_url", "source_post_url"),
+        ("source_vk_post_url", "source_vk_post_url"),
+        ("source_text", "source_text"),
+    ):
+        raw = getattr(event, attr, None)
+        if raw:
+            parts[label] = str(raw).strip()
+    source_texts = getattr(event, "source_texts", None) or []
+    if source_texts:
+        parts["source_texts"] = "\n".join(str(item or "").strip() for item in source_texts if str(item or "").strip())
+    return parts
+
+
+def classify_event_konb_library(event: Event) -> FilterDecision:
+    event_id = int(getattr(event, "id", 0) or 0)
+    parts = _konb_text_parts(event)
+    location_blob = " ".join(
+        parts.get(key, "")
+        for key in ("location_name", "location_address")
+    ).casefold()
+    source_blob = " ".join(
+        parts.get(key, "")
+        for key in ("source_post_url", "source_vk_post_url", "source_text", "source_texts")
+    ).casefold()
+
+    location_hit = next(
+        (hint for hint in KONB_LIBRARY_LOCATION_HINTS if hint in location_blob),
+        "",
+    )
+    source_hit = next(
+        (hint for hint in KONB_LIBRARY_SOURCE_HINTS if hint in source_blob),
+        "",
+    )
+    if location_hit or source_hit:
+        return FilterDecision(
+            event_id=event_id,
+            matched=True,
+            needs_manual_review=False,
+            reason=(
+                f"location:{location_hit}" if location_hit else f"source:{source_hit}"
+            ),
+            extra={
+                "location_hit": location_hit,
+                "source_hit": source_hit,
+            },
+        )
+    return FilterDecision(
+        event_id=event_id,
+        matched=False,
+        needs_manual_review=False,
+        reason="not_konb_library",
         extra={},
     )
 

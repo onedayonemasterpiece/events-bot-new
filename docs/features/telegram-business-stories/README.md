@@ -22,12 +22,15 @@
   - для CherryFlash encrypted story secrets должны лежать в том же `cherryflash-session-*` dataset, что и `story_publish.json`, чтобы Kaggle не смонтировал устаревшую статическую версию secrets dataset;
   - выбранные Business targets для CherryFlash являются независимым best-effort fanout: если secret отсутствует, права уже недоступны или Telegram возвращает ограничение по story boosts, это должно попасть в per-target report, но не должно отменять публикацию в основные Telegram/VK поверхности;
   - CherryFlash и `/check_business` обязаны передавать `post_to_chat_page=true` в Bot API `postStory`, чтобы story была видима на странице Business account, а не только как текущая активная сторис;
-  - по умолчанию Business targets разрешены для CherryFlash modes `popular_review,cherryflash_libsvtav1` и для production-ready Kenigsberg mode `kenigsberg_story` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
+  - по умолчанию Business targets разрешены для CherryFlash modes `popular_review,popular_review_eco,popular_review_east,popular_review_konb,cherryflash_libsvtav1` и для production-ready Kenigsberg mode `kenigsberg_story` через `VIDEO_ANNOUNCE_STORY_BUSINESS_MODES`;
   - `VIDEO_ANNOUNCE_STORY_BUSINESS_DELAY_SECONDS` задаёт паузу перед каждым Business target и по умолчанию равен `600`.
   - партнёрские CherryFlash-треки должны задавать явный
     `story_targets_override=[]`: это означает отсутствие Telethon/channel
     fanout и оставляет только `story_business_targets`. Такой пустой override
     не должен падать обратно к глобальному `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`.
+  - исключение: `partner_konb_library_001` стартует в `test` mode с явным
+    Telegram channel target `@keniggpt`, а в `prod` mode использует явные
+    Telegram/VK story targets; Business preflight для него не требуется.
 
 ## Operator commands
 

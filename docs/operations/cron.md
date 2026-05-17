@@ -106,6 +106,12 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - the scheduled path uses `VideoAnnounceScenario.run_popular_review_pipeline(wait_for_handoff=True)` and must not mark `ops_run(kind='video_popular_review')` as `success` until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug, not `local:CherryFlash`;
   - startup catch-up and the live watchdog retry the same local-day slot when the only matching CherryFlash session failed before Kaggle handoff;
   - duplicate prevention is based on remote handoff evidence: a matching session with a non-local kernel ref plus `cherryflash-session-*` dataset suppresses catch-up even if local status later drifts.
+- **CherryFlash partner tracks** – always-registered daily partner story tracks with per-track defaults and watchdog retry until `22:00 Europe/Kaliningrad`.
+  - `partner_eco_nature_001`: `12:30 Europe/Kaliningrad` (`V_PARTNER_TRACK_ECO_TIME_LOCAL`);
+  - `partner_konb_library_001`: `12:50 Europe/Kaliningrad` (`V_PARTNER_TRACK_KONB_TIME_LOCAL`), defaulting to `test` publish mode (`@keniggpt`) until `setting.partner_track_konb_publish_mode=prod` is set;
+  - `partner_region_east_001`: `18:30 Europe/Kaliningrad` (`V_PARTNER_TRACK_EAST_TIME_LOCAL`).
+  - The КОНБ production fanout treats the Telegram channel story as best-effort, so `BOOSTS_REQUIRED` does not stop VK story publication.
+  - The east-region track stops same-day watchdog launches after the scheduled attempt plus one retry when the Business story target is still missing from the encrypted cache; the next attempt is the next daily schedule.
 - **kaggle recovery** – resumes in-flight Kaggle jobs after restarts, including `tg_monitoring` and `guide_monitoring`.
   - `guide_monitoring` now keeps a persisted copy of the downloaded results bundle under `GUIDE_MONITORING_RESULTS_STORE_ROOT` (default `/data/guide_monitoring_results`), so a restart during server import or scheduled digest publish can resume from the saved `results_path` instead of depending on a second Kaggle download.
   - before and after copying a new guide output bundle, the server prunes old `guide-excursions-*` directories in that store by age/count/size/free-space guard. This is production-critical because the store shares Fly `/data` with SQLite; without retention, old recovery bundles can trigger `database or disk is full` and drop daily scheduler slots.
@@ -165,6 +171,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `ENABLE_V_POPULAR_REVIEW_SCHEDULED` – enable scheduled CherryFlash `popular_review`.
 - `V_POPULAR_REVIEW_TIME_LOCAL` / `V_POPULAR_REVIEW_TZ` – local schedule for CherryFlash `popular_review` (default: `10:15 Europe/Kaliningrad`).
 - `V_POPULAR_REVIEW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the CherryFlash slot before the independent watchdog dispatches a missing local-only pre-handoff run (default: `900`).
+- `V_PARTNER_TRACK_ECO_TIME_LOCAL` / `V_PARTNER_TRACK_KONB_TIME_LOCAL` / `V_PARTNER_TRACK_EAST_TIME_LOCAL` – local schedule overrides for the always-registered CherryFlash partner tracks.
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_REQUIRED` – optional prod guard: when enabled, `/healthz` fails if `/v` story publish is disabled or obviously misconfigured.

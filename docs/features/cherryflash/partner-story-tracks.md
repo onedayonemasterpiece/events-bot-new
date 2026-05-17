@@ -1,6 +1,6 @@
 # CherryFlash Partner Story Tracks
 
-> **Status:** MVP implemented (2026-05-14) — `partner_eco_nature_001` and `partner_region_east_001` shipped through `/v`; remaining items (LLM-driven east geo classifier, per-run Kaggle isolation, source audit, scheduled runs) are tracked in the acceptance checklist below.
+> **Status:** MVP implemented (2026-05-14) — `partner_eco_nature_001`, `partner_region_east_001`, and `partner_konb_library_001` ship through `/v`; remaining items (LLM-driven east geo classifier, per-run Kaggle isolation, source audit, scheduled runs) are tracked in the acceptance checklist below.
 > **Scope:** partner-specific CherryFlash story releases for Telegram Business accounts, where each partner can have its own event filter, geo filter, schedule, render profile, and Business Story target.
 
 ## Product goal
@@ -114,6 +114,12 @@ fail-closed.
 
 Other partner tracks resolve promo only for their exact partner `profile_key`
 unless they get their own documented exception.
+
+For `partner_region_east_001`, a missing Telegram Business target is treated as
+a same-day defer signal after the scheduled attempt plus one watchdog retry.
+When the cached Business connection still cannot be resolved on the retry, the
+watchdog stops launching that track until the next scheduled local day instead
+of retrying every 10 minutes up to the 22:00 deadline.
 
 ## Selection policy
 
@@ -236,6 +242,51 @@ Initial partner assignment:
 - `publish surface`: Telegram Business Story
 - `target`: encrypted Business target supplied out-of-band; do not write raw handle to repo-visible files.
 
+## Filter `konb_library`
+
+Human label: `КОНБ / Калининградская областная научная библиотека`.
+
+Main rule: include only future/current events that belong to the scientific library surface. This is a venue/source ownership filter, not a broad “library” topic classifier.
+
+Include when at least one of these source-grounded facts is present:
+
+- canonical venue/location mentions `Научная библиотека`, `Калининградская областная научная библиотека`, `КОНБ`, `КОУНБ`, or `Мира 9`;
+- source evidence from `https://t.me/kaliningradlibrary/...`, `https://vk.com/wall-30777579_...`, or `https://vk.com/konb39...`;
+- source text explicitly identifies the event as a scientific-library event.
+
+Exclude:
+
+- other regional libraries, even when they are library events;
+- generic book, lecture, reading, or culture events without source/venue evidence tying them to КОНБ;
+- events at `Мира 9` that are clearly owned by another venue and have no КОНБ source/organizer evidence.
+
+Selection policy:
+
+- profile key: `popular_review_konb`;
+- track id: `partner_konb_library_001`;
+- default publish mode: `test`, publishing the first run to `https://t.me/keniggpt`;
+- production publish mode is enabled by setting `partner_track_konb_publish_mode=prod`;
+- production story fanout: Telegram channel story `https://t.me/kaliningradlibrary` as best-effort/non-blocking, plus VK community story `https://vk.com/konb39` as required;
+- if Telegram channel boosts are insufficient, the Telegram target may fail locally while the VK story still runs and determines required publish success;
+- daily schedule: `12:50 Europe/Kaliningrad`, just after the eco/nature partner slot; if the render lane is still occupied, the partner watchdog retries later the same day until the shared 22:00 deadline.
+
+Ranking policy:
+
+- base order still comes from CherryFlash popularity signals (`views`, `likes`, normalized score);
+- events with `ticket_link` or a non-zero stored price receive a strong priority boost and are placed closer to the beginning when many eligible events exist;
+- explicit special-guest wording (`специальный гость`, `приглашённый гость`, `встреча с`, etc.) receives a smaller priority boost;
+- events due in 3 days or 1 day receive an additional boost, giving the requested extra exposure windows;
+- КОНБ cooldown is intentionally shorter than the base CherryFlash cooldown, but a same event is still deduped within one video and cannot repeat on adjacent daily runs unless it is a priority item whose last show is at least one day old;
+- an event that occupied slot 1 recently receives a first-position penalty, so a single strong event should not permanently stick to the first scene when there are other eligible candidates;
+- when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, cooldown, and ranking rules.
+
+Outro:
+
+- strip color: `#780000`;
+- large line: `Калининградская областная научная библиотека`;
+- small line: `при поддержке`;
+- medium line: `Полюбить Калининград Анонсы`.
+
 ## Filter `icae_events`
 
 Human label: `ИЦАЭ`.
@@ -276,6 +327,7 @@ Required initial buttons:
 
 - `🍒 CherryFlash` — existing base popularity track.
 - `🍃 Эко-природная` — launches `partner_track_id=partner_eco_nature_001` with `content_filter_id=eco_prirodnaya`.
+- `📚 КОНБ` — launches `partner_track_id=partner_konb_library_001` with `content_filter_id=konb_library` and starts in `test` publish mode until explicitly promoted to `prod`.
 
 Future partner tracks should add their own one-click buttons with stable human labels, for example a future east-region partner button may use the `kaliningrad_region_east` geo filter once its Business target is supplied and source audit is complete.
 

@@ -526,7 +526,7 @@ def _business_modes() -> set[str]:
     if not raw:
         raw = (
             "popular_review,popular_review_eco,popular_review_east,"
-            "cherryflash_libsvtav1,kenigsberg_story"
+            "popular_review_konb,cherryflash_libsvtav1,kenigsberg_story"
         )
     return {item.strip().casefold() for item in raw.split(",") if item.strip()}
 

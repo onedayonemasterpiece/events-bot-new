@@ -21,6 +21,7 @@ from models import (
 )
 from promo import PromoCandidate
 from video_announce.partner_filters import FilterDecision
+from video_announce.partner_filters import classify_event_konb_library
 from video_announce.popular_review import build_popular_review_selection
 from video_announce import popular_review as popular_review_module
 from handlers import popular_posts_cmd as popular_posts_module
@@ -899,3 +900,88 @@ async def test_popular_review_seeded_promo_uses_only_future_festival_events(tmp_
     assert len(campaigns) == 1
     assert campaigns[0].status == "active"
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_konb_selection_falls_back_to_future_library_events(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        konb_ticketed = Event(
+            title="Лекция со специальным гостем",
+            description="Встреча с приглашённым гостем",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-20",
+            time="19:00",
+            location_name="Научная библиотека, Мира 9, Калининград",
+            city="Калининград",
+            ticket_link="https://tickets.example/konb",
+            photo_urls=["https://example.com/konb-ticketed.jpg"],
+            photo_count=1,
+        )
+        other_library = Event(
+            title="Другая библиотека",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-20",
+            time="19:00",
+            location_name="Библиотека им. Лунина, Калинина 4, Черняховск",
+            city="Черняховск",
+            photo_urls=["https://example.com/other.jpg"],
+            photo_count=1,
+        )
+        session.add_all([konb_ticketed, other_library])
+        await session.commit()
+        await session.refresh(konb_ticketed)
+        await session.refresh(other_library)
+
+    async def no_popular_hits(*_args, **_kwargs):
+        return []
+
+    async def no_promos(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(popular_review_module, "_collect_popular_hits", no_popular_hits)
+    monkeypatch.setattr(popular_review_module, "resolve_video_promo_candidates", no_promos)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=2,
+        min_events=1,
+        anti_repeat_days=1,
+        candidate_limit=5,
+        now_utc=now_utc,
+        profile_key="popular_review_konb",
+        partner_track_id="partner_konb_library_001",
+        event_filter=classify_event_konb_library,
+        admit_manual_review=False,
+        selection_policy_id="konb_library",
+    )
+
+    assert selection.event_ids == [int(konb_ticketed.id)]
+    meta = selection.trace[int(konb_ticketed.id)]
+    assert meta["source_window"] == "future_fallback"
+    assert "ticket_or_price" in meta["priority_reasons"]
+    assert "special_guest_hint" in meta["priority_reasons"]
+    assert "due_in_3_days" in meta["priority_reasons"]
+    await db.close()
+
+
+def test_konb_first_position_penalty_demotes_recent_leader():
+    penalty = popular_review_module._first_position_penalty(
+        {"best_recent_position": 1},
+        selection_policy_id="konb_library",
+    )
+    no_penalty = popular_review_module._first_position_penalty(
+        {"best_recent_position": 2},
+        selection_policy_id="konb_library",
+    )
+
+    assert penalty > 0
+    assert no_penalty == 0.0

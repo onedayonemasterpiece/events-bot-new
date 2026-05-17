@@ -13,7 +13,7 @@ existing encrypted Business connection cache via
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 from .popular_review import POPULAR_REVIEW_PROFILE
 
@@ -37,6 +37,12 @@ class PartnerTrack:
     # case-insensitively. Operator can still override at runtime by writing the
     # corresponding Setting row.
     default_business_selector: str = ""
+    publish_mode_setting_key: str = ""
+    default_publish_mode: str = "business"
+    test_story_targets: tuple[dict[str, Any], ...] = ()
+    prod_story_targets: tuple[dict[str, Any], ...] = ()
+    selection_policy_id: str = ""
+    outro: dict[str, Any] | None = None
 
 
 PARTNER_ECO_NATURE = PartnerTrack(
@@ -71,7 +77,83 @@ PARTNER_REGION_EAST = PartnerTrack(
 )
 
 
-PARTNER_TRACKS: tuple[PartnerTrack, ...] = (PARTNER_ECO_NATURE, PARTNER_REGION_EAST)
+PARTNER_KONB_LIBRARY = PartnerTrack(
+    track_id="partner_konb_library_001",
+    profile_key="popular_review_konb",
+    display_name="Калининградская областная научная библиотека",
+    button_emoji="📚",
+    button_label="КОНБ",
+    callback_action="konb",
+    content_filter_id="konb_library",
+    geo_filter_id=None,
+    intro_kicker="НАУЧНАЯ\nБИБЛИОТЕКА",
+    intro_screen_top="научная библиотека",
+    business_selector_setting_key="",
+    default_business_selector="",
+    publish_mode_setting_key="partner_track_konb_publish_mode",
+    default_publish_mode="test",
+    test_story_targets=(
+        {
+            "peer": "@keniggpt",
+            "label": "tg:@keniggpt:test",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "blocking": True,
+            "required": True,
+        },
+    ),
+    prod_story_targets=(
+        {
+            "peer": "@kaliningradlibrary",
+            "label": "tg:@kaliningradlibrary:story",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "blocking": False,
+            "required": False,
+        },
+        {
+            "peer": "konb39",
+            "label": "vk:konb39:story",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "transport": "vk_story",
+            "blocking": False,
+            "required": True,
+        },
+    ),
+    selection_policy_id="konb_library",
+    outro={
+        "strip_color": "#780000",
+        "text_color": "#FFFFFF",
+        "lines": [
+            {
+                "text": "Калининградская областная научная библиотека",
+                "scale": 1.0,
+                "side": "left",
+                "delay": 0.0,
+            },
+            {
+                "text": "при поддержке",
+                "scale": 0.42,
+                "side": "right",
+                "delay": 0.35,
+            },
+            {
+                "text": "Полюбить Калининград Анонсы",
+                "scale": 0.68,
+                "side": "left",
+                "delay": 0.7,
+            },
+        ],
+    },
+)
+
+
+PARTNER_TRACKS: tuple[PartnerTrack, ...] = (
+    PARTNER_ECO_NATURE,
+    PARTNER_REGION_EAST,
+    PARTNER_KONB_LIBRARY,
+)
 
 
 _BY_TRACK_ID: dict[str, PartnerTrack] = {t.track_id: t for t in PARTNER_TRACKS}

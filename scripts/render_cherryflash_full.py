@@ -82,6 +82,7 @@ OUTRO_BG = BG_BLACK
 OUTRO_STRIP = ImageColor.getrgb("#F1E44B")
 OUTRO_TEXT = ImageColor.getrgb("#100E0E")
 LEGACY_STRIP = (80, 20, 140, 255)
+OUTRO_CONFIG: dict = {}
 
 KNOWN_CITY_NAMES = {
     "Калининград",
@@ -120,6 +121,49 @@ def _load_payload() -> dict:
     if matches:
         return json.loads(matches[0].read_text(encoding="utf-8"))
     raise FileNotFoundError("CherryFlash payload.json not found")
+
+
+def _hex_rgb(value: str | None, fallback: tuple[int, int, int]) -> tuple[int, int, int]:
+    raw = str(value or "").strip()
+    if not raw:
+        return fallback
+    try:
+        return ImageColor.getrgb(raw)
+    except Exception:
+        return fallback
+
+
+def _configure_outro(payload: dict) -> None:
+    global OUTRO_CONFIG
+    raw = payload.get("outro") if isinstance(payload, dict) else None
+    OUTRO_CONFIG = raw if isinstance(raw, dict) else {}
+
+
+def _outro_lines() -> list[dict]:
+    raw_lines = OUTRO_CONFIG.get("lines") if isinstance(OUTRO_CONFIG, dict) else None
+    if isinstance(raw_lines, list) and raw_lines:
+        lines: list[dict] = []
+        for idx, item in enumerate(raw_lines):
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            lines.append(
+                {
+                    "text": text.upper(),
+                    "scale": float(item.get("scale") or 1.0),
+                    "side": str(item.get("side") or ("left" if idx % 2 == 0 else "right")),
+                    "delay": float(item.get("delay") or idx * 0.4),
+                }
+            )
+        if lines:
+            return lines
+    return [
+        {"text": "ПОЛЮБИТЬ", "side": "left", "delay": 0.0, "scale": 1.0},
+        {"text": "КАЛИНИНГРАД", "side": "right", "delay": 0.4, "scale": 1.0},
+        {"text": "АНОНСЫ", "side": "left", "delay": 0.8, "scale": 1.0},
+    ]
 
 
 def _candidate_audio_path() -> Path:
@@ -262,17 +306,28 @@ def _build_outro_strip(
     font_path: Path,
     font_size: int,
     strip_height: int,
+    strip_color: tuple[int, int, int] = OUTRO_STRIP,
+    text_color: tuple[int, int, int] = OUTRO_TEXT,
+    max_width: int | None = None,
 ) -> Image.Image:
+    font_size = max(18, int(font_size))
+    max_width = max_width or W
     font = approval.font(font_path, font_size)
     bbox = font.getbbox(text)
     text_w = int(math.ceil(font.getlength(text)))
     text_h = bbox[3] - bbox[1]
     pad_x = max(18, round(25 * (W / approval.BASE_W)))
+    while text_w + pad_x * 2 > max_width and font_size > 18:
+        font_size -= 2
+        font = approval.font(font_path, font_size)
+        bbox = font.getbbox(text)
+        text_w = int(math.ceil(font.getlength(text)))
+        text_h = bbox[3] - bbox[1]
     strip_w = text_w + pad_x * 2
     text_y = int((strip_height - text_h) / 2 - bbox[1])
-    image = Image.new("RGBA", (strip_w, strip_height), (*OUTRO_STRIP, 255))
+    image = Image.new("RGBA", (strip_w, strip_height), (*strip_color, 255))
     draw = ImageDraw.Draw(image)
-    draw.text((pad_x, text_y), text, font=font, fill=(*OUTRO_TEXT, 255))
+    draw.text((pad_x, text_y), text, font=font, fill=(*text_color, 255))
     return image
 
 
@@ -305,6 +360,7 @@ def _strip_leading_emoji(title: str) -> str:
 
 
 def _build_render_scenes(payload: dict) -> list[RenderScene]:
+    _configure_outro(payload)
     scenes_data = payload.get("scenes") or []
     scenes: list[RenderScene] = []
     first_primary_assigned = False
@@ -540,29 +596,42 @@ def _render_scene_frame(scene: RenderScene, local_t: float, text_blocks) -> Imag
 
 def _render_brand_outro_frame(local_t: float) -> Image.Image:
     scale = W / approval.BASE_W
-    strip_height = max(56, round(210 * scale))
+    base_strip_height = max(56, round(210 * scale))
     gap = max(8, round(20 * scale))
-    font_size = max(48, round(160 * scale))
+    base_font_size = max(48, round(160 * scale))
     slide_duration = 0.8
-    words_conf = [
-        {"text": "ПОЛЮБИТЬ", "side": "left", "delay": 0.0},
-        {"text": "КАЛИНИНГРАД", "side": "right", "delay": 0.4},
-        {"text": "АНОНСЫ", "side": "left", "delay": 0.8},
+    words_conf = _outro_lines()
+    strip_color = _hex_rgb(
+        OUTRO_CONFIG.get("strip_color") if isinstance(OUTRO_CONFIG, dict) else None,
+        OUTRO_STRIP,
+    )
+    text_color = _hex_rgb(
+        OUTRO_CONFIG.get("text_color") if isinstance(OUTRO_CONFIG, dict) else None,
+        OUTRO_TEXT,
+    )
+    heights = [
+        max(42, round(base_strip_height * max(0.32, min(1.2, float(item.get("scale") or 1.0)))))
+        for item in words_conf
     ]
-    step_y = strip_height + gap
-    total_block_h = len(words_conf) * step_y - gap
+    total_block_h = sum(heights) + gap * (len(words_conf) - 1)
     start_y_block = (H - total_block_h) / 2.0
     canvas = Image.new("RGBA", (W, H), (*OUTRO_BG, 255))
 
+    current_y = start_y_block
     for idx, item in enumerate(words_conf):
+        strip_height = heights[idx]
+        font_size = max(24, round(base_font_size * max(0.35, min(1.1, float(item.get("scale") or 1.0)))))
         strip = _build_outro_strip(
             item["text"],
             font_path=PRIMARY_TITLE_FONT,
             font_size=font_size,
             strip_height=strip_height,
+            strip_color=strip_color,
+            text_color=text_color,
+            max_width=round(W * 0.94),
         )
         final_x = (W - strip.width) / 2.0
-        final_y = start_y_block + idx * step_y
+        final_y = current_y
         start_x = -strip.width - round(100 * scale) if item["side"] == "left" else W + round(100 * scale)
         if local_t < item["delay"]:
             x = float(start_x)
@@ -570,6 +639,7 @@ def _render_brand_outro_frame(local_t: float) -> Image.Image:
             progress = min(1.0, max(0.0, (local_t - item["delay"]) / slide_duration))
             x = start_x + (final_x - start_x) * ease_out_expo(progress)
         _paste_rgba_subpixel(canvas, strip, x, final_y)
+        current_y += strip_height + gap
 
     if local_t < FINAL_CARD_FADE_IN:
         alpha = int(255 * approval.ease_out_cubic(max(0.0, local_t / FINAL_CARD_FADE_IN)))

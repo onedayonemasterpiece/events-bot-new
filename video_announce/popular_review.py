@@ -27,6 +27,8 @@ POPULAR_REVIEW_MAX_EVENTS = 6
 POPULAR_REVIEW_ANTI_REPEAT_DAYS = 7
 POPULAR_REVIEW_CANDIDATE_LIMIT = 40
 ECO_NATURE_PARTNER_TRACK_ID = "partner_eco_nature_001"
+KONB_LIBRARY_PARTNER_TRACK_ID = "partner_konb_library_001"
+KONB_LIBRARY_SELECTION_POLICY = "konb_library"
 PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES = 3
 PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION = 1
 PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND = "guaranteed_any_position"
@@ -65,6 +67,15 @@ class PopularReviewPick:
     promo_campaign_id: int | None = None
     promo_activity_id: int | None = None
     promo_placement_kind: str | None = None
+    priority_score: float = 0.0
+    priority_reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class EventPriority:
+    score_boost: float = 0.0
+    reasons: tuple[str, ...] = ()
+    allow_repeat_after_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -448,17 +459,39 @@ def preferred_scene_description(ev: Event) -> str:
     return ""
 
 
+def _coerce_utc_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 async def _load_recent_popular_review_hits(
     db,
     *,
     anti_repeat_days: int,
     now_utc: datetime,
     profile_key: str = POPULAR_REVIEW_PROFILE,
-) -> set[int]:
+) -> dict[int, dict[str, Any]]:
     threshold = now_utc - timedelta(days=max(1, anti_repeat_days))
     async with db.get_session() as session:
         result = await session.execute(
-            select(VideoAnnounceItem.event_id)
+            select(
+                VideoAnnounceItem.event_id,
+                VideoAnnounceItem.position,
+                func.coalesce(
+                    VideoAnnounceSession.published_at,
+                    VideoAnnounceSession.finished_at,
+                    VideoAnnounceSession.started_at,
+                    VideoAnnounceSession.created_at,
+                ),
+            )
             .join(
                 VideoAnnounceSession,
                 VideoAnnounceItem.session_id == VideoAnnounceSession.id,
@@ -476,7 +509,153 @@ async def _load_recent_popular_review_hits(
                 >= threshold,
             )
         )
-        return {int(event_id) for event_id in result.scalars().all() if event_id is not None}
+        rows = result.all()
+    out: dict[int, dict[str, Any]] = {}
+    for event_id, position, seen_at_raw in rows:
+        if event_id is None:
+            continue
+        event_key = int(event_id)
+        seen_at = _coerce_utc_datetime(seen_at_raw)
+        position_int = int(position) if position is not None else None
+        current = out.get(event_key)
+        if current is None:
+            out[event_key] = {
+                "last_seen_at": seen_at,
+                "best_recent_position": position_int,
+            }
+            continue
+        current_seen = current.get("last_seen_at")
+        if seen_at is not None and (
+            not isinstance(current_seen, datetime) or seen_at > current_seen
+        ):
+            current["last_seen_at"] = seen_at
+        current_pos = current.get("best_recent_position")
+        if position_int is not None and (
+            current_pos is None or int(position_int) < int(current_pos)
+        ):
+            current["best_recent_position"] = position_int
+    return out
+
+
+def _text_blob(event: Event) -> str:
+    values: list[str] = []
+    for attr in (
+        "title",
+        "description",
+        "short_description",
+        "search_digest",
+        "source_text",
+    ):
+        raw = getattr(event, attr, None)
+        if raw:
+            values.append(str(raw))
+    for raw in getattr(event, "source_texts", None) or []:
+        if raw:
+            values.append(str(raw))
+    return "\n".join(values).casefold()
+
+
+def _has_ticket_or_price(event: Event) -> bool:
+    if str(getattr(event, "ticket_link", None) or "").strip():
+        return True
+    for attr in ("ticket_price_min", "ticket_price_max"):
+        raw = getattr(event, attr, None)
+        if isinstance(raw, int) and raw > 0:
+            return True
+    return False
+
+
+SPECIAL_GUEST_HINTS: tuple[str, ...] = (
+    "специальный гость",
+    "особый гость",
+    "приглашенный гость",
+    "приглашённый гость",
+    "гость встречи",
+    "встреча с",
+    "лекцию прочитает",
+    "лекцию проведет",
+    "лекцию проведёт",
+)
+
+
+def _event_days_until(event: Event, *, today: date) -> int | None:
+    event_day = _parse_iso_date(getattr(event, "date", None))
+    if event_day is None:
+        return None
+    return (event_day - today).days
+
+
+def _konb_event_priority(event: Event, *, today: date) -> EventPriority:
+    boost = 0.0
+    reasons: list[str] = []
+    allow_repeat_after_days: int | None = None
+    days_until = _event_days_until(event, today=today)
+    if days_until == 1:
+        boost += 700.0
+        reasons.append("due_in_1_day")
+        allow_repeat_after_days = 1
+    elif days_until == 3:
+        boost += 620.0
+        reasons.append("due_in_3_days")
+        allow_repeat_after_days = 1
+    if _has_ticket_or_price(event):
+        boost += 520.0
+        reasons.append("ticket_or_price")
+        allow_repeat_after_days = 1
+    if any(hint in _text_blob(event) for hint in SPECIAL_GUEST_HINTS):
+        boost += 280.0
+        reasons.append("special_guest_hint")
+        allow_repeat_after_days = 1
+    return EventPriority(
+        score_boost=boost,
+        reasons=tuple(reasons),
+        allow_repeat_after_days=allow_repeat_after_days,
+    )
+
+
+def _event_priority(
+    event: Event,
+    *,
+    today: date,
+    selection_policy_id: str | None,
+) -> EventPriority:
+    if selection_policy_id == KONB_LIBRARY_SELECTION_POLICY:
+        return _konb_event_priority(event, today=today)
+    return EventPriority()
+
+
+def _priority_repeat_allowed(
+    priority: EventPriority,
+    recent_meta: dict[str, Any] | None,
+    *,
+    now_utc: datetime,
+) -> bool:
+    if not recent_meta or priority.allow_repeat_after_days is None:
+        return False
+    last_seen_at = recent_meta.get("last_seen_at")
+    if not isinstance(last_seen_at, datetime):
+        return False
+    min_age = max(1, priority.allow_repeat_after_days) * 86400
+    return (now_utc - last_seen_at).total_seconds() >= min_age
+
+
+def _first_position_penalty(
+    recent_meta: dict[str, Any] | None,
+    *,
+    selection_policy_id: str | None,
+) -> float:
+    if selection_policy_id != KONB_LIBRARY_SELECTION_POLICY or not recent_meta:
+        return 0.0
+    if recent_meta.get("best_recent_position") == 1:
+        return 360.0
+    return 0.0
+
+
+def _stable_daily_jitter(event_id: int, *, now_utc: datetime, profile_key: str) -> float:
+    seed = f"{now_utc.date().isoformat()}|{profile_key}|{event_id}"
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return int(digest[:6], 16) / 16_777_215.0
+
 
 
 async def _resolve_filter_decision(event_filter, event):
@@ -638,6 +817,43 @@ async def _collect_partner_eco_recall_hits(
     return hits
 
 
+async def _collect_future_event_hits(
+    db,
+    *,
+    today: date,
+    exclude_event_ids: set[int],
+    limit: int,
+) -> list[dict[str, Any]]:
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Event)
+            .where(Event.date >= today.isoformat())
+            .where(Event.lifecycle_status == "active")
+            .order_by(Event.date.asc(), Event.time.asc(), Event.id.asc())
+            .limit(max(1, int(limit)))
+        )
+        events = result.scalars().all()
+    hits: list[dict[str, Any]] = []
+    for event in events:
+        event_id = int(event.id or 0)
+        if not event_id or event_id in exclude_event_ids:
+            continue
+        hits.append(
+            {
+                "event_id": event_id,
+                "source_window": "future_fallback",
+                "source_post_url": (
+                    getattr(event, "source_post_url", None)
+                    or getattr(event, "source_vk_post_url", None)
+                    or ""
+                ),
+                "source_label": "future_library",
+                "score": 0.0,
+            }
+        )
+    return hits
+
+
 EventFilterFn = Callable[[Event], "FilterDecision | Awaitable[FilterDecision]"]
 
 
@@ -653,6 +869,7 @@ async def build_popular_review_selection(
     event_filter: EventFilterFn | None = None,
     partner_track_id: str | None = None,
     admit_manual_review: bool = True,
+    selection_policy_id: str | None = None,
 ) -> PopularReviewSelection:
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()
@@ -677,14 +894,28 @@ async def build_popular_review_selection(
         [int(item["event_id"]) for item in ordered_hits],
     )
 
-    fresh: list[PopularReviewPick] = []
     filter_trace: dict[int, dict[str, Any]] = {}
+    fresh: list[PopularReviewPick] = []
+    processed_event_ids: set[int] = set()
 
     async def _consider_hit(hit: dict[str, Any], event: Event | None) -> None:
         event_id = int(hit["event_id"])
+        if event_id in processed_event_ids:
+            return
+        processed_event_ids.add(event_id)
         if event is None:
             return
-        if event_id in recent_hits:
+        priority = _event_priority(
+            event,
+            today=today,
+            selection_policy_id=selection_policy_id,
+        )
+        recent_meta = recent_hits.get(event_id)
+        if recent_meta and not _priority_repeat_allowed(
+            priority,
+            recent_meta,
+            now_utc=now_utc,
+        ):
             logger.info(
                 "video_announce.popular_review: skipped event due to cooldown "
                 "event_id=%s anti_repeat_days=%s",
@@ -729,12 +960,26 @@ async def build_popular_review_selection(
                 )
         pick = PopularReviewPick(
             event=event,
-            score=float(hit["score"]),
+            score=(
+                float(hit["score"])
+                + float(priority.score_boost)
+                - _first_position_penalty(
+                    recent_meta,
+                    selection_policy_id=selection_policy_id,
+                )
+                + _stable_daily_jitter(
+                    event_id,
+                    now_utc=now_utc,
+                    profile_key=profile_key,
+                )
+            ),
             source_window=str(hit["source_window"]),
             source_post_url=str(hit["source_post_url"]),
             source_label=str(hit["source_label"]),
-            anti_repeat_status="fresh",
+            anti_repeat_status="priority_repeat" if recent_meta else "fresh",
             description=preferred_scene_description(event),
+            priority_score=float(priority.score_boost),
+            priority_reasons=priority.reasons,
         )
         fresh.append(pick)
 
@@ -764,6 +1009,32 @@ async def build_popular_review_selection(
                     break
                 event_id = int(hit["event_id"])
                 await _consider_hit(hit, recall_map.get(event_id))
+
+    if selection_policy_id == KONB_LIBRARY_SELECTION_POLICY and len(fresh) < max_events:
+        fallback_hits = await _collect_future_event_hits(
+            db,
+            today=today,
+            exclude_event_ids=set(processed_event_ids),
+            limit=max(candidate_limit * 3, max_events * 8),
+        )
+        if fallback_hits:
+            fallback_map = await _load_events_map(
+                db,
+                [int(item["event_id"]) for item in fallback_hits],
+            )
+            for hit in fallback_hits:
+                await _consider_hit(hit, fallback_map.get(int(hit["event_id"])))
+                if len(fresh) >= max_events * 2:
+                    break
+
+    if selection_policy_id == KONB_LIBRARY_SELECTION_POLICY:
+        fresh.sort(
+            key=lambda pick: (
+                float(pick.score),
+                -(_event_days_until(pick.event, today=today) or 9999),
+            ),
+            reverse=True,
+        )
 
     allow_partner_off_filter_promo = partner_track_id == ECO_NATURE_PARTNER_TRACK_ID
     promo_picks: list[PopularReviewPick] = []
@@ -939,6 +1210,9 @@ async def build_popular_review_selection(
             "source_label": pick.source_label,
             "anti_repeat_status": pick.anti_repeat_status,
         }
+        if pick.priority_score or pick.priority_reasons:
+            trace[event_id]["priority_score"] = round(float(pick.priority_score), 6)
+            trace[event_id]["priority_reasons"] = list(pick.priority_reasons)
         if pick.promo_campaign_id:
             trace[event_id].update(
                 {

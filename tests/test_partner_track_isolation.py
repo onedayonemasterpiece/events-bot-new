@@ -18,7 +18,11 @@ if str(ROOT) not in sys.path:
 
 
 from video_announce import story_publish as story_publish_module
-from video_announce.partner_tracks import PARTNER_ECO_NATURE, PARTNER_REGION_EAST
+from video_announce.partner_tracks import (
+    PARTNER_ECO_NATURE,
+    PARTNER_KONB_LIBRARY,
+    PARTNER_REGION_EAST,
+)
 from video_announce.popular_review import POPULAR_REVIEW_PROFILE
 
 
@@ -110,6 +114,7 @@ def test_partner_mode_is_popular_review_so_business_resolution_runs():
 
     class _Stub:
         db = None
+        _partner_track_story_targets = scenario_module.VideoAnnounceScenario._partner_track_story_targets
 
     params = scenario_module.VideoAnnounceScenario._partner_track_selection_params(
         _Stub(),
@@ -122,11 +127,31 @@ def test_partner_mode_is_popular_review_so_business_resolution_runs():
     assert story_publish_module._business_targets_allowed_for_mode(params) is True
 
 
+def test_konb_selection_params_use_test_story_target_not_business():
+    from video_announce import scenario as scenario_module
+
+    class _Stub:
+        db = None
+        _partner_track_story_targets = scenario_module.VideoAnnounceScenario._partner_track_story_targets
+
+    params = scenario_module.VideoAnnounceScenario._partner_track_selection_params(
+        _Stub(),
+        PARTNER_KONB_LIBRARY,
+        publish_mode="test",
+    )
+    assert params["mode"] == POPULAR_REVIEW_PROFILE
+    assert params["partner_track_id"] == PARTNER_KONB_LIBRARY.track_id
+    assert params["partner_publish_mode"] == "test"
+    assert params["story_targets_override"][0]["peer"] == "@keniggpt"
+    assert "story_business_targets" not in params
+
+
 def test_partner_modes_are_in_default_business_mode_whitelist():
     """Defence in depth: even if a future caller passes the partner profile_key
     as `mode`, business resolution must still be allowed."""
     for partner_profile_key in (
         PARTNER_ECO_NATURE.profile_key,
+        PARTNER_KONB_LIBRARY.profile_key,
         PARTNER_REGION_EAST.profile_key,
     ):
         assert story_publish_module._business_targets_allowed_for_mode(

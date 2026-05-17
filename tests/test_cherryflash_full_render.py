@@ -354,6 +354,28 @@ def test_brand_outro_keeps_black_background(monkeypatch) -> None:
     assert frame.getpixel((0, 0)) == (*full.BG_BLACK, 255)
 
 
+def test_brand_outro_accepts_custom_konb_palette_and_lines() -> None:
+    full._configure_outro(
+        {
+            "outro": {
+                "strip_color": "#780000",
+                "text_color": "#FFFFFF",
+                "lines": [
+                    {"text": "Калининградская областная научная библиотека", "scale": 1.0},
+                    {"text": "при поддержке", "scale": 0.42},
+                    {"text": "Полюбить Калининград Анонсы", "scale": 0.68},
+                ],
+            }
+        }
+    )
+
+    frame = full._render_brand_outro_frame(1.6)
+
+    assert frame.getpixel((0, 0)) == (*full.BG_BLACK, 255)
+    assert full._hex_rgb(full.OUTRO_CONFIG["strip_color"], full.OUTRO_STRIP) == (120, 0, 0)
+    full._configure_outro({})
+
+
 def test_render_scene_frames_uses_short_brand_outro_duration(
     monkeypatch,
     tmp_path: Path,

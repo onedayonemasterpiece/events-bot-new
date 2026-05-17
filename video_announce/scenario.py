@@ -70,6 +70,7 @@ from .partner_tracks import (
     get_partner_track_by_action,
 )
 from .partner_filters import (
+    classify_event_konb_library,
     classify_event_eco_prirodnaya,
     classify_event_kaliningrad_region_east,
     make_eco_gemma_llm_call,
@@ -1431,6 +1432,11 @@ class VideoAnnounceScenario:
                 return classify_event_kaliningrad_region_east(event)
 
             return _east_filter
+        if partner_track.content_filter_id == "konb_library":
+            def _konb_filter(event):
+                return classify_event_konb_library(event)
+
+            return _konb_filter
         if partner_track.content_filter_id == "eco_prirodnaya":
             client = self._gemma_client_for_partner_filters()
             from .partner_filters import make_eco_4o_fallback_llm_call
@@ -1451,6 +1457,8 @@ class VideoAnnounceScenario:
     async def _resolve_partner_business_selector(
         self, partner_track: PartnerTrack
     ) -> str:
+        if partner_track.default_publish_mode != "business":
+            return ""
         raw = await get_setting_value(
             self.db, partner_track.business_selector_setting_key
         )
@@ -1459,8 +1467,40 @@ class VideoAnnounceScenario:
             return value
         return (partner_track.default_business_selector or "").strip()
 
+    async def _resolve_partner_publish_mode(self, partner_track: PartnerTrack) -> str:
+        default = (partner_track.default_publish_mode or "business").strip().lower()
+        raw = ""
+        if partner_track.publish_mode_setting_key:
+            raw = (
+                await get_setting_value(self.db, partner_track.publish_mode_setting_key)
+                or ""
+            ).strip()
+        value = (raw or default).strip().lower()
+        if value not in {"business", "test", "prod"}:
+            logger.warning(
+                "video_announce.partner_tracks: invalid publish mode track=%s mode=%s; using %s",
+                partner_track.track_id,
+                value,
+                default,
+            )
+            return default
+        return value
+
+    def _partner_track_story_targets(
+        self, partner_track: PartnerTrack, *, publish_mode: str
+    ) -> list[dict[str, Any]]:
+        if publish_mode == "test":
+            return [dict(item) for item in partner_track.test_story_targets]
+        if publish_mode == "prod":
+            return [dict(item) for item in partner_track.prod_story_targets]
+        return []
+
     def _partner_track_selection_params(
-        self, partner_track: PartnerTrack, *, business_selector: str
+        self,
+        partner_track: PartnerTrack,
+        *,
+        business_selector: str = "",
+        publish_mode: str = "business",
     ) -> dict[str, Any]:
         today = datetime.now(LOCAL_TZ).date()
         # Partner tracks publish only to the encrypted Business target — no
@@ -1486,17 +1526,24 @@ class VideoAnnounceScenario:
             "story_publish_enabled": True,
             "story_publish_mode": "video",
             "story_upload_profile": "telegram_story_native_hevc_720p_v1",
-            "story_targets_override": [],
-            "story_business_targets": business_selector,
+            "story_targets_override": self._partner_track_story_targets(
+                partner_track,
+                publish_mode=publish_mode,
+            ),
             "intro_text": partner_track.intro_kicker,
             "intro_text_valid": True,
             "partner_track_id": partner_track.track_id,
             "partner_profile_key": partner_track.profile_key,
+            "partner_publish_mode": publish_mode,
             "variant_overrides": {
                 "kicker": partner_track.intro_kicker,
                 "screen_top": partner_track.intro_screen_top,
             },
         }
+        if publish_mode == "business":
+            params["story_business_targets"] = business_selector
+        if partner_track.outro:
+            params["outro"] = dict(partner_track.outro)
         return params
 
     async def _last_partner_publication(
@@ -1691,17 +1738,22 @@ class VideoAnnounceScenario:
         *,
         wait_for_handoff: bool = False,
     ) -> int | None:
+        self.last_partner_track_skip_reason = ""
         if not await self.ensure_access():
+            self.last_partner_track_skip_reason = "access_denied"
             return None
         existing = await self.has_rendering()
         if existing:
+            self.last_partner_track_skip_reason = "render_in_progress"
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
             )
             return None
+        publish_mode = await self._resolve_partner_publish_mode(partner_track)
         business_selector = await self._resolve_partner_business_selector(partner_track)
-        if not business_selector:
+        if publish_mode == "business" and not business_selector:
+            self.last_partner_track_skip_reason = "missing_business_selector"
             await self.bot.send_message(
                 self.chat_id,
                 (
@@ -1710,50 +1762,57 @@ class VideoAnnounceScenario:
                 ),
             )
             return None
-        # Pre-flight: confirm the selector resolves to a cached Business
-        # connection. If the partner has not yet added the bot to their
-        # Telegram Business, we cannot publish — only the partner human can
-        # complete that step from their Telegram client.
-        try:
-            resolved_targets = await asyncio.to_thread(
-                load_business_story_targets, selector_raw=business_selector
-            )
-        except Exception as exc:
-            logger.exception(
-                "video_announce.partner_tracks: business target preflight crashed track=%s",
-                partner_track.track_id,
-            )
-            await self.bot.send_message(
-                self.chat_id,
-                (
-                    f"Партнёрский трек «{partner_track.display_name}»: не удалось "
-                    f"проверить Business-кэш ({type(exc).__name__}: {exc})"
-                ),
-            )
-            return None
-        if not resolved_targets:
-            await self.bot.send_message(
-                self.chat_id,
-                (
-                    f"Партнёрский трек «{partner_track.display_name}»: в Business-кэше "
-                    f"нет подключения с подходящим selector ({business_selector}). "
-                    "Партнёру нужно один раз добавить бота в Telegram → Настройки → "
-                    "Business → Чат-боты и включить право публиковать сторис; после "
-                    "этого бот сам поймает business_connection и трек заработает."
-                ),
-            )
-            return None
+        if publish_mode == "business":
+            # Pre-flight: confirm the selector resolves to a cached Business
+            # connection. If the partner has not yet added the bot to their
+            # Telegram Business, only the partner human can complete that step.
+            try:
+                resolved_targets = await asyncio.to_thread(
+                    load_business_story_targets, selector_raw=business_selector
+                )
+            except Exception as exc:
+                logger.exception(
+                    "video_announce.partner_tracks: business target preflight crashed track=%s",
+                    partner_track.track_id,
+                )
+                await self.bot.send_message(
+                    self.chat_id,
+                    (
+                        f"Партнёрский трек «{partner_track.display_name}»: не удалось "
+                        f"проверить Business-кэш ({type(exc).__name__}: {exc})"
+                    ),
+                )
+                self.last_partner_track_skip_reason = "business_preflight_error"
+                return None
+            if not resolved_targets:
+                self.last_partner_track_skip_reason = "missing_business_target"
+                await self.bot.send_message(
+                    self.chat_id,
+                    (
+                        f"Партнёрский трек «{partner_track.display_name}»: в Business-кэше "
+                        f"нет подключения с подходящим selector ({business_selector}). "
+                        "Партнёру нужно один раз добавить бота в Telegram → Настройки → "
+                        "Business → Чат-боты и включить право публиковать сторис; после "
+                        "этого бот сам поймает business_connection и трек заработает."
+                    ),
+                )
+                return None
         event_filter = self._build_event_filter_for_partner_track(partner_track)
         try:
             selection = await build_popular_review_selection(
                 self.db,
                 max_events=POPULAR_REVIEW_MAX_EVENTS,
                 min_events=1,
-                anti_repeat_days=POPULAR_REVIEW_ANTI_REPEAT_DAYS,
+                anti_repeat_days=(
+                    1
+                    if partner_track.selection_policy_id == "konb_library"
+                    else POPULAR_REVIEW_ANTI_REPEAT_DAYS
+                ),
                 profile_key=partner_track.profile_key,
                 event_filter=event_filter,
                 partner_track_id=partner_track.track_id,
                 admit_manual_review=False,
+                selection_policy_id=partner_track.selection_policy_id,
             )
         except Exception as exc:
             await self.bot.send_message(
@@ -1763,9 +1822,11 @@ class VideoAnnounceScenario:
                     f"валидный набор для публикации ({type(exc).__name__}: {exc})"
                 ),
             )
+            self.last_partner_track_skip_reason = "selection_failed"
             return None
         kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
         if not kernel_ref:
+            self.last_partner_track_skip_reason = "missing_kernel_ref"
             await self.bot.send_message(
                 self.chat_id,
                 "Не удалось подобрать CherryFlash kernel для Kaggle",
@@ -1778,6 +1839,7 @@ class VideoAnnounceScenario:
             POPULAR_REVIEW_TARGET_USERNAME
         )
         if not test_chat_id:
+            self.last_partner_track_skip_reason = "missing_preview_channel"
             await self.bot.send_message(
                 self.chat_id,
                 (
@@ -1787,7 +1849,9 @@ class VideoAnnounceScenario:
             )
             return None
         params = self._partner_track_selection_params(
-            partner_track, business_selector=business_selector
+            partner_track,
+            business_selector=business_selector,
+            publish_mode=publish_mode,
         )
         async with self.db.get_session() as session:
             obj = VideoAnnounceSession(
@@ -1808,7 +1872,7 @@ class VideoAnnounceScenario:
             (
                 f"Сессия #{obj.id} запущена: {partner_track.display_name} "
                 f"({partner_track.track_id}), {len(selection.event_ids)} событий, "
-                f"target=encrypted business selector. Kernel: {kernel_ref}"
+                f"publish_mode={publish_mode}. Kernel: {kernel_ref}"
             ),
         )
         msg = await self.start_render(
@@ -1818,6 +1882,7 @@ class VideoAnnounceScenario:
             background=not wait_for_handoff,
         )
         if msg and msg != "Рендеринг запущен":
+            self.last_partner_track_skip_reason = "render_start_failed"
             await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
             return None
         return int(obj.id)
