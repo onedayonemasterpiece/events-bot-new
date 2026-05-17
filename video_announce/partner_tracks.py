@@ -127,18 +127,37 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
     outro={
         "strip_color": "#780000",
         "text_color": "#FFFFFF",
+        # Round-2 (2026-05-17) sizing: every stripe + font + base gap is
+        # rendered 30% smaller end-to-end via `global_scale=0.7`. Per-line
+        # `scale` keeps the same ratios as round-1 (1.0 / 0.42 / 0.8).
+        "global_scale": 0.7,
         # Library name: one word per stripe at full scale.
-        # Sponsor caption "при поддержке": a single small stripe.
-        # Channel signature "Полюбить Калининград Анонсы": one word per stripe
-        # at scale 0.80 (20% smaller than the library name lines), per
-        # docs/features/cherryflash/partner-story-tracks.md КОНБ outro contract.
+        # Sponsor caption «при поддержке»: a single small stripe with 2×
+        # empty space above AND below — the «при поддержке» row sets
+        # `extra_gap_before=1.0` (so the gap ABOVE it doubles), and the next
+        # «Полюбить» row also sets `extra_gap_before=1.0` (so the gap BELOW
+        # «при поддержке» doubles too).
+        # Channel signature «Полюбить Калининград Анонсы»: one word per
+        # stripe at scale 0.80 (20% smaller than the library name lines).
         "lines": [
             {"text": "Калининградская", "scale": 1.0, "side": "left", "delay": 0.0},
             {"text": "областная", "scale": 1.0, "side": "right", "delay": 0.18},
             {"text": "научная", "scale": 1.0, "side": "left", "delay": 0.36},
             {"text": "библиотека", "scale": 1.0, "side": "right", "delay": 0.54},
-            {"text": "при поддержке", "scale": 0.42, "side": "left", "delay": 0.78},
-            {"text": "Полюбить", "scale": 0.8, "side": "right", "delay": 0.96},
+            {
+                "text": "при поддержке",
+                "scale": 0.42,
+                "side": "left",
+                "delay": 0.78,
+                "extra_gap_before": 1.0,
+            },
+            {
+                "text": "Полюбить",
+                "scale": 0.8,
+                "side": "right",
+                "delay": 0.96,
+                "extra_gap_before": 1.0,
+            },
             {"text": "Калининград", "scale": 0.8, "side": "left", "delay": 1.14},
             {"text": "Анонсы", "scale": 0.8, "side": "right", "delay": 1.32},
         ],

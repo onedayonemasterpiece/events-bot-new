@@ -104,7 +104,6 @@ class RenderScene:
     image_path: Path
     start_local: float
     festival_line: str = ""
-    address_line: str = ""
     price_line: str = ""
 
 
@@ -246,31 +245,32 @@ def _format_display_location(
     location_name: str | None = None,
     city: str | None = None,
     raw_location: str | None = None,
+    address: str | None = None,
 ) -> str:
+    """Single-line venue label in the bot's canonical form:
+
+        ЛОКАЦИЯ • АДРЕС • ГОРОД
+
+    `address` is the optional street address (e.g. ``Мира 9``); when present
+    it slots between the location name and the city. If the address is empty
+    the line falls back to the legacy ``LOC • CITY`` shape.
+    """
     explicit_location = _normalize_text(location_name)
     explicit_city = _normalize_text(city).split(",")[0].strip()
     raw_location_norm = _normalize_text(raw_location)
     fallback_location = raw_location_norm.split(",")[0].strip() if raw_location_norm else ""
     city_value = explicit_city or _extract_city_from_location(raw_location_norm)
+    # Strip the city tail that some VK extractors append to address strings
+    # (e.g. ``Мира 9, Калининград``) — the city is already in its own slot.
+    address_value = _normalize_text(address).split(",")[0].strip()
     parts = [
         part.upper()
-        for part in (explicit_location or fallback_location, city_value)
+        for part in (explicit_location or fallback_location, address_value, city_value)
         if part
     ]
     if parts:
         return " • ".join(dict.fromkeys(parts))
     return raw_location_norm.upper()
-
-
-def _format_display_address(raw_address: str | None) -> str:
-    address = _normalize_text(raw_address)
-    if not address:
-        return ""
-    # Strip trailing city duplicates that some VK extractors append, e.g.
-    # "Мира 9, Калининград" — the city is already rendered on the location
-    # line below the address.
-    cleaned = address.split(",")[0].strip()
-    return cleaned.upper()
 
 
 def _format_display_price(scene_data: dict) -> str:
@@ -438,8 +438,8 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                     location_name=raw_scene.get("location_name"),
                     city=raw_scene.get("city"),
                     raw_location=raw_scene.get("location"),
+                    address=raw_scene.get("location_address"),
                 ),
-                address_line=_format_display_address(raw_scene.get("location_address")),
                 price_line=_format_display_price(raw_scene),
                 description=_scene_description(raw_scene),
                 image_path=image_path,
@@ -572,26 +572,15 @@ def _build_primary_blocks(scene: RenderScene):
         start_y=next_y + round(30 * scale),
     )
     blocks.extend(date_blocks)
-    if scene.address_line:
-        address_blocks, next_y = approval._build_text_blocks(
-            scene.address_line,
-            font_path=PRIMARY_TITLE_FONT,
-            font_size=max(20, round(40 * scale)),
-            text_color=DETAIL_COLOR,
-            start_time=SCENE_TEXT_START + 0.3,
-            duration=approval.T_INFO + 1.0,
-            start_y=next_y + round(18 * scale),
-        )
-        blocks.extend(address_blocks)
     if scene.price_line:
         price_blocks, next_y = approval._build_text_blocks(
             scene.price_line,
             font_path=PRIMARY_TITLE_FONT,
             font_size=max(20, round(40 * scale)),
             text_color=DETAIL_COLOR,
-            start_time=SCENE_TEXT_START + 0.35,
+            start_time=SCENE_TEXT_START + 0.3,
             duration=approval.T_INFO + 1.0,
-            start_y=next_y + round(14 * scale),
+            start_y=next_y + round(18 * scale),
         )
         blocks.extend(price_blocks)
     location_blocks, _ = approval._build_text_blocks(
@@ -660,9 +649,18 @@ def _render_scene_frame(scene: RenderScene, local_t: float, text_blocks) -> Imag
 
 def _render_brand_outro_frame(local_t: float) -> Image.Image:
     scale = W / approval.BASE_W
-    base_strip_height = max(56, round(210 * scale))
-    gap = max(8, round(20 * scale))
-    base_font_size = max(48, round(160 * scale))
+    # `global_scale` lets the outro config shrink every stripe + font + gap
+    # uniformly (per КОНБ round-2 feedback: outro is 30% smaller end-to-end).
+    global_outro_scale = 1.0
+    if isinstance(OUTRO_CONFIG, dict):
+        try:
+            global_outro_scale = float(OUTRO_CONFIG.get("global_scale") or 1.0)
+        except (TypeError, ValueError):
+            global_outro_scale = 1.0
+    global_outro_scale = max(0.3, min(1.5, global_outro_scale))
+    base_strip_height = max(40, round(210 * scale * global_outro_scale))
+    gap = max(6, round(20 * scale * global_outro_scale))
+    base_font_size = max(36, round(160 * scale * global_outro_scale))
     slide_duration = 0.8
     words_conf = _outro_lines()
     strip_color = _hex_rgb(
@@ -674,17 +672,32 @@ def _render_brand_outro_frame(local_t: float) -> Image.Image:
         OUTRO_TEXT,
     )
     heights = [
-        max(42, round(base_strip_height * max(0.32, min(1.2, float(item.get("scale") or 1.0)))))
+        max(30, round(base_strip_height * max(0.32, min(1.2, float(item.get("scale") or 1.0)))))
         for item in words_conf
     ]
-    total_block_h = sum(heights) + gap * (len(words_conf) - 1)
+    # Per-item extra gap BEFORE the stripe, as a multiplier of the base gap.
+    # Used by КОНБ outro to add `2x` empty space above AND below «при поддержке»
+    # — the stripe itself sets `extra_gap_before=1.0` (so total gap above is
+    # 2× normal), and the next stripe (Полюбить) also sets it to 1.0
+    # (so total gap below «при поддержке» is also 2× normal).
+    extra_before: list[float] = [
+        max(0.0, float(item.get("extra_gap_before") or 0.0)) for item in words_conf
+    ]
+    extra_gap_px = [round(gap * mult) for mult in extra_before]
+    total_block_h = (
+        sum(heights)
+        + gap * max(0, len(words_conf) - 1)
+        + sum(extra_gap_px[1:])
+    )
     start_y_block = (H - total_block_h) / 2.0
     canvas = Image.new("RGBA", (W, H), (*OUTRO_BG, 255))
 
     current_y = start_y_block
     for idx, item in enumerate(words_conf):
+        if idx > 0:
+            current_y += extra_gap_px[idx]
         strip_height = heights[idx]
-        font_size = max(24, round(base_font_size * max(0.35, min(1.1, float(item.get("scale") or 1.0)))))
+        font_size = max(20, round(base_font_size * max(0.35, min(1.1, float(item.get("scale") or 1.0)))))
         strip = _build_outro_strip(
             item["text"],
             font_path=PRIMARY_TITLE_FONT,

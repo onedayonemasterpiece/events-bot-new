@@ -738,14 +738,31 @@ def make_screen_label_texture(text: str, out_path: Path, *, position: str):
             draw.rounded_rectangle((s(26), s(28), s(54), s(56)), radius=s(14), fill=accent)
             draw.text((s(74), 0), text, font=label_font, fill=ink)
         else:
+            # Two-line top label: both lines use the SAME font (CYGRE_BOLD,
+            # same size) so e.g. КОНБ’s «Калининградская областная / научная
+            # библиотека» reads as a single institution title, not a count +
+            # subtitle. Pick the largest size that fits the WIDER of the two
+            # lines into the available width, and floor at s(60) so a long
+            # name still fits in two visible lines instead of being cut off
+            # by the UV-mapped phone screen plane.
             line_1 = lines[0]
             line_2 = lines[1]
             draw.rounded_rectangle((s(26), s(28), s(54), s(56)), radius=s(14), fill=accent)
-            count_font = fit_font(line_1, CYGRE_BOLD, s(128), s(90), w - s(184))
-            types_font = fit_font(line_2, CYGRE_SEMIBOLD, s(50), s(34), w - s(184))
-            draw.text((s(74), 0), line_1, font=count_font, fill=ink)
-            line_1_h = text_size(draw, line_1, count_font)[1]
-            draw.text((s(74), max(s(8), s(4) + line_1_h)), line_2, font=types_font, fill=muted)
+            max_width = w - s(124)
+            chosen_font = None
+            for size in range(s(128), s(58), -4):
+                candidate = font(CYGRE_BOLD, size)
+                w1 = text_size(draw, line_1, candidate)[0]
+                w2 = text_size(draw, line_2, candidate)[0]
+                if max(w1, w2) <= max_width:
+                    chosen_font = candidate
+                    break
+            if chosen_font is None:
+                chosen_font = font(CYGRE_BOLD, s(60))
+            line_1_h = text_size(draw, line_1, chosen_font)[1]
+            line_gap = max(s(4), round(line_1_h * 0.04))
+            draw.text((s(74), 0), line_1, font=chosen_font, fill=ink)
+            draw.text((s(74), max(s(8), s(4) + line_1_h + line_gap)), line_2, font=chosen_font, fill=ink)
     else:
         if len(text) <= 22:
             size = 96

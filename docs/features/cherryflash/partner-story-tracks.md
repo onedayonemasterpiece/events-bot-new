@@ -283,22 +283,24 @@ Ranking policy:
 - an event that occupied slot 1 recently receives a first-position penalty, so a single strong event should not permanently stick to the first scene when there are other eligible candidates;
 - when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, cooldown, and ranking rules.
 
-Outro (post-round-1 contract, 2026-05-17):
+Outro (post-round-2 contract, 2026-05-17):
 
 - strip color: `#780000`, text color `#FFFFFF`;
+- **global outro size**: the whole composition (stripe heights, font sizes, base inter-stripe gap) is rendered **30% smaller** than round-1 via `outro.global_scale = 0.7` in `PARTNER_KONB_LIBRARY.outro`. Per-line `scale` ratios stay at 1.0 / 0.42 / 0.8;
 - library name is rendered as **one word per stripe at scale 1.0**: `Калининградская` / `областная` / `научная` / `библиотека`;
-- sponsor caption is a single small stripe at scale 0.42: `при поддержке`;
-- channel signature is rendered as **one word per stripe at scale 0.8** (20% smaller than the library lines, per operator brief): `Полюбить` / `Калининград` / `Анонсы`;
+- sponsor caption is a single small stripe at scale 0.42: `при поддержке`. The stripe has `extra_gap_before = 1.0` (the gap ABOVE it is doubled), and the next stripe (`Полюбить`) also carries `extra_gap_before = 1.0` (the gap BELOW «при поддержке» is doubled too), so the caption visually floats with 2× empty space above and below;
+- channel signature is rendered as **one word per stripe at scale 0.8** (20% smaller than the library lines): `Полюбить` / `Калининград` / `Анонсы`;
 - stripes enter alternating from left/right on a staggered delay so the 8-stripe composition slides in well before the 3.5s outro card duration.
 
-Intro contract (post-round-1, 2026-05-17):
+Intro contract (post-round-2, 2026-05-17):
 
 - the 2D overlay kicker text is `НАУЧНАЯ\nБИБЛИОТЕКА`; the underline stripe under the kicker is positioned by **measuring the actual bottom of the last rendered kicker line** so it correctly sits under «БИБЛИОТЕКА» regardless of how many lines the partner kicker has;
-- the 3D-phone top-screen label uses the full institutional name `Калининградская областная\nнаучная библиотека` (two lines), rendered via the existing two-line top-label path.
+- the 3D-phone top-screen label uses the full institutional name `Калининградская областная\nнаучная библиотека` (two lines). **Both lines must use the same font (CYGRE_BOLD) and the same size** — the size is auto-picked as the largest that fits the wider of the two lines into the available label width, so the full name reads as a single institution title, not as a count + subtitle. Round-1 used `CYGRE_SEMIBOLD` at a much smaller size for the second line, which truncated «Калининградская област…»; round-2 fixes this.
 
-Scene card contract (post-round-1, 2026-05-17):
+Scene card contract (post-round-2, 2026-05-17):
 
-- between the date/time line and the venue line, each scene card now renders **an address line** (sourced from `event.location_address`, e.g. `МИРА 9`) and **a free/price line** (`БЕСПЛАТНО` when `is_free` or both `ticket_price_min/max` are absent/zero, otherwise a `min ₽` / `min–max ₽` / `до max ₽` label from the stored ticket prices). Both lines use the same `DETAIL_COLOR` palette as the venue line;
+- venue is rendered **on one line** in the bot's canonical form `ЛОКАЦИЯ • АДРЕС • ГОРОД` (e.g. `НАУЧНАЯ БИБЛИОТЕКА • МИРА 9 • КАЛИНИНГРАД`), with the address slotted between the location name and the city. The address is sourced from `event.location_address`; if missing, the line falls back to the legacy `LOC • CITY` shape. Round-1 used a separate address line above the venue — round-2 collapses that into the single venue line per operator brief;
+- between the date/time line and the venue line, each scene card still renders **a free/price line** (`БЕСПЛАТНО` when `is_free` or both `ticket_price_min/max` are absent/zero, otherwise a `min ₽` / `min–max ₽` / `до max ₽` label from the stored ticket prices), in the same `DETAIL_COLOR` palette as the venue line;
 - festival context (when `event.festival` is set) continues to render between the title and the date line, unchanged.
 
 ## Filter `icae_events`
