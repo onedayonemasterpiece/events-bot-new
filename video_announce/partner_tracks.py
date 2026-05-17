@@ -87,7 +87,7 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
     content_filter_id="konb_library",
     geo_filter_id=None,
     intro_kicker="НАУЧНАЯ\nБИБЛИОТЕКА",
-    intro_screen_top="научная библиотека",
+    intro_screen_top="Калининградская областная\nнаучная библиотека",
     business_selector_setting_key="",
     default_business_selector="",
     publish_mode_setting_key="partner_track_konb_publish_mode",
@@ -127,25 +127,20 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
     outro={
         "strip_color": "#780000",
         "text_color": "#FFFFFF",
+        # Library name: one word per stripe at full scale.
+        # Sponsor caption "при поддержке": a single small stripe.
+        # Channel signature "Полюбить Калининград Анонсы": one word per stripe
+        # at scale 0.80 (20% smaller than the library name lines), per
+        # docs/features/cherryflash/partner-story-tracks.md КОНБ outro contract.
         "lines": [
-            {
-                "text": "Калининградская областная научная библиотека",
-                "scale": 1.0,
-                "side": "left",
-                "delay": 0.0,
-            },
-            {
-                "text": "при поддержке",
-                "scale": 0.42,
-                "side": "right",
-                "delay": 0.35,
-            },
-            {
-                "text": "Полюбить Калининград Анонсы",
-                "scale": 0.68,
-                "side": "left",
-                "delay": 0.7,
-            },
+            {"text": "Калининградская", "scale": 1.0, "side": "left", "delay": 0.0},
+            {"text": "областная", "scale": 1.0, "side": "right", "delay": 0.18},
+            {"text": "научная", "scale": 1.0, "side": "left", "delay": 0.36},
+            {"text": "библиотека", "scale": 1.0, "side": "right", "delay": 0.54},
+            {"text": "при поддержке", "scale": 0.42, "side": "left", "delay": 0.78},
+            {"text": "Полюбить", "scale": 0.8, "side": "right", "delay": 0.96},
+            {"text": "Калининград", "scale": 0.8, "side": "left", "delay": 1.14},
+            {"text": "Анонсы", "scale": 0.8, "side": "right", "delay": 1.32},
         ],
     },
 )

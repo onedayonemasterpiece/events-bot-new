@@ -1301,9 +1301,12 @@ def payload_as_json(payload: RenderPayload, tz: timezone) -> str:
             "time": (ev.time or "").strip(),
             "city": (ev.city or "").strip(),
             "location_name": (ev.location_name or "").strip(),
+            "location_address": (getattr(ev, "location_address", None) or "").strip(),
             "location": location,
             "images": _poster_urls(ev),
             "is_free": bool(getattr(ev, "is_free", False)),
+            "ticket_price_min": getattr(ev, "ticket_price_min", None),
+            "ticket_price_max": getattr(ev, "ticket_price_max", None),
             "scene_variant": "primary",
         }
         primary_scenes.append(scene)

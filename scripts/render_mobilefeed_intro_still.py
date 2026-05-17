@@ -653,8 +653,22 @@ def make_overlay_texture(variant: Variant, out_path: Path):
         _, h = text_size(draw, line, title_font)
         y += h + line_gap
     kicker_y = y + 14
-    draw.text((x + 4, kicker_y), variant.kicker, font=kicker_font, fill=accent)
-    draw.rectangle((x + 4, kicker_y + 68, x + 300, kicker_y + 80), fill=accent)
+    kicker_lines = [line for line in variant.kicker.splitlines() if line.strip()] or [variant.kicker]
+    kicker_line_gap = 6
+    line_y = kicker_y
+    last_line_bottom = kicker_y + 68
+    last_line_width = 296
+    for kicker_line in kicker_lines:
+        draw.text((x + 4, line_y), kicker_line, font=kicker_font, fill=accent)
+        line_w, line_h = text_size(draw, kicker_line, kicker_font)
+        last_line_bottom = line_y + line_h
+        last_line_width = max(line_w, 200)
+        line_y += line_h + kicker_line_gap
+    underline_y = last_line_bottom + 8
+    draw.rectangle(
+        (x + 4, underline_y, x + 4 + last_line_width, underline_y + 12),
+        fill=accent,
+    )
     draw_right(draw, W - SAFE_SIDE, SAFE_TOP + 14, variant.date_copy, dates_font, fill=ink)
     draw_right(draw, W - SAFE_SIDE, SAFE_TOP + 64, variant.period_copy, kicker_font, fill=accent)
     draw_right(draw, W - SAFE_SIDE, H - SAFE_BOTTOM - 18, variant.city_copy, city_font, fill=ink)

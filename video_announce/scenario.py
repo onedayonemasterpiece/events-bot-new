@@ -4142,7 +4142,11 @@ class VideoAnnounceScenario:
                     "time": scene.get("time") or "",
                     "city": scene.get("city") or "",
                     "location_name": scene.get("location_name") or "",
+                    "location_address": scene.get("location_address") or "",
                     "location": scene.get("location") or "",
+                    "is_free": bool(scene.get("is_free", False)),
+                    "ticket_price_min": scene.get("ticket_price_min"),
+                    "ticket_price_max": scene.get("ticket_price_max"),
                     "poster_file": (
                         Path(_scene_poster_candidates(scene)[0]).name
                         if _scene_poster_candidates(scene)

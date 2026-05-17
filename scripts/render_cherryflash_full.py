@@ -104,6 +104,8 @@ class RenderScene:
     image_path: Path
     start_local: float
     festival_line: str = ""
+    address_line: str = ""
+    price_line: str = ""
 
 
 def _ensure_dirs() -> None:
@@ -260,6 +262,44 @@ def _format_display_location(
     return raw_location_norm.upper()
 
 
+def _format_display_address(raw_address: str | None) -> str:
+    address = _normalize_text(raw_address)
+    if not address:
+        return ""
+    # Strip trailing city duplicates that some VK extractors append, e.g.
+    # "Мира 9, Калининград" — the city is already rendered on the location
+    # line below the address.
+    cleaned = address.split(",")[0].strip()
+    return cleaned.upper()
+
+
+def _format_display_price(scene_data: dict) -> str:
+    price_min = scene_data.get("ticket_price_min")
+    price_max = scene_data.get("ticket_price_max")
+    is_free = bool(scene_data.get("is_free"))
+
+    def _to_int(value) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            ivalue = int(round(float(value)))
+        except (TypeError, ValueError):
+            return None
+        return ivalue if ivalue >= 0 else None
+
+    pmin = _to_int(price_min)
+    pmax = _to_int(price_max)
+    if pmin is not None and pmin > 0:
+        if pmax is not None and pmax > pmin:
+            return f"{pmin}–{pmax} ₽"
+        return f"ОТ {pmin} ₽" if pmax is None else f"{pmin} ₽"
+    if pmax is not None and pmax > 0:
+        return f"ДО {pmax} ₽"
+    if is_free or (pmin == 0 and pmax in (None, 0)) or (pmax == 0 and pmin in (None, 0)):
+        return "БЕСПЛАТНО"
+    return "БЕСПЛАТНО"
+
+
 def _resolve_final_card_path() -> Path | None:
     for candidate in (
         ROOT / "Final.png",
@@ -399,6 +439,8 @@ def _build_render_scenes(payload: dict) -> list[RenderScene]:
                     city=raw_scene.get("city"),
                     raw_location=raw_scene.get("location"),
                 ),
+                address_line=_format_display_address(raw_scene.get("location_address")),
+                price_line=_format_display_price(raw_scene),
                 description=_scene_description(raw_scene),
                 image_path=image_path,
                 start_local=start_local,
@@ -530,6 +572,28 @@ def _build_primary_blocks(scene: RenderScene):
         start_y=next_y + round(30 * scale),
     )
     blocks.extend(date_blocks)
+    if scene.address_line:
+        address_blocks, next_y = approval._build_text_blocks(
+            scene.address_line,
+            font_path=PRIMARY_TITLE_FONT,
+            font_size=max(20, round(40 * scale)),
+            text_color=DETAIL_COLOR,
+            start_time=SCENE_TEXT_START + 0.3,
+            duration=approval.T_INFO + 1.0,
+            start_y=next_y + round(18 * scale),
+        )
+        blocks.extend(address_blocks)
+    if scene.price_line:
+        price_blocks, next_y = approval._build_text_blocks(
+            scene.price_line,
+            font_path=PRIMARY_TITLE_FONT,
+            font_size=max(20, round(40 * scale)),
+            text_color=DETAIL_COLOR,
+            start_time=SCENE_TEXT_START + 0.35,
+            duration=approval.T_INFO + 1.0,
+            start_y=next_y + round(14 * scale),
+        )
+        blocks.extend(price_blocks)
     location_blocks, _ = approval._build_text_blocks(
         scene.location_line,
         font_path=PRIMARY_TITLE_FONT,
@@ -537,7 +601,7 @@ def _build_primary_blocks(scene: RenderScene):
         text_color=DETAIL_COLOR,
         start_time=SCENE_TEXT_START + 0.4,
         duration=approval.T_INFO + 1.0,
-        start_y=next_y + round(52 * scale),
+        start_y=next_y + round(22 * scale),
     )
     blocks.extend(location_blocks)
     return blocks

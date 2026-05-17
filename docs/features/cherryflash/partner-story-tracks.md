@@ -252,7 +252,7 @@ Main rule: include only future/current events that belong to the scientific libr
 
 Include when at least one of these source-grounded facts is present:
 
-- canonical venue/location mentions `Научная библиотека`, `Калининградская областная научная библиотека`, `КОНБ`, `КОУНБ`, or `Мира 9`;
+- canonical venue/location mentions `Научная библиотека`, `Калининградская областная научная библиотека`, `КОНБ`, or `КОУНБ` (the КОНБ name itself — `Мира 9` alone is no longer sufficient, see exclusion below);
 - source evidence from `https://t.me/kaliningradlibrary/...`, `https://vk.com/wall-30777579_...`, or `https://vk.com/konb39...`;
 - source text explicitly identifies the event as a scientific-library event.
 
@@ -260,7 +260,7 @@ Exclude:
 
 - other regional libraries, even when they are library events;
 - generic book, lecture, reading, or culture events without source/venue evidence tying them to КОНБ;
-- events at `Мира 9` that are clearly owned by another venue and have no КОНБ source/organizer evidence.
+- **same-address tenants at `Мира 9`** — the КОНБ shares the building with `Дом китобоя` (a separate museum). `Дом китобоя` / `Музей китобоя` events MUST be rejected by the filter even if the LLM-extracted street address is the same. The deterministic filter contains an explicit `KONB_LIBRARY_EXCLUDED_LOCATION_HINTS` list (`дом китобоя`, `доме китобоя`, `музей китобоя`, …) checked against `location_name` and title before any inclusion check, and bare-`Мира 9` matches without an explicit КОНБ name or owned source are no longer accepted (post-2026-05-17 round-1 feedback, requirement #5).
 
 Selection policy:
 
@@ -283,12 +283,23 @@ Ranking policy:
 - an event that occupied slot 1 recently receives a first-position penalty, so a single strong event should not permanently stick to the first scene when there are other eligible candidates;
 - when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, cooldown, and ranking rules.
 
-Outro:
+Outro (post-round-1 contract, 2026-05-17):
 
-- strip color: `#780000`;
-- large line: `Калининградская областная научная библиотека`;
-- small line: `при поддержке`;
-- medium line: `Полюбить Калининград Анонсы`.
+- strip color: `#780000`, text color `#FFFFFF`;
+- library name is rendered as **one word per stripe at scale 1.0**: `Калининградская` / `областная` / `научная` / `библиотека`;
+- sponsor caption is a single small stripe at scale 0.42: `при поддержке`;
+- channel signature is rendered as **one word per stripe at scale 0.8** (20% smaller than the library lines, per operator brief): `Полюбить` / `Калининград` / `Анонсы`;
+- stripes enter alternating from left/right on a staggered delay so the 8-stripe composition slides in well before the 3.5s outro card duration.
+
+Intro contract (post-round-1, 2026-05-17):
+
+- the 2D overlay kicker text is `НАУЧНАЯ\nБИБЛИОТЕКА`; the underline stripe under the kicker is positioned by **measuring the actual bottom of the last rendered kicker line** so it correctly sits under «БИБЛИОТЕКА» regardless of how many lines the partner kicker has;
+- the 3D-phone top-screen label uses the full institutional name `Калининградская областная\nнаучная библиотека` (two lines), rendered via the existing two-line top-label path.
+
+Scene card contract (post-round-1, 2026-05-17):
+
+- between the date/time line and the venue line, each scene card now renders **an address line** (sourced from `event.location_address`, e.g. `МИРА 9`) and **a free/price line** (`БЕСПЛАТНО` when `is_free` or both `ticket_price_min/max` are absent/zero, otherwise a `min ₽` / `min–max ₽` / `до max ₽` label from the stored ticket prices). Both lines use the same `DETAIL_COLOR` palette as the venue line;
+- festival context (when `event.festival` is set) continues to render between the title and the date line, unchanged.
 
 ## Filter `icae_events`
 

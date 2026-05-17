@@ -226,7 +226,17 @@ KONB_LIBRARY_LOCATION_HINTS: tuple[str, ...] = (
     "калининградская областная научная библиотека",
     "коунб",
     "конб",
-    "мира 9",
+)
+
+# Same-address tenants (Мира 9) that share the building with the КОНБ but are
+# different organisations: their events must NOT pass through КОНБ partner
+# filter even if the LLM-extracted address overlaps. See requirement #5 from
+# 2026-05-17 test-run feedback.
+KONB_LIBRARY_EXCLUDED_LOCATION_HINTS: tuple[str, ...] = (
+    "дом китобоя",
+    "доме китобоя",
+    "дом-китобоя",
+    "музей китобоя",
 )
 
 KONB_LIBRARY_SOURCE_HINTS: tuple[str, ...] = (
@@ -267,10 +277,31 @@ def classify_event_konb_library(event: Event) -> FilterDecision:
         parts.get(key, "")
         for key in ("location_name", "location_address")
     ).casefold()
+    title_blob = " ".join(
+        parts.get(key, "")
+        for key in ("title", "description", "short_description", "search_digest")
+    ).casefold()
     source_blob = " ".join(
         parts.get(key, "")
         for key in ("source_post_url", "source_vk_post_url", "source_text", "source_texts")
     ).casefold()
+
+    excluded_hit = next(
+        (
+            hint
+            for hint in KONB_LIBRARY_EXCLUDED_LOCATION_HINTS
+            if hint in location_blob or hint in title_blob
+        ),
+        "",
+    )
+    if excluded_hit:
+        return FilterDecision(
+            event_id=event_id,
+            matched=False,
+            needs_manual_review=False,
+            reason=f"exclude:{excluded_hit}",
+            extra={"excluded_hit": excluded_hit},
+        )
 
     location_hit = next(
         (hint for hint in KONB_LIBRARY_LOCATION_HINTS if hint in location_blob),

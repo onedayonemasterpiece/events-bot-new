@@ -20,3 +20,15 @@
 - Treat `AGENTS.md` as the repository-wide routing and workflow contract.
 - Respect Telegram session boundaries exactly as written in `AGENTS.md`: `TELEGRAM_AUTH_BUNDLE_S22` is for Kaggle/remote monitoring only, while `TELEGRAM_AUTH_BUNDLE_E2E` (or `TELEGRAM_SESSION`) is for local live E2E only.
 - Do not substitute one auth bundle for another without explicit user permission, even as a temporary debugging shortcut.
+
+## Requirements Discipline
+- **Treat the canonical feature doc (e.g. `docs/features/<name>/README.md`) as the live requirements ledger.** When the user refines, clarifies, or contradicts an earlier requirement (including the original `docs/backlog/<...>/requirements.md`), record the change in the canonical doc the same turn it lands. Do not let refinements live only in chat — they will be lost.
+- **Flag contradictions immediately.** Before silently following a new instruction that overrides an earlier one (either the spec doc or an earlier user statement), surface the contradiction:
+  - quote the prior requirement,
+  - quote the new requirement,
+  - state which interpretation you intend to take and why,
+  - ask the user to confirm before continuing.
+  Do not just pick a side and proceed — drift caught after multiple rounds is much more expensive to fix than a 30-second check-in.
+- **Each requirement change gets a CHANGELOG line.** Under `[Unreleased]`, record the override with both versions (old / new), the reason, and the date. This is the audit trail for why the implementation diverges from the original spec.
+- **Re-derive open questions on every feedback round.** When the user pushes back on the result, list (a) what they're correcting, (b) which earlier requirement that contradicts or refines, (c) what else might be implicitly affected. Confirm with the user before broad rework.
+- This applies even when the user explicitly tells you to "just continue" — autonomy on execution does not mean autonomy on changing requirements without documenting them.

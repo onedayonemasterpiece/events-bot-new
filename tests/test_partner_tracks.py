@@ -172,6 +172,50 @@ def test_konb_filter_rejects_other_library():
     assert decision.reason == "not_konb_library"
 
 
+def test_konb_filter_rejects_dom_kitoboya_same_address():
+    """Дом китобоя shares Мира 9 with the КОНБ but is a different museum:
+    its events must NEVER pass through the КОНБ partner filter even when
+    the LLM extracts the same street address. Regression for the 2026-05-17
+    test-run feedback (requirement #5).
+    """
+    event = _make_event(
+        id=33,
+        title="Выставка «Куплю гараж. Калининград»",
+        location_name="Дом китобоя",
+        location_address="Мира 9, Калининград",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is False
+    assert decision.reason.startswith("exclude:")
+
+
+def test_konb_filter_rejects_dom_kitoboya_when_mentioned_in_title():
+    event = _make_event(
+        id=34,
+        title="Лекция в Доме китобоя",
+        location_name="Калининград",
+        location_address="Мира 9",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is False
+    assert decision.reason.startswith("exclude:")
+
+
+def test_konb_filter_address_alone_no_longer_admits():
+    """Bare 'Мира 9' is no longer a sufficient КОНБ signal — without an
+    explicit library identity (name or owned source) the event must not
+    pass the filter, since the building hosts other organisations."""
+    event = _make_event(
+        id=35,
+        title="Вечер поэзии",
+        location_name="Калининград",
+        location_address="Мира 9",
+    )
+    decision = classify_event_konb_library(event)
+    assert decision.matched is False
+    assert decision.reason == "not_konb_library"
+
+
 # ---------------------------------------------------------------------------
 # eco_prirodnaya — LLM-first classifier
 # ---------------------------------------------------------------------------
