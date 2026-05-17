@@ -7,6 +7,7 @@ import logging
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Awaitable, Callable
 
 from sqlalchemy import func, select
@@ -29,6 +30,12 @@ POPULAR_REVIEW_CANDIDATE_LIMIT = 40
 ECO_NATURE_PARTNER_TRACK_ID = "partner_eco_nature_001"
 KONB_LIBRARY_PARTNER_TRACK_ID = "partner_konb_library_001"
 KONB_LIBRARY_SELECTION_POLICY = "konb_library"
+KONB_LIBRARY_LOCAL_TZ = ZoneInfo("Europe/Kaliningrad")
+# Score penalty applied to КОНБ candidates that were already shown in the
+# last `anti_repeat_days` window. Keeps fresh events sorted ahead of repeats
+# but does not exclude repeats — the operator explicitly allowed re-airing
+# events as long as they're not in the same video and not back-to-back.
+KONB_REPEAT_SCORE_PENALTY = 220.0
 PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES = 3
 PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION = 1
 PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND = "guaranteed_any_position"
@@ -588,24 +595,26 @@ def _event_days_until(event: Event, *, today: date) -> int | None:
 def _konb_event_priority(event: Event, *, today: date) -> EventPriority:
     boost = 0.0
     reasons: list[str] = []
-    allow_repeat_after_days: int | None = None
+    # КОНБ default: ALL events are allowed to repeat after one calendar-day
+    # boundary in Europe/Kaliningrad. The operator explicitly stated that
+    # re-airing events is fine — the only hard constraint is "not in the
+    # same video, ideally not back-to-back". `_priority_repeat_allowed`
+    # honours the calendar-day boundary, and `KONB_REPEAT_SCORE_PENALTY`
+    # below biases fresh events to sort ahead of repeats when both exist.
+    allow_repeat_after_days: int | None = 1
     days_until = _event_days_until(event, today=today)
     if days_until == 1:
         boost += 700.0
         reasons.append("due_in_1_day")
-        allow_repeat_after_days = 1
     elif days_until == 3:
         boost += 620.0
         reasons.append("due_in_3_days")
-        allow_repeat_after_days = 1
     if _has_ticket_or_price(event):
         boost += 520.0
         reasons.append("ticket_or_price")
-        allow_repeat_after_days = 1
     if any(hint in _text_blob(event) for hint in SPECIAL_GUEST_HINTS):
         boost += 280.0
         reasons.append("special_guest_hint")
-        allow_repeat_after_days = 1
     return EventPriority(
         score_boost=boost,
         reasons=tuple(reasons),
@@ -635,8 +644,15 @@ def _priority_repeat_allowed(
     last_seen_at = recent_meta.get("last_seen_at")
     if not isinstance(last_seen_at, datetime):
         return False
-    min_age = max(1, priority.allow_repeat_after_days) * 86400
-    return (now_utc - last_seen_at).total_seconds() >= min_age
+    # Calendar-day spacing in Europe/Kaliningrad: an event shown yesterday or
+    # earlier is allowed to repeat today. Using calendar boundaries instead
+    # of strict 24h seconds prevents the "next-day run that happens slightly
+    # earlier than yesterday's run leaves nothing eligible" failure mode
+    # (the КОНБ test produced `selected=0` exactly because of this).
+    last_local_day = last_seen_at.astimezone(KONB_LIBRARY_LOCAL_TZ).date()
+    today_local_day = now_utc.astimezone(KONB_LIBRARY_LOCAL_TZ).date()
+    days_apart = (today_local_day - last_local_day).days
+    return days_apart >= max(1, priority.allow_repeat_after_days)
 
 
 def _first_position_penalty(
@@ -649,6 +665,20 @@ def _first_position_penalty(
     if recent_meta.get("best_recent_position") == 1:
         return 360.0
     return 0.0
+
+
+def _repeat_score_penalty(
+    recent_meta: dict[str, Any] | None,
+    *,
+    selection_policy_id: str | None,
+) -> float:
+    """Bias КОНБ sort so any recently-shown event sits below fresh ones,
+    even when repeats are admitted. Combined with `_first_position_penalty`,
+    a repeat at slot 1 pays both penalties (~580 pts) and only re-appears
+    when there are no fresh candidates."""
+    if selection_policy_id != KONB_LIBRARY_SELECTION_POLICY or not recent_meta:
+        return 0.0
+    return KONB_REPEAT_SCORE_PENALTY
 
 
 def _stable_daily_jitter(event_id: int, *, now_utc: datetime, profile_key: str) -> float:
@@ -964,6 +994,10 @@ async def build_popular_review_selection(
                 float(hit["score"])
                 + float(priority.score_boost)
                 - _first_position_penalty(
+                    recent_meta,
+                    selection_policy_id=selection_policy_id,
+                )
+                - _repeat_score_penalty(
                     recent_meta,
                     selection_policy_id=selection_policy_id,
                 )

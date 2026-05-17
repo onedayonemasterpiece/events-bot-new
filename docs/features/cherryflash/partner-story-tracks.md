@@ -279,9 +279,10 @@ Ranking policy:
 - events with `ticket_link` or a non-zero stored price receive a strong priority boost and are placed closer to the beginning when many eligible events exist;
 - explicit special-guest wording (`специальный гость`, `приглашённый гость`, `встреча с`, etc.) receives a smaller priority boost;
 - events due in 3 days or 1 day receive an additional boost, giving the requested extra exposure windows;
-- КОНБ cooldown is intentionally shorter than the base CherryFlash cooldown, but a same event is still deduped within one video and cannot repeat on adjacent daily runs unless it is a priority item whose last show is at least one day old;
-- an event that occupied slot 1 recently receives a first-position penalty, so a single strong event should not permanently stick to the first scene when there are other eligible candidates;
-- when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, cooldown, and ranking rules.
+- **anti-repeat (post-round-3, 2026-05-17)**: КОНБ events may repeat across daily videos once at least **one calendar-day boundary** has crossed in `Europe/Kaliningrad` since the last show — same-day repeats are blocked, but the next-day run is always eligible regardless of exact wall-clock alignment. Within a single video, the same event is still deduped (different scene = different event). The operator brief was «повторять анонс это не плохо, главное не в одном ролике и максимально не подряд»; the repeat allowance is intentionally permissive so the daily slot never goes empty when the КОНБ pool is small;
+- repeats are admitted but **demoted** — every recently-shown event pays `KONB_REPEAT_SCORE_PENALTY` (~220 pts) in the score, so fresh КОНБ candidates always sort ahead of repeats when both exist. A repeat only appears when the fresh pool can't fill `max_events`;
+- an event that occupied slot 1 recently additionally pays the `first_position` penalty (~360 pts), so even a permitted repeat does not pin to slot 1 on the next day;
+- when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, calendar-day-spaced repeat allowance, and ranking rules.
 
 Outro (post-round-2 contract, 2026-05-17):
 
