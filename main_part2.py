@@ -3897,13 +3897,20 @@ async def sync_vk_source_post(
         else:
             calendar_line_value = calendar_source_url
 
-    if event.source_vk_post_url:
+    existing_vk_post_url = (event.source_vk_post_url or "").strip()
+    if existing_vk_post_url:
+        ids = _vk_owner_and_post_id(existing_vk_post_url)
+        target_id = str(target_group_id).lstrip("-")
+        if not ids or str(abs(int(ids[0]))) != target_id:
+            existing_vk_post_url = ""
+
+    if existing_vk_post_url:
         await ensure_vk_short_ticket_link(
             event, db, bot=bot, vk_api_fn=_vk_api
         )
         existing = ""
         try:
-            ids = _vk_owner_and_post_id(event.source_vk_post_url)
+            ids = _vk_owner_and_post_id(existing_vk_post_url)
             if ids:
                 response = await vk_api(
                     "wall.getById", posts=f"{ids[0]}_{ids[1]}"
@@ -3967,13 +3974,13 @@ async def sync_vk_source_post(
         new_lines.append(VK_SOURCE_FOOTER)
         new_message = "\n".join(new_lines)
         await edit_vk_post(
-            event.source_vk_post_url,
+            existing_vk_post_url,
             new_message,
             db,
             bot,
             attachments,
         )
-        url = event.source_vk_post_url
+        url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
     else:
         _short_link_result = await ensure_vk_short_ticket_link(

@@ -18675,7 +18675,13 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
     new_hash = content_hash(text_for_vk)
-    if getattr(ev, "vk_source_hash", None) == new_hash and ev.source_vk_post_url:
+    existing_vk_post_url = (ev.source_vk_post_url or "").strip()
+    managed_vk_post = False
+    if existing_vk_post_url:
+        ids = _vk_owner_and_post_id(existing_vk_post_url)
+        target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+        managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
+    if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
         return
     vk_url = await sync_vk_source_post(ev, text_for_vk, db, bot, ics_url=ev.ics_url)
     partner_user: User | None = None

@@ -320,6 +320,42 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
     assert edited["attachments"] == ["ph1"]
 
 
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_creates_when_existing_vk_url_is_external(
+    monkeypatch,
+):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    event = main.Event(
+        title="T",
+        description="",
+        date="2026-06-01",
+        time="10:00",
+        location_name="Place",
+        source_text="T",
+    )
+    event.source_vk_post_url = "https://vk.com/wall-48383763_40520"
+
+    posted = {}
+
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None):
+        posted["group_id"] = group_id
+        posted["message"] = message
+        return "https://vk.com/wall-231920894_1"
+
+    async def fail_edit(*args, **kwargs):
+        raise AssertionError("external source VK post must not be edited")
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr(main, "edit_vk_post", fail_edit)
+
+    url = await main.sync_vk_source_post(event, "Text", None, None)
+
+    assert url == "https://vk.com/wall-231920894_1"
+    assert posted["group_id"] == "231920894"
+
+
 def test_build_vk_source_message_converts_links():
     text = "Регистрация [здесь](http://reg) и <a href=\"http://pay\">билеты</a>"
     event = main.Event(
