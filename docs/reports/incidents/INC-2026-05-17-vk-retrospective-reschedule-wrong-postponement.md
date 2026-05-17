@@ -117,12 +117,16 @@ inspection showed event `4617` in `lifecycle_status='postponed'` with
 
 ## Release And Closure Evidence
 
-- deployed SHA: not deployed yet per operator instruction
-- deploy path: pending separate command
+- deployed SHA: `bba67b5aa78c4bd6c516348e4e5b4cfd26cd9c35`
+- deploy path: clean linked worktree `hotfix/2026-05-17-cherryflash-eco-promo`, pushed to `origin/main`, deployed with `flyctl deploy -a events-bot-new-wngqia`
 - regression checks:
-  - `.venv/bin/python -m py_compile promo.py video_announce/popular_review.py vk_auto_queue.py`
-  - `.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py -q` -> `49 passed`
-- post-deploy verification: pending
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile promo.py video_announce/popular_review.py vk_auto_queue.py source_parsing/telegram/handlers.py location_reference.py kaggle/TelegramMonitor/telegram_monitor.py`
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` -> `91 passed`
+- post-deploy verification:
+  - Fly image `events-bot-new-wngqia:deployment-01KRTH9RXB7P1NV3X86S4CDWAT`
+  - Fly machine `48e42d5b714228`, version `1100`, state `started`, checks `1 passing`
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`
+  - production event `4617` remains `active`; no `event_source` for `wall-190663987_8758` remains attached to it; `vk_inbox.id=6935` is `skipped` with `imported_event_id=NULL`.
 
 ## Prevention
 

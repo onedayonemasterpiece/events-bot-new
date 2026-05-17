@@ -130,7 +130,9 @@ Still-open investigation areas:
   - `kaggle/TelegramMonitor/telegram_monitor.py` runs a narrow LLM single-event rescue when the structural detector sees a clear dated/timed event with ticket or venue evidence and the main extractor returned `[]`.
   - `source_parsing/telegram/handlers.py` persists `telegram_scanned_message.status='skipped'`, `events_extracted=0`, `error='producer_zero_events:clear_event_signals'` for structurally clear zero-event messages.
   - `_should_reprocess_incomplete_scan` allows `producer_zero_events` rows to be retried when a later payload contains importable events.
-- No catch-up import, row repair, deploy, or public surface rebuild has been performed yet.
+- Code prevention was deployed on 2026-05-17. Catch-up import, row repair for
+  the exact `kraftmarket39/235` source attachment, and public surface rebuild
+  are still pending.
 
 ## Corrective Actions
 
@@ -149,10 +151,10 @@ Still-open investigation areas:
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: `pytest tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` (`42 passed`); `py_compile` for touched Python modules passed.
-- post-deploy verification: —
+- deployed SHA: `bba67b5aa78c4bd6c516348e4e5b4cfd26cd9c35`
+- deploy path: clean linked worktree `hotfix/2026-05-17-cherryflash-eco-promo`, pushed to `origin/main`, deployed with `flyctl deploy -a events-bot-new-wngqia`
+- regression checks: `/home/dev/projects/events-bot-new/.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` -> `91 passed`; `py_compile` for touched Python modules passed.
+- post-deploy verification: Fly image `events-bot-new-wngqia:deployment-01KRTH9RXB7P1NV3X86S4CDWAT`; Fly machine `48e42d5b714228`, version `1100`, checks `1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`. Exact `kraftmarket39/235` catch-up remains a separate follow-up.
 
 ## Prevention
 

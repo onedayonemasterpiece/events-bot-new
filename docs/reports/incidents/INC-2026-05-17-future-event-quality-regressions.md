@@ -143,7 +143,8 @@ Still-open investigation areas:
   - `kaggle/TelegramMonitor/telegram_monitor.py`: LLM-first prompt/review hardening for theatre digest titles, `DD.MM | Title` date markers, obvious person-name venues, and clear single-event posts.
   - `source_parsing/telegram/handlers.py`: server safety-net for person-name venues, date-marker-as-time drops, and source default parsing.
   - `location_reference.py`: fuzzy venue matching no longer treats city names as identity tokens.
-- No row-level production repair, deploy, catch-up, or Telegraph rebuild has been performed yet.
+- Code prevention was deployed on 2026-05-17. Row-level production repair,
+  catch-up, and Telegraph rebuild are still pending.
 
 ## Corrective Actions
 
@@ -167,10 +168,10 @@ Still-open investigation areas:
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: `pytest tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` (`42 passed`); `pytest tests/test_pre_create_duplicate_probe.py -q` (`7 passed`); `py_compile` for touched Python modules passed.
-- post-deploy verification: —
+- deployed SHA: `bba67b5aa78c4bd6c516348e4e5b4cfd26cd9c35`
+- deploy path: clean linked worktree `hotfix/2026-05-17-cherryflash-eco-promo`, pushed to `origin/main`, deployed with `flyctl deploy -a events-bot-new-wngqia`
+- regression checks: `/home/dev/projects/events-bot-new/.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` -> `91 passed`; `py_compile` for touched Python modules passed.
+- post-deploy verification: Fly image `events-bot-new-wngqia:deployment-01KRTH9RXB7P1NV3X86S4CDWAT`; Fly machine `48e42d5b714228`, version `1100`, checks `1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
 
 ## Prevention
 

@@ -118,10 +118,10 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
   documented exception is added.
 - Apply the partner `event_filter` to promo candidates as well as organic
   candidates, fail-closing `manual_review` in automatic runs.
-- 2026-05-17 local fix evidence is not deployed yet per operator instruction.
+- 2026-05-17 follow-up fix deployed as `bba67b5aa78c4bd6c516348e4e5b4cfd26cd9c35`.
   Regression checks: `.venv/bin/python -m py_compile promo.py video_announce/popular_review.py vk_auto_queue.py`
-  and `.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py -q`
-  -> `49 passed`.
+  and `/home/dev/projects/events-bot-new/.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q`
+  -> `91 passed`.
 
 ## Follow-up Actions
 
@@ -140,6 +140,12 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
   - Fly machine `48e42d5b714228`, version `1096`, state `started`, checks `1 passing`
   - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`
   - webhook check was not available from this worktree because no `TELEGRAM_BOT_TOKEN` was present in local env; no publishing/rerun was attempted
+- 2026-05-17 follow-up deploy:
+  - deployed SHA: `bba67b5aa78c4bd6c516348e4e5b4cfd26cd9c35`
+  - deploy path: clean linked worktree `hotfix/2026-05-17-cherryflash-eco-promo`, pushed to `origin/main`, deployed with `flyctl deploy -a events-bot-new-wngqia`
+  - Fly image `events-bot-new-wngqia:deployment-01KRTH9RXB7P1NV3X86S4CDWAT`
+  - Fly machine `48e42d5b714228`, version `1100`, state `started`, checks `1 passing`
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`
 
 ## Prevention
 
