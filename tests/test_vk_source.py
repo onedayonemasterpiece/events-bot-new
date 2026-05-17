@@ -31,6 +31,38 @@ async def test_vk_photos_enabled_defaults_on_until_explicitly_disabled(
 
 
 @pytest.mark.asyncio
+async def test_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    async with db.get_session() as session:
+        event = main.Event(
+            title="T",
+            description="",
+            date="2026-06-01",
+            time="10:00",
+            location_name="Place",
+            source_text="T",
+            source_post_url="https://vk.com/wall-1_2",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event)
+
+    assert main.JobTask.vk_sync in tasks
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_includes_calendar_link(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
 

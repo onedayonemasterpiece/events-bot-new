@@ -13841,9 +13841,8 @@ async def schedule_event_update_tasks(
             )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
-    if not skip_vk_sync:
-        if not (is_vk_wall_url(ev.source_post_url) or ev.source_vk_post_url):
-            results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
+    if not skip_vk_sync and not ev.source_vk_post_url:
+        results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
@@ -18671,7 +18670,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         ev.source_post_url if ev else None,
         is_vk_wall_url(ev.source_post_url) if ev else None,
     )
-    if not ev or is_vk_wall_url(ev.source_post_url):
+    if not ev:
         return
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
