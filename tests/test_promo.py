@@ -12,6 +12,7 @@ from models import (
     Festival,
     PromoActivity,
     PromoCampaign,
+    PromoExposure,
     PromoTarget,
     VideoAnnounceItem,
     VideoAnnounceItemStatus,
@@ -20,6 +21,7 @@ from models import (
 )
 from promo import (
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
+    PROMO_POLICY_FIRST_SLOT,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     ensure_initial_80_stories_campaign,
@@ -258,6 +260,139 @@ async def test_video_promo_resolver_uses_priority_and_global_budget(tmp_path) ->
     assert [pick.event.title for pick in picks[:2]] == ["High Event", "Low Event"]
     assert len(picks) <= 2
     assert picks[0].priority == 0
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_video_promo_resolver_honors_slot_total_and_daily_caps(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        campaign = PromoCampaign(
+            title="8 women",
+            status="active",
+            priority=0,
+            starts_at=now_utc,
+            ends_at=datetime(2026, 5, 21, 23, 59, tzinfo=timezone.utc),
+            total_exposure_goal=2,
+            daily_exposure_cap=1,
+        )
+        event = _event("Спектакль 8 ЖЕНЩИН", "2026-05-22")
+        session.add_all([campaign, event])
+        await session.commit()
+        await session.refresh(campaign)
+        await session.refresh(event)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id)))
+        first = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface="video_general",
+            profile_key="popular_review",
+            slot=1,
+            max_per_publish=1,
+            target_exposure_goal=1,
+            daily_cap=1,
+            selection_policy=PROMO_POLICY_FIRST_SLOT,
+            enabled=True,
+        )
+        any_slot = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface="video_general",
+            profile_key="popular_review",
+            max_per_publish=1,
+            target_exposure_goal=1,
+            daily_cap=1,
+            selection_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
+            enabled=True,
+        )
+        session.add_all([first, any_slot])
+        await session.commit()
+        await session.refresh(first)
+        await session.refresh(any_slot)
+        first_id = int(first.id)
+        any_id = int(any_slot.id)
+        event_id = int(event.id)
+        campaign_id = int(campaign.id)
+
+    first_day = await resolve_video_promo_candidates(
+        db,
+        profile_key="popular_review",
+        now_utc=now_utc,
+    )
+    assert [(pick.activity_id, pick.placement_kind) for pick in first_day] == [
+        (first_id, PROMO_POLICY_FIRST_SLOT)
+    ]
+
+    async with db.get_session() as session:
+        session.add(
+            PromoExposure(
+                campaign_id=campaign_id,
+                activity_id=first_id,
+                event_id=event_id,
+                surface="video",
+                placement_kind=PROMO_POLICY_FIRST_SLOT,
+                publish_status="PUBLISHED_TEST",
+                published_at=now_utc,
+            )
+        )
+        await session.commit()
+
+    same_day = await resolve_video_promo_candidates(
+        db,
+        profile_key="popular_review",
+        now_utc=now_utc.replace(hour=12),
+    )
+    assert same_day == []
+
+    next_day = await resolve_video_promo_candidates(
+        db,
+        profile_key="popular_review",
+        now_utc=datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc),
+    )
+    assert [(pick.activity_id, pick.placement_kind) for pick in next_day] == [
+        (any_id, PROMO_POLICY_GUARANTEED_ANY_POSITION)
+    ]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_video_promo_resolver_can_exclude_global_profile_for_partner_tracks(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        campaign = PromoCampaign(
+            title="base promo",
+            status="active",
+            starts_at=now_utc,
+            ends_at=datetime(2026, 6, 1, 23, 59, tzinfo=timezone.utc),
+        )
+        event = _event("Base Promo", "2026-05-22")
+        session.add_all([campaign, event])
+        await session.commit()
+        await session.refresh(campaign)
+        await session.refresh(event)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id)))
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface="video_general",
+                profile_key="popular_review",
+                max_per_publish=1,
+                enabled=True,
+            )
+        )
+        await session.commit()
+
+    partner_picks = await resolve_video_promo_candidates(
+        db,
+        profile_key="popular_review_eco",
+        now_utc=now_utc,
+        include_global_profile=False,
+    )
+    assert partner_picks == []
     await db.close()
 
 

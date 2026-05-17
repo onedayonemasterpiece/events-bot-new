@@ -336,6 +336,16 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
         "молодежныйи",
         "молодежныи",
         "молодежный",
+        # City names are useful filters, not venue identity tokens. Using them
+        # as one-token fuzzy overlap can map an unknown source default such as
+        # "Barn, ..., Калининград" to an unrelated venue whose official name
+        # happens to include the city.
+        "калининград",
+        "светлогорск",
+        "зеленоградск",
+        "советск",
+        "гусев",
+        "черняховск",
     }
 
     def _tokens(s: str) -> set[str]:

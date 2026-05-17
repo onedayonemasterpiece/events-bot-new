@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 
@@ -33,6 +34,8 @@ INITIAL_80_STORIES_PRIORITY = 1
 VIDEO_PROMO_GLOBAL_MAX_PER_PUBLISH = 2
 PROMO_POLICY_GUARANTEED_ANY_POSITION = "guaranteed_any_position"
 PROMO_POLICY_DIVERSE_SHUFFLE = "diverse_shuffle"
+PROMO_POLICY_FIRST_SLOT = "first_slot"
+PROMO_DAILY_TZ = "Europe/Kaliningrad"
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,14 @@ class PromoCreateResult:
 
 def _campaign_end_dt(day: date) -> datetime:
     return datetime.combine(day, time(23, 59, 59), tzinfo=timezone.utc)
+
+
+def _promo_day_bounds(now_utc: datetime) -> tuple[datetime, datetime]:
+    tz = ZoneInfo(PROMO_DAILY_TZ)
+    local = now_utc.astimezone(tz)
+    start_local = datetime.combine(local.date(), time.min, tzinfo=tz)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 
 def default_campaign_end(now_utc: datetime | None = None) -> date:
@@ -102,10 +113,16 @@ def _is_sold_out_status(value: str | None) -> bool:
     return text in {"sold_out", "soldout", "распродано", "билетов_нет", "нет_билетов"}
 
 
-def _event_is_promo_eligible(ev: Event, *, today: date, campaign: PromoCampaign) -> bool:
+def _event_is_promo_eligible(
+    ev: Event,
+    *,
+    today: date,
+    campaign: PromoCampaign,
+    enforce_event_date_lte_campaign: bool = True,
+) -> bool:
     if not event_is_future_for_promo(ev, today=today):
         return False
-    if not _event_is_not_after_campaign(ev, campaign=campaign):
+    if enforce_event_date_lte_campaign and not _event_is_not_after_campaign(ev, campaign=campaign):
         return False
     if getattr(ev, "silent", False):
         return False
@@ -317,7 +334,6 @@ async def create_event_promo_campaign(
         res = await session.execute(
             select(Event)
             .where(Event.date >= today.isoformat())
-            .where(Event.date <= ends.isoformat())
             .where(Event.lifecycle_status == "active")
             .where(Event.silent.is_(False))
             .order_by(Event.date, Event.time, Event.id)
@@ -504,7 +520,12 @@ async def _events_for_target(
     async with db.get_session() as session:
         if target.target_type == "event" and target.event_id:
             ev = await session.get(Event, int(target.event_id))
-            if not ev or not _event_is_promo_eligible(ev, today=today, campaign=campaign):
+            if not ev or not _event_is_promo_eligible(
+                ev,
+                today=today,
+                campaign=campaign,
+                enforce_event_date_lte_campaign=False,
+            ):
                 return []
             return [ev]
         if target.target_type != "festival" or not target.festival_name:
@@ -557,19 +578,44 @@ async def _load_public_exposure_stats(
     return stats
 
 
+async def _count_public_exposures(
+    db: Database,
+    *,
+    campaign_id: int,
+    activity_id: int | None = None,
+    since_utc: datetime | None = None,
+    until_utc: datetime | None = None,
+) -> int:
+    async with db.get_session() as session:
+        query = (
+            select(func.count(PromoExposure.id))
+            .where(PromoExposure.campaign_id == campaign_id)
+            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST")))
+        )
+        if activity_id is not None:
+            query = query.where(PromoExposure.activity_id == activity_id)
+        if since_utc is not None:
+            query = query.where(PromoExposure.published_at >= since_utc)
+        if until_utc is not None:
+            query = query.where(PromoExposure.published_at < until_utc)
+        return int((await session.execute(query)).scalar() or 0)
+
+
 async def resolve_video_promo_candidates(
     db: Database,
     *,
     profile_key: str,
     now_utc: datetime | None = None,
     surface: str = "video_general",
+    include_global_profile: bool = True,
 ) -> list[PromoCandidate]:
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()
+    day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
     await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
 
     async with db.get_session() as session:
-        res = await session.execute(
+        query = (
             select(PromoCampaign, PromoActivity, PromoTarget)
             .join(PromoActivity, PromoActivity.campaign_id == PromoCampaign.id)
             .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
@@ -578,8 +624,13 @@ async def resolve_video_promo_candidates(
             .where(or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc))
             .where(PromoActivity.enabled.is_(True))
             .where(PromoActivity.surface == surface)
-            .where(or_(PromoActivity.profile_key.is_(None), PromoActivity.profile_key == profile_key))
-            .order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id, PromoTarget.id)
+        )
+        if include_global_profile:
+            query = query.where(or_(PromoActivity.profile_key.is_(None), PromoActivity.profile_key == profile_key))
+        else:
+            query = query.where(PromoActivity.profile_key == profile_key)
+        res = await session.execute(
+            query.order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id, PromoTarget.id)
         )
         rows = list(res.all())
 
@@ -591,6 +642,39 @@ async def resolve_video_promo_candidates(
             continue
         if len(result) >= global_budget:
             break
+        campaign_id = int(campaign.id)
+        activity_id = int(activity.id)
+        if campaign.total_exposure_goal is not None:
+            total_count = await _count_public_exposures(db, campaign_id=campaign_id)
+            if total_count >= max(0, int(campaign.total_exposure_goal)):
+                continue
+        if campaign.daily_exposure_cap is not None:
+            daily_count = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                since_utc=day_start_utc,
+                until_utc=day_end_utc,
+            )
+            if daily_count >= max(0, int(campaign.daily_exposure_cap)):
+                continue
+        if activity.target_exposure_goal is not None:
+            activity_total = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+            )
+            if activity_total >= max(0, int(activity.target_exposure_goal)):
+                continue
+        if activity.daily_cap is not None:
+            activity_daily = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                since_utc=day_start_utc,
+                until_utc=day_end_utc,
+            )
+            if activity_daily >= max(0, int(activity.daily_cap)):
+                continue
         max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
         max_per_publish = min(max_per_publish, global_budget - len(result))
         events = await _events_for_target(
@@ -624,11 +708,12 @@ async def resolve_video_promo_candidates(
             return (count, last_key, shuffle, start, time_value, int(ev.id))
 
         picked = sorted(events, key=sort_key)[:max_per_publish]
-        placement_kind = (
-            PROMO_POLICY_GUARANTEED_ANY_POSITION
-            if str(activity.selection_policy or "") == PROMO_POLICY_GUARANTEED_ANY_POSITION
-            else "general_boost"
-        )
+        if int(activity.slot or 0) == 1 or str(activity.selection_policy or "") == PROMO_POLICY_FIRST_SLOT:
+            placement_kind = PROMO_POLICY_FIRST_SLOT
+        elif str(activity.selection_policy or "") == PROMO_POLICY_GUARANTEED_ANY_POSITION:
+            placement_kind = PROMO_POLICY_GUARANTEED_ANY_POSITION
+        else:
+            placement_kind = "general_boost"
         for ev in picked:
             if ev.id is None:
                 continue
@@ -636,8 +721,8 @@ async def resolve_video_promo_candidates(
             result.append(
                 PromoCandidate(
                     event=ev,
-                    campaign_id=int(campaign.id),
-                    activity_id=int(activity.id),
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
                     placement_kind=placement_kind,
                     reason=(
                         f"promo:{surface}"

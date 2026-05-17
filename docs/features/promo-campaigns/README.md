@@ -72,12 +72,17 @@ CherryFlash (`popular_review`) calls the promo resolver after collecting normal
 popular-post candidates. General promo:
 
 - has a global video promo budget of two events per CherryFlash release;
+- honors campaign-level `total_exposure_goal` and local-day
+  `daily_exposure_cap` (`Europe/Kaliningrad`) before choosing activities;
+- honors activity-level `target_exposure_goal`, `daily_cap`, and `slot=1` /
+  `selection_policy=first_slot` for one guaranteed first-slot exposure;
 - resolves campaigns by priority first (`0` highest, `3` lowest), then creation
   order, so when many campaigns are active the two available video promo seats
   go to the highest-priority eligible campaigns;
 - is interleaved with organic popularity picks;
-- starts the first promo item in position 1 or 2 by stable daily choice unless a
-  future named-slot rule explicitly requests the first slot;
+- starts a promo item in position 1 only when the activity explicitly requests
+  `slot=1` or `selection_policy=first_slot`; otherwise guaranteed-any-position
+  promo replaces tail organic items when needed;
 - avoids filling positions 1 and 2 with two promo items when an organic event is
   available;
 - does not bypass future-date checks;
@@ -85,6 +90,10 @@ popular-post candidates. General promo:
 - stores promo provenance on `VideoAnnounceItem`;
 - uses festival rotation by viewer-facing exposure count and stable daily
   shuffle among equally exposed future events.
+
+Event promo campaigns may end before the promoted event date. The campaign end
+date limits when promotion can run; the event itself only needs to be an active
+future event that is renderable.
 
 `80 историй о главном` is the initial special policy:
 
@@ -94,6 +103,22 @@ popular-post candidates. General promo:
 - it is guaranteed into CherryFlash at any available/lower position, replacing
   tail organic items if the normal organic list is already full;
 - it may contribute up to two future events when the promo budget has room.
+- for `partner_eco_nature_001`, a non-eco `80 историй` promo item may appear
+  only under the eco partner exception: at least three profile-matched
+  eco/nature/local-history events are already selected, and only one off-filter
+  promo candidate is admitted at any-position placement, never as first-slot
+  pressure.
+
+`Спектакль 8 ЖЕНЩИН` (event `4617`, show date 2026-05-22) is a live one-off
+campaign created on production on 2026-05-17:
+
+- campaign ends at the end of 2026-05-21 local day;
+- campaign total exposure goal is `2`, with daily cap `1`;
+- one activity is `selection_policy=first_slot`, `slot=1`,
+  `target_exposure_goal=1`, `daily_cap=1`;
+- one activity is `selection_policy=guaranteed_any_position`,
+  `target_exposure_goal=1`, `daily_cap=1`;
+- the two activities must therefore be satisfied on different local days.
 
 This directly covers the regression contract from
 `INC-2026-05-05-80-stories-video-promo-gap`: a promoted future festival event
@@ -116,7 +141,8 @@ activation.
 - MVP implements CherryFlash general boost and daily-section highlighting.
 - Telegraph month/weekend activities are stored for campaigns, but page-render
   adapters are still pending.
-- Named video slots are part of the design, not the MVP.
+- First-slot video promo is implemented through `slot=1` /
+  `selection_policy=first_slot`; broader named video slots are still pending.
 - `/promo report` reconstructs viewer-facing CherryFlash publications from
   `videoannounce_session`/`videoannounce_item` and uses `promo_exposure` as the
   normalized audit trail. Story target fanout details can be expanded from

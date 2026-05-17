@@ -423,3 +423,97 @@ async def test_tg_build_candidate_rejects_ungrounded_known_venue_from_extraction
     cand = _build_candidate(src, message, event_data)
     assert cand.location_name is None
     assert cand.location_address is None
+
+
+# --- INC-2026-05-17 future quality prevention --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_drops_person_name_location_and_uses_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Barn, ул. Литовский Вал 38, Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "barn_kaliningrad",
+        "message_id": 1002,
+        "source_link": "https://t.me/barn_kaliningrad/1002",
+        "text": (
+            "Кураторский тур по выставке «Общая кухня».\n"
+            "17 мая 15:30-16:30. Куратор: ТАТЬЯНА БОРИСОВА."
+        ),
+    }
+    event_data = {
+        "title": "Кураторский тур по выставке «Общая кухня»",
+        "date": "2026-05-17",
+        "time": "15:30-16:30",
+        "location_name": "ТАТЬЯНА БОРИСОВА",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Barn"
+    assert cand.location_address == "Литовский Вал 38"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_drops_date_marker_extracted_as_time():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Драматический театр, Мира 4, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "dramteatr39",
+        "message_id": 4193,
+        "source_link": "https://t.me/dramteatr39/4193",
+        "text": "17.05 | GROZA\nНеделя в театре\nБилеты: https://dramteatr39.ru/spektakli/Groza",
+    }
+    event_data = {
+        "title": "GROZA",
+        "date": "2026-05-17",
+        "time": "17:05",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.time == ""
+    assert cand.time_is_default is False
+    assert cand.location_name == "Драматический театр"
+
+
+def test_tg_zero_event_diagnostic_detects_kraftmarket235_shape():
+    from source_parsing.telegram.handlers import _message_has_event_like_zero_extraction_signals
+
+    message = {
+        "text": (
+            "Спектакль «8 женщин»\n"
+            "22 мая в 19:00\n"
+            "Городской центр культуры и искусства, Курортный проспект 11, Зеленоградск\n"
+            "Билеты: https://voroh.ru/event/1022458/"
+        )
+    }
+
+    assert _message_has_event_like_zero_extraction_signals(message) is True
+
+
+def test_tg_zero_event_diagnostic_does_not_flag_plain_news():
+    from source_parsing.telegram.handlers import _message_has_event_like_zero_extraction_signals
+
+    message = {
+        "text": (
+            "Подводим итоги недели и делимся фотографиями с прошедшей встречи. "
+            "Спасибо всем, кто был с нами."
+        )
+    }
+
+    assert _message_has_event_like_zero_extraction_signals(message) is False

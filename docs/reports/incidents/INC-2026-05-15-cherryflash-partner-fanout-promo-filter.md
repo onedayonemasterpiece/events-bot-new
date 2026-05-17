@@ -32,6 +32,11 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 - 2026-05-15 11:20 UTC: session `#304` reached `PUBLISHED_TEST`.
 - 2026-05-15 11:25 UTC: operator reported wrong channel publication and bad eco selection.
 - 2026-05-15 12:10 UTC: follow-up deploy `f8ba897023d4d1f176b4b495fa5128341d24c77c` reached production with the partner/promo fixes plus CherryFlash festival-context video-card rendering. Per operator direction, no compensating CherryFlash rerun/catch-up was started.
+- 2026-05-17 07:00 UTC: follow-up production investigation of current
+  `popular_review_eco` sessions showed a second promo-path leak: sessions
+  `#304`, `#309`, and `#310` contained `promo_campaign_id=1` candidates from
+  the base `popular_review` campaign, and those promo candidates were not
+  passed through the eco `event_filter`.
 
 ## Root Cause
 
@@ -39,6 +44,10 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 2. Partner auto-publish called `build_popular_review_selection(... admit_manual_review=True)`, so LLM provider failures became publishable partner events.
 3. The eco classifier had only a single Gemma call path; provider errors had no retry/fallback before the selection layer saw `manual_review`.
 4. Promo campaigns had no priority field or separate “guaranteed anywhere” policy, so all video promo behaved as top-slot pressure.
+5. The CherryFlash selection builder always resolved video promo through the
+   base `popular_review` profile and merged those promo candidates before the
+   partner-specific semantic filter. This let a general campaign enter the eco
+   partner track even when it was not nature/eco/local-history content.
 
 ## Contributing Factors
 
@@ -71,6 +80,10 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 - `tests/test_video_announce_story_publish.py` must prove explicit empty `story_targets_override` blocks global channel fallback while Business target remains.
 - `tests/test_partner_tracks.py` must prove eco classifier retries and 4o fallback.
 - `tests/test_video_announce_popular_review.py` must prove `guaranteed_any_position` promo lands away from leading slots and stays guaranteed.
+- `tests/test_video_announce_popular_review.py` must prove generic partner
+  promo candidates pass the partner `event_filter` before publication, and that
+  the eco-track off-filter exception admits at most one promo only after three
+  profile-matched eco/nature/local-history events are already available.
 - `tests/test_promo.py` must prove `80 историй` priority/policy and priority-ordered resolver behavior.
 - Production `/healthz` after deploy.
 - Post-deploy read-only check that partner story config for a synthetic/DB selection would resolve Business-only targets, not `@kenigevents`/`@lovekenig`.
@@ -96,6 +109,19 @@ The operator saw the 2026-05-15 eco/nature CherryFlash story in `@kenigevents` a
 - Add promo campaign priority (`0..3`) and set `80 историй о главном` to priority `1`.
 - Add `guaranteed_any_position` policy for the 80 Stories video activity.
 - Add bot UI buttons for promo report/seed/status/priority/status changes.
+- Resolve base/global `popular_review` promo for the eco/nature partner track
+  only under an explicit bounded policy: if the promo passes the eco filter it
+  follows normal promo placement; if it does not pass, admit at most one item
+  only after three profile-matched eco/nature/local-history events are already
+  available, and downgrade that off-filter item to any-position placement.
+- Other partner tracks keep exact-profile promo resolution unless a separate
+  documented exception is added.
+- Apply the partner `event_filter` to promo candidates as well as organic
+  candidates, fail-closing `manual_review` in automatic runs.
+- 2026-05-17 local fix evidence is not deployed yet per operator instruction.
+  Regression checks: `.venv/bin/python -m py_compile promo.py video_announce/popular_review.py vk_auto_queue.py`
+  and `.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py -q`
+  -> `49 passed`.
 
 ## Follow-up Actions
 

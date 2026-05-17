@@ -2140,6 +2140,7 @@ _SERVICE_HEADING_TITLE_RE = re.compile(
     r"|(?:\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)"
     r"|(?:начало\s+в\s+\d{1,2}[:.]\d{2})"
     r"|(?:билеты|регистрация|стоимость|цена|вход|место|адрес)"
+    r"|(?:неделя\s+в\s+театр[еа]|скоро\s+в\s+театр[еа]|афиша|репертуар|анонс)"
     r")\s*$",
     re.IGNORECASE | re.UNICODE,
 )
@@ -2171,6 +2172,29 @@ _LOCATION_REVIEW_GENERIC_ROOM_RE = re.compile(
     r"^\s*(?:кино(?:зал|театр)|зал|холл|аудитори[яи]|сцена|мастерск(?:ая|ие)|дворик|площадка)\s*:?\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+_CLEAR_SINGLE_EVENT_INVITE_RE = re.compile(
+    r"\b(?:"
+    r"спектакл[ьяею]|концерт\w*|кинопоказ\w*|показ\w*|лекци[яюи]|встреч[ауе]|"
+    r"экскурси[яюи]|тур\w*|мастер[- ]?класс\w*|стендап\w*|ярмарк\w*|"
+    r"приглашаем|жд[её]м\s+вас|состоится|пройд[её]т|начало|билеты"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_CLEAR_SINGLE_EVENT_DATE_RE = re.compile(
+    r"\b(?:"
+    r"\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_CLEAR_SINGLE_EVENT_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b", re.IGNORECASE | re.UNICODE)
+_CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE = re.compile(
+    r"\b(?:билет\w*|регистрац\w*|касс\w*|vk\.cc|qtickets|tickets?|"
+    r"театр\w*|центр\s+культур\w*|дк\b|музе[йяе]|галере[яи]|бар\w*|клуб\w*|"
+    r"пространств\w*|ул\.?|улица|проспект|пр-т|площадь|пл\.?|наб\.?|аллея)"
+    r"\b|https?://",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 def _clean_event_string_value(value) -> str:
@@ -2193,6 +2217,40 @@ def _clean_event_string_value(value) -> str:
     if cleaned.casefold() in _UNKNOWN_LITERALS:
         return ''
     return cleaned
+
+
+def _location_review_looks_like_person_name(value: str | None) -> bool:
+    """Syntactic trigger only: obvious all-caps person names should get LLM venue review."""
+    raw = str(value or '').strip()
+    if not raw:
+        return False
+    if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw):
+        return False
+    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+        return False
+    words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
+    if not (2 <= len(words) <= 4):
+        return False
+    letters = ''.join(re.findall(r"[A-Za-zА-Яа-яЁё]", raw))
+    if len(letters) < 6:
+        return False
+    uppercase = sum(1 for ch in letters if ch.upper() == ch and ch.lower() != ch)
+    return uppercase / max(1, len(letters)) >= 0.75
+
+
+def _looks_like_clear_single_event_invitation(content: str | None) -> bool:
+    """Detect structural evidence for an LLM rescue call, not semantic extraction."""
+    raw = str(content or '').strip()
+    if len(raw) < 40:
+        return False
+    if len(re.findall(r"\b\d{1,2}:\d{2}\b", raw)) > 4:
+        return False
+    return bool(
+        _CLEAR_SINGLE_EVENT_INVITE_RE.search(raw)
+        and _CLEAR_SINGLE_EVENT_DATE_RE.search(raw)
+        and _CLEAR_SINGLE_EVENT_TIME_RE.search(raw)
+        and _CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE.search(raw)
+    )
 
 
 def _sanitize_extracted_events(events) -> list[dict]:
@@ -2264,6 +2322,8 @@ async def _repair_service_heading_titles(
         'Do not add events. Do not drop events. '
         'A title made only of date/time/service text such as "НАЧАЛО В 19:00", "24 АПРЕЛЯ", "БИЛЕТЫ", '
         '"РЕГИСТРАЦИЯ", price, age limit, or venue/address label is invalid if the message caption contains a named event. '
+        'Section labels and digest headings like "неделя в театре", "афиша", "репертуар", or "анонс" are also invalid titles '
+        'when a nearby line names a real attendee-facing event. '
         'In that case, output the named attendee-facing event from the caption as title. '
         'Example: caption "Второй Большой киноквиз!" and OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" '
         'must output title "Второй Большой киноквиз". '
@@ -2398,6 +2458,8 @@ def _needs_llm_location_review(
             return True
         if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
             return True
+        if _location_review_looks_like_person_name(compact):
+            return True
         if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
             return True
         if evidence_text and _event_needs_location_grounding_review(ev, evidence_text):
@@ -2438,6 +2500,7 @@ async def _repair_suspicious_locations(
         'Do not add events. Do not drop events. Do not change title/date/time. '
         'Use the original message text, OCR, source title, source username, and source default location as evidence. '
         'location_name must be a real venue/place name where attendees go. '
+        'A curator/speaker/artist/person name such as "ТАТЬЯНА БОРИСОВА" is not a venue unless the source explicitly says the place is named that way. '
         'If current venue fields are not grounded in the source text/OCR/source context, replace them with the '
         'grounded venue from the source or return empty strings. Do not preserve a plausible but ungrounded venue. '
         'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '
@@ -2723,6 +2786,8 @@ async def extract_events(
         'or instruction-like phrases such as "return one event object" or "second row" inside any field value. '
         'Choose the final title silently. '
         'Title must be the attendee-facing event name, not a poster service heading. '
+        'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс" are not event titles when a nearby date line names the real event. '
+        'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
         'If a post is in-character promo copy but a ticket URL/page or clear program title gives the canonical event name, '
         'use the canonical attendee-facing title rather than the in-character/plot phrase. '
         'If message text/caption contains a named event and OCR contains only schedule/service headings '
@@ -2750,6 +2815,8 @@ async def extract_events(
         'unless that exact full venue name is explicitly stated in text or OCR. '
         'If a post clearly invites attendance to one lecture/talk/meetup/excursion/event and text or OCR gives an exact date/time, '
         'do NOT return [] only because some venue, city, or ticket fields remain unresolved; return one best-effort event object and leave unresolved text fields empty. '
+        'If one post clearly announces one attendee-facing performance/show/concert/play/film screening with exact future date, start time, and either venue/address or ticket/registration link, '
+        'do NOT return [] solely because the wording is short, promotional, or partially in a poster/link; return one best-effort event object. '
         'For such a clearly invited single lecture/talk, prefer filling date/time from text or OCR rather than leaving them empty. '
         'If only the title is reliable at extraction time, still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it. '
         'For a clearly invited single lecture/talk with one supported start datetime, return exactly one event row '
@@ -2935,6 +3002,41 @@ async def extract_events(
             out = bridge_rescue
         else:
             out = bridge_fallback
+
+    if not out and _looks_like_clear_single_event_invitation(content):
+        single_event_prompt = (
+            'Extract one clearly announced attendee-facing event from Telegram text as strict JSON array. '
+            'Return raw JSON only: the first character must be "[" and the last character must be "]"; '
+            'do not wrap the array in markdown/code fences and do not append trailing ``` markers. '
+            'Return [] only if the post is clearly not an attendable event. '
+            'Fields per event: title, date (YYYY-MM-DD), time (HH:MM or empty), '
+            'end_date (YYYY-MM-DD or empty string), location_name, location_address, city, '
+            'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
+            'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
+            'Use empty string for unknown text fields. '
+            'This rescue runs only after a structural detector found exact date, exact time, and ticket/venue evidence; '
+            'prefer returning one best-effort event over [] when the source clearly invites attendance. '
+            'Do not invent facts: leave unresolved venue/address/city/ticket fields empty. '
+            'Infer missing year from the message date and choose the nearest upcoming date. '
+            'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
+            'Digest or service headings such as "неделя в театре", "афиша", "репертуар", or "анонс" are not titles when a nearby line names the event. '
+            'location_name must be a real venue/place name where attendees go, not a speaker/person name, prose fragment, ticket instruction, or event description. '
+            'If no venue is grounded, leave location_name empty. '
+            'Never emit empty JSON objects ({}) or venue-only rows. '
+            'Never include inline comments, instruction-like text, uncertainty markers, or markdown markers inside any field value. '
+            + date_context + '\n'
+            + (source_context_line + '\n' if source_context_line else '')
+            + 'Message text:\n' + content
+        )
+        try:
+            text_single = await _call_model('text', single_event_prompt, response_schema=EVENT_ARRAY_SCHEMA)
+            data_single = _safe_json(text_single)
+            if isinstance(data_single, dict) and isinstance(data_single.get('events'), list):
+                out = data_single['events']
+            elif isinstance(data_single, list):
+                out = data_single
+        except Exception as exc:
+            logger.warning('extract_events single-event rescue failed: %s', exc)
 
     if not out and schedule_like:
         shared_schedule_context = content[:1200]

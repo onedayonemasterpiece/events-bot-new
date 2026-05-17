@@ -26,6 +26,10 @@ POPULAR_REVIEW_MIN_EVENTS = 2
 POPULAR_REVIEW_MAX_EVENTS = 6
 POPULAR_REVIEW_ANTI_REPEAT_DAYS = 7
 POPULAR_REVIEW_CANDIDATE_LIMIT = 40
+ECO_NATURE_PARTNER_TRACK_ID = "partner_eco_nature_001"
+PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES = 3
+PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION = 1
+PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND = "guaranteed_any_position"
 POPULAR_REVIEW_WINDOW_CHAIN: tuple[tuple[int, int, str], ...] = (
     (1, 0, "24h"),
     (3, 2, "3d"),
@@ -92,8 +96,13 @@ def _merge_promo_and_fresh_picks(
 ) -> list[PopularReviewPick]:
     selected: list[PopularReviewPick] = []
     selected_event_ids: set[int] = set()
+    first_slot_promo = [
+        pick for pick in promo_picks if pick.promo_placement_kind == "first_slot"
+    ]
     top_slot_promo = [
-        pick for pick in promo_picks if pick.promo_placement_kind != "guaranteed_any_position"
+        pick
+        for pick in promo_picks
+        if pick.promo_placement_kind not in {"guaranteed_any_position", "first_slot"}
     ]
     guaranteed_anywhere = [
         pick for pick in promo_picks if pick.promo_placement_kind == "guaranteed_any_position"
@@ -126,6 +135,25 @@ def _merge_promo_and_fresh_picks(
             removed = selected.pop(removable_idx)
             selected_event_ids.discard(int(removed.event.id))
         add_pick(pick)
+
+    if first_slot_promo:
+        promo_idx = 0
+        fresh_idx = 0
+        while len(selected) < max_events and promo_idx < len(first_slot_promo):
+            add_pick(first_slot_promo[promo_idx])
+            promo_idx += 1
+        while len(selected) < max_events and (fresh_idx < len(fresh) or top_slot_promo):
+            if fresh_idx < len(fresh):
+                add_pick(fresh[fresh_idx])
+                fresh_idx += 1
+            if top_slot_promo:
+                add_pick(top_slot_promo.pop(0))
+        for candidate in guaranteed_anywhere:
+            guarantee_pick(candidate)
+        while len(selected) < max_events and fresh_idx < len(fresh):
+            add_pick(fresh[fresh_idx])
+            fresh_idx += 1
+        return selected
 
     if top_slot_promo and fresh:
         promo_first = _promo_starts_first(top_slot_promo, now_utc=now_utc)
@@ -614,12 +642,16 @@ async def build_popular_review_selection(
         )
         fresh.append(pick)
 
+    allow_partner_off_filter_promo = partner_track_id == ECO_NATURE_PARTNER_TRACK_ID
     promo_picks: list[PopularReviewPick] = []
+    off_filter_partner_promo: list[PopularReviewPick] = []
+    partner_filter_matched_count = len(fresh) if event_filter is not None else 0
     try:
         promo_candidates = await resolve_video_promo_candidates(
             db,
-            profile_key=POPULAR_REVIEW_PROFILE,
+            profile_key=profile_key,
             now_utc=now_utc,
+            include_global_profile=(partner_track_id is None or allow_partner_off_filter_promo),
         )
     except Exception:
         logger.exception("video_announce.popular_review: failed to resolve promo candidates")
@@ -642,6 +674,52 @@ async def build_popular_review_selection(
                 event_id,
             )
             continue
+        if event_filter is not None:
+            decision = await _resolve_filter_decision(event_filter, event)
+            filter_trace[event_id] = {
+                "matched": decision.matched,
+                "needs_manual_review": decision.needs_manual_review,
+                "reason": decision.reason,
+                "extra": decision.extra,
+            }
+            if (
+                allow_partner_off_filter_promo
+                and not decision.matched
+                and not decision.needs_manual_review
+            ):
+                off_filter_partner_promo.append(
+                    PopularReviewPick(
+                        event=event,
+                        score=999.0,
+                        source_window="promo",
+                        source_post_url=getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None) or "",
+                        source_label="promo",
+                        anti_repeat_status="promo",
+                        description=preferred_scene_description(event),
+                        promo_campaign_id=candidate.campaign_id,
+                        promo_activity_id=candidate.activity_id,
+                        promo_placement_kind=PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND,
+                    )
+                )
+                continue
+            if not decision.matched and not (admit_manual_review and decision.needs_manual_review):
+                logger.info(
+                    "video_announce.popular_review: skipped promo event by partner filter "
+                    "partner_track_id=%s event_id=%s reason=%s",
+                    partner_track_id,
+                    event_id,
+                    decision.reason,
+                )
+                continue
+            if decision.needs_manual_review and admit_manual_review:
+                logger.warning(
+                    "video_announce.popular_review: admitting manual_review promo event "
+                    "partner_track_id=%s event_id=%s reason=%s",
+                    partner_track_id,
+                    event_id,
+                    decision.reason,
+                )
+            partner_filter_matched_count += 1
         promo_picks.append(
             PopularReviewPick(
                 event=event,
@@ -656,6 +734,45 @@ async def build_popular_review_selection(
                 promo_placement_kind=candidate.placement_kind,
             )
         )
+
+    if event_filter is not None and off_filter_partner_promo:
+        if (
+            partner_filter_matched_count >= PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES
+            and max_events > PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES
+        ):
+            allowed = off_filter_partner_promo[:PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION]
+            promo_picks.extend(allowed)
+            for pick in allowed:
+                event_id = int(pick.event.id) if pick.event.id is not None else None
+                if event_id is not None:
+                    filter_trace.setdefault(event_id, {})
+                    filter_trace[event_id].update(
+                        {
+                            "matched": False,
+                            "needs_manual_review": False,
+                            "partner_promo_off_filter_admitted": True,
+                            "reason": (
+                                "promo admitted after "
+                                f"{partner_filter_matched_count} partner-filter matches"
+                            ),
+                        }
+                    )
+                    logger.info(
+                        "video_announce.popular_review: admitted one off-filter partner promo "
+                        "partner_track_id=%s event_id=%s matched_count=%s",
+                        partner_track_id,
+                        event_id,
+                        partner_filter_matched_count,
+                    )
+        else:
+            logger.info(
+                "video_announce.popular_review: skipped off-filter partner promo candidates "
+                "partner_track_id=%s matched_count=%s required=%s skipped=%s",
+                partner_track_id,
+                partner_filter_matched_count,
+                PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES,
+                len(off_filter_partner_promo),
+            )
 
     selected = _merge_promo_and_fresh_picks(
         promo_picks,

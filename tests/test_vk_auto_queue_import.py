@@ -327,6 +327,19 @@ def test_vk_auto_import_time_reschedule_notice_stays_on_normal_import_path():
     assert vk_auto_queue._looks_like_cancellation_notice(text) is False
 
 
+def test_vk_auto_import_previous_meeting_reschedule_stays_on_normal_import_path():
+    text = (
+        "«Прерафаэлиты: братство, приручившее вечность»\n"
+        "Время: 22 мая, пятница, 19:00-20:30\n"
+        "Место: Железнодорожные ворота\n"
+        "Эта лекция - перенос несостоявшейся встречи в апреле."
+    )
+
+    assert vk_auto_queue._parse_ru_date_from_text(text, year_hint=2026) == "2026-05-22"
+    assert vk_auto_queue._looks_like_retrospective_reschedule_context(text) is True
+    assert vk_auto_queue._looks_like_cancellation_notice(text) is False
+
+
 @pytest.mark.asyncio
 async def test_vk_auto_cancel_match_requires_date_or_title_anchor(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))

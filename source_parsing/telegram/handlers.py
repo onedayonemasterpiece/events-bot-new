@@ -1116,6 +1116,17 @@ def _time_is_supported_by_texts(time_value: str | None, *texts: str | None) -> b
     return any(token in supported for token in wanted)
 
 
+def _time_value_matches_event_date_marker(time_value: str | None, event_date: str | None) -> bool:
+    raw = str(time_value or "").strip()
+    event_day = _parse_event_payload_date(event_date)
+    if not raw or event_day is None:
+        return False
+    wanted = _extract_time_tokens(raw)
+    if not wanted:
+        return False
+    return any(token == f"{event_day.day:02d}:{event_day.month:02d}" for token in wanted)
+
+
 def _source_filters(source: TelegramSource) -> dict[str, Any]:
     value = getattr(source, "filters_json", None)
     if not value:
@@ -2351,6 +2362,10 @@ _BAD_TITLE_RE = re.compile(r"^\s*[\W_]*\(?\s*\d*\s*(?:мест[ао]?)?\s*\)?\s*
 _ADDRESS_HINT_RE = re.compile(
     r"(?i)\b(ул\.|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
 )
+_LOCATION_VENUE_CUE_RE = re.compile(
+    r"(?iu)\b(?:театр\w*|музе[йяе]|галере[яи]|кино(?:театр|зал)|дк\b|дом\s+культур\w*|"
+    r"центр\s+культур\w*|бар\w*|клуб\w*|пространств\w*|зал|сцена|ворот[а-я]*)\b"
+)
 _LOCATION_PROSE_VERB_RE = re.compile(
     r"(?iu)\b("
     r"анонсирован\w*|представ\w*|расскаж\w*|покаж\w*|приглаша\w*|"
@@ -2513,6 +2528,19 @@ def _infer_title_from_message_text(text: str | None) -> str | None:
     return None
 
 
+def _split_default_location_line(value: str | None) -> tuple[str | None, str | None, str | None]:
+    raw = str(value or "").strip()
+    if not raw or "," not in raw:
+        return (raw or None), None, _infer_city_from_location_string(raw)
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    if len(parts) < 2:
+        return (raw or None), None, _infer_city_from_location_string(raw)
+    city = _infer_city_from_location_string(parts[-1]) or _infer_city_from_location_string(raw)
+    if city and len(parts) >= 3:
+        return parts[0], ", ".join(parts[1:-1]).strip() or None, city
+    return parts[0], ", ".join(parts[1:]).strip() or None, city
+
+
 def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]:
     raw = str(text or "").strip()
     if not raw:
@@ -2614,6 +2642,25 @@ def _looks_like_location_prose_fragment(value: str | None) -> bool:
     if len(words) >= 4 and re.search(r"[.!?]\s*$", compact):
         return True
     return False
+
+
+def _looks_like_location_person_name_fragment(value: str | None) -> bool:
+    """Syntactic safety-net for obvious speaker/person names in location_name."""
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    if _ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw):
+        return False
+    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+        return False
+    words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
+    if not (2 <= len(words) <= 4):
+        return False
+    letters = "".join(re.findall(r"[A-Za-zА-Яа-яЁё]", raw))
+    if len(letters) < 6:
+        return False
+    uppercase = sum(1 for ch in letters if ch.upper() == ch and ch.lower() != ch)
+    return uppercase / max(1, len(letters)) >= 0.75
 
 
 def _known_venue_payload_from_text(text: str | None, *, city: str | None = None) -> tuple[str | None, str | None, str | None]:
@@ -3165,13 +3212,21 @@ async def _should_reprocess_incomplete_scan(
     status = str(getattr(existing, "status", "") or "").strip().lower()
     if status not in {"skipped", "partial", "error"}:
         return False
-    if str(getattr(existing, "error", "") or "").strip():
+    error_text = str(getattr(existing, "error", "") or "").strip()
+    producer_zero_events = "producer_zero_events" in error_text
+    if error_text and not producer_zero_events:
         return False
     try:
         extracted = int(getattr(existing, "events_extracted", 0) or 0)
         imported = int(getattr(existing, "events_imported", 0) or 0)
     except Exception:
         return False
+    if producer_zero_events:
+        if not _has_reprocessable_event_payload(events):
+            return False
+        if imported <= 0 and await _source_url_already_attached(db, source_url):
+            return False
+        return True
     if extracted <= 0 or imported >= extracted:
         return False
     if not _has_reprocessable_event_payload(events):
@@ -3193,6 +3248,40 @@ def _scan_error_from_breakdown(
         "skip_breakdown": dict(sorted(dict(skip_breakdown).items())),
     }
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+_ZERO_EVENT_CLEAR_INVITE_RE = re.compile(
+    r"(?iu)\b(?:спектакл[ьяею]|концерт\w*|кинопоказ\w*|показ\w*|лекци[яюи]|встреч[ауе]|"
+    r"экскурси[яюи]|тур\w*|мастер[- ]?класс\w*|стендап\w*|приглашаем|билеты|регистрац\w*)\b"
+)
+_ZERO_EVENT_DATE_RE = re.compile(
+    r"(?iu)\b(?:\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?|\d{1,2}\s+"
+    r"(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря))\b"
+)
+_ZERO_EVENT_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
+_ZERO_EVENT_VENUE_OR_TICKET_RE = re.compile(
+    r"(?iu)\b(?:билет\w*|регистрац\w*|касс\w*|vk\.cc|qtickets|tickets?|театр\w*|центр\s+культур\w*|"
+    r"дк\b|музе[йяе]|галере[яи]|бар\w*|клуб\w*|пространств\w*|ул\.?|улица|проспект|пр-т|площадь|пл\.?|наб\.?|аллея)\b|https?://"
+)
+
+
+def _message_has_event_like_zero_extraction_signals(message: dict[str, Any]) -> bool:
+    """Structural diagnostics only: flags silent producer [] on clear event-shaped posts."""
+    text = str(message.get("text") or "").strip()
+    for item in message.get("posters") or []:
+        if isinstance(item, dict):
+            text += "\n" + str(item.get("ocr_text") or "")
+            text += "\n" + str(item.get("ocr_title") or "")
+    if len(text.strip()) < 40:
+        return False
+    if len(_ZERO_EVENT_TIME_RE.findall(text)) > 4:
+        return False
+    return bool(
+        _ZERO_EVENT_CLEAR_INVITE_RE.search(text)
+        and _ZERO_EVENT_DATE_RE.search(text)
+        and _ZERO_EVENT_TIME_RE.search(text)
+        and _ZERO_EVENT_VENUE_OR_TICKET_RE.search(text)
+    )
 
 
 async def _mark_message_scanned(
@@ -3286,6 +3375,16 @@ def _build_candidate(
         location_name, location_address = location_address, None
     extracted_city = event_data.get("city")
     default_city = _infer_city_from_location_string(source.default_location)
+    if (
+        source.default_location
+        and str(location_name or "").strip() == str(source.default_location or "").strip()
+        and not location_address
+    ):
+        default_name, default_address, parsed_default_city = _split_default_location_line(source.default_location)
+        location_name = default_name
+        location_address = default_address
+        if parsed_default_city and not default_city:
+            default_city = parsed_default_city
     city_overridden_by_default = False
     if not default_city and location_name and "," in str(location_name):
         # Best-effort: sometimes extractor puts "Venue, City" into location_name.
@@ -3447,20 +3546,36 @@ def _build_candidate(
         location_address = None
         extracted_location_address = None
         location_address_was_prose = True
-    if location_name and _looks_like_location_prose_fragment(location_name):
+    if location_name and (
+        _looks_like_location_prose_fragment(location_name)
+        or _looks_like_location_person_name_fragment(location_name)
+    ):
         logger.warning(
-            "telegram: dropped prose-like extracted location source=%s message_id=%s title=%r location=%r",
+            "telegram: dropped prose/person-like extracted location source=%s message_id=%s title=%r location=%r",
             username,
             message_id,
             title,
             location_name,
         )
-        location_name = known_loc or source.default_location
+        if known_loc:
+            location_name = known_loc
+        elif source.default_location:
+            default_name, default_address, parsed_default_city = _split_default_location_line(source.default_location)
+            location_name = default_name
+            if default_address:
+                location_address = default_address
+            if parsed_default_city and not extracted_city:
+                extracted_city = parsed_default_city
+        else:
+            location_name = None
         if known_addr and (known_loc or not location_address or location_address_was_prose):
             location_address = known_addr
         if known_city and not extracted_city:
             extracted_city = known_city
-        if extracted_location and _looks_like_location_prose_fragment(extracted_location):
+        if extracted_location and (
+            _looks_like_location_prose_fragment(extracted_location)
+            or _looks_like_location_person_name_fragment(extracted_location)
+        ):
             extracted_location = None
 
     if not location_name:
@@ -3647,9 +3762,12 @@ def _build_candidate(
     # venue from reference is authoritative even if its name contains characters
     # the prose detector would otherwise flag (e.g. `Творческое пространство 12|55`).
     if matched_venue is None:
-        if location_name and _looks_like_location_prose_fragment(location_name):
+        if location_name and (
+            _looks_like_location_prose_fragment(location_name)
+            or _looks_like_location_person_name_fragment(location_name)
+        ):
             logger.warning(
-                "telegram: dropping prose location_name after recovery source=%s message_id=%s title=%r location=%r",
+                "telegram: dropping prose/person location_name after recovery source=%s message_id=%s title=%r location=%r",
                 username,
                 message_id,
                 title,
@@ -3957,6 +4075,17 @@ def _build_candidate(
                 title,
                 current_time_for_support,
             )
+            if _time_value_matches_event_date_marker(current_time_for_support, str(date_raw or "")):
+                logger.warning(
+                    "telegram: dropped date-marker extracted as time source=%s message_id=%s title=%r date=%r time=%r",
+                    username,
+                    message_id,
+                    title,
+                    date_raw,
+                    current_time_for_support,
+                )
+                time_raw = ""
+                time_is_default = False
 
     metrics_raw = message.get("metrics")
     metrics: dict[str, Any] = dict(metrics_raw) if isinstance(metrics_raw, dict) else {}
@@ -4488,6 +4617,33 @@ async def process_telegram_results(
         # Kaggle may include such posts for completeness, but they are useless for server import
         # and would pollute popularity baselines if we stored metrics for them.
         if events_extracted <= 0 and not forced and not existing and not bridge_target:
+            if _message_has_event_like_zero_extraction_signals(message):
+                logger.warning(
+                    "tg_monitor: producer_zero_events source=%s message_id=%s source_link=%s",
+                    username,
+                    message_id,
+                    source_link,
+                )
+                await _mark_message_scanned(
+                    db,
+                    source_id=int(source.id),
+                    message_id=int(message_id),
+                    message_date=message_dt,
+                    status="skipped",
+                    events_extracted=0,
+                    events_imported=0,
+                    error="producer_zero_events:clear_event_signals",
+                )
+                await _update_source_scan_meta(db, int(source.id), int(message_id))
+                report.skipped_posts.append(
+                    {
+                        "source_username": username,
+                        "message_id": int(message_id),
+                        "source_link": source_link,
+                        "reason": "producer_zero_events:clear_event_signals",
+                        "text_excerpt": _build_excerpt(str(message.get("text") or ""), max_len=240),
+                    }
+                )
             continue
 
         processed_no += 1

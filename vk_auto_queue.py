@@ -93,6 +93,29 @@ _VK_TIME_RESCHEDULE_RE = re.compile(
     r"[^.!?\n]{0,80}\b(?:на|к)\s+\d{1,2}[:.]\d{2}\b"
 )
 
+_VK_RETROSPECTIVE_RESCHEDULE_RE = re.compile(
+    r"(?iu)\b(?:это|эта|данн\w+|наш\w+)?\s*"
+    r"(?:лекци\w+|встреч\w+|мероприяти\w+|событи\w+)?\s*"
+    r"(?:[-—:]\s*)?перенос\w*\b[^.!?\n]{0,120}"
+    r"\b(?:несостоявш\w+|ранее\s+отмен[её]нн\w+|прошл\w+|апрельск\w+|мартовск\w+|февральск\w+)\b"
+    r"[^.!?\n]{0,120}\b(?:встреч\w+|лекци\w+|мероприяти\w+|событи\w+)\b"
+)
+
+
+def _looks_like_retrospective_reschedule_context(text: str | None) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    # A post for a real new event can mention that this is a replacement for
+    # an old missed meeting. That is context for extraction, not a signal to
+    # mark another event as postponed.
+    if re.search(
+        r"(?iu)\b(?:отменяется|отмен[её]н[аоы]?|не\s+состо(?:ится|ит)|отложен[аоы]?)\b",
+        raw,
+    ):
+        return False
+    return bool(_VK_RETROSPECTIVE_RESCHEDULE_RE.search(raw))
+
 
 def _looks_like_time_reschedule_notice(text: str | None) -> bool:
     raw = (text or "").strip()
@@ -106,6 +129,8 @@ def _looks_like_cancellation_notice(text: str | None) -> bool:
     if not raw:
         return False
     if not _VK_CANCEL_RE.search(raw):
+        return False
+    if _looks_like_retrospective_reschedule_context(raw):
         return False
     # "Время начала перенесено на 19:30" is a time update for an event that
     # still happens, not a cancellation/postponement that should deactivate a

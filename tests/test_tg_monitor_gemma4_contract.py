@@ -139,6 +139,9 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it" in source
     assert 'Choose the final title silently.' in source
     assert "Title must be the attendee-facing event name, not a poster service heading." in source
+    assert 'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс"' in source
+    assert 'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05".' in source
+    assert "performance/show/concert/play/film screening with exact future date, start time" in source
     assert '"НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ"' in source
     assert "keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields" in source
     assert 'caption "Второй Большой киноквиз!" plus' in source
@@ -172,6 +175,10 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "дворец спорта Янтарный" in source
     assert "use only the venue nearest the event line" in source
     assert "source_context_line=source_context_line" in source
+    assert "_looks_like_clear_single_event_invitation" in source
+    assert "single-event rescue failed" in source
+    assert "A curator/speaker/artist/person name" in source
+    assert "_location_review_looks_like_person_name" in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:

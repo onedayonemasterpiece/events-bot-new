@@ -100,6 +100,21 @@ classification request; if all provider paths fail, the candidate is skipped
 rather than published. The watchdog may try a later run, but it must not fill
 the partner video with unrelated events after classifier errors.
 
+Partner tracks do not freely inherit base `popular_review` promo campaigns. The
+eco/nature track has one explicit exception: after the selector already has at
+least three partner-filtered profile matches, it may admit at most one promo
+candidate that does not pass the eco filter. Promo candidates that do pass the
+eco filter follow the normal promo merge rules. This lets broad editorial promo,
+for example `80 историй о главном`, appear periodically without replacing the
+eco/nature core of the release. Off-filter promo is always downgraded to
+any-position placement for the eco track, so a base `first_slot` campaign cannot
+take the first eco slot unless it also passes the eco filter. If a promo
+candidate returns `manual_review` in an automatic run, it is skipped
+fail-closed.
+
+Other partner tracks resolve promo only for their exact partner `profile_key`
+unless they get their own documented exception.
+
 ## Selection policy
 
 Partner tracks are LLM-first editorial filters. Keyword lists and geo lists below are guardrails and audit aids, not a replacement for semantic classification.

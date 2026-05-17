@@ -19,6 +19,8 @@ from models import (
     VideoAnnounceSession,
     VideoAnnounceSessionStatus,
 )
+from promo import PromoCandidate
+from video_announce.partner_filters import FilterDecision
 from video_announce.popular_review import build_popular_review_selection
 from video_announce import popular_review as popular_review_module
 from handlers import popular_posts_cmd as popular_posts_module
@@ -111,6 +113,218 @@ def test_popular_review_guaranteed_any_position_uses_tail_slots() -> None:
 
     assert [pick.event.id for pick in selected[:4]] == [3, 4, 5, 6]
     assert [pick.event.id for pick in selected[4:]] == [1, 2]
+
+
+def test_popular_review_first_slot_promo_forces_position_one() -> None:
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+    promo = [
+        _pick_for_merge(1, promo=True, placement_kind="first_slot"),
+        _pick_for_merge(2, promo=True, placement_kind="guaranteed_any_position"),
+    ]
+    fresh = [
+        _pick_for_merge(3, promo=False),
+        _pick_for_merge(4, promo=False),
+        _pick_for_merge(5, promo=False),
+    ]
+
+    selected = popular_review_module._merge_promo_and_fresh_picks(
+        promo,
+        fresh,
+        max_events=4,
+        now_utc=now_utc,
+    )
+
+    assert [pick.event.id for pick in selected] == [1, 3, 4, 2]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_partner_filter_applies_to_promo_candidates(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = Event(
+            title="Base Promo",
+            description="Description",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-22",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/base-promo.jpg"],
+            photo_count=1,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    async def fake_resolve_video_promo_candidates(*_args, **kwargs):
+        assert kwargs["profile_key"] == "popular_review_eco"
+        assert kwargs["include_global_profile"] is True
+        return [
+            PromoCandidate(
+                event=event,
+                campaign_id=1,
+                activity_id=2,
+                placement_kind="guaranteed_any_position",
+                reason="promo",
+            )
+        ]
+
+    def reject_promo(ev: Event) -> FilterDecision:
+        return FilterDecision(
+            event_id=int(ev.id or 0),
+            matched=False,
+            needs_manual_review=False,
+            reason="not eco",
+            extra={},
+        )
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "resolve_video_promo_candidates",
+        fake_resolve_video_promo_candidates,
+    )
+
+    with pytest.raises(RuntimeError, match="did not collect enough events"):
+        await build_popular_review_selection(
+            db,
+            max_events=1,
+            min_events=1,
+            anti_repeat_days=7,
+            candidate_limit=1,
+            now_utc=now_utc,
+            profile_key="popular_review_eco",
+            partner_track_id="partner_eco_nature_001",
+            event_filter=reject_promo,
+            admit_manual_review=False,
+        )
+
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_popular_review_partner_allows_one_off_filter_promo_after_three_matches(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        profile_events = [
+            Event(
+                title=f"Eco Event {idx}",
+                description="Description",
+                short_description="Short",
+                search_digest="Digest",
+                source_text="source",
+                date="2026-05-22",
+                time="19:00",
+                location_name="Venue",
+                city="Калининград",
+                photo_urls=[f"https://example.com/eco-{idx}.jpg"],
+                photo_count=1,
+            )
+            for idx in range(3)
+        ]
+        promo_events = [
+            Event(
+                title=f"Festival Promo {idx}",
+                description="Description",
+                short_description="Short",
+                search_digest="Digest",
+                source_text="source",
+                date="2026-05-23",
+                time="19:00",
+                location_name="Venue",
+                city="Калининград",
+                photo_urls=[f"https://example.com/promo-{idx}.jpg"],
+                photo_count=1,
+            )
+            for idx in range(2)
+        ]
+        session.add_all([*profile_events, *promo_events])
+        await session.commit()
+        for event in [*profile_events, *promo_events]:
+            await session.refresh(event)
+
+    async def fake_collect_popular_hits(*_args, **_kwargs):
+        return [
+            {
+                "event_id": int(event.id),
+                "score": 100.0 - idx,
+                "source_window": "24h",
+                "source_post_url": f"https://t.me/popular/{idx}",
+                "source_label": "organic",
+            }
+            for idx, event in enumerate(profile_events, start=1)
+        ]
+
+    async def fake_load_events_map(_db, event_ids):
+        all_events = {int(event.id): event for event in [*profile_events, *promo_events]}
+        return {int(event_id): all_events[int(event_id)] for event_id in event_ids}
+
+    async def fake_resolve_video_promo_candidates(*_args, **kwargs):
+        assert kwargs["profile_key"] == "popular_review_eco"
+        assert kwargs["include_global_profile"] is True
+        return [
+            PromoCandidate(
+                event=promo_events[0],
+                campaign_id=80,
+                activity_id=1,
+                placement_kind="guaranteed_any_position",
+                reason="promo:80-stories",
+            ),
+            PromoCandidate(
+                event=promo_events[1],
+                campaign_id=80,
+                activity_id=2,
+                placement_kind="guaranteed_any_position",
+                reason="promo:80-stories",
+            ),
+        ]
+
+    def eco_filter(ev: Event) -> FilterDecision:
+        matched = str(ev.title or "").startswith("Eco")
+        return FilterDecision(
+            event_id=int(ev.id or 0),
+            matched=matched,
+            needs_manual_review=False,
+            reason="eco" if matched else "not eco",
+            extra={},
+        )
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "resolve_video_promo_candidates",
+        fake_resolve_video_promo_candidates,
+    )
+    monkeypatch.setattr(popular_review_module, "_collect_popular_hits", fake_collect_popular_hits)
+    monkeypatch.setattr(popular_review_module, "_load_events_map", fake_load_events_map)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=4,
+        min_events=4,
+        anti_repeat_days=7,
+        candidate_limit=10,
+        now_utc=now_utc,
+        profile_key="popular_review_eco",
+        partner_track_id="partner_eco_nature_001",
+        event_filter=eco_filter,
+        admit_manual_review=False,
+    )
+
+    profile_ids = {int(event.id) for event in profile_events}
+    promo_ids = [int(event.id) for event in promo_events]
+    assert profile_ids.issubset(set(selection.event_ids))
+    assert selection.event_ids.count(promo_ids[0]) == 1
+    assert promo_ids[1] not in selection.event_ids
+    assert selection.trace[promo_ids[0]]["promo_placement_kind"] == "guaranteed_any_position"
+    assert selection.trace[promo_ids[0]]["partner_filter"]["partner_promo_off_filter_admitted"] is True
+    await db.close()
 
 
 async def _seed_popular_post(

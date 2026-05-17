@@ -91,7 +91,10 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
     incident_tg_location_prose_cityjazz_recurrence_2026_05_16: docs/reports/incidents/INC-2026-05-16-tg-location-prose-cityjazz-recurrence.md
+    incident_future_event_quality_regressions_2026_05_17: docs/reports/incidents/INC-2026-05-17-future-event-quality-regressions.md
+    incident_kraftmarket235_tg_monitoring_extraction_miss_2026_05_17: docs/reports/incidents/INC-2026-05-17-kraftmarket235-tg-monitoring-extraction-miss.md
     incident_cherryflash_partner_fanout_promo_filter_2026_05_15: docs/reports/incidents/INC-2026-05-15-cherryflash-partner-fanout-promo-filter.md
     incident_event_location_alias_free_dup_regressions_2026_05_09: docs/reports/incidents/INC-2026-05-09-event-location-alias-free-dup-regressions.md
     incident_vk_quality_false_skips_2026_05_08: docs/reports/incidents/INC-2026-05-08-vk-quality-false-skips.md
