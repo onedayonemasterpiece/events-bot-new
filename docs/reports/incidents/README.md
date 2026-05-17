@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-17-eco-cherryflash-underfilled-event-recall.md`
+  - Scope: CherryFlash `partner_eco_nature_001` candidate recall, recent popularity windows, same-day/future event-date recall, and eco LLM filter handoff.
+  - Must not regress: a current/future eco/nature/local-history event with renderable media must not be invisible solely because its source post was published more than seven days earlier; event-date recall may widen candidates, but the existing `eco_prirodnaya` LLM filter must still own the semantic include/exclude decision before publication.
 - `INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md`
   - Scope: VK auto-import cancellation/postponement shortcut and lifecycle matching for posts whose `перенос` wording is retrospective context, not a cancellation of the current announced event.
   - Must not regress: a post like `Прерафаэлиты... 22 мая 19:00 ... Эта лекция - перенос несостоявшейся встречи в апреле` must stay on the normal LLM-first VK import path and must never mark an unrelated event sharing date/time as `postponed`.

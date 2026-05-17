@@ -327,6 +327,89 @@ async def test_popular_review_partner_allows_one_off_filter_promo_after_three_ma
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_popular_review_partner_eco_recalls_current_event_with_old_source_post(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 17, 8, 0, tzinfo=timezone.utc)
+    _freeze_popular_posts_now(monkeypatch, now_utc)
+
+    async with db.get_session() as session:
+        green = Event(
+            title="Фестиваль «Зелёный Кёнигсберг»",
+            description="Фестиваль про растения, ботанику, науку и обмен растениями.",
+            short_description="Ботанический фестиваль с обменом растениями.",
+            search_digest="Растения, ботаника, обмен растениями, наука и технологии.",
+            source_text="source",
+            date="2026-05-17",
+            end_date="2026-05-17",
+            time="",
+            location_name="культурный квартал «Понарт»",
+            location_address="Судостроительная 6/2",
+            city="Калининград",
+            photo_urls=["https://example.com/green.jpg"],
+            photo_count=1,
+            source_post_url="https://t.me/kulturnaya_chaika/7603",
+        )
+        unrelated = Event(
+            title="Обычный концерт",
+            description="Музыкальная программа без эко или краеведческой темы.",
+            short_description="Концерт.",
+            search_digest="Музыка и концерт.",
+            source_text="source",
+            date="2026-05-17",
+            time="19:00",
+            location_name="Venue",
+            city="Калининград",
+            photo_urls=["https://example.com/concert.jpg"],
+            photo_count=1,
+            source_post_url="https://t.me/music/1",
+        )
+        session.add_all([green, unrelated])
+        await session.commit()
+        await session.refresh(green)
+        await session.refresh(unrelated)
+
+    async def no_recent_popular_hits(*_args, **_kwargs):
+        return []
+
+    def eco_filter(ev: Event) -> FilterDecision:
+        matched = "растен" in (
+            f"{ev.title} {ev.description} {ev.search_digest}".casefold()
+        )
+        return FilterDecision(
+            event_id=int(ev.id or 0),
+            matched=matched,
+            needs_manual_review=False,
+            reason="eco plants" if matched else "not eco",
+            extra={},
+        )
+
+    monkeypatch.setattr(
+        popular_review_module,
+        "_collect_popular_hits",
+        no_recent_popular_hits,
+    )
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=2,
+        min_events=1,
+        anti_repeat_days=7,
+        candidate_limit=2,
+        now_utc=now_utc,
+        profile_key="popular_review_eco",
+        partner_track_id="partner_eco_nature_001",
+        event_filter=eco_filter,
+        admit_manual_review=False,
+    )
+
+    assert selection.event_ids == [int(green.id)]
+    assert selection.trace[int(green.id)]["source_window"] == "partner_event_date_recall"
+    assert int(unrelated.id) not in selection.event_ids
+    await db.close()
+
+
 async def _seed_popular_post(
     db: Database,
     *,

@@ -126,6 +126,11 @@ Partner filters narrow the CherryFlash candidate universe; they do not replace C
 The selector should:
 
 - start from future/current events that CherryFlash can render and that belong to the `/popular_posts` / CherryFlash popularity candidate pool;
+- for `partner_eco_nature_001`, if the recent popularity pool underfills the
+  profile, add a bounded event-date recall pass over active current/future
+  events whose source posts may be older than the 1/3/7-day popularity windows;
+  this recall only widens the candidate list for the same `eco_prirodnaya`
+  LLM filter and must not make a deterministic semantic include decision;
 - apply partner-specific semantic and/or geo filters as an eligibility layer;
 - rank the remaining eligible events primarily by popularity signals (`views`, `likes`, normalized score, winning popularity window), with partner filter score used for eligibility/explanation and only as a secondary tie-breaker when popularity is otherwise comparable;
 - keep source provenance and filter reasons in the selection trace;

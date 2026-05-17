@@ -30,6 +30,8 @@ ECO_NATURE_PARTNER_TRACK_ID = "partner_eco_nature_001"
 PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES = 3
 PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION = 1
 PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND = "guaranteed_any_position"
+PARTNER_ECO_RECALL_LOOKAHEAD_DAYS = 14
+PARTNER_ECO_RECALL_LIMIT = 32
 POPULAR_REVIEW_WINDOW_CHAIN: tuple[tuple[int, int, str], ...] = (
     (1, 0, "24h"),
     (3, 2, "3d"),
@@ -542,6 +544,100 @@ async def _collect_popular_hits(
     return ordered_hits
 
 
+def _event_date_or_max(event: Event) -> date:
+    raw = str(getattr(event, "date", "") or "").strip()
+    try:
+        return date.fromisoformat(raw)
+    except Exception:
+        return date.max
+
+
+def _event_time_sort_key(event: Event) -> str:
+    return str(getattr(event, "time", "") or "").strip() or "99:99"
+
+
+async def _collect_partner_eco_recall_hits(
+    db,
+    *,
+    today: date,
+    exclude_event_ids: set[int],
+    limit: int = PARTNER_ECO_RECALL_LIMIT,
+) -> list[dict[str, Any]]:
+    """Recall current/future eco-track candidates whose source post is old.
+
+    The base CherryFlash pool is intentionally popularity-post-window driven:
+    it looks at posts published in the last 1/3/7 days. Partner eco stories
+    also need event-date recall because a highly relevant current event can be
+    announced weeks earlier and still be exactly what the partner audience
+    expects today. This helper only widens the LLM candidate universe; the
+    semantic include/exclude decision remains owned by the partner LLM filter.
+    """
+
+    try:
+        from .partner_filters import _eco_event_text, _has_keyword_hint
+    except Exception:
+        logger.exception("video_announce.popular_review: eco recall helpers unavailable")
+        return []
+
+    until = today + timedelta(days=PARTNER_ECO_RECALL_LOOKAHEAD_DAYS)
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Event)
+            .where(Event.lifecycle_status == "active")
+            .where(Event.silent.is_(False))
+            .where(Event.date >= today.isoformat())
+            .where(Event.date <= until.isoformat())
+            .order_by(Event.date.asc(), Event.time.asc(), Event.id.desc())
+            .limit(max(1, int(limit)) * 4)
+        )
+        events = list(result.scalars().all())
+
+    recalled: list[Event] = []
+    for event in events:
+        try:
+            event_id = int(event.id or 0)
+        except Exception:
+            event_id = 0
+        if event_id <= 0 or event_id in exclude_event_ids:
+            continue
+        text = _eco_event_text(event)
+        if not _has_keyword_hint(text):
+            continue
+        recalled.append(event)
+        if len(recalled) >= max(1, int(limit)):
+            break
+
+    def _score(event: Event) -> float:
+        event_day = _event_date_or_max(event)
+        days_until = 999 if event_day == date.max else max(0, (event_day - today).days)
+        # Keep recall below real popularity scores while preserving soonness.
+        return max(0.01, 0.75 - min(days_until, PARTNER_ECO_RECALL_LOOKAHEAD_DAYS) * 0.03)
+
+    hits: list[dict[str, Any]] = []
+    for event in sorted(recalled, key=lambda ev: (_event_date_or_max(ev), _event_time_sort_key(ev), -(int(ev.id or 0)))):
+        event_id = int(event.id or 0)
+        hits.append(
+            {
+                "event_id": event_id,
+                "source_window": "partner_event_date_recall",
+                "source_post_url": str(
+                    getattr(event, "source_post_url", None)
+                    or getattr(event, "source_vk_post_url", None)
+                    or ""
+                ),
+                "source_label": "event-date recall",
+                "score": _score(event),
+            }
+        )
+    if hits:
+        logger.info(
+            "video_announce.popular_review: partner eco event-date recall candidates=%s ids=%s",
+            len(hits),
+            [int(item["event_id"]) for item in hits[:12]],
+        )
+    return hits
+
+
 EventFilterFn = Callable[[Event], "FilterDecision | Awaitable[FilterDecision]"]
 
 
@@ -583,11 +679,11 @@ async def build_popular_review_selection(
 
     fresh: list[PopularReviewPick] = []
     filter_trace: dict[int, dict[str, Any]] = {}
-    for hit in ordered_hits:
+
+    async def _consider_hit(hit: dict[str, Any], event: Event | None) -> None:
         event_id = int(hit["event_id"])
-        event = events_map.get(event_id)
         if event is None:
-            continue
+            return
         if event_id in recent_hits:
             logger.info(
                 "video_announce.popular_review: skipped event due to cooldown "
@@ -595,9 +691,9 @@ async def build_popular_review_selection(
                 event_id,
                 anti_repeat_days,
             )
-            continue
+            return
         if not _starts_today_or_in_future(event, today=today):
-            continue
+            return
         photo_urls = await _ensure_renderable_photo_urls(event, db=db)
         if not photo_urls:
             logger.info(
@@ -605,7 +701,7 @@ async def build_popular_review_selection(
                 event_id,
                 getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None) or "",
             )
-            continue
+            return
         if event_filter is not None:
             decision = await _resolve_filter_decision(event_filter, event)
             filter_trace[event_id] = {
@@ -622,7 +718,7 @@ async def build_popular_review_selection(
                     event_id,
                     decision.reason,
                 )
-                continue
+                return
             if decision.needs_manual_review and admit_manual_review:
                 logger.warning(
                     "video_announce.popular_review: admitting manual_review event "
@@ -641,6 +737,33 @@ async def build_popular_review_selection(
             description=preferred_scene_description(event),
         )
         fresh.append(pick)
+
+    for hit in ordered_hits:
+        event_id = int(hit["event_id"])
+        await _consider_hit(hit, events_map.get(event_id))
+
+    if (
+        event_filter is not None
+        and partner_track_id == ECO_NATURE_PARTNER_TRACK_ID
+        and len(fresh) < max_events
+    ):
+        exclude_event_ids = {int(item["event_id"]) for item in ordered_hits}
+        exclude_event_ids.update(int(event_id) for event_id in recent_hits)
+        recall_hits = await _collect_partner_eco_recall_hits(
+            db,
+            today=today,
+            exclude_event_ids=exclude_event_ids,
+        )
+        if recall_hits:
+            recall_map = await _load_events_map(
+                db,
+                [int(item["event_id"]) for item in recall_hits],
+            )
+            for hit in recall_hits:
+                if len(fresh) >= max_events:
+                    break
+                event_id = int(hit["event_id"])
+                await _consider_hit(hit, recall_map.get(event_id))
 
     allow_partner_off_filter_promo = partner_track_id == ECO_NATURE_PARTNER_TRACK_ID
     promo_picks: list[PopularReviewPick] = []
