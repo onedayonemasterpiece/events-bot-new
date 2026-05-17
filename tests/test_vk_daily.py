@@ -6,11 +6,7 @@ import pytest
 import main
 from main import (
     Database,
-    WeekendPage,
-    WeekPage,
     Event,
-    format_weekend_range,
-    month_name_nominative,
 )
 
 
@@ -31,23 +27,12 @@ async def test_format_event_vk_no_ticket_link_with_vk_source():
 
 
 @pytest.mark.asyncio
-async def test_build_daily_sections_vk_links(tmp_path: Path):
+async def test_build_daily_sections_vk_compact_without_navigation_links(tmp_path: Path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     today = date(2025, 7, 10)
-    w_start = date(2025, 7, 12)
 
     async with db.get_session() as session:
-        session.add(
-            WeekendPage(
-                start=w_start.isoformat(),
-                url="u1",
-                path="p1",
-                vk_post_url="https://vk.com/wall-1_2",
-            )
-        )
-        session.add(WeekPage(start=date(2025, 7, 7).isoformat(), vk_post_url="https://vk.com/wall-1_3"))
-        session.add(WeekPage(start=date(2025, 8, 4).isoformat(), vk_post_url="https://vk.com/wall-1_4"))
         session.add(
             Event(
                 title="Party",
@@ -64,15 +49,9 @@ async def test_build_daily_sections_vk_links(tmp_path: Path):
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    label_weekend = f"выходные {format_weekend_range(w_start)}"
-    assert f"[https://vk.com/wall-1_2|{label_weekend}]" in sec1
-    assert (
-        f"[https://vk.com/wall-1_3|{month_name_nominative('2025-07')}]" in sec1
-    )
-    assert (
-        f"[https://vk.com/wall-1_4|{month_name_nominative('2025-08')}]" in sec1
-    )
-    assert "u1" not in sec1
+    assert sec1.splitlines() == ["НЕ ПРОПУСТИТЕ СЕГОДНЯ", "10.07 🚩 Party"]
+    assert "выходные" not in sec1
+    assert "wall-1_2" not in sec1
 
 
 @pytest.mark.asyncio
@@ -100,12 +79,12 @@ async def test_build_daily_sections_vk_prefers_repost_for_non_partner(tmp_path: 
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    event_line = sec1.splitlines()[4]
-    assert event_line.startswith("👉 [https://vk.com/wall-1_7|")
+    event_line = sec1.splitlines()[1]
+    assert event_line == "10.07 [https://vk.com/wall-1_7|Party]"
 
 
 @pytest.mark.asyncio
-async def test_build_daily_sections_vk_keeps_partner_source_link(tmp_path: Path):
+async def test_build_daily_sections_vk_does_not_link_partner_repost(tmp_path: Path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     today = date(2025, 7, 10)
@@ -133,8 +112,10 @@ async def test_build_daily_sections_vk_keeps_partner_source_link(tmp_path: Path)
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    event_line = sec1.splitlines()[4]
-    assert event_line.startswith("👉 [https://vk.com/wall-1_8|")
+    event_line = sec1.splitlines()[1]
+    assert event_line == "10.07 Party"
+    assert "wall-1_8" not in sec1
+    assert "wall-1_9" not in sec1
 
 
 @pytest.mark.asyncio
@@ -161,12 +142,13 @@ async def test_build_daily_sections_vk_includes_fair_when_few_events(tmp_path: P
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=now
     )
-    assert "FAIR" in sec1
-    assert main.format_day_pretty(date(2026, 1, 3)) in sec1
+    assert "03.01 🚩 Fair" in sec1
 
 
 @pytest.mark.asyncio
-async def test_build_daily_sections_vk_short_link_reuse(tmp_path: Path, monkeypatch):
+async def test_build_daily_sections_vk_does_not_touch_ticket_shortlinks(
+    tmp_path: Path, monkeypatch
+):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     today = date(2025, 7, 10)
@@ -211,21 +193,20 @@ async def test_build_daily_sections_vk_short_link_reuse(tmp_path: Path, monkeypa
 
     async with db.get_session() as session:
         stored = await session.get(Event, event_id)
-        assert stored.vk_ticket_short_url == "https://vk.cc/short", call_ids
-        assert stored.vk_ticket_short_key == "short"
+        assert stored.vk_ticket_short_url is None
+        assert stored.vk_ticket_short_key is None
 
-    assert "vk.cc/short" in sec1
-    assert call_ids == [event_id]
+    assert "vk.cc/short" not in sec1
+    assert call_ids == []
 
     async def fail_helper(*args, **kwargs):  # pragma: no cover - ensure reuse
         raise AssertionError("short link should be reused")
 
     monkeypatch.setattr(main, "ensure_vk_short_ticket_link", fail_helper)
 
-    sec1_again, _ = await main.build_daily_sections_vk(
+    await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    assert "vk.cc/short" in sec1_again
 
 
 def test_split_vk_daily_text_atomic_keeps_chunks_under_limit(monkeypatch):

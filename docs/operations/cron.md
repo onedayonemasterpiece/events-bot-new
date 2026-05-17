@@ -64,6 +64,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - Daily build must treat shortlink enrichment as best-effort: if VK `utils.getShortLink` fails for one actor/token path (including `code=8 / Application is blocked`), the run must fall back to the next token or keep the original URL instead of stalling the whole announcement.
 - **VK daily posts and polls** – publishes daily announcements and festival polls when posting times are reached and a VK group is configured.
   - VK daily announcements are split into multiple `wall.post` calls when the generated section exceeds `VK_DAILY_POST_MAX_CHARS` (default `12000`) so a busy day does not fail with VK `message_character_limit`. The split preserves event cards when possible and the slot is marked sent only after every chunk returns a VK post URL.
+  - VK daily has two compact slots configured by `/vktime`: morning `today` publishes `НЕ ПРОПУСТИТЕ СЕГОДНЯ`, evening `added` publishes `N ДОБАВИЛИ В АНОНС`. Event rows are one-line entries and link to the event VK post when one exists.
 - **VK auto queue import** – imports queued VK posts (`vk_inbox`) via Smart Update on a fixed schedule when enabled.
 - **Telegraph pages sync** – refreshes month and weekend Telegraph pages after 01:00 local time. Disabled by default; enable with `ENABLE_NIGHTLY_PAGE_SYNC=1`. Nightly runs update both page content and the month navigation block.
 - **Telegraph cache sanitizer** – probes and warms Telegram web preview for Telegraph pages (via Kaggle/Telethon), tracks missing `cached_page` (Instant View) and warns on missing preview `photo`, and enqueues rebuilds for persistent “no cached_page” failures. Skips past pages (ended events / past weekends / past months). Manual `/telegraph_cache_sanitize` updates a single Kaggle status message while polling (like `/tg`), scheduled runs post a final summary to `ADMIN_CHAT_ID` when configured. Disabled by default; enable with `ENABLE_TELEGRAPH_CACHE_SANITIZER=1`.
@@ -124,8 +125,11 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `SCHED_HEAVY_GUARD_MODE` – scheduled heavy jobs gate mode: `skip` (default), `wait`, or `off`.
 - `SCHED_HEAVY_TRY_TIMEOUT_SEC` – try-acquire timeout in seconds for `SCHED_HEAVY_GUARD_MODE=skip` (default: `0.2`).
 - `SCHED_SERIALIZE_HEAVY_JOBS` – legacy flag: when enabled (`1|true|yes|on`) it implies `SCHED_HEAVY_GUARD_MODE=wait` + extra in-scheduler serialization.
-- `VK_USER_TOKEN` – user token for VK posts (scopes: wall,groups,offline).
+- `VK_USER_TOKEN` – user token for VK posts (scopes: wall,groups,offline). Local/dev runs may also provide the same token as `VK_ACCESS_TOKEN4`.
 - `VK_TOKEN` – optional group token used as a fallback.
+- `VK_EVENTS_GROUP_ID` – target group id for Smart Update event posts with photos/video attachments; defaults to `VK_AFISHA_GROUP_ID`.
+- `VK_PHOTOS_ENABLED_DEFAULT` – default for VK event-post media attachments before `/vkphotos` writes an explicit DB setting; default `true`.
+- `VK_ACCESS_TOKEN5` – VK user token bundled into CherryFlash Kaggle story secrets for VK wall/story publication.
 - `EVBOT_DEBUG` – enables extra logging and queue statistics.
 - `ENABLE_SOURCE_PARSING` – enable nightly source parsing schedule.
 - `SOURCE_PARSING_TIME_LOCAL` / `SOURCE_PARSING_TZ` – nightly parse time in local time zone.

@@ -183,9 +183,14 @@ line under the button row. The command accepts dates like `2025-07-10`,
   # Set OPERATOR_CHAT_ID=0 to disable forwarding operator notifications
   # User access token for VK posts (scopes: wall,groups,offline)
   export VK_USER_TOKEN=vk_user_token
+  # Local/dev fallback for the same user token; CherryFlash Kaggle VK fanout uses VK_ACCESS_TOKEN5
+  export VK_ACCESS_TOKEN4=vk_user_token
+  export VK_ACCESS_TOKEN5=vk_user_token_for_kaggle_vk_stories
   # IDs of VK groups (without @)
   export VK_MAIN_GROUP_ID=123
   export VK_AFISHA_GROUP_ID=231828790
+  export VK_EVENTS_GROUP_ID=231920894
+  export VK_PHOTOS_ENABLED_DEFAULT=true
   # Group tokens
   export VK_TOKEN=vk_group_token
   export VK_TOKEN_AFISHA=vk_afisha_group_token
@@ -349,9 +354,11 @@ A VK service (server) token helps keep read-only API traffic away from the user 
    fly secrets set TELEGRAPH_TOKEN=<token>
    # User access token for VK posts (scopes: wall,groups,offline)
    fly secrets set VK_USER_TOKEN=<token>
+   fly secrets set VK_ACCESS_TOKEN5=<token-for-kaggle-vk-fanout>
    # IDs of VK groups (without @)
    fly secrets set VK_MAIN_GROUP_ID=<id>
    fly secrets set VK_AFISHA_GROUP_ID=<id>
+   fly secrets set VK_EVENTS_GROUP_ID=<id>
    # Group tokens
    fly secrets set VK_TOKEN=<token>
    fly secrets set VK_TOKEN_AFISHA=<token>

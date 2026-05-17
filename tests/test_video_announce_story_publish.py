@@ -37,10 +37,67 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
     assert params["story_publish_mode"] == "video"
     assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
     assert params["story_targets_override"] == [
-        {"peer": "@kenigevents", "delay_seconds": 0, "mode": "upload"},
-        {"peer": "@lovekenig", "delay_seconds": 600, "mode": "repost_previous"},
-        {"peer": "@loving_guide39", "delay_seconds": 600, "mode": "repost_previous"},
-        {"peer": "@catwithbag", "delay_seconds": 600, "mode": "repost_previous"},
+        {
+            "peer": "@kenigevents",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "blocking": False,
+        },
+        {
+            "peer": "club231828790",
+            "label": "vk:club231828790:wall",
+            "delay_seconds": 300,
+            "mode": "upload",
+            "transport": "vk_wall",
+            "caption": "Видеоанонс",
+        },
+        {"peer": "@lovekenig", "delay_seconds": 300, "mode": "repost_previous"},
+        {
+            "peer": "club231828790",
+            "label": "vk:club231828790:story",
+            "delay_seconds": 300,
+            "mode": "upload",
+            "transport": "vk_story",
+        },
+        {"peer": "@loving_guide39", "delay_seconds": 300, "mode": "repost_previous"},
+        {
+            "peer": "klgdevents",
+            "label": "vk:klgdevents:story",
+            "delay_seconds": 300,
+            "mode": "upload",
+            "transport": "vk_story",
+        },
+        {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_primary(
+    monkeypatch,
+):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params=scenario._popular_review_selection_params(),
+        selected_event_dates=["2026-05-17"],
+    )
+
+    assert config is not None
+    assert config["targets"][0]["blocking"] is False
+    assert [
+        (target["peer"], target.get("transport", "telethon"))
+        for target in config["targets"]
+    ] == [
+        ("@kenigevents", "telethon"),
+        ("club231828790", "vk_wall"),
+        ("@lovekenig", "telethon"),
+        ("club231828790", "vk_story"),
+        ("@loving_guide39", "telethon"),
+        ("klgdevents", "vk_story"),
+        ("@catwithbag", "telethon"),
     ]
 
 
@@ -152,8 +209,8 @@ async def test_build_story_publish_config_appends_encrypted_business_targets(
     business_target = config["targets"][-1]
     assert business_target["transport"] == "telegram_business"
     assert business_target["delay_seconds"] == 600
-    assert business_target["blocking"] is True
-    assert business_target["required"] is True
+    assert business_target["blocking"] is False
+    assert "required" not in business_target
     assert business_target["label"].startswith("business:")
     serialized = str(config)
     assert "biz-connection-secret" not in serialized
@@ -272,7 +329,8 @@ async def test_business_story_targets_are_allowed_for_kenigsberg(monkeypatch, tm
 
     assert config is not None
     assert config["targets"][-1]["transport"] == "telegram_business"
-    assert config["targets"][-1]["required"] is True
+    assert config["targets"][-1]["blocking"] is False
+    assert "required" not in config["targets"][-1]
 
 
 @pytest.mark.asyncio

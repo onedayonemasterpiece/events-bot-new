@@ -16,6 +16,21 @@ def _sync_event_updates(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_vk_photos_enabled_defaults_on_until_explicitly_disabled(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED_DEFAULT", True)
+
+    assert await main.get_vk_photos_enabled(db) is True
+
+    await main.set_vk_photos_enabled(db, False)
+
+    assert await main.get_vk_photos_enabled(db) is False
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_includes_calendar_link(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
 
@@ -189,7 +204,7 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
     url = await main.sync_vk_source_post(event, "Text", None, None)
 
     assert url == "https://vk.com/wall-1_2"
-    assert uploaded == [("http://img1", "ga")]
+    assert uploaded == [("http://img1", None)]
     assert posted["vals"] == ["ph1"]
 
 
@@ -400,4 +415,3 @@ async def test_sync_vk_source_post_updates_without_append(monkeypatch):
     assert "old text" not in msg
     assert "updated text" in msg
     assert main.CONTENT_SEPARATOR not in msg
-

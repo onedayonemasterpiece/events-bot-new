@@ -41,6 +41,7 @@ class StoryTarget:
     business_connection_hash: str = ""
     user_hash: str = ""
     fallback_peer: str = ""
+    caption: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -61,6 +62,8 @@ class StoryTarget:
             payload["user_hash"] = self.user_hash
         if self.fallback_peer:
             payload["fallback_peer"] = self.fallback_peer
+        if self.caption:
+            payload["caption"] = self.caption
         return payload
 
 
@@ -217,6 +220,9 @@ def _story_session_payload() -> dict[str, Any]:
 
 def build_story_secrets_payload() -> str:
     payload = _story_session_payload()
+    vk_access_token = _get_env_value("VK_ACCESS_TOKEN5")
+    if vk_access_token:
+        payload["vk_access_token"] = vk_access_token
     business_targets = _load_business_story_targets(selector_raw="all")
     if business_targets:
         bot_token = _require_env_any("TELEGRAM_BOT_TOKEN")
@@ -346,6 +352,8 @@ def _dedupe_targets(targets: list[StoryTarget]) -> list[StoryTarget]:
     for target in targets:
         if target.transport == "telegram_business":
             key = f"business:{target.business_connection_hash}"
+        elif target.transport in {"vk_story", "vk_wall"}:
+            key = f"{target.transport}:{target.peer.casefold()}"
         else:
             key = f"telethon:{target.peer.casefold()}"
         if key in seen:
@@ -376,6 +384,8 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             label = peer or f"extra-{idx + 1}"
             delay_seconds = 0
             mode = "upload"
+            transport = "telethon"
+            caption = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"extra-{idx + 1}")
@@ -387,6 +397,9 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 ) from exc
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
+            raw_transport = str(item.get("transport") or "telethon").strip().lower()
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "vk_story", "vk_wall"} else "telethon"
+            caption = str(item.get("caption") or "").strip()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -418,6 +431,8 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 mode=mode,
                 blocking=blocking,
                 required=required,
+                transport=transport,
+                caption=caption,
                 fallback_peer=fallback_peer,
             )
         )
@@ -450,6 +465,8 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             label = peer or f"override-{idx + 1}"
             delay_seconds = 0
             mode = "upload"
+            transport = "telethon"
+            caption = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"override-{idx + 1}")
@@ -461,6 +478,9 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 ) from exc
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
+            raw_transport = str(item.get("transport") or "telethon").strip().lower()
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "vk_story", "vk_wall"} else "telethon"
+            caption = str(item.get("caption") or "").strip()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -492,6 +512,8 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 mode=mode,
                 blocking=blocking,
                 required=required,
+                transport=transport,
+                caption=caption,
                 fallback_peer=fallback_peer,
             )
         )
@@ -561,8 +583,8 @@ async def _business_story_targets(
                 label=f"business:{connection_hash}",
                 delay_seconds=delay_seconds,
                 mode="upload",
-                blocking=True,
-                required=True,
+                blocking=False,
+                required=False,
                 transport="telegram_business",
                 business_connection_hash=connection_hash,
                 user_hash=str(item.get("user_hash") or "").strip(),
@@ -682,6 +704,7 @@ async def build_story_publish_config(
         "period_seconds": _story_period_seconds(selected_event_dates=selected_event_dates),
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,
+        "vk_api_version": _get_env_value("VK_API_VERSION") or "5.199",
         "targets": [target.as_dict() for target in targets],
     }
     logger.info(

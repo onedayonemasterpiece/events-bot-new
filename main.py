@@ -566,7 +566,7 @@ SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "events-ics")
 SUPABASE_MEDIA_BUCKET = (os.getenv("SUPABASE_MEDIA_BUCKET") or SUPABASE_BUCKET).strip() or SUPABASE_BUCKET
 VK_TOKEN = os.getenv("VK_TOKEN")
 VK_TOKEN_AFISHA = os.getenv("VK_TOKEN_AFISHA")  # NEW
-VK_USER_TOKEN = os.getenv("VK_USER_TOKEN")
+VK_USER_TOKEN = os.getenv("VK_USER_TOKEN") or os.getenv("VK_ACCESS_TOKEN4")
 VK_SERVICE_TOKEN = os.getenv("VK_SERVICE_TOKEN") or os.getenv("VK_SERVICE_KEY")
 VK_READ_VIA_SERVICE = os.getenv("VK_READ_VIA_SERVICE", "true").lower() == "true"
 VK_MIN_INTERVAL_MS = int(os.getenv("VK_MIN_INTERVAL_MS", "350"))
@@ -593,6 +593,7 @@ VK_SERVICE_READ_PREFIXES = ("video.get",)
 
 VK_MAIN_GROUP_ID = os.getenv("VK_MAIN_GROUP_ID")
 VK_AFISHA_GROUP_ID = os.getenv("VK_AFISHA_GROUP_ID")
+VK_EVENTS_GROUP_ID = os.getenv("VK_EVENTS_GROUP_ID") or VK_AFISHA_GROUP_ID
 VK_API_VERSION = os.getenv("VK_API_VERSION", "5.199")
 try:
     VK_MAX_ATTACHMENTS = int(os.getenv("VK_MAX_ATTACHMENTS", "10"))
@@ -1611,7 +1612,11 @@ async def _watch_add_event_worker(app: web.Application, db: Database, bot: Bot):
 # toggle for uploading images to catbox
 CATBOX_ENABLED: bool = False
 # toggle for sending photos to VK
-VK_PHOTOS_ENABLED: bool = False
+VK_PHOTOS_ENABLED_DEFAULT: bool = (
+    os.getenv("VK_PHOTOS_ENABLED_DEFAULT", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+VK_PHOTOS_ENABLED: bool = VK_PHOTOS_ENABLED_DEFAULT
 _supabase_client: "Client | None" = None  # type: ignore[name-defined]
 _normalized_supabase_url: str | None = None
 _normalized_supabase_url_source: str | None = None
@@ -3021,7 +3026,9 @@ async def get_vk_photos_enabled(db: Database) -> bool:
             "SELECT value FROM setting WHERE key='vk_photos_enabled'"
         )
         row = await cursor.fetchone()
-    return bool(row and row[0] == "1")
+    if row is None:
+        return VK_PHOTOS_ENABLED_DEFAULT
+    return row[0] == "1"
 
 
 async def set_vk_photos_enabled(db: Database, value: bool):
@@ -19568,6 +19575,49 @@ def format_event_vk(
         lines.append(loc)
 
     return "\n".join(lines)
+
+
+def format_event_vk_daily_inline(
+    e: Event,
+    *,
+    promo_highlight: bool = False,
+    partner_creator_ids: Collection[int] | None = None,
+) -> str:
+    """Return compact one-line VK daily text, linking only to our VK event post."""
+
+    date_part = ""
+    if e.date:
+        date_part = e.date.split("..", 1)[0]
+    elif e.end_date:
+        date_part = e.end_date.split("..", 1)[0]
+
+    formatted_date = ""
+    if date_part:
+        d = parse_iso_date(date_part)
+        formatted_date = d.strftime("%d.%m") if d else date_part
+
+    markers: list[str] = []
+    if promo_highlight:
+        markers.append("✨")
+    if is_recent(e):
+        markers.append("\U0001f6a9")
+    if e.is_free:
+        markers.append("🟡")
+    prefix = "".join(f"{m} " for m in markers)
+
+    title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
+    body_title = f"{prefix}{emoji_part}{title_text}".strip()
+    partner_creator_ids = partner_creator_ids or ()
+    is_partner_creator = (
+        e.creator_id in partner_creator_ids if e.creator_id is not None else False
+    )
+    if not is_partner_creator and is_vk_wall_url(e.vk_repost_url):
+        body = f"[{e.vk_repost_url}|{body_title}]"
+    else:
+        body = body_title
+    if formatted_date:
+        return f"{formatted_date} {body}".strip()
+    return body
 
 
 def format_event_daily(

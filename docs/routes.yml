@@ -261,6 +261,14 @@ features:
       - main_part2.py
       - vk_review.py
       - vk_intake.py
+  vk_publishing:
+    status: implemented
+    docs: docs/features/vk-publishing/README.md
+    entrypoints:
+      - main.py
+      - main_part2.py
+      - video_announce/story_publish.py
+      - kaggle/CrumpleVideo/story_publish.py
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md

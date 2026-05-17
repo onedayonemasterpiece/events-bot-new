@@ -14,7 +14,7 @@
 | `/ik_poster` | - | Обработка афиш через ImageKit (Smart crop / GenFill). |
 | `/vkgroup <id|off>` | required id or `off` | Set or disable VK group for daily announcements. |
 | `/vktime today|added <HH:MM>` | required type and time | Change VK posting times (default 08:00/20:00). |
-| `/vkphotos` | - | Toggle sending images to VK posts. |
+| `/vkphotos` | - | Toggle sending images/media groups to VK event posts. Default is enabled unless the DB setting explicitly disables it. |
 | `/vk_auto_import [N|all] [--include-skipped]` | optional limit flags | Суперадмин: авторазбор очереди VK (таблица `vk_inbox`) через Smart Update. По умолчанию без аргументов обрабатывает всю активную очередь; `N` ограничивает количество постов. Показывает прогресс `X/Y`, унифицированный отчёт с фактами и количеством добавленных иллюстраций, ссылки на Telegraph и `/log`. |
 | `/vk_auto_import_stop` | - | Суперадмин: запросить остановку текущего прогона `/vk_auto_import` (остановка после завершения текущего поста). |
 | `/imp_groups_30d` | - | Суперадмин. Показать агрегированную статистику импорта за 30 дней по группам из Supabase-вьюха `vk_import_by_group`. Пример ответа:<br>`Импорт из VK по группам за последние 30 дн.:`<br>`1. club123: Импорт: 12, Отклонено: 4`. |

@@ -1,7 +1,7 @@
 # CherryFlash / Popular Video Afisha
 
 > **Status:** Production testing / Not confirmed by user  
-> **Scope:** daily popularity-driven video announce mode for `/v` ("Быстрый обзор") with phase-1 publication to `@keniggpt`, formally deployed on production, but still not user-confirmed because there has not yet been a fully successful end-to-end story publication run.
+> **Scope:** daily popularity-driven video announce mode for `/v` ("Быстрый обзор") with a mixed Telegram/VK publication fanout. Older `@keniggpt` wording in historical requirement gates is a validation fallback, not the active production target.
 >
 > **Naming + product boundary**
 > - marketing / product name: `CherryFlash`
@@ -482,8 +482,8 @@ This section captures the latest intro-direction request as an explicit delta to
   - multiple source posts that map to the same event;
   - multiple `/popular_posts` windows in the same run.
 - A mode-specific anti-repeat rule for the last `7` days.
-- Automatic scheduled publication of this mode to `@keniggpt`.
-- Explicit phase-1 rule that story autopublish is prepared but remains disabled.
+- Automatic scheduled publication of this mode.
+- Explicit rollout rule for the active mixed Telegram/VK story fanout.
 - A replacement intro/cover design direction for this mode.
 - A canonized `Мобильная лента` intro spec with strict shot-matching and an explicit handoff contract into `video_afisha`.
 
@@ -501,8 +501,8 @@ This section captures the latest intro-direction request as an explicit delta to
 - The active implementation target is now:
   - render the full CherryFlash release with `3D intro + 2..6` event scenes/posters on real data, followed by the canonical animated brand outro;
   - validate scheduled generation;
-  - validate phase-1 publication to `@keniggpt`;
-  - keep story autopublish code path disabled in this step.
+  - validate the mixed Telegram/VK fanout described in `Publication target`;
+  - keep `@keniggpt` only as a validation/debug fallback when story rollout is intentionally bypassed.
 
 ### Phase 1 rollout
 
@@ -510,8 +510,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - Use a dedicated CherryFlash schedule slot that is independently switchable from `/v tomorrow`.
 - Scheduler start time may be back-calculated from observed runtime, but the operational requirement is:
   - by `12:30 Europe/Kaliningrad` the current day's CherryFlash result is already published on its phase-1 target surface.
-- Publish final mp4 to `https://t.me/keniggpt`.
-- Do not publish stories yet.
+- Publish through the active mixed Telegram/VK fanout; `https://t.me/keniggpt` is no longer the active production destination.
 - This mode may include events not only for tomorrow/near future, but also clearly future events that already proved audience interest through source-post popularity.
 
 ### Output size
@@ -667,10 +666,17 @@ This section captures the latest intro-direction request as an explicit delta to
 
 ### Publication target
 
-- Phase 1 target channel: `@keniggpt` only.
-- Recommended safe routing for phase 1:
-  - configure this mode's publish destination to `@keniggpt`;
-  - do not auto-fanout to additional main channels yet.
+- Production publication is a mixed Telegram/VK fanout, not a single Telegram-only phase target.
+- The current ordered chain interleaves surfaces with 5-minute pauses so VK users do not wait for the whole Telegram fanout:
+  - upload primary Telegram story to `@kenigevents`;
+  - after `300` seconds publish the same video as a VK wall post in `https://vk.com/club231828790`;
+  - after `300` seconds repost the Telegram story to `@lovekenig`;
+  - after `300` seconds publish VK story in `https://vk.com/club231828790`;
+  - after `300` seconds repost the Telegram story to `@loving_guide39`;
+  - after `300` seconds publish VK story in `https://vk.com/klgdevents`;
+  - after `300` seconds repost the Telegram story to `@catwithbag`.
+- The two VK story targets therefore stay `600` seconds apart even though the overall queue alternates Telegram and VK every `300` seconds.
+- Telegram channel-story failures such as `BOOSTS_REQUIRED` must not abort CherryFlash publication for the rest of the surfaces. Business partner stories and VK publications are independent best-effort fanout targets and should continue even if the main Telegram channel lacks story boosts.
 
 ### Scheduler shape
 
@@ -696,15 +702,14 @@ This section captures the latest intro-direction request as an explicit delta to
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
   - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
-  - the shared helper treats the first ordered story target as the blocking gate for render/publish success; later repost/fanout targets are best-effort by default and must not cancel the run when only they hit `BOOSTS_REQUIRED` or another target-local error;
-  - the current CherryFlash story fanout is an ordered repost chain:
-    - first upload to `@kenigevents`;
-    - then after `600` seconds repost to `@lovekenig`;
-    - then after another `600` seconds repost to `@loving_guide39`;
-    - then after another `600` seconds repost to `@catwithbag`;
-    - then each configured encrypted Telegram Business target is posted through Bot API `postStory` after its own `600` second delay, without writing account usernames, user ids, or `business_connection_id` into code/docs/config artifacts.
+  - the shared helper supports `telethon`, `telegram_business`, `vk_wall`, and `vk_story` targets in one ordered queue;
+  - the mixed queue uses `300` second per-target delays and relies on target order to maintain the required `600` seconds between VK story publications;
+  - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall post; `vk_story` uploads via `stories.getVideoUploadServer` and finalizes with `stories.save`;
+  - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
+  - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
-  - Business targets are mandatory for a configured CherryFlash fanout: they must be marked `blocking=true` and `required=true`, and their encrypted Bot API secrets must be co-located with the session `story_publish.json` inside the same `cherryflash-session-*` dataset so Kaggle cannot preflight against stale static story secrets.
+  - Business targets are optional fanout for CherryFlash: missing boosts, missing rights, or a missing Business connection must be visible in the per-target report but must not prevent Telegram channel targets, VK wall posts, or VK stories from proceeding.
+  - Encrypted Bot API secrets must be co-located with the session `story_publish.json` inside the same `cherryflash-session-*` dataset so Kaggle cannot preflight against stale static story secrets.
   - Business story posts must pass Bot API `post_to_chat_page=true`; without it, Telegram can accept `postStory` and show an active story while not exposing it on the account page/profile story list in the expected way.
   - Kaggle story runtime startup must log enough non-secret matching evidence to diagnose publication fanout before render starts: config/cipher/key paths, target labels already present in `story_publish.json`, business target count, encrypted business secret count, and missing business connection hashes. Raw `business_connection_id`, Telegram user ids, bot tokens, and personal account handles must not be printed.
 - Sibling profile rule:
@@ -764,7 +769,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
-- [ ] Story autopublish publishes the current ordered fanout `@kenigevents -> @lovekenig -> @loving_guide39 -> @catwithbag -> encrypted Telegram Business targets` through the shared helper path, preserving `600` second spacing between all targets.
+- [ ] Story autopublish publishes the current mixed ordered fanout `@kenigevents -> VK wall club231828790 -> @lovekenig -> VK story club231828790 -> @loving_guide39 -> VK story klgdevents -> @catwithbag`, preserving `600` second spacing between the two VK story targets.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
 - [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 

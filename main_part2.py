@@ -3550,99 +3550,37 @@ async def build_daily_sections_vk(
             elif m == next_month(cur_month):
                 next_count += 1
 
-    processed_short_ids: set[int] = set()
-    for candidate in (*events_today, *events_new):
-        if (
-            candidate.ticket_link
-            and candidate.id is not None
-            and candidate.id not in processed_short_ids
-            and not (
-                candidate.vk_ticket_short_url and candidate.vk_ticket_short_key
-            )
-        ):
-            await ensure_vk_short_ticket_link(
-                candidate,
-                db,
-                vk_api_fn=_vk_api,
-            )
-            processed_short_ids.add(candidate.id)
+    def _city_name(event: Event) -> str:
+        raw_city = (event.city or "Калининград").strip()
+        return raw_city or "Калининград"
 
-    lines1 = [
-        f"\U0001f4c5 АНОНС на {format_day_pretty(today)} {today.year}",
-        DAYS_OF_WEEK[today.weekday()],
-        "",
-        "НЕ ПРОПУСТИТЕ СЕГОДНЯ",
-    ]
-    for e in events_today:
-        w_url = None
-        d = parse_iso_date(e.date)
-        if d and d.weekday() == 5:
-            w = weekend_map.get(d.isoformat())
-            if w:
-                w_url = w.vk_post_url
-        lines1.append(
-            format_event_vk(
-                e,
-                highlight=True,
-                weekend_url=w_url,
-                festival=fest_map.get((e.festival or "").casefold()),
+    def _append_compact_event(lines: list[str], event: Event) -> None:
+        lines.append(
+            format_event_vk_daily_inline(
+                event,
+                promo_highlight=event.id is not None and int(event.id) in promo_highlight_ids,
                 partner_creator_ids=partner_creator_ids,
-                prefer_vk_repost=True,
             )
         )
-        lines1.append(VK_EVENT_SEPARATOR)
-    if events_today:
-        lines1.pop()
-    link_lines: list[str] = []
-    if wpage and wpage.vk_post_url:
-        label = f"выходные {format_weekend_range(w_start)}"
-        prefix = f"(+{weekend_count}) " if weekend_count else ""
-        link_lines.append(f"{prefix}[{wpage.vk_post_url}|{label}]")
-    if week_cur:
-        label = month_name_nominative(cur_month)
-        prefix = f"(+{cur_count}) " if cur_count else ""
-        link_lines.append(f"{prefix}[{week_cur.vk_post_url}|{label}]")
-    if week_next:
-        label = month_name_nominative(next_month_str)
-        prefix = f"(+{next_count}) " if next_count else ""
-        link_lines.append(f"{prefix}[{week_next.vk_post_url}|{label}]")
-    if link_lines:
-        lines1.append(VK_EVENT_SEPARATOR)
-        lines1.extend(link_lines)
-    lines1.append(VK_EVENT_SEPARATOR)
-    lines1.append(
-        f"#Афиша_Калининград #кудапойти_Калининград #Калининград #39region #концерт #{today.day}{MONTHS[today.month - 1]}"
-    )
+
+    lines1 = ["НЕ ПРОПУСТИТЕ СЕГОДНЯ"]
+    for e in events_today:
+        _append_compact_event(lines1, e)
     section1 = "\n".join(lines1)
 
-    lines2 = [f"+{len(events_new)} ДОБАВИЛИ В АНОНС", VK_BLANK_LINE]
-    for e in events_new:
-        w_url = None
-        d = parse_iso_date(e.date)
-        if d and d.weekday() == 5:
-            w = weekend_map.get(d.isoformat())
-            if w:
-                w_url = w.vk_post_url
-        lines2.append(
-            format_event_vk(
-                e,
-                promo_highlight=e.id is not None and int(e.id) in promo_highlight_ids,
-                weekend_url=w_url,
-                festival=fest_map.get((e.festival or "").casefold()),
-                partner_creator_ids=partner_creator_ids,
-                prefer_vk_repost=True,
-            )
-        )
-        lines2.append(VK_EVENT_SEPARATOR)
-    if events_new:
-        lines2.pop()
-    if link_lines:
-        lines2.append(VK_EVENT_SEPARATOR)
-        lines2.extend(link_lines)
-    lines2.append(VK_EVENT_SEPARATOR)
-    lines2.append(
-        f"#события_Калининград #Калининград #39region #новое #фестиваль #{today.day}{MONTHS[today.month - 1]}"
-    )
+    lines2 = [f"+{len(events_new)} ДОБАВИЛИ В АНОНС"]
+    if len(events_new) > 9:
+        grouped: dict[str, list[Event]] = {}
+        for e in events_new:
+            grouped.setdefault(_city_name(e), []).append(e)
+        for city, events in grouped.items():
+            lines2.append("")
+            lines2.append(city.upper())
+            for e in events:
+                _append_compact_event(lines2, e)
+    else:
+        for e in events_new:
+            _append_compact_event(lines2, e)
     section2 = "\n".join(lines2)
 
     return section1, section2
@@ -3911,7 +3849,8 @@ async def sync_vk_source_post(
     append_text: bool = True,
 ) -> str | None:
     """Create or update VK source post for an event."""
-    if not VK_AFISHA_GROUP_ID:
+    target_group_id = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
+    if not target_group_id:
         return None
     logging.info("sync_vk_source_post start for event %s", event.id)
     festival = None
@@ -3924,25 +3863,19 @@ async def sync_vk_source_post(
 
     attachments: list[str] | None = None
     if VK_PHOTOS_ENABLED and event.photo_urls:
-        token = VK_TOKEN_AFISHA or VK_TOKEN
-        if token:
-            ids: list[str] = []
-            for url in event.photo_urls[:VK_MAX_ATTACHMENTS]:
-                photo_id = await upload_vk_photo(
-                    VK_AFISHA_GROUP_ID, url, db, bot, token=token, token_kind="group"
+        ids: list[str] = []
+        for url in event.photo_urls[:VK_MAX_ATTACHMENTS]:
+            photo_id = await upload_vk_photo(target_group_id, url, db, bot)
+            if photo_id:
+                ids.append(photo_id)
+            elif not VK_USER_TOKEN:
+                logging.info(
+                    "VK photo upload skipped: user token required",
+                    extra={"eid": event.id},
                 )
-                if photo_id:
-                    ids.append(photo_id)
-                elif not VK_USER_TOKEN:
-                    logging.info(
-                        "VK photo upload skipped: user token required",
-                        extra={"eid": event.id},
-                    )
-                    break
-            if ids:
-                attachments = ids
-        else:
-            logging.info("VK photo upload skipped: no group token")
+                break
+        if ids:
+            attachments = ids
 
     calendar_line_value: str | None = None
     previous_ics_url = event.ics_url
@@ -4050,7 +3983,7 @@ async def sync_vk_source_post(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
         url = await post_to_vk(
-            VK_AFISHA_GROUP_ID,
+            target_group_id,
             message,
             db,
             bot,
@@ -14108,7 +14041,6 @@ async def _vkrev_handle_repost(callback: types.CallbackQuery, event_id: int, db:
             params,
             db,
             bot,
-            token=VK_TOKEN_AFISHA,
             skip_captcha=True,
         )
         post = data.get("response", {}).get("post_id")
@@ -14473,17 +14405,15 @@ async def _vkrev_publish_shortpost(
         )
 
     if not photo_attachments and VK_PHOTOS_ENABLED and ev.photo_urls:
-        token = VK_TOKEN_AFISHA or VK_TOKEN
-        if token:
+        target_group_id = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
+        if target_group_id:
             uploaded: list[str] = []
             for url in ev.photo_urls[:VK_SHORTPOST_MAX_PHOTOS]:
                 photo_id = await upload_vk_photo(
-                    VK_AFISHA_GROUP_ID,
+                    target_group_id,
                     url,
                     db,
                     bot,
-                    token=token,
-                    token_kind="group",
                 )
                 if photo_id:
                     uploaded.append(photo_id)
@@ -14497,7 +14427,7 @@ async def _vkrev_publish_shortpost(
             photo_attachments.extend(uploaded)
         else:
             logging.info(
-                "shortpost_photo_upload_skipped gid=%s post=%s reason=no_token",
+                "shortpost_photo_upload_skipped gid=%s post=%s reason=no_target_group",
                 group_id,
                 post_id,
             )
@@ -14510,8 +14440,12 @@ async def _vkrev_publish_shortpost(
 
     attachments_str = ",".join(attachments) if attachments else None
 
+    target_group_id = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
+    if not target_group_id:
+        await bot.send_message(actor_chat_id, "❌ Не удалось: VK_EVENTS_GROUP_ID не задан")
+        return
     params = {
-        "owner_id": f"-{VK_AFISHA_GROUP_ID.lstrip('-')}",
+        "owner_id": f"-{target_group_id.lstrip('-')}",
         "from_group": 1,
         "message": message,
         "copyright": vk_url,
@@ -14532,7 +14466,7 @@ async def _vkrev_publish_shortpost(
         post = data.get("response", {}).get("post_id")
         if not post:
             raise RuntimeError("no post_id")
-        url = f"https://vk.com/wall-{VK_AFISHA_GROUP_ID.lstrip('-')}_{post}"
+        url = f"https://vk.com/wall-{target_group_id.lstrip('-')}_{post}"
         await vk_review.save_repost_url(db, event_id, url)
         await bot.send_message(actor_chat_id, f"✅ Опубликовано: {url}")
         if operator_chat and operator_chat != actor_chat_id:

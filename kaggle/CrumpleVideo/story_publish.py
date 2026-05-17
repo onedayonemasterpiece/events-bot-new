@@ -724,6 +724,209 @@ def _post_business_story(
     return result
 
 
+def _vk_token(auth: dict[str, Any]) -> str:
+    token = str(auth.get("vk_access_token") or "").strip()
+    if not token:
+        raise RuntimeError("VK access token is missing")
+    return token
+
+
+def _vk_api(
+    method: str,
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    **params: Any,
+) -> Any:
+    data = dict(params)
+    data["access_token"] = _vk_token(auth)
+    data["v"] = str(config.get("vk_api_version") or "5.199")
+    response = requests.post(
+        f"https://api.vk.com/method/{method}",
+        data=data,
+        timeout=60,
+    )
+    try:
+        payload = response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"VK {method} returned non-json status={response.status_code}"
+        ) from exc
+    if "error" in payload:
+        err = payload["error"] or {}
+        raise RuntimeError(
+            f"VK {method} failed code={err.get('error_code')} msg={err.get('error_msg')}"
+        )
+    return payload.get("response")
+
+
+def _vk_group_id(peer_ref: str, *, auth: dict[str, Any], config: dict[str, Any]) -> int:
+    raw = str(peer_ref or "").strip().lstrip("@/")
+    raw = raw.removeprefix("https://vk.com/").removeprefix("http://vk.com/")
+    raw = raw.removeprefix("vk.com/")
+    if raw.startswith("club") and raw[4:].isdigit():
+        return int(raw[4:])
+    if raw.startswith("public") and raw[6:].isdigit():
+        return int(raw[6:])
+    if raw.isdigit():
+        return int(raw)
+    resolved = _vk_api(
+        "utils.resolveScreenName",
+        auth=auth,
+        config=config,
+        screen_name=raw,
+    )
+    if not isinstance(resolved, dict) or resolved.get("type") != "group":
+        raise RuntimeError(f"VK target {peer_ref!r} did not resolve to a group")
+    return int(resolved["object_id"])
+
+
+def _vk_upload_video_attachment(
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    group_id: int,
+    media_path: Path,
+    name: str,
+    description: str,
+) -> str:
+    saved = _vk_api(
+        "video.save",
+        auth=auth,
+        config=config,
+        group_id=str(group_id),
+        name=name,
+        description=description,
+        wallpost="0",
+    )
+    if not isinstance(saved, dict) or not saved.get("upload_url"):
+        raise RuntimeError("VK video.save returned no upload_url")
+    with media_path.open("rb") as handle:
+        upload_response = requests.post(
+            str(saved["upload_url"]),
+            files={
+                "video_file": (
+                    media_path.name,
+                    handle,
+                    mimetypes.guess_type(str(media_path))[0] or "video/mp4",
+                )
+            },
+            timeout=600,
+        )
+    try:
+        upload_payload = upload_response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"VK video upload returned non-json status={upload_response.status_code}"
+        ) from exc
+    if upload_response.status_code >= 400 or "error" in upload_payload:
+        raise RuntimeError(f"VK video upload failed: {upload_payload}")
+    video_id = saved.get("video_id") or saved.get("vid") or saved.get("id")
+    owner_id = saved.get("owner_id")
+    if video_id is None or owner_id is None:
+        raise RuntimeError("VK video.save response missing owner_id/video_id")
+    attachment = f"video{owner_id}_{video_id}"
+    if saved.get("access_key"):
+        attachment += f"_{saved['access_key']}"
+    return attachment
+
+
+def _publish_vk_wall_video(
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    target_cfg: dict[str, Any],
+    media_path: Path,
+) -> dict[str, Any]:
+    group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
+    caption = str(target_cfg.get("caption") or config.get("caption") or "Видеоанонс").strip()
+    attachment = _vk_upload_video_attachment(
+        auth=auth,
+        config=config,
+        group_id=group_id,
+        media_path=media_path,
+        name=caption[:120] or "Видеоанонс",
+        description=caption,
+    )
+    response = _vk_api(
+        "wall.post",
+        auth=auth,
+        config=config,
+        owner_id=f"-{group_id}",
+        from_group="1",
+        signed="0",
+        message=caption,
+        attachments=attachment,
+    )
+    post_id = response.get("post_id") if isinstance(response, dict) else None
+    if post_id is None:
+        raise RuntimeError("VK wall.post returned no post_id")
+    return {
+        "group_id": group_id,
+        "post_id": int(post_id),
+        "post_url": f"https://vk.com/wall-{group_id}_{post_id}",
+        "attachment": attachment,
+    }
+
+
+def _publish_vk_story_video(
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    target_cfg: dict[str, Any],
+    media_path: Path,
+) -> dict[str, Any]:
+    group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
+    server = _vk_api(
+        "stories.getVideoUploadServer",
+        auth=auth,
+        config=config,
+        group_id=str(group_id),
+        add_to_news="1",
+    )
+    upload_url = server.get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        raise RuntimeError("VK stories.getVideoUploadServer returned no upload_url")
+    with media_path.open("rb") as handle:
+        upload_response = requests.post(
+            str(upload_url),
+            files={
+                "file": (
+                    media_path.name,
+                    handle,
+                    mimetypes.guess_type(str(media_path))[0] or "video/mp4",
+                )
+            },
+            timeout=600,
+        )
+    try:
+        upload_payload = upload_response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"VK story upload returned non-json status={upload_response.status_code}"
+        ) from exc
+    if upload_response.status_code >= 400 or "error" in upload_payload:
+        raise RuntimeError(f"VK story upload failed: {upload_payload}")
+    upload_result = (upload_payload.get("response") or {}).get("upload_result")
+    if not upload_result:
+        raise RuntimeError("VK story upload response missing upload_result")
+    saved = _vk_api(
+        "stories.save",
+        auth=auth,
+        config=config,
+        upload_results=upload_result,
+        extended="1",
+    )
+    items = saved.get("items") if isinstance(saved, dict) else None
+    item = items[0] if isinstance(items, list) and items else {}
+    return {
+        "group_id": group_id,
+        "story_id": item.get("id"),
+        "owner_id": item.get("owner_id"),
+        "expires_at": item.get("expires_at"),
+    }
+
+
 async def _story_targets_report(
     client: TelegramClient,
     *,
@@ -774,6 +977,40 @@ async def _story_targets_report(
             "ok": False,
         }
         try:
+            if transport in {"vk_story", "vk_wall"}:
+                group_id = _vk_group_id(peer_ref, auth=auth, config=config)
+                target_report["group_id"] = group_id
+                if media_path is not None:
+                    if transport == "vk_story":
+                        result = _publish_vk_story_video(
+                            auth=auth,
+                            config=config,
+                            target_cfg=target_cfg,
+                            media_path=media_path,
+                        )
+                        target_report.update(result)
+                        log(
+                            f"✅ VK story published to {label}"
+                            + (
+                                f" (story_id={target_report['story_id']})"
+                                if target_report.get("story_id") is not None
+                                else ""
+                            )
+                        )
+                    else:
+                        result = _publish_vk_wall_video(
+                            auth=auth,
+                            config=config,
+                            target_cfg=target_cfg,
+                            media_path=media_path,
+                        )
+                        target_report.update(result)
+                        log(f"✅ VK wall video published to {label}: {result['post_url']}")
+                else:
+                    log(f"✅ VK {transport} preflight passed for {label} (club{group_id})")
+                target_report["ok"] = True
+                report["targets"].append(target_report)
+                continue
             if transport == "telegram_business":
                 connection = _business_connection_for_target(auth, target_cfg)
                 if not connection:
@@ -936,12 +1173,8 @@ async def _story_targets_report(
         item for item in targets if item.get("blocking") or item.get("required")
     ]
     report["fanout_ok"] = bool(targets) and all(bool(item.get("ok")) for item in targets)
-    report["blocking_ok"] = bool(blocking_targets) and all(
-        bool(item.get("ok")) for item in blocking_targets
-    )
-    report["required_ok"] = bool(required_targets) and all(
-        bool(item.get("ok")) for item in required_targets
-    )
+    report["blocking_ok"] = all(bool(item.get("ok")) for item in blocking_targets)
+    report["required_ok"] = all(bool(item.get("ok")) for item in required_targets)
     report["partial_ok"] = bool(report["blocking_ok"]) and not bool(report["fanout_ok"])
     if phase == "preflight":
         report["ok"] = bool(report["blocking_ok"])

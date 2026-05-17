@@ -14,6 +14,7 @@
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
 - `docs/features/linked-events/README.md` — связанные события (серии “то же событие в другие даты” + UI «Другие даты»)
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
+- `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
 - `docs/features/festivals/README.md` — фестивали: серии/выпуски, очередь и связь с событиями
 - `docs/features/post-metrics/README.md` — статистика постов и популярность (TG/VK): медианы, уровни ⭐/👍, основа для ранжирования
