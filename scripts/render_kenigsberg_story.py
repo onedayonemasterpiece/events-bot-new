@@ -540,13 +540,9 @@ def poem_block_layout(
     return fnt, 36, 7, 18
 
 
-def draw_poem_block(
-    image: Image.Image,
+def _flatten_poem_groups(
     cue: dict[str, Any] | list[str],
-    *,
-    t: float,
-    scene_duration: float,
-) -> None:
+) -> tuple[list[str], set[int], str]:
     if isinstance(cue, dict):
         groups_raw = cue.get("groups")
         if not isinstance(groups_raw, list) or not groups_raw:
@@ -562,55 +558,81 @@ def draw_poem_block(
         cleaned = [str(line).strip() for line in group if str(line).strip()]
         if cleaned:
             groups.append(cleaned)
-    if not groups:
-        return
     flat: list[str] = []
     group_breaks: set[int] = set()
-    group_index_per_line: list[int] = []
     for gi, group in enumerate(groups):
         for line in group:
             flat.append(line)
-            group_index_per_line.append(gi)
-        if gi < len(groups) - 1:
+        if gi < len(groups) - 1 and flat:
             group_breaks.add(len(flat) - 1)
+    return flat, group_breaks, style
+
+
+def poem_line_y_positions(
+    line_count: int,
+    line_h: int,
+    gap: int,
+    group_extra: int,
+    group_breaks: set[int],
+    y0: int,
+) -> list[int]:
+    """Return the top-y for each line. Inter-group gap is inserted BEFORE the first
+    line of a new group (i.e. when ``idx - 1`` is in ``group_breaks``)."""
+    positions: list[int] = []
+    cursor = y0
+    for idx in range(line_count):
+        if (idx - 1) in group_breaks:
+            cursor += group_extra
+        positions.append(cursor)
+        cursor += line_h + (gap if idx < line_count - 1 else 0)
+    return positions
+
+
+def draw_poem_block(
+    image: Image.Image,
+    cue: dict[str, Any] | list[str],
+    *,
+    t: float,
+    scene_duration: float,
+) -> None:
+    flat, group_breaks, style = _flatten_poem_groups(cue)
+    if not flat:
+        return
     draw = ImageDraw.Draw(image, "RGBA")
     fnt, line_h, gap, group_extra = poem_block_layout(flat, draw, group_breaks=group_breaks)
-    extras = [group_extra if (idx - 1) in group_breaks else 0 for idx in range(len(flat))]
     block_h = (
         len(flat) * line_h
         + max(0, len(flat) - 1) * gap
-        + sum(extras)
+        + len({idx for idx in group_breaks if idx < len(flat) - 1}) * group_extra
     )
     x0 = 48
     y0 = int((H - block_h) * 0.46)
+    positions = poem_line_y_positions(len(flat), line_h, gap, group_extra, group_breaks, y0)
     is_title = style == "title"
     if is_title:
-        in_duration = min(0.32, max(0.12, scene_duration * 0.08))
-        out_start = max(0.85, scene_duration - 0.32)
-        out_duration = 0.24
+        fade_out_dur = 0.24
+        fade_out_start = max(0.0, scene_duration - fade_out_dur)
+        out_progress = max(0.0, min(1.0, (t - fade_out_start) / fade_out_dur)) if fade_out_dur > 0 else 0.0
     else:
         in_duration = min(0.58, max(0.24, scene_duration * 0.22))
         out_start = max(0.65, scene_duration - min(0.44, scene_duration * 0.18))
         out_duration = 0.28
-    cursor_y = y0
     for idx, line in enumerate(flat):
         if is_title:
-            in_p = ease_out_cubic(t / in_duration) if in_duration > 0 else 1.0
-            out_p = ease_in_cubic((t - out_start) / out_duration) if out_duration > 0 else 0.0
+            alpha = int(232 * (1.0 - out_progress))
             stripe_progress = 1.0
         else:
             local_delay = idx * 0.055
             in_p = ease_out_cubic((t - local_delay) / in_duration)
             out_p = ease_in_cubic((t - out_start - idx * 0.035) / out_duration)
             stripe_progress = max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p)))
-        alpha = int(232 * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
+            alpha = int(232 * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
         if alpha <= 0:
-            cursor_y += line_h + (gap if idx < len(flat) - 1 else 0) + extras[idx]
             continue
         text_w = int(draw.textlength(line, font=fnt))
         stripe_w = min(W - x0 - 34, text_w + 36)
-        visible_w = int(stripe_w * stripe_progress) if not is_title else stripe_w
-        y = cursor_y
+        visible_w = stripe_w if is_title else int(stripe_w * stripe_progress)
+        y = positions[idx]
         draw.rounded_rectangle(
             (x0, y, x0 + visible_w, y + line_h),
             radius=5,
@@ -621,7 +643,6 @@ def draw_poem_block(
             text_h = bbox[3] - bbox[1]
             text_y = int(y + (line_h - text_h) / 2 - bbox[1])
             draw.text((x0 + 18, text_y), line, font=fnt, fill=(16, 14, 14, min(255, alpha + 20)))
-        cursor_y += line_h + (gap if idx < len(flat) - 1 else 0) + extras[idx]
 
 
 def build_outro_strip(text: str, fnt: ImageFont.ImageFont, strip_height: int) -> Image.Image:
@@ -913,7 +934,8 @@ def build_poetry_text_cues(
     if not clean:
         return []
     signature = [str(line).strip() for line in (signature_lines or []) if str(line).strip()]
-    start_pad = 0.18
+    title_first = len(clean[0]) == 1
+    start_pad = 0.0 if title_first else 0.18
     end_pad = 0.18
     available = max(1.0, total_duration - start_pad - end_pad)
     weights = [max(8, sum(len(line) for line in block)) for block in clean]

@@ -337,11 +337,92 @@ def test_build_poetry_text_cues_marks_title_and_final_with_signature() -> None:
 
     assert cues[0]["style"] == "title"
     assert cues[0]["groups"] == [["Ich Liebe Königsberg"]]
+    assert cues[0]["start"] == 0.0
     assert cues[-1]["style"] == "final"
     assert cues[-1]["groups"] == [
         ["Здесь каждый дом построен на костях", "Мой Кёнигсберг"],
         ["Анна Грозовская", "врач скорой медицинской помощи"],
     ]
+
+
+def test_build_poetry_text_cues_normal_first_block_keeps_start_pad() -> None:
+    cues = renderer.build_poetry_text_cues(
+        [
+            ["Первая", "Вторая"],
+            ["Третья"],
+        ],
+        20.0,
+        voice_path=None,
+    )
+
+    assert cues[0]["style"] == "normal"
+    assert cues[0]["start"] > 0.0
+
+
+def test_poem_line_y_positions_inserts_extra_before_signature_group() -> None:
+    positions = renderer.poem_line_y_positions(
+        line_count=6,
+        line_h=50,
+        gap=8,
+        group_extra=24,
+        group_breaks={3},
+        y0=100,
+    )
+
+    # Quatrain (idx 0..3) is contiguous: each line is line_h+gap below the previous.
+    assert positions == [100, 158, 216, 274, 356, 414]
+    # Gap between last quatrain line (idx=3) and first signature line (idx=4)
+    # should include both the normal inter-line gap AND the extra group gap, NOT
+    # be a plain gap (which would visually glue the signature to the quatrain).
+    assert positions[4] - positions[3] == 50 + 8 + 24
+    # Within the signature group (idx=4 → 5) only the normal gap applies.
+    assert positions[5] - positions[4] == 50 + 8
+
+
+def test_poem_line_y_positions_no_group_break_is_uniform() -> None:
+    positions = renderer.poem_line_y_positions(
+        line_count=4,
+        line_h=40,
+        gap=6,
+        group_extra=20,
+        group_breaks=set(),
+        y0=0,
+    )
+
+    assert positions == [0, 46, 92, 138]
+
+
+def test_poem_line_y_positions_handles_three_line_signature() -> None:
+    positions = renderer.poem_line_y_positions(
+        line_count=7,
+        line_h=40,
+        gap=6,
+        group_extra=20,
+        group_breaks={3},
+        y0=0,
+    )
+
+    # 4 quatrain lines, then normal gap + group_extra inserted before the 3
+    # signature lines (line_h=40 + gap=6 + extra=20 = 66 between idx=3 and idx=4).
+    assert positions == [0, 46, 92, 138, 204, 250, 296]
+
+
+def test_draw_poem_title_block_is_visible_on_first_frame() -> None:
+    image = Image.new("RGBA", (renderer.W, renderer.H), (0, 0, 0, 255))
+    cue = {
+        "lines": ["Ich Liebe Königsberg"],
+        "groups": [["Ich Liebe Königsberg"]],
+        "style": "title",
+        "start": 0.0,
+        "end": 2.0,
+    }
+
+    renderer.draw_poem_block(image, cue, t=0.0, scene_duration=2.0)
+
+    # Sample the area where the title stripe lives; expect non-background pixels.
+    sample = image.crop((60, 0, renderer.W - 60, renderer.H)).convert("RGB")
+    non_black = sum(1 for px in sample.getdata() if px != (0, 0, 0))
+    assert non_black > 5000, "Title cue must be visible at t=0 (cover frame)"
 
 
 def test_renderer_pins_forced_dataset_for_poetry(tmp_path) -> None:
