@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-18-prod-startup-missing-partner-promo-module.md`
+  - Scope: `main_part2.py::create_app`, optional handler imports, Fly production startup, and `/healthz`.
+  - Must not regress: optional or unfinished feature modules such as partner promo must not be imported unconditionally from the production startup path; missing optional handlers must fail closed without taking down webhook serving.
 - `INC-2026-05-17-konb-cherryflash-test-story-preflight.md`
   - Scope: CherryFlash `partner_konb_library_001` test/prod publish targets, Telegram channel-post test delivery, and prevention of inherited global Telegram Business fanout.
   - Must not regress: КОНБ test mode must post the rendered video to `@keniggpt` as a normal Telegram channel post, not run Telegram channel story preflight; КОНБ test/prod modes must include only explicit КОНБ targets and must not inherit `setting.video_announce_story_business_targets`.

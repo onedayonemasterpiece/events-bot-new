@@ -14,6 +14,7 @@ backups/
 .codex/
 .gemini/
 .pytest_cache/
+.venv/
 video_announce/test_output/
 video_announce/test_afisha/
 tmp/

@@ -16882,12 +16882,26 @@ def create_app() -> web.Application:
         await process_request(callback, db, bot)
 
     async def partner_promo_cb_wrapper(callback: types.CallbackQuery):
-        from handlers.partner_promo_cmd import handle_partner_promo_callback
+        try:
+            from handlers.partner_promo_cmd import handle_partner_promo_callback
+        except ModuleNotFoundError as exc:
+            if exc.name not in {"handlers.partner_promo_cmd", "partner_promo"}:
+                raise
+            logging.error("partner_promo callback unavailable: %s", exc)
+            await callback.answer("Промо-кампании временно недоступны", show_alert=True)
+            return
 
         await handle_partner_promo_callback(callback, db, bot)
 
     async def partner_promo_reply_wrapper(message: types.Message):
-        from handlers.partner_promo_cmd import handle_partner_promo_reply
+        try:
+            from handlers.partner_promo_cmd import handle_partner_promo_reply
+        except ModuleNotFoundError as exc:
+            if exc.name not in {"handlers.partner_promo_cmd", "partner_promo"}:
+                raise
+            logging.error("partner_promo reply unavailable: %s", exc)
+            await bot.send_message(message.chat.id, "Промо-кампании временно недоступны")
+            return
 
         await handle_partner_promo_reply(message, db, bot)
 
@@ -17549,7 +17563,13 @@ def create_app() -> web.Application:
     dp.message.register(menu_wrapper, Command("menu"))
     dp.message.register(events_menu_wrapper, lambda m: m.text == MENU_EVENTS)
     dp.message.register(events_date_wrapper, lambda m: m.from_user.id in events_date_sessions)
-    from partner_promo import partner_promo_input_sessions as _ppromo_input_sessions
+    try:
+        from partner_promo import partner_promo_input_sessions as _ppromo_input_sessions
+    except ModuleNotFoundError as exc:
+        if exc.name != "partner_promo":
+            raise
+        logging.error("partner_promo input sessions unavailable: %s", exc)
+        _ppromo_input_sessions = ()
 
     dp.message.register(
         partner_promo_reply_wrapper,
