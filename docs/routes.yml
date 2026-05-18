@@ -212,6 +212,7 @@ features:
     status: mvp
     docs: docs/features/kenigsberg-stories/README.md
     thoughts: docs/features/kenigsberg-stories/thoughts.md
+    poems: docs/features/kenigsberg-stories/poems.md
     entrypoints:
       - main.py
       - main_part2.py

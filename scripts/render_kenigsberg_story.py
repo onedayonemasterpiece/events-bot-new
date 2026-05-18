@@ -31,6 +31,8 @@ H = 1280
 FPS = 30
 MAIN_DURATION = 18.0
 OUTRO_SCREEN_DURATION = 3.5
+STORY_MAX_DURATION = 60.0
+POETRY_MIN_OUTRO_SCREEN_DURATION = 1.8
 TRANSITION_FRAMES = 2
 WATERMARK_TEXT = "Мост в Кёнигсберг"
 OUTRO_BG = (0, 0, 0)
@@ -69,7 +71,14 @@ def log(message: str) -> None:
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, check=True, text=True, capture_output=True)
+    try:
+        return subprocess.run(cmd, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        if exc.stdout:
+            log(exc.stdout[-4000:])
+        if exc.stderr:
+            log(exc.stderr[-4000:])
+        raise
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -186,6 +195,33 @@ def iter_files(root: Path, exts: set[str]) -> list[Path]:
 def normalize_music_key(value: str) -> str:
     stem = Path(value).stem if Path(value).suffix else value
     return re.sub(r"[^0-9a-zа-яё]+", " ", stem.casefold()).strip()
+
+
+def normalize_media_match_key(value: str) -> str:
+    return re.sub(r"[^0-9a-zа-яё]+", " ", Path(str(value)).stem.casefold()).strip()
+
+
+def find_poem_voice_audio(input_root: Path, payload: dict[str, Any]) -> Path | None:
+    poem_id = str(payload.get("poem_audio") or payload.get("poem_id") or "").strip()
+    if not poem_id:
+        return None
+    expected = normalize_media_match_key(poem_id)
+    if not expected:
+        return None
+    candidates: list[Path] = []
+    for path in input_root.rglob("*") if input_root.exists() else []:
+        if not path.is_file() or path.suffix.casefold() not in AUDIO_EXTS:
+            continue
+        rel = path.relative_to(input_root).as_posix().casefold()
+        if "koenigsberg-music" in rel or "kenigsberg-music" in rel:
+            continue
+        key = normalize_media_match_key(path.name)
+        if expected == key or expected in key:
+            candidates.append(path)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (len(item.name), item.name))
+    return candidates[0]
 
 
 def parse_music_range_time(value: Any) -> float | None:
@@ -441,6 +477,73 @@ def draw_stripes(
         image.alpha_composite(Image.composite(text_layer, Image.new("RGBA", image.size), mask))
 
 
+def poem_block_layout(
+    lines: list[str],
+    draw: ImageDraw.ImageDraw,
+) -> tuple[ImageFont.ImageFont, int, int]:
+    max_width = W - 96
+    max_height = 690
+    clean = [line for line in lines if line.strip()]
+    for size in range(42, 23, -2):
+        fnt = font(size)
+        line_h = max(44, int(size * 1.34))
+        gap = max(8, int(size * 0.22))
+        total_h = len(clean) * line_h + max(0, len(clean) - 1) * gap
+        if total_h > max_height:
+            continue
+        if all(draw.textlength(line, font=fnt) <= max_width - 36 for line in clean):
+            return fnt, line_h, gap
+    fnt = font(24)
+    too_wide = [line for line in clean if draw.textlength(line, font=fnt) > max_width - 36]
+    if too_wide:
+        raise RuntimeError(
+            "Poetry line does not fit without wrapping at minimum font size: "
+            + json.dumps(too_wide[:3], ensure_ascii=False)
+        )
+    return fnt, 36, 7
+
+
+def draw_poem_block(
+    image: Image.Image,
+    lines: list[str],
+    *,
+    t: float,
+    scene_duration: float,
+) -> None:
+    clean = [line.strip() for line in lines if line.strip()]
+    if not clean:
+        return
+    draw = ImageDraw.Draw(image, "RGBA")
+    fnt, line_h, gap = poem_block_layout(clean, draw)
+    block_h = len(clean) * line_h + max(0, len(clean) - 1) * gap
+    x0 = 48
+    y0 = int((H - block_h) * 0.46)
+    in_duration = min(0.58, max(0.24, scene_duration * 0.22))
+    out_start = max(0.65, scene_duration - min(0.44, scene_duration * 0.18))
+    for idx, line in enumerate(clean):
+        local_delay = idx * 0.055
+        in_p = ease_out_cubic((t - local_delay) / in_duration)
+        out_p = ease_in_cubic((t - out_start - idx * 0.035) / 0.28)
+        alpha = int(232 * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
+        if alpha <= 0:
+            continue
+        text_w = int(draw.textlength(line, font=fnt))
+        stripe_w = min(W - x0 - 34, text_w + 36)
+        visible_w = int(stripe_w * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
+        y = y0 + idx * (line_h + gap)
+        draw.rounded_rectangle(
+            (x0, y, x0 + visible_w, y + line_h),
+            radius=5,
+            fill=(241, 228, 75, alpha),
+        )
+        if visible_w < text_w + 20:
+            continue
+        bbox = fnt.getbbox(line)
+        text_h = bbox[3] - bbox[1]
+        text_y = int(y + (line_h - text_h) / 2 - bbox[1])
+        draw.text((x0 + 18, text_y), line, font=fnt, fill=(16, 14, 14, min(255, alpha + 20)))
+
+
 def build_outro_strip(text: str, fnt: ImageFont.ImageFont, strip_height: int) -> Image.Image:
     bbox = fnt.getbbox(text)
     text_w = int(math.ceil(ImageDraw.Draw(Image.new("RGBA", (1, 1))).textlength(text, font=fnt)))
@@ -684,12 +787,98 @@ def build_text_cues(lines: list[str], total_duration: float) -> list[dict[str, A
     return cues
 
 
+def voice_pause_times(voice_path: Path | None, duration: float) -> list[float]:
+    if voice_path is None or librosa is None or np is None or not voice_path.exists():
+        return []
+    try:
+        y, sr = librosa.load(str(voice_path), sr=16000, mono=True, duration=duration)
+        if y is None or len(y) < sr:
+            return []
+        rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=256)[0]
+        times = librosa.frames_to_time(range(len(rms)), sr=sr, hop_length=256)
+        threshold = max(float(np.percentile(rms, 28)) * 1.12, float(np.max(rms)) * 0.055)
+        pauses: list[float] = []
+        start: float | None = None
+        for value, ts in zip(rms, times):
+            t = float(ts)
+            if float(value) <= threshold:
+                if start is None:
+                    start = t
+            elif start is not None:
+                if t - start >= 0.16:
+                    pauses.append(round((start + t) / 2.0, 3))
+                start = None
+        return [pause for pause in pauses if 0.5 <= pause <= duration - 0.5]
+    except Exception as exc:
+        log(f"Poetry voice pause analysis failed: {type(exc).__name__}: {exc}")
+        return []
+
+
+def _nearest_pause(target: float, pauses: list[float], *, min_t: float, max_t: float) -> float:
+    candidates = [pause for pause in pauses if min_t <= pause <= max_t and abs(pause - target) <= 0.9]
+    if not candidates:
+        return target
+    return min(candidates, key=lambda pause: abs(pause - target))
+
+
+def build_poetry_text_cues(
+    blocks: list[list[str]],
+    total_duration: float,
+    *,
+    voice_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    clean = [[str(line).strip() for line in block if str(line).strip()] for block in blocks]
+    clean = [block for block in clean if block]
+    if not clean:
+        return []
+    start_pad = 0.18
+    end_pad = 0.18
+    available = max(1.0, total_duration - start_pad - end_pad)
+    weights = [max(8, sum(len(line) for line in block)) for block in clean]
+    total_weight = float(sum(weights)) or 1.0
+    pauses = voice_pause_times(voice_path, total_duration)
+    cues: list[dict[str, Any]] = []
+    cursor = start_pad
+    for idx, (block, weight) in enumerate(zip(clean, weights)):
+        if idx == len(clean) - 1:
+            end = total_duration - end_pad
+        else:
+            target_end = cursor + available * (weight / total_weight)
+            min_end = cursor + 1.8
+            max_end = min(total_duration - end_pad - (len(clean) - idx - 1) * 1.55, target_end + 1.05)
+            end = _nearest_pause(target_end, pauses, min_t=min_end, max_t=max_end)
+        if end <= cursor:
+            end = min(total_duration - end_pad, cursor + 1.8)
+        cues.append(
+            {
+                "text": "\n".join(block),
+                "lines": block,
+                "start": round(cursor, 3),
+                "end": round(end, 3),
+            }
+        )
+        cursor = end + 0.08
+    return cues
+
+
 def text_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[str, float, float] | None:
     for cue in cues:
         start = float(cue.get("start") or 0.0)
         end = float(cue.get("end") or 0.0)
         if start <= timeline_t < end:
             return str(cue.get("text") or ""), timeline_t - start, max(0.1, end - start)
+    return None
+
+
+def poetry_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[list[str], float, float] | None:
+    for cue in cues:
+        start = float(cue.get("start") or 0.0)
+        end = float(cue.get("end") or 0.0)
+        if start <= timeline_t < end:
+            lines = cue.get("lines")
+            if not isinstance(lines, list):
+                lines = str(cue.get("text") or "").splitlines()
+            return [str(line) for line in lines], timeline_t - start, max(0.1, end - start)
     return None
 
 
@@ -769,11 +958,12 @@ def choose_music(
     rng: random.Random,
     *,
     recent_music: list[dict[str, Any]] | None = None,
+    total_duration: float | None = None,
 ) -> tuple[Path, float, float, dict[str, Any]]:
     tracks = iter_files(music_dir, AUDIO_EXTS)
     if not tracks:
         raise RuntimeError(f"No audio tracks found in {music_dir}")
-    total_duration = MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION
+    total_duration = float(total_duration or (MAIN_DURATION + 2 * OUTRO_SCREEN_DURATION))
     rng.shuffle(tracks)
     skipped: list[str] = []
     recent = _recent_music_items(recent_music or [])
@@ -1060,6 +1250,35 @@ def beat_slots(
     return slots, meta
 
 
+def poetry_timeline_plan(voice_audio: Path | None, payload: dict[str, Any]) -> tuple[float, list[dict[str, Any]], dict[str, Any]]:
+    if str(payload.get("content_mode") or "").strip() != "poetry":
+        return MAIN_DURATION, [
+            {"lines": ["МОСТ", "В КЁНИГСБЕРГ"], "duration": OUTRO_SCREEN_DURATION},
+            {"lines": ["ЗНАЙ ПРОШЛОЕ", "СТРОЙ БУДУЩЕЕ"], "duration": OUTRO_SCREEN_DURATION},
+        ], {"mode": "thought_default"}
+    if voice_audio is not None and voice_audio.exists():
+        main_duration = max(8.0, ffprobe_duration(voice_audio))
+    else:
+        blocks = payload.get("poem_blocks") if isinstance(payload.get("poem_blocks"), list) else []
+        line_count = sum(len(block) for block in blocks if isinstance(block, list))
+        main_duration = min(46.0, max(24.0, line_count * 2.2))
+    remaining = max(0.0, STORY_MAX_DURATION - main_duration)
+    outro_screens: list[dict[str, Any]] = []
+    if remaining >= POETRY_MIN_OUTRO_SCREEN_DURATION:
+        first_duration = min(OUTRO_SCREEN_DURATION, remaining)
+        outro_screens.append({"lines": ["МОСТ", "В КЁНИГСБЕРГ"], "duration": round(first_duration, 3)})
+        remaining -= first_duration
+    if remaining >= POETRY_MIN_OUTRO_SCREEN_DURATION + 0.2:
+        second_duration = min(OUTRO_SCREEN_DURATION, remaining)
+        outro_screens.append({"lines": ["ЗНАЙ ПРОШЛОЕ", "СТРОЙ БУДУЩЕЕ"], "duration": round(second_duration, 3)})
+    return round(main_duration, 3), outro_screens, {
+        "mode": "poetry",
+        "voice_audio": voice_audio.name if voice_audio else "",
+        "voice_duration": round(ffprobe_duration(voice_audio), 3) if voice_audio else 0.0,
+        "outro_screens": outro_screens,
+    }
+
+
 def normalize_source_bans(raw: Any, *, dataset_slug: str = "") -> dict[str, list[dict[str, Any]]]:
     if isinstance(raw, dict):
         return {
@@ -1261,8 +1480,24 @@ def render_frames(
     )
     main_duration = float(slots[-1][1]) if slots else MAIN_DURATION
     thought = str(payload.get("thought_text") or "").strip()
-    lines = payload_scene_lines(payload, thought, max(4, min(7, len(segments))))
-    text_cues = build_text_cues(lines, main_duration)
+    is_poetry = str(payload.get("content_mode") or "").strip() == "poetry"
+    if is_poetry:
+        raw_blocks = payload.get("poem_blocks") or []
+        blocks = [
+            [str(line).strip() for line in block if str(line).strip()]
+            for block in raw_blocks
+            if isinstance(block, list)
+        ]
+        lines = ["\n".join(block) for block in blocks]
+        voice_path_raw = str(payload.get("voice_audio_path") or "").strip()
+        text_cues = build_poetry_text_cues(
+            blocks,
+            main_duration,
+            voice_path=Path(voice_path_raw) if voice_path_raw else None,
+        )
+    else:
+        lines = payload_scene_lines(payload, thought, max(4, min(7, len(segments))))
+        text_cues = build_text_cues(lines, main_duration)
     log(
         "Story text: "
         + json.dumps(
@@ -1309,10 +1544,16 @@ def render_frames(
             with Image.open(source_frames[local_frame]) as src_image:
                 image = src_image.convert("RGBA")
             timeline_t = float(segment["timeline_start"]) + (local_frame / FPS)
-            active_text = text_cue_at(text_cues, timeline_t)
-            if active_text:
-                text, cue_t, cue_duration = active_text
-                draw_stripes(image, text, t=cue_t, scene_duration=cue_duration)
+            if is_poetry:
+                active_poem = poetry_cue_at(text_cues, timeline_t)
+                if active_poem:
+                    poem_lines, cue_t, cue_duration = active_poem
+                    draw_poem_block(image, poem_lines, t=cue_t, scene_duration=cue_duration)
+            else:
+                active_text = text_cue_at(text_cues, timeline_t)
+                if active_text:
+                    text, cue_t, cue_duration = active_text
+                    draw_stripes(image, text, t=cue_t, scene_duration=cue_duration)
             mask_bottom_source_strip(image, bottom_mask_px)
             draw_watermark(image)
             if seg_idx > 0:
@@ -1323,12 +1564,20 @@ def render_frames(
             image.convert("RGB").save(out_dir / f"frame_{frame_no:05d}.jpg", quality=92)
             frame_no += 1
         transition_tail = segment_tail
-    outro_screens = [
-        ["МОСТ", "В КЁНИГСБЕРГ"],
-        ["ЗНАЙ ПРОШЛОЕ", "СТРОЙ БУДУЩЕЕ"],
+    outro_screens = payload.get("outro_screens") or [
+        {"lines": ["МОСТ", "В КЁНИГСБЕРГ"], "duration": OUTRO_SCREEN_DURATION},
+        {"lines": ["ЗНАЙ ПРОШЛОЕ", "СТРОЙ БУДУЩЕЕ"], "duration": OUTRO_SCREEN_DURATION},
     ]
-    for lines_for_screen in outro_screens:
-        total = int(OUTRO_SCREEN_DURATION * FPS)
+    for screen in outro_screens:
+        if isinstance(screen, dict):
+            lines_for_screen = [str(line) for line in screen.get("lines") or []]
+            screen_duration = float(screen.get("duration") or OUTRO_SCREEN_DURATION)
+        else:
+            lines_for_screen = [str(line) for line in screen]
+            screen_duration = OUTRO_SCREEN_DURATION
+        if not lines_for_screen or screen_duration <= 0:
+            continue
+        total = max(1, int(screen_duration * FPS))
         for i in range(total):
             image = draw_cherryflash_outro_screen(
                 i / FPS,
@@ -1342,30 +1591,79 @@ def render_frames(
     return segments
 
 
-def encode_video(frames_dir: Path, music: Path, music_start: float, total_duration: float, out_path: Path) -> None:
+def encode_video(
+    frames_dir: Path,
+    music: Path,
+    music_start: float,
+    total_duration: float,
+    out_path: Path,
+    *,
+    voice_audio: Path | None = None,
+    main_duration: float | None = None,
+    voice_music_gain: float = 0.08,
+) -> None:
     audio_tmp = out_path.parent / "_kenigsberg_audio.m4a"
-    run(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            str(music_start),
-            "-t",
-            str(total_duration),
-            "-i",
-            str(music),
-            "-vn",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            str(audio_tmp),
-        ]
-    )
+    if voice_audio is not None and voice_audio.exists():
+        voice_duration = float(main_duration or ffprobe_duration(voice_audio) or total_duration)
+        safe_music_gain = max(0.0, min(float(voice_music_gain), 0.12))
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                str(music_start),
+                "-t",
+                str(total_duration),
+                "-i",
+                str(music),
+                "-i",
+                str(voice_audio),
+                "-filter_complex",
+                (
+                    f"[0:a]volume={safe_music_gain:.3f},atrim=0:"
+                    f"{total_duration:.3f},asetpts=PTS-STARTPTS[m];"
+                    "[1:a]loudnorm=I=-16:TP=-2.0:LRA=9,"
+                    f"atrim=0:{voice_duration:.3f},asetpts=PTS-STARTPTS[v];"
+                    "[m][v]amix=inputs=2:duration=longest:dropout_transition=0,"
+                    "alimiter=limit=0.96[a]"
+                ),
+                "-map",
+                "[a]",
+                "-vn",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                str(audio_tmp),
+            ]
+        )
+    else:
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                str(music_start),
+                "-t",
+                str(total_duration),
+                "-i",
+                str(music),
+                "-vn",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                str(audio_tmp),
+            ]
+        )
     run(
         [
             "ffmpeg",
@@ -1433,6 +1731,9 @@ def main() -> None:
     payload = json.loads((session_root / "payload.json").read_text(encoding="utf-8"))
     seed = int(payload.get("seed") or 1)
     rng = random.Random(seed)
+    voice_audio = find_poem_voice_audio(input_root, payload)
+    main_duration_target, outro_screens, timeline_meta = poetry_timeline_plan(voice_audio, payload)
+    total_duration_target = main_duration_target + sum(float(screen.get("duration") or 0.0) for screen in outro_screens)
     video_dir, period_key, dataset_slug = choose_video_dataset(input_root, rng)
     log(f"Selected video dataset: period={period_key} path={video_dir}")
     mounted_video_files = iter_files(video_dir, VIDEO_EXTS)
@@ -1445,6 +1746,7 @@ def main() -> None:
         music_dir,
         rng,
         recent_music=payload.get("recent_music") or [],
+        total_duration=total_duration_target,
     )
     log(
         "Selected music: "
@@ -1459,7 +1761,7 @@ def main() -> None:
         f"skipped_audio={music_meta.get('skipped_audio_count')}"
     )
     rhythm_slots, rhythm_meta = beat_slots(
-        MAIN_DURATION,
+        main_duration_target,
         rng,
         music_path=music,
         music_start=music_start,
@@ -1470,12 +1772,32 @@ def main() -> None:
     render_payload = dict(payload)
     render_payload["dataset"] = dataset_slug
     render_payload["rhythm_meta"] = rhythm_meta
+    render_payload["outro_screens"] = outro_screens
+    render_payload["voice_audio_path"] = str(voice_audio) if voice_audio else ""
     segments = render_frames(render_payload, video_dir, frames_dir, rng, rhythm_slots)
     main_duration = float(render_payload.get("main_duration") or MAIN_DURATION)
-    total_duration = main_duration + 2 * OUTRO_SCREEN_DURATION
+    total_duration = main_duration + sum(float(screen.get("duration") or 0.0) for screen in outro_screens)
     music_meta["selected_end"] = round(music_start + total_duration, 3)
+    voice_music_gain = 0.08
+    if voice_audio is not None and voice_audio.exists():
+        music_voice_risk = float(music_meta.get("voice_risk") or 0.0)
+        selection_tier = str(music_meta.get("music_selection_tier") or "")
+        if music_voice_risk >= 0.68 or "emergency" in selection_tier:
+            voice_music_gain = 0.045
+        elif music_voice_risk >= 0.58:
+            voice_music_gain = 0.06
+    music_meta["voice_mix_music_gain"] = voice_music_gain
     out_path = working / "kenigsberg_story_final.mp4"
-    encode_video(frames_dir, music, music_start, total_duration, out_path)
+    encode_video(
+        frames_dir,
+        music,
+        music_start,
+        total_duration,
+        out_path,
+        voice_audio=voice_audio,
+        main_duration=main_duration,
+        voice_music_gain=voice_music_gain,
+    )
     preview_frames = export_preview_frames(frames_dir, working)
     frame_count = len(list(frames_dir.glob("frame_*.jpg")))
     shutil.rmtree(frames_dir, ignore_errors=True)
@@ -1494,6 +1816,16 @@ def main() -> None:
             "end_is_track_end": music_meta.get("allowed_end_is_track_end"),
         },
         "music_voice_risk": music_meta.get("voice_risk"),
+        "voice_mix_music_gain": music_meta.get("voice_mix_music_gain"),
+        "content_mode": str(payload.get("content_mode") or "thought"),
+        "poetry_mode": str(payload.get("poetry_mode") or ""),
+        "poem_id": str(payload.get("poem_id") or ""),
+        "poem_title": str(payload.get("poem_title") or ""),
+        "poem_author": str(payload.get("poem_author") or ""),
+        "poem_handle": str(payload.get("poem_handle") or ""),
+        "voice_audio_file": voice_audio.name if voice_audio else "",
+        "timeline_plan": timeline_meta,
+        "outro_screens": outro_screens,
         "music_selection": {
             "score": music_meta.get("music_selection_score"),
             "tier": music_meta.get("music_selection_tier"),
@@ -1508,6 +1840,7 @@ def main() -> None:
             "overlaps_recent": music_meta.get("overlaps_recent"),
             "range_manifest_loaded": music_meta.get("range_manifest_loaded"),
             "skipped_audio_count": music_meta.get("skipped_audio_count"),
+            "voice_mix_music_gain": music_meta.get("voice_mix_music_gain"),
         },
         "total_duration": total_duration,
         "main_duration": main_duration,
@@ -1535,6 +1868,7 @@ def main() -> None:
             "video_count": len(mounted_video_files),
             "video_files_sample": [path.name for path in mounted_video_files[:30]],
         },
+        "timeline_plan": timeline_meta,
         "selected_music": {
             "file": music.name,
             "path": str(music),
@@ -1561,8 +1895,11 @@ def main() -> None:
             "overlaps_recent": music_meta.get("overlaps_recent"),
             "range_manifest_loaded": music_meta.get("range_manifest_loaded"),
             "skipped_audio_count": music_meta.get("skipped_audio_count"),
+            "voice_mix_music_gain": music_meta.get("voice_mix_music_gain"),
         },
         "text": {
+            "content_mode": str(payload.get("content_mode") or "thought"),
+            "poem_id": str(payload.get("poem_id") or ""),
             "thought_id": manifest["thought_id"],
             "thought_text": manifest["thought_text"],
             "hook": manifest["hook"],
@@ -1606,6 +1943,7 @@ def main() -> None:
             {
                 "period": period_key,
                 "music": music.name,
+                "voice_audio": voice_audio.name if voice_audio else "",
                 "music_start": music_start,
                 "music_end": music_meta.get("selected_end"),
                 "music_allowed_range": manifest["music_allowed_range"],

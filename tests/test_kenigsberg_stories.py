@@ -9,11 +9,14 @@ from PIL import Image
 from handlers import admin_assist_cmd, kenigsberg_stories_cmd
 from kenigsberg_stories.state import (
     SecondRange,
+    choose_next_poem,
     choose_next_thought,
     format_bans_report,
     load_state,
+    load_poems,
     map_generated_range_to_source,
     parse_second_ranges,
+    poetry_due,
     recent_music_exclusions,
     recent_source_exclusions,
     register_issue_manifest,
@@ -231,6 +234,103 @@ def test_kenigsberg_command_canonicalizes_bans_list_args() -> None:
     assert kenigsberg_stories_cmd._canonicalize_ban_args("покажи список банов") == "bans"
 
 
+def test_load_poems_parses_blocks_and_metadata(tmp_path) -> None:
+    path = tmp_path / "poems.md"
+    path.write_text(
+        """# Poems
+
+## poem-1
+title: Ich Liebe Königsberg
+author: Анна Грозовская
+author_note: врач скорой медицинской помощи
+handle: @agrozovskaya
+audio: poem-1
+
+```poem
+Ich Liebe Königsberg
+
+Первая строка
+Вторая строка
+
+Анна Грозовская
+@agrozovskaya
+```
+""",
+        encoding="utf-8",
+    )
+
+    poems = load_poems(path)
+
+    assert poems[0]["id"] == "poem-1"
+    assert poems[0]["title"] == "Ich Liebe Königsberg"
+    assert poems[0]["handle"] == "@agrozovskaya"
+    assert poems[0]["blocks"] == [
+        ["Ich Liebe Königsberg"],
+        ["Первая строка", "Вторая строка"],
+        ["Анна Грозовская", "@agrozovskaya"],
+    ]
+
+
+def test_poetry_test_targets_use_keniggpt_chat_post() -> None:
+    targets = kenigsberg_stories_cmd._kenigsberg_story_targets(poetry_test=True)
+
+    assert targets == [
+        {
+            "peer": "@keniggpt",
+            "transport": "telegram_chat",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "blocking": True,
+            "required": True,
+            "label": "@keniggpt",
+        }
+    ]
+
+
+def test_poetry_vk_wall_target_is_best_effort() -> None:
+    targets = kenigsberg_stories_cmd._kenigsberg_story_targets(
+        poetry_vk_caption="hook\n\n@author\n\n#Kenigsberg"
+    )
+
+    wall = targets[-1]
+    assert wall["peer"] == "mostvkenig"
+    assert wall["transport"] == "vk_wall"
+    assert wall["blocking"] is False
+    assert wall["required"] is False
+    assert wall["caption"] == "hook\n\n@author\n\n#Kenigsberg"
+
+
+def test_renderer_matches_actual_poem_audio_filename(tmp_path) -> None:
+    input_root = tmp_path / "input"
+    audio_dir = input_root / "kenigsberg-audio"
+    audio_dir.mkdir(parents=True)
+    voice = audio_dir / "-poem-1-enhanced-v2.mp3"
+    voice.write_bytes(b"stub")
+    (input_root / "koenigsberg-music").mkdir()
+
+    found = renderer.find_poem_voice_audio(
+        input_root,
+        {"content_mode": "poetry", "poem_id": "poem-1", "poem_audio": "poem-1"},
+    )
+
+    assert found == voice
+
+
+def test_poetry_timeline_keeps_first_outro_for_55s_voice(monkeypatch, tmp_path) -> None:
+    voice = tmp_path / "-poem-1-enhanced-v2.mp3"
+    voice.write_bytes(b"stub")
+    monkeypatch.setattr(renderer, "ffprobe_duration", lambda path: 55.0)
+
+    main_duration, outro_screens, meta = renderer.poetry_timeline_plan(
+        voice,
+        {"content_mode": "poetry", "poem_blocks": [["a"], ["b"]]},
+    )
+
+    assert main_duration == 55.0
+    assert outro_screens == [{"lines": ["МОСТ", "В КЁНИГСБЕРГ"], "duration": 3.5}]
+    assert meta["voice_duration"] == 55.0
+
+
 def test_kenigsberg_text_split_retry_delays_are_bounded(monkeypatch) -> None:
     monkeypatch.setenv("KENIGSBERG_STORIES_TEXT_SPLIT_RETRY_DELAYS_SEC", "1, 4, bad, 99")
 
@@ -253,7 +353,7 @@ async def test_kenigsberg_launch_command_acknowledges_before_background(monkeypa
     async def fake_require_superadmin(message):  # noqa: ANN001
         return True
 
-    async def fake_background(message):  # noqa: ANN001
+    async def fake_background(message, **kwargs):  # noqa: ANN001, ARG001
         background_started.set()
 
     monkeypatch.setattr(kenigsberg_stories_cmd, "_require_superadmin", fake_require_superadmin)
@@ -520,6 +620,71 @@ async def test_reset_recent_usage_windows_preserves_bans_and_issue_history(tmp_p
     assert reset_state["recent_usage_reset_at"]
     assert recent_source_exclusions(loaded) == []
     assert recent_music_exclusions(loaded) == []
+
+
+@pytest.mark.asyncio
+async def test_poetry_test_manifest_does_not_consume_pending_poem(tmp_path) -> None:
+    class RawConn:
+        def __init__(self, outer):
+            self.outer = outer
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def execute(self, query, params=()):
+            if query.lstrip().upper().startswith("SELECT"):
+                return SimpleNamespace(fetchone=lambda: self.outer._fetchone())
+            key, value = params
+            self.outer.store[key] = value
+            return SimpleNamespace(fetchone=lambda: None)
+
+        async def commit(self):
+            return None
+
+    class FakeDb:
+        def __init__(self):
+            self.store = {}
+
+        def raw_conn(self):
+            return RawConn(self)
+
+        async def _fetchone(self):
+            value = self.store.get("kenigsberg_stories_state")
+            return (value,) if value is not None else None
+
+    db = FakeDb()
+    await save_state(
+        db,
+        {
+            "version": 1,
+            "next_issue": 1,
+            "pending_poem_id": "poem-1",
+            "used_poem_ids": [],
+            "issues": {},
+            "source_bans": [],
+        },
+    )
+
+    await register_issue_manifest(
+        db,
+        {
+            "issue_number": 7,
+            "content_mode": "poetry",
+            "poetry_mode": "test",
+            "poem_id": "poem-1",
+            "music_file": "The Promise.flac",
+            "music_start": 402,
+            "music_end": 460,
+        },
+    )
+
+    state = await load_state(db)
+    assert state["pending_poem_id"] == "poem-1"
+    assert state["used_poem_ids"] == []
+    assert not state.get("last_poetry_success_at")
 
 
 def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:

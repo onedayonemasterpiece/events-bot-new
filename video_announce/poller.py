@@ -1088,7 +1088,6 @@ async def run_kernel_poller(
         story_report_path = _find_story_report(output_files)
         story_report = _load_story_report(story_report_path)
         await _persist_partner_story_metadata(db, session_obj, story_report)
-        await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         if not video_path:
             logger.warning(
                 "video_announce: no video in output session=%s files=%s",
@@ -1210,6 +1209,7 @@ async def run_kernel_poller(
                     caption=f"⚠️ Story publish report сессии #{session_obj.id}",
                 )
             return
+        await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         target_test = test_chat_id or notify_chat_id
         try:
             await _send_video_with_preview(bot, target_test, video_path, caption=caption)

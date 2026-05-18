@@ -10,7 +10,8 @@
   "dataset_sources": [
     "zigomaro/koenigsberg19191940",
     "zigomaro/koenigsberg-winter",
-    "zigomaro/koenigsberg-music"
+    "zigomaro/koenigsberg-music",
+    "zigomaro/kenigsberg-audio"
   ],
   "competition_sources": [],
   "kernel_sources": [],

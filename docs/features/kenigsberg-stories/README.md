@@ -71,6 +71,27 @@ Allowed instrumental ranges are hard constraints for the full encoded story, inc
 
 Пул должен работать как shuffle-bag: мысль не повторяется, пока все мысли не были использованы. После полного цикла bag сбрасывается и начинается новый круг. Мысль считается использованной только после успешной регистрации `kenigsberg_issue_manifest.json`; failed Kaggle launch/render не должен вынимать мысль из пула.
 
+### Poetry source
+
+Канонический список стихов: `docs/features/kenigsberg-stories/poems.md`.
+
+Poetry-выпуски используют тот же `/kenigsberg` pipeline, но с `content_mode=poetry`:
+
+- `/kenigsberg --poetry-test` — принудительный poetry-рендер с публикацией готового MP4 в тестовый Telegram target `@keniggpt` через `transport=telegram_chat`; test-run не помечает стих использованным и не двигает production cadence, чтобы следующий production run мог взять тот же `pending_poem_id`;
+- `/kenigsberg --poetry-today` — принудительный production poetry-выпуск сейчас, с теми же production fanout targets, что и scheduled `/kenigsberg`;
+- scheduled `/kenigsberg` берёт стих автоматически, если с последнего успешного poetry issue прошло `KENIGSBERG_POETRY_INTERVAL_DAYS` (default `3`) или если в state есть `pending_poem_id` после сорванной попытки; если стихов нет, pipeline возвращается к обычному thoughts issue.
+
+`poems.md` хранит один или несколько блоков `## poem-N` с metadata (`title`, `author`, `author_note`, `handle`, `audio`) и fenced `poem` text. Пустые строки внутри fenced text задают экранные блоки. Строки внутри блока не переносятся: renderer подбирает размер шрифта под самую длинную строку и fail-closed, если строка не помещается даже на минимальном размере. Последняя строка-упоминание вида `@...` не попадает на видео, но сохраняется в VK caption.
+
+Poetry voice-over lives in Kaggle dataset `zigomaro/kenigsberg-audio`. Renderer matches voice files by normalized poem id, so `audio: poem-1` matches actual dataset names like `-poem-1-enhanced-v2.mp3`.
+
+When voice-over exists:
+
+- main video duration follows the voice duration;
+- text cues are distributed across poem blocks by text weight and adjusted to nearby voice pauses when `librosa` can detect them;
+- background music stays inside the existing instrumental whitelist, is selected with the same voice-risk diagnostics, and is mixed under the voice with very low adaptive gain after voice loudness normalization (`voice_risk` / emergency music pools lower the gain further);
+- total story duration is capped under Telegram's native story `60s` guard. If a 55s voice-over leaves room for only one outro, the renderer keeps the first `МОСТ / В КЁНИГСБЕРГ` outro screen and drops the second slogan screen.
+
 ## Reuse from CherryFlash
 
 MVP должен быть sibling product к CherryFlash, а не новым независимым механизмом.
@@ -360,6 +381,7 @@ Debug phase uses Kaggle GPU. After the rendering path is stable, production shou
 Testing:
 
 - historical MVP tests published generated MP4s to `@keniggpt`;
+- `/kenigsberg --poetry-test` publishes the poetry MP4 to `@keniggpt` as a Telegram chat post and does not fan out to production targets;
 - current manual `/kenigsberg` uses the same production story publishing path as the scheduler and sends operational copies/logs only to the operator/superadmin chat.
 
 Production:
@@ -372,6 +394,7 @@ Production:
 - the required production story target is `@mostvkenig` with `fallback_peer=me`: the shared Kaggle story helper first attempts to publish the story as the channel `@mostvkenig` (so reposts show the channel as the author) and, if that attempt raises (e.g. Telegram returns `BOOSTS_REQUIRED` because channel-native story rights are not yet available), the helper transparently retries the same upload against `peer=me`. Either outcome counts as a successful blocking/required publish, and the resulting story id is what downstream `repost_previous` targets forward from;
 - after the primary story is live, the Kaggle helper reposts it to `@loving_guide39` and `@jane_tour39` as best-effort `repost_previous` targets with `600` second spacing (matching the CherryFlash fanout cadence); failures there do not block render/publish;
 - the same generated story is also published as a VK community story to `vk.com/mostvkenig` (`transport=vk_story`, `peer=mostvkenig`) `120` seconds after the primary Telegram publish. The VK target is intentionally `blocking=false, required=false`: failure (missing VK admin rights, VK rejecting the upload, etc.) is logged in `story_publish_report.json` but must not gate or fail the Telegram publish. The VK story uses the same encrypted runtime bundle as CherryFlash KONB (`VK_ACCESS_TOKEN5`, no new env), reusing the upload path validated by `kaggle/CrumpleVideo/story_publish.py` (`stories.getVideoUploadServer` → upload → `stories.save`).
+- poetry production issues additionally publish the same MP4 as a VK community wall post to `vk.com/mostvkenig` (`transport=vk_wall`, `peer=mostvkenig`, best-effort). The wall caption is generated from the poem and author as a short 10-16 word hook, then author lines, then fixed tags: `#Kenigsberg #Königsberg #NeuroKönigsberg #МоствКёнигсберг #Кёнигсберг`.
 - Kenigsberg must not use the shared Business story allowlist from video announcements. This is a separate history-channel product, not a partner video-announcement fanout; `story_business_targets` is forced to an empty list in code.
 - keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
 - never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.

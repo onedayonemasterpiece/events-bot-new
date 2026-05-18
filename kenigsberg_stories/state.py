@@ -12,6 +12,7 @@ from typing import Any
 KENIGSBERG_PROFILE_KEY = "kenigsberg_story"
 STATE_SETTING_KEY = "kenigsberg_stories_state"
 THOUGHTS_PATH = Path("docs/features/kenigsberg-stories/thoughts.md")
+POEMS_PATH = Path("docs/features/kenigsberg-stories/poems.md")
 
 _RANGE_TOKEN_RE = re.compile(r"(?<!\d)(\d+(?:[.,]\d+)?)(?:\s*[-–—]\s*(\d+(?:[.,]\d+)?))?(?!\d)")
 
@@ -34,6 +35,9 @@ def _empty_state() -> dict[str, Any]:
         "version": 1,
         "next_issue": 1,
         "used_thought_ids": [],
+        "used_poem_ids": [],
+        "pending_poem_id": None,
+        "last_poetry_success_at": None,
         "recent_music": [],
         "recent_sources": [],
         "recent_usage_reset_at": None,
@@ -91,6 +95,7 @@ async def load_state(db: Any) -> dict[str, Any]:
     state.update(data)
     state["issues"] = state.get("issues") if isinstance(state.get("issues"), dict) else {}
     state["source_bans"] = state.get("source_bans") if isinstance(state.get("source_bans"), list) else []
+    state["used_poem_ids"] = state.get("used_poem_ids") if isinstance(state.get("used_poem_ids"), list) else []
     return state
 
 
@@ -257,6 +262,81 @@ def load_thoughts(path: Path = THOUGHTS_PATH) -> list[dict[str, str]]:
     return thoughts
 
 
+def _parse_poem_block(block: list[str]) -> dict[str, Any] | None:
+    if not block:
+        return None
+    header = block[0].strip()
+    match = re.match(r"^##\s+([A-Za-z0-9_-]+)\s*$", header)
+    if not match:
+        return None
+    poem_id = match.group(1).strip()
+    meta: dict[str, str] = {}
+    body_lines: list[str] = []
+    in_body = False
+    for raw_line in block[1:]:
+        line = raw_line.rstrip()
+        if line.strip() == "```poem":
+            in_body = True
+            continue
+        if line.strip() == "```" and in_body:
+            in_body = False
+            continue
+        if in_body:
+            body_lines.append(line)
+            continue
+        key_match = re.match(r"^([a-zA-Z_]+):\s*(.*?)\s*$", line)
+        if key_match:
+            meta[key_match.group(1).casefold()] = key_match.group(2)
+    while body_lines and not body_lines[0].strip():
+        body_lines.pop(0)
+    while body_lines and not body_lines[-1].strip():
+        body_lines.pop()
+    if not body_lines:
+        return None
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    for line in body_lines:
+        clean = line.strip()
+        if not clean:
+            if current:
+                blocks.append(current)
+                current = []
+            continue
+        current.append(clean)
+    if current:
+        blocks.append(current)
+    body_text = "\n".join(body_lines).strip()
+    return {
+        "id": poem_id,
+        "title": meta.get("title", ""),
+        "author": meta.get("author", ""),
+        "author_note": meta.get("author_note", ""),
+        "handle": meta.get("handle", ""),
+        "audio": meta.get("audio", poem_id),
+        "body": body_text,
+        "blocks": blocks,
+    }
+
+
+def load_poems(path: Path = POEMS_PATH) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    poems: list[dict[str, Any]] = []
+    block: list[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if raw_line.startswith("## "):
+            poem = _parse_poem_block(block)
+            if poem:
+                poems.append(poem)
+            block = [raw_line]
+        elif block:
+            block.append(raw_line)
+    poem = _parse_poem_block(block)
+    if poem:
+        poems.append(poem)
+    return poems
+
+
 async def reserve_issue_number(db: Any) -> int:
     state = await load_state(db)
     issue_number = int(state.get("next_issue") or 1)
@@ -276,6 +356,56 @@ async def choose_next_thought(db: Any, *, thoughts_path: Path = THOUGHTS_PATH) -
         available = list(thoughts)
     index = secrets.randbelow(len(available))
     return available[index]
+
+
+def _find_poem_by_id(poems: list[dict[str, Any]], poem_id: str | None) -> dict[str, Any] | None:
+    target = str(poem_id or "").strip()
+    if not target:
+        return None
+    for poem in poems:
+        if str(poem.get("id") or "").strip() == target:
+            return poem
+    return None
+
+
+async def choose_next_poem(db: Any, *, poems_path: Path = POEMS_PATH) -> dict[str, Any] | None:
+    poems = load_poems(poems_path)
+    if not poems:
+        return None
+    state = await load_state(db)
+    pending = _find_poem_by_id(poems, str(state.get("pending_poem_id") or ""))
+    if pending:
+        return pending
+    used = {str(item) for item in (state.get("used_poem_ids") or [])}
+    available = [item for item in poems if str(item.get("id") or "") not in used]
+    if not available:
+        available = list(poems)
+        used = set()
+    index = secrets.randbelow(len(available))
+    selected = available[index]
+    state["pending_poem_id"] = selected.get("id")
+    if not available or not used:
+        state["used_poem_ids"] = [item for item in state.get("used_poem_ids", []) if item in used]
+    await save_state(db, state)
+    return selected
+
+
+def poetry_due(state: dict[str, Any], *, now: datetime | None = None, interval_days: int = 3) -> bool:
+    if state.get("pending_poem_id"):
+        return True
+    raw = str(state.get("last_poetry_success_at") or "").strip()
+    if not raw:
+        return True
+    try:
+        last = datetime.fromisoformat(raw)
+    except Exception:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current - last >= timedelta(days=max(1, int(interval_days)))
 
 
 def recent_source_exclusions(
@@ -429,6 +559,21 @@ async def register_issue_manifest(db: Any, manifest: dict[str, Any]) -> None:
                 *sorted(used, key=lambda x: int(x) if x.isdigit() else x),
                 thought_id,
             ]
+    if (
+        str(manifest.get("content_mode") or "").strip() == "poetry"
+        and str(manifest.get("poetry_mode") or "").strip() != "test"
+    ):
+        poem_id = str(manifest.get("poem_id") or "").strip()
+        if poem_id:
+            used_poems = [str(item) for item in (state.get("used_poem_ids") or []) if str(item).strip()]
+            if poem_id not in set(used_poems):
+                state["used_poem_ids"] = [
+                    *sorted(used_poems, key=lambda x: int(x.rsplit("-", 1)[-1]) if x.rsplit("-", 1)[-1].isdigit() else x),
+                    poem_id,
+                ]
+            if str(state.get("pending_poem_id") or "") == poem_id:
+                state["pending_poem_id"] = None
+            state["last_poetry_success_at"] = _utc_now_iso()
     music_file = str(manifest.get("music_file") or "").strip()
     try:
         music_start = float(manifest.get("music_start") or 0.0)

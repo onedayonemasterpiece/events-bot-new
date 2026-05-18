@@ -19,11 +19,14 @@ from sqlalchemy import select
 from kenigsberg_stories.state import (
     KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
+    choose_next_poem,
     choose_next_thought,
     format_bans_report,
     load_state,
+    load_poems,
     load_thoughts,
     parse_second_ranges,
+    poetry_due,
     recent_source_exclusions,
     recent_music_exclusions,
     reserve_issue_number,
@@ -67,6 +70,13 @@ KAGGLE_BIND_WAIT_SECONDS = max(
 
 class StoryTextPreparationError(RuntimeError):
     pass
+
+
+POETRY_INTERVAL_DAYS = max(1, int(os.getenv("KENIGSBERG_POETRY_INTERVAL_DAYS", "3") or "3"))
+KENIGSBERG_POETRY_TEST_TARGET = os.getenv("KENIGSBERG_POETRY_TEST_TARGET", "@keniggpt").strip() or "@keniggpt"
+KENIGSBERG_POETRY_HASHTAGS = (
+    "#Kenigsberg #Königsberg #NeuroKönigsberg #МоствКёнигсберг #Кёнигсберг"
+)
 
 
 def _is_sqlite_locked(exc: Exception) -> bool:
@@ -182,8 +192,24 @@ async def _require_superadmin(message: types.Message) -> bool:
     return True
 
 
-def _kenigsberg_story_targets() -> list[dict[str, object]]:
-    return [
+def _kenigsberg_story_targets(
+    *,
+    poetry_test: bool = False,
+    poetry_vk_caption: str = "",
+) -> list[dict[str, object]]:
+    if poetry_test:
+        return [
+            {
+                "peer": KENIGSBERG_POETRY_TEST_TARGET,
+                "transport": "telegram_chat",
+                "delay_seconds": 0,
+                "mode": "upload",
+                "blocking": True,
+                "required": True,
+                "label": KENIGSBERG_POETRY_TEST_TARGET,
+            }
+        ]
+    targets: list[dict[str, object]] = [
         {
             "peer": "@mostvkenig",
             "delay_seconds": 0,
@@ -219,15 +245,37 @@ def _kenigsberg_story_targets() -> list[dict[str, object]]:
             "label": "vk:mostvkenig:story",
         },
     ]
+    if poetry_vk_caption.strip():
+        targets.append(
+            {
+                "peer": "mostvkenig",
+                "transport": "vk_wall",
+                "delay_seconds": 180,
+                "mode": "upload",
+                "blocking": False,
+                "required": False,
+                "label": "vk:mostvkenig:wall",
+                "caption": poetry_vk_caption.strip(),
+            }
+        )
+    return targets
 
 
-async def _build_production_story_config(db) -> dict | None:
+async def _build_production_story_config(
+    db,
+    *,
+    poetry_test: bool = False,
+    poetry_vk_caption: str = "",
+) -> dict | None:
     story_selection_params = {
         "mode": KENIGSBERG_PROFILE_KEY,
         "story_publish_enabled": True,
         "story_publish_mode": "video",
         "story_upload_profile": "telegram_story_native_hevc_720p_v1",
-        "story_targets_override": _kenigsberg_story_targets(),
+        "story_targets_override": _kenigsberg_story_targets(
+            poetry_test=poetry_test,
+            poetry_vk_caption=poetry_vk_caption,
+        ),
         "story_business_targets": [],
         "story_caption": "",
     }
@@ -496,6 +544,88 @@ async def _prepare_story_text_from_thought(thought_text: str) -> dict:
             ) from fallback_exc
 
 
+def _poem_blocks_for_video(poem: dict) -> list[list[str]]:
+    blocks: list[list[str]] = []
+    for raw_block in poem.get("blocks") or []:
+        if not isinstance(raw_block, list):
+            continue
+        block = []
+        for raw_line in raw_block:
+            line = " ".join(str(raw_line or "").split())
+            if not line or line.startswith("@"):
+                continue
+            block.append(line)
+        if block:
+            blocks.append(block)
+    return blocks
+
+
+def _poem_author_lines(poem: dict) -> list[str]:
+    return [
+        str(poem.get("author") or "").strip(),
+        str(poem.get("author_note") or "").strip(),
+        str(poem.get("handle") or "").strip(),
+    ]
+
+
+def _poem_plain_text_for_hook(poem: dict) -> str:
+    title = str(poem.get("title") or "").strip()
+    block_text = "\n\n".join("\n".join(block) for block in _poem_blocks_for_video(poem))
+    return "\n\n".join(part for part in [title, block_text] if part)
+
+
+async def _build_poetry_vk_caption(poem: dict) -> str:
+    author = str(poem.get("author") or "").strip()
+    poem_text = _poem_plain_text_for_hook(poem)
+    fallback_hook = (
+        f"Кёнигсберг звучит голосом {author}: любовь к городу в строках и памяти."
+        if author
+        else "Кёнигсберг звучит в стихах: город, память и любовь в одном коротком видео."
+    )
+    hook = fallback_hook
+    try:
+        ask_4o = require_main_attr("ask_4o")
+        raw = await asyncio.wait_for(
+            ask_4o(
+                (
+                    "Напиши один короткий цепляющий VK-хук на русском для видео со стихотворением "
+                    "о Кёнигсберге. 10-16 слов. Без хештегов, кавычек и эмодзи. "
+                    f"Автор: {author or '-'}\n\nСтих:\n{poem_text[:2500]}"
+                ),
+                system_prompt="Ты редактор культурного VK-сообщества. Верни только одну строку хука.",
+                max_tokens=80,
+                model=os.getenv("KENIGSBERG_POETRY_HOOK_MODEL", "gpt-4o"),
+                meta={"consumer": "kenigsberg_stories", "stage": "poetry_vk_hook"},
+                temperature=0.4,
+            ),
+            timeout=max(8.0, float(os.getenv("KENIGSBERG_POETRY_HOOK_TIMEOUT_SEC", "25") or "25")),
+        )
+        candidate = " ".join(str(raw or "").strip().strip('"').split())
+        if 6 <= len(candidate.split()) <= 20:
+            hook = candidate
+    except Exception:
+        logger.warning("kenigsberg: poetry hook generation failed; using fallback", exc_info=True)
+    author_lines = [line for line in _poem_author_lines(poem) if line]
+    return "\n".join([hook, "", *author_lines, "", KENIGSBERG_POETRY_HASHTAGS]).strip()
+
+
+def _build_poetry_text_payload(poem: dict, *, vk_caption: str) -> dict:
+    blocks = _poem_blocks_for_video(poem)
+    if not blocks:
+        raise StoryTextPreparationError("poem has no text blocks")
+    title = str(poem.get("title") or "").strip()
+    first_line = blocks[0][0] if blocks and blocks[0] else title
+    return {
+        "hook": title or first_line,
+        "scene_lines": ["\n".join(block) for block in blocks],
+        "caption": vk_caption,
+        "source": "poems_md",
+        "text_model": "",
+        "poem_blocks": blocks,
+        "poem_author_lines": _poem_author_lines(poem),
+    }
+
+
 
 async def _handle_ban_command(message: types.Message, args: str) -> None:
     db = require_main_attr("get_db")()
@@ -574,7 +704,22 @@ async def _handle_launch(message: types.Message) -> None:
     )
 
 
-async def _run_launch_in_background(message: types.Message) -> None:
+async def _handle_launch_with_mode(message: types.Message, *, poetry_mode: str = "auto") -> None:
+    db = require_main_attr("get_db")()
+    thoughts = load_thoughts()
+    await _launch_kaggle_generation(
+        message,
+        db,
+        thoughts_count=len(thoughts),
+        bot=message.bot,
+        notify_chat_id=message.chat.id,
+        operator_user_id=message.from_user.id if message.from_user else None,
+        trigger="manual",
+        poetry_mode=poetry_mode,
+    )
+
+
+async def _run_launch_in_background(message: types.Message, *, poetry_mode: str = "auto") -> None:
     if _KENIGSBERG_LAUNCH_LOCK.locked():
         await message.answer(
             "Kenigsberg: предыдущий запуск ещё проходит preflight/Kaggle handoff. "
@@ -583,7 +728,7 @@ async def _run_launch_in_background(message: types.Message) -> None:
         return
     async with _KENIGSBERG_LAUNCH_LOCK:
         try:
-            await _handle_launch(message)
+            await _handle_launch_with_mode(message, poetry_mode=poetry_mode)
         except Exception as exc:
             logger.exception("kenigsberg: background launch crashed")
             try:
@@ -614,6 +759,10 @@ def _copy_required_assets(tmp_path: Path) -> None:
         (
             PROJECT_ROOT / "docs" / "features" / "kenigsberg-stories" / "thoughts.md",
             "docs/features/kenigsberg-stories/thoughts.md",
+        ),
+        (
+            PROJECT_ROOT / "docs" / "features" / "kenigsberg-stories" / "poems.md",
+            "docs/features/kenigsberg-stories/poems.md",
         ),
         (
             PROJECT_ROOT / "kaggle" / "CherryFlash" / "video_announce" / "assets" / "BebasNeue-Bold.ttf",
@@ -712,6 +861,7 @@ async def _launch_kaggle_generation(
     notify_chat_id: int | None = None,
     operator_user_id: int | None = None,
     trigger: str = "manual",
+    poetry_mode: str = "auto",
 ) -> int | None:
     if message is not None:
         bot = bot or message.bot
@@ -793,41 +943,83 @@ async def _launch_kaggle_generation(
     test_chat_id = None
 
     issue_number = await reserve_issue_number(db)
-    thought = await choose_next_thought(db)
     seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
     state = await load_state(db)
-    thought_text = str(thought.get("text") or "")
+    poems = load_poems()
+    mode_key = str(poetry_mode or "auto").strip().casefold()
+    force_poetry = mode_key in {"today", "test", "force"}
+    poetry_test = mode_key == "test"
+    use_poetry = bool(
+        poems
+        and (
+            force_poetry
+            or (
+                mode_key == "auto"
+                and poetry_due(state, interval_days=POETRY_INTERVAL_DAYS)
+            )
+        )
+    )
+    thought: dict[str, str] = {"id": "", "text": ""}
+    poem: dict | None = None
+    story_text: dict
+    poetry_vk_caption = ""
+    if use_poetry:
+        poem = await choose_next_poem(db)
+        if poem is None:
+            use_poetry = False
+    if use_poetry and poem is not None:
+        poetry_vk_caption = await _build_poetry_vk_caption(poem)
+        story_text = _build_poetry_text_payload(poem, vk_caption=poetry_vk_caption)
+        thought_text = str(poem.get("body") or "")
+    else:
+        thought = await choose_next_thought(db)
+        thought_text = str(thought.get("text") or "")
     await notify(
         f"Kenigsberg #{issue_number}: принял команду, готовлю Kaggle, "
-        f"thought={thought.get('id') or '-'} / {thoughts_count}."
+        + (
+            f"poetry={poem.get('id') if poem else '-'} / {len(poems)}"
+            if use_poetry and poem is not None
+            else f"thought={thought.get('id') or '-'} / {thoughts_count}"
+        )
+        + "."
     )
     logger.info(
         "kenigsberg: launch accepted issue=%s thought=%s chat_id=%s user_id=%s",
         issue_number,
-        thought.get("id") or "",
+        poem.get("id") if poem else thought.get("id") or "",
         notify_chat_id,
         operator_user_id,
     )
-    try:
-        story_text = await _prepare_story_text_from_thought(thought_text)
-    except StoryTextPreparationError as exc:
-        logger.warning(
-            "kenigsberg: launch aborted issue=%s thought=%s reason=%s",
-            issue_number,
-            thought.get("id") or "",
-            exc,
-        )
-        await notify(
-            f"Kenigsberg #{issue_number}: LLM не подготовила безопасную смысловую нарезку текста, "
-            "Kaggle не запускаю."
-        )
-        return None
+    if not use_poetry:
+        try:
+            story_text = await _prepare_story_text_from_thought(thought_text)
+        except StoryTextPreparationError as exc:
+            logger.warning(
+                "kenigsberg: launch aborted issue=%s thought=%s reason=%s",
+                issue_number,
+                thought.get("id") or "",
+                exc,
+            )
+            await notify(
+                f"Kenigsberg #{issue_number}: LLM не подготовила безопасную смысловую нарезку текста, "
+                "Kaggle не запускаю."
+            )
+            return None
     payload = {
         "issue_number": issue_number,
         "seed": seed,
         "profile_key": KENIGSBERG_PROFILE_KEY,
+        "content_mode": "poetry" if use_poetry else "thought",
         "thought_id": thought.get("id") or "",
         "thought_text": thought_text,
+        "poem_id": poem.get("id") if poem else "",
+        "poem_title": poem.get("title") if poem else "",
+        "poem_author": poem.get("author") if poem else "",
+        "poem_author_note": poem.get("author_note") if poem else "",
+        "poem_handle": poem.get("handle") if poem else "",
+        "poem_audio": poem.get("audio") if poem else "",
+        "poem_blocks": story_text.get("poem_blocks") or [],
+        "poem_author_lines": story_text.get("poem_author_lines") or [],
         "hook": story_text.get("hook") or "",
         "scene_lines": story_text.get("scene_lines") or [],
         "caption": story_text.get("caption") or "",
@@ -844,12 +1036,17 @@ async def _launch_kaggle_generation(
         "target": "https://t.me/mostvkenig",
         "strategy": "heuristic_v1",
         "trigger": trigger,
+        "poetry_mode": mode_key if use_poetry else "",
         "story_publish_requested": True,
-        "production_target": "https://t.me/mostvkenig",
+        "production_target": KENIGSBERG_POETRY_TEST_TARGET if poetry_test else "https://t.me/mostvkenig",
     }
     story_config: dict | None = None
     try:
-        story_config = await _build_production_story_config(db)
+        story_config = await _build_production_story_config(
+            db,
+            poetry_test=poetry_test,
+            poetry_vk_caption=poetry_vk_caption if use_poetry and not poetry_test else "",
+        )
     except Exception as exc:
         logger.exception("kenigsberg: failed to build production story config")
         await notify(
@@ -891,8 +1088,12 @@ async def _launch_kaggle_generation(
 
     await notify(
         f"Kenigsberg #{issue_number}: запускаю Kaggle MVP, period=auto, "
-        f"thought={thought.get('id') or '-'} / {thoughts_count}, "
-        f"text={story_text.get('source') or 'unknown'}"
+        + (
+            f"poetry={poem.get('id') if poem else '-'} / {len(poems)}, "
+            if use_poetry and poem is not None
+            else f"thought={thought.get('id') or '-'} / {thoughts_count}, "
+        )
+        + f"text={story_text.get('source') or 'unknown'}"
         f"{'/' + str(story_text.get('text_model')) if story_text.get('text_model') else ''}."
     )
     client = KaggleClient()
@@ -971,6 +1172,7 @@ async def launch_scheduled_kenigsberg_story(
     *,
     notify_chat_id: int | None,
     trigger: str = "scheduled",
+    poetry_mode: str = "auto",
 ) -> int | None:
     if _KENIGSBERG_LAUNCH_LOCK.locked():
         raise RuntimeError("Kenigsberg launch preflight is already running")
@@ -983,6 +1185,7 @@ async def launch_scheduled_kenigsberg_story(
             notify_chat_id=notify_chat_id,
             operator_user_id=0,
             trigger=trigger,
+            poetry_mode=poetry_mode,
         )
 
 
@@ -991,7 +1194,17 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
     args = (command.args or "").strip()
     args = _canonicalize_ban_args(args)
     lowered = args.casefold()
-    is_launch = not args or lowered in {"start", "run", "generate", "сгенерируй", "запуск"}
+    poetry_mode = "auto"
+    launch_args = {"--poetry-test", "--poetry-today", "poetry-test", "poetry-today"}
+    if lowered in {"--poetry-test", "poetry-test"}:
+        poetry_mode = "test"
+    elif lowered in {"--poetry-today", "poetry-today"}:
+        poetry_mode = "today"
+    is_launch = (
+        not args
+        or lowered in {"start", "run", "generate", "сгенерируй", "запуск"}
+        or lowered in launch_args
+    )
 
     if is_launch:
         await message.answer(
@@ -1002,7 +1215,7 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
         return
 
     if is_launch:
-        task = asyncio.create_task(_run_launch_in_background(message))
+        task = asyncio.create_task(_run_launch_in_background(message, poetry_mode=poetry_mode))
         _KENIGSBERG_LAUNCH_TASKS.add(task)
         task.add_done_callback(_KENIGSBERG_LAUNCH_TASKS.discard)
         return
@@ -1016,6 +1229,9 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
             "production_story=enabled_in_code\n"
             f"next_issue=#{state.get('next_issue', 1)}\n"
             f"thoughts={len(thoughts)} used={len(state.get('used_thought_ids') or [])}\n"
+            f"poems={len(load_poems())} used={len(state.get('used_poem_ids') or [])} "
+            f"pending={state.get('pending_poem_id') or '-'} "
+            f"last_poetry={state.get('last_poetry_success_at') or '-'}\n"
             f"issues={len(state.get('issues') or {})} bans={len(state.get('source_bans') or [])} "
             f"recent_exclusions={len(recent_source_exclusions(state))}"
         )
@@ -1038,6 +1254,8 @@ async def cmd_kenigsberg(message: types.Message, command: CommandObject) -> None
     await message.answer(
         "Формат:\n"
         "/kenigsberg\n"
+        "/kenigsberg --poetry-test\n"
+        "/kenigsberg --poetry-today\n"
         "/kenigsberg status\n"
         "/kenigsberg bans\n"
         "/kenigsberg unlock\n"
