@@ -982,6 +982,7 @@ async def build_popular_review_selection(
     partner_track_id: str | None = None,
     admit_manual_review: bool = True,
     selection_policy_id: str | None = None,
+    allow_same_day_recycle: bool = False,
 ) -> PopularReviewSelection:
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()
@@ -1010,9 +1011,16 @@ async def build_popular_review_selection(
     fresh: list[PopularReviewPick] = []
     processed_event_ids: set[int] = set()
 
-    async def _consider_hit(hit: dict[str, Any], event: Event | None) -> None:
+    async def _consider_hit(
+        hit: dict[str, Any],
+        event: Event | None,
+        *,
+        allow_reprocess: bool = False,
+        ignore_recent_cooldown: bool = False,
+        anti_repeat_status_override: str | None = None,
+    ) -> None:
         event_id = int(hit["event_id"])
-        if event_id in processed_event_ids:
+        if event_id in processed_event_ids and not allow_reprocess:
             return
         processed_event_ids.add(event_id)
         if event is None:
@@ -1023,10 +1031,14 @@ async def build_popular_review_selection(
             selection_policy_id=selection_policy_id,
         )
         recent_meta = recent_hits.get(event_id)
-        if recent_meta and not _priority_repeat_allowed(
-            priority,
-            recent_meta,
-            now_utc=now_utc,
+        if (
+            recent_meta
+            and not ignore_recent_cooldown
+            and not _priority_repeat_allowed(
+                priority,
+                recent_meta,
+                now_utc=now_utc,
+            )
         ):
             logger.info(
                 "video_announce.popular_review: skipped event due to cooldown "
@@ -1092,7 +1104,10 @@ async def build_popular_review_selection(
             source_window=str(hit["source_window"]),
             source_post_url=str(hit["source_post_url"]),
             source_label=str(hit["source_label"]),
-            anti_repeat_status="priority_repeat" if recent_meta else "fresh",
+            anti_repeat_status=(
+                anti_repeat_status_override
+                or ("priority_repeat" if recent_meta else "fresh")
+            ),
             description=preferred_scene_description(event),
             priority_score=float(priority.score_boost),
             priority_reasons=priority.reasons,
@@ -1160,6 +1175,35 @@ async def build_popular_review_selection(
                 )
                 for hit in recycle_hits:
                     await _consider_hit(hit, recycle_map.get(int(hit["event_id"])))
+                    if len(fresh) >= max_events:
+                        break
+        # Final аварийный слой: если обычный recycle тоже пустой, КОНБ-трек
+        # может переиспользовать сегодняшние уже показанные события, чтобы не
+        # сорвать daily slot. Дубли внутри одного выпуска всё равно отсекаются
+        # через `fresh`/`max_events` и уникальный список recycle-кандидатов.
+        if len(fresh) < min_events and allow_same_day_recycle:
+            selected_ids = {int(pick.event.id) for pick in fresh if pick.event.id is not None}
+            same_day_hits = await _collect_partner_konb_recycle_hits(
+                db,
+                today=today,
+                exclude_event_ids=selected_ids,
+            )
+            if same_day_hits:
+                same_day_map = await _load_events_map(
+                    db,
+                    [int(item["event_id"]) for item in same_day_hits],
+                )
+                for hit in same_day_hits:
+                    hit = dict(hit)
+                    hit["source_window"] = "konb_same_day_recycle"
+                    hit["source_label"] = "konb_same_day_recycle"
+                    await _consider_hit(
+                        hit,
+                        same_day_map.get(int(hit["event_id"])),
+                        allow_reprocess=True,
+                        ignore_recent_cooldown=True,
+                        anti_repeat_status_override="same_day_recycle",
+                    )
                     if len(fresh) >= max_events:
                         break
 

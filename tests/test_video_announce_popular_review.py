@@ -1128,6 +1128,86 @@ async def test_konb_selection_recycle_does_not_repeat_same_calendar_day(
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_konb_selection_can_use_same_day_recycle_as_last_resort(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        same_day = Event(
+            title="КОНБ: лекция",
+            description="Калининградская областная научная библиотека",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-20",
+            time="19:00",
+            location_name="Научная библиотека, Мира 9, Калининград",
+            city="Калининград",
+            photo_urls=["https://example.com/same-day-repeat.jpg"],
+            photo_count=1,
+        )
+        session.add(same_day)
+        await session.commit()
+        await session.refresh(same_day)
+        previous = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review_konb",
+            created_at=now_utc,
+            started_at=now_utc,
+            finished_at=now_utc,
+        )
+        session.add(previous)
+        await session.commit()
+        await session.refresh(previous)
+        session.add(
+            VideoAnnounceItem(
+                session_id=previous.id,
+                event_id=same_day.id,
+                position=1,
+                status=VideoAnnounceItemStatus.READY,
+            )
+        )
+        await session.commit()
+
+    async def no_popular_hits(*_args, **_kwargs):
+        return []
+
+    async def no_future_hits(*_args, **_kwargs):
+        return []
+
+    async def no_promos(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(popular_review_module, "_collect_popular_hits", no_popular_hits)
+    monkeypatch.setattr(popular_review_module, "_collect_future_event_hits", no_future_hits)
+    monkeypatch.setattr(popular_review_module, "resolve_video_promo_candidates", no_promos)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=2,
+        min_events=1,
+        anti_repeat_days=1,
+        candidate_limit=5,
+        now_utc=now_utc,
+        profile_key="popular_review_konb",
+        partner_track_id="partner_konb_library_001",
+        event_filter=classify_event_konb_library,
+        admit_manual_review=False,
+        selection_policy_id="konb_library",
+        allow_same_day_recycle=True,
+    )
+
+    assert selection.event_ids == [int(same_day.id)]
+    assert selection.trace[int(same_day.id)]["source_window"] == "konb_same_day_recycle"
+    assert selection.trace[int(same_day.id)]["anti_repeat_status"] == "same_day_recycle"
+    await db.close()
+
+
 def test_konb_first_position_penalty_demotes_recent_leader():
     penalty = popular_review_module._first_position_penalty(
         {"best_recent_position": 1},

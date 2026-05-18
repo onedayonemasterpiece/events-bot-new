@@ -1833,6 +1833,9 @@ class VideoAnnounceScenario:
                 partner_track_id=partner_track.track_id,
                 admit_manual_review=False,
                 selection_policy_id=partner_track.selection_policy_id,
+                allow_same_day_recycle=(
+                    partner_track.selection_policy_id == "konb_library"
+                ),
             )
         except Exception as exc:
             await self.bot.send_message(
