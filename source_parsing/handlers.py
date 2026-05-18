@@ -166,6 +166,7 @@ class AddedEventInfo:
     source_total: int | None = None
     photo_count: int | None = None
     added_posters: int | None = None
+    vk_post_url: str | None = None
 
 
 @dataclass
@@ -186,6 +187,7 @@ class UpdatedEventInfo:
     source_total: int | None = None
     photo_count: int | None = None
     added_posters: int | None = None
+    vk_post_url: str | None = None
 
 
 def _event_telegraph_url(event) -> str | None:
@@ -573,6 +575,14 @@ async def build_added_event_info(
     except Exception:
         photo_count = None
 
+    vk_post_url_value: str | None = None
+    try:
+        raw_vk_url = getattr(event, "source_vk_post_url", None)
+        if raw_vk_url and str(raw_vk_url).strip():
+            vk_post_url_value = str(raw_vk_url).strip()
+    except Exception:
+        vk_post_url_value = None
+
     return AddedEventInfo(
         event_id=event_id,
         title=event.title or "",
@@ -587,6 +597,7 @@ async def build_added_event_info(
         source_ordinal=source_ordinal,
         source_total=source_total,
         photo_count=photo_count,
+        vk_post_url=vk_post_url_value,
     )
 
 
@@ -649,6 +660,14 @@ async def build_updated_event_info(
     except Exception:
         photo_count = None
 
+    vk_post_url_value: str | None = None
+    try:
+        raw_vk_url = getattr(event, "source_vk_post_url", None)
+        if raw_vk_url and str(raw_vk_url).strip():
+            vk_post_url_value = str(raw_vk_url).strip()
+    except Exception:
+        vk_post_url_value = None
+
     return UpdatedEventInfo(
         event_id=event_id,
         title=event.title or "",
@@ -664,6 +683,7 @@ async def build_updated_event_info(
         source_ordinal=source_ordinal,
         source_total=source_total,
         photo_count=photo_count,
+        vk_post_url=vk_post_url_value,
     )
 
 
@@ -1396,6 +1416,12 @@ async def format_parsing_report(
             return f"  ICS: [ics]({value})"
         return "  ICS: ⏳" if has_time else "  ICS: —"
 
+    def _vk_post_line_md(url: str | None) -> str | None:
+        value = (url or "").strip()
+        if not value:
+            return None
+        return f"  VK: [пост]({value})"
+
     def _sources_lines_md(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
         if not rows or not tz:
@@ -1511,6 +1537,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
+                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
+                if vk_line:
+                    lines.append(vk_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(added_items) > 12:
@@ -1547,6 +1576,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
+                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
+                if vk_line:
+                    lines.append(vk_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(updated_items) > 12:

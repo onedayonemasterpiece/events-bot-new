@@ -109,6 +109,7 @@ class TelegramMonitorEventInfo:
     queue_notes: list[str] = field(default_factory=list)
     popularity: str | None = None
     telegraph_job_status: str | None = None
+    vk_post_url: str | None = None
 
 
 @dataclass(slots=True)
@@ -409,6 +410,13 @@ async def _build_event_info(
             photo_count = int(raw or 0)
     except Exception:
         photo_count = None
+    vk_post_url_value: str | None = None
+    try:
+        raw_vk_url = getattr(event, "source_vk_post_url", None)
+        if raw_vk_url and str(raw_vk_url).strip():
+            vk_post_url_value = str(raw_vk_url).strip()
+    except Exception:
+        vk_post_url_value = None
     return TelegramMonitorEventInfo(
         event_id=event_id,
         title=getattr(event, "title", "") or "",
@@ -426,6 +434,7 @@ async def _build_event_info(
         queue_notes=list(queue_notes or []),
         popularity=(str(popularity).strip() or None) if popularity else None,
         telegraph_job_status=telegraph_job_status,
+        vk_post_url=vk_post_url_value,
     )
 
 
@@ -454,6 +463,15 @@ async def refresh_telegram_monitor_event_info(
                     raw = len([u for u in urls if (str(u or "").strip())])
             if raw is not None:
                 info.photo_count = int(raw or 0)
+        except Exception:
+            pass
+        try:
+            raw_vk_url = getattr(event, "source_vk_post_url", None)
+            info.vk_post_url = (
+                str(raw_vk_url).strip()
+                if raw_vk_url and str(raw_vk_url).strip()
+                else None
+            )
         except Exception:
             pass
     info.log_cmd = f"/log {int(info.event_id)}"

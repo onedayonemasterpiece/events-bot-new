@@ -1462,6 +1462,17 @@ class Database:
                     """,
                     ("Бар Бастион, Судостроительная 6/1, Калининград", 149955604),
                 )
+                # Seed VK monitoring sources that are tied to specific operator
+                # requests rather than ad-hoc UI additions. INSERT OR IGNORE so
+                # the row only appears the first time and never overwrites
+                # operator edits later.
+                await conn.execute(
+                    """
+                    INSERT OR IGNORE INTO vk_source(group_id, screen_name, name)
+                    VALUES (?, ?, ?)
+                    """,
+                    (194393485, "club194393485", "Географическая школа"),
+                )
             except Exception:
                 logging.warning("db.init: failed to seed vk_source defaults", exc_info=True)
 

@@ -301,7 +301,11 @@ def _format_display_price(scene_data: dict) -> str:
         return f"ДО {pmax} руб."
     if is_free or (pmin == 0 and pmax in (None, 0)) or (pmax == 0 and pmin in (None, 0)):
         return "БЕСПЛАТНО"
-    return "БЕСПЛАТНО"
+    # No objective price info — don't claim free. The original round-1 KONB
+    # override defaulted to "БЕСПЛАТНО" because library events are mostly free,
+    # but that leaked into the general cherryflash flow and mislabelled paid
+    # events.
+    return ""
 
 
 def _resolve_final_card_path() -> Path | None:

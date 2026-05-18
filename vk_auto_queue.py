@@ -823,6 +823,13 @@ async def _send_unified_event_report(
             return f'ICS: <a href="{safe}">ics</a>'
         return "ICS: ⏳" if has_time else "ICS: —"
 
+    def _vk_post_line(url: str | None) -> str | None:
+        value = (url or "").strip()
+        if not value:
+            return None
+        safe = html.escape(value, quote=True)
+        return f'VK: <a href="{safe}">пост</a>'
+
     def _sources_lines(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
         if not rows or not tz:
@@ -963,6 +970,9 @@ async def _send_unified_event_report(
                 else:
                     lines.append(f"  Лог: {html.escape(info.log_cmd)}")
             lines.append(f"  {_ics_line(info.ics_url, has_time=bool((info.time or '').strip()))}")
+            vk_line = _vk_post_line(getattr(info, "vk_post_url", None))
+            if vk_line:
+                lines.append(f"  {vk_line}")
             lines.append(f"  {_render_facts_and_photos(info, eid=int(info.event_id))}")
             lines.extend(_queue_lines(int(info.event_id)))
             lines.append("")
@@ -1000,6 +1010,9 @@ async def _send_unified_event_report(
                 else:
                     lines.append(f"  Лог: {html.escape(info.log_cmd)}")
             lines.append(f"  {_ics_line(info.ics_url, has_time=bool((info.time or '').strip()))}")
+            vk_line = _vk_post_line(getattr(info, "vk_post_url", None))
+            if vk_line:
+                lines.append(f"  {vk_line}")
             lines.append(f"  {_render_facts_and_photos(info, eid=int(info.event_id))}")
             lines.extend(_queue_lines(int(info.event_id)))
             lines.append("")

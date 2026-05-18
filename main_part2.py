@@ -3290,6 +3290,10 @@ async def post_to_vk(
     params_base = {"owner_id": f"-{group_id.lstrip('-')}", "message": message}
     if attachments:
         params_base["attachments"] = ",".join(attachments)
+        if len(attachments) > 1:
+            # Multi-photo posts default to carousel in modern VK clients;
+            # publish as a grid so all images are visible at once.
+            params_base["primary_attachments_mode"] = "grid"
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
@@ -3582,9 +3586,68 @@ async def sync_vk_source_post(
             existing_vk_post_url = ""
 
     attachments: list[str] | None = None
-    if VK_PHOTOS_ENABLED and event.photo_urls:
+    photo_urls_source: list[str] = list(event.photo_urls or [])
+    if VK_PHOTOS_ENABLED and not photo_urls_source:
+        # Fallback: when the event has no cached photo_urls but a Telegraph
+        # source page exists, use the images from that page so the VK post
+        # is not left bare. Only do this when the existing VK post has no
+        # photo attachments yet, to avoid re-uploading duplicates on every
+        # Smart Update sync.
+        telegraph_url_value = (event.telegraph_url or "").strip()
+        if not telegraph_url_value and getattr(event, "telegraph_path", None):
+            telegraph_url_value = f"https://telegra.ph/{str(event.telegraph_path).lstrip('/')}"
+        if telegraph_url_value:
+            existing_has_photos = False
+            if existing_vk_post_url:
+                try:
+                    ids_check = _vk_owner_and_post_id(existing_vk_post_url)
+                    if ids_check:
+                        response_check = await vk_api(
+                            "wall.getById",
+                            posts=f"{ids_check[0]}_{ids_check[1]}",
+                        )
+                        items_check = (
+                            response_check.get("response")
+                            if isinstance(response_check, dict)
+                            else response_check
+                        ) or []
+                        if not isinstance(items_check, list):
+                            items_check = [items_check] if items_check else []
+                        if items_check:
+                            existing_has_photos = any(
+                                (att or {}).get("type") == "photo"
+                                for att in (items_check[0].get("attachments") or [])
+                            )
+                except Exception as exc:
+                    logging.warning(
+                        "sync_vk_source_post: wall.getById probe failed event_id=%s err=%s",
+                        event.id,
+                        exc,
+                    )
+            if not existing_has_photos:
+                try:
+                    from main import extract_telegraph_image_urls
+
+                    telegraph_images = await extract_telegraph_image_urls(
+                        telegraph_url_value
+                    )
+                except Exception as exc:
+                    telegraph_images = []
+                    logging.warning(
+                        "sync_vk_source_post: telegraph image fallback failed event_id=%s err=%s",
+                        event.id,
+                        exc,
+                    )
+                if telegraph_images:
+                    photo_urls_source = telegraph_images
+                    logging.info(
+                        "sync_vk_source_post: telegraph image fallback event_id=%s count=%d",
+                        event.id,
+                        len(telegraph_images),
+                    )
+    if VK_PHOTOS_ENABLED and photo_urls_source:
         ids: list[str] = []
-        photo_urls = event.photo_urls[:VK_MAX_ATTACHMENTS]
+        photo_urls = photo_urls_source[:VK_MAX_ATTACHMENTS]
         for url in photo_urls:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:
@@ -3872,6 +3935,10 @@ async def edit_vk_post(
         params["attachments"] = ",".join(current) if current else ""
     elif current:
         params["attachments"] = ",".join(current)
+    if len(current) > 1:
+        # Mirror post_to_vk: keep multi-photo posts as a grid (default
+        # rendering is carousel in current VK clients).
+        params["primary_attachments_mode"] = "grid"
     if not edit_token:
         raise VKAPIError(None, "VK_USER_TOKEN missing", method="wall.edit")
     await _vk_api(
@@ -13771,6 +13838,9 @@ async def _vkrev_handle_repost(callback: types.CallbackQuery, event_id: int, db:
         "copyright": vk_url,
         "signed": 0,
     }
+    if len(photos) > 1:
+        # Multi-photo reposts render as a grid, not carousel.
+        params["primary_attachments_mode"] = "grid"
     try:
         data = await _vk_api(
             "wall.post",
@@ -14189,6 +14259,9 @@ async def _vkrev_publish_shortpost(
     }
     if attachments_str:
         params["attachments"] = attachments_str
+    if len(photo_attachments) > 1:
+        # Multi-photo shortposts should render as a grid, not carousel.
+        params["primary_attachments_mode"] = "grid"
     operator_chat = op_state.chat_id if op_state else None
     try:
         data = await _vk_api(
