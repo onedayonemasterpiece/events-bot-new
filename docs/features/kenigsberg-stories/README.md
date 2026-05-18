@@ -94,7 +94,7 @@ Poetry voice-over lives in Kaggle dataset `zigomaro/kenigsberg-audio`. Renderer 
 
 When voice-over exists:
 
-- main video duration follows the voice duration;
+- main video duration follows the voice duration; rhythm slots run with `extend_to_duration=True`, so the last slot always reaches `voice_duration` even if the detected strong-beat grid would otherwise end a couple of seconds short. The thoughts-mode contract («end on a strong beat to avoid a sharply shortened clip») is preserved only when there is no voice file — for poetry, voice integrity is a hard constraint and trimming the voice at the last strong beat is forbidden;
 - text cues are distributed across poem blocks by text weight and adjusted to nearby voice pauses when `librosa` can detect them;
 - background music stays inside the existing instrumental whitelist, is selected with the same voice-risk diagnostics, and is mixed under the voice with very low adaptive gain after voice loudness normalization (`voice_risk` / emergency music pools lower the gain further);
 - total story duration is capped under Telegram's native story `60s` guard. If a 55s voice-over leaves room for only one outro, the renderer keeps the first `МОСТ / В КЁНИГСБЕРГ` outro screen and drops the second slogan screen.

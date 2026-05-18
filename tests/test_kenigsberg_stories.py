@@ -937,6 +937,44 @@ def test_renderer_rhythm_slots_land_on_strong_beats_and_vary_by_seed() -> None:
             assert round(end - start, 2) in {2.0, 4.0}
 
 
+def test_rhythm_slots_extend_to_voice_duration_for_poetry() -> None:
+    # 55s voice with strong beats ending at 52s — current+thoughts behavior would
+    # leave slots[-1][1] = 52s and encode_video would trim the voice. For poetry
+    # (extend_to_duration=True), the last slot must reach the voice duration.
+    strong_beats = [round(0.72 + i * 1.0, 2) for i in range(0, 52)]
+    slots = renderer.rhythm_slots_from_strong_beats(
+        strong_beats,
+        55.0,
+        renderer.random.Random(1),
+        extend_to_duration=True,
+    )
+
+    assert slots[-1][1] == 55.0
+
+
+def test_rhythm_slots_strict_strong_beat_mode_unchanged_without_flag() -> None:
+    # Same input without the flag still ends on a strong beat (thought-mode contract).
+    strong_beats = [round(0.72 + i * 1.0, 2) for i in range(0, 52)]
+    slots = renderer.rhythm_slots_from_strong_beats(
+        strong_beats,
+        55.0,
+        renderer.random.Random(1),
+    )
+
+    assert slots[-1][1] in strong_beats
+    assert slots[-1][1] < 55.0
+
+
+def test_approximate_rhythm_slots_extend_to_duration() -> None:
+    slots = renderer.approximate_rhythm_slots(
+        55.0,
+        renderer.random.Random(1),
+        extend_to_duration=True,
+    )
+
+    assert slots[-1][1] == 55.0
+
+
 def test_renderer_rhythm_slots_keep_target_duration_when_strong_beats_end_too_early() -> None:
     strong_beats = [0.72, 2.72, 4.72, 6.72, 8.72, 10.72]
 

@@ -1216,6 +1216,8 @@ def rhythm_slots_from_strong_beats(
     strong_beats: list[float],
     duration: float,
     rng: random.Random,
+    *,
+    extend_to_duration: bool = False,
 ) -> list[tuple[float, float]]:
     anchors = [beat for beat in strong_beats if 0.35 <= beat < duration - 0.25]
     if len(anchors) < 4:
@@ -1242,16 +1244,34 @@ def rhythm_slots_from_strong_beats(
         slots.append((current, target))
         current = target
         idx = target_idx + 1
-    if current < min(MIN_STRONG_MAIN_DURATION, duration - 0.5) and duration - current >= 0.45:
-        # Keep the MVP resilient: when the detected strong-beat sequence is too
-        # short, preserve the established story length instead of publishing a
-        # sharply shortened clip. The manifest marks this as a target-duration
-        # fallback so it is visible in audit logs.
-        slots.append((current, duration))
+    if extend_to_duration:
+        # Voice-driven duration is a hard constraint (the encoder trims the voice
+        # at the last slot end). Always fill any leftover tail so the rhythm slots
+        # span the full target duration — either by appending a tail slot, or, if
+        # the tail is too small to be a slot of its own, by extending the last slot.
+        tail = duration - current
+        if tail >= 0.45:
+            slots.append((current, duration))
+        elif slots and tail > 0.0:
+            slots[-1] = (slots[-1][0], duration)
+        elif not slots:
+            slots.append((0.0, duration))
+    else:
+        if current < min(MIN_STRONG_MAIN_DURATION, duration - 0.5) and duration - current >= 0.45:
+            # Keep the MVP resilient: when the detected strong-beat sequence is
+            # too short, preserve the established story length instead of
+            # publishing a sharply shortened clip. The manifest marks this as a
+            # target-duration fallback so it is visible in audit logs.
+            slots.append((current, duration))
     return [(round(start, 3), round(end, 3)) for start, end in slots]
 
 
-def approximate_rhythm_slots(duration: float, rng: random.Random) -> list[tuple[float, float]]:
+def approximate_rhythm_slots(
+    duration: float,
+    rng: random.Random,
+    *,
+    extend_to_duration: bool = False,
+) -> list[tuple[float, float]]:
     slots: list[tuple[float, float]] = []
     current = 0.0
     base_interval = rng.uniform(1.62, 2.12)
@@ -1264,6 +1284,14 @@ def approximate_rhythm_slots(duration: float, rng: random.Random) -> list[tuple[
             break
         slots.append((round(current, 3), round(target, 3)))
         current = target
+    if extend_to_duration and current < duration:
+        tail = duration - current
+        if tail >= 0.45:
+            slots.append((round(current, 3), round(duration, 3)))
+        elif slots and tail > 0.0:
+            slots[-1] = (slots[-1][0], round(duration, 3))
+        elif not slots:
+            slots.append((0.0, round(duration, 3)))
     return slots
 
 
@@ -1337,19 +1365,22 @@ def beat_slots(
     *,
     music_path: Path | None = None,
     music_start: float = 0.0,
+    extend_to_duration: bool = False,
 ) -> tuple[list[tuple[float, float]], dict[str, Any]]:
     if music_path is None:
         raise RuntimeError("music_path is required for beat-synced Kenigsberg rhythm slots")
     try:
         strong_beats, meta = detect_strong_beats(music_path, music_start, duration)
-        slots = rhythm_slots_from_strong_beats(strong_beats, duration, rng)
+        slots = rhythm_slots_from_strong_beats(
+            strong_beats, duration, rng, extend_to_duration=extend_to_duration
+        )
         last_end = slots[-1][1] if slots else 0.0
         ends_on_strong = any(abs(last_end - beat) <= 0.025 for beat in strong_beats)
         meta["rhythm_end_mode"] = "strong_beat" if ends_on_strong else "target_duration_fallback"
         if not ends_on_strong:
             meta["fallback_reason"] = "strong_beats_ended_before_target_duration"
     except Exception as exc:
-        slots = approximate_rhythm_slots(duration, rng)
+        slots = approximate_rhythm_slots(duration, rng, extend_to_duration=extend_to_duration)
         meta = {
             "rhythm_end_mode": "approximate_fallback",
             "fallback_reason": f"{type(exc).__name__}: {exc}",
@@ -1884,11 +1915,17 @@ def main() -> None:
         f"range_manifest_loaded={music_meta.get('range_manifest_loaded')} "
         f"skipped_audio={music_meta.get('skipped_audio_count')}"
     )
+    require_full_duration = (
+        str(payload.get("content_mode") or "").strip() == "poetry"
+        and voice_audio is not None
+        and voice_audio.exists()
+    )
     rhythm_slots, rhythm_meta = beat_slots(
         main_duration_target,
         rng,
         music_path=music,
         music_start=music_start,
+        extend_to_duration=require_full_duration,
     )
     frames_dir = working / "kenigsberg_frames"
     if frames_dir.exists():
