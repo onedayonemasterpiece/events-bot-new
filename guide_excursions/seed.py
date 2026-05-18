@@ -15,6 +15,30 @@ def _json_dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def _source_link(spec: GuideSourceSpec) -> str:
+    if spec.source_url:
+        return str(spec.source_url).strip()
+    if spec.platform == "vk":
+        return f"https://vk.com/{spec.username}"
+    return f"https://t.me/{spec.username}"
+
+
+def _merge_source_links(existing_json: Any, source_link: str) -> str:
+    links: list[str] = []
+    try:
+        raw = json.loads(existing_json) if existing_json else []
+    except Exception:
+        raw = []
+    if isinstance(raw, list):
+        for item in raw:
+            text = str(item or "").strip()
+            if text and text not in links:
+                links.append(text)
+    if source_link and source_link not in links:
+        links.append(source_link)
+    return _json_dumps(links)
+
+
 async def seed_guide_sources(
     conn: aiosqlite.Connection,
     *,
@@ -36,8 +60,7 @@ async def seed_guide_sources(
             (spec.profile_slug,),
         )
         profile_row = await cur.fetchone()
-        source_link = f"https://t.me/{spec.username}"
-        links_json = _json_dumps([source_link])
+        links_json = _merge_source_links(profile_row[3] if profile_row else None, _source_link(spec))
         if profile_row:
             await conn.execute(
                 """
@@ -90,8 +113,8 @@ async def seed_guide_sources(
             metrics["profiles_inserted"] += 1
 
         cur = await conn.execute(
-            "SELECT id FROM guide_source WHERE platform='telegram' AND username=?",
-            (spec.username,),
+            "SELECT id FROM guide_source WHERE platform=? AND username=?",
+            (spec.platform, spec.username),
         )
         existing = await cur.fetchone()
         flags_json = _json_dumps(spec.flags or {})
@@ -138,9 +161,10 @@ async def seed_guide_sources(
                     created_at,
                     updated_at
                 )
-                VALUES('telegram', ?, ?, ?, ?, ?, 1, ?, ?, 'seed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES(?, ?, ?, ?, ?, ?, 1, ?, ?, 'seed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """,
                 (
+                    spec.platform,
                     spec.username,
                     int(profile_id),
                     spec.source_kind,

@@ -8,7 +8,7 @@
 
 Текущая каноническая граница совпадает с backlog-доками:
 
-- `Kaggle notebook` делает Telegram fetch, grouped albums, OCR/vision pass по candidate images, deterministic prefilter и `Tier 1` extraction;
+- `Kaggle notebook` делает Telegram/VK fetch, Telegram grouped albums, OCR/vision pass по Telegram candidate images, deterministic prefilter и `Tier 1` extraction;
 - multi-announce posts inside Kaggle сначала режутся на `occurrence_blocks`, после чего Gemma extraction обязана вернуть несколько отдельных occurrences по разным датам/маршрутам, а uncovered schedule blocks добираются block-level rescue pass'ом;
 - `trail_scout.screen.v1` оценивает пост целиком и не получает `occurrence_blocks` как вход; block split используется только на extraction stage, чтобы screen не подхватывал детерминированное мнение сплиттера;
 - guide extraction идёт Opus/lollipop-style семействами, а не одним тяжёлым универсальным prompt'ом: `trail_scout.announce_extract_tier1.v1` вытаскивает только occurrence skeleton, `trail_scout.status_claim_extract.v1` обрабатывает update-посты, `trail_scout.template_extract.v1` собирает template-only сигналы, а `route_weaver.enrich.v1` отдельным коротким запросом дозаполняет семантические поля по уже найденному occurrence;
@@ -32,6 +32,7 @@
   - server-side `guide_excursions_digest_batch` (Lollipop Trails writer) -> `gemini-3.1-flash-lite` (writer-twin Smart Update; per-day объём ~1-3 batched calls на digest publish)
   - `GOOGLE_AI_FALLBACK_MODELS` должен включать `gemma-4-31b-it`, чтобы Lite outage прозрачно откатывался на Gemma 4 через канонический `GoogleAIClient` model chain;
 - для Telegram auth Kaggle guide path по умолчанию использует только `TELEGRAM_AUTH_BUNDLE_S22`; локальная `TELEGRAM_AUTH_BUNDLE_E2E` не считается допустимым автоматическим fallback и может быть использована только через явный аварийный override;
+- VK sources in the same Kaggle guide path use `GUIDE_MONITORING_VK_TOKEN`; server-side encrypted secrets populate it from `GUIDE_MONITORING_VK_TOKEN` or from the env named by `GUIDE_MONITORING_VK_TOKEN_ENV` (default `VK_ACCESS_TOKEN5`). This token is scoped to Kaggle guide monitoring and is not exposed in config datasets.
 - перед запуском guide Kaggle kernel сервер обязан проверить общий `kaggle_registry`: если другой remote Telegram job (`tg_monitoring`, `guide_monitoring`, `telegraph_cache_probe`) ещё жив или его Kaggle status не удалось надёжно прочитать, guide run должен завершиться `skipped` с явной диагностикой `remote_telegram_session_busy`, а не запускать вторую Telethon session;
 - guide digest publish-time fallback для media запрещён: bot-side `forward -> file_id`, Telethon download и public-web scraping не считаются каноническим путём; если materialized assets не доехали из Kaggle/import path, publish должен останавливаться явно, а не деградировать до text-only поста.
 - server-side guide Gemma path (`enrich`, `dedup`, `digest_writer`) тоже обязан идти как fixed-key consumer: runtime резолвит `candidate_key_ids` из `google_ai_api_keys.env_var_name` и сначала пытается зарезервировать именно `GOOGLE_API_KEY2` / `GOOGLE_API_KEY_2`, а на `GOOGLE_API_KEY` откатывается только если для primary guide key metadata ещё не заведена в Supabase;
@@ -58,7 +59,7 @@
 
 - отдельный guide-track в основной SQLite;
 - seed-пак Telegram-источников из casebook;
-- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` как personal guide source for Kaliningrad excursions и `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки;
+- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` как personal guide source for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate` и `vk.com/konb39` через тот же Kaggle guide-monitoring runtime;
 - guide-specific Kaggle runtime: [kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py](/workspaces/events-bot-new/kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py);
 - secure Kaggle push/poll/download через тот же split-secrets pattern, что и в Telegram Monitoring;
 - guide Kaggle transport теперь повторяет продовый Telegram Monitoring pattern: kernel push содержит нужный `google_ai/` код сразу, а secrets по-прежнему идут только через два отдельных datasets (`cipher + key`), без третьего payload dataset;

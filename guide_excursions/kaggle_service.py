@@ -240,6 +240,7 @@ async def _build_config_payload(
         cur = await conn.execute(
             """
             SELECT
+                gs.platform,
                 gs.username,
                 gs.title,
                 gs.source_kind,
@@ -252,8 +253,8 @@ async def _build_config_payload(
                 gp.marketing_name
             FROM guide_source gs
             LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
-            WHERE gs.platform='telegram' AND COALESCE(gs.enabled, 1)=1
-            ORDER BY gs.priority_weight DESC, gs.username ASC
+            WHERE COALESCE(gs.platform, 'telegram') IN ('telegram', 'vk') AND COALESCE(gs.enabled, 1)=1
+            ORDER BY gs.priority_weight DESC, COALESCE(gs.platform, 'telegram') ASC, gs.username ASC
             """
         )
         rows = await cur.fetchall()
@@ -263,9 +264,17 @@ async def _build_config_payload(
             flags = json.loads(row["flags_json"]) if row["flags_json"] else {}
         except Exception:
             flags = {}
+        platform = str(row["platform"] or "telegram").strip().lower() or "telegram"
+        username = str(row["username"] or "").strip()
+        if platform == "vk":
+            source_url = f"https://vk.com/{username}"
+        else:
+            source_url = f"https://t.me/{username}"
         sources.append(
             {
-                "username": str(row["username"] or "").strip(),
+                "platform": platform,
+                "username": username,
+                "source_url": source_url,
                 "title": str(row["title"] or "").strip() or None,
                 "source_kind": str(row["source_kind"] or "").strip() or None,
                 "trust_level": str(row["trust_level"] or "").strip() or None,
@@ -307,6 +316,11 @@ def _build_secrets_payload() -> str:
             payload["TG_SESSION"] = str(bundle.get("session") or "").strip()
     else:
         payload["TG_SESSION"] = _require_env_any("TG_SESSION", "TELEGRAM_SESSION")
+    vk_token_env = (os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_ACCESS_TOKEN5").strip() or "VK_ACCESS_TOKEN5"
+    vk_token = (os.getenv("GUIDE_MONITORING_VK_TOKEN") or os.getenv(vk_token_env) or "").strip()
+    if vk_token:
+        payload["GUIDE_MONITORING_VK_TOKEN"] = vk_token
+        payload["GUIDE_MONITORING_VK_TOKEN_ENV"] = vk_token_env
     for key in (
         "SUPABASE_URL",
         "SUPABASE_KEY",
@@ -318,6 +332,8 @@ def _build_secrets_payload() -> str:
         "GUIDE_MONITORING_EXTRACT_MODEL",
         "GUIDE_MONITORING_LLM_TIMEOUT_SEC",
         "GUIDE_MONITORING_GOOGLE_KEY_ENV",
+        "GUIDE_MONITORING_VK_API_VERSION",
+        "GUIDE_MONITORING_VK_TIMEOUT_SEC",
         "GOOGLE_API_LOCALNAME2",
         "GOOGLE_API_LOCALNAME",
         "GOOGLE_AI_ALLOW_RESERVE_FALLBACK",

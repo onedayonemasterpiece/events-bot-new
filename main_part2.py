@@ -3248,7 +3248,7 @@ async def build_daily_sections_vk(
             )
         )
 
-    lines1 = ["НЕ ПРОПУСТИТЕ СЕГОДНЯ"]
+    lines1 = ["НЕ ПРОПУСТИТЕ СЕГОДНЯ", f"{format_day_pretty(today)} {today.year}"]
     for e in events_today:
         _append_compact_event(lines1, e, prefix_mode="time")
     section1 = "\n".join(lines1)

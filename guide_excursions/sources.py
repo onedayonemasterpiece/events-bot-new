@@ -19,6 +19,18 @@ class GuideSourceSpec:
     priority_weight: float = 1.0
     flags: dict[str, Any] | None = None
     notes: str | None = None
+    platform: str = "telegram"
+    source_url: str | None = None
+
+
+def _normalize_vk_username(value: str) -> str:
+    raw = str(value or "").strip().removeprefix("@")
+    for prefix in ("https://vk.com/", "http://vk.com/", "https://vk.ru/", "http://vk.ru/"):
+        if raw.lower().startswith(prefix):
+            raw = raw[len(prefix) :]
+            break
+    raw = raw.split("?", 1)[0].split("#", 1)[0].strip("/")
+    return raw.lower()
 
 
 def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
@@ -159,6 +171,35 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             ),
         ),
         GuideSourceSpec(
+            username="konb39",
+            profile_slug="kaliningrad-library",
+            profile_kind="organization",
+            display_name="Калининградская областная научная библиотека",
+            marketing_name="Калининградская областная научная библиотека",
+            source_kind="organization_with_tours",
+            trust_level="medium",
+            flags={"organization": True, "mixed_topic": True, "library": True, "vk_public": True},
+            notes=(
+                "Added from operator request on 2026-05-18; VK public for the regional library, "
+                "monitored for guided tours and excursion-like walks alongside Telegram."
+            ),
+            platform="vk",
+            source_url="https://vk.com/konb39",
+        ),
+        GuideSourceSpec(
+            username="balticsyndicate",
+            profile_slug="baltic-syndicate",
+            profile_kind="project",
+            display_name="Baltic Syndicate",
+            marketing_name="Baltic Syndicate",
+            source_kind="guide_project",
+            trust_level="medium",
+            flags={"vk_public": True, "mixed_topic": True},
+            notes="Added from operator request on 2026-05-18; VK public monitored for excursion announcements.",
+            platform="vk",
+            source_url="https://vk.ru/balticsyndicate",
+        ),
+        GuideSourceSpec(
             username="excursions_profitour",
             profile_slug="profitur",
             profile_kind="operator",
@@ -182,7 +223,13 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
     ]
     out: list[GuideSourceSpec] = []
     for item in raw:
-        username = normalize_tg_username(item.username)
+        platform = str(item.platform or "telegram").strip().lower() or "telegram"
+        if platform == "telegram":
+            username = normalize_tg_username(item.username)
+        elif platform == "vk":
+            username = _normalize_vk_username(item.username)
+        else:
+            continue
         if not username:
             continue
         out.append(
@@ -198,7 +245,9 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
                 priority_weight=float(item.priority_weight or 1.0),
                 flags=dict(item.flags or {}),
                 notes=item.notes,
+                platform=platform,
+                source_url=item.source_url,
             )
         )
-    out.sort(key=lambda item: item.username)
+    out.sort(key=lambda item: (item.platform, item.username))
     return tuple(out)

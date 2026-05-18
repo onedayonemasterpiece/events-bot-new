@@ -730,6 +730,8 @@ def _format_source_post_label(source_username: str | None, source_post_url: str 
     url = collapse_ws(source_post_url)
     if username and url and _is_tg_post_url(url):
         return f"@{username}/{url.rstrip('/').split('/')[-1]}"
+    if url and ("vk.com/wall" in url or "vk.ru/wall" in url):
+        return url
     if username:
         return f"@{username}"
     return url or "—"
@@ -939,6 +941,7 @@ async def _get_enabled_sources(conn: aiosqlite.Connection) -> list[aiosqlite.Row
         """
         SELECT
             gs.id,
+            gs.platform,
             gs.username,
             gs.title,
             gs.primary_profile_id,
@@ -951,8 +954,8 @@ async def _get_enabled_sources(conn: aiosqlite.Connection) -> list[aiosqlite.Row
             gp.marketing_name
         FROM guide_source gs
         LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
-        WHERE gs.platform='telegram' AND COALESCE(gs.enabled, 1) = 1
-        ORDER BY gs.priority_weight DESC, gs.username ASC
+        WHERE COALESCE(gs.platform, 'telegram') IN ('telegram', 'vk') AND COALESCE(gs.enabled, 1) = 1
+        ORDER BY gs.priority_weight DESC, COALESCE(gs.platform, 'telegram') ASC, gs.username ASC
         """
     )
     return list(await cur.fetchall())
@@ -2306,8 +2309,10 @@ async def _import_source_payload(
     errors: list[str] = []
     posts = list(_safe_json_list(source_payload.get("posts") or source_payload.get("candidates")))
     username = str(source_row["username"] or "")
+    platform = collapse_ws(_mapping_value(source_row, "platform")) or "telegram"
     source_title = collapse_ws(source_payload.get("source_title")) or collapse_ws(_mapping_value(source_row, "title")) or None
     source_report: dict[str, Any] = {
+        "platform": platform,
         "username": username,
         "source_title": source_title,
         "source_kind": str(source_row["source_kind"] or ""),
@@ -2590,22 +2595,26 @@ async def _import_results_file(
         await seed_guide_sources(conn)
         await conn.commit()
         sources = await _get_enabled_sources(conn)
-        source_by_username = {str(row["username"]): row for row in sources}
+        source_by_key = {
+            (collapse_ws(_mapping_value(row, "platform")) or "telegram", str(row["username"] or "")): row
+            for row in sources
+        }
         for source_payload in _safe_json_list(data.get("sources")):
             if not isinstance(source_payload, dict):
                 continue
+            platform = collapse_ws(source_payload.get("platform")).lower() or "telegram"
             username = collapse_ws(source_payload.get("username"))
             if not username:
                 continue
-            source_row = source_by_username.get(username)
+            source_row = source_by_key.get((platform, username))
             if source_row is None:
-                errors.append(f"@{username}: source not seeded")
+                errors.append(f"{platform}:{username}: source not seeded")
                 metrics["errors"] += 1
                 continue
             source_status = collapse_ws(source_payload.get("source_status")) or "ok"
             if source_status not in {"ok", "partial", "completed"}:
                 errors.extend(
-                    f"@{username}: {collapse_ws(item)}"
+                    f"{platform}:{username}: {collapse_ws(item)}"
                     for item in _normalize_string_list(source_payload.get("errors"), limit=6)
                 )
                 metrics["errors"] += 1
@@ -3057,6 +3066,8 @@ async def run_guide_monitor(
                     async with db.raw_conn() as conn:
                         await _enable_row_factory(conn)
                         for source in sources:
+                            if (collapse_ws(_mapping_value(source, "platform")) or "telegram") != "telegram":
+                                continue
                             try:
                                 source_metrics, source_report = await _scan_and_import_source(
                                     conn,
@@ -4151,6 +4162,7 @@ async def fetch_guide_sources_summary(db: Database) -> list[dict[str, Any]]:
         cur = await conn.execute(
             """
             SELECT
+                gs.platform,
                 gs.username,
                 gs.title,
                 gs.source_kind,
@@ -4161,9 +4173,8 @@ async def fetch_guide_sources_summary(db: Database) -> list[dict[str, Any]]:
             FROM guide_source gs
             LEFT JOIN guide_monitor_post gmp ON gmp.source_id = gs.id
             LEFT JOIN guide_occurrence go ON go.primary_source_id = gs.id
-            WHERE gs.platform='telegram'
             GROUP BY gs.id
-            ORDER BY gs.priority_weight DESC, gs.username ASC
+            ORDER BY gs.priority_weight DESC, COALESCE(gs.platform, 'telegram') ASC, gs.username ASC
             """
         )
         rows = await cur.fetchall()
@@ -4174,7 +4185,8 @@ async def render_guide_sources_summary(db: Database) -> str:
     rows = await fetch_guide_sources_summary(db)
     lines = ["🗂 Источники экскурсий"]
     for row in rows:
-        uname = f"@{row['username']}"
+        platform = collapse_ws(row.get("platform")).lower() or "telegram"
+        uname = f"@{row['username']}" if platform == "telegram" else f"vk:{row['username']}"
         title = collapse_ws(str(row.get("title") or ""))
         kind = collapse_ws(str(row.get("source_kind") or ""))
         trust = collapse_ws(str(row.get("trust_level") or ""))
@@ -5026,13 +5038,14 @@ async def render_guide_run_report(
     if source_reports:
         for source_report in source_reports[:12]:
             username = collapse_ws(source_report.get("username")).lstrip("@") or "—"
+            platform = collapse_ws(source_report.get("platform")).lower() or "telegram"
             title = collapse_ws(source_report.get("source_title"))
             source_kind = collapse_ws(source_report.get("source_kind")) or "—"
             source_status = collapse_ws(source_report.get("source_status")) or "—"
             errors = _normalize_string_list(source_report.get("errors"), limit=8)
             posts = [item for item in _safe_json_list(source_report.get("posts")) if isinstance(item, dict)]
             lines.append("")
-            header = f"{_status_icon(source_status)} @{username}"
+            header = f"{_status_icon(source_status)} {'@' if platform == 'telegram' else 'vk:'}{username}"
             if title:
                 header += f" — {title}"
             lines.append(header)

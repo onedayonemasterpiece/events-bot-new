@@ -51,6 +51,7 @@ async def test_build_daily_sections_vk_compact_without_navigation_links(tmp_path
     )
     assert sec1.splitlines() == [
         "НЕ ПРОПУСТИТЕ СЕГОДНЯ",
+        "10 июля 2025",
         "10:00 [https://vk.com/wall-1_1|🚩 Party]",
     ]
     assert "выходные" not in sec1
@@ -82,7 +83,7 @@ async def test_build_daily_sections_vk_prefers_repost_for_non_partner(tmp_path: 
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    event_line = sec1.splitlines()[1]
+    event_line = sec1.splitlines()[2]
     assert event_line == "10:00 [https://vk.com/wall-1_7|Party]"
 
 
@@ -141,7 +142,7 @@ async def test_build_daily_sections_vk_links_partner_repost(tmp_path: Path):
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    event_line = sec1.splitlines()[1]
+    event_line = sec1.splitlines()[2]
     assert event_line == "10:00 [https://vk.com/wall-1_9|Party]"
 
 

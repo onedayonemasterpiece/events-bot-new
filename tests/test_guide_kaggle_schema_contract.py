@@ -13,3 +13,14 @@ def test_guide_kaggle_single_occurrence_schema_avoids_anyof() -> None:
 
     assert "anyOf" not in helper_source
     assert '"type": "null"' not in helper_source
+
+
+def test_guide_kaggle_runtime_supports_vk_sources() -> None:
+    source = Path("kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "GUIDE_MONITORING_VK_TOKEN" in source
+    assert "async def scan_vk_source_posts" in source
+    assert '"platform": platform' in source
+    assert "wall.get" in source

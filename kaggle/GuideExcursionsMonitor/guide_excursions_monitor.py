@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import html
 import importlib.util
 import json
 import os
@@ -11,6 +12,8 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.parse
+import urllib.request
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -160,6 +163,8 @@ GUIDE_OCR_ENABLED = True
 GUIDE_OCR_IMAGE_LIMIT_PER_POST = 2
 GUIDE_OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
 GUIDE_OCR_TEXT_LIMIT = 1200
+VK_API_VERSION = "5.199"
+VK_TIMEOUT_SECONDS = 20
 _GEMMA_CLIENTS: dict[str, Any] = {}
 _SUPABASE_CLIENT: Any | None = None
 _LLM_GATEWAY_LOGGED = False
@@ -221,6 +226,7 @@ def refresh_runtime_settings() -> None:
     global LLM_TIMEOUT_RETRY_ATTEMPTS, LLM_PROVIDER_5XX_RETRY_ATTEMPTS
     global ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS
     global GUIDE_OCR_ENABLED, GUIDE_OCR_IMAGE_LIMIT_PER_POST, GUIDE_OCR_MAX_IMAGE_BYTES, GUIDE_OCR_TEXT_LIMIT
+    global VK_API_VERSION, VK_TIMEOUT_SECONDS
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
     SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
@@ -281,6 +287,14 @@ def refresh_runtime_settings() -> None:
         )
     except Exception:
         GUIDE_OCR_TEXT_LIMIT = 1200
+    VK_API_VERSION = (os.getenv("GUIDE_MONITORING_VK_API_VERSION") or "5.199").strip() or "5.199"
+    try:
+        VK_TIMEOUT_SECONDS = max(
+            5,
+            min(int(float((os.getenv("GUIDE_MONITORING_VK_TIMEOUT_SEC") or "20").strip() or 20)), 60),
+        )
+    except Exception:
+        VK_TIMEOUT_SECONDS = 20
     _GEMMA_CLIENTS = {}
     _SUPABASE_CLIENT = None
     _LLM_GATEWAY_LOGGED = False
@@ -703,6 +717,150 @@ async def scan_source_posts(client: TelegramClient, *, username: str, limit: int
             posts.append(collapsed)
     posts.sort(key=lambda item: (item.post_date, item.message_id), reverse=True)
     return {"source_title": source_title, "about_text": about_text or None, "about_links": about_links}, posts
+
+
+def _vk_token() -> str:
+    token = (os.getenv("GUIDE_MONITORING_VK_TOKEN") or "").strip()
+    if token:
+        return token
+    token_env = (os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_ACCESS_TOKEN5").strip() or "VK_ACCESS_TOKEN5"
+    return (os.getenv(token_env) or "").strip()
+
+
+def _vk_api_call(method: str, params: dict[str, Any]) -> Any:
+    token = _vk_token()
+    if not token:
+        raise RuntimeError("GUIDE_MONITORING_VK_TOKEN is missing in Kaggle runtime")
+    payload = {key: value for key, value in params.items() if value is not None}
+    payload["access_token"] = token
+    payload["v"] = VK_API_VERSION
+    url = f"https://api.vk.com/method/{method}?{urllib.parse.urlencode(payload)}"
+    request = urllib.request.Request(url, headers={"User-Agent": "events-bot-guide-monitor/1.0"})
+    with urllib.request.urlopen(request, timeout=VK_TIMEOUT_SECONDS) as response:
+        raw = response.read().decode("utf-8")
+    data = json.loads(raw)
+    if isinstance(data, dict) and data.get("error"):
+        error = data["error"]
+        if isinstance(error, dict):
+            raise RuntimeError(f"VK API {method} error {error.get('error_code')}: {error.get('error_msg')}")
+        raise RuntimeError(f"VK API {method} error: {error}")
+    return data.get("response") if isinstance(data, dict) else data
+
+
+def _vk_group_from_response(response: Any) -> dict[str, Any]:
+    if isinstance(response, dict):
+        groups = response.get("groups")
+        if isinstance(groups, list) and groups:
+            return groups[0] if isinstance(groups[0], dict) else {}
+    if isinstance(response, list) and response:
+        return response[0] if isinstance(response[0], dict) else {}
+    return {}
+
+
+def _vk_wall_items(response: Any) -> list[dict[str, Any]]:
+    if isinstance(response, dict):
+        items = response.get("items")
+        return [item for item in (items or []) if isinstance(item, dict)]
+    if isinstance(response, list):
+        return [item for item in response[1:] if isinstance(item, dict)]
+    return []
+
+
+def _vk_extract_links(text: str) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for match in URL_RE.findall(text or ""):
+        link = match.strip(".,);:!?\"'")
+        if link and link not in seen:
+            seen.add(link)
+            out.append(link)
+    return out
+
+
+def _vk_post_text(post: dict[str, Any]) -> str:
+    text = str(post.get("text") or "")
+    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    return html.unescape(text).strip()
+
+
+def _vk_post_to_scanned_post(post: dict[str, Any], *, group_id: int, username: str) -> ScannedPost | None:
+    message_id = int(post.get("id") or 0)
+    timestamp = int(post.get("date") or 0)
+    if message_id <= 0 or timestamp <= 0:
+        return None
+    likes = int(((post.get("likes") or {}) if isinstance(post.get("likes"), dict) else {}).get("count") or 0)
+    comments = int(((post.get("comments") or {}) if isinstance(post.get("comments"), dict) else {}).get("count") or 0)
+    reposts = int(((post.get("reposts") or {}) if isinstance(post.get("reposts"), dict) else {}).get("count") or 0)
+    reactions_json = {
+        key: value
+        for key, value in {"likes": likes, "comments": comments, "reposts": reposts}.items()
+        if value > 0
+    }
+    views_raw = post.get("views")
+    views = int(views_raw.get("count") or 0) if isinstance(views_raw, dict) and views_raw.get("count") is not None else None
+    text = _vk_post_text(post)
+    attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
+    if not text and not attachments:
+        return None
+    return ScannedPost(
+        message_id=message_id,
+        grouped_id=None,
+        post_date=datetime.fromtimestamp(timestamp, tz=timezone.utc),
+        source_url=f"https://vk.com/wall-{group_id}_{message_id}",
+        text=text,
+        views=views,
+        forwards=reposts or None,
+        reactions_total=sum(reactions_json.values()) or None,
+        reactions_json=reactions_json or None,
+        media_refs=[],
+        media_assets=[],
+    )
+
+
+async def scan_vk_source_posts(
+    source_payload: dict[str, Any],
+    *,
+    limit: int,
+    days_back: int,
+) -> tuple[dict[str, Any], list[ScannedPost]]:
+    username = collapse_ws(source_payload.get("username")).lstrip("@")
+    if not username:
+        raise RuntimeError("VK source username is empty")
+    group_response = await asyncio.to_thread(
+        _vk_api_call,
+        "groups.getById",
+        {"group_ids": username, "fields": "description,site,screen_name,name"},
+    )
+    group = _vk_group_from_response(group_response)
+    group_id = int(group.get("id") or 0)
+    if group_id <= 0:
+        raise RuntimeError(f"VK group not found: {username}")
+    domain = collapse_ws(group.get("screen_name")) or username
+    description = collapse_ws(group.get("description"))
+    site = collapse_ws(group.get("site"))
+    about_text = "\n".join(part for part in (description, site) if part).strip()
+    wall_response = await asyncio.to_thread(
+        _vk_api_call,
+        "wall.get",
+        {"owner_id": f"-{group_id}", "count": max(1, int(limit)), "filter": "owner"},
+    )
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(days_back)))
+    posts: list[ScannedPost] = []
+    for item in _vk_wall_items(wall_response):
+        scanned = _vk_post_to_scanned_post(item, group_id=group_id, username=domain)
+        if scanned and scanned.post_date >= cutoff:
+            posts.append(scanned)
+    posts.sort(key=lambda item: (item.post_date, item.message_id), reverse=True)
+    links = _vk_extract_links(about_text)
+    source_url = collapse_ws(source_payload.get("source_url")) or f"https://vk.com/{domain}"
+    if source_url and source_url not in links:
+        links.insert(0, source_url)
+    return {
+        "source_title": collapse_ws(group.get("name")) or source_payload.get("title"),
+        "about_text": about_text or None,
+        "about_links": links,
+        "source_url": source_url,
+    }, posts
 
 
 def _detect_image_mime(data: bytes) -> str:
@@ -2424,18 +2582,25 @@ def _summarize_run_stats(sources_output: list[dict[str, Any]]) -> dict[str, int]
     return totals
 
 
-async def process_source(client: TelegramClient, source_payload: dict[str, Any], *, limit: int, days_back: int) -> dict[str, Any]:
+async def process_source(client: TelegramClient | None, source_payload: dict[str, Any], *, limit: int, days_back: int) -> dict[str, Any]:
+    platform = collapse_ws(source_payload.get("platform")).lower() or "telegram"
     username = str(source_payload.get("username") or "").strip()
     source_kind = str(source_payload.get("source_kind") or "").strip()
-    print(f"[source:start] @{username} kind={source_kind or 'unknown'} limit={limit} days_back={days_back}", flush=True)
-    try:
-        await ensure_client_connected(client)
-        meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
-    except Exception as exc:
-        if "disconnected" not in str(exc).lower():
-            raise
-        await ensure_client_connected(client, force_reconnect=True)
-        meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
+    source_label = f"{platform}:{username}" if platform != "telegram" else f"@{username}"
+    print(f"[source:start] {source_label} kind={source_kind or 'unknown'} limit={limit} days_back={days_back}", flush=True)
+    if platform == "vk":
+        meta, posts = await scan_vk_source_posts(source_payload, limit=limit, days_back=days_back)
+    else:
+        if client is None:
+            raise RuntimeError("Telegram client is unavailable")
+        try:
+            await ensure_client_connected(client)
+            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
+        except Exception as exc:
+            if "disconnected" not in str(exc).lower():
+                raise
+            await ensure_client_connected(client, force_reconnect=True)
+            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
     out_posts: list[dict[str, Any]] = []
     errors: list[str] = []
     for post in posts:
@@ -2443,7 +2608,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
         ocr_status = "skipped"
         base_flags = prefilter_flags(post)
         base_pass = prefilter_pass(post, source_kind, base_flags)
-        if _should_run_post_ocr(post, source_kind, base_flags, base_pass=base_pass):
+        if platform == "telegram" and client is not None and _should_run_post_ocr(post, source_kind, base_flags, base_pass=base_pass):
             try:
                 ocr_chunks = await collect_post_ocr_chunks(
                     client,
@@ -2460,7 +2625,11 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
                 )
         flags = prefilter_flags(post, ocr_chunks=ocr_chunks)
         passes = prefilter_pass(post, source_kind, flags)
-        media_assets = await materialize_post_media_assets(client, username=username, post=post) if passes else []
+        media_assets = (
+            await materialize_post_media_assets(client, username=username, post=post)
+            if passes and platform == "telegram" and client is not None
+            else []
+        )
         payload: dict[str, Any] = {
             "message_id": post.message_id,
             "grouped_id": post.grouped_id,
@@ -2494,6 +2663,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
             try:
                 screen = await screen_post(
                     {
+                        "platform": platform,
                         "username": username,
                         "source_kind": source_kind,
                         "title": meta.get("source_title"),
@@ -2511,6 +2681,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
                 if screen.get("extract_mode") != "none" and screen.get("decision") != "ignore":
                     payload["occurrences"] = await extract_post(
                         {
+                            "platform": platform,
                             "username": username,
                             "source_kind": source_kind,
                             "title": meta.get("source_title"),
@@ -2544,7 +2715,7 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
     source_status = "partial" if errors else "ok"
     print(
         (
-            f"[source:done] @{username} status={source_status} "
+            f"[source:done] {source_label} status={source_status} "
             f"posts={len(posts)} extracted={sum(len((item.get('occurrences') or [])) for item in out_posts)} "
             f"errors={len(errors)}"
         ),
@@ -2552,8 +2723,10 @@ async def process_source(client: TelegramClient, source_payload: dict[str, Any],
     )
     stats = _summarize_source_stats(out_posts)
     return {
+        "platform": platform,
         "username": username,
         "source_title": meta.get("source_title"),
+        "source_url": meta.get("source_url") or source_payload.get("source_url"),
         "source_kind": source_kind,
         "about_text": meta.get("about_text"),
         "about_links": meta.get("about_links"),
@@ -2581,7 +2754,11 @@ async def main() -> None:
         ),
         flush=True,
     )
-    client = await create_client()
+    has_telegram_sources = any(
+        (collapse_ws(source.get("platform")).lower() or "telegram") == "telegram"
+        for source in sources
+    )
+    client = await create_client() if has_telegram_sources else None
     partial = False
     sources_output: list[dict[str, Any]] = []
     try:
@@ -2591,13 +2768,16 @@ async def main() -> None:
             if not isinstance(source, dict):
                 continue
             try:
-                await ensure_client_connected(client)
+                if client is not None and (collapse_ws(source.get("platform")).lower() or "telegram") == "telegram":
+                    await ensure_client_connected(client)
                 result = await process_source(client, source, limit=limit, days_back=days_back)
             except Exception as exc:
                 partial = True
                 result = {
+                    "platform": collapse_ws(source.get("platform")).lower() or "telegram",
                     "username": str(source.get("username") or ""),
                     "source_title": str(source.get("title") or "") or None,
+                    "source_url": str(source.get("source_url") or "") or None,
                     "source_kind": str(source.get("source_kind") or "") or None,
                     "source_status": "error",
                     "posts_scanned": 0,
@@ -2608,7 +2788,8 @@ async def main() -> None:
                 partial = True
             sources_output.append(result)
     finally:
-        await client.disconnect()
+        if client is not None:
+            await client.disconnect()
     stats = _summarize_run_stats(sources_output)
     payload = {
         "schema_version": 1,
