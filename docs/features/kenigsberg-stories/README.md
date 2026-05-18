@@ -355,7 +355,7 @@ The time slot should avoid other heavy operations:
 
 Debug phase uses Kaggle GPU. After the rendering path is stable, production should switch to CPU unless measured CPU runtime makes the slot unsafe.
 
-## Telegram publish contract
+## Publish contract
 
 Testing:
 
@@ -371,6 +371,7 @@ Production:
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
 - the required production story target is `@mostvkenig` with `fallback_peer=me`: the shared Kaggle story helper first attempts to publish the story as the channel `@mostvkenig` (so reposts show the channel as the author) and, if that attempt raises (e.g. Telegram returns `BOOSTS_REQUIRED` because channel-native story rights are not yet available), the helper transparently retries the same upload against `peer=me`. Either outcome counts as a successful blocking/required publish, and the resulting story id is what downstream `repost_previous` targets forward from;
 - after the primary story is live, the Kaggle helper reposts it to `@loving_guide39` and `@jane_tour39` as best-effort `repost_previous` targets with `600` second spacing (matching the CherryFlash fanout cadence); failures there do not block render/publish;
+- the same generated story is also published as a VK community story to `vk.com/mostvkenig` (`transport=vk_story`, `peer=mostvkenig`) `120` seconds after the primary Telegram publish. The VK target is intentionally `blocking=false, required=false`: failure (missing VK admin rights, VK rejecting the upload, etc.) is logged in `story_publish_report.json` but must not gate or fail the Telegram publish. The VK story uses the same encrypted runtime bundle as CherryFlash KONB (`VK_ACCESS_TOKEN5`, no new env), reusing the upload path validated by `kaggle/CrumpleVideo/story_publish.py` (`stories.getVideoUploadServer` → upload → `stories.save`).
 - Kenigsberg must not use the shared Business story allowlist from video announcements. This is a separate history-channel product, not a partner video-announcement fanout; `story_business_targets` is forced to an empty list in code.
 - keep Business connection secrets in encrypted cache / per-run encrypted Kaggle story secrets;
 - never log raw `business_connection_id`, Telegram user id, bot token, auth bundle, or personal account handles.

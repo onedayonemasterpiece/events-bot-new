@@ -1151,3 +1151,9 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_pro
     assert overrides[2]["blocking"] is False
     assert overrides[2]["required"] is False
     assert overrides[2]["delay_seconds"] == 600
+    assert overrides[3]["peer"] == "mostvkenig"
+    assert overrides[3]["transport"] == "vk_story"
+    assert overrides[3]["mode"] == "upload"
+    assert overrides[3]["blocking"] is False
+    assert overrides[3]["required"] is False
+    assert overrides[3]["delay_seconds"] == 120

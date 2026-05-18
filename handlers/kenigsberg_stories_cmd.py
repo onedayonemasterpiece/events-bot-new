@@ -209,6 +209,15 @@ def _kenigsberg_story_targets() -> list[dict[str, object]]:
             "required": False,
             "label": "@jane_tour39",
         },
+        {
+            "peer": "mostvkenig",
+            "transport": "vk_story",
+            "delay_seconds": 120,
+            "mode": "upload",
+            "blocking": False,
+            "required": False,
+            "label": "vk:mostvkenig:story",
+        },
     ]
 
 
