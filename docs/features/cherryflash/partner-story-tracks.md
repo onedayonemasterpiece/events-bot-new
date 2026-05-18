@@ -266,11 +266,9 @@ Selection policy:
 
 - profile key: `popular_review_konb`;
 - track id: `partner_konb_library_001`;
-- default publish mode: `test`, publishing the first run to `https://t.me/keniggpt` as a normal Telegram channel post, not a channel story;
-- production publish mode is enabled by setting `partner_track_konb_publish_mode=prod`;
-- production story fanout: Telegram channel story `https://t.me/kaliningradlibrary` as best-effort/non-blocking, plus VK community story `https://vk.com/konb39` as required;
-- if Telegram channel boosts are insufficient, the Telegram target may fail locally while the VK story still runs and determines required publish success;
-- daily schedule: `12:50 Europe/Kaliningrad`, just after the eco/nature partner slot; if the render lane is still occupied, the partner watchdog retries later the same day until the shared 22:00 deadline.
+- default publish mode (post-round-3, 2026-05-17): **`prod`**. Test mode is still available via setting `partner_track_konb_publish_mode=test`, which publishes a normal Telegram channel post to `https://t.me/keniggpt` (not a channel story);
+- production story fanout (post-round-3): **two independent best-effort targets** — Telegram channel story `https://t.me/kaliningradlibrary` and VK community story `https://vk.com/konb39`. **Neither is `required`** — success in one does not gate the other, and failure of one does not fail the overall publish. Each target is attempted on its own (`blocking=False`, `required=False`);
+- daily schedule (post-round-3): **`12:37 Europe/Kaliningrad`**, exactly 7 min after the eco/nature partner slot at 12:30, per operator brief. If the render lane is still occupied at 12:37, the partner watchdog retries later the same day until the shared 22:00 deadline;
 - КОНБ test/prod modes must not inherit global `video_announce_story_business_targets`; the only targets are the explicit КОНБ test/prod targets above.
 
 Ranking policy:
@@ -284,12 +282,13 @@ Ranking policy:
 - an event that occupied slot 1 recently additionally pays the `first_position` penalty (~360 pts), so even a permitted repeat does not pin to slot 1 on the next day;
 - when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, calendar-day-spaced repeat allowance, and ranking rules.
 
-Outro (post-round-2 contract, 2026-05-17):
+Outro (post-round-3 contract, 2026-05-17):
 
 - strip color: `#780000`, text color `#FFFFFF`;
 - **global outro size**: the whole composition (stripe heights, font sizes, base inter-stripe gap) is rendered **30% smaller** than round-1 via `outro.global_scale = 0.7` in `PARTNER_KONB_LIBRARY.outro`. Per-line `scale` ratios stay at 1.0 / 0.42 / 0.8;
 - library name is rendered as **one word per stripe at scale 1.0**: `Калининградская` / `областная` / `научная` / `библиотека`;
-- sponsor caption is a single small stripe at scale 0.42: `при поддержке`. The stripe has `extra_gap_before = 1.0` (the gap ABOVE it is doubled), and the next stripe (`Полюбить`) also carries `extra_gap_before = 1.0` (the gap BELOW «при поддержке» is doubled too), so the caption visually floats with 2× empty space above and below;
+- sponsor caption is a single small stripe at scale 0.42: `при поддержке`. The stripe has `extra_gap_before = 2.0` (the gap ABOVE it triples: base + 2×base = 3×base), and the next stripe (`Полюбить`) also carries `extra_gap_before = 2.0` (the gap BELOW «при поддержке» triples too), so the caption visually floats with **3× empty space above and below**;
+- price/free line uses **«руб.»** instead of the `₽` glyph: the CherryFlash title font (Bebas Neue) does not include the ruble codepoint and falls back to `.notdef`, which caused render artefacts on the round-2 test. Free events still render as `БЕСПЛАТНО`; paid events render as `N руб.` / `N–M руб.` / `ОТ N руб.` / `ДО M руб.`;
 - channel signature is rendered as **one word per stripe at scale 0.8** (20% smaller than the library lines): `Полюбить` / `Калининград` / `Анонсы`;
 - stripes enter alternating from left/right on a staggered delay so the 8-stripe composition slides in well before the 3.5s outro card duration.
 

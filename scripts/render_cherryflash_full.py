@@ -289,12 +289,16 @@ def _format_display_price(scene_data: dict) -> str:
 
     pmin = _to_int(price_min)
     pmax = _to_int(price_max)
+    # Use «руб.» instead of the ₽ glyph: round-3 operator feedback
+    # (2026-05-17) reported render artefacts on the price line because the
+    # CherryFlash title font (Bebas Neue) does not include the ruble sign
+    # codepoint and falls back to `.notdef`. «руб.» renders cleanly.
     if pmin is not None and pmin > 0:
         if pmax is not None and pmax > pmin:
-            return f"{pmin}–{pmax} ₽"
-        return f"ОТ {pmin} ₽" if pmax is None else f"{pmin} ₽"
+            return f"{pmin}–{pmax} руб."
+        return f"ОТ {pmin} руб." if pmax is None else f"{pmin} руб."
     if pmax is not None and pmax > 0:
-        return f"ДО {pmax} ₽"
+        return f"ДО {pmax} руб."
     if is_free or (pmin == 0 and pmax in (None, 0)) or (pmax == 0 and pmin in (None, 0)):
         return "БЕСПЛАТНО"
     return "БЕСПЛАТНО"

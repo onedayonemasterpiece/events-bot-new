@@ -1210,7 +1210,10 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
 PARTNER_TRACK_TZ = "Europe/Kaliningrad"
 PARTNER_TRACK_DEFAULT_TIMES: dict[str, str] = {
     "partner_eco_nature_001": "12:30",
-    "partner_konb_library_001": "12:50",
+    # КОНБ launches 7 min after the eco/nature slot per operator brief
+    # (round-3 prod launch, 2026-05-17): «через 7 минут после запуска
+    # эко-природы».
+    "partner_konb_library_001": "12:37",
     "partner_region_east_001": "18:30",
 }
 # Hard deadline (local time): after this the watchdog stops retrying for today

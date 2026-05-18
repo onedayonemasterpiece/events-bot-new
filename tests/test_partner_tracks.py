@@ -86,12 +86,20 @@ def test_partner_tracks_carry_default_business_selector():
             assert track.default_business_selector.startswith("@"), track.track_id
 
 
-def test_konb_track_defaults_to_test_story_target():
-    assert PARTNER_KONB_LIBRARY.default_publish_mode == "test"
+def test_konb_track_defaults_to_prod_story_targets():
+    # Round-3 prod launch (2026-05-17): КОНБ default mode is `prod`. Both
+    # story targets (`@kaliningradlibrary` TG story + `konb39` VK story)
+    # are independent best-effort — neither has `required=True`, so a
+    # failure on one transport does not fail the overall publish.
+    assert PARTNER_KONB_LIBRARY.default_publish_mode == "prod"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["peer"] == "@keniggpt"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["transport"] == "telegram_chat"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[0]["peer"] == "@kaliningradlibrary"
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["peer"] == "konb39"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_story"
+    for target in PARTNER_KONB_LIBRARY.prod_story_targets:
+        assert target.get("required") is False, target
+        assert target.get("blocking") is False, target
     assert PARTNER_KONB_LIBRARY.outro["strip_color"] == "#780000"
 
 

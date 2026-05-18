@@ -91,7 +91,7 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
     business_selector_setting_key="",
     default_business_selector="",
     publish_mode_setting_key="partner_track_konb_publish_mode",
-    default_publish_mode="test",
+    default_publish_mode="prod",
     test_story_targets=(
         {
             "peer": "@keniggpt",
@@ -105,6 +105,12 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         },
     ),
     prod_story_targets=(
+        # Round-3 prod contract (2026-05-17): both targets are independent
+        # best-effort — neither is `required`. Success in one does not gate
+        # the other, and failure of one does not fail the overall publish.
+        # Operator brief: «публикация в сторис телеграм и в сторис вк
+        # сообщества, вне зависимости от успеха публикации в какой-либо
+        # из них».
         {
             "peer": "@kaliningradlibrary",
             "label": "tg:@kaliningradlibrary:story",
@@ -120,7 +126,7 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
             "mode": "upload",
             "transport": "vk_story",
             "blocking": False,
-            "required": True,
+            "required": False,
         },
     ),
     selection_policy_id="konb_library",
@@ -132,11 +138,14 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         # `scale` keeps the same ratios as round-1 (1.0 / 0.42 / 0.8).
         "global_scale": 0.7,
         # Library name: one word per stripe at full scale.
-        # Sponsor caption «при поддержке»: a single small stripe with 2×
+        # Sponsor caption «при поддержке»: a single small stripe with 3×
         # empty space above AND below — the «при поддержке» row sets
-        # `extra_gap_before=1.0` (so the gap ABOVE it doubles), and the next
-        # «Полюбить» row also sets `extra_gap_before=1.0` (so the gap BELOW
-        # «при поддержке» doubles too).
+        # `extra_gap_before=2.0` (so the gap ABOVE it triples: base + 2×base
+        # = 3×base), and the next «Полюбить» row also sets
+        # `extra_gap_before=2.0` (so the gap BELOW «при поддержке» triples
+        # too). Round-3 operator request (2026-05-17): «между "при
+        # поддержке" сверху и снизу добавь дополнительный интервал, в 3
+        # раза больше».
         # Channel signature «Полюбить Калининград Анонсы»: one word per
         # stripe at scale 0.80 (20% smaller than the library name lines).
         "lines": [
@@ -149,14 +158,14 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
                 "scale": 0.42,
                 "side": "left",
                 "delay": 0.78,
-                "extra_gap_before": 1.0,
+                "extra_gap_before": 2.0,
             },
             {
                 "text": "Полюбить",
                 "scale": 0.8,
                 "side": "right",
                 "delay": 0.96,
-                "extra_gap_before": 1.0,
+                "extra_gap_before": 2.0,
             },
             {"text": "Калининград", "scale": 0.8, "side": "left", "delay": 1.14},
             {"text": "Анонсы", "scale": 0.8, "side": "right", "delay": 1.32},

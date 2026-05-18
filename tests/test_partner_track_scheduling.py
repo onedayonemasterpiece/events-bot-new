@@ -394,7 +394,7 @@ def test_partner_track_default_times():
         scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_eco_nature_001"] == "12:30"
     )
     assert (
-        scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_konb_library_001"] == "12:50"
+        scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_konb_library_001"] == "12:37"
     )
     assert (
         scheduling.PARTNER_TRACK_DEFAULT_TIMES["partner_region_east_001"] == "18:30"
