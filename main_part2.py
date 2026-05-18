@@ -3233,18 +3233,24 @@ async def build_daily_sections_vk(
         raw_city = (event.city or "Калининград").strip()
         return raw_city or "Калининград"
 
-    def _append_compact_event(lines: list[str], event: Event) -> None:
+    def _append_compact_event(
+        lines: list[str],
+        event: Event,
+        *,
+        prefix_mode: Literal["date", "time"] = "date",
+    ) -> None:
         lines.append(
             format_event_vk_daily_inline(
                 event,
                 promo_highlight=event.id is not None and int(event.id) in promo_highlight_ids,
                 partner_creator_ids=partner_creator_ids,
+                prefix_mode=prefix_mode,
             )
         )
 
     lines1 = ["НЕ ПРОПУСТИТЕ СЕГОДНЯ"]
     for e in events_today:
-        _append_compact_event(lines1, e)
+        _append_compact_event(lines1, e, prefix_mode="time")
     section1 = "\n".join(lines1)
 
     lines2 = [f"+{len(events_new)} ДОБАВИЛИ В АНОНС"]

@@ -19582,8 +19582,9 @@ def format_event_vk_daily_inline(
     *,
     promo_highlight: bool = False,
     partner_creator_ids: Collection[int] | None = None,
+    prefix_mode: Literal["date", "time"] = "date",
 ) -> str:
-    """Return compact one-line VK daily text, linking only to our VK event post."""
+    """Return compact one-line VK daily text with the best available VK wall link."""
 
     date_part = ""
     if e.date:
@@ -19595,6 +19596,9 @@ def format_event_vk_daily_inline(
     if date_part:
         d = parse_iso_date(date_part)
         formatted_date = d.strftime("%d.%m") if d else date_part
+    formatted_time = ""
+    if e.time and e.time != "00:00":
+        formatted_time = e.time.strip()
 
     markers: list[str] = []
     if promo_highlight:
@@ -19607,14 +19611,17 @@ def format_event_vk_daily_inline(
 
     title_text, emoji_part = _normalize_title_and_emoji(e.title, e.emoji)
     body_title = f"{prefix}{emoji_part}{title_text}".strip()
-    partner_creator_ids = partner_creator_ids or ()
-    is_partner_creator = (
-        e.creator_id in partner_creator_ids if e.creator_id is not None else False
-    )
-    if not is_partner_creator and is_vk_wall_url(e.vk_repost_url):
-        body = f"[{e.vk_repost_url}|{body_title}]"
+    vk_link = None
+    for candidate in (e.vk_repost_url, e.source_post_url, e.source_vk_post_url):
+        if is_vk_wall_url(candidate):
+            vk_link = candidate
+            break
+    if vk_link:
+        body = f"[{vk_link}|{body_title}]"
     else:
         body = body_title
+    if prefix_mode == "time" and formatted_time:
+        return f"{formatted_time} {body}".strip()
     if formatted_date:
         return f"{formatted_date} {body}".strip()
     return body

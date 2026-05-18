@@ -49,7 +49,10 @@ async def test_build_daily_sections_vk_compact_without_navigation_links(tmp_path
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
-    assert sec1.splitlines() == ["НЕ ПРОПУСТИТЕ СЕГОДНЯ", "10.07 🚩 Party"]
+    assert sec1.splitlines() == [
+        "НЕ ПРОПУСТИТЕ СЕГОДНЯ",
+        "10:00 [https://vk.com/wall-1_1|🚩 Party]",
+    ]
     assert "выходные" not in sec1
     assert "wall-1_2" not in sec1
 
@@ -80,11 +83,37 @@ async def test_build_daily_sections_vk_prefers_repost_for_non_partner(tmp_path: 
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
     event_line = sec1.splitlines()[1]
-    assert event_line == "10.07 [https://vk.com/wall-1_7|Party]"
+    assert event_line == "10:00 [https://vk.com/wall-1_7|Party]"
 
 
 @pytest.mark.asyncio
-async def test_build_daily_sections_vk_does_not_link_partner_repost(tmp_path: Path):
+async def test_build_daily_sections_vk_added_keeps_date_and_uses_source_link(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2025, 7, 10, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(
+            Event(
+                title="Future party",
+                description="d",
+                source_text="s",
+                date="2025-07-12",
+                time="20:00",
+                location_name="Club",
+                source_post_url="https://vk.com/wall-1_11",
+                added_at=now,
+            )
+        )
+        await session.commit()
+
+    _, sec2 = await main.build_daily_sections_vk(db, timezone.utc, now=now)
+    event_line = sec2.splitlines()[1]
+    assert event_line == "12.07 [https://vk.com/wall-1_11|Future party]"
+
+
+@pytest.mark.asyncio
+async def test_build_daily_sections_vk_links_partner_repost(tmp_path: Path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     today = date(2025, 7, 10)
@@ -113,9 +142,7 @@ async def test_build_daily_sections_vk_does_not_link_partner_repost(tmp_path: Pa
         db, timezone.utc, now=datetime(2025, 7, 10, tzinfo=timezone.utc)
     )
     event_line = sec1.splitlines()[1]
-    assert event_line == "10.07 Party"
-    assert "wall-1_8" not in sec1
-    assert "wall-1_9" not in sec1
+    assert event_line == "10:00 [https://vk.com/wall-1_9|Party]"
 
 
 @pytest.mark.asyncio
@@ -142,7 +169,7 @@ async def test_build_daily_sections_vk_includes_fair_when_few_events(tmp_path: P
     sec1, _ = await main.build_daily_sections_vk(
         db, timezone.utc, now=now
     )
-    assert "03.01 🚩 Fair" in sec1
+    assert "10:00..17:30 🚩 Fair" in sec1
 
 
 @pytest.mark.asyncio
