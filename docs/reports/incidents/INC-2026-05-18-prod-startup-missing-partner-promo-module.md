@@ -1,10 +1,10 @@
 # INC-2026-05-18 Prod Startup Missing Partner Promo Module
 
-Status: open
+Status: closed
 Severity: sev0
 Service: Fly production bot startup / webhook serving
 Opened: 2026-05-18
-Closed: —
+Closed: 2026-05-18
 Owners: events-bot runtime / release owner
 Related incidents: `INC-2026-04-25-prod-bot-unresponsive-after-tg-monitoring-smoke`
 Related docs: `docs/operations/incident-management.md`, `docs/operations/release-governance.md`, `docs/features/digests/README.md`
@@ -30,6 +30,8 @@ The 2026-05-18 deploy of `c7dc458b` restarted the Fly machine, but production fa
 - 2026-05-18 06:51 UTC: deploy image `deployment-01KRWXFD9PE9ZPX0DHEDKY63WA` started rolling out.
 - 2026-05-18 06:51-06:52 UTC: production machine repeatedly exited with `ModuleNotFoundError: partner_promo`.
 - 2026-05-18 06:52 UTC: incident workflow started from failed health checks and Fly logs.
+- 2026-05-18 06:57 UTC: hotfix `5f47e135` deployed as image `deployment-01KRWXZEEBASCV2EHZP6QQS1Z6`.
+- 2026-05-18 06:58 UTC: `/healthz` returned `ok=true`, `ready=true`, and Fly health check was passing.
 
 ## Root Cause
 
@@ -90,10 +92,17 @@ The 2026-05-18 deploy of `c7dc458b` restarted the Fly machine, but production fa
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `5f47e135929ca7033b15bcdd1ecb756bf9cc704d` (`fix(prod): guard optional partner promo imports`), reachable from `origin/main`;
+- deploy path: manual `flyctl deploy --remote-only` from clean branch `hotfix/2026-05-18-daily-vk-links`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KRWXZEEBASCV2EHZP6QQS1Z6`, machine `48e42d5b714228` version `1119`;
 - regression checks:
+  - `.venv/bin/python -m py_compile main.py main_part2.py tests/test_vk_daily.py`;
+  - `.venv/bin/python -m pytest -q tests/test_vk_daily.py tests/test_daily_format.py tests/test_kenigsberg_stories.py` → `75 passed`;
+  - `TELEGRAM_BOT_TOKEN=... .venv/bin/python - <<'PY' ... main.create_app() ...` → `CREATE_APP_OK ['bot']` and logged `partner_promo input sessions unavailable` without crashing;
+  - `git diff --check`;
 - post-deploy verification:
+  - `flyctl status --app events-bot-new-wngqia` → machine `48e42d5b714228` version `1119`, `1 total, 1 passing`;
+  - `curl https://events-bot-new-wngqia.fly.dev/healthz` → `ok=true`, `ready=true`, DB `ok`, `daily_scheduler` `ok`, `kenigsberg_story_daily` `ok`, `issues=[]`;
+  - Fly logs showed `BOOT_OK`, `Running on http://0.0.0.0:8080`, health check passing, and webhook POSTs returning `200`.
 
 ## Prevention
 
