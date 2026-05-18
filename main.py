@@ -323,8 +323,6 @@ page_lock = _page_locks
 _month_next_run: dict[str, float] = defaultdict(float)
 _week_next_run: dict[str, float] = defaultdict(float)
 _weekend_next_run: dict[str, float] = defaultdict(float)
-_vk_week_next_run: dict[str, float] = defaultdict(float)
-_vk_weekend_next_run: dict[str, float] = defaultdict(float)
 _partner_last_run: date | None = None
 
 _startup_handler_registered = False
@@ -434,15 +432,6 @@ def normalize_telegraph_url(url: str | None) -> str | None:
     return url
 
 
-
-@lru_cache(maxsize=20)
-def _weekend_vk_lock(start: str) -> asyncio.Lock:
-    return asyncio.Lock()
-
-
-@lru_cache(maxsize=20)
-def _week_vk_lock(start: str) -> asyncio.Lock:
-    return asyncio.Lock()
 
 DB_PATH = os.getenv("DB_PATH", "/data/db.sqlite")
 db: Database | None = None
@@ -10823,7 +10812,6 @@ async def process_request(callback: types.CallbackQuery, db: Database, bot: Bot)
             await sync_month_page(db, month)
             if w_start:
                 await sync_weekend_page(db, w_start.isoformat(), post_vk=False)
-                await sync_vk_weekend_post(db, w_start.isoformat())
         if vk_post:
             await delete_vk_post(vk_post, db, bot)
         offset = await get_tz_offset(db)
@@ -13818,9 +13806,9 @@ async def schedule_event_update_tasks(
 
         d = parse_iso_date(ev.date)
         if d:
-            results[JobTask.week_pages] = await enqueue_job(
-                db, eid, JobTask.week_pages, depends_on=page_deps
-            )
+            # JobTask.week_pages retired 2026-05-17 with the VK weekly nav post: it only
+            # ever drove `sync_vk_week_post`; Telegraph weekly navigation is handled inside
+            # weekend/month rebuilds, so we no longer enqueue this task.
             w_start = weekend_start_for_date(d)
             if w_start:
                 if os.getenv("EVENT_UPDATE_SYNC"):
@@ -13844,8 +13832,21 @@ async def schedule_event_update_tasks(
             )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
-    if not skip_vk_sync and not ev.source_vk_post_url:
-        results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
+    if not skip_vk_sync:
+        # Schedule vk_sync unless we already have a managed klgdevents post for this event.
+        # Imported VK events keep `source_vk_post_url` pointing at the external source wall
+        # post; those must still get a redactional post in `VK_EVENTS_GROUP_ID`.
+        existing_vk_url = (ev.source_vk_post_url or "").strip()
+        managed_klgdevents_post = False
+        if existing_vk_url:
+            owner_ids = _vk_owner_and_post_id(existing_vk_url)
+            target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+            if owner_ids and target_group_id:
+                managed_klgdevents_post = (
+                    str(abs(int(owner_ids[0]))) == target_group_id
+                )
+        if not managed_klgdevents_post:
+            results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
@@ -13871,8 +13872,7 @@ async def _drain_nav_tasks(db: Database, event_id: int, timeout: float = 90.0) -
             keys.add(f"month_pages:{month}")
             d = parse_iso_date(ev.date)
             if d:
-                week = d.isocalendar().week
-                keys.add(f"week_pages:{d.year}-{week:02d}")
+                # week_pages retired 2026-05-17 (VK-only).
                 w = weekend_start_for_date(d)
                 if w:
                     keys.add(f"weekend_pages:{w.isoformat()}")
@@ -18204,17 +18204,11 @@ async def update_weekend_pages_for(event_id: int, db: Database, bot: Bot | None)
 
 
 async def update_week_pages_for(event_id: int, db: Database, bot: Bot | None) -> None:
-    if DISABLE_PAGE_JOBS:
-        logging.info("update_week_pages_for disabled via DISABLE_PAGE_JOBS")
-        return
-    async with db.get_session() as session:
-        ev = await session.get(Event, event_id)
-    if not ev:
-        return
-    d = parse_iso_date(ev.date)
-    if d:
-        w_start = week_start_for_date(d)
-        await sync_vk_week_post(db, w_start.isoformat(), bot)
+    # VK weekly navigation posts were retired 2026-05-17 together with the new compact
+    # VK daily slots: weekly nav links no longer live in the VK group, so this task is a
+    # no-op. The handler is kept registered so already-queued `week_pages` jobs in the
+    # outbox drain cleanly without raising "unknown task".
+    return
 
 
 async def ics_fix_nav(db: Database, month: str | None = None) -> int:
@@ -18237,7 +18231,6 @@ async def ics_fix_nav(db: Database, month: str | None = None) -> int:
             for ev in events:
                 await enqueue_job(db, ev.id, JobTask.month_pages)
                 await enqueue_job(db, ev.id, JobTask.weekend_pages)
-                await enqueue_job(db, ev.id, JobTask.week_pages)
                 count += 1
     logging.info("ics_fix_nav enqueued tasks for %s events", count)
     return count
@@ -18284,8 +18277,7 @@ async def publish_event_progress(
     coalesce_keys: list[str] = []
     if d:
         coalesce_keys.append(f"month_pages:{d.strftime('%Y-%m')}")
-        week = d.isocalendar().week
-        coalesce_keys.append(f"week_pages:{d.year}-{week:02d}")
+        # week_pages retired 2026-05-17 (VK-only); no progress key for it anymore.
         w_start = weekend_start_for_date(d)
         if w_start:
             coalesce_keys.append(f"weekend_pages:{w_start.isoformat()}")

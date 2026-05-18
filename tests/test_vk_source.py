@@ -42,6 +42,8 @@ async def test_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
 
     monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
 
     async with db.get_session() as session:
         event = main.Event(
@@ -52,6 +54,9 @@ async def test_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
             location_name="Place",
             source_text="T",
             source_post_url="https://vk.com/wall-1_2",
+            # Imported VK events also persist the source URL in source_vk_post_url —
+            # vk_sync must still be scheduled to publish a managed klgdevents post.
+            source_vk_post_url="https://vk.com/wall-1_2",
         )
         session.add(event)
         await session.commit()
@@ -60,6 +65,40 @@ async def test_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
     await main.schedule_event_update_tasks(db, event)
 
     assert main.JobTask.vk_sync in tasks
+
+
+@pytest.mark.asyncio
+async def test_managed_klgdevents_event_skips_vk_sync(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+
+    async with db.get_session() as session:
+        event = main.Event(
+            title="T",
+            description="",
+            date="2026-06-01",
+            time="10:00",
+            location_name="Place",
+            source_text="T",
+            source_vk_post_url="https://vk.com/wall-231920894_981",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event)
+
+    assert main.JobTask.vk_sync not in tasks
 
 
 @pytest.mark.asyncio
