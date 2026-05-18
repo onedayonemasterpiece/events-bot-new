@@ -150,7 +150,12 @@ def mounted_input_dirs(input_root: Path) -> list[str]:
     return dirs
 
 
-def choose_video_dataset(input_root: Path, rng: random.Random) -> tuple[Path, str, str]:
+def choose_video_dataset(
+    input_root: Path,
+    rng: random.Random,
+    *,
+    forced_dataset: str = "",
+) -> tuple[Path, str, str]:
     options = []
     for spec in VIDEO_DATASETS:
         path = find_dataset_dir(input_root, list(spec["aliases"]))
@@ -158,6 +163,30 @@ def choose_video_dataset(input_root: Path, rng: random.Random) -> tuple[Path, st
             video_count = len(iter_files(path, VIDEO_EXTS))
             if video_count > 0:
                 options.append((path, str(spec["period_key"]), str(spec["dataset"]), video_count))
+    forced = str(forced_dataset or "").strip().casefold()
+    if forced:
+        forced_aliases = [forced, Path(forced).name.casefold()]
+        for spec in VIDEO_DATASETS:
+            spec_aliases = {str(alias).casefold() for alias in spec["aliases"]}
+            spec_aliases.add(str(spec["dataset"]).casefold())
+            spec_aliases.add(Path(str(spec["dataset"])).name.casefold())
+            if any(alias in spec_aliases for alias in forced_aliases):
+                forced_aliases.extend(spec_aliases)
+                break
+        for path, period_key, dataset_slug, _video_count in options:
+            if (
+                dataset_slug.casefold() in forced_aliases
+                or Path(dataset_slug).name.casefold() in forced_aliases
+                or path.name.casefold() in forced_aliases
+            ):
+                return path, period_key, dataset_slug
+        path = find_dataset_dir(input_root, list({alias for alias in forced_aliases if alias}))
+        if path and iter_files(path, VIDEO_EXTS):
+            return path, forced, forced
+        raise RuntimeError(
+            "Pinned poetry video dataset is not mounted or empty: "
+            f"requested={forced_dataset!r} available_inputs={mounted_input_dirs(input_root)}"
+        )
     if options:
         total = sum(item[3] for item in options)
         threshold = rng.uniform(0, float(total))
@@ -480,19 +509,27 @@ def draw_stripes(
 def poem_block_layout(
     lines: list[str],
     draw: ImageDraw.ImageDraw,
-) -> tuple[ImageFont.ImageFont, int, int]:
+    *,
+    group_breaks: set[int] | None = None,
+) -> tuple[ImageFont.ImageFont, int, int, int]:
     max_width = W - 96
-    max_height = 690
+    max_height = 720
     clean = [line for line in lines if line.strip()]
+    breaks = {idx for idx in (group_breaks or set()) if 0 <= idx < len(clean) - 1}
     for size in range(42, 23, -2):
         fnt = font(size)
         line_h = max(44, int(size * 1.34))
         gap = max(8, int(size * 0.22))
-        total_h = len(clean) * line_h + max(0, len(clean) - 1) * gap
+        group_extra = max(18, int(size * 0.6))
+        total_h = (
+            len(clean) * line_h
+            + max(0, len(clean) - 1) * gap
+            + len(breaks) * group_extra
+        )
         if total_h > max_height:
             continue
         if all(draw.textlength(line, font=fnt) <= max_width - 36 for line in clean):
-            return fnt, line_h, gap
+            return fnt, line_h, gap, group_extra
     fnt = font(24)
     too_wide = [line for line in clean if draw.textlength(line, font=fnt) > max_width - 36]
     if too_wide:
@@ -500,48 +537,91 @@ def poem_block_layout(
             "Poetry line does not fit without wrapping at minimum font size: "
             + json.dumps(too_wide[:3], ensure_ascii=False)
         )
-    return fnt, 36, 7
+    return fnt, 36, 7, 18
 
 
 def draw_poem_block(
     image: Image.Image,
-    lines: list[str],
+    cue: dict[str, Any] | list[str],
     *,
     t: float,
     scene_duration: float,
 ) -> None:
-    clean = [line.strip() for line in lines if line.strip()]
-    if not clean:
+    if isinstance(cue, dict):
+        groups_raw = cue.get("groups")
+        if not isinstance(groups_raw, list) or not groups_raw:
+            groups_raw = [cue.get("lines") or []]
+        style = str(cue.get("style") or "normal")
+    else:
+        groups_raw = [cue]
+        style = "normal"
+    groups: list[list[str]] = []
+    for group in groups_raw:
+        if not isinstance(group, list):
+            continue
+        cleaned = [str(line).strip() for line in group if str(line).strip()]
+        if cleaned:
+            groups.append(cleaned)
+    if not groups:
         return
+    flat: list[str] = []
+    group_breaks: set[int] = set()
+    group_index_per_line: list[int] = []
+    for gi, group in enumerate(groups):
+        for line in group:
+            flat.append(line)
+            group_index_per_line.append(gi)
+        if gi < len(groups) - 1:
+            group_breaks.add(len(flat) - 1)
     draw = ImageDraw.Draw(image, "RGBA")
-    fnt, line_h, gap = poem_block_layout(clean, draw)
-    block_h = len(clean) * line_h + max(0, len(clean) - 1) * gap
+    fnt, line_h, gap, group_extra = poem_block_layout(flat, draw, group_breaks=group_breaks)
+    extras = [group_extra if (idx - 1) in group_breaks else 0 for idx in range(len(flat))]
+    block_h = (
+        len(flat) * line_h
+        + max(0, len(flat) - 1) * gap
+        + sum(extras)
+    )
     x0 = 48
     y0 = int((H - block_h) * 0.46)
-    in_duration = min(0.58, max(0.24, scene_duration * 0.22))
-    out_start = max(0.65, scene_duration - min(0.44, scene_duration * 0.18))
-    for idx, line in enumerate(clean):
-        local_delay = idx * 0.055
-        in_p = ease_out_cubic((t - local_delay) / in_duration)
-        out_p = ease_in_cubic((t - out_start - idx * 0.035) / 0.28)
+    is_title = style == "title"
+    if is_title:
+        in_duration = min(0.32, max(0.12, scene_duration * 0.08))
+        out_start = max(0.85, scene_duration - 0.32)
+        out_duration = 0.24
+    else:
+        in_duration = min(0.58, max(0.24, scene_duration * 0.22))
+        out_start = max(0.65, scene_duration - min(0.44, scene_duration * 0.18))
+        out_duration = 0.28
+    cursor_y = y0
+    for idx, line in enumerate(flat):
+        if is_title:
+            in_p = ease_out_cubic(t / in_duration) if in_duration > 0 else 1.0
+            out_p = ease_in_cubic((t - out_start) / out_duration) if out_duration > 0 else 0.0
+            stripe_progress = 1.0
+        else:
+            local_delay = idx * 0.055
+            in_p = ease_out_cubic((t - local_delay) / in_duration)
+            out_p = ease_in_cubic((t - out_start - idx * 0.035) / out_duration)
+            stripe_progress = max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p)))
         alpha = int(232 * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
         if alpha <= 0:
+            cursor_y += line_h + (gap if idx < len(flat) - 1 else 0) + extras[idx]
             continue
         text_w = int(draw.textlength(line, font=fnt))
         stripe_w = min(W - x0 - 34, text_w + 36)
-        visible_w = int(stripe_w * max(0.0, min(1.0, in_p)) * (1.0 - max(0.0, min(1.0, out_p))))
-        y = y0 + idx * (line_h + gap)
+        visible_w = int(stripe_w * stripe_progress) if not is_title else stripe_w
+        y = cursor_y
         draw.rounded_rectangle(
             (x0, y, x0 + visible_w, y + line_h),
             radius=5,
             fill=(241, 228, 75, alpha),
         )
-        if visible_w < text_w + 20:
-            continue
-        bbox = fnt.getbbox(line)
-        text_h = bbox[3] - bbox[1]
-        text_y = int(y + (line_h - text_h) / 2 - bbox[1])
-        draw.text((x0 + 18, text_y), line, font=fnt, fill=(16, 14, 14, min(255, alpha + 20)))
+        if visible_w >= text_w + 20:
+            bbox = fnt.getbbox(line)
+            text_h = bbox[3] - bbox[1]
+            text_y = int(y + (line_h - text_h) / 2 - bbox[1])
+            draw.text((x0 + 18, text_y), line, font=fnt, fill=(16, 14, 14, min(255, alpha + 20)))
+        cursor_y += line_h + (gap if idx < len(flat) - 1 else 0) + extras[idx]
 
 
 def build_outro_strip(text: str, fnt: ImageFont.ImageFont, strip_height: int) -> Image.Image:
@@ -826,11 +906,13 @@ def build_poetry_text_cues(
     total_duration: float,
     *,
     voice_path: Path | None = None,
+    signature_lines: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     clean = [[str(line).strip() for line in block if str(line).strip()] for block in blocks]
     clean = [block for block in clean if block]
     if not clean:
         return []
+    signature = [str(line).strip() for line in (signature_lines or []) if str(line).strip()]
     start_pad = 0.18
     end_pad = 0.18
     available = max(1.0, total_duration - start_pad - end_pad)
@@ -849,10 +931,19 @@ def build_poetry_text_cues(
             end = _nearest_pause(target_end, pauses, min_t=min_end, max_t=max_end)
         if end <= cursor:
             end = min(total_duration - end_pad, cursor + 1.8)
+        groups = [block]
+        style = "normal"
+        if idx == 0 and len(block) == 1:
+            style = "title"
+        if idx == len(clean) - 1 and signature:
+            groups = [block, signature]
+            style = "final"
         cues.append(
             {
                 "text": "\n".join(block),
                 "lines": block,
+                "groups": groups,
+                "style": style,
                 "start": round(cursor, 3),
                 "end": round(end, 3),
             }
@@ -870,15 +961,12 @@ def text_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[str, flo
     return None
 
 
-def poetry_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[list[str], float, float] | None:
+def poetry_cue_at(cues: list[dict[str, Any]], timeline_t: float) -> tuple[dict[str, Any], float, float] | None:
     for cue in cues:
         start = float(cue.get("start") or 0.0)
         end = float(cue.get("end") or 0.0)
         if start <= timeline_t < end:
-            lines = cue.get("lines")
-            if not isinstance(lines, list):
-                lines = str(cue.get("text") or "").splitlines()
-            return [str(line) for line in lines], timeline_t - start, max(0.1, end - start)
+            return cue, timeline_t - start, max(0.1, end - start)
     return None
 
 
@@ -1488,12 +1576,18 @@ def render_frames(
             for block in raw_blocks
             if isinstance(block, list)
         ]
+        signature_lines = [
+            str(line).strip()
+            for line in (payload.get("poem_signature_lines") or [])
+            if str(line).strip() and not str(line).strip().startswith("@")
+        ]
         lines = ["\n".join(block) for block in blocks]
         voice_path_raw = str(payload.get("voice_audio_path") or "").strip()
         text_cues = build_poetry_text_cues(
             blocks,
             main_duration,
             voice_path=Path(voice_path_raw) if voice_path_raw else None,
+            signature_lines=signature_lines,
         )
     else:
         lines = payload_scene_lines(payload, thought, max(4, min(7, len(segments))))
@@ -1547,8 +1641,8 @@ def render_frames(
             if is_poetry:
                 active_poem = poetry_cue_at(text_cues, timeline_t)
                 if active_poem:
-                    poem_lines, cue_t, cue_duration = active_poem
-                    draw_poem_block(image, poem_lines, t=cue_t, scene_duration=cue_duration)
+                    cue_dict, cue_t, cue_duration = active_poem
+                    draw_poem_block(image, cue_dict, t=cue_t, scene_duration=cue_duration)
             else:
                 active_text = text_cue_at(text_cues, timeline_t)
                 if active_text:
@@ -1734,8 +1828,16 @@ def main() -> None:
     voice_audio = find_poem_voice_audio(input_root, payload)
     main_duration_target, outro_screens, timeline_meta = poetry_timeline_plan(voice_audio, payload)
     total_duration_target = main_duration_target + sum(float(screen.get("duration") or 0.0) for screen in outro_screens)
-    video_dir, period_key, dataset_slug = choose_video_dataset(input_root, rng)
-    log(f"Selected video dataset: period={period_key} path={video_dir}")
+    forced_video_dataset = str(payload.get("forced_video_dataset") or "").strip()
+    video_dir, period_key, dataset_slug = choose_video_dataset(
+        input_root,
+        rng,
+        forced_dataset=forced_video_dataset,
+    )
+    log(
+        f"Selected video dataset: period={period_key} path={video_dir}"
+        + (f" forced={forced_video_dataset}" if forced_video_dataset else "")
+    )
     mounted_video_files = iter_files(video_dir, VIDEO_EXTS)
     music_dir = find_dataset_dir(input_root, ["koenigsberg-music", "music"])
     if music_dir is None:

@@ -615,13 +615,24 @@ def _build_poetry_text_payload(poem: dict, *, vk_caption: str) -> dict:
         raise StoryTextPreparationError("poem has no text blocks")
     title = str(poem.get("title") or "").strip()
     first_line = blocks[0][0] if blocks and blocks[0] else title
+    signature_lines = [line for line in _poem_author_lines(poem) if line and not line.startswith("@")]
+    signature_keyset = {line.casefold() for line in signature_lines}
+    stanza_blocks = list(blocks)
+    if signature_keyset and stanza_blocks:
+        tail_keys = {line.casefold() for line in stanza_blocks[-1]}
+        if tail_keys and tail_keys.issubset(signature_keyset):
+            stanza_blocks = stanza_blocks[:-1]
+    if not stanza_blocks:
+        stanza_blocks = list(blocks)
+        signature_lines = []
     return {
         "hook": title or first_line,
-        "scene_lines": ["\n".join(block) for block in blocks],
+        "scene_lines": ["\n".join(block) for block in stanza_blocks],
         "caption": vk_caption,
         "source": "poems_md",
         "text_model": "",
-        "poem_blocks": blocks,
+        "poem_blocks": stanza_blocks,
+        "poem_signature_lines": signature_lines,
         "poem_author_lines": _poem_author_lines(poem),
     }
 
@@ -1019,7 +1030,9 @@ async def _launch_kaggle_generation(
         "poem_handle": poem.get("handle") if poem else "",
         "poem_audio": poem.get("audio") if poem else "",
         "poem_blocks": story_text.get("poem_blocks") or [],
+        "poem_signature_lines": story_text.get("poem_signature_lines") or [],
         "poem_author_lines": story_text.get("poem_author_lines") or [],
+        "forced_video_dataset": (poem.get("video_dataset") or "") if poem else "",
         "hook": story_text.get("hook") or "",
         "scene_lines": story_text.get("scene_lines") or [],
         "caption": story_text.get("caption") or "",

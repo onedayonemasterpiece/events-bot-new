@@ -264,11 +264,114 @@ Ich Liebe Königsberg
     assert poems[0]["id"] == "poem-1"
     assert poems[0]["title"] == "Ich Liebe Königsberg"
     assert poems[0]["handle"] == "@agrozovskaya"
+    assert poems[0]["video_dataset"] == ""
     assert poems[0]["blocks"] == [
         ["Ich Liebe Königsberg"],
         ["Первая строка", "Вторая строка"],
         ["Анна Грозовская", "@agrozovskaya"],
     ]
+
+
+def test_load_poems_reads_video_dataset_metadata(tmp_path) -> None:
+    path = tmp_path / "poems.md"
+    path.write_text(
+        """## poem-1
+title: Ich Liebe Königsberg
+author: Анна Грозовская
+author_note: врач скорой медицинской помощи
+handle: @agrozovskaya
+audio: poem-1
+video_dataset: koenigsberg19191940
+
+```poem
+Ich Liebe Königsberg
+
+Первая строка
+```
+""",
+        encoding="utf-8",
+    )
+
+    poems = load_poems(path)
+
+    assert poems[0]["video_dataset"] == "koenigsberg19191940"
+
+
+def test_build_poetry_text_payload_strips_author_block_and_forwards_signature() -> None:
+    poem = {
+        "id": "poem-1",
+        "title": "Ich Liebe Königsberg",
+        "author": "Анна Грозовская",
+        "author_note": "врач скорой медицинской помощи",
+        "handle": "@agrozovskaya",
+        "blocks": [
+            ["Ich Liebe Königsberg"],
+            ["Первая", "Вторая", "Третья", "Четвёртая"],
+            ["Анна Грозовская", "врач скорой медицинской помощи", "@agrozovskaya"],
+        ],
+    }
+
+    payload = kenigsberg_stories_cmd._build_poetry_text_payload(poem, vk_caption="hook")
+
+    assert payload["poem_blocks"] == [
+        ["Ich Liebe Königsberg"],
+        ["Первая", "Вторая", "Третья", "Четвёртая"],
+    ]
+    assert payload["poem_signature_lines"] == [
+        "Анна Грозовская",
+        "врач скорой медицинской помощи",
+    ]
+
+
+def test_build_poetry_text_cues_marks_title_and_final_with_signature() -> None:
+    cues = renderer.build_poetry_text_cues(
+        [
+            ["Ich Liebe Königsberg"],
+            ["Каких он модных фрау здесь встречал"],
+            ["Здесь каждый дом построен на костях", "Мой Кёнигсберг"],
+        ],
+        45.0,
+        voice_path=None,
+        signature_lines=["Анна Грозовская", "врач скорой медицинской помощи"],
+    )
+
+    assert cues[0]["style"] == "title"
+    assert cues[0]["groups"] == [["Ich Liebe Königsberg"]]
+    assert cues[-1]["style"] == "final"
+    assert cues[-1]["groups"] == [
+        ["Здесь каждый дом построен на костях", "Мой Кёнигсберг"],
+        ["Анна Грозовская", "врач скорой медицинской помощи"],
+    ]
+
+
+def test_renderer_pins_forced_dataset_for_poetry(tmp_path) -> None:
+    period_dir = tmp_path / "datasets" / "koenigsberg19191940"
+    winter_dir = tmp_path / "datasets" / "koenigsberg-winter"
+    period_dir.mkdir(parents=True)
+    winter_dir.mkdir(parents=True)
+    (period_dir / "a.mp4").write_bytes(b"stub")
+    (winter_dir / "b.mp4").write_bytes(b"stub")
+
+    for seed in range(1, 8):
+        selected, period_key, _ = renderer.choose_video_dataset(
+            tmp_path,
+            renderer.random.Random(seed),
+            forced_dataset="koenigsberg19191940",
+        )
+        assert selected == period_dir
+        assert period_key == "1919-1940"
+
+
+def test_renderer_fails_when_forced_dataset_missing(tmp_path) -> None:
+    (tmp_path / "datasets" / "koenigsberg-winter").mkdir(parents=True)
+    (tmp_path / "datasets" / "koenigsberg-winter" / "b.mp4").write_bytes(b"stub")
+
+    with pytest.raises(RuntimeError, match="Pinned poetry video dataset"):
+        renderer.choose_video_dataset(
+            tmp_path,
+            renderer.random.Random(1),
+            forced_dataset="koenigsberg19191940",
+        )
 
 
 def test_poetry_test_targets_use_keniggpt_chat_post() -> None:

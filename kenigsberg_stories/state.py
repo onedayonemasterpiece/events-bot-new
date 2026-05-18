@@ -313,6 +313,7 @@ def _parse_poem_block(block: list[str]) -> dict[str, Any] | None:
         "author_note": meta.get("author_note", ""),
         "handle": meta.get("handle", ""),
         "audio": meta.get("audio", poem_id),
+        "video_dataset": meta.get("video_dataset", ""),
         "body": body_text,
         "blocks": blocks,
     }

@@ -81,7 +81,14 @@ Poetry-выпуски используют тот же `/kenigsberg` pipeline, �
 - `/kenigsberg --poetry-today` — принудительный production poetry-выпуск сейчас, с теми же production fanout targets, что и scheduled `/kenigsberg`;
 - scheduled `/kenigsberg` берёт стих автоматически, если с последнего успешного poetry issue прошло `KENIGSBERG_POETRY_INTERVAL_DAYS` (default `3`) или если в state есть `pending_poem_id` после сорванной попытки; если стихов нет, pipeline возвращается к обычному thoughts issue.
 
-`poems.md` хранит один или несколько блоков `## poem-N` с metadata (`title`, `author`, `author_note`, `handle`, `audio`) и fenced `poem` text. Пустые строки внутри fenced text задают экранные блоки. Строки внутри блока не переносятся: renderer подбирает размер шрифта под самую длинную строку и fail-closed, если строка не помещается даже на минимальном размере. Последняя строка-упоминание вида `@...` не попадает на видео, но сохраняется в VK caption.
+`poems.md` хранит один или несколько блоков `## poem-N` с metadata (`title`, `author`, `author_note`, `handle`, `audio`, `video_dataset`) и fenced `poem` text. Пустые строки внутри fenced text задают экранные блоки. Строки внутри блока не переносятся: renderer подбирает размер шрифта под самую длинную строку и fail-closed, если строка не помещается даже на минимальном размере. Последняя строка-упоминание вида `@...` не попадает на видео, но сохраняется в VK caption.
+
+Особые правила экранной раскладки poetry:
+
+- если первый блок состоит из одной строки, он считается заголовком ролика и показывается сразу полностью (без stripe-reveal), оставаясь видимым на всём своём cue;
+- автор/подпись (`author` + `author_note`) визуально сливаются с последним четверостишием: они показываются ниже последней строфы через увеличенный отступ и держатся на экране до конца основного cue, чтобы зритель долго видел упоминание автора. На картинку видео не выводится строка-`@handle`; она остаётся только в VK caption.
+
+`video_dataset` (опционально) пиннит выпуск к конкретному footage-датасету: renderer берёт видео только из него, игнорируя обычное взвешенное выборки периодов. Значение — короткий алиас mounted dataset directory (например, `koenigsberg19191940`). Для poem-1 закреплён датасет `koenigsberg19191940` (период 1919-1940), чтобы кадры визуально соответствовали тексту. Если pinned датасет не примонтирован или пуст, рендер фейлится явно, а не уходит в случайный fallback.
 
 Poetry voice-over lives in Kaggle dataset `zigomaro/kenigsberg-audio`. Renderer matches voice files by normalized poem id, so `audio: poem-1` matches actual dataset names like `-poem-1-enhanced-v2.mp3`.
 
