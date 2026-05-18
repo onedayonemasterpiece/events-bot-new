@@ -894,13 +894,26 @@ class VideoAnnounceScenario:
             )
         return None
 
-    async def has_rendering(self) -> VideoAnnounceSession | None:
+    async def has_rendering(
+        self, *, profile_key: str | None = None
+    ) -> VideoAnnounceSession | None:
+        """Return an in-flight rendering session.
+
+        When ``profile_key`` is given, the lock is scoped to that profile.
+        Different cherryflash profiles (e.g. partner tracks
+        ``popular_review_konb`` and ``popular_review_eco``) have independent
+        DB/session lanes, so blocking one behind the other turns a delayed eco
+        run into a missed КОНБ publish. Global callers (default
+        ``profile_key=None``) keep the legacy any-session lock.
+        """
+
         async with self.db.get_session() as session:
-            res = await session.execute(
-                select(VideoAnnounceSession).where(
-                    VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
-                )
+            query = select(VideoAnnounceSession).where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
             )
+            if profile_key:
+                query = query.where(VideoAnnounceSession.profile_key == profile_key)
+            res = await session.execute(query)
             return res.scalars().first()
 
     async def _load_session(self, session_id: int) -> VideoAnnounceSession | None:
@@ -1744,7 +1757,12 @@ class VideoAnnounceScenario:
         if not await self.ensure_access():
             self.last_partner_track_skip_reason = "access_denied"
             return None
-        existing = await self.has_rendering()
+        # Scope the render lock to this partner's profile_key so a slow eco
+        # render does not block the КОНБ slot scheduled 7 minutes later
+        # (see 2026-05-18 incident: «Сессия #325 уже рендерится» loops
+        # 12:37→13:09 then "selected=0 min=1" at 13:19 because КОНБ never
+        # got a chance to start).
+        existing = await self.has_rendering(profile_key=partner_track.profile_key)
         if existing:
             self.last_partner_track_skip_reason = "render_in_progress"
             await self.bot.send_message(
@@ -1825,6 +1843,16 @@ class VideoAnnounceScenario:
                 ),
             )
             self.last_partner_track_skip_reason = "selection_failed"
+            return None
+        if not selection.event_ids:
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}»: нет событий "
+                    "для публикации даже после fallback/recycle."
+                ),
+            )
+            self.last_partner_track_skip_reason = "selection_empty"
             return None
         kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
         if not kernel_ref:

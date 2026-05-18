@@ -200,6 +200,48 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             source_url="https://vk.ru/balticsyndicate",
         ),
         GuideSourceSpec(
+            username="ivsguide",
+            profile_slug="ivsguide",
+            profile_kind="guide",
+            display_name="Игорь Селин",
+            marketing_name="Игорь Селин",
+            source_kind="guide_personal",
+            trust_level="medium",
+            flags={
+                "vk_personal_page": True,
+                "mixed_topic": True,
+                "guide": True,
+            },
+            notes=(
+                "Added from operator request on 2026-05-18; VK personal page of "
+                "a Kaliningrad guide (Игорь Селин), monitored for guided "
+                "walks/excursions alongside other guide sources."
+            ),
+            platform="vk",
+            source_url="https://vk.com/ivsguide",
+        ),
+        GuideSourceSpec(
+            username="natakkaz",
+            profile_slug="natakkaz",
+            profile_kind="guide",
+            display_name="Наталья Казакова",
+            marketing_name="Наталья Казакова",
+            source_kind="guide_personal",
+            trust_level="medium",
+            flags={
+                "vk_personal_page": True,
+                "mixed_topic": True,
+                "guide": True,
+            },
+            notes=(
+                "Added from operator request on 2026-05-18; VK personal page of "
+                "a Kaliningrad guide (Наталья Казакова), monitored for guided "
+                "walks/excursions alongside other guide sources."
+            ),
+            platform="vk",
+            source_url="https://vk.ru/natakkaz",
+        ),
+        GuideSourceSpec(
             username="excursions_profitour",
             profile_slug="profitur",
             profile_kind="operator",

@@ -847,6 +847,88 @@ async def _collect_partner_eco_recall_hits(
     return hits
 
 
+async def _collect_partner_konb_recycle_hits(
+    db,
+    *,
+    today: date,
+    exclude_event_ids: set[int],
+    lookback_days: int = 90,
+    limit: int = 60,
+) -> list[dict[str, Any]]:
+    """Re-air pool for КОНБ when the fresh popularity pool is dry.
+
+    Loads event_ids that have ever appeared in the КОНБ video profile in the
+    last ``lookback_days`` days and are still upcoming. Going through
+    ``_consider_hit`` re-applies the КОНБ partner filter and the calendar-day
+    cooldown, so events shown TODAY are still skipped (operator contract
+    «в один день не делать повтор»), but events from yesterday or earlier
+    are allowed to repeat — the operator explicitly preferred a cross-day
+    repeat over a missed publication (2026-05-18 incident).
+    """
+    threshold = datetime.now(timezone.utc) - timedelta(days=max(1, int(lookback_days)))
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(VideoAnnounceItem.event_id)
+            .join(
+                VideoAnnounceSession,
+                VideoAnnounceItem.session_id == VideoAnnounceSession.id,
+            )
+            .where(VideoAnnounceSession.profile_key == "popular_review_konb")
+            .where(
+                func.coalesce(
+                    VideoAnnounceSession.published_at,
+                    VideoAnnounceSession.finished_at,
+                    VideoAnnounceSession.started_at,
+                    VideoAnnounceSession.created_at,
+                )
+                >= threshold,
+            )
+            .where(VideoAnnounceItem.event_id.is_not(None))
+        )
+        rows = result.all()
+    seen: set[int] = set()
+    candidate_ids: list[int] = []
+    for (event_id,) in rows:
+        if event_id is None:
+            continue
+        eid = int(event_id)
+        if eid in exclude_event_ids or eid in seen:
+            continue
+        seen.add(eid)
+        candidate_ids.append(eid)
+    if not candidate_ids:
+        return []
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Event)
+            .where(Event.id.in_(candidate_ids))
+            .where(Event.lifecycle_status == "active")
+            .where(Event.date >= today.isoformat())
+            .order_by(Event.date.asc(), Event.time.asc(), Event.id.asc())
+            .limit(max(1, int(limit)))
+        )
+        events = result.scalars().all()
+    hits: list[dict[str, Any]] = []
+    for event in events:
+        event_id = int(event.id or 0)
+        if not event_id:
+            continue
+        hits.append(
+            {
+                "event_id": event_id,
+                "source_window": "konb_recycle",
+                "source_post_url": (
+                    getattr(event, "source_post_url", None)
+                    or getattr(event, "source_vk_post_url", None)
+                    or ""
+                ),
+                "source_label": "konb_recycle",
+                "score": 0.0,
+            }
+        )
+    return hits
+
+
 async def _collect_future_event_hits(
     db,
     *,
@@ -1060,6 +1142,26 @@ async def build_popular_review_selection(
                 await _consider_hit(hit, fallback_map.get(int(hit["event_id"])))
                 if len(fresh) >= max_events * 2:
                     break
+        # Last-resort recycle pool: if the broad future scan still produced
+        # nothing, re-air events previously shown in the КОНБ profile that
+        # are still upcoming (calendar-day cooldown is enforced inside
+        # `_consider_hit`, so events shown TODAY are still excluded).
+        # Operator contract: «лучше повтор чем не выпустить вообще».
+        if len(fresh) < min_events:
+            recycle_hits = await _collect_partner_konb_recycle_hits(
+                db,
+                today=today,
+                exclude_event_ids=set(processed_event_ids),
+            )
+            if recycle_hits:
+                recycle_map = await _load_events_map(
+                    db,
+                    [int(item["event_id"]) for item in recycle_hits],
+                )
+                for hit in recycle_hits:
+                    await _consider_hit(hit, recycle_map.get(int(hit["event_id"])))
+                    if len(fresh) >= max_events:
+                        break
 
     if selection_policy_id == KONB_LIBRARY_SELECTION_POLICY:
         fresh.sort(
@@ -1210,10 +1312,27 @@ async def build_popular_review_selection(
     )
 
     if len(selected) < min_events:
-        raise RuntimeError(
-            "CherryFlash popular review did not collect enough events "
-            f"(selected={len(selected)} min={min_events})"
+        # For КОНБ partner track the operator contract is «лучше повтор/skip,
+        # чем не выпустить вообще»: never crash the publish job — log loudly
+        # and let the caller decide whether to ship a partial issue or skip.
+        # All non-partner callers historically expected a RuntimeError, so we
+        # preserve that contract whenever the selection is below its minimum.
+        # With partner policies the caller (scenario.py) handles the empty
+        # case by skipping without starting a zero-scene render.
+        logger.warning(
+            "video_announce.popular_review.selection_below_min "
+            "selected=%s min=%s max=%s policy=%s partner_track=%s",
+            len(selected),
+            min_events,
+            max_events,
+            selection_policy_id or "",
+            partner_track_id or "",
         )
+        if not selection_policy_id:
+            raise RuntimeError(
+                "CherryFlash popular review did not collect enough events "
+                f"(selected={len(selected)} min={min_events})"
+            )
 
     ranked: list[RankedEvent] = []
     trace: dict[int, dict[str, Any]] = {}

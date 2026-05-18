@@ -327,6 +327,10 @@ class InboxPost:
     review_batch: Optional[str]
     imported_event_id: Optional[int]
     event_ts_hint: Optional[int]
+    # ``owner_type`` ('group' or 'user') distinguishes community posts
+    # (owner_id = -group_id) from personal-page posts (owner_id = +user_id).
+    # Default 'group' preserves the legacy contract for pre-migration rows.
+    owner_type: str = "group"
 
 
 def _hours_from_env(name: str, default: float) -> float:
@@ -419,7 +423,7 @@ async def pick_next(
                 # Continue reviewing rows that remain locked for this operator.
                 cur = await conn.execute(
                     """
-                    SELECT id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint
+                    SELECT id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
                     FROM vk_inbox
                     WHERE status='locked' AND locked_by=?
                     ORDER BY locked_at ASC, id ASC
@@ -540,7 +544,7 @@ async def pick_next(
                     UPDATE vk_inbox
                     SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
                     WHERE id = (SELECT id FROM next)
-                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint
+                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
                     """,
                     (reject_cutoff, operator_id, batch_id),
                 )
@@ -562,7 +566,7 @@ async def pick_next(
                     UPDATE vk_inbox
                     SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
                     WHERE id = (SELECT id FROM next)
-                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint
+                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
                     """,
                     (reject_cutoff, urgent_cutoff, operator_id, batch_id),
                 )
@@ -690,7 +694,7 @@ async def pick_next(
                         UPDATE vk_inbox
                         SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
                         WHERE id = (SELECT id FROM ranked)
-                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint
+                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
                     """
                     bucket_cursor = await conn.execute(
                         bucket_query,
@@ -713,7 +717,7 @@ async def pick_next(
                         UPDATE vk_inbox
                         SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
                         WHERE id = (SELECT id FROM next)
-                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint
+                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
                         """,
                         (reject_cutoff, operator_id, batch_id),
                     )

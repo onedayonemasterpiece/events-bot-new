@@ -783,7 +783,13 @@ def _vk_post_text(post: dict[str, Any]) -> str:
     return html.unescape(text).strip()
 
 
-def _vk_post_to_scanned_post(post: dict[str, Any], *, group_id: int, username: str) -> ScannedPost | None:
+def _vk_post_to_scanned_post(
+    post: dict[str, Any],
+    *,
+    group_id: int,
+    username: str,
+    owner_type: str = "group",
+) -> ScannedPost | None:
     message_id = int(post.get("id") or 0)
     timestamp = int(post.get("date") or 0)
     if message_id <= 0 or timestamp <= 0:
@@ -802,11 +808,15 @@ def _vk_post_to_scanned_post(post: dict[str, Any], *, group_id: int, username: s
     attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
     if not text and not attachments:
         return None
+    if owner_type == "user":
+        source_url = f"https://vk.com/wall{group_id}_{message_id}"
+    else:
+        source_url = f"https://vk.com/wall-{group_id}_{message_id}"
     return ScannedPost(
         message_id=message_id,
         grouped_id=None,
         post_date=datetime.fromtimestamp(timestamp, tz=timezone.utc),
-        source_url=f"https://vk.com/wall-{group_id}_{message_id}",
+        source_url=source_url,
         text=text,
         views=views,
         forwards=reposts or None,
@@ -815,6 +825,57 @@ def _vk_post_to_scanned_post(post: dict[str, Any], *, group_id: int, username: s
         media_refs=[],
         media_assets=[],
     )
+
+
+def _vk_resolve_source(username: str) -> tuple[int, str, str, str]:
+    """Return ``(numeric_id, screen_name, display_name, owner_type)``.
+
+    First tries ``utils.resolveScreenName`` to learn whether the URL points
+    at a community (``group``/``page``/``event``) or a personal page
+    (``user``). Falls back to ``groups.getById`` when resolution returned
+    nothing, so plain community shortnames keep working.
+    """
+    resolved_type: str | None = None
+    resolved_id: int | None = None
+    try:
+        rs = _vk_api_call("utils.resolveScreenName", {"screen_name": username})
+    except Exception:
+        rs = None
+    if isinstance(rs, dict):
+        rtype = str(rs.get("type") or "").strip().lower()
+        try:
+            obj_id = int(rs.get("object_id") or 0)
+        except (TypeError, ValueError):
+            obj_id = 0
+        if obj_id > 0 and rtype in {"group", "page", "public", "event", "user"}:
+            resolved_id = obj_id
+            resolved_type = "user" if rtype == "user" else "group"
+    if resolved_type == "user":
+        user_response = _vk_api_call(
+            "users.get",
+            {"user_ids": resolved_id, "fields": "screen_name,about,status,site"},
+        )
+        users = user_response if isinstance(user_response, list) else []
+        user = users[0] if users and isinstance(users[0], dict) else {}
+        user_id = int(user.get("id") or resolved_id or 0)
+        if user_id <= 0:
+            raise RuntimeError(f"VK user not found: {username}")
+        domain = collapse_ws(user.get("screen_name")) or username
+        first = collapse_ws(user.get("first_name") or "")
+        last = collapse_ws(user.get("last_name") or "")
+        display = (f"{first} {last}".strip()) or domain
+        return user_id, domain, display, "user"
+    group_arg = resolved_id if resolved_id is not None else username
+    group_response = _vk_api_call(
+        "groups.getById",
+        {"group_ids": group_arg, "fields": "description,site,screen_name,name"},
+    )
+    group = _vk_group_from_response(group_response)
+    group_id = int(group.get("id") or 0)
+    if group_id <= 0:
+        raise RuntimeError(f"VK group not found: {username}")
+    domain = collapse_ws(group.get("screen_name")) or username
+    return group_id, domain, collapse_ws(group.get("name")) or domain, "group"
 
 
 async def scan_vk_source_posts(
@@ -826,28 +887,48 @@ async def scan_vk_source_posts(
     username = collapse_ws(source_payload.get("username")).lstrip("@")
     if not username:
         raise RuntimeError("VK source username is empty")
-    group_response = await asyncio.to_thread(
-        _vk_api_call,
-        "groups.getById",
-        {"group_ids": username, "fields": "description,site,screen_name,name"},
+    group_id, domain, display_name, owner_type = await asyncio.to_thread(
+        _vk_resolve_source, username
     )
-    group = _vk_group_from_response(group_response)
-    group_id = int(group.get("id") or 0)
-    if group_id <= 0:
-        raise RuntimeError(f"VK group not found: {username}")
-    domain = collapse_ws(group.get("screen_name")) or username
-    description = collapse_ws(group.get("description"))
-    site = collapse_ws(group.get("site"))
-    about_text = "\n".join(part for part in (description, site) if part).strip()
+    about_text = ""
+    description = ""
+    site = ""
+    if owner_type == "group":
+        group_response = await asyncio.to_thread(
+            _vk_api_call,
+            "groups.getById",
+            {"group_ids": group_id, "fields": "description,site,screen_name,name"},
+        )
+        group = _vk_group_from_response(group_response)
+        description = collapse_ws(group.get("description"))
+        site = collapse_ws(group.get("site"))
+        about_text = "\n".join(part for part in (description, site) if part).strip()
+        domain = collapse_ws(group.get("screen_name")) or domain
+    else:
+        user_response = await asyncio.to_thread(
+            _vk_api_call,
+            "users.get",
+            {"user_ids": group_id, "fields": "screen_name,about,status,site"},
+        )
+        users = user_response if isinstance(user_response, list) else []
+        user = users[0] if users and isinstance(users[0], dict) else {}
+        about = collapse_ws(user.get("about"))
+        status = collapse_ws(user.get("status"))
+        site = collapse_ws(user.get("site"))
+        about_text = "\n".join(part for part in (about, status, site) if part).strip()
+        domain = collapse_ws(user.get("screen_name")) or domain
+    owner_id_signed = group_id if owner_type == "user" else -group_id
     wall_response = await asyncio.to_thread(
         _vk_api_call,
         "wall.get",
-        {"owner_id": f"-{group_id}", "count": max(1, int(limit)), "filter": "owner"},
+        {"owner_id": str(owner_id_signed), "count": max(1, int(limit)), "filter": "owner"},
     )
     cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(days_back)))
     posts: list[ScannedPost] = []
     for item in _vk_wall_items(wall_response):
-        scanned = _vk_post_to_scanned_post(item, group_id=group_id, username=domain)
+        scanned = _vk_post_to_scanned_post(
+            item, group_id=group_id, username=domain, owner_type=owner_type
+        )
         if scanned and scanned.post_date >= cutoff:
             posts.append(scanned)
     posts.sort(key=lambda item: (item.post_date, item.message_id), reverse=True)
@@ -856,7 +937,7 @@ async def scan_vk_source_posts(
     if source_url and source_url not in links:
         links.insert(0, source_url)
     return {
-        "source_title": collapse_ws(group.get("name")) or source_payload.get("title"),
+        "source_title": display_name or source_payload.get("title"),
         "about_text": about_text or None,
         "about_links": links,
         "source_url": source_url,

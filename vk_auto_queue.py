@@ -393,8 +393,10 @@ def _clear_vk_auto_import_cancel(*, chat_id: int, operator_id: int) -> None:
     _vk_auto_import_cancel_requests.discard(key)
 
 
-def _vk_wall_url(group_id: int, post_id: int) -> str:
-    return f"https://vk.com/wall-{int(group_id)}_{int(post_id)}"
+def _vk_wall_url(group_id: int, post_id: int, owner_type: str | None = "group") -> str:
+    from vk_owner import vk_wall_url as _vk_wall_url_helper
+
+    return _vk_wall_url_helper(group_id, post_id, owner_type)
 
 
 def _best_url(sizes: Sequence[Mapping[str, Any]]) -> str:
@@ -1372,7 +1374,11 @@ async def run_vk_auto_import(
         def _start_prefetch(post_obj: Any) -> asyncio.Task | None:
             if not prefetch_enabled or not post_obj:
                 return None
-            next_url = _vk_wall_url(post_obj.group_id, post_obj.post_id)
+            next_url = _vk_wall_url(
+                post_obj.group_id,
+                post_obj.post_id,
+                getattr(post_obj, "owner_type", None) or "group",
+            )
             return asyncio.create_task(
                 _prefetch_vk_inbox_row(
                     db,
@@ -1466,7 +1472,9 @@ async def run_vk_auto_import(
 
                 current_no += 1
                 report.inbox_processed += 1
-                source_url = _vk_wall_url(post.group_id, post.post_id)
+                source_url = _vk_wall_url(
+                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                )
                 total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
                 progress_mid: int | None = None
                 if send_progress and (current_no % progress_every == 0):
@@ -1558,7 +1566,9 @@ async def run_vk_auto_import(
                 current_no += 1
                 remaining -= 1
                 report.inbox_processed += 1
-                source_url = _vk_wall_url(post.group_id, post.post_id)
+                source_url = _vk_wall_url(
+                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                )
                 total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else str(int(limit_int))
                 progress_mid = None
                 if send_progress and (current_no % progress_every == 0):

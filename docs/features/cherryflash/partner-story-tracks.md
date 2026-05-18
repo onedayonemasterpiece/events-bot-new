@@ -268,7 +268,7 @@ Selection policy:
 - track id: `partner_konb_library_001`;
 - default publish mode (post-round-3, 2026-05-17): **`prod`**. Test mode is still available via setting `partner_track_konb_publish_mode=test`, which publishes a normal Telegram channel post to `https://t.me/keniggpt` (not a channel story);
 - production story fanout (post-round-3): **two independent best-effort targets** — Telegram channel story `https://t.me/kaliningradlibrary` and VK community story `https://vk.com/konb39`. **Neither is `required`** — success in one does not gate the other, and failure of one does not fail the overall publish. Each target is attempted on its own (`blocking=False`, `required=False`);
-- daily schedule (post-round-3): **`12:37 Europe/Kaliningrad`**, exactly 7 min after the eco/nature partner slot at 12:30, per operator brief. If the render lane is still occupied at 12:37, the partner watchdog retries later the same day until the shared 22:00 deadline;
+- daily schedule (post-round-3): **`12:37 Europe/Kaliningrad`**, exactly 7 min after the eco/nature partner slot at 12:30, per operator brief. The partner-track render guard is scoped by `profile_key`, so a slow `popular_review_eco` render must not block the KОНБ slot or watchdog retries. The watchdog still retries later the same day until the shared 22:00 deadline if the KОНБ slot itself misses handoff;
 - КОНБ test/prod modes must not inherit global `video_announce_story_business_targets`; the only targets are the explicit КОНБ test/prod targets above.
 
 Ranking policy:
@@ -280,7 +280,8 @@ Ranking policy:
 - **anti-repeat (post-round-3, 2026-05-17)**: КОНБ events may repeat across daily videos once at least **one calendar-day boundary** has crossed in `Europe/Kaliningrad` since the last show — same-day repeats are blocked, but the next-day run is always eligible regardless of exact wall-clock alignment. Within a single video, the same event is still deduped (different scene = different event). The operator brief was «повторять анонс это не плохо, главное не в одном ролике и максимально не подряд»; the repeat allowance is intentionally permissive so the daily slot never goes empty when the КОНБ pool is small;
 - repeats are admitted but **demoted** — every recently-shown event pays `KONB_REPEAT_SCORE_PENALTY` (~220 pts) in the score, so fresh КОНБ candidates always sort ahead of repeats when both exist. A repeat only appears when the fresh pool can't fill `max_events`;
 - an event that occupied slot 1 recently additionally pays the `first_position` penalty (~360 pts), so even a permitted repeat does not pin to slot 1 on the next day;
-- when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, calendar-day-spaced repeat allowance, and ranking rules.
+- when the popularity pool contains too few КОНБ events, the selector expands to all future КОНБ events and then applies the same renderability, calendar-day-spaced repeat allowance, and ranking rules;
+- if the future fallback still underfills, the selector uses a last-resort `konb_recycle` pool from previous `popular_review_konb` video items whose events are still current/future. This is intentionally permissive across calendar days because the production contract is "prefer a repeat over no KОНБ publication"; same-video duplicates and same-calendar-day repeats remain blocked.
 
 Outro (post-round-3 contract, 2026-05-17):
 
@@ -482,7 +483,7 @@ source_audit:
 - [ ] East-region source-level guarantees are backed by a source audit, including Gumbinnen and any Farm Tyuniny source before use. Deferred: today the east filter goes purely through `event.location`.
 - [x] First generation/regeneration for a new partner track runs on Kaggle GPU. Inherited from the existing CherryFlash kernel deploy path; no change.
 - [x] Stable steady-state partner runs can run without GPU when validated. Inherited.
-- [ ] Parallel CherryFlash partner runs cannot detach or overwrite each other's Kaggle session datasets, kernels, or story secrets. Mitigated by serialization: the existing `has_rendering()` guard serializes any RENDERING session across the bot, so partner tracks cannot run concurrently with each other or with base CherryFlash. Full per-run kernel isolation (separate kernel slug or per-run kernel copy) is still deferred.
+- [ ] Parallel CherryFlash partner runs cannot detach or overwrite each other's Kaggle session datasets, kernels, or story secrets. Mitigated in production by scoped render locks: partner launch checks are scoped by `profile_key` so a slow eco/nature render does not block KОНБ, while same-profile duplicate renders are still blocked. Full per-run kernel isolation (separate kernel slug or per-run kernel copy) remains a follow-up for truly independent concurrent Kaggle mutation.
 - [x] Successful partner runs publish to Telegram Business Stories with `post_to_chat_page=true`. Inherited from the existing Bot API `postStory` call in `kaggle/CrumpleVideo/story_publish.py`.
 
 ### What has to happen before first run
@@ -512,11 +513,12 @@ Both partner tracks publish daily at fixed `Europe/Kaliningrad` local slots pick
 
 To clear a daily double-peak at `20:10` (`guide_excursions_full` + `kenigsberg_story_daily`), the Kenigsberg slot was moved from `20:10` to `19:30 local` on 2026-05-14.
 
-Cron jobs `video_partner_track_eco` / `video_partner_track_east` invoke `_run_scheduled_partner_track`. A per-track watchdog (`video_partner_track_<eco|east>_watchdog`) runs every 10 minutes and re-launches the partner pipeline if today's slot was missed (no confirmed Kaggle handoff for today's `target_date` under the partner `profile_key`). Retries stop at hard local deadline `22:00` so nothing publishes overnight. Anti-repeat (`POPULAR_REVIEW_ANTI_REPEAT_DAYS` scoped by `profile_key`) keeps re-runs idempotent.
+Cron jobs `video_partner_track_eco` / `video_partner_track_konb` / `video_partner_track_east` invoke `_run_scheduled_partner_track`. A per-track watchdog (`video_partner_track_<eco|konb|east>_watchdog`) runs every 10 minutes and re-launches the partner pipeline if today's slot was missed (no confirmed Kaggle handoff for today's `target_date` under the partner `profile_key`). Retries stop at hard local deadline `22:00` so nothing publishes overnight. Anti-repeat (`POPULAR_REVIEW_ANTI_REPEAT_DAYS` scoped by `profile_key`) keeps re-runs idempotent.
 
 The schedule is intentionally **not gated by feature flags** — the user explicitly asked to remove `ENABLE_V_*_SCHEDULED` flags as failure points. Only per-slot times can be moved without redeploy:
 
 - `V_PARTNER_TRACK_ECO_TIME_LOCAL` (default `12:30`)
+- `V_PARTNER_TRACK_KONB_TIME_LOCAL` (default `12:37`)
 - `V_PARTNER_TRACK_EAST_TIME_LOCAL` (default `18:30`)
 
 ### Telegram-session isolation

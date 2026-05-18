@@ -3372,22 +3372,62 @@ async def vk_api(method: str, **params: Any) -> Any:
 _VK_URL_RE = re.compile(r"(?:https?://)?(?:www\.)?vk\.com/([^/?#]+)")
 
 
-async def vk_resolve_group(screen_or_url: str) -> tuple[int, str, str]:
-    """Return (group_id, name, screen_name) for a VK community."""
+async def vk_resolve_group(
+    screen_or_url: str,
+) -> tuple[int, str, str, str]:
+    """Resolve a VK URL/screen-name to ``(numeric_id, name, screen_name, owner_type)``.
+
+    ``owner_type`` is ``"group"`` for communities/pages/events and
+    ``"user"`` for personal profiles. ``numeric_id`` is always positive;
+    callers must thread ``owner_type`` through to compute the signed
+    VK ``owner_id`` (see :mod:`vk_owner`).
+    """
     raw = (screen_or_url or "").strip()
     m = _VK_URL_RE.search(raw)
     screen = m.group(1) if m else raw.lstrip("@/")
 
     if screen.startswith(("club", "public")) and screen[len("club"):].isdigit():
         screen = screen.split("b", 1)[-1] if screen.startswith("club") else screen.split("c", 1)[-1]
+    # Numeric personal page paths look like ``id12345`` in VK URLs.
+    if screen.startswith("id") and screen[2:].isdigit():
+        screen = screen[2:]
 
     gid: int | None = None
+    resolved_type: str | None = None
     try:
         rs = await vk_api("utils.resolveScreenName", screen_name=screen)
-        if rs and rs.get("type") == "group" and int(rs.get("object_id", 0)) > 0:
-            gid = int(rs["object_id"])
+        if rs and isinstance(rs, dict):
+            rtype = str(rs.get("type") or "").strip().lower()
+            try:
+                obj_id = int(rs.get("object_id", 0))
+            except (TypeError, ValueError):
+                obj_id = 0
+            if obj_id > 0 and rtype in {"group", "page", "public", "event", "user"}:
+                gid = obj_id
+                resolved_type = "user" if rtype == "user" else "group"
     except Exception:
         pass
+
+    if resolved_type == "user":
+        try:
+            ub = await vk_api(
+                "users.get",
+                user_ids=gid,
+                fields="screen_name",
+            )
+            resp = ub if isinstance(ub, list) else (ub.get("users") or [ub])
+            if not isinstance(resp, list) or not resp:
+                raise ValueError("Empty response from users.get")
+            u = resp[0]
+            user_id = int(u["id"])
+            first = str(u.get("first_name") or "").strip()
+            last = str(u.get("last_name") or "").strip()
+            name = (f"{first} {last}".strip()) or str(user_id)
+            screen_name = u.get("screen_name") or screen
+            return user_id, name, screen_name, "user"
+        except Exception as e:
+            logging.error("vk_resolve_group(user) failed: %s", e)
+            raise
 
     try:
         arg = gid if gid is not None else screen
@@ -3399,7 +3439,7 @@ async def vk_resolve_group(screen_or_url: str) -> tuple[int, str, str]:
         group_id = int(g["id"])
         name = g.get("name") or str(group_id)
         screen_name = g.get("screen_name") or screen
-        return group_id, name, screen_name
+        return group_id, name, screen_name, "group"
     except Exception as e:
         logging.error("vk_resolve_group failed: %s", e)
         raise
@@ -3424,16 +3464,33 @@ def _extract_post_photos(post: dict) -> list[str]:
 
 
 async def vk_wall_since(
-    group_id: int, since_ts: int, *, count: int = 100, offset: int = 0
+    group_id: int,
+    since_ts: int,
+    *,
+    count: int = 100,
+    offset: int = 0,
+    owner_type: str = "group",
 ) -> list[dict]:
-    """Return wall posts for a group since timestamp.
+    """Return wall posts for a community or personal page since ``since_ts``.
+
+    ``group_id`` is the **positive** numeric VK id. For communities
+    (``owner_type='group'``) the actual ``owner_id`` is negated; for
+    personal pages (``owner_type='user'``) it stays positive. The post
+    ``url`` field in the returned dicts is built via
+    :func:`vk_owner.vk_wall_url` so personal-page posts get the correct
+    ``https://vk.com/wall<user_id>_<post_id>`` form without the leading
+    ``-``.
 
     ``count`` and ``offset`` are forwarded to :func:`wall.get` allowing
     pagination.
     """
+    from vk_owner import normalize_owner_type, signed_owner_id, vk_wall_url
+
+    owner_type_norm = normalize_owner_type(owner_type)
+    owner_id = signed_owner_id(group_id, owner_type_norm)
     resp = await vk_api(
         "wall.get",
-        owner_id=-group_id,
+        owner_id=owner_id,
         count=count,
         offset=offset,
         filter="owner",
@@ -3462,11 +3519,12 @@ async def vk_wall_since(
         posts.append(
             {
                 "group_id": group_id,
+                "owner_type": owner_type_norm,
                 "post_id": item["id"],
                 "date": item["date"],
                 "text": src.get("text", ""),
                 "photos": photos,
-                "url": f"https://vk.com/wall-{group_id}_{item['id']}",
+                "url": vk_wall_url(group_id, item["id"], owner_type_norm),
                 "views": views,
                 "likes": likes,
             }

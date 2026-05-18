@@ -32,7 +32,7 @@ async def test_crawl_skips_past_events(tmp_path, monkeypatch):
         {"date": int(time.time()) + 1, "post_id": 2, "text": f"31 августа {future_year} концерты"},
     ]
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         return posts if offset == 0 else []
 
     monkeypatch.setattr(main, "vk_wall_since", fake_wall_since)
@@ -71,7 +71,7 @@ async def test_crawl_inserts_blank_single_photo_post(tmp_path, monkeypatch):
         }
     ]
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         return posts if offset == 0 else []
 
     monkeypatch.setattr(main, "vk_wall_since", fake_wall_since)
@@ -137,7 +137,7 @@ async def test_forced_backfill_respects_clamped_horizon(
 
     calls: list[tuple[int, int, int, int]] = []
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         calls.append((gid, since, count, offset))
         if offset == 0:
             return [recent_post, stale_post]
@@ -207,7 +207,7 @@ async def test_incremental_pagination_processes_full_backlog(
         for i in range(total_posts)
     ]
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         filtered = [p for p in posts if p["date"] >= since]
         filtered.sort(key=lambda p: (p["date"], p["post_id"]), reverse=True)
         start = offset
@@ -294,7 +294,7 @@ async def test_hard_cap_triggers_backfill(tmp_path, monkeypatch, caplog):
 
     call_log: list[tuple[int, int]] = []
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         call_log.append((since, offset))
         filtered = [p for p in posts if p["date"] >= since]
         filtered.sort(key=lambda p: (p["date"], p["post_id"]), reverse=True)

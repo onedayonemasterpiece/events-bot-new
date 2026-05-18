@@ -27,6 +27,8 @@
 - только если `location` пустой или “общий” (например “Гаражка, Калининград”),
 - и **не** перезаписывает вручную заданные значения.
 
+VK monitoring operator seeds (`club194393485`, `ivsguide`, `natakkaz`) also live in `Database.init()` as `INSERT OR IGNORE` rows. They are enabled by default for production/fresh snapshots and can be disabled for narrow unit-test fixtures with `DB_INIT_SKIP_VK_SOURCES_SEED=1`.
+
 ### Пример: канонические Telegram‑источники (мониторинг)
 
 В `Database.init()` также выполняется идемпотентный seed списка Telegram‑источников:

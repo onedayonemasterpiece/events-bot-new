@@ -9865,20 +9865,28 @@ async def handle_vk_add_message(message: types.Message, db: Database, bot: Bot) 
         else:
             location = p
     try:
-        gid, name, screen_name = await vk_resolve_group(screen)
+        gid, name, screen_name, owner_type = await vk_resolve_group(screen)
     except Exception as e:
         logging.exception("vk_resolve_group failed")
         await bot.send_message(
             message.chat.id,
             "Не удалось определить сообщество.\n"
-            "Проверьте ссылку/скриннейм (пример: https://vk.com/muzteatr39).\n"
+            "Проверьте ссылку/скриннейм (пример: https://vk.com/muzteatr39 или https://vk.com/ivsguide).\n"
             f"Технические детали: {e}.",
         )
         return
     async with db.raw_conn() as conn:
         await conn.execute(
-            "INSERT OR IGNORE INTO vk_source(group_id, screen_name, name, location, default_time, default_ticket_link) VALUES(?,?,?,?,?,?)",
-            (gid, screen_name, name, location, default_time, default_ticket_link),
+            "INSERT OR IGNORE INTO vk_source(group_id, screen_name, name, location, default_time, default_ticket_link, owner_type) VALUES(?,?,?,?,?,?,?)",
+            (
+                gid,
+                screen_name,
+                name,
+                location,
+                default_time,
+                default_ticket_link,
+                owner_type,
+            ),
         )
         await conn.commit()
     extra = []
@@ -10198,14 +10206,14 @@ async def handle_vk_rejected_callback(
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT name, screen_name FROM vk_source WHERE group_id=?",
+            "SELECT name, screen_name, COALESCE(owner_type, 'group') FROM vk_source WHERE group_id=?",
             (group_id,),
         )
         source_row = await cur.fetchone()
         await cur.close()
         cur = await conn.execute(
             """
-            SELECT post_id
+            SELECT post_id, COALESCE(owner_type, 'group')
             FROM vk_inbox
             WHERE group_id=? AND status='rejected'
             ORDER BY
@@ -10223,10 +10231,11 @@ async def handle_vk_rejected_callback(
         return
 
     if source_row:
-        name, screen = source_row
+        name, screen, source_owner_type = source_row
     else:
         name = None
         screen = None
+        source_owner_type = "group"
 
     if name and screen:
         header = f"{name} (vk.com/{screen})"
@@ -10237,7 +10246,12 @@ async def handle_vk_rejected_callback(
     else:
         header = f"group {group_id}"
 
-    links = [f"https://vk.com/wall-{group_id}_{post_id}" for (post_id,) in rows]
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    links = [
+        _vk_wall_url(group_id, post_id, row_owner_type or source_owner_type)
+        for (post_id, row_owner_type) in rows
+    ]
     message_text = "\n".join([f"🚫 Отклонённые посты — {header}"] + links)
 
     await bot.send_message(
@@ -11265,7 +11279,12 @@ async def _vkrev_queue_size(db: Database) -> int:
 
 
 async def _vk_wall_get_items(
-    group_id: int, post_id: int, db: Database, bot: Bot
+    group_id: int,
+    post_id: int,
+    db: Database,
+    bot: Bot,
+    *,
+    owner_type: str = "group",
 ) -> list[dict[str, Any]]:
     token: str | None = VK_SERVICE_TOKEN
     token_kind = "service"
@@ -11274,10 +11293,13 @@ async def _vk_wall_get_items(
         token_kind = "user"
     if not token:
         return []
+    from vk_owner import signed_owner_id as _signed_owner_id
+
+    owner_signed = _signed_owner_id(group_id, owner_type)
     try:
         data = await _vk_api(
             "wall.getById",
-            {"posts": f"-{group_id}_{post_id}"},
+            {"posts": f"{owner_signed}_{post_id}"},
             db,
             bot,
             token=token,
@@ -11388,13 +11410,27 @@ def _vk_extract_photo_urls(
     return photos
 
 
-async def _vkrev_fetch_photos(group_id: int, post_id: int, db: Database, bot: Bot) -> list[str]:
-    items = await _vk_wall_get_items(group_id, post_id, db, bot)
+async def _vkrev_fetch_photos(
+    group_id: int,
+    post_id: int,
+    db: Database,
+    bot: Bot,
+    *,
+    owner_type: str = "group",
+) -> list[str]:
+    items = await _vk_wall_get_items(
+        group_id, post_id, db, bot, owner_type=owner_type
+    )
     if not items:
         return []
     photos = _vk_extract_photo_urls(items)
     if not photos:
-        logging.info("no media found for -%s_%s", group_id, post_id)
+        logging.info(
+            "no media found for %s_%s (owner_type=%s)",
+            group_id,
+            post_id,
+            owner_type,
+        )
     return photos
 
 
@@ -12274,7 +12310,13 @@ async def _vkrev_show_next(chat_id: int, batch_id: str, operator_id: int, db: Da
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=inline_buttons),
             )
         return
-    photos = await _vkrev_fetch_photos(post.group_id, post.post_id, db, bot)
+    photos = await _vkrev_fetch_photos(
+        post.group_id,
+        post.post_id,
+        db,
+        bot,
+        owner_type=getattr(post, "owner_type", None) or "group",
+    )
     if photos:
         media = [types.InputMediaPhoto(media=p) for p in photos[:10]]
         with contextlib.suppress(Exception):
@@ -12316,7 +12358,11 @@ async def _vkrev_show_next(chat_id: int, batch_id: str, operator_id: int, db: Da
                 await conn.commit()
         ts_hint = recomputed_hint
 
-    url = f"https://vk.com/wall-{post.group_id}_{post.post_id}"
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    url = _vk_wall_url(
+        post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+    )
     pending = await _vkrev_queue_size(db)
     if post.matched_kw == vk_intake.OCR_PENDING_SENTINEL:
         matched_kw_display = "ожидает OCR"
@@ -12540,21 +12586,23 @@ async def _vkrev_import_flow(
 ) -> None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT group_id, post_id, text, date, event_ts_hint FROM vk_inbox WHERE id=?",
+            "SELECT group_id, post_id, text, date, event_ts_hint, COALESCE(owner_type, 'group') FROM vk_inbox WHERE id=?",
             (inbox_id,),
         )
         row = await cur.fetchone()
     if not row:
         await bot.send_message(chat_id, "Инбокс не найден")
         return
-    group_id, post_id, text, publish_ts, event_ts_hint = row
+    group_id, post_id, text, publish_ts, event_ts_hint, inbox_owner_type = row
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             "SELECT name, location, default_time, default_ticket_link FROM vk_source WHERE group_id=?",
             (group_id,),
         )
         source = await cur.fetchone()
-    photos = await _vkrev_fetch_photos(group_id, post_id, db, bot)
+    photos = await _vkrev_fetch_photos(
+        group_id, post_id, db, bot, owner_type=inbox_owner_type
+    )
     async with db.get_session() as session:
         res_f = await session.execute(select(Festival))
         festivals = res_f.scalars().all()
@@ -12614,7 +12662,9 @@ async def _vkrev_import_flow(
         event_ts_hint=event_ts_hint,
         db=db,
     )
-    source_post_url = f"https://vk.com/wall-{group_id}_{post_id}"
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    source_post_url = _vk_wall_url(group_id, post_id, inbox_owner_type)
     if isinstance(festival_info_raw, str):
         festival_info_raw = {"name": festival_info_raw}
 
@@ -13111,7 +13161,7 @@ async def _vkrev_handle_story_choice(
         )
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT group_id, post_id, text FROM vk_inbox WHERE id=?",
+            "SELECT group_id, post_id, text, COALESCE(owner_type, 'group') FROM vk_inbox WHERE id=?",
             (inbox_id,),
         )
         row = await cur.fetchone()
@@ -13119,11 +13169,15 @@ async def _vkrev_handle_story_choice(
         vk_review_story_sessions.pop(operator_id, None)
         await bot.send_message(callback.message.chat.id, "Инбокс не найден")
         return
-    group_id, post_id, text = row
+    group_id, post_id, text, story_owner_type = row
     raw_title = _vkrev_story_title(text, group_id, post_id)
     default_title = f"История VK {group_id}_{post_id}"
-    source_url = f"https://vk.com/wall-{group_id}_{post_id}"
-    photos = await _vkrev_fetch_photos(group_id, post_id, db, bot)
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    source_url = _vk_wall_url(group_id, post_id, story_owner_type)
+    photos = await _vkrev_fetch_photos(
+        group_id, post_id, db, bot, owner_type=story_owner_type
+    )
     image_mode = "inline" if placement == "middle" else "tail"
     source_text = text or ""
     editor_html: str | None = None
@@ -13773,15 +13827,17 @@ async def handle_vk_review_cb(callback: types.CallbackQuery, db: Database, bot: 
 async def _vkrev_handle_repost(callback: types.CallbackQuery, event_id: int, db: Database, bot: Bot) -> None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT group_id, post_id, review_batch FROM vk_inbox WHERE imported_event_id=?",
+            "SELECT group_id, post_id, review_batch, COALESCE(owner_type, 'group') FROM vk_inbox WHERE imported_event_id=?",
             (event_id,),
         )
         row = await cur.fetchone()
     if not row:
         await bot.send_message(callback.message.chat.id, "❌ Репост не удался: нет события")
         return
-    group_id, post_id, batch_id = row
-    vk_url = f"https://vk.com/wall-{group_id}_{post_id}"
+    group_id, post_id, batch_id, repost_owner_type = row
+    from vk_owner import signed_owner_id as _signed_owner_id, vk_wall_url as _vk_wall_url
+
+    vk_url = _vk_wall_url(group_id, post_id, repost_owner_type)
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
     if not ev:
@@ -13789,7 +13845,9 @@ async def _vkrev_handle_repost(callback: types.CallbackQuery, event_id: int, db:
         return
 
     if VK_ALLOW_TRUE_REPOST:
-        object_id = f"wall-{group_id}_{post_id}"
+        # wall.repost expects ``object=wall<owner_id>_<post_id>`` with
+        # signed owner_id (negative for groups, positive for users).
+        object_id = f"wall{_signed_owner_id(group_id, repost_owner_type)}_{post_id}"
         target_group = int(VK_AFISHA_GROUP_ID.lstrip('-')) if VK_AFISHA_GROUP_ID else None
         params = {"object": object_id}
         if target_group:
@@ -13815,7 +13873,10 @@ async def _vkrev_handle_repost(callback: types.CallbackQuery, event_id: int, db:
         return
 
     try:
-        response = await vk_api("wall.getById", posts=f"-{group_id}_{post_id}")
+        response = await vk_api(
+            "wall.getById",
+            posts=f"{_signed_owner_id(group_id, repost_owner_type)}_{post_id}",
+        )
     except Exception:
         items: list[dict[str, Any]] = []
     else:
@@ -14047,15 +14108,17 @@ async def _vkrev_build_shortpost(
 async def _vkrev_handle_shortpost(callback: types.CallbackQuery, event_id: int, db: Database, bot: Bot) -> None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT group_id, post_id, review_batch FROM vk_inbox WHERE imported_event_id=?",
+            "SELECT group_id, post_id, review_batch, COALESCE(owner_type, 'group') FROM vk_inbox WHERE imported_event_id=?",
             (event_id,),
         )
         row = await cur.fetchone()
     if not row:
         await bot.send_message(callback.message.chat.id, "❌ Не удалось: нет события")
         return
-    group_id, post_id, batch_id = row
-    vk_url = f"https://vk.com/wall-{group_id}_{post_id}"
+    group_id, post_id, batch_id, sp_owner_type = row
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    vk_url = _vk_wall_url(group_id, post_id, sp_owner_type)
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
         if not ev:
@@ -14112,15 +14175,17 @@ async def _vkrev_publish_shortpost(
 ) -> None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT group_id, post_id, review_batch FROM vk_inbox WHERE imported_event_id=?",
+            "SELECT group_id, post_id, review_batch, COALESCE(owner_type, 'group') FROM vk_inbox WHERE imported_event_id=?",
             (event_id,),
         )
         row = await cur.fetchone()
     if not row:
         await bot.send_message(actor_chat_id, "❌ Не удалось: нет события")
         return
-    group_id, post_id, batch_id = row
-    vk_url = f"https://vk.com/wall-{group_id}_{post_id}"
+    group_id, post_id, batch_id, pub_owner_type = row
+    from vk_owner import vk_wall_url as _vk_wall_url
+
+    vk_url = _vk_wall_url(group_id, post_id, pub_owner_type)
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
         if not ev:
@@ -14188,8 +14253,13 @@ async def _vkrev_publish_shortpost(
                 )
 
     photo_attachments: list[str] = []
+    from vk_owner import signed_owner_id as _signed_owner_id
+
     try:
-        response = await vk_api("wall.getById", posts=f"-{group_id}_{post_id}")
+        response = await vk_api(
+            "wall.getById",
+            posts=f"{_signed_owner_id(group_id, pub_owner_type)}_{post_id}",
+        )
     except Exception as exc:  # pragma: no cover - logging only
         logging.error(
             "shortpost_fetch_photos_failed gid=%s post=%s: %s",

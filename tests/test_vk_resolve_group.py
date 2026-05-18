@@ -40,10 +40,46 @@ async def test_vk_resolve_group_variants(raw, monkeypatch):
         raise AssertionError("unexpected method")
 
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
-    gid, name, screen_name = await main.vk_resolve_group(raw)
+    gid, name, screen_name, owner_type = await main.vk_resolve_group(raw)
     assert gid == 231920894
     assert name == "Teatr"
     assert screen_name == "muzteatr39"
+    assert owner_type == "group"
+
+
+@pytest.mark.asyncio
+async def test_vk_resolve_group_accepts_personal_page(monkeypatch):
+    async def fake_vk_api(method, **params):
+        if method == "utils.resolveScreenName":
+            assert params["screen_name"] == "ivsguide"
+            return {"type": "user", "object_id": 61694047}
+        if method == "users.get":
+            assert params["user_ids"] in (61694047, "61694047")
+            assert params.get("fields") == "screen_name"
+            return [
+                {
+                    "id": 61694047,
+                    "first_name": "Игорь",
+                    "last_name": "Селин",
+                    "domain": "ivsguide",
+                }
+            ]
+        raise AssertionError("unexpected method")
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    gid, name, screen_name, owner_type = await main.vk_resolve_group("https://vk.com/ivsguide")
+
+    assert gid == 61694047
+    assert name == "Игорь Селин"
+    assert screen_name == "ivsguide"
+    assert owner_type == "user"
+
+
+def test_vk_wall_url_uses_positive_owner_for_personal_pages():
+    from vk_owner import signed_owner_id, vk_wall_url
+
+    assert signed_owner_id(61694047, "user") == 61694047
+    assert vk_wall_url(61694047, 123, "user") == "https://vk.com/wall61694047_123"
 
 
 @pytest.mark.asyncio
@@ -70,6 +106,6 @@ async def test_vk_add_message_error(monkeypatch, tmp_path):
     await main.handle_vk_add_message(msg, db, bot)
     assert bot.messages[-1][1] == (
         "Не удалось определить сообщество.\n"
-        "Проверьте ссылку/скриннейм (пример: https://vk.com/muzteatr39).\n"
+        "Проверьте ссылку/скриннейм (пример: https://vk.com/muzteatr39 или https://vk.com/ivsguide).\n"
         "Технические детали: boom."
     )

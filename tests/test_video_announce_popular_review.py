@@ -973,6 +973,161 @@ async def test_konb_selection_falls_back_to_future_library_events(tmp_path, monk
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_konb_selection_recycles_previous_future_event_when_fresh_pool_empty(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        recycled = Event(
+            title="КОНБ: лекция о литературе",
+            description="Встреча в Калининградской областной научной библиотеке",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-20",
+            time="19:00",
+            location_name="Научная библиотека, Мира 9, Калининград",
+            city="Калининград",
+            photo_urls=["https://example.com/recycled.jpg"],
+            photo_count=1,
+        )
+        session.add(recycled)
+        await session.commit()
+        await session.refresh(recycled)
+        previous = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review_konb",
+            created_at=datetime(2026, 5, 17, 10, 0, tzinfo=timezone.utc),
+            started_at=datetime(2026, 5, 17, 10, 0, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 5, 17, 10, 30, tzinfo=timezone.utc),
+        )
+        session.add(previous)
+        await session.commit()
+        await session.refresh(previous)
+        session.add(
+            VideoAnnounceItem(
+                session_id=previous.id,
+                event_id=recycled.id,
+                position=1,
+                status=VideoAnnounceItemStatus.READY,
+            )
+        )
+        await session.commit()
+
+    async def no_popular_hits(*_args, **_kwargs):
+        return []
+
+    async def no_future_hits(*_args, **_kwargs):
+        return []
+
+    async def no_promos(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(popular_review_module, "_collect_popular_hits", no_popular_hits)
+    monkeypatch.setattr(popular_review_module, "_collect_future_event_hits", no_future_hits)
+    monkeypatch.setattr(popular_review_module, "resolve_video_promo_candidates", no_promos)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=2,
+        min_events=1,
+        anti_repeat_days=1,
+        candidate_limit=5,
+        now_utc=now_utc,
+        profile_key="popular_review_konb",
+        partner_track_id="partner_konb_library_001",
+        event_filter=classify_event_konb_library,
+        admit_manual_review=False,
+        selection_policy_id="konb_library",
+    )
+
+    assert selection.event_ids == [int(recycled.id)]
+    assert selection.trace[int(recycled.id)]["source_window"] == "konb_recycle"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_konb_selection_recycle_does_not_repeat_same_calendar_day(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        same_day = Event(
+            title="КОНБ: встреча",
+            description="Калининградская областная научная библиотека",
+            short_description="Short",
+            search_digest="Digest",
+            source_text="source",
+            date="2026-05-20",
+            time="19:00",
+            location_name="Научная библиотека, Мира 9, Калининград",
+            city="Калининград",
+            photo_urls=["https://example.com/same-day.jpg"],
+            photo_count=1,
+        )
+        session.add(same_day)
+        await session.commit()
+        await session.refresh(same_day)
+        previous = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review_konb",
+            created_at=now_utc,
+            started_at=now_utc,
+            finished_at=now_utc,
+        )
+        session.add(previous)
+        await session.commit()
+        await session.refresh(previous)
+        session.add(
+            VideoAnnounceItem(
+                session_id=previous.id,
+                event_id=same_day.id,
+                position=1,
+                status=VideoAnnounceItemStatus.READY,
+            )
+        )
+        await session.commit()
+
+    async def no_popular_hits(*_args, **_kwargs):
+        return []
+
+    async def no_future_hits(*_args, **_kwargs):
+        return []
+
+    async def no_promos(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(popular_review_module, "_collect_popular_hits", no_popular_hits)
+    monkeypatch.setattr(popular_review_module, "_collect_future_event_hits", no_future_hits)
+    monkeypatch.setattr(popular_review_module, "resolve_video_promo_candidates", no_promos)
+
+    selection = await build_popular_review_selection(
+        db,
+        max_events=2,
+        min_events=1,
+        anti_repeat_days=1,
+        candidate_limit=5,
+        now_utc=now_utc,
+        profile_key="popular_review_konb",
+        partner_track_id="partner_konb_library_001",
+        event_filter=classify_event_konb_library,
+        admit_manual_review=False,
+        selection_policy_id="konb_library",
+    )
+
+    assert selection.event_ids == []
+    await db.close()
+
+
 def test_konb_first_position_penalty_demotes_recent_leader():
     penalty = popular_review_module._first_position_penalty(
         {"best_recent_position": 1},

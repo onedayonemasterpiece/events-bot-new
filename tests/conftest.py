@@ -18,6 +18,14 @@ def _reset_run_due_jobs_lock():
 
 
 @pytest.fixture(autouse=True)
+def _skip_default_vk_source_seed(monkeypatch):
+    # Most unit tests build tiny vk_source fixtures and assert exact crawl/list
+    # counts. Production keeps this seed enabled by default; tests opt out unless
+    # a specific case explicitly clears the env var.
+    monkeypatch.setenv("DB_INIT_SKIP_VK_SOURCES_SEED", "1")
+
+
+@pytest.fixture(autouse=True)
 def _mock_telegraph(monkeypatch, request):
     if "get_telegraph_token" not in request.node.nodeid:
         monkeypatch.setattr(main, "get_telegraph_token", lambda: "t")

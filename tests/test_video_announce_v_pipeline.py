@@ -85,6 +85,27 @@ async def test_rendering_unique_index_is_scoped_by_profile(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_partner_render_lock_is_scoped_by_profile(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="popular_review_eco",
+            )
+        )
+        await session.commit()
+
+    scenario = VideoAnnounceScenario(db, _DummyBot(), chat_id=123, user_id=1)
+
+    assert (await scenario.has_rendering()) is not None
+    assert (await scenario.has_rendering(profile_key="popular_review_eco")) is not None
+    assert await scenario.has_rendering(profile_key="popular_review_konb") is None
+
+
+@pytest.mark.asyncio
 async def test_run_tomorrow_pipeline_creates_session_and_starts(monkeypatch, tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

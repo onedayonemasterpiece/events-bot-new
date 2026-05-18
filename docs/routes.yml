@@ -92,6 +92,7 @@ sections:
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
     incident_vk_retrospective_reschedule_wrong_postponement_2026_05_17: docs/reports/incidents/INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement.md
+    incident_konb_cherryflash_render_lock_empty_selection_2026_05_18: docs/reports/incidents/INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection.md
     incident_tg_location_prose_cityjazz_recurrence_2026_05_16: docs/reports/incidents/INC-2026-05-16-tg-location-prose-cityjazz-recurrence.md
     incident_future_event_quality_regressions_2026_05_17: docs/reports/incidents/INC-2026-05-17-future-event-quality-regressions.md
     incident_kraftmarket235_tg_monitoring_extraction_miss_2026_05_17: docs/reports/incidents/INC-2026-05-17-kraftmarket235-tg-monitoring-extraction-miss.md

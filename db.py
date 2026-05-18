@@ -1409,6 +1409,13 @@ class Database:
             await _add_column(conn, "vk_source", "default_ticket_link TEXT")
             await _add_column(conn, "vk_source", "festival_source BOOLEAN DEFAULT 0")
             await _add_column(conn, "vk_source", "festival_series TEXT")
+            # owner_type distinguishes communities ("group") from personal
+            # pages ("user"). Existing rows default to "group" which matches
+            # the historical contract where group_id was always negated to
+            # form owner_id in wall.get and post URLs.
+            await _add_column(
+                conn, "vk_source", "owner_type TEXT NOT NULL DEFAULT 'group'"
+            )
 
             # Seed well-known VK sources with stable defaults so live E2E / fresh prod
             # snapshots don't lose operator UX improvements after DB refresh.
@@ -1462,17 +1469,38 @@ class Database:
                     """,
                     ("Бар Бастион, Судостроительная 6/1, Калининград", 149955604),
                 )
-                # Seed VK monitoring sources that are tied to specific operator
-                # requests rather than ad-hoc UI additions. INSERT OR IGNORE so
-                # the row only appears the first time and never overwrites
-                # operator edits later.
-                await conn.execute(
-                    """
-                    INSERT OR IGNORE INTO vk_source(group_id, screen_name, name)
-                    VALUES (?, ?, ?)
-                    """,
-                    (194393485, "club194393485", "Географическая школа"),
+                skip_vk_source_seed = (
+                    (os.getenv("DB_INIT_SKIP_VK_SOURCES_SEED") or "").strip().lower()
+                    in {"1", "true", "yes", "on"}
                 )
+                if not skip_vk_source_seed:
+                    # Seed VK monitoring sources that are tied to specific operator
+                    # requests rather than ad-hoc UI additions. INSERT OR IGNORE so
+                    # the row only appears the first time and never overwrites
+                    # operator edits later. For users the ``group_id`` column
+                    # holds the positive user_id; ``owner_type='user'`` flips
+                    # the owner_id sign in vk_wall_since and the URL builder.
+                    await conn.execute(
+                        """
+                        INSERT OR IGNORE INTO vk_source(group_id, screen_name, name, owner_type)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (194393485, "club194393485", "Географическая школа", "group"),
+                    )
+                    await conn.execute(
+                        """
+                        INSERT OR IGNORE INTO vk_source(group_id, screen_name, name, owner_type)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (61694047, "ivsguide", "Игорь Селин", "user"),
+                    )
+                    await conn.execute(
+                        """
+                        INSERT OR IGNORE INTO vk_source(group_id, screen_name, name, owner_type)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (290624941, "natakkaz", "Наталья Казакова", "user"),
+                    )
             except Exception:
                 logging.warning("db.init: failed to seed vk_source defaults", exc_info=True)
 
@@ -1546,6 +1574,11 @@ class Database:
             )
 
             await _add_column(conn, "vk_crawl_cursor", "checked_at INTEGER")
+            # See vk_source.owner_type — default "group" preserves the
+            # legacy contract for existing cursors.
+            await _add_column(
+                conn, "vk_crawl_cursor", "owner_type TEXT NOT NULL DEFAULT 'group'"
+            )
 
             await conn.execute(
                 """
@@ -1574,6 +1607,11 @@ class Database:
 
             await _add_column(conn, "vk_inbox", "event_ts_hint INTEGER")
             await _add_column(conn, "vk_inbox", "attempts INTEGER NOT NULL DEFAULT 0")
+            # See vk_source.owner_type — default "group" preserves the
+            # legacy contract for existing inbox rows.
+            await _add_column(
+                conn, "vk_inbox", "owner_type TEXT NOT NULL DEFAULT 'group'"
+            )
 
             await conn.execute(
                 """

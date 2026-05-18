@@ -3693,7 +3693,14 @@ async def crawl_once(
         )
         cur = await conn.execute(
             """
-            SELECT group_id, screen_name, name, location, default_time, default_ticket_link
+            SELECT
+                group_id,
+                screen_name,
+                name,
+                location,
+                default_time,
+                default_ticket_link,
+                COALESCE(owner_type, 'group')
             FROM vk_source
             """
         )
@@ -3705,6 +3712,7 @@ async def crawl_once(
                 "location": row[3],
                 "default_time": row[4],
                 "default_ticket_link": row[5],
+                "owner_type": row[6],
             }
             for row in await cur.fetchall()
         ]
@@ -3720,6 +3728,8 @@ async def crawl_once(
     now_ts = int(time.time())
     for group in groups:
         gid = group["group_id"]
+        raw_owner_type = group.get("owner_type") or "group"
+        owner_type = "user" if str(raw_owner_type).strip().lower() == "user" else "group"
         group_title_norm = _normalize_group_title(group.get("name"))
         group_screen_name_norm = _normalize_group_screen_name(
             group.get("screen_name")
@@ -3808,7 +3818,11 @@ async def crawl_once(
                 offset = 0
                 while pages_loaded < VK_CRAWL_MAX_PAGES_BACKFILL:
                     page = await vk_wall_since(
-                        gid, 0, count=VK_CRAWL_PAGE_SIZE_BACKFILL, offset=offset
+                        gid,
+                        0,
+                        count=VK_CRAWL_PAGE_SIZE_BACKFILL,
+                        offset=offset,
+                        owner_type=owner_type,
                     )
                     pages_loaded += 1
                     posts.extend(p for p in page if p["date"] >= horizon)
@@ -3824,7 +3838,11 @@ async def crawl_once(
                 hard_cap = safety_cap_threshold * 10
                 while True:
                     page = await vk_wall_since(
-                        gid, since, count=VK_CRAWL_PAGE_SIZE, offset=offset
+                        gid,
+                        since,
+                        count=VK_CRAWL_PAGE_SIZE,
+                        offset=offset,
+                        owner_type=owner_type,
                     )
                     pages_loaded += 1
                     posts.extend(page)
@@ -3897,7 +3915,12 @@ async def crawl_once(
                 post_text = post.get("text", "")
                 photos = post.get("photos", []) or []
                 post_url = post.get("url")
-                miss_url = post_url or f"https://vk.com/wall-{gid}_{pid}"
+                if post_url:
+                    miss_url = post_url
+                else:
+                    from vk_owner import vk_wall_url as _vk_wall_url
+
+                    miss_url = _vk_wall_url(gid, pid, owner_type)
                 blank_single_photo = not post_text.strip() and len(photos) == 1
 
                 if blank_single_photo:
@@ -4071,8 +4094,8 @@ async def crawl_once(
                         cur = await conn.execute(
                             """
                             INSERT OR IGNORE INTO vk_inbox(
-                                group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+                                group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status, owner_type
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
                             """,
                             (
                                 gid,
@@ -4082,6 +4105,7 @@ async def crawl_once(
                                 matched_kw_value,
                                 has_date_value,
                                 event_ts_hint,
+                                owner_type,
                             ),
                         )
                         await conn.commit()
@@ -4183,8 +4207,8 @@ async def crawl_once(
             if cursor_payload is not None:
                 async with db.raw_conn() as conn:
                     await conn.execute(
-                        "INSERT OR REPLACE INTO vk_crawl_cursor(group_id, last_seen_ts, last_post_id, updated_at, checked_at) VALUES(?,?,?,?,?)",
-                        (gid, *cursor_payload),
+                        "INSERT OR REPLACE INTO vk_crawl_cursor(group_id, last_seen_ts, last_post_id, updated_at, checked_at, owner_type) VALUES(?,?,?,?,?,?)",
+                        (gid, *cursor_payload, owner_type),
                     )
                     await conn.commit()
         finally:

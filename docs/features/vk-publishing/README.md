@@ -33,6 +33,7 @@
 
 ## Operational Checks
 
+- `vk_source.owner_type` distinguishes community walls (`group`, negative owner id) from personal pages (`user`, positive owner id). Operator-seeded personal sources such as `ivsguide` and `natakkaz` must keep `owner_type='user'` so crawl/review/repost URLs use `wall<user_id>_<post_id>` instead of `wall-<group_id>_<post_id>`.
 - Перед production-проверкой убедиться, что заданы `VK_USER_TOKEN` или `VK_ACCESS_TOKEN4`, `VK_EVENTS_GROUP_ID` и целевой `/vkgroup` для daily.
 - Для события с несколькими картинками проверять не только наличие `vk_repost_url`, но и attachments в самом VK-посте.
 - Для daily проверять два независимых слота: утренний `today` и вечерний `added`; отсутствие событий в одном слоте не должно блокировать второй.

@@ -40,7 +40,7 @@ async def test_crawl_enqueues_historical_posts(tmp_path, monkeypatch, post_text)
         }
     ]
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         return posts if offset == 0 else []
 
     monkeypatch.setattr(main, "vk_wall_since", fake_wall_since)
@@ -92,7 +92,7 @@ async def test_crawl_includes_history_with_other_matches(tmp_path, monkeypatch):
         }
     ]
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         return posts if offset == 0 else []
 
     monkeypatch.setattr(main, "vk_wall_since", fake_wall_since)

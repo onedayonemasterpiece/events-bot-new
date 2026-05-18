@@ -222,7 +222,7 @@ async def test_vk_crawl_empty_group_updates_checked_at(tmp_path, monkeypatch):
 
     fixed_now = 1717245296
 
-    async def fake_wall_since(gid, since, count, offset=0):
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
         assert gid == 1
         assert offset == 0
         return []

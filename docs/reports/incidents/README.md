@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection.md`
+  - Scope: CherryFlash `partner_konb_library_001` scheduled production slot, partner render-lock scoping, KОНБ underfilled selection recycle, and same-day compensation.
+  - Must not regress: a slow `popular_review_eco` render must not block the KОНБ partner track scheduled 7 minutes later; if fresh/future KОНБ candidates underfill, eligible future KОНБ events from prior days may repeat, while same-video duplicates and same-calendar-day repeats remain blocked.
 - `INC-2026-05-18-prod-startup-missing-partner-promo-module.md`
   - Scope: `main_part2.py::create_app`, optional handler imports, Fly production startup, and `/healthz`.
   - Must not regress: optional or unfinished feature modules such as partner promo must not be imported unconditionally from the production startup path; missing optional handlers must fail closed without taking down webhook serving.
