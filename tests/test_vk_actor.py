@@ -1,6 +1,8 @@
 import logging
 import pytest
 from collections import defaultdict
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import main
 
 
@@ -169,6 +171,7 @@ async def test_post_to_vk_group_actor_posts_from_group(monkeypatch):
     monkeypatch.setattr(main, "VK_TOKEN", "gm")
     monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "ga")
     monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", False)
 
     captured = {}
 
@@ -205,3 +208,123 @@ async def test_post_to_vk_group_actor_posts_from_group(monkeypatch):
     assert captured["params"]["message"] == "hello"
     assert captured["params"]["from_group"] == 1
     assert captured["params"]["signed"] == 0
+
+
+def test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    tz = ZoneInfo("Europe/Kaliningrad")
+
+    early = datetime(2026, 5, 19, 5, 45, tzinfo=tz)
+    assert main._vk_postponed_next_slot(early, None) == datetime(
+        2026, 5, 19, 6, 0, tzinfo=tz
+    )
+
+    daytime = datetime(2026, 5, 19, 10, 0, tzinfo=tz)
+    assert main._vk_postponed_next_slot(daytime, None) == datetime(
+        2026, 5, 19, 10, 10, tzinfo=tz
+    )
+
+    latest = int(datetime(2026, 5, 19, 10, 30, tzinfo=tz).timestamp())
+    assert main._vk_postponed_next_slot(daytime, latest) == datetime(
+        2026, 5, 19, 10, 40, tzinfo=tz
+    )
+
+    late = int(datetime(2026, 5, 19, 23, 55, tzinfo=tz).timestamp())
+    assert main._vk_postponed_next_slot(daytime, late) == datetime(
+        2026, 5, 20, 6, 0, tzinfo=tz
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
+    monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
+    monkeypatch.setattr(main, "VK_TOKEN", "gm")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "ga")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", True)
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    main._vk_postponed_reserved_until_by_owner.clear()
+
+    tz = ZoneInfo("Europe/Kaliningrad")
+    expected = int(datetime(2026, 5, 19, 10, 40, tzinfo=tz).timestamp())
+    captured_wall_post = {}
+
+    async def fake_reserve(owner_id, actors, db, bot, *, now=None):
+        assert owner_id == -2
+        assert [actor.label for actor in actors] == ["group:afisha", "user"]
+        return expected
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        assert method == "wall.post"
+        captured_wall_post.update(
+            {
+                "params": params,
+                "token": token,
+                "token_kind": token_kind,
+                "skip_captcha": skip_captcha,
+            }
+        )
+        return {"response": {"post_id": 124}}
+
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk("2", "hello")
+
+    assert url == "https://vk.com/wall-2_124"
+    assert captured_wall_post["token"] == "ga"
+    assert captured_wall_post["token_kind"] == "group"
+    assert captured_wall_post["skip_captcha"] is True
+    assert captured_wall_post["params"]["owner_id"] == "-2"
+    assert captured_wall_post["params"]["from_group"] == 1
+    assert captured_wall_post["params"]["signed"] == 0
+    assert captured_wall_post["params"]["publish_date"] == expected
+
+
+@pytest.mark.asyncio
+async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    tz = ZoneInfo("Europe/Kaliningrad")
+    postponed_ts = int(datetime(2026, 5, 20, 10, 30, tzinfo=tz).timestamp())
+    calls = []
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        calls.append((method, token, token_kind, skip_captcha))
+        return {"response": {"items": [{"id": 1, "date": postponed_ts}]}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    latest = await main._fetch_vk_latest_postponed_ts(
+        -2,
+        [
+            main.VkActor("group", "g", "group:afisha"),
+            main.VkActor("user", None, "user"),
+        ],
+        db=None,
+        bot=None,
+    )
+
+    assert latest == postponed_ts
+    assert calls == [("wall.get", "u", "user", False)]

@@ -3271,6 +3271,152 @@ async def build_daily_sections_vk(
     return section1, section2
 
 
+VK_POSTPONED_ENABLED = (
+    os.getenv("VK_POSTPONED_ENABLED", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+VK_POSTPONED_TZ = os.getenv("VK_POSTPONED_TZ", "Europe/Kaliningrad")
+try:
+    VK_POSTPONED_MIN_INTERVAL_SECONDS = int(
+        os.getenv("VK_POSTPONED_MIN_INTERVAL_SECONDS", "600")
+    )
+except ValueError:
+    VK_POSTPONED_MIN_INTERVAL_SECONDS = 600
+try:
+    VK_POSTPONED_START_HOUR = int(os.getenv("VK_POSTPONED_START_HOUR", "6"))
+except ValueError:
+    VK_POSTPONED_START_HOUR = 6
+
+_vk_postponed_schedule_lock = asyncio.Lock()
+_vk_postponed_reserved_until_by_owner: dict[int, int] = {}
+
+
+def _vk_postponed_zone() -> timezone:
+    try:
+        return ZoneInfo(VK_POSTPONED_TZ)
+    except Exception:
+        logging.warning(
+            "vk.postponed invalid timezone=%s; falling back to Europe/Kaliningrad",
+            VK_POSTPONED_TZ,
+        )
+        return ZoneInfo("Europe/Kaliningrad")
+
+
+def _round_up_to_next_minute(value: datetime) -> datetime:
+    if value.second or value.microsecond:
+        value = value + timedelta(minutes=1)
+    return value.replace(second=0, microsecond=0)
+
+
+def _vk_postponed_day_start(value: datetime) -> datetime:
+    start_hour = min(23, max(0, VK_POSTPONED_START_HOUR))
+    return value.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+
+
+def _vk_postponed_next_slot(
+    now: datetime,
+    latest_postponed_ts: int | None,
+) -> datetime:
+    tz = _vk_postponed_zone()
+    now_local = now.astimezone(tz)
+    interval = max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)
+    candidate = now_local + timedelta(seconds=interval)
+    if latest_postponed_ts:
+        latest_dt = datetime.fromtimestamp(latest_postponed_ts, tz)
+        candidate = max(candidate, latest_dt + timedelta(seconds=interval))
+    candidate = _round_up_to_next_minute(candidate)
+    if candidate.hour < min(23, max(0, VK_POSTPONED_START_HOUR)):
+        candidate = _vk_postponed_day_start(candidate)
+    return candidate
+
+
+def _vk_postponed_items(response: dict) -> list[dict]:
+    data = response.get("response", response)
+    if isinstance(data, dict):
+        items = data.get("items", [])
+    elif isinstance(data, list) and len(data) > 1:
+        items = data[1:]
+    else:
+        items = []
+    return [item for item in items if isinstance(item, dict)]
+
+
+async def _fetch_vk_latest_postponed_ts(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    params = {
+        "owner_id": str(owner_id),
+        "filter": "postponed",
+        "count": 100,
+    }
+    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+    lookup_actors = [actor for actor in actors if actor.kind == "user"] + [
+        actor for actor in actors if actor.kind != "user"
+    ]
+    for actor in lookup_actors:
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        try:
+            response = await _vk_api(
+                "wall.get",
+                params,
+                db,
+                bot,
+                token=token,
+                token_kind=actor.kind,
+                skip_captcha=(actor.kind == "group"),
+            )
+        except VKAPIError as exc:
+            logging.warning(
+                "vk.postponed wall.get failed owner_id=%s actor=%s code=%s msg=%s",
+                owner_id,
+                actor.label,
+                exc.code,
+                exc.message,
+            )
+            continue
+        dates: list[int] = []
+        for item in _vk_postponed_items(response):
+            value = item.get("date") or item.get("publish_date")
+            if isinstance(value, int) and value > now_ts:
+                dates.append(value)
+        return max(dates) if dates else None
+    return None
+
+
+async def _reserve_vk_postponed_publish_date(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    now: datetime | None = None,
+) -> int | None:
+    if not VK_POSTPONED_ENABLED:
+        return None
+    async with _vk_postponed_schedule_lock:
+        tz = _vk_postponed_zone()
+        now_local = (now or datetime.now(tz)).astimezone(tz)
+        now_ts = int(now_local.timestamp())
+        latest_ts = await _fetch_vk_latest_postponed_ts(owner_id, actors, db, bot)
+        reserved_ts = _vk_postponed_reserved_until_by_owner.get(owner_id)
+        if reserved_ts and reserved_ts > now_ts:
+            latest_ts = max(latest_ts or 0, reserved_ts)
+        publish_dt = _vk_postponed_next_slot(now_local, latest_ts)
+        publish_ts = int(publish_dt.timestamp())
+        _vk_postponed_reserved_until_by_owner[owner_id] = publish_ts
+        logging.info(
+            "vk.postponed reserved owner_id=%s publish_date=%s local=%s latest=%s",
+            owner_id,
+            publish_ts,
+            publish_dt.isoformat(),
+            latest_ts,
+        )
+        return publish_ts
+
+
 async def post_to_vk(
     group_id: str,
     message: str,
@@ -3302,6 +3448,9 @@ async def post_to_vk(
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
+    publish_date = await _reserve_vk_postponed_publish_date(owner_id, actors, db, bot)
+    if publish_date:
+        params_base["publish_date"] = publish_date
     for idx, actor in enumerate(actors, start=1):
         params = params_base.copy()
         logging.info(
