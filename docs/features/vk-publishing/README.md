@@ -1,6 +1,6 @@
 # VK Publishing
 
-Каноника для исходящих публикаций в VK: посты отдельных событий после Smart Update и компактный ежедневный анонс.
+Каноника для исходящих публикаций в VK: посты отдельных событий после Smart Update, компактный ежедневный анонс и отдельные feature-owned дайджесты.
 
 ## Event Posts
 
@@ -33,6 +33,13 @@
 - VK daily не добавляет тяжёлую навигацию по дням, выходным и месяцам. Ссылкой для перехода служит VK-пост события; если `vk_repost_url` отсутствует, строка остаётся без ссылки.
 - Партнёрские события не получают автоматическую ссылку на сохранённый partner/source post в daily-строке: строка остаётся текстовой, чтобы не уводить трафик в чужой исходник вместо редакционного VK-анонса.
 
+## Feature-Owned Digests
+
+- Guide excursions VK digest принадлежит фиче [Guide Excursions Monitoring](../guide-excursions-monitoring/README.md), но обязан использовать общий VK wall contract из этого документа.
+- Для `https://vk.com/uhtykaliningrad` нужен отдельный target group id/env, независимый от `VK_EVENTS_GROUP_ID` (`klgdevents`) и `/vkgroup` daily-настройки.
+- Такие дайджесты публикуются через `post_to_vk`, поэтому по умолчанию попадают в отложку: минимум через 10 минут от текущего времени, с теми же `VK_POSTPONED_*` правилами и community-author contract.
+- Feature-owned digest не должен молча наследовать Telegram formatting. Перед вызовом `wall.post` он должен быть plain text, с VK-safe ссылками, без HTML/Markdown и без Telegram-only caption/media mechanics.
+
 ## Operational Checks
 
 - `vk_source.owner_type` distinguishes community walls (`group`, negative owner id) from personal pages (`user`, positive owner id). Operator-seeded personal sources such as `ivsguide` and `natakkaz` must keep `owner_type='user'` so crawl/review/repost URLs use `wall<user_id>_<post_id>` instead of `wall-<group_id>_<post_id>`.
@@ -40,4 +47,5 @@
 - Для события с несколькими картинками проверять не только наличие `vk_repost_url`, но и attachments в самом VK-посте.
 - Для daily проверять два независимых слота: утренний `today` и вечерний `added`; отсутствие событий в одном слоте не должно блокировать второй.
 - Для нового daily/event smoke проверять через VK API не только URL, но и авторство: `from_id` должен быть `-<group_id>`, а `likes.can_publish` должен быть `1`. Новые smoke-посты ожидаемо появляются в postponed queue; проверять `publish_date`/`date` и удалять из отложки после проверки, если smoke не должен выйти публично.
+- Для guide digest smoke в `uhtykaliningrad` дополнительно проверять, что первая строка содержит count + месяцы, пост один, `publish_date` стоит минимум на 10 минут вперёд, а Telegram registration/source links либо сокращены через `vk.cc`, либо явно залогированы как shortener fallback.
 - Runtime-параметры отложки: `VK_POSTPONED_ENABLED` (default `true`), `VK_POSTPONED_TZ` (default `Europe/Kaliningrad`), `VK_POSTPONED_MIN_INTERVAL_SECONDS` (default `600`), `VK_POSTPONED_START_HOUR` (default `6`).

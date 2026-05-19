@@ -59,7 +59,7 @@
 
 - отдельный guide-track в основной SQLite;
 - seed-пак Telegram-источников из casebook;
-- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` как personal guide source for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate` и `vk.com/konb39` через тот же Kaggle guide-monitoring runtime;
+- seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` как personal guide source for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate`, `vk.com/konb39`, `vk.com/ruin.keepers` и `vk.com/narodexcursovod` через тот же Kaggle guide-monitoring runtime;
 - guide-specific Kaggle runtime: [kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py](/workspaces/events-bot-new/kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py);
 - secure Kaggle push/poll/download через тот же split-secrets pattern, что и в Telegram Monitoring;
 - guide Kaggle transport теперь повторяет продовый Telegram Monitoring pattern: kernel push содержит нужный `google_ai/` код сразу, а secrets по-прежнему идут только через два отдельных datasets (`cipher + key`), без третьего payload dataset;
@@ -113,6 +113,7 @@ Guide admin surface подключается в основной bot runtime ч�
 - `/guide_facts <occurrence_id>` — materialized fact pack и `GuideFactClaim` по конкретной карточке;
 - `/guide_log <occurrence_id>` — source-post / claim log для конкретной карточки, аналог `/log` у Smart Update;
 - `/guide_digest` — publish текущего digest во все каналы из `GUIDE_DIGEST_TARGET_CHATS`.
+- `/guide_digest_vk` — publish последнего успешного `new_occurrences` digest issue в VK target через отложенный wall-post.
 
 ## Admin observability
 
@@ -248,7 +249,7 @@ Target channels для manual/scheduled publish задаются через `GUI
 
 ## Формат digest-карточки
 
-- заголовок экскурсии кликается и ведёт на исходный Telegram-пост;
+- в Telegram-render заголовок экскурсии кликается и ведёт на исходный Telegram/VK-пост;
 - строка с каналом остаётся plain text без ссылки, чтобы не было двух соседних tap-target;
 - отдельная строка `🔗 Анонс: исходный пост` больше не публикуется: source link живёт только в title, чтобы карточка не дублировала один и тот же tap-target дважды;
 - между карточками ставится пустая строка + горизонтальный разделитель, чтобы длинный digest легче сканировался глазами в Telegram;
@@ -265,6 +266,45 @@ Target channels для manual/scheduled publish задаются через `GUI
 - media selection не должна останавливаться на первых нескольких карточках без фото: runtime добирает media дальше по digest rows, пока не соберёт доступный album pack (до Telegram cap).
 - если preview выбрал карточки с `media_refs`, но usable materialized files для них отсутствуют, publish обязан завершаться с явной ошибкой; silent text-only fallback для guide digest не допускается.
 - service-only фразы вроде `Новых экскурсионных находок пока нет.` или `Сигналов last call пока нет.` не считаются публичным digest payload: при пустом наборе candidates runtime не публикует их в target channels и оставляет такие сообщения только для operator-facing surfaces.
+
+## VK digest MVP
+
+Цель ближайшего запуска: публиковать тот же `new_occurrences` fact-pack в VK-паблик `https://vk.com/uhtykaliningrad` отдельным от Telegram surface. VK-пост должен быть одним wall-постом, без Telegram-style split на несколько частей, пока итоговый plain-text payload проходит лимит VK. Если однажды payload не помещается, runtime должен явно остановить публикацию и показать оператору причину, а не резать выпуск молча.
+
+Формат первой строки важен для ленты VK: она должна сразу сообщать количество и месяцы найденных новых выходов, например `Новые экскурсии: 7 выходов на май и июнь`. Месяцы считаются по `guide_occurrence.date` после финальной dedup/editorial фильтрации, то есть по тем карточкам, которые реально попали в VK-пост. Следующие строки могут давать короткий редакционный lead, но первая строка не должна начинаться с приветствия, hashtag'ов, служебной метки или длинной интро-фразы.
+
+VK-render отличается от Telegram-render:
+
+- используется plain text, без HTML `<a>` и без Telegram media album/caption mechanics;
+- карточки остаются fact-first и берут те же поля, что Telegram digest: дата, локация, гид/организатор, маршрут, цена, места, запись;
+- исходная ссылка на анонс выводится отдельной короткой строкой в карточке, потому что заголовок в plain VK text не может быть кликабельным;
+- Telegram booking/source links (`t.me/...`, `https://t.me/...`) перед выводом в VK должны проходить через existing VK shortener (`utils.getShortLink` / `vk.cc`); если shortener недоступен, публикация не падает, но сохраняет исходную ссылку и пишет warning в operator/runtime evidence;
+- если экскурсия пришла с личной VK-стены, public attribution должен показывать VK user mention/link на автора (`https://vk.com/<screen_name>` или `[id...|Имя]`, если resolve доступен), а не только обезличенное `Источник: VK`;
+- если экскурсия пришла из VK-сообщества, attribution использует community label/source link, но не притворяется персональным гидом без occurrence-level evidence;
+- VK-пост должен идти через общий community wall publishing contract из [VK Publishing](../vk-publishing/README.md): `owner_id=-<group_id>`, `from_group=1`, `signed=0`, `publish_date` минимум через 10 минут.
+
+Минимальный rollout для `uhtykaliningrad`:
+
+1. Добавить env/настройку целевой группы для guide VK digest отдельно от `VK_EVENTS_GROUP_ID`, чтобы не смешивать `uhtykaliningrad` с `klgdevents`.
+2. Добавить VK-render поверх уже существующего `build_guide_digest_preview(..., family="new_occurrences")`, чтобы dedup, writer, repeat-policy и published marks не расходились между Telegram и VK.
+3. Сохранять VK publication evidence в `guide_digest_issue.published_targets_json` или совместимом per-target поле, чтобы повторный запуск видел, что выпуск уже ушёл в VK, и не дублировал тот же digest.
+4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`.
+
+Runtime flags:
+
+- `ENABLE_GUIDE_DIGEST_VK=1` включает scheduled VK fanout после успешной Telegram-публикации scheduled `new_occurrences`;
+- `GUIDE_DIGEST_VK_TARGET=uhtykaliningrad` задаёт screen name целевого паблика; если `GUIDE_DIGEST_VK_TARGET_GROUP_ID` пуст, runtime resolve'ит group id через `utils.resolveScreenName`;
+- `GUIDE_DIGEST_VK_MAX_CHARS=15000` задаёт fail-closed лимит одного VK-поста;
+- ручной catch-up после deploy: `/guide_digest_vk` публикует последний успешный digest issue в VK-отложку и не пересобирает candidates.
+
+Подводные камни, которые считаются blocking для запуска:
+
+- нельзя переиспользовать Telegram split text как есть: VK должен получить один связный plain-text пост с собственной первой строкой;
+- нельзя отмечать occurrence опубликованным только из-за VK-failure/partial: published mark ставится только после успешного wall.post/postponed result;
+- shortener failure не блокирует digest, но должен быть видимым, потому что Telegram-ссылки в VK без сокращения часто выглядят длинно и плохо меряются;
+- personal VK source требует owner/user awareness. `vk.com/ivsguide`, `vk.ru/natakkaz` и будущие личные страницы нельзя обрабатывать как negative group wall id;
+- добавление `vk.com/ruin.keepers` и `vk.com/narodexcursovod` расширяет duplicate surface: Route Matchmaker должен сравнивать VK announcements с Telegram `ruin_keepers` и aggregator mirrors по same-date route/booking anchors, иначе один и тот же выход появится в VK digest второй карточкой;
+- если VK resolve screen_name/group id недоступен из-за token/permission/rate limit, запуск должен остановиться до production-поста и показать оператору, какой source/target не был resolved.
 
 ## Terminology Policy
 

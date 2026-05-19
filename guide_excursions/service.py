@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, List, Mapping, Sequence
+from typing import Any, Awaitable, Callable, List, Mapping, Sequence
 
 import aiosqlite
 from aiogram import Bot, types
@@ -112,6 +112,12 @@ GUIDE_DIGEST_TARGET_CHATS = _parse_digest_target_chats(
     or "@wheretogo39"
 )
 GUIDE_DIGEST_TARGET_CHAT = GUIDE_DIGEST_TARGET_CHATS[0]
+GUIDE_DIGEST_VK_TARGET = collapse_ws(os.getenv("GUIDE_DIGEST_VK_TARGET") or "uhtykaliningrad")
+GUIDE_DIGEST_VK_TARGET_GROUP_ID = collapse_ws(os.getenv("GUIDE_DIGEST_VK_TARGET_GROUP_ID"))
+GUIDE_DIGEST_VK_MAX_CHARS = max(
+    1000,
+    min(int((os.getenv("GUIDE_DIGEST_VK_MAX_CHARS") or "15000") or 15000), 16000),
+)
 GUIDE_SCAN_LIMIT_FULL = max(10, min(int((os.getenv("GUIDE_SCAN_LIMIT_FULL") or "60") or 60), 200))
 GUIDE_SCAN_LIMIT_LIGHT = max(5, min(int((os.getenv("GUIDE_SCAN_LIMIT_LIGHT") or "25") or 25), 120))
 GUIDE_DAYS_BACK_FULL = max(3, min(int((os.getenv("GUIDE_DAYS_BACK_FULL") or "5") or 5), 90))
@@ -321,6 +327,159 @@ def _digest_period_label_from_items(items: Sequence[Mapping[str, Any]] | None) -
     return build_media_caption_period_label(date_isos)
 
 
+VK_MONTH_NOM = {
+    1: "январь",
+    2: "февраль",
+    3: "март",
+    4: "апрель",
+    5: "май",
+    6: "июнь",
+    7: "июль",
+    8: "август",
+    9: "сентябрь",
+    10: "октябрь",
+    11: "ноябрь",
+    12: "декабрь",
+}
+
+
+def _join_ru_list(items: Sequence[str]) -> str:
+    clean = [collapse_ws(item) for item in items if collapse_ws(item)]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} и {clean[1]}"
+    return f"{', '.join(clean[:-1])} и {clean[-1]}"
+
+
+def _ru_exit_word(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return "выход"
+    if count % 10 in {2, 3, 4} and count % 100 not in {12, 13, 14}:
+        return "выхода"
+    return "выходов"
+
+
+def _guide_digest_vk_lead(rows: Sequence[Mapping[str, Any]], *, family: str) -> str:
+    months: list[str] = []
+    for row in rows:
+        parsed = _parse_iso_date(collapse_ws(_mapping_value(row, "date")))
+        if not parsed:
+            continue
+        month = VK_MONTH_NOM.get(parsed.month)
+        if month and month not in months:
+            months.append(month)
+    period = f" на {_join_ru_list(months)}" if months else ""
+    count = len(rows)
+    if family == "last_call":
+        return f"Last call по экскурсиям: {count} сигналов{period}"
+    return f"Новые экскурсии: {count} {_ru_exit_word(count)}{period}"
+
+
+def _plain_line_value(value: Any) -> str | None:
+    text = collapse_ws(value)
+    if not text:
+        return None
+    if text.lower() in {
+        "не определено",
+        "не указано",
+        "нет",
+        "n/a",
+        "none",
+        "одна дата",
+        "one date",
+        "single date",
+        "только одна дата",
+    }:
+        return None
+    return text
+
+
+def _guide_digest_vk_source_label(row: Mapping[str, Any]) -> str | None:
+    platform = collapse_ws(_mapping_value(row, "source_platform"))
+    username = collapse_ws(_mapping_value(row, "source_username"))
+    title = _plain_line_value(_mapping_value(row, "source_title"))
+    flags = _mapping_value(row, "source_flags")
+    flags_map = flags if isinstance(flags, Mapping) else {}
+    source_url = _plain_line_value(_mapping_value(row, "source_post_url"))
+    if platform == "vk" and username:
+        profile_url = f"https://vk.com/{username}"
+        if bool(flags_map.get("vk_personal_page")):
+            return f"Автор: {title or profile_url} · {profile_url}"
+        return f"Источник: {title or profile_url} · {profile_url}"
+    if title:
+        return f"Источник: {title}"
+    if source_url:
+        return f"Источник: {source_url}"
+    return None
+
+
+def _extract_wall_post_id(url: str | None) -> int | None:
+    match = re.search(r"wall-?\d+_(\d+)", collapse_ws(url))
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+
+def _vk_public_target_key(*, group_id: int, target: str | None = None) -> str:
+    label = collapse_ws(target) or str(group_id)
+    return f"vk:{label}"
+
+
+async def _shorten_url_for_vk(
+    url: str | None,
+    *,
+    db: Database | None,
+    bot: Bot | None,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None,
+) -> str | None:
+    raw = collapse_ws(url)
+    if not raw:
+        return None
+    if raw.lower().startswith("vk.cc/"):
+        return raw
+    if raw.lower().startswith("https://vk.cc/") or raw.lower().startswith("http://vk.cc/"):
+        try:
+            from shortlinks import format_vk_short_url
+
+            return format_vk_short_url(raw)
+        except Exception:
+            return re.sub(r"^https?://", "", raw, flags=re.IGNORECASE)
+    if not re.search(r"(^https?://t\.me/|^t\.me/|^https?://telegram\.me/|^telegram\.me/)", raw, flags=re.I):
+        return raw
+    full = raw if raw.lower().startswith(("http://", "https://")) else f"https://{raw}"
+    if vk_api_fn is None:
+        logger.warning("guide_digest_vk_shortlink_fallback url=%s reason=no_vk_api", full)
+        return raw
+    try:
+        response = await vk_api_fn("utils.getShortLink", {"url": full}, db, bot)
+    except Exception:
+        logger.exception("guide_digest_vk_shortlink_fallback url=%s reason=fetch_failed", full)
+        return raw
+    payload = response.get("response", response) if isinstance(response, dict) else response
+    if not isinstance(payload, Mapping):
+        logger.warning("guide_digest_vk_shortlink_fallback url=%s reason=invalid_response", full)
+        return raw
+    short_url = collapse_ws(payload.get("short_url"))
+    key = collapse_ws(payload.get("key"))
+    if not short_url and key:
+        short_url = f"https://vk.cc/{key}"
+    if not short_url:
+        logger.warning("guide_digest_vk_shortlink_fallback url=%s reason=missing_short_url", full)
+        return raw
+    try:
+        from shortlinks import format_vk_short_url
+
+        return format_vk_short_url(short_url)
+    except Exception:
+        return re.sub(r"^https?://", "", short_url, flags=re.IGNORECASE)
+
+
 async def _issue_period_label(db: Database, items_json: Any) -> str | None:
     occurrence_ids = _issue_occurrence_ids(items_json)
     if not occurrence_ids:
@@ -494,6 +653,102 @@ def _source_post_url(payload_url: str | None, fallback_url: str | None) -> str |
     if _is_tg_post_url(fallback):
         return fallback
     return primary or fallback or None
+
+
+async def build_guide_vk_digest_text(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    family: str = "new_occurrences",
+    db: Database | None = None,
+    bot: Bot | None = None,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+) -> str:
+    items = [dict(row) for row in rows]
+    if not items:
+        raise ValueError("guide VK digest requires at least one item")
+
+    lines: list[str] = [
+        _guide_digest_vk_lead(items, family=family),
+        "",
+        "Собрали новые маршруты из мониторинга гидов и экскурсионных сообществ.",
+        "",
+    ]
+    for idx, row in enumerate(items, start=1):
+        title = _plain_line_value(row.get("canonical_title")) or "Экскурсия"
+        lines.append(f"{idx}. {title}")
+        source_label = _guide_digest_vk_source_label(row)
+        if source_label:
+            lines.append(source_label)
+
+        date_line = _plain_line_value(row.get("schedule_line")) or format_date_time(
+            collapse_ws(row.get("date")),
+            collapse_ws(row.get("time")),
+        )
+        if date_line:
+            lines.append(f"🗓 {date_line}")
+
+        city = _plain_line_value(row.get("city"))
+        if city:
+            lines.append(f"📍 {city}")
+
+        guide_line = _plain_line_value(row.get("guide_line"))
+        organizer_line = _plain_line_value(row.get("organizer_line"))
+        guide_names = row.get("guide_names") or []
+        if isinstance(guide_names, list) and guide_names and not guide_line:
+            guide_line = ", ".join(collapse_ws(item) for item in guide_names if collapse_ws(item))
+        if guide_line:
+            lines.append(f"Гид: {guide_line}")
+        elif organizer_line:
+            lines.append(f"Организатор: {organizer_line}")
+
+        blurb = _plain_line_value(row.get("digest_blurb") or row.get("summary_one_liner"))
+        if blurb:
+            lines.append(blurb)
+
+        route = _plain_line_value(row.get("route_line") or row.get("route_summary"))
+        if route:
+            lines.append(f"Что в маршруте: {route}")
+
+        duration = _plain_line_value(row.get("duration_line") or row.get("duration_text"))
+        if duration:
+            lines.append(f"Продолжительность: {duration}")
+
+        meeting = _plain_line_value(row.get("meeting_point_line") or row.get("meeting_point"))
+        if meeting:
+            lines.append(f"Место сбора: {meeting}")
+
+        price = _plain_line_value(row.get("price_line") or row.get("price_text"))
+        if price:
+            lines.append(f"Стоимость: {price}")
+
+        seats = _plain_line_value(row.get("seats_line") or row.get("seats_text"))
+        if seats:
+            lines.append(f"Места: {seats}")
+
+        booking_text = _plain_line_value(row.get("booking_line") or row.get("booking_text"))
+        booking_url = _plain_line_value(row.get("booking_url"))
+        booking_url = await _shorten_url_for_vk(booking_url, db=db, bot=bot, vk_api_fn=vk_api_fn)
+        if booking_text and booking_url and booking_url != booking_text:
+            lines.append(f"Запись: {booking_text} · {booking_url}")
+        elif booking_url:
+            lines.append(f"Запись: {booking_url}")
+        elif booking_text:
+            lines.append(f"Запись: {booking_text}")
+
+        source_post_url = await _shorten_url_for_vk(
+            _plain_line_value(row.get("source_post_url") or row.get("channel_url")),
+            db=db,
+            bot=bot,
+            vk_api_fn=vk_api_fn,
+        )
+        if source_post_url:
+            lines.append(f"Анонс: {source_post_url}")
+
+        if idx < len(items):
+            lines.extend(["", "----------", ""])
+
+    lines.extend(["", "#экскурсии #Калининград #УхтыКалининград"])
+    return "\n".join(lines).strip()
 
 
 def _parse_iso_date(value: str | None) -> date | None:
@@ -3290,6 +3545,22 @@ async def resume_guide_monitor_jobs(
                                 disable_web_page_preview=True,
                             )
                     else:
+                        vk_result = None
+                        if publish_result.get("published") and guide_digest_vk_enabled():
+                            try:
+                                vk_result = await publish_latest_guide_digest_to_vk(
+                                    db,
+                                    bot,
+                                    family="new_occurrences",
+                                    issue_id=int(publish_result.get("issue_id") or 0),
+                                )
+                            except Exception as exc:
+                                logger.exception(
+                                    "guide_monitor recovery: scheduled VK digest publish failed kernel=%s run_id=%s",
+                                    kernel_ref,
+                                    run_id,
+                                )
+                                vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
                         if notify_chat_id:
                             if publish_result.get("published"):
                                 await bot.send_message(
@@ -3298,6 +3569,12 @@ async def resume_guide_monitor_jobs(
                                         "📣 guide_monitor recovery: scheduled digest опубликован\n"
                                         f"issue_id={publish_result.get('issue_id')}\n"
                                         f"targets={', '.join(publish_result.get('target_chats') or [str(publish_result.get('target_chat') or '—')])}"
+                                        + (
+                                            "\n"
+                                            f"vk={vk_result.get('url') or 'skipped'}"
+                                            if vk_result
+                                            else ""
+                                        )
                                     ),
                                     disable_web_page_preview=True,
                                 )
@@ -3360,8 +3637,10 @@ async def _fetch_digest_candidates(
         SELECT
             go.*,
             gs.username AS source_username,
+            gs.platform AS source_platform,
             gs.title AS source_title,
             gs.source_kind AS source_kind,
+            gs.flags_json AS source_flags_json,
             gs.about_text AS source_about_text,
             gs.about_links_json AS source_about_links_json,
             gs.priority_weight AS priority_weight,
@@ -3414,6 +3693,7 @@ async def _fetch_digest_candidates(
         if not item["audience_fit"] and item["fact_pack"].get("audience_fit"):
             item["audience_fit"] = _normalize_string_list(item["fact_pack"].get("audience_fit"), limit=8)
         item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
+        item["source_flags"] = _safe_json_object(item.get("source_flags_json"))
         item["source_about_links"] = _parse_json_array(item.get("source_about_links_json"))
         item["priority_weight"] = float(item.get("priority_weight") or 1.0)
         item["aggregator_only"] = int(item.get("aggregator_only") or 0)
@@ -3438,6 +3718,96 @@ async def _fetch_digest_candidates(
         )
         out.append(item)
     return out
+
+
+async def _fetch_digest_rows_by_ids(
+    conn: aiosqlite.Connection,
+    occurrence_ids: Sequence[int],
+) -> list[dict[str, Any]]:
+    ids = [int(item) for item in occurrence_ids if int(item or 0) > 0]
+    if not ids:
+        return []
+    placeholders = ",".join("?" for _ in ids)
+    cur = await conn.execute(
+        f"""
+        SELECT
+            go.*,
+            gs.username AS source_username,
+            gs.platform AS source_platform,
+            gs.title AS source_title,
+            gs.source_kind AS source_kind,
+            gs.flags_json AS source_flags_json,
+            gs.about_text AS source_about_text,
+            gs.about_links_json AS source_about_links_json,
+            gs.priority_weight AS priority_weight,
+            gp.display_name AS guide_profile_display_name,
+            gp.marketing_name AS guide_profile_marketing_name,
+            gp.summary_short AS guide_profile_summary,
+            gp.facts_rollup_json AS guide_profile_facts_rollup_json
+        FROM guide_occurrence go
+        LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
+        LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
+        WHERE go.id IN ({placeholders})
+        """,
+        tuple(ids),
+    )
+    rows = await cur.fetchall()
+    by_id: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        item = dict(row)
+        item["guide_names"] = _parse_json_array(item.get("guide_names_json"))
+        item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
+        item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
+        item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
+        for key in (
+            "canonical_title",
+            "date",
+            "time",
+            "duration_text",
+            "city",
+            "meeting_point",
+            "route_summary",
+            "price_text",
+            "booking_text",
+            "booking_url",
+            "status",
+            "seats_text",
+            "summary_one_liner",
+            "digest_blurb",
+            "availability_mode",
+            "post_kind",
+            "group_format",
+        ):
+            if not item.get(key) and item["fact_pack"].get(key) is not None:
+                item[key] = item["fact_pack"].get(key)
+        if not item["guide_names"] and item["fact_pack"].get("guide_names"):
+            item["guide_names"] = _normalize_string_list(item["fact_pack"].get("guide_names"), limit=4)
+        if not item["organizer_names"] and item["fact_pack"].get("organizer_names"):
+            item["organizer_names"] = _normalize_string_list(item["fact_pack"].get("organizer_names"), limit=4)
+        if not item["audience_fit"] and item["fact_pack"].get("audience_fit"):
+            item["audience_fit"] = _normalize_string_list(item["fact_pack"].get("audience_fit"), limit=8)
+        item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
+        item["source_flags"] = _safe_json_object(item.get("source_flags_json"))
+        item["source_about_links"] = _parse_json_array(item.get("source_about_links_json"))
+        post_cur = await conn.execute(
+            """
+            SELECT gmp.text, gmp.source_url
+            FROM guide_occurrence_source gos
+            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+            WHERE gos.occurrence_id=?
+            ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
+            LIMIT 1
+            """,
+            (int(item.get("id") or 0),),
+        )
+        post_row = await post_cur.fetchone()
+        item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
+        item["source_post_url"] = _source_post_url(
+            item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None,
+            (post_row["source_url"] if post_row else None) or item.get("channel_url"),
+        )
+        by_id[int(item["id"])] = item
+    return [by_id[item] for item in ids if item in by_id]
 
 
 def _display_rows_excluding_published_reference_clusters(
@@ -3633,7 +4003,7 @@ async def build_guide_digest_preview(
                 GUIDE_DIGEST_TARGET_CHAT,
                 texts[0][:180] if texts else "",
                 GUIDE_DIGEST_PART_DELIMITER.join(texts),
-                _json_dump(occurrence_ids),
+                _json_dump([int(row["id"]) for row in display_rows if int(row.get("id") or 0) > 0]),
                 _json_dump(media_items),
                 int(run_id) if run_id is not None else None,
             ),
@@ -3889,6 +4259,167 @@ async def publish_guide_digest(
         "text_message_ids": list(primary_payload["text_message_ids"]),
         "media_message_ids": list(primary_payload["media_message_ids"]),
         "texts": texts,
+    }
+
+
+async def _resolve_vk_digest_group_id(
+    *,
+    db: Database | None,
+    bot: Bot | None,
+    group_id: str | int | None = None,
+    target: str | None = None,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+) -> int:
+    explicit = collapse_ws(group_id) or GUIDE_DIGEST_VK_TARGET_GROUP_ID
+    if explicit:
+        raw = explicit.lstrip("-")
+        if raw.isdigit():
+            return int(raw)
+        target = raw
+    screen_name = collapse_ws(target) or GUIDE_DIGEST_VK_TARGET
+    screen_name = re.sub(r"^https?://vk\.(?:com|ru)/", "", screen_name, flags=re.I).strip("/")
+    if not screen_name:
+        raise RuntimeError("GUIDE_DIGEST_VK_TARGET or GUIDE_DIGEST_VK_TARGET_GROUP_ID is required")
+    if vk_api_fn is None:
+        import main
+
+        vk_api_fn = main._vk_api  # type: ignore[attr-defined]
+
+    response = await vk_api_fn("utils.resolveScreenName", {"screen_name": screen_name}, db, bot)
+    payload = response.get("response", response) if isinstance(response, dict) else response
+    if not isinstance(payload, Mapping):
+        raise RuntimeError(f"VK target resolve failed for {screen_name}: invalid response")
+    obj_type = collapse_ws(payload.get("type"))
+    object_id = payload.get("object_id")
+    if obj_type != "group" or object_id is None:
+        raise RuntimeError(f"VK target {screen_name} resolved as {obj_type or 'unknown'}, expected group")
+    return int(object_id)
+
+
+def guide_digest_vk_enabled() -> bool:
+    value = collapse_ws(os.getenv("ENABLE_GUIDE_DIGEST_VK"))
+    if value:
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(collapse_ws(os.getenv("GUIDE_DIGEST_VK_TARGET_GROUP_ID")))
+
+
+async def publish_latest_guide_digest_to_vk(
+    db: Database,
+    bot: Bot | None = None,
+    *,
+    family: str = "new_occurrences",
+    issue_id: int | None = None,
+    group_id: str | int | None = None,
+    target: str | None = None,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+    post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
+) -> dict[str, Any]:
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        if issue_id is not None:
+            cur = await conn.execute(
+                """
+                SELECT id, family, status, items_json, published_targets_json
+                FROM guide_digest_issue
+                WHERE id=? AND family=?
+                """,
+                (int(issue_id), family),
+            )
+        else:
+            cur = await conn.execute(
+                """
+                SELECT id, family, status, items_json, published_targets_json
+                FROM guide_digest_issue
+                WHERE family=? AND status IN ('published', 'partial')
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (family,),
+            )
+        issue = await cur.fetchone()
+        if not issue:
+            return {"published": False, "reason": "no_issue", "family": family}
+        issue_id_resolved = int(issue["id"] or 0)
+        occurrence_ids = _issue_occurrence_ids(issue["items_json"])
+        rows = await _fetch_digest_rows_by_ids(conn, occurrence_ids)
+
+    if not rows:
+        return {"published": False, "reason": "no_items", "issue_id": issue_id_resolved, "family": family}
+
+    if vk_api_fn is None:
+        import main
+
+        vk_api_fn = main._vk_api  # type: ignore[attr-defined]
+    if post_to_vk_fn is None:
+        import main
+
+        post_to_vk_fn = main.post_to_vk  # type: ignore[attr-defined]
+
+    vk_group_id = await _resolve_vk_digest_group_id(
+        db=db,
+        bot=bot,
+        group_id=group_id,
+        target=target,
+        vk_api_fn=vk_api_fn,
+    )
+    target_key = _vk_public_target_key(group_id=vk_group_id, target=target or GUIDE_DIGEST_VK_TARGET)
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        cur = await conn.execute(
+            "SELECT published_targets_json FROM guide_digest_issue WHERE id=?",
+            (issue_id_resolved,),
+        )
+        current = await cur.fetchone()
+    published_targets_raw = _json_load(current["published_targets_json"] if current else None, fallback={})
+    if isinstance(published_targets_raw, Mapping) and target_key in published_targets_raw:
+        return {
+            "published": False,
+            "reason": "already_published",
+            "issue_id": issue_id_resolved,
+            "target": target_key,
+            "group_id": vk_group_id,
+        }
+
+    text = await build_guide_vk_digest_text(
+        rows,
+        family=family,
+        db=db,
+        bot=bot,
+        vk_api_fn=vk_api_fn,
+    )
+    if len(text) > GUIDE_DIGEST_VK_MAX_CHARS:
+        raise RuntimeError(
+            f"Guide VK digest too long for one post: {len(text)} > {GUIDE_DIGEST_VK_MAX_CHARS}"
+        )
+    url = await post_to_vk_fn(str(vk_group_id), text, db, bot)
+    if not url:
+        raise RuntimeError("Guide VK digest wall.post failed")
+
+    post_id = _extract_wall_post_id(url)
+    next_targets = dict(published_targets_raw) if isinstance(published_targets_raw, Mapping) else {}
+    next_targets[target_key] = {
+        "message_ids": [int(post_id)] if post_id else [],
+        "text_message_ids": [int(post_id)] if post_id else [],
+        "media_message_ids": [],
+        "post_urls": [url],
+        "group_id": int(vk_group_id),
+        "transport": "vk_wall",
+    }
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        await conn.execute(
+            "UPDATE guide_digest_issue SET published_targets_json=? WHERE id=?",
+            (_json_dump(next_targets), issue_id_resolved),
+        )
+        await conn.commit()
+    return {
+        "published": True,
+        "issue_id": issue_id_resolved,
+        "family": family,
+        "target": target_key,
+        "group_id": vk_group_id,
+        "url": url,
+        "text": text,
     }
 
 

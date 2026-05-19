@@ -77,7 +77,12 @@ async def _run_scheduled_guide_excursions(
     *,
     mode: str,
 ) -> None:
-    from guide_excursions.service import publish_guide_digest, run_guide_monitor
+    from guide_excursions.service import (
+        guide_digest_vk_enabled,
+        publish_guide_digest,
+        publish_latest_guide_digest_to_vk,
+        run_guide_monitor,
+    )
 
     target_chat_id = await resolve_superadmin_chat_id(db)
     result = await run_guide_monitor(
@@ -115,6 +120,18 @@ async def _run_scheduled_guide_excursions(
             except Exception:
                 logging.exception("SCHED failed to notify admin about scheduled guide digest publish failure")
         return
+    vk_result = None
+    if publish_result.get("published") and guide_digest_vk_enabled():
+        try:
+            vk_result = await publish_latest_guide_digest_to_vk(
+                db,
+                bot,
+                family="new_occurrences",
+                issue_id=int(publish_result.get("issue_id") or 0),
+            )
+        except Exception as exc:
+            logging.exception("SCHED scheduled guide VK digest publish failed")
+            vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
     if target_chat_id and publish_result.get("published"):
         try:
             await bot.send_message(
@@ -123,6 +140,12 @@ async def _run_scheduled_guide_excursions(
                     "📣 Scheduled guide digest published\n"
                     f"issue_id={publish_result.get('issue_id')}\n"
                     f"target={publish_result.get('target_chat') or '—'}"
+                    + (
+                        "\n"
+                        f"vk={vk_result.get('url') or 'skipped'}"
+                        if vk_result
+                        else ""
+                    )
                     + (
                         "\n"
                         f"warnings={len(warnings)}\n"
