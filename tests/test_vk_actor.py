@@ -292,3 +292,39 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     assert captured_wall_post["params"]["from_group"] == 1
     assert captured_wall_post["params"]["signed"] == 0
     assert captured_wall_post["params"]["publish_date"] == expected
+
+
+@pytest.mark.asyncio
+async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    tz = ZoneInfo("Europe/Kaliningrad")
+    postponed_ts = int(datetime(2026, 5, 20, 10, 30, tzinfo=tz).timestamp())
+    calls = []
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        calls.append((method, token, token_kind, skip_captcha))
+        return {"response": {"items": [{"id": 1, "date": postponed_ts}]}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    latest = await main._fetch_vk_latest_postponed_ts(
+        -2,
+        [
+            main.VkActor("group", "g", "group:afisha"),
+            main.VkActor("user", None, "user"),
+        ],
+        db=None,
+        bot=None,
+    )
+
+    assert latest == postponed_ts
+    assert calls == [("wall.get", "u", "user", False)]

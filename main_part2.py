@@ -3353,7 +3353,10 @@ async def _fetch_vk_latest_postponed_ts(
         "count": 100,
     }
     now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
-    for actor in actors:
+    lookup_actors = [actor for actor in actors if actor.kind == "user"] + [
+        actor for actor in actors if actor.kind != "user"
+    ]
+    for actor in lookup_actors:
         token = actor.token if actor.kind == "group" else VK_USER_TOKEN
         try:
             response = await _vk_api(
