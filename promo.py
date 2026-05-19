@@ -35,7 +35,31 @@ VIDEO_PROMO_GLOBAL_MAX_PER_PUBLISH = 2
 PROMO_POLICY_GUARANTEED_ANY_POSITION = "guaranteed_any_position"
 PROMO_POLICY_DIVERSE_SHUFFLE = "diverse_shuffle"
 PROMO_POLICY_FIRST_SLOT = "first_slot"
+PROMO_POLICY_FIRST_TWO_SLOTS = "first_two_slots"
 PROMO_DAILY_TZ = "Europe/Kaliningrad"
+PROMO_SURFACE_VIDEO_GENERAL = "video_general"
+PROMO_SURFACE_VK_REPOST = "vk_repost"
+
+
+def clamp_campaign_end_to_event(
+    requested_end: date, event: Event
+) -> date:
+    """Clamp campaign end date to the last day the event is still on.
+
+    For ``target=event`` campaigns there is no point promoting past the
+    event itself. ``event.end_date`` covers multi-day events; otherwise
+    fall back to ``event.date``. Returns the original requested end if it
+    is already on or before the event's last day.
+    """
+
+    last_iso = (getattr(event, "end_date", None) or getattr(event, "date", "") or "").split("..", 1)[0].strip()
+    if not last_iso:
+        return requested_end
+    try:
+        last = date.fromisoformat(last_iso)
+    except ValueError:
+        return requested_end
+    return min(requested_end, last)
 
 
 @dataclass(frozen=True)
@@ -386,6 +410,191 @@ async def create_event_promo_campaign(
         campaign,
         "created",
         f"Создал кампанию #{campaign.id}: событие #{event_id} {top_event.title}, до {ends.isoformat()}.",
+    )
+
+
+PARTNER_PROMO_VIDEO_PROFILES: dict[str, str] = {
+    "popular_review": "Видеоанонс — популярное",
+    "default": "Видеоанонс — завтра",
+    "konb": "Видеоанонс — КОНБ",
+}
+
+PARTNER_PROMO_SLOT_POLICIES: dict[str, str] = {
+    PROMO_POLICY_GUARANTEED_ANY_POSITION: "Любая позиция",
+    PROMO_POLICY_FIRST_TWO_SLOTS: "Слот 1–2",
+    PROMO_POLICY_FIRST_SLOT: "Только слот 1",
+}
+
+
+@dataclass(frozen=True)
+class PartnerPromoSpec:
+    event_id: int
+    creator_user_id: int
+    organization_name: str | None
+    surface: str
+    profile_key: str | None
+    slot_policy: str
+    count: int
+    ends_at: date
+    is_editorial: bool
+    sponsorship_disclosure: str | None
+    title_override: str | None = None
+    priority: int = PROMO_DEFAULT_PRIORITY
+
+
+def build_partner_campaign_title(
+    *,
+    organization_name: str | None,
+    partner_username: str | None,
+    event_title: str,
+    created_date: date,
+    is_superadmin: bool,
+) -> str:
+    if is_superadmin:
+        prefix = "editorial"
+    else:
+        prefix = (organization_name or partner_username or "partner").strip() or "partner"
+    short_title = (event_title or "").strip()
+    if len(short_title) > 40:
+        short_title = short_title[:39].rstrip() + "…"
+    return f"{prefix} · {short_title} · {created_date.isoformat()}"
+
+
+def _activity_slot_for_policy(policy: str) -> int | None:
+    if policy == PROMO_POLICY_FIRST_SLOT:
+        return 1
+    return None
+
+
+async def create_partner_event_promo_campaign(
+    db: Database,
+    spec: PartnerPromoSpec,
+    *,
+    now_utc: datetime | None = None,
+) -> PromoCreateResult:
+    """Create an event-targeted partner promo campaign from a confirmed FSM spec.
+
+    The caller (FSM step 6) is responsible for authorization. This function
+    only validates business rules: event must exist, be future and active,
+    ``ends_at`` is clamped to the event end date, count is positive.
+    """
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    today = now_utc.date()
+
+    if spec.count <= 0:
+        return PromoCreateResult(None, "invalid", "Количество показов должно быть положительным.")
+    if spec.surface not in {PROMO_SURFACE_VIDEO_GENERAL, PROMO_SURFACE_VK_REPOST}:
+        return PromoCreateResult(None, "invalid", f"Неизвестная поверхность: {spec.surface!r}.")
+    if spec.surface == PROMO_SURFACE_VIDEO_GENERAL and spec.slot_policy not in {
+        PROMO_POLICY_GUARANTEED_ANY_POSITION,
+        PROMO_POLICY_FIRST_TWO_SLOTS,
+        PROMO_POLICY_FIRST_SLOT,
+    }:
+        return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
+
+    async with db.get_session() as session:
+        from models import User  # local import to avoid cycle at import-time
+
+        event = await session.get(Event, int(spec.event_id))
+        if event is None:
+            return PromoCreateResult(None, "not_found", "Событие не найдено.")
+        if not _event_is_promo_eligible(
+            event,
+            today=today,
+            campaign=PromoCampaign(
+                title="_probe_",
+                status="active",
+                starts_at=now_utc,
+                ends_at=_campaign_end_dt(spec.ends_at),
+            ),
+            enforce_event_date_lte_campaign=False,
+        ):
+            return PromoCreateResult(
+                None,
+                "not_eligible",
+                "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
+            )
+        partner = await session.get(User, int(spec.creator_user_id))
+        partner_username = partner.username if partner is not None else None
+        is_superadmin = bool(partner.is_superadmin) if partner is not None else False
+        event_title = str(event.title or "")
+        event_id = int(event.id)
+
+    clamped_end = clamp_campaign_end_to_event(spec.ends_at, event)
+    if clamped_end < today:
+        return PromoCreateResult(
+            None,
+            "invalid",
+            "Дата окончания кампании уже в прошлом после клампа на дату события.",
+        )
+
+    title = spec.title_override or build_partner_campaign_title(
+        organization_name=spec.organization_name,
+        partner_username=partner_username,
+        event_title=event_title,
+        created_date=today,
+        is_superadmin=is_superadmin,
+    )
+
+    sponsorship = None if spec.is_editorial else (spec.sponsorship_disclosure or "Партнёрский материал")
+
+    campaign = PromoCampaign(
+        title=title,
+        status="active",
+        goal_comment=f"партнёрское промо: событие #{event_id} {event_title}",
+        starts_at=now_utc,
+        ends_at=_campaign_end_dt(clamped_end),
+        total_exposure_goal=int(spec.count),
+        priority=normalize_promo_priority(spec.priority),
+        sponsorship_disclosure=sponsorship,
+        created_by=int(spec.creator_user_id),
+    )
+
+    async with db.get_session() as session:
+        session.add(campaign)
+        await session.commit()
+        await session.refresh(campaign)
+        campaign_id = int(campaign.id)
+
+        target = PromoTarget(
+            campaign_id=campaign_id,
+            target_type="event",
+            event_id=event_id,
+            query_text=event_title,
+        )
+
+        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+            activity = PromoActivity(
+                campaign_id=campaign_id,
+                surface=PROMO_SURFACE_VIDEO_GENERAL,
+                profile_key=spec.profile_key,
+                slot=_activity_slot_for_policy(spec.slot_policy),
+                max_per_publish=1,
+                target_exposure_goal=int(spec.count),
+                selection_policy=spec.slot_policy,
+                enabled=True,
+            )
+        else:
+            activity = PromoActivity(
+                campaign_id=campaign_id,
+                surface=PROMO_SURFACE_VK_REPOST,
+                profile_key=None,
+                slot=None,
+                max_per_publish=1,
+                target_exposure_goal=int(spec.count),
+                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+                enabled=True,
+            )
+        session.add(target)
+        session.add(activity)
+        await session.commit()
+        await session.refresh(campaign)
+
+    return PromoCreateResult(
+        campaign,
+        "created",
+        f"Создал кампанию #{campaign.id}: {title}, показов {spec.count}, до {clamped_end.isoformat()}.",
     )
 
 

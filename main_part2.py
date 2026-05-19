@@ -17261,12 +17261,27 @@ def create_app() -> web.Application:
     async def promo_wrapper(message: types.Message):
         async with db.get_session() as session:
             user = await session.get(User, message.from_user.id)
-            if not has_admin_access(user):
+            if user is None or user.blocked or not (
+                user.is_superadmin or user.is_partner
+            ):
                 await bot.send_message(message.chat.id, "Not authorized")
                 return
-        from handlers.promo_cmd import handle_promo_command
+            is_admin = bool(user.is_superadmin)
+        args = (message.text or "").split(maxsplit=1)
+        has_args = len(args) > 1 and args[1].strip()
+        if has_args and is_admin:
+            from handlers.promo_cmd import handle_promo_command
 
-        await handle_promo_command(message, db, bot)
+            await handle_promo_command(message, db, bot)
+            return
+        try:
+            from handlers.partner_promo_cmd import handle_promo_menu_command
+        except ModuleNotFoundError as exc:
+            if exc.name not in {"handlers.partner_promo_cmd", "partner_promo"}:
+                raise
+            await bot.send_message(message.chat.id, "Промо-кампании временно недоступны")
+            return
+        await handle_promo_menu_command(message, db, bot)
 
     async def images_wrapper(message: types.Message):
         await handle_images(message, db, bot)

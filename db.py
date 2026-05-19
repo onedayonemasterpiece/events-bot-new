@@ -1968,6 +1968,63 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_promo_exposure_event_surface ON promo_exposure(event_id, surface, published_at)"
             )
 
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS organization(
+                    name TEXT PRIMARY KEY,
+                    vk_source_group_ids JSON NOT NULL DEFAULT '[]',
+                    video_profile_key TEXT,
+                    sponsorship_default TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            # Idempotent seed for partner organizations referenced by the
+            # partner-promo feature. The name must match what is stored in
+            # ``user.organization`` for partner accounts — for КОНБ that is
+            # "Научная библиотека" in production. Existing rows are not
+            # overwritten.
+            await conn.execute(
+                """
+                INSERT OR IGNORE INTO organization
+                    (name, vk_source_group_ids, video_profile_key, sponsorship_default)
+                VALUES
+                    ('Научная библиотека', '[30777579]', 'konb',
+                     'Партнёрский материал · Научная библиотека')
+                """
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_vk_repost_job(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    campaign_id INTEGER NOT NULL,
+                    activity_id INTEGER NOT NULL,
+                    event_id INTEGER NOT NULL,
+                    scheduled_at TIMESTAMP NOT NULL,
+                    source_owner_id INTEGER NOT NULL,
+                    source_post_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    executed_at TIMESTAMP,
+                    vk_post_id INTEGER,
+                    error_json JSON NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(campaign_id) REFERENCES promo_campaign(id) ON DELETE CASCADE,
+                    FOREIGN KEY(activity_id) REFERENCES promo_activity(id) ON DELETE CASCADE,
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_vk_repost_job_pending ON promo_vk_repost_job(status, scheduled_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_vk_repost_job_source ON promo_vk_repost_job(source_owner_id, source_post_id, executed_at)"
+            )
+
             await conn.commit()
 
     async def _ensure_conn(self) -> aiosqlite.Connection:

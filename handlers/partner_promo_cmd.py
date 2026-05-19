@@ -1,0 +1,1792 @@
+"""Partner promo FSM handler.
+
+Routes ``ppromo:*`` callbacks invoked from the per-event ``🎬`` button on
+``/events``. The user-facing spec is
+``docs/backlog/features/promo-campaigns/partner-promo.md``.
+
+Phase A scope: video_general surface with three slot policies.
+``vk_repost`` surface is recognised but currently shown as "coming soon"
+because the scheduler/runner is implemented in Phase B.
+"""
+
+from __future__ import annotations
+
+import html
+import logging
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from aiogram import Bot, types
+from sqlalchemy import select
+
+from db import Database
+from models import Event, Organization, PromoActivity, PromoCampaign, PromoTarget, User
+from partner_promo import (
+    PARTNER_PROMO_INPUT_COUNT,
+    PARTNER_PROMO_INPUT_DISCLOSURE,
+    PARTNER_PROMO_INPUT_END_DATE,
+    PARTNER_PROMO_INPUT_RENAME,
+    PartnerPromoInputSession,
+    PartnerPromoSession,
+    partner_promo_input_sessions,
+    partner_promo_sessions,
+)
+from promo import (
+    PARTNER_PROMO_SLOT_POLICIES,
+    PARTNER_PROMO_VIDEO_PROFILES,
+    PROMO_DEFAULT_PRIORITY,
+    PROMO_POLICY_FIRST_SLOT,
+    PROMO_POLICY_FIRST_TWO_SLOTS,
+    PROMO_POLICY_GUARANTEED_ANY_POSITION,
+    PROMO_SURFACE_VIDEO_GENERAL,
+    PROMO_SURFACE_VK_REPOST,
+    PartnerPromoSpec,
+    build_partner_campaign_title,
+    clamp_campaign_end_to_event,
+    create_partner_event_promo_campaign,
+    normalize_promo_priority,
+)
+
+logger = logging.getLogger(__name__)
+
+
+PROFILE_ORDER = ("popular_review", "default", "konb")
+SLOT_ORDER = (
+    PROMO_POLICY_GUARANTEED_ANY_POSITION,
+    PROMO_POLICY_FIRST_TWO_SLOTS,
+    PROMO_POLICY_FIRST_SLOT,
+)
+COUNT_PRESETS = (1, 2, 3, 5, 7, 10)
+DEFAULT_DURATIONS_DAYS = (7, 14, 30)
+
+
+def _status_label(status: str) -> str:
+    return {
+        "draft": "черновик",
+        "active": "активна",
+        "paused": "пауза",
+        "archived": "архив",
+    }.get(status, status)
+
+
+def _event_last_date(event: Event) -> date | None:
+    raw = (getattr(event, "end_date", None) or getattr(event, "date", "") or "").split("..", 1)[0].strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+async def _load_event_and_user(
+    db: Database, *, event_id: int, user_id: int
+) -> tuple[Optional[Event], Optional[User]]:
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+        user = await session.get(User, int(user_id))
+        return event, user
+
+
+def _is_authorized(user: User | None, event: Event | None) -> bool:
+    if user is None or user.blocked or event is None:
+        return False
+    if user.is_superadmin:
+        return True
+    if user.is_partner and int(event.creator_id or 0) == int(user.user_id or 0):
+        return True
+    return False
+
+
+async def _load_partner_organization(
+    db: Database, user: User
+) -> Optional[Organization]:
+    name = (user.organization or "").strip()
+    if not name:
+        return None
+    async with db.get_session() as session:
+        return await session.get(Organization, name)
+
+
+async def _list_user_campaigns_for_event(
+    db: Database, *, user: User, event_id: int
+) -> list[PromoCampaign]:
+    async with db.get_session() as session:
+        stmt = (
+            select(PromoCampaign)
+            .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
+            .where(PromoTarget.target_type == "event")
+            .where(PromoTarget.event_id == int(event_id))
+            .where(PromoCampaign.status != "archived")
+            .order_by(PromoCampaign.created_at.desc())
+        )
+        if not user.is_superadmin:
+            stmt = stmt.where(PromoCampaign.created_by == int(user.user_id))
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
+
+
+def _surface_buttons(
+    *, event_id: int, organization: Organization | None, vk_repost_available: bool
+) -> list[list[types.InlineKeyboardButton]]:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    for profile in PROFILE_ORDER:
+        if profile == "konb" and (
+            organization is None or (organization.video_profile_key or "") != "konb"
+        ):
+            continue
+        label = PARTNER_PROMO_VIDEO_PROFILES[profile]
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"🎬 {label}",
+                    callback_data=f"ppromo:surface:{event_id}:video_general:{profile}",
+                )
+            ]
+        )
+    if vk_repost_available:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="📨 Репост в партнёрский паблик",
+                    callback_data=f"ppromo:surface:{event_id}:vk_repost:none",
+                )
+            ]
+        )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="🌐 Сайт",
+                callback_data=f"ppromo:site:{event_id}",
+            )
+        ]
+    )
+    rows.append(_nav_row(event_id, step=1))
+    return rows
+
+
+def _nav_row(event_id: int, *, step: int) -> list[types.InlineKeyboardButton]:
+    row: list[types.InlineKeyboardButton] = []
+    if step > 1:
+        row.append(
+            types.InlineKeyboardButton(
+                text="◀ Назад", callback_data=f"ppromo:back:{event_id}:{step}"
+            )
+        )
+    row.append(
+        types.InlineKeyboardButton(
+            text="✕ Отмена", callback_data=f"ppromo:cancel:{event_id}"
+        )
+    )
+    return row
+
+
+def _event_card_text(event: Event) -> str:
+    title = html.escape(event.title or "")
+    date_str = html.escape(str(event.date or "")[:10])
+    return f"<b>{title}</b>\n<i>{date_str}</i> · #{event.id}"
+
+
+def _campaign_list_text(event: Event, campaigns: list[PromoCampaign]) -> str:
+    lines = [_event_card_text(event), ""]
+    if campaigns:
+        lines.append("Действующие кампании:")
+        for c in campaigns:
+            lines.append(
+                f"#{c.id} <b>{html.escape(c.title)}</b> — {_status_label(c.status)}"
+            )
+    else:
+        lines.append("Кампаний по этому событию пока нет.")
+    return "\n".join(lines)
+
+
+def _campaigns_keyboard(
+    event_id: int, campaigns: list[PromoCampaign]
+) -> types.InlineKeyboardMarkup:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    for c in campaigns[:6]:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"📊 #{c.id} {c.title[:35]}",
+                    callback_data=f"ppromo:campaign:{c.id}",
+                )
+            ]
+        )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="➕ Новая промо-кампания",
+                callback_data=f"ppromo:new:{event_id}",
+            )
+        ]
+    )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="✕ Закрыть", callback_data=f"ppromo:cancel:{event_id}"
+            )
+        ]
+    )
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _send_or_edit(
+    bot: Bot, callback: types.CallbackQuery, text: str, markup: types.InlineKeyboardMarkup
+) -> None:
+    chat_id: int | None = None
+    if callback.message is not None:
+        chat_id = callback.message.chat.id
+        try:
+            await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+            return
+        except Exception:
+            logger.debug("partner_promo: edit_text failed, sending new", exc_info=True)
+    if chat_id is None:
+        target = getattr(callback, "_reply_target", None)
+        if target is not None:
+            chat_id = target.chat.id
+    if chat_id is None and callback.from_user is not None:
+        chat_id = callback.from_user.id
+    if chat_id is None:
+        return
+    await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
+
+
+async def render_step0_campaign_list(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event: Event, user: User
+) -> None:
+    campaigns = await _list_user_campaigns_for_event(
+        db, user=user, event_id=int(event.id)
+    )
+    text = _campaign_list_text(event, campaigns)
+    markup = _campaigns_keyboard(int(event.id), campaigns)
+    await _send_or_edit(bot, callback, text, markup)
+
+
+async def render_step1_surface(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event: Event,
+    user: User,
+) -> None:
+    organization = await _load_partner_organization(db, user)
+    vk_repost_available = bool(
+        organization
+        and organization.vk_source_group_ids
+        and (event.source_vk_post_url or "")
+    )
+    rows = _surface_buttons(
+        event_id=int(event.id),
+        organization=organization,
+        vk_repost_available=vk_repost_available,
+    )
+    text = (
+        _event_card_text(event)
+        + "\n\nШаг 1/6. Выберите тип размещения:"
+    )
+    await _send_or_edit(
+        bot, callback, text, types.InlineKeyboardMarkup(inline_keyboard=rows)
+    )
+
+
+def _slot_rows(event_id: int) -> list[list[types.InlineKeyboardButton]]:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    for policy in SLOT_ORDER:
+        label = PARTNER_PROMO_SLOT_POLICIES[policy]
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"ppromo:slot:{event_id}:{policy}",
+                )
+            ]
+        )
+    rows.append(_nav_row(event_id, step=2))
+    return rows
+
+
+async def render_step2_slot(
+    callback: types.CallbackQuery,
+    bot: Bot,
+    *,
+    event: Event,
+    session: PartnerPromoSession,
+) -> None:
+    profile_label = PARTNER_PROMO_VIDEO_PROFILES.get(
+        session.profile_key or "", session.profile_key or ""
+    )
+    text = (
+        _event_card_text(event)
+        + f"\n\nШаг 2/6. {html.escape(profile_label)}"
+        + "\nВыберите расположение в видео:\n\n"
+        + "<i>Слот может не гарантироваться сегодня, если он уже занят\n"
+        + "более приоритетной кампанией — попытка перенесётся на следующий выпуск.</i>"
+    )
+    markup = types.InlineKeyboardMarkup(inline_keyboard=_slot_rows(int(event.id)))
+    await _send_or_edit(bot, callback, text, markup)
+
+
+def _count_rows(event_id: int) -> list[list[types.InlineKeyboardButton]]:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    line: list[types.InlineKeyboardButton] = []
+    for n in COUNT_PRESETS:
+        line.append(
+            types.InlineKeyboardButton(
+                text=str(n), callback_data=f"ppromo:count:{event_id}:{n}"
+            )
+        )
+        if len(line) == 3:
+            rows.append(line)
+            line = []
+    if line:
+        rows.append(line)
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="Ввести число",
+                callback_data=f"ppromo:count_input:{event_id}",
+            )
+        ]
+    )
+    rows.append(_nav_row(event_id, step=3))
+    return rows
+
+
+async def render_step3_count(
+    callback: types.CallbackQuery, bot: Bot, *, event: Event
+) -> None:
+    text = _event_card_text(event) + "\n\nШаг 3/6. Сколько показов?"
+    markup = types.InlineKeyboardMarkup(inline_keyboard=_count_rows(int(event.id)))
+    await _send_or_edit(bot, callback, text, markup)
+
+
+def _end_date_rows(event_id: int, event_last: date | None) -> list[list[types.InlineKeyboardButton]]:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    for days in DEFAULT_DURATIONS_DAYS:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"+{days} дней",
+                    callback_data=f"ppromo:end:{event_id}:d{days}",
+                )
+            ]
+        )
+    if event_last is not None:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"До даты события ({event_last.isoformat()})",
+                    callback_data=f"ppromo:end:{event_id}:event",
+                )
+            ]
+        )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="Ввести дату",
+                callback_data=f"ppromo:end_input:{event_id}",
+            )
+        ]
+    )
+    rows.append(_nav_row(event_id, step=4))
+    return rows
+
+
+async def render_step4_end(
+    callback: types.CallbackQuery, bot: Bot, *, event: Event
+) -> None:
+    text = _event_card_text(event) + "\n\nШаг 4/6. Дата окончания кампании:"
+    rows = _end_date_rows(int(event.id), _event_last_date(event))
+    markup = types.InlineKeyboardMarkup(inline_keyboard=rows)
+    await _send_or_edit(bot, callback, text, markup)
+
+
+def _mode_rows(event_id: int) -> list[list[types.InlineKeyboardButton]]:
+    return [
+        [
+            types.InlineKeyboardButton(
+                text="Партнёрский / коммерческий",
+                callback_data=f"ppromo:mode:{event_id}:partner",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="Редакционный (бесплатный)",
+                callback_data=f"ppromo:mode:{event_id}:editorial",
+            )
+        ],
+        _nav_row(event_id, step=5),
+    ]
+
+
+async def render_step5_mode(
+    callback: types.CallbackQuery, bot: Bot, *, event: Event
+) -> None:
+    text = (
+        _event_card_text(event)
+        + "\n\nШаг 5/6. Режим кампании:\n\n"
+        + "<i>Партнёрский режим публикует подпись «Партнёрский материал».\n"
+        + "Редакционный — только маркер ✨ без подписи.</i>"
+    )
+    markup = types.InlineKeyboardMarkup(inline_keyboard=_mode_rows(int(event.id)))
+    await _send_or_edit(bot, callback, text, markup)
+
+
+def _confirm_rows(event_id: int) -> list[list[types.InlineKeyboardButton]]:
+    return [
+        [
+            types.InlineKeyboardButton(
+                text="✅ Запустить",
+                callback_data=f"ppromo:confirm:{event_id}",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="✏ Переименовать",
+                callback_data=f"ppromo:rename_input:{event_id}",
+            ),
+            types.InlineKeyboardButton(
+                text="✕ Отмена",
+                callback_data=f"ppromo:cancel:{event_id}",
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="◀ Назад",
+                callback_data=f"ppromo:back:{event_id}:6",
+            )
+        ],
+    ]
+
+
+def _summary_text(
+    event: Event, sess: PartnerPromoSession, *, suggested_title: str, mode_label: str
+) -> str:
+    profile = (
+        PARTNER_PROMO_VIDEO_PROFILES.get(sess.profile_key or "", sess.profile_key or "—")
+        if sess.surface == PROMO_SURFACE_VIDEO_GENERAL
+        else "Репост ВК"
+    )
+    slot = (
+        PARTNER_PROMO_SLOT_POLICIES.get(sess.slot_policy or "", sess.slot_policy or "—")
+        if sess.surface == PROMO_SURFACE_VIDEO_GENERAL
+        else "—"
+    )
+    end = sess.ends_at.isoformat() if sess.ends_at else "—"
+    disclosure = sess.sponsorship_disclosure or "—"
+    title = sess.title_override or suggested_title
+    lines = [
+        "<b>Подтвердите кампанию</b>",
+        "",
+        f"Название: <code>{html.escape(title)}</code>",
+        f"Событие: #{event.id} {html.escape(event.title or '')}",
+        f"Размещение: {html.escape(profile)}" + (
+            f", {html.escape(slot)}" if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else ""
+        ),
+        f"Количество показов: {sess.count}",
+        f"Период: до {end}",
+        f"Режим: {mode_label}",
+    ]
+    if not sess.is_editorial:
+        lines.append(f"Раскрытие: «{html.escape(disclosure)}»")
+    return "\n".join(lines)
+
+
+async def render_step6_confirm(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event: Event,
+    user: User,
+    session: PartnerPromoSession,
+) -> None:
+    organization = await _load_partner_organization(db, user)
+    suggested = build_partner_campaign_title(
+        organization_name=organization.name if organization else (user.organization or None),
+        partner_username=user.username,
+        event_title=event.title or "",
+        created_date=datetime.now(timezone.utc).date(),
+        is_superadmin=bool(user.is_superadmin),
+    )
+    mode_label = "редакционный" if session.is_editorial else "партнёрский"
+    text = _summary_text(event, session, suggested_title=suggested, mode_label=mode_label)
+    markup = types.InlineKeyboardMarkup(inline_keyboard=_confirm_rows(int(event.id)))
+    await _send_or_edit(bot, callback, text, markup)
+
+
+def _parse_date_input(raw: str) -> date | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        pass
+    for fmt in ("%d.%m.%Y", "%d.%m.%y", "%d.%m"):
+        try:
+            parsed = datetime.strptime(raw, fmt).date()
+            if fmt == "%d.%m":
+                parsed = parsed.replace(year=datetime.now(timezone.utc).year)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
+async def _begin_flow(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event_id: int
+) -> None:
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    await callback.answer()
+    await render_step0_campaign_list(callback, db, bot, event=event, user=user)
+
+
+async def _open_new_form(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event_id: int
+) -> None:
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    partner_promo_sessions[int(callback.from_user.id)] = PartnerPromoSession(
+        event_id=int(event_id), step=1
+    )
+    await callback.answer()
+    await render_step1_surface(callback, db, bot, event=event, user=user)
+
+
+async def _handle_surface(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event_id: int,
+    surface: str,
+    profile: str,
+) -> None:
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    if surface == PROMO_SURFACE_VK_REPOST:
+        await callback.answer(
+            "Репост в партнёрский паблик появится в следующем релизе.",
+            show_alert=True,
+        )
+        return
+    if surface != PROMO_SURFACE_VIDEO_GENERAL:
+        await callback.answer("Неизвестная поверхность", show_alert=True)
+        return
+    if profile not in PARTNER_PROMO_VIDEO_PROFILES:
+        await callback.answer("Неизвестный профиль", show_alert=True)
+        return
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        sess = PartnerPromoSession(event_id=int(event_id))
+        partner_promo_sessions[int(callback.from_user.id)] = sess
+    sess.surface = surface
+    sess.profile_key = profile
+    sess.step = 2
+    await callback.answer()
+    await render_step2_slot(callback, bot, event=event, session=sess)
+
+
+async def _handle_slot(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event_id: int,
+    policy: str,
+) -> None:
+    if policy not in PARTNER_PROMO_SLOT_POLICIES:
+        await callback.answer("Неизвестная политика", show_alert=True)
+        return
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла, начните заново.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    sess.slot_policy = policy
+    sess.step = 3
+    await callback.answer()
+    await render_step3_count(callback, bot, event=event)
+
+
+async def _handle_count(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event_id: int,
+    n: int,
+) -> None:
+    if n <= 0 or n > 365:
+        await callback.answer("Допускаются числа от 1 до 365.", show_alert=True)
+        return
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    sess.count = int(n)
+    sess.step = 4
+    await callback.answer()
+    await render_step4_end(callback, bot, event=event)
+
+
+async def _handle_end_choice(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event_id: int,
+    choice: str,
+) -> None:
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    today = datetime.now(timezone.utc).date()
+    ends_at: date | None
+    if choice.startswith("d"):
+        try:
+            days = int(choice[1:])
+        except ValueError:
+            days = 0
+        if days <= 0:
+            await callback.answer("Некорректный период.", show_alert=True)
+            return
+        ends_at = today + timedelta(days=days)
+    elif choice == "event":
+        ends_at = _event_last_date(event)
+        if ends_at is None:
+            await callback.answer("У события нет даты.", show_alert=True)
+            return
+    else:
+        await callback.answer("Неизвестный выбор.", show_alert=True)
+        return
+    clamped = clamp_campaign_end_to_event(ends_at, event)
+    if clamped < today:
+        await callback.answer(
+            "После клампа на дату события дата окончания в прошлом.",
+            show_alert=True,
+        )
+        return
+    sess.ends_at = clamped
+    sess.step = 5
+    await callback.answer()
+    await render_step5_mode(callback, bot, event=event)
+
+
+async def _handle_mode(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    event_id: int,
+    mode: str,
+) -> None:
+    if mode not in {"partner", "editorial"}:
+        await callback.answer("Неизвестный режим.", show_alert=True)
+        return
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    organization = await _load_partner_organization(db, user)
+    if mode == "editorial":
+        sess.is_editorial = True
+        sess.sponsorship_disclosure = None
+    else:
+        sess.is_editorial = False
+        if not sess.sponsorship_disclosure:
+            sess.sponsorship_disclosure = (
+                (organization.sponsorship_default if organization else None)
+                or "Партнёрский материал"
+            )
+    sess.step = 6
+    await callback.answer()
+    await render_step6_confirm(callback, db, bot, event=event, user=user, session=sess)
+
+
+async def _handle_confirm(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event_id: int
+) -> None:
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    if not all(
+        [
+            sess.surface,
+            sess.profile_key if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else True,
+            sess.slot_policy if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else True,
+            sess.count,
+            sess.ends_at,
+        ]
+    ):
+        await callback.answer("Не все шаги заполнены.", show_alert=True)
+        return
+    organization = await _load_partner_organization(db, user)
+    spec = PartnerPromoSpec(
+        event_id=int(event.id),
+        creator_user_id=int(user.user_id),
+        organization_name=(organization.name if organization else (user.organization or None)),
+        surface=str(sess.surface),
+        profile_key=sess.profile_key,
+        slot_policy=str(sess.slot_policy or PROMO_POLICY_GUARANTEED_ANY_POSITION),
+        count=int(sess.count or 0),
+        ends_at=sess.ends_at,
+        is_editorial=bool(sess.is_editorial),
+        sponsorship_disclosure=sess.sponsorship_disclosure,
+        title_override=sess.title_override,
+        priority=normalize_promo_priority(
+            1 if user.is_superadmin else PROMO_DEFAULT_PRIORITY
+        ),
+    )
+    result = await create_partner_event_promo_campaign(db, spec)
+    partner_promo_sessions.pop(int(callback.from_user.id), None)
+    if result.status != "created" or result.campaign is None:
+        await callback.answer(result.message[:200], show_alert=True)
+        return
+    text = (
+        f"✅ Кампания #{result.campaign.id} активна.\n"
+        f"{html.escape(result.message)}"
+    )
+    rows = [
+        [
+            types.InlineKeyboardButton(
+                text="📊 Открыть карточку",
+                callback_data=f"ppromo:campaign:{result.campaign.id}",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="✕ Закрыть",
+                callback_data=f"ppromo:cancel:{event_id}",
+            )
+        ],
+    ]
+    await _send_or_edit(
+        bot,
+        callback,
+        text,
+        types.InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+    await callback.answer("Готово")
+
+
+async def _handle_back(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event_id: int, current_step: int
+) -> None:
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    event, user = await _load_event_and_user(
+        db, event_id=event_id, user_id=callback.from_user.id
+    )
+    if not _is_authorized(user, event):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    target = max(1, current_step - 1)
+    sess.step = target
+    await callback.answer()
+    if target == 1:
+        await render_step1_surface(callback, db, bot, event=event, user=user)
+    elif target == 2:
+        await render_step2_slot(callback, bot, event=event, session=sess)
+    elif target == 3:
+        await render_step3_count(callback, bot, event=event)
+    elif target == 4:
+        await render_step4_end(callback, bot, event=event)
+    elif target == 5:
+        await render_step5_mode(callback, bot, event=event)
+
+
+async def _handle_cancel(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, event_id: int
+) -> None:
+    partner_promo_sessions.pop(int(callback.from_user.id), None)
+    partner_promo_input_sessions.pop(int(callback.from_user.id), None)
+    await callback.answer("Отменено")
+    try:
+        if callback.message is not None:
+            await callback.message.delete()
+    except Exception:
+        logger.debug("partner_promo: cancel delete failed", exc_info=True)
+
+
+async def _handle_site_alert(callback: types.CallbackQuery) -> None:
+    await callback.answer(
+        "Размещение на сайте появится в следующих релизах.",
+        show_alert=True,
+    )
+
+
+async def _handle_input_request(
+    callback: types.CallbackQuery, *, event_id: int, field: str
+) -> None:
+    sess = partner_promo_sessions.get(int(callback.from_user.id))
+    if sess is None or sess.event_id != int(event_id):
+        await callback.answer("Сессия истекла.", show_alert=True)
+        return
+    partner_promo_input_sessions[int(callback.from_user.id)] = PartnerPromoInputSession(
+        event_id=int(event_id), field=field
+    )
+    prompts = {
+        PARTNER_PROMO_INPUT_COUNT: "Пришлите количество показов сообщением (целое число > 0).",
+        PARTNER_PROMO_INPUT_END_DATE: "Пришлите дату окончания (YYYY-MM-DD или ДД.ММ.ГГГГ).",
+        PARTNER_PROMO_INPUT_DISCLOSURE: "Пришлите текст раскрытия (или . чтобы оставить «Партнёрский материал»).",
+        PARTNER_PROMO_INPUT_RENAME: "Пришлите новое название кампании.",
+    }
+    await callback.answer(prompts.get(field, "Пришлите значение"), show_alert=True)
+
+
+async def handle_partner_promo_callback(
+    callback: types.CallbackQuery, db: Database, bot: Bot
+) -> bool:
+    """Return True if the callback was consumed by this handler."""
+
+    data = callback.data or ""
+    if not data.startswith("ppromo:"):
+        return False
+    parts = data.split(":")
+    action = parts[1] if len(parts) > 1 else ""
+    try:
+        if action == "start" and len(parts) >= 3:
+            await _begin_flow(callback, db, bot, event_id=int(parts[2]))
+        elif action == "new" and len(parts) >= 3:
+            await _open_new_form(callback, db, bot, event_id=int(parts[2]))
+        elif action == "surface" and len(parts) >= 5:
+            await _handle_surface(
+                callback,
+                db,
+                bot,
+                event_id=int(parts[2]),
+                surface=parts[3],
+                profile=parts[4],
+            )
+        elif action == "slot" and len(parts) >= 4:
+            await _handle_slot(
+                callback, db, bot, event_id=int(parts[2]), policy=parts[3]
+            )
+        elif action == "count" and len(parts) >= 4:
+            await _handle_count(
+                callback, db, bot, event_id=int(parts[2]), n=int(parts[3])
+            )
+        elif action == "count_input" and len(parts) >= 3:
+            await _handle_input_request(
+                callback, event_id=int(parts[2]), field=PARTNER_PROMO_INPUT_COUNT
+            )
+        elif action == "end" and len(parts) >= 4:
+            await _handle_end_choice(
+                callback, db, bot, event_id=int(parts[2]), choice=parts[3]
+            )
+        elif action == "end_input" and len(parts) >= 3:
+            await _handle_input_request(
+                callback, event_id=int(parts[2]), field=PARTNER_PROMO_INPUT_END_DATE
+            )
+        elif action == "mode" and len(parts) >= 4:
+            await _handle_mode(
+                callback, db, bot, event_id=int(parts[2]), mode=parts[3]
+            )
+        elif action == "confirm" and len(parts) >= 3:
+            await _handle_confirm(callback, db, bot, event_id=int(parts[2]))
+        elif action == "back" and len(parts) >= 4:
+            await _handle_back(
+                callback,
+                db,
+                bot,
+                event_id=int(parts[2]),
+                current_step=int(parts[3]),
+            )
+        elif action == "cancel" and len(parts) >= 3:
+            await _handle_cancel(callback, db, bot, event_id=int(parts[2]))
+        elif action == "site" and len(parts) >= 3:
+            await _handle_site_alert(callback)
+        elif action == "rename_input" and len(parts) >= 3:
+            await _handle_input_request(
+                callback, event_id=int(parts[2]), field=PARTNER_PROMO_INPUT_RENAME
+            )
+        else:
+            await callback.answer("Неизвестное действие", show_alert=True)
+    except Exception:
+        logger.exception("partner_promo: callback handling failed data=%r", data)
+        try:
+            await callback.answer("Ошибка обработки", show_alert=True)
+        except Exception:
+            pass
+    return True
+
+
+async def handle_partner_promo_reply(
+    message: types.Message, db: Database, bot: Bot
+) -> bool:
+    """Consume free-text replies for count/date/disclosure/rename inputs."""
+
+    user_id = int(message.from_user.id) if message.from_user else 0
+    pending = partner_promo_input_sessions.get(user_id)
+    if pending is None:
+        return False
+    sess = partner_promo_sessions.get(user_id)
+    if sess is None or sess.event_id != pending.event_id:
+        partner_promo_input_sessions.pop(user_id, None)
+        return False
+    raw = (message.text or "").strip()
+    if not raw:
+        await bot.send_message(message.chat.id, "Пустой ответ. Попробуйте ещё раз.")
+        return True
+    if pending.field == PARTNER_PROMO_INPUT_COUNT:
+        try:
+            n = int(raw)
+        except ValueError:
+            await bot.send_message(message.chat.id, "Нужно число.")
+            return True
+        if n <= 0 or n > 365:
+            await bot.send_message(message.chat.id, "Допускаются числа 1..365.")
+            return True
+        sess.count = n
+        sess.step = 4
+    elif pending.field == PARTNER_PROMO_INPUT_END_DATE:
+        parsed = _parse_date_input(raw)
+        if parsed is None:
+            await bot.send_message(message.chat.id, "Дата не распознана.")
+            return True
+        event, _ = await _load_event_and_user(
+            db, event_id=sess.event_id, user_id=user_id
+        )
+        if event is None:
+            await bot.send_message(message.chat.id, "Событие не найдено.")
+            partner_promo_input_sessions.pop(user_id, None)
+            return True
+        today = datetime.now(timezone.utc).date()
+        clamped = clamp_campaign_end_to_event(parsed, event)
+        if clamped < today:
+            await bot.send_message(
+                message.chat.id,
+                "После клампа на дату события дата окончания в прошлом. Введите другую дату.",
+            )
+            return True
+        sess.ends_at = clamped
+        sess.step = 5
+    elif pending.field == PARTNER_PROMO_INPUT_DISCLOSURE:
+        sess.sponsorship_disclosure = (
+            raw if raw != "." else (sess.sponsorship_disclosure or "Партнёрский материал")
+        )
+    elif pending.field == PARTNER_PROMO_INPUT_RENAME:
+        sess.title_override = raw[:120]
+    else:
+        partner_promo_input_sessions.pop(user_id, None)
+        return False
+
+    partner_promo_input_sessions.pop(user_id, None)
+    event, user = await _load_event_and_user(
+        db, event_id=sess.event_id, user_id=user_id
+    )
+    if event is None or user is None:
+        await bot.send_message(message.chat.id, "Событие не найдено.")
+        return True
+
+    fake_callback = _DummyCallback(message=message, from_user=message.from_user)
+    if sess.step == 4:
+        await render_step4_end(fake_callback, bot, event=event)
+    elif sess.step == 5:
+        await render_step5_mode(fake_callback, bot, event=event)
+    else:
+        await render_step6_confirm(
+            fake_callback, db, bot, event=event, user=user, session=sess
+        )
+    return True
+
+
+class _DummyCallback:
+    """Minimal stand-in so render_step* helpers can be reused after a reply.
+
+    ``_send_or_edit`` checks ``callback.message``; with this stub it falls
+    through to ``bot.send_message`` which is the correct behaviour for a
+    fresh reply.
+    """
+
+    def __init__(self, *, message: types.Message, from_user: types.User | None) -> None:
+        self.message = None  # force send_message path
+        self.from_user = from_user
+        self._reply_target = message
+
+    async def answer(self, *args, **kwargs) -> None:  # noqa: D401
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Promo management menu (button-rich UI shared by admin and partner)
+# ---------------------------------------------------------------------------
+
+from sqlalchemy import func
+from models import PromoActivity, PromoExposure
+
+
+def _is_role_authorized_for_menu(user: User | None) -> bool:
+    if user is None or user.blocked:
+        return False
+    return bool(user.is_superadmin or user.is_partner)
+
+
+async def _load_user(db: Database, user_id: int) -> User | None:
+    async with db.get_session() as session:
+        return await session.get(User, int(user_id))
+
+
+async def _list_campaigns_for_role(
+    db: Database, *, user: User, include_archived: bool
+) -> list[PromoCampaign]:
+    async with db.get_session() as session:
+        stmt = select(PromoCampaign).order_by(
+            PromoCampaign.status, PromoCampaign.created_at.desc()
+        )
+        if not include_archived:
+            stmt = stmt.where(PromoCampaign.status != "archived")
+        if not user.is_superadmin:
+            stmt = stmt.where(PromoCampaign.created_by == int(user.user_id))
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
+
+
+def _truncate(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _menu_text(user: User, campaigns: list[PromoCampaign], *, archived: bool) -> str:
+    role = "суперадмин" if user.is_superadmin else "партнёр"
+    header = f"<b>Промо-кампании</b> ({role})"
+    if archived:
+        header += " — архив"
+    if not campaigns:
+        body = "Кампаний нет."
+    else:
+        lines = []
+        for c in campaigns[:15]:
+            ends = c.ends_at.date().isoformat() if c.ends_at else "—"
+            goal = (
+                f" · {c.total_exposure_goal}" if c.total_exposure_goal is not None else ""
+            )
+            lines.append(
+                f"#{c.id} {html.escape(_truncate(c.title, 50))} · "
+                f"{_status_label(c.status)} · до {ends}{goal}"
+            )
+        body = "\n".join(lines)
+        if len(campaigns) > 15:
+            body += f"\n… ещё {len(campaigns) - 15}"
+    return header + "\n\n" + body
+
+
+def _menu_keyboard(
+    campaigns: list[PromoCampaign], *, archived: bool, is_superadmin: bool
+) -> types.InlineKeyboardMarkup:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    for c in campaigns[:10]:
+        label = f"#{c.id} {_truncate(c.title, 36)}"
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=label, callback_data=f"ppromo:view:{c.id}"
+                )
+            ]
+        )
+    nav: list[types.InlineKeyboardButton] = []
+    if archived:
+        nav.append(
+            types.InlineKeyboardButton(
+                text="▣ К активным", callback_data="ppromo:menu:active"
+            )
+        )
+    else:
+        nav.append(
+            types.InlineKeyboardButton(
+                text="📦 Архив", callback_data="ppromo:menu:archived"
+            )
+        )
+    if is_superadmin:
+        nav.append(
+            types.InlineKeyboardButton(
+                text="🌟 Seed 80", callback_data="ppromo:menu:seed80"
+            )
+        )
+    nav.append(
+        types.InlineKeyboardButton(text="✕ Закрыть", callback_data="ppromo:close")
+    )
+    rows.append(nav)
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _render_menu(
+    bot: Bot,
+    callback: types.CallbackQuery | None,
+    chat_id: int,
+    *,
+    db: Database,
+    user: User,
+    archived: bool,
+) -> None:
+    campaigns = await _list_campaigns_for_role(
+        db, user=user, include_archived=archived
+    )
+    if archived:
+        campaigns = [c for c in campaigns if c.status == "archived"]
+    text = _menu_text(user, campaigns, archived=archived)
+    markup = _menu_keyboard(
+        campaigns, archived=archived, is_superadmin=bool(user.is_superadmin)
+    )
+    if callback is not None and callback.message is not None:
+        try:
+            await callback.message.edit_text(
+                text, reply_markup=markup, parse_mode="HTML"
+            )
+            return
+        except Exception:
+            logger.debug("partner_promo: menu edit_text failed", exc_info=True)
+    await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
+
+
+async def _load_campaign_with_visibility(
+    db: Database, *, user: User, campaign_id: int
+) -> PromoCampaign | None:
+    async with db.get_session() as session:
+        campaign = await session.get(PromoCampaign, int(campaign_id))
+    if campaign is None:
+        return None
+    if user.is_superadmin:
+        return campaign
+    if int(campaign.created_by or 0) == int(user.user_id):
+        return campaign
+    return None
+
+
+async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
+    async with db.get_session() as session:
+        target_res = await session.execute(
+            select(PromoTarget).where(PromoTarget.campaign_id == campaign.id)
+        )
+        targets = list(target_res.scalars().all())
+        act_res = await session.execute(
+            select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
+        )
+        activities = list(act_res.scalars().all())
+        exposure_res = await session.execute(
+            select(func.count())
+            .select_from(PromoExposure)
+            .where(PromoExposure.campaign_id == campaign.id)
+            .where(PromoExposure.public_target_count > 0)
+        )
+        recorded = int(exposure_res.scalar() or 0)
+
+    target_lines: list[str] = []
+    for t in targets:
+        if t.target_type == "event" and t.event_id:
+            target_lines.append(f"Событие #{t.event_id}: {html.escape(t.query_text or '')}")
+        elif t.target_type == "festival":
+            target_lines.append(f"Фестиваль: {html.escape(t.festival_name or '')}")
+
+    act_lines: list[str] = []
+    for a in activities:
+        bits = [a.surface]
+        if a.profile_key:
+            bits.append(a.profile_key)
+        if a.slot:
+            bits.append(f"slot={a.slot}")
+        if a.selection_policy:
+            bits.append(a.selection_policy)
+        bits.append("on" if a.enabled else "off")
+        act_lines.append("• " + " · ".join(bits))
+
+    ends = campaign.ends_at.date().isoformat() if campaign.ends_at else "—"
+    disclosure = campaign.sponsorship_disclosure or "редакционно (без подписи)"
+    progress = (
+        f"{recorded}/{campaign.total_exposure_goal}"
+        if campaign.total_exposure_goal is not None
+        else f"{recorded}"
+    )
+    lines = [
+        f"<b>#{campaign.id} {html.escape(campaign.title)}</b>",
+        f"Статус: {_status_label(campaign.status)} · приоритет {campaign.priority}",
+        f"Период: до {ends}",
+        f"Цель показов: {progress}",
+        f"Раскрытие: {html.escape(disclosure)}",
+        "",
+        "Цели:",
+        *(target_lines or ["—"]),
+        "",
+        "Активности:",
+        *(act_lines or ["—"]),
+    ]
+    return "\n".join(lines)
+
+
+def _campaign_card_keyboard(
+    campaign: PromoCampaign, *, is_superadmin: bool
+) -> types.InlineKeyboardMarkup:
+    cid = int(campaign.id or 0)
+    rows: list[list[types.InlineKeyboardButton]] = []
+    status = campaign.status
+    primary: list[types.InlineKeyboardButton] = []
+    if status == "active":
+        primary.append(
+            types.InlineKeyboardButton(
+                text="⏸ Пауза", callback_data=f"ppromo:pause:{cid}"
+            )
+        )
+    elif status == "paused":
+        primary.append(
+            types.InlineKeyboardButton(
+                text="▶ Запустить", callback_data=f"ppromo:resume:{cid}"
+            )
+        )
+    elif status == "draft":
+        primary.append(
+            types.InlineKeyboardButton(
+                text="▶ Запустить", callback_data=f"ppromo:resume:{cid}"
+            )
+        )
+    if status != "archived":
+        primary.append(
+            types.InlineKeyboardButton(
+                text="📦 Архив", callback_data=f"ppromo:archive:{cid}"
+            )
+        )
+    else:
+        primary.append(
+            types.InlineKeyboardButton(
+                text="🔄 Восстановить", callback_data=f"ppromo:resume:{cid}"
+            )
+        )
+    rows.append(primary)
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="📊 Статистика", callback_data=f"ppromo:stats:{cid}"
+            ),
+            types.InlineKeyboardButton(
+                text="✏ Переименовать", callback_data=f"ppromo:cren:{cid}"
+            ),
+        ]
+    )
+    if is_superadmin:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"P{p}",
+                    callback_data=f"ppromo:prio:{cid}:{p}",
+                )
+                for p in range(0, 4)
+            ]
+        )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="◀ К списку", callback_data="ppromo:menu:active"
+            )
+        ]
+    )
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _render_campaign_card(
+    bot: Bot,
+    callback: types.CallbackQuery | None,
+    chat_id: int,
+    *,
+    db: Database,
+    user: User,
+    campaign: PromoCampaign,
+) -> None:
+    text = await _campaign_card_text(db, campaign)
+    markup = _campaign_card_keyboard(campaign, is_superadmin=bool(user.is_superadmin))
+    if callback is not None and callback.message is not None:
+        try:
+            await callback.message.edit_text(
+                text, reply_markup=markup, parse_mode="HTML"
+            )
+            return
+        except Exception:
+            logger.debug("partner_promo: card edit_text failed", exc_info=True)
+    await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
+
+
+async def _change_campaign_status(
+    db: Database,
+    *,
+    user: User,
+    campaign_id: int,
+    new_status: str,
+) -> tuple[bool, str]:
+    campaign = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    if campaign is None:
+        return False, "Кампания недоступна."
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, int(campaign_id))
+        if c is None:
+            return False, "Кампания не найдена."
+        if not user.is_superadmin and int(c.created_by or 0) != int(user.user_id):
+            return False, "Not authorized"
+        c.status = new_status
+        c.updated_at = datetime.now(timezone.utc)
+        if new_status == "archived":
+            c.archived_at = datetime.now(timezone.utc)
+        session.add(c)
+        await session.commit()
+    return True, f"Готово: {_status_label(new_status)}"
+
+
+async def _change_campaign_priority(
+    db: Database,
+    *,
+    user: User,
+    campaign_id: int,
+    priority: int,
+) -> tuple[bool, str]:
+    if not user.is_superadmin:
+        return False, "Приоритет меняет только суперадмин."
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, int(campaign_id))
+        if c is None:
+            return False, "Кампания не найдена."
+        c.priority = normalize_promo_priority(priority)
+        c.updated_at = datetime.now(timezone.utc)
+        session.add(c)
+        await session.commit()
+    return True, f"P{priority}"
+
+
+async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
+    async with db.get_session() as session:
+        per_surface_res = await session.execute(
+            select(
+                PromoExposure.surface,
+                func.count(PromoExposure.id),
+            )
+            .where(PromoExposure.campaign_id == campaign.id)
+            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST")))
+            .group_by(PromoExposure.surface)
+        )
+        per_surface = list(per_surface_res.all())
+        recent_res = await session.execute(
+            select(
+                PromoExposure.published_at,
+                PromoExposure.surface,
+                PromoExposure.event_id,
+                PromoExposure.position,
+                PromoExposure.publish_status,
+            )
+            .where(PromoExposure.campaign_id == campaign.id)
+            .order_by(PromoExposure.published_at.desc())
+            .limit(8)
+        )
+        recent = list(recent_res.all())
+
+    lines = [f"<b>📊 Статистика #{campaign.id}</b>", ""]
+    if not per_surface:
+        lines.append("Публичных показов пока нет.")
+    else:
+        lines.append("По поверхностям:")
+        for surface, count in per_surface:
+            lines.append(f"• {html.escape(str(surface))}: {int(count or 0)}")
+    if recent:
+        lines.append("")
+        lines.append("Последние показы:")
+        for published_at, surface, event_id, position, status in recent:
+            when = (
+                published_at.astimezone(timezone.utc).strftime("%d.%m %H:%M")
+                if published_at is not None
+                else "—"
+            )
+            lines.append(
+                f"• {when} · {html.escape(str(surface))} · ev#{int(event_id or 0)} "
+                f"· поз. {int(position or 0)} · {html.escape(str(status or ''))}"
+            )
+    return "\n".join(lines)
+
+
+async def _render_campaign_stats(
+    bot: Bot,
+    callback: types.CallbackQuery | None,
+    chat_id: int,
+    *,
+    db: Database,
+    campaign: PromoCampaign,
+) -> None:
+    text = await _campaign_stats_text(db, campaign)
+    rows = [
+        [
+            types.InlineKeyboardButton(
+                text="◀ Назад к карточке",
+                callback_data=f"ppromo:view:{campaign.id}",
+            )
+        ]
+    ]
+    markup = types.InlineKeyboardMarkup(inline_keyboard=rows)
+    if callback is not None and callback.message is not None:
+        try:
+            await callback.message.edit_text(
+                text, reply_markup=markup, parse_mode="HTML"
+            )
+            return
+        except Exception:
+            logger.debug("partner_promo: stats edit_text failed", exc_info=True)
+    await bot.send_message(chat_id, text, reply_markup=markup, parse_mode="HTML")
+
+
+# ---- public entry points ----------------------------------------------------
+
+
+async def handle_promo_menu_command(
+    message: types.Message, db: Database, bot: Bot
+) -> None:
+    """Entry point for ``/promo`` (no-args). Shared by admin and partner."""
+
+    user = await _load_user(db, int(message.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await bot.send_message(message.chat.id, "Not authorized")
+        return
+    await _render_menu(
+        bot, None, message.chat.id, db=db, user=user, archived=False
+    )
+
+
+async def _handle_menu_action(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, action: str
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    if action == "active":
+        await callback.answer()
+        await _render_menu(
+            bot, callback, callback.message.chat.id, db=db, user=user, archived=False
+        )
+    elif action == "archived":
+        await callback.answer()
+        await _render_menu(
+            bot, callback, callback.message.chat.id, db=db, user=user, archived=True
+        )
+    elif action == "seed80":
+        if not user.is_superadmin:
+            await callback.answer("Только суперадмин", show_alert=True)
+            return
+        from promo import ensure_initial_80_stories_campaign  # local import
+
+        campaign = await ensure_initial_80_stories_campaign(db)
+        if campaign is None:
+            await callback.answer(
+                "Не создал: фестиваль 80 историй без будущих событий.",
+                show_alert=True,
+            )
+        else:
+            await callback.answer(f"Готово: #{campaign.id}")
+        await _render_menu(
+            bot, callback, callback.message.chat.id, db=db, user=user, archived=False
+        )
+    else:
+        await callback.answer("Неизвестное действие", show_alert=True)
+
+
+async def _handle_view_campaign(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, campaign_id: int
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    await callback.answer()
+    await _render_campaign_card(
+        bot, callback, callback.message.chat.id, db=db, user=user, campaign=campaign
+    )
+
+
+async def _handle_campaign_status_change(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+    new_status: str,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    ok, msg = await _change_campaign_status(
+        db, user=user, campaign_id=campaign_id, new_status=new_status
+    )
+    if not ok:
+        await callback.answer(msg, show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer(msg)
+        await _render_menu(
+            bot, callback, callback.message.chat.id, db=db, user=user, archived=False
+        )
+        return
+    await callback.answer(msg)
+    await _render_campaign_card(
+        bot, callback, callback.message.chat.id, db=db, user=user, campaign=campaign
+    )
+
+
+async def _handle_campaign_priority(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+    priority: int,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    ok, msg = await _change_campaign_priority(
+        db, user=user, campaign_id=campaign_id, priority=priority
+    )
+    if not ok:
+        await callback.answer(msg, show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer(msg)
+        return
+    await callback.answer(msg)
+    await _render_campaign_card(
+        bot, callback, callback.message.chat.id, db=db, user=user, campaign=campaign
+    )
+
+
+async def _handle_campaign_stats(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, campaign_id: int
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    await callback.answer()
+    await _render_campaign_stats(
+        bot, callback, callback.message.chat.id, db=db, campaign=campaign
+    )
+
+
+async def _handle_campaign_rename_request(
+    callback: types.CallbackQuery, db: Database, *, campaign_id: int
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    partner_promo_input_sessions[int(callback.from_user.id)] = PartnerPromoInputSession(
+        event_id=0,
+        field=PARTNER_PROMO_INPUT_RENAME,
+        campaign_id=int(campaign_id),
+    )
+    await callback.answer(
+        "Пришлите новое название кампании сообщением.",
+        show_alert=True,
+    )
+
+
+async def _handle_rename_reply(
+    message: types.Message,
+    bot: Bot,
+    db: Database,
+    *,
+    user_id: int,
+    pending: PartnerPromoInputSession,
+) -> bool:
+    new_title = (message.text or "").strip()
+    if not new_title:
+        await bot.send_message(message.chat.id, "Пустое название.")
+        return True
+    new_title = new_title[:120]
+    user = await _load_user(db, user_id)
+    if not _is_role_authorized_for_menu(user):
+        await bot.send_message(message.chat.id, "Not authorized")
+        return True
+    campaign_id = int(pending.campaign_id or 0)
+    if campaign_id <= 0:
+        return False
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await bot.send_message(message.chat.id, "Кампания недоступна.")
+        return True
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, campaign_id)
+        if c is None:
+            await bot.send_message(message.chat.id, "Кампания не найдена.")
+            return True
+        c.title = new_title
+        c.updated_at = datetime.now(timezone.utc)
+        session.add(c)
+        await session.commit()
+    partner_promo_input_sessions.pop(user_id, None)
+    await bot.send_message(message.chat.id, f"Готово: #{campaign_id} → {new_title}")
+    return True
+
+
+# Extend the existing callback dispatcher with management actions.
+_ORIGINAL_HANDLE_PARTNER_PROMO_CALLBACK = handle_partner_promo_callback
+
+
+async def handle_partner_promo_callback(  # noqa: F811 — extend dispatch
+    callback: types.CallbackQuery, db: Database, bot: Bot
+) -> bool:
+    data = callback.data or ""
+    if not data.startswith("ppromo:"):
+        return False
+    parts = data.split(":")
+    action = parts[1] if len(parts) > 1 else ""
+    try:
+        if action == "menu":
+            sub = parts[2] if len(parts) >= 3 else "active"
+            await _handle_menu_action(callback, db, bot, action=sub)
+            return True
+        if action == "close":
+            await callback.answer("Закрыто")
+            try:
+                if callback.message is not None:
+                    await callback.message.delete()
+            except Exception:
+                logger.debug("partner_promo: close delete failed", exc_info=True)
+            return True
+        if action == "view" and len(parts) >= 3:
+            await _handle_view_campaign(
+                callback, db, bot, campaign_id=int(parts[2])
+            )
+            return True
+        if action in {"pause", "resume", "archive"} and len(parts) >= 3:
+            new_status = {
+                "pause": "paused",
+                "resume": "active",
+                "archive": "archived",
+            }[action]
+            await _handle_campaign_status_change(
+                callback, db, bot, campaign_id=int(parts[2]), new_status=new_status
+            )
+            return True
+        if action == "prio" and len(parts) >= 4:
+            await _handle_campaign_priority(
+                callback,
+                db,
+                bot,
+                campaign_id=int(parts[2]),
+                priority=int(parts[3]),
+            )
+            return True
+        if action == "stats" and len(parts) >= 3:
+            await _handle_campaign_stats(
+                callback, db, bot, campaign_id=int(parts[2])
+            )
+            return True
+        if action == "cren" and len(parts) >= 3:
+            await _handle_campaign_rename_request(
+                callback, db, campaign_id=int(parts[2])
+            )
+            return True
+    except Exception:
+        logger.exception("partner_promo: management callback failed data=%r", data)
+        try:
+            await callback.answer("Ошибка обработки", show_alert=True)
+        except Exception:
+            pass
+        return True
+    return await _ORIGINAL_HANDLE_PARTNER_PROMO_CALLBACK(callback, db, bot)
+
+
+# Extend the reply dispatcher so PARTNER_PROMO_INPUT_RENAME without an active
+# FSM session is routed to the rename-by-campaign-id path.
+_ORIGINAL_HANDLE_PARTNER_PROMO_REPLY = handle_partner_promo_reply
+
+
+async def handle_partner_promo_reply(  # noqa: F811 — extend dispatch
+    message: types.Message, db: Database, bot: Bot
+) -> bool:
+    user_id = int(message.from_user.id) if message.from_user else 0
+    pending = partner_promo_input_sessions.get(user_id)
+    if pending is None:
+        return False
+    if (
+        pending.field == PARTNER_PROMO_INPUT_RENAME
+        and pending.campaign_id is not None
+        and pending.event_id == 0
+    ):
+        handled = await _handle_rename_reply(
+            message, bot, db, user_id=user_id, pending=pending
+        )
+        return handled
+    return await _ORIGINAL_HANDLE_PARTNER_PROMO_REPLY(message, db, bot)

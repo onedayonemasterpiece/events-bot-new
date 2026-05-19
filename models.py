@@ -296,6 +296,23 @@ class User(SQLModel, table=True):
     )
 
 
+class Organization(SQLModel, table=True):
+    __tablename__ = "organization"
+
+    name: str = Field(primary_key=True)
+    vk_source_group_ids: list[int] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    video_profile_key: Optional[str] = None
+    sponsorship_default: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
 class PendingUser(SQLModel, table=True):
     user_id: int = Field(primary_key=True)
     username: Optional[str] = None
@@ -541,6 +558,44 @@ class PromoExposure(SQLModel, table=True):
     )
     details_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class PromoVkRepostJob(SQLModel, table=True):
+    __tablename__ = "promo_vk_repost_job"
+    __table_args__ = (
+        Index(
+            "ix_promo_vk_repost_job_pending",
+            "status",
+            "scheduled_at",
+        ),
+        Index(
+            "ix_promo_vk_repost_job_source",
+            "source_owner_id",
+            "source_post_id",
+            "executed_at",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    campaign_id: int = Field(foreign_key="promo_campaign.id")
+    activity_id: int = Field(foreign_key="promo_activity.id")
+    event_id: int = Field(foreign_key="event.id")
+    scheduled_at: datetime = Field(sa_column=Column(DateTime(timezone=True)))
+    source_owner_id: int
+    source_post_id: int
+    status: str = "pending"
+    attempts: int = 0
+    executed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    vk_post_id: Optional[int] = None
+    error_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
 

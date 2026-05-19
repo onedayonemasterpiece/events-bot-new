@@ -12,6 +12,11 @@ The full product design and researched promo practices remain in
 `docs/backlog/features/promo-campaigns/README.md`; this document is the
 implemented behavior contract.
 
+Partner-facing UX (the `🎬` button on `/events`, the 6-step creation FSM, the
+shared `/promo` management menu, the upcoming KONB-CherryFlash auto-promote
+rule, and the VK-repost activity type) lives in a dedicated canonical spec:
+[partner-promo.md](partner-promo.md).
+
 ## Data Model
 
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,
