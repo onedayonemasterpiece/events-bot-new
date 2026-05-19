@@ -1,10 +1,10 @@
 # INC-2026-05-19-vk-posts-personal-author
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: VK outbound publishing (`kenigeventsofficial`, `klgdevents`)
 Opened: 2026-05-19
-Closed: —
+Closed: 2026-05-19
 Owners: Codex
 Related incidents: `INC-2026-04-26-vk-daily-message-limit`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/operations/release-governance.md`, `docs/operations/runtime-logs.md`
@@ -92,14 +92,24 @@ VK wall posts created through the shared `post_to_vk` helper were published on c
 
 ## Follow-up Actions
 
-- [ ] After deploy, verify the next scheduled VK daily/event post and close this incident with the exact post URL and API evidence.
+- [x] After deploy, verify the next scheduled VK daily/event post shape or a controlled smoke post and close this incident with the exact post URL and API evidence.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `ae8494f8feb31e6f196e12a4169813ca92f498bf`
+- deploy path: manual `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`
+- production health:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "issues": []}` after deploy.
+  - Fly machine `48e42d5b714228`, version `1131`, status `started`, checks `1 passing`.
+- regression checks:
+  - `python3 -m py_compile main_part2.py tests/test_vk_actor.py` -> passed.
+  - `timeout 90 /home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_vk_actor.py tests/test_vk_source.py::test_vk_wall_source_still_gets_event_vk_sync tests/test_vk_source.py::test_managed_klgdevents_event_skips_vk_sync tests/test_sanitize_for_vk.py` -> `13 passed in 3.00s`.
+  - Broader `tests/test_vk_source.py` still has an unrelated existing LLM-fixture drift: `test_add_events_from_text_preserves_links` monkeypatches the old 4o parser path, but current code tries Gemma and fails without `GOOGLE_API_KEY`.
+- post-deploy verification:
+  - Controlled smoke through deployed `/app/main.post_to_vk("231828790", ...)` created `https://vk.com/wall-231828790_885` via `actor=group:main`. VK API evidence before deletion: `owner_id=-231828790`, `from_id=-231828790`, `created_by=868977531`, `likes.can_publish=1`, `likes.repost_disabled=false`, `post_source.type=api`.
+  - Controlled smoke through deployed `/app/main.post_to_vk("231920894", ...)` created `https://vk.com/wall-231920894_1152` via `actor=group:afisha`. VK API evidence before deletion: `owner_id=-231920894`, `from_id=-231920894`, `created_by=868977531`, `likes.can_publish=1`, `likes.repost_disabled=false`, `post_source.type=api`.
+  - Both smoke posts were deleted immediately after verification; no pre-existing VK posts were edited or deleted.
+  - Release-governance check: deployed SHA is reachable from `origin/main`; no `origin/release/*` or `origin/hotfix/*` branch was ahead of `origin/main` before deploy.
 
 ## Prevention
 
