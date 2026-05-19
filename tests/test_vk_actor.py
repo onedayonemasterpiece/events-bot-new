@@ -160,3 +160,48 @@ def test_choose_vk_actor(monkeypatch):
     actors_afisha = main.choose_vk_actor(-2, "wall.post")
     assert [a.label for a in actors_afisha] == ["group:afisha", "user"]
     assert actors_afisha[0].token == "ga"
+
+
+@pytest.mark.asyncio
+async def test_post_to_vk_group_actor_posts_from_group(monkeypatch):
+    monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
+    monkeypatch.setattr(main, "VK_TOKEN", "gm")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "ga")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+
+    captured = {}
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        captured.update(
+            {
+                "method": method,
+                "params": params,
+                "token": token,
+                "token_kind": token_kind,
+                "skip_captcha": skip_captcha,
+            }
+        )
+        return {"response": {"post_id": 123}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk("2", "hello")
+
+    assert url == "https://vk.com/wall-2_123"
+    assert captured["method"] == "wall.post"
+    assert captured["token"] == "ga"
+    assert captured["token_kind"] == "group"
+    assert captured["skip_captcha"] is True
+    assert captured["params"]["owner_id"] == "-2"
+    assert captured["params"]["message"] == "hello"
+    assert captured["params"]["from_group"] == 1
+    assert captured["params"]["signed"] == 0
