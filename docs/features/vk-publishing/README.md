@@ -9,6 +9,7 @@
 - Если попытка `wall.edit` для управляемого klgdevents-поста отклонена VK как «окно редактирования истекло» (старше `VK_POST_MAX_EDIT_AGE` или `can_edit=0`), редактор пишет предупреждение в лог и тихо завершается. Superadmin-чат больше не получает уведомление: Smart Update не должен зависеть от возможности редактировать произвольно старые VK-посты.
 - VK weekly/weekend «навигационные» wall-посты выведены из эксплуатации 2026-05-17. `JobTask.week_pages` больше не ставится в очередь нигде в коде; `update_week_pages_for`, `sync_vk_week_post`, `sync_vk_weekend_post` оставлены как no-op стабы для дренажа уже стоящих в `JobOutbox` записей. Перестроение Telegraph weekend-страницы (`sync_weekend_page`) больше не дёргает `wall.post`/`wall.edit`. Помощники `build_week_vk_message`, `build_weekend_vk_message`, `_build_month_vk_nav_lines` и связанные дебаунсы удалены. Навигация в VK ограничивается компактным VK daily.
 - Целевое production-сообщество для событийных анонсов: `https://vk.com/klgdevents`.
+- Все исходящие community wall-посты через общий `post_to_vk` публикуются с `owner_id=-<group_id>`, `from_group=1`, `signed=0` независимо от actor token (`group` или `user`). Это обязательный contract: VK должен записывать `from_id=-<group_id>`, иначе пост выглядит созданным личным пользователем и теряет нормальный wall/community forward.
 - Пост события поддерживает медиагруппу: все доступные `event.photo_urls` загружаются как `photo-<group_id>_<id>` и прикладываются к `wall.post` в рамках `VK_MAX_ATTACHMENTS`.
 - VK не поддерживает Markdown-заголовки в wall text. Markdown/HTML headings из Smart Update перед публикацией превращаются в plain text: заголовок капсом и пустая строка ниже.
 - В конце событийного поста перед редакционным футером добавляется VK hashtag line: базовые `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`, город события и две даты события (`#17мая` и `#17_мая`).
@@ -37,3 +38,4 @@
 - Перед production-проверкой убедиться, что заданы `VK_USER_TOKEN` или `VK_ACCESS_TOKEN4`, `VK_EVENTS_GROUP_ID` и целевой `/vkgroup` для daily.
 - Для события с несколькими картинками проверять не только наличие `vk_repost_url`, но и attachments в самом VK-посте.
 - Для daily проверять два независимых слота: утренний `today` и вечерний `added`; отсутствие событий в одном слоте не должно блокировать второй.
+- Для нового daily/event smoke проверять через VK API не только URL, но и авторство: `from_id` должен быть `-<group_id>`, а `likes.can_publish` должен быть `1`.

@@ -3287,7 +3287,12 @@ async def post_to_vk(
         len(attachments or []),
     )
     owner_id = -int(group_id.lstrip("-"))
-    params_base = {"owner_id": f"-{group_id.lstrip('-')}", "message": message}
+    params_base = {
+        "owner_id": f"-{group_id.lstrip('-')}",
+        "message": message,
+        "from_group": 1,
+        "signed": 0,
+    }
     if attachments:
         params_base["attachments"] = ",".join(attachments)
         if len(attachments) > 1:
@@ -3299,8 +3304,6 @@ async def post_to_vk(
         raise VKAPIError(None, "VK token missing", method="wall.post")
     for idx, actor in enumerate(actors, start=1):
         params = params_base.copy()
-        if actor.kind == "user" and owner_id < 0:
-            params["from_group"] = 1
         logging.info(
             "vk.call method=wall.post owner_id=%s try=%d/%d actor=%s",
             owner_id,
