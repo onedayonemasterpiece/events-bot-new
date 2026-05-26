@@ -187,6 +187,39 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             source_url="https://vk.com/konb39",
         ),
         GuideSourceSpec(
+            username="ruin.keepers",
+            profile_slug="ruin-keepers",
+            profile_kind="organization",
+            display_name="Хранители руин",
+            marketing_name="Хранители руин",
+            source_kind="organization_with_tours",
+            trust_level="medium",
+            priority_weight=1.05,
+            flags={"organization": True, "vk_public": True},
+            notes=(
+                "Added from operator request on 2026-05-19; VK public mirrors/extends "
+                "the Ruin Keepers guide source and must dedup against Telegram ruin_keepers."
+            ),
+            platform="vk",
+            source_url="https://vk.com/ruin.keepers",
+        ),
+        GuideSourceSpec(
+            username="narodexcursovod",
+            profile_slug="narodny-excursovod",
+            profile_kind="organization",
+            display_name="Народный экскурсовод",
+            marketing_name="Народный экскурсовод",
+            source_kind="organization_with_tours",
+            trust_level="medium",
+            flags={"organization": True, "vk_public": True, "mixed_topic": True},
+            notes=(
+                "Added from operator request on 2026-05-19; VK public monitored for "
+                "Kaliningrad-region guided walks and excursion announcements."
+            ),
+            platform="vk",
+            source_url="https://vk.com/narodexcursovod",
+        ),
+        GuideSourceSpec(
             username="balticsyndicate",
             profile_slug="baltic-syndicate",
             profile_kind="project",

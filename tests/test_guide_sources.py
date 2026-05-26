@@ -46,6 +46,20 @@ def test_canonical_guide_sources_include_vk_publics() -> None:
     assert konb.source_url == "https://vk.com/konb39"
     assert konb.flags == {"organization": True, "mixed_topic": True, "library": True, "vk_public": True}
 
+    assert ("vk", "ruin.keepers") in by_source
+    ruin = by_source[("vk", "ruin.keepers")]
+    assert ruin.profile_slug == "ruin-keepers"
+    assert ruin.source_url == "https://vk.com/ruin.keepers"
+    assert ruin.source_kind == "organization_with_tours"
+    assert ruin.flags == {"organization": True, "vk_public": True}
+
+    assert ("vk", "narodexcursovod") in by_source
+    narod = by_source[("vk", "narodexcursovod")]
+    assert narod.profile_slug == "narodny-excursovod"
+    assert narod.source_url == "https://vk.com/narodexcursovod"
+    assert narod.source_kind == "organization_with_tours"
+    assert narod.flags == {"organization": True, "vk_public": True, "mixed_topic": True}
+
 
 def test_canonical_guide_sources_are_normalized_unique_and_sorted() -> None:
     sources = canonical_guide_sources()

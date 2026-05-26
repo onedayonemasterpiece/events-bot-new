@@ -21,6 +21,7 @@ from .service import (
     delete_guide_occurrence,
     delete_guide_template,
     publish_guide_digest,
+    publish_latest_guide_digest_to_vk,
     render_guide_occurrence_facts,
     render_guide_occurrence_log,
     render_guide_recent_changes,
@@ -83,6 +84,7 @@ def get_guide_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="⚠️ Last call", callback_data="guide:preview:last_call"),
             ],
             [InlineKeyboardButton(text="📣 Опубликовать новые", callback_data="guide:publish:new_occurrences")],
+            [InlineKeyboardButton(text="VK отложка", callback_data="guide:publish_vk:new_occurrences")],
             [InlineKeyboardButton(text="🗂 Источники", callback_data="guide:sources")],
         ]
     )
@@ -348,6 +350,52 @@ async def cmd_guide_digest(message: types.Message):
     )
 
 
+@guide_router.message(Command("guide_digest_vk"))
+async def cmd_guide_digest_vk(message: types.Message):
+    import main
+
+    db = main.get_db()
+    if not db:
+        await message.answer("❌ Database not initialized")
+        return
+    if not main.has_admin_access(await _get_user(db, message.from_user.id)):
+        return
+    try:
+        res = await publish_latest_guide_digest_to_vk(
+            db,
+            message.bot,
+            family="new_occurrences",
+        )
+    except Exception as exc:
+        logger.exception("guide_digest_vk: publish failed")
+        await message.answer(
+            (
+                "❌ VK-публикация остановлена.\n"
+                f"{html.escape(str(exc))}"
+            ),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        return
+    if not res.get("published"):
+        await message.answer(
+            f"VK-публикация не выполнена: {html.escape(str(res.get('reason') or 'unknown'))}",
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        return
+    await message.answer(
+        (
+            "✅ Дайджест экскурсий поставлен в VK-отложку.\n"
+            f"issue_id={res['issue_id']}\n"
+            f"group_id={res.get('group_id')}\n"
+            f"url={html.escape(str(res.get('url') or ''))}"
+        ),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
 async def _run_scan_task(bot: Bot, db: Database, *, chat_id: int, operator_id: int, mode: str) -> None:
     result = await run_guide_monitor(
         db,
@@ -505,6 +553,47 @@ async def handle_guide_callback(callback: CallbackQuery):
                 f"issue_id={res['issue_id']}\n"
                 f"targets={html.escape(', '.join(res.get('target_chats') or [str(res.get('target_chat') or '')]))}\n"
                 f"messages={len(res.get('message_ids') or [])}"
+            ),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=get_guide_keyboard(),
+        )
+        return
+
+    if action == "publish_vk":
+        await callback.answer()
+        try:
+            res = await publish_latest_guide_digest_to_vk(
+                db,
+                callback.bot,
+                family=value or "new_occurrences",
+            )
+        except Exception as exc:
+            logger.exception("guide_digest_vk: publish failed via callback")
+            await callback.message.answer(
+                (
+                    "❌ VK-публикация остановлена.\n"
+                    f"{html.escape(str(exc))}"
+                ),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=get_guide_keyboard(),
+            )
+            return
+        if not res.get("published"):
+            await callback.message.answer(
+                f"VK-публикация не выполнена: {html.escape(str(res.get('reason') or 'unknown'))}",
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=get_guide_keyboard(),
+            )
+            return
+        await callback.message.answer(
+            (
+                "✅ VK-отложка создана.\n"
+                f"issue_id={res['issue_id']}\n"
+                f"group_id={res.get('group_id')}\n"
+                f"url={html.escape(str(res.get('url') or ''))}"
             ),
             parse_mode="HTML",
             disable_web_page_preview=True,
