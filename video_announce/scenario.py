@@ -3644,14 +3644,14 @@ class VideoAnnounceScenario:
     ) -> str:
         if not await self._has_access():
             return "Not authorized"
-        if await self.has_rendering():
-            return "Уже есть активный рендер"
         if not payload_json.strip():
             return "Payload не найден"
         async with self.db.get_session() as session:
             sess = await session.get(VideoAnnounceSession, session_id)
             if not sess:
                 return "Сессия не найдена"
+            if await self.has_rendering(profile_key=sess.profile_key):
+                return "Уже есть активный рендер"
             if not sess.kaggle_kernel_ref:
                 return "Kernel не выбран"
             if sess.status == VideoAnnounceSessionStatus.RENDERING:
@@ -3710,7 +3710,12 @@ class VideoAnnounceScenario:
     ) -> str:
         if not await self._has_access():
             return "Not authorized"
-        if await self.has_rendering():
+        sess_profile_key: str | None = None
+        async with self.db.get_session() as session:
+            sess_preview = await session.get(VideoAnnounceSession, session_id)
+            if sess_preview is not None:
+                sess_profile_key = sess_preview.profile_key
+        if await self.has_rendering(profile_key=sess_profile_key):
             return "Уже есть активный рендер"
         ranked = await self._load_ranked_events(session_id, ready_only=True)
         if limit_scenes is not None:

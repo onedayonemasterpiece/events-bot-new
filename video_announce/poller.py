@@ -973,7 +973,14 @@ async def run_kernel_poller(
         
         if state == "complete":
             break
-        if state in {"error", "failed"}:
+        if state in {
+            "error",
+            "failed",
+            "cancel_acknowledged",
+            "cancel_requested",
+            "cancelled",
+            "canceled",
+        }:
             failure_msg = status.get("failureMessage") or status.get("failure_message") or ""
             error_detail = f"{state}: {failure_msg}" if failure_msg else str(status)
             logger.warning(
