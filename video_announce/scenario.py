@@ -4590,8 +4590,32 @@ class VideoAnnounceScenario:
             # Fallback (old behavior) should be avoided if we enforce selection
             raise RuntimeError("Kernel reference not provided")
 
+        from .accel_pref import read_active_pref, tier_to_machine_shape
+
+        slug = _resolve_kaggle_slug(kernel_ref) or kernel_ref
+        machine_shape: str | None = None
+        try:
+            pref = await read_active_pref(self.db, slug)
+            if pref:
+                machine_shape = tier_to_machine_shape(pref.tier)
+                if machine_shape:
+                    logger.info(
+                        "video_announce: accel-pref active slug=%s tier=%s expires=%s",
+                        slug,
+                        pref.tier,
+                        pref.expires_at.isoformat(),
+                    )
+        except Exception:
+            logger.exception(
+                "video_announce: accel-pref read failed slug=%s; falling back to default",
+                slug,
+            )
+
         return await asyncio.to_thread(
-            client.deploy_kernel_update, kernel_ref, dataset_sources
+            client.deploy_kernel_update,
+            kernel_ref,
+            dataset_sources,
+            machine_shape=machine_shape,
         )
 
     async def refresh_status(self) -> None:

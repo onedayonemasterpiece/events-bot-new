@@ -715,13 +715,21 @@ class KaggleClient:
         api.kernels_pull(kernel_ref, path=str(path), metadata=metadata)
 
     def deploy_kernel_update(
-        self, kernel_ref: str, dataset_sources: str | list[str]
+        self,
+        kernel_ref: str,
+        dataset_sources: str | list[str],
+        *,
+        machine_shape: str | None = None,
     ) -> str:
         """Deploy kernel with dataset sources updated.
-        
+
         HYBRID approach:
         - If a matching repo-local kernel exists, use repo code/metadata as source of truth
         - Otherwise, pull from Kaggle as a fallback
+
+        ``machine_shape`` overrides the accelerator (e.g. ``NvidiaTeslaT4``).
+        Pass ``None`` to keep the kernel's default. Used by the accel-pref
+        fallback (INC-2026-05-26 round 3).
         """
         import time
         api = self._get_api()
@@ -821,11 +829,20 @@ class KaggleClient:
             if is_local and _should_force_gpu_for_local_kernel(local_kernel_name, meta_data):
                 meta_data["enable_gpu"] = True
 
+            if machine_shape:
+                meta_data["machine_shape"] = machine_shape
+                logger.warning(
+                    "kaggle: applying accel-pref override id=%s machine_shape=%s",
+                    meta_data.get("id"),
+                    machine_shape,
+                )
+
             logger.info(
-                "kaggle: kernel metadata updated id=%s dataset_sources=%s enable_gpu=%s",
+                "kaggle: kernel metadata updated id=%s dataset_sources=%s enable_gpu=%s machine_shape=%s",
                 meta_data.get("id"),
                 meta_data.get("dataset_sources"),
                 meta_data.get("enable_gpu"),
+                meta_data.get("machine_shape"),
             )
 
             meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2))

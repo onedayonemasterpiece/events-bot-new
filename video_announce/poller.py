@@ -31,7 +31,7 @@ from models import (
     VideoAnnounceSessionStatus,
 )
 from promo import record_video_promo_exposures
-from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient
+from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient, resolve_kaggle_slug as _accel_pref_resolve_slug
 
 logger = logging.getLogger(__name__)
 
@@ -898,7 +898,13 @@ async def run_kernel_poller(
     # Kaggle kernel can take a while to start, API returns None during startup
     # At ~1 min poll interval, 30 attempts = ~30 minutes before failing
     MAX_UNKNOWN_STATUS_COUNT = 30
-    
+
+    # INC-2026-05-26 round 3: track when the kernel first went QUEUED to drive
+    # an auto-demote to a lower accelerator tier when P100 is congested.
+    from . import accel_pref as _accel_pref
+
+    queued_since: datetime | None = None
+
     while datetime.now(timezone.utc) < deadline:
         try:
             status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
@@ -971,6 +977,75 @@ async def run_kernel_poller(
             # Reset counter if we get a valid status
             unknown_status_count = 0
         
+        # INC-2026-05-26 round 3: stuck-in-queue auto-demote.
+        # If the kernel sits in QUEUED beyond the threshold (default 5 min),
+        # write an accel-pref demotion for this slug so the *next* push uses
+        # T4 instead, fail this session in our DB, and exit. The current
+        # zombie Kaggle session can't be cancelled programmatically (Kaggle
+        # public API rejects it), so it stays QUEUED on Kaggle's side and
+        # will eventually run uselessly — that's acceptable; the kernel-slug
+        # lock prevents us from piling up more versions on the same slug.
+        if state == "queued":
+            if queued_since is None:
+                queued_since = datetime.now(timezone.utc)
+            else:
+                stuck_for = (datetime.now(timezone.utc) - queued_since).total_seconds()
+                if stuck_for >= _accel_pref.queue_demote_threshold_sec():
+                    slug = _accel_pref_resolve_slug(kernel_ref)
+                    if slug:
+                        current_pref = await _accel_pref.read_active_pref(db, slug)
+                        current_tier = (
+                            current_pref.tier if current_pref else _accel_pref.TIER_DEFAULT
+                        )
+                        reason = (
+                            f"queue >{int(stuck_for)}s on {current_tier} "
+                            f"(session #{session_obj.id})"
+                        )
+                        new_pref = await _accel_pref.demote(
+                            db, slug, current_tier=current_tier, reason=reason
+                        )
+                        if new_pref is None:
+                            err_msg = (
+                                f"kaggle_queue: ladder exhausted on {current_tier} "
+                                f"after {int(stuck_for)}s"
+                            )
+                            session_obj = await _update_status(
+                                db,
+                                session_obj.id,
+                                status=VideoAnnounceSessionStatus.FAILED,
+                                error=err_msg,
+                            )
+                            await bot.send_message(
+                                notify_chat_id,
+                                f"🛑 Сессия #{session_obj.id if session_obj else '?'}: все Kaggle тиеры исчерпаны для {slug} ({int(stuck_for)}с в очереди). Рендер не пойдёт; нужно ручное вмешательство.",
+                            )
+                            return
+                        err_msg = (
+                            f"queue_demote: {current_tier}->{new_pref.tier} "
+                            f"after {int(stuck_for)}s queue"
+                        )
+                        session_obj = await _update_status(
+                            db,
+                            session_obj.id,
+                            status=VideoAnnounceSessionStatus.FAILED,
+                            error=err_msg,
+                        )
+                        expires_local = new_pref.expires_at.astimezone(timezone.utc).strftime(
+                            "%Y-%m-%d %H:%M UTC"
+                        )
+                        await bot.send_message(
+                            notify_chat_id,
+                            (
+                                f"⚠️ Сессия #{session_obj.id if session_obj else '?'}: "
+                                f"Kaggle очередь {int(stuck_for)}s на {current_tier} → "
+                                f"следующие пуши {slug} идут на {new_pref.tier} "
+                                f"до {expires_local}. Watchdog подберёт пропущенный слот."
+                            ),
+                        )
+                        return
+        else:
+            queued_since = None
+
         if state == "complete":
             break
         if state in {
