@@ -346,3 +346,28 @@ async def test_campaign_card_lists_both_activities(tmp_path) -> None:
     assert "🎬 Видеоанонс · Завтра · только слот 1" in text
     assert "first_two_slots" not in text
     assert "first_slot" not in text
+
+
+@pytest.mark.asyncio
+async def test_step0_keyboard_uses_view_callback_not_campaign(tmp_path) -> None:
+    """All "Open card" buttons emit ppromo:view: — the dispatcher binds to
+    'view', so a stray 'ppromo:campaign:' callback would show
+    "Неизвестное действие" to the user (regression)."""
+
+    from handlers.partner_promo_cmd import _campaigns_keyboard
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(_partner(100))
+        await session.commit()
+    campaign = await _seed_campaign(db, event_title="CbReg", creator=100)
+    markup = _campaigns_keyboard(int(5137), [campaign], [])
+    for row in markup.inline_keyboard:
+        for btn in row:
+            cb = btn.callback_data or ""
+            assert "ppromo:campaign:" not in cb, (
+                f"button {btn.text!r} still emits legacy ppromo:campaign: callback"
+            )
+            if btn.text.startswith("📊"):
+                assert cb.startswith("ppromo:view:"), cb

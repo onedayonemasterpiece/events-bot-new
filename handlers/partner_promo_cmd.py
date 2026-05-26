@@ -268,7 +268,7 @@ def _campaigns_keyboard(
             [
                 types.InlineKeyboardButton(
                     text=f"📊 #{c.id} {c.title[:35]}",
-                    callback_data=f"ppromo:campaign:{c.id}",
+                    callback_data=f"ppromo:view:{c.id}",
                 )
             ]
         )
@@ -277,7 +277,7 @@ def _campaigns_keyboard(
             [
                 types.InlineKeyboardButton(
                     text=f"🎪 #{c.id} {c.title[:33]}",
-                    callback_data=f"ppromo:campaign:{c.id}",
+                    callback_data=f"ppromo:view:{c.id}",
                 )
             ]
         )
@@ -1009,7 +1009,7 @@ async def _handle_confirm(
         [
             types.InlineKeyboardButton(
                 text="📊 Открыть карточку",
-                callback_data=f"ppromo:campaign:{result.campaign.id}",
+                callback_data=f"ppromo:view:{result.campaign.id}",
             )
         ],
         [
