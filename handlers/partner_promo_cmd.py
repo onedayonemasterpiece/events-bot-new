@@ -108,11 +108,25 @@ async def _load_partner_organization(
         return await session.get(Organization, name)
 
 
-async def _list_user_campaigns_for_event(
+async def _list_campaigns_covering_event(
     db: Database, *, user: User, event_id: int
-) -> list[PromoCampaign]:
+) -> tuple[list[PromoCampaign], list[PromoCampaign]]:
+    """Return (event_targeted, festival_covering) campaigns for this event.
+
+    The first list is campaigns whose ``PromoTarget`` directly points to this
+    event. The second list is festival-targeted campaigns whose
+    ``festival_name`` matches ``event.festival`` — those campaigns cover this
+    event implicitly even though there is no direct event-id link.
+
+    For non-superadmin users both lists are filtered by ``created_by``: a
+    partner sees only their own campaigns, regardless of target type.
+    """
+
     async with db.get_session() as session:
-        stmt = (
+        event = await session.get(Event, int(event_id))
+        festival_name = (getattr(event, "festival", None) or "").strip() if event else ""
+
+        event_stmt = (
             select(PromoCampaign)
             .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
             .where(PromoTarget.target_type == "event")
@@ -121,9 +135,34 @@ async def _list_user_campaigns_for_event(
             .order_by(PromoCampaign.created_at.desc())
         )
         if not user.is_superadmin:
-            stmt = stmt.where(PromoCampaign.created_by == int(user.user_id))
-        res = await session.execute(stmt)
-        return list(res.scalars().all())
+            event_stmt = event_stmt.where(PromoCampaign.created_by == int(user.user_id))
+        event_campaigns = list((await session.execute(event_stmt)).scalars().all())
+
+        festival_campaigns: list[PromoCampaign] = []
+        if festival_name:
+            fest_stmt = (
+                select(PromoCampaign)
+                .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
+                .where(PromoTarget.target_type == "festival")
+                .where(PromoTarget.festival_name == festival_name)
+                .where(PromoCampaign.status != "archived")
+                .order_by(PromoCampaign.created_at.desc())
+            )
+            if not user.is_superadmin:
+                fest_stmt = fest_stmt.where(
+                    PromoCampaign.created_by == int(user.user_id)
+                )
+            festival_campaigns = list(
+                (await session.execute(fest_stmt)).scalars().all()
+            )
+
+        # Dedup: a campaign cannot be in both buckets (event vs festival
+        # target), but be defensive in case of mixed-target campaigns.
+        event_ids = {int(c.id or 0) for c in event_campaigns}
+        festival_campaigns = [
+            c for c in festival_campaigns if int(c.id or 0) not in event_ids
+        ]
+        return event_campaigns, festival_campaigns
 
 
 def _surface_buttons(
@@ -187,28 +226,57 @@ def _event_card_text(event: Event) -> str:
     return f"<b>{title}</b>\n<i>{date_str}</i> · #{event.id}"
 
 
-def _campaign_list_text(event: Event, campaigns: list[PromoCampaign]) -> str:
+def _campaign_list_text(
+    event: Event,
+    event_campaigns: list[PromoCampaign],
+    festival_campaigns: list[PromoCampaign],
+) -> str:
     lines = [_event_card_text(event), ""]
-    if campaigns:
-        lines.append("Действующие кампании:")
-        for c in campaigns:
+    if not event_campaigns and not festival_campaigns:
+        lines.append("Кампаний по этому событию пока нет.")
+        return "\n".join(lines)
+    if event_campaigns:
+        lines.append("<b>Кампании по событию:</b>")
+        for c in event_campaigns:
             lines.append(
                 f"#{c.id} <b>{html.escape(c.title)}</b> — {_status_label(c.status)}"
             )
-    else:
-        lines.append("Кампаний по этому событию пока нет.")
+    if festival_campaigns:
+        if event_campaigns:
+            lines.append("")
+        festival_name = (event.festival or "").strip()
+        header = "<b>Покрывающие фестивальные кампании"
+        if festival_name:
+            header += f" ({html.escape(festival_name)})"
+        header += ":</b>"
+        lines.append(header)
+        for c in festival_campaigns:
+            lines.append(
+                f"#{c.id} <b>{html.escape(c.title)}</b> — {_status_label(c.status)}"
+            )
     return "\n".join(lines)
 
 
 def _campaigns_keyboard(
-    event_id: int, campaigns: list[PromoCampaign]
+    event_id: int,
+    event_campaigns: list[PromoCampaign],
+    festival_campaigns: list[PromoCampaign],
 ) -> types.InlineKeyboardMarkup:
     rows: list[list[types.InlineKeyboardButton]] = []
-    for c in campaigns[:6]:
+    for c in event_campaigns[:5]:
         rows.append(
             [
                 types.InlineKeyboardButton(
                     text=f"📊 #{c.id} {c.title[:35]}",
+                    callback_data=f"ppromo:campaign:{c.id}",
+                )
+            ]
+        )
+    for c in festival_campaigns[:3]:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f"🎪 #{c.id} {c.title[:33]}",
                     callback_data=f"ppromo:campaign:{c.id}",
                 )
             ]
@@ -256,11 +324,13 @@ async def _send_or_edit(
 async def render_step0_campaign_list(
     callback: types.CallbackQuery, db: Database, bot: Bot, *, event: Event, user: User
 ) -> None:
-    campaigns = await _list_user_campaigns_for_event(
+    event_campaigns, festival_campaigns = await _list_campaigns_covering_event(
         db, user=user, event_id=int(event.id)
     )
-    text = _campaign_list_text(event, campaigns)
-    markup = _campaigns_keyboard(int(event.id), campaigns)
+    text = _campaign_list_text(event, event_campaigns, festival_campaigns)
+    markup = _campaigns_keyboard(
+        int(event.id), event_campaigns, festival_campaigns
+    )
     await _send_or_edit(bot, callback, text, markup)
 
 

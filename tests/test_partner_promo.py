@@ -507,3 +507,146 @@ async def test_add_partner_activity_supports_vk_repost(tmp_path) -> None:
         ).scalar_one()
     assert vk_act.target_exposure_goal == 4
     assert vk_act.profile_key is None
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns_covering_event_includes_festival(tmp_path) -> None:
+    """Event belonging to a festival shows the covering festival campaign."""
+
+    from handlers.partner_promo_cmd import _list_campaigns_covering_event
+    from promo import create_festival_promo_campaign
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 26, 8, 0, tzinfo=timezone.utc)
+
+    # superadmin user — sees everything
+    async with db.get_session() as session:
+        session.add(User(user_id=1, username="root", is_superadmin=True))
+        from models import Festival
+        session.add(Festival(name="80 историй о главном"))
+        ev = _event("Зоопарк", "2026-06-04")
+        ev.festival = "80 историй о главном"
+        session.add(ev)
+        await session.commit()
+        ev_id = (
+            await session.execute(select(Event.id).where(Event.title == "Зоопарк"))
+        ).scalar_one()
+        admin = await session.get(User, 1)
+
+    fest_result = await create_festival_promo_campaign(
+        db,
+        festival_name="80 историй о главном",
+        ends_at=date(2026, 7, 18),
+        now_utc=now_utc,
+    )
+    assert fest_result.status == "created", fest_result.message
+    fest_id = int(fest_result.campaign.id)
+
+    event_camps, fest_camps = await _list_campaigns_covering_event(
+        db, user=admin, event_id=int(ev_id)
+    )
+    assert event_camps == []
+    assert len(fest_camps) == 1
+    assert int(fest_camps[0].id) == fest_id
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns_covering_event_partner_hides_admin_festival(tmp_path) -> None:
+    """A partner does not see a festival campaign created by another user."""
+
+    from handlers.partner_promo_cmd import _list_campaigns_covering_event
+    from promo import create_festival_promo_campaign
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 26, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_partner(900, username="lib"))
+        from models import Festival
+        session.add(Festival(name="80 историй о главном"))
+        ev = _event("Зоопарк partner", "2026-06-04", creator_id=900)
+        ev.festival = "80 историй о главном"
+        session.add(ev)
+        await session.commit()
+        ev_id = (
+            await session.execute(
+                select(Event.id).where(Event.title == "Зоопарк partner")
+            )
+        ).scalar_one()
+        partner = await session.get(User, 900)
+
+    # Admin-created seed-style festival campaign (created_by=None / different uid)
+    fest_result = await create_festival_promo_campaign(
+        db,
+        festival_name="80 историй о главном",
+        ends_at=date(2026, 7, 18),
+        now_utc=now_utc,
+        created_by=None,
+    )
+    assert fest_result.status == "created"
+
+    event_camps, fest_camps = await _list_campaigns_covering_event(
+        db, user=partner, event_id=int(ev_id)
+    )
+    assert event_camps == []
+    # Partner does NOT see admin's festival campaign
+    assert fest_camps == []
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns_covering_event_combines_event_and_festival(tmp_path) -> None:
+    """Both event-targeted and festival-covering campaigns surface side by side."""
+
+    from handlers.partner_promo_cmd import _list_campaigns_covering_event
+    from promo import create_festival_promo_campaign
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 26, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, username="root", is_superadmin=True))
+        from models import Festival
+        session.add(Festival(name="80 историй о главном"))
+        ev = _event("Двойник", "2026-06-04")
+        ev.festival = "80 историй о главном"
+        session.add(ev)
+        await session.commit()
+        ev_id = (
+            await session.execute(select(Event.id).where(Event.title == "Двойник"))
+        ).scalar_one()
+        admin = await session.get(User, 1)
+
+    fest_res = await create_festival_promo_campaign(
+        db,
+        festival_name="80 историй о главном",
+        ends_at=date(2026, 7, 18),
+        now_utc=now_utc,
+    )
+    assert fest_res.status == "created"
+
+    # Event-targeted campaign on top of the festival one
+    ev_spec = PartnerPromoSpec(
+        event_id=int(ev_id),
+        creator_user_id=1,
+        organization_name=None,
+        surface=PROMO_SURFACE_VIDEO_GENERAL,
+        profile_key="popular_review",
+        slot_policy=PROMO_POLICY_FIRST_TWO_SLOTS,
+        count=2,
+        ends_at=date(2026, 6, 4),
+        is_editorial=False,
+        sponsorship_disclosure="Партнёрский материал",
+    )
+    ev_res = await create_partner_event_promo_campaign(db, ev_spec, now_utc=now_utc)
+    assert ev_res.status == "created"
+
+    event_camps, fest_camps = await _list_campaigns_covering_event(
+        db, user=admin, event_id=int(ev_id)
+    )
+    assert len(event_camps) == 1
+    assert int(event_camps[0].id) == int(ev_res.campaign.id)
+    assert len(fest_camps) == 1
+    assert int(fest_camps[0].id) == int(fest_res.campaign.id)
