@@ -1038,13 +1038,24 @@ async def run_kernel_poller(
                         expires_local = new_pref.expires_at.astimezone(timezone.utc).strftime(
                             "%Y-%m-%d %H:%M UTC"
                         )
+                        # INC-2026-05-26 round 5: delete the session-specific
+                        # dataset so the zombie Kaggle run (which we cannot
+                        # cancel via API) fails at the mount step instead of
+                        # mounting our payload + Telegram bundle and
+                        # conflicting with the next push from a different IP
+                        # (previous incident: AuthKeyDuplicatedError when
+                        # v128 zombie + v129 fresh both opened the same
+                        # Telegram session simultaneously).
+                        await _cleanup_dataset(client, dataset_slug)
                         await bot.send_message(
                             notify_chat_id,
                             (
                                 f"⚠️ Сессия #{session_obj.id if session_obj else '?'}: "
                                 f"Kaggle очередь {int(stuck_for)}s на {current_tier} → "
                                 f"следующие пуши {slug} идут на {new_pref.tier} "
-                                f"до {expires_local}. Watchdog подберёт пропущенный слот."
+                                f"до {expires_local}. Dataset зомби-сессии удалён, "
+                                f"чтобы избежать конфликта Telegram-сессии. "
+                                f"Watchdog подберёт пропущенный слот."
                             ),
                         )
                         return
