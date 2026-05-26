@@ -430,6 +430,29 @@ def _kernel_slug(kernel_ref: str) -> str:
     return ref
 
 
+def resolve_kaggle_slug(kernel_ref: str | None) -> str | None:
+    """Resolve a kernel_ref (local: or owner/slug) to the Kaggle kernel id used at push time.
+
+    `local:CherryFlash` and `zigomaro/cherryflash` both refer to the same
+    Kaggle kernel; the lock against concurrent same-kernel pushes must
+    normalize them. For ``local:`` refs we read ``kernel-metadata.json`` (the
+    same file ``kernels_push`` would send) and return its ``id`` field; for
+    other refs we return them unchanged.
+    """
+
+    ref = str(kernel_ref or "").strip()
+    if not ref:
+        return None
+    if not ref.startswith(LOCAL_KERNEL_PREFIX):
+        return ref
+    local = find_local_kernel(ref)
+    if local:
+        kernel_id = str(local.get("id") or "").strip()
+        if kernel_id:
+            return kernel_id
+    return ref
+
+
 def find_local_kernel(kernel_ref: str) -> dict[str, Any] | None:
     """Return the repo-local kernel matching a requested local or Kaggle ref."""
     normalized_ref = str(kernel_ref or "").strip()
