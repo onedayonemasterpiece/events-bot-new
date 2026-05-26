@@ -120,6 +120,15 @@ def test_ladder_for_known_slug():
     assert accel_pref.ladder_for("zigomaro/unknown") == []
 
 
+def test_ladder_for_cpu_kernel_is_empty():
+    # crumple-video is CPU-only (enable_gpu=false in kernel-metadata).
+    # It must not participate in demote logic — the poller relies on an
+    # empty ladder as the signal to skip demote for this slug. Without
+    # this guard, a >5min QUEUED on a CPU kernel would hard-fail the run.
+    # Regression: INC-2026-05-26 round 4 (session #539).
+    assert accel_pref.ladder_for("zigomaro/crumple-video") == []
+
+
 def test_next_tier_step():
     assert accel_pref.next_tier(
         "zigomaro/cherryflash", accel_pref.TIER_DEFAULT

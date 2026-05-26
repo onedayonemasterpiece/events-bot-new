@@ -992,7 +992,12 @@ async def run_kernel_poller(
                 stuck_for = (datetime.now(timezone.utc) - queued_since).total_seconds()
                 if stuck_for >= _accel_pref.queue_demote_threshold_sec():
                     slug = _accel_pref_resolve_slug(kernel_ref)
-                    if slug:
+                    # Skip auto-demote when this slug has no configured ladder
+                    # (e.g. CPU-only kernels like crumple-video). Without this
+                    # check the demote call returns None ("ladder exhausted")
+                    # and we wrongly hard-fail a CPU run that would have
+                    # finished naturally. INC-2026-05-26 round 4 regression.
+                    if slug and _accel_pref.ladder_for(slug):
                         current_pref = await _accel_pref.read_active_pref(db, slug)
                         current_tier = (
                             current_pref.tier if current_pref else _accel_pref.TIER_DEFAULT
