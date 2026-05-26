@@ -35,6 +35,10 @@ class PartnerPromoSession:
     sponsorship_disclosure: Optional[str] = None
     title_override: Optional[str] = None
     info_message_id: Optional[int] = None
+    # When set, the FSM is in "add activity to an existing campaign" mode —
+    # period/mode/disclosure come from the campaign, FSM jumps from step 3
+    # (count) straight to step 6 (confirm).
+    add_to_campaign_id: Optional[int] = None
 
 
 @dataclass

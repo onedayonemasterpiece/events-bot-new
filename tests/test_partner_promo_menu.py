@@ -193,8 +193,13 @@ async def test_campaign_card_text_has_target_and_activity(tmp_path) -> None:
     assert f"#{campaign.id}" in text
     assert "Цели:" in text
     assert "Активности:" in text
-    assert "video_general" in text
-    assert "konb" in text
+    # Partner-friendly labels — no raw technical keys like ``video_general`` /
+    # ``first_two_slots`` should leak into the card.
+    assert "🎬 Видеоанонс" in text
+    assert "КОНБ" in text
+    assert "слот 1–2" in text
+    assert "video_general" not in text
+    assert "first_two_slots" not in text
 
 
 @pytest.mark.asyncio
@@ -268,3 +273,76 @@ async def test_campaign_stats_text_when_no_exposures(tmp_path) -> None:
     campaign = await _seed_campaign(db, event_title="Stats", creator=100)
     text = await _campaign_stats_text(db, campaign)
     assert "Публичных показов пока нет" in text
+
+
+@pytest.mark.asyncio
+async def test_campaign_card_shows_add_activity_button(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(_partner(100))
+        await session.commit()
+    campaign = await _seed_campaign(db, event_title="AddAct", creator=100)
+    kb = _campaign_card_keyboard(campaign, is_superadmin=False)
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    assert any("➕ Активность" in l for l in labels)
+
+
+@pytest.mark.asyncio
+async def test_campaign_card_no_add_activity_button_when_archived(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(_partner(100))
+        await session.commit()
+    campaign = await _seed_campaign(db, event_title="Archived", creator=100)
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, int(campaign.id))
+        c.status = "archived"
+        session.add(c)
+        await session.commit()
+        await session.refresh(c)
+        campaign = c
+    kb = _campaign_card_keyboard(campaign, is_superadmin=False)
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    assert all("➕ Активность" not in l for l in labels)
+
+
+@pytest.mark.asyncio
+async def test_campaign_card_lists_both_activities(tmp_path) -> None:
+    """After adding a second activity the card lists both with human labels."""
+
+    from promo import (
+        PROMO_POLICY_FIRST_SLOT,
+        PROMO_SURFACE_VIDEO_GENERAL,
+        PartnerActivitySpec,
+        add_partner_activity_to_campaign,
+    )
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(_partner(100))
+        await session.commit()
+
+    campaign = await _seed_campaign(db, event_title="Many", creator=100)
+    add_result = await add_partner_activity_to_campaign(
+        db,
+        PartnerActivitySpec(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key="default",
+            slot_policy=PROMO_POLICY_FIRST_SLOT,
+            count=1,
+        ),
+        actor_user_id=100,
+    )
+    assert add_result.status == "created"
+
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, int(campaign.id))
+    text = await _campaign_card_text(db, c)
+    assert "🎬 Видеоанонс · КОНБ · слот 1–2" in text
+    assert "🎬 Видеоанонс · Завтра · только слот 1" in text
+    assert "first_two_slots" not in text
+    assert "first_slot" not in text

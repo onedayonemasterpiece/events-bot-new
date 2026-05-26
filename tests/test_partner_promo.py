@@ -21,7 +21,10 @@ from promo import (
     PROMO_POLICY_FIRST_TWO_SLOTS,
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_SURFACE_VIDEO_GENERAL,
+    PROMO_SURFACE_VK_REPOST,
+    PartnerActivitySpec,
     PartnerPromoSpec,
+    add_partner_activity_to_campaign,
     build_partner_campaign_title,
     clamp_campaign_end_to_event,
     create_partner_event_promo_campaign,
@@ -327,3 +330,180 @@ async def test_organization_schema_round_trips(tmp_path) -> None:
         assert konb is not None
         assert konb.video_profile_key == "konb"
         assert konb.vk_source_group_ids == [30777579]
+
+
+@pytest.mark.asyncio
+async def test_add_partner_activity_appends_to_existing_campaign(tmp_path) -> None:
+    """Add-activity FSM lands a fresh PromoActivity on the existing campaign."""
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_partner(600))
+        session.add(_event("Лекция", "2026-06-15", creator_id=600))
+        await session.commit()
+        ev_id = (
+            await session.execute(select(Event.id).where(Event.title == "Лекция"))
+        ).scalar_one()
+
+    spec = PartnerPromoSpec(
+        event_id=int(ev_id),
+        creator_user_id=600,
+        organization_name="КОНБ",
+        surface=PROMO_SURFACE_VIDEO_GENERAL,
+        profile_key="popular_review",
+        slot_policy=PROMO_POLICY_FIRST_TWO_SLOTS,
+        count=3,
+        ends_at=date(2026, 6, 1),
+        is_editorial=False,
+        sponsorship_disclosure="Партнёрский материал",
+    )
+    initial = await create_partner_event_promo_campaign(db, spec, now_utc=now_utc)
+    assert initial.status == "created"
+    assert initial.campaign is not None
+    campaign_id = int(initial.campaign.id)
+
+    # Add a second activity — a different profile + slot policy.
+    add_result = await add_partner_activity_to_campaign(
+        db,
+        PartnerActivitySpec(
+            campaign_id=campaign_id,
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key="default",
+            slot_policy=PROMO_POLICY_FIRST_SLOT,
+            count=1,
+        ),
+        actor_user_id=600,
+        now_utc=now_utc,
+    )
+    assert add_result.status == "created"
+    assert add_result.campaign is not None
+    assert int(add_result.campaign.id) == campaign_id
+
+    async with db.get_session() as session:
+        activities = list(
+            (
+                await session.execute(
+                    select(PromoActivity).where(PromoActivity.campaign_id == campaign_id)
+                )
+            ).scalars().all()
+        )
+    assert len(activities) == 2
+    surfaces = [(a.surface, a.profile_key, a.selection_policy, a.target_exposure_goal) for a in activities]
+    assert (PROMO_SURFACE_VIDEO_GENERAL, "popular_review", PROMO_POLICY_FIRST_TWO_SLOTS, 3) in surfaces
+    assert (PROMO_SURFACE_VIDEO_GENERAL, "default", PROMO_POLICY_FIRST_SLOT, 1) in surfaces
+    # first_slot activity stores slot=1; first_two_slots stores slot=None.
+    slots = {(a.profile_key, a.slot) for a in activities}
+    assert ("default", 1) in slots
+    assert ("popular_review", None) in slots
+
+
+@pytest.mark.asyncio
+async def test_add_partner_activity_rejects_archived_campaign(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_partner(700))
+        session.add(_event("Архив", "2026-06-15", creator_id=700))
+        await session.commit()
+        ev_id = (
+            await session.execute(select(Event.id).where(Event.title == "Архив"))
+        ).scalar_one()
+
+    spec = PartnerPromoSpec(
+        event_id=int(ev_id),
+        creator_user_id=700,
+        organization_name=None,
+        surface=PROMO_SURFACE_VIDEO_GENERAL,
+        profile_key="popular_review",
+        slot_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
+        count=1,
+        ends_at=date(2026, 6, 1),
+        is_editorial=False,
+        sponsorship_disclosure=None,
+    )
+    initial = await create_partner_event_promo_campaign(db, spec, now_utc=now_utc)
+    assert initial.status == "created"
+    campaign_id = int(initial.campaign.id)
+
+    # Archive the campaign
+    async with db.get_session() as session:
+        c = await session.get(PromoCampaign, campaign_id)
+        c.status = "archived"
+        session.add(c)
+        await session.commit()
+
+    add_result = await add_partner_activity_to_campaign(
+        db,
+        PartnerActivitySpec(
+            campaign_id=campaign_id,
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key="default",
+            slot_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
+            count=1,
+        ),
+        actor_user_id=700,
+        now_utc=now_utc,
+    )
+    assert add_result.status == "invalid"
+    assert "архив" in add_result.message
+
+
+@pytest.mark.asyncio
+async def test_add_partner_activity_supports_vk_repost(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(_partner(800))
+        session.add(_event("ВК", "2026-06-15", creator_id=800))
+        await session.commit()
+        ev_id = (
+            await session.execute(select(Event.id).where(Event.title == "ВК"))
+        ).scalar_one()
+
+    spec = PartnerPromoSpec(
+        event_id=int(ev_id),
+        creator_user_id=800,
+        organization_name="КОНБ",
+        surface=PROMO_SURFACE_VIDEO_GENERAL,
+        profile_key="popular_review",
+        slot_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
+        count=2,
+        ends_at=date(2026, 6, 1),
+        is_editorial=False,
+        sponsorship_disclosure="Партнёрский материал",
+    )
+    initial = await create_partner_event_promo_campaign(db, spec, now_utc=now_utc)
+    assert initial.status == "created"
+    campaign_id = int(initial.campaign.id)
+
+    add_result = await add_partner_activity_to_campaign(
+        db,
+        PartnerActivitySpec(
+            campaign_id=campaign_id,
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key=None,
+            slot_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,  # ignored for vk_repost
+            count=4,
+        ),
+        actor_user_id=800,
+        now_utc=now_utc,
+    )
+    assert add_result.status == "created"
+
+    async with db.get_session() as session:
+        vk_act = (
+            await session.execute(
+                select(PromoActivity)
+                .where(PromoActivity.campaign_id == campaign_id)
+                .where(PromoActivity.surface == PROMO_SURFACE_VK_REPOST)
+            )
+        ).scalar_one()
+    assert vk_act.target_exposure_goal == 4
+    assert vk_act.profile_key is None

@@ -598,6 +598,95 @@ async def create_partner_event_promo_campaign(
     )
 
 
+@dataclass(frozen=True)
+class PartnerActivitySpec:
+    """Spec for adding one PromoActivity to an existing campaign.
+
+    Period, mode, sponsorship_disclosure and target event are inherited
+    from the campaign — only the placement-specific knobs are user-input.
+    """
+
+    campaign_id: int
+    surface: str
+    profile_key: str | None
+    slot_policy: str
+    count: int
+
+
+async def add_partner_activity_to_campaign(
+    db: Database,
+    spec: PartnerActivitySpec,
+    *,
+    actor_user_id: int,
+    now_utc: datetime | None = None,
+) -> PromoCreateResult:
+    """Append a new PromoActivity to an existing partner campaign.
+
+    Authorization: caller must verify the user owns the campaign or is
+    superadmin; this function only enforces business rules (campaign
+    exists, not archived, surface/slot_policy known, count positive).
+    """
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    if spec.count <= 0:
+        return PromoCreateResult(None, "invalid", "Количество показов должно быть положительным.")
+    if spec.surface not in {PROMO_SURFACE_VIDEO_GENERAL, PROMO_SURFACE_VK_REPOST}:
+        return PromoCreateResult(None, "invalid", f"Неизвестная поверхность: {spec.surface!r}.")
+    if spec.surface == PROMO_SURFACE_VIDEO_GENERAL and spec.slot_policy not in {
+        PROMO_POLICY_GUARANTEED_ANY_POSITION,
+        PROMO_POLICY_FIRST_TWO_SLOTS,
+        PROMO_POLICY_FIRST_SLOT,
+    }:
+        return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
+
+    async with db.get_session() as session:
+        campaign = await session.get(PromoCampaign, int(spec.campaign_id))
+        if campaign is None:
+            return PromoCreateResult(None, "not_found", "Кампания не найдена.")
+        if campaign.status == "archived":
+            return PromoCreateResult(
+                None,
+                "invalid",
+                "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
+            )
+
+        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+            activity = PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_VIDEO_GENERAL,
+                profile_key=spec.profile_key,
+                slot=1 if spec.slot_policy == PROMO_POLICY_FIRST_SLOT else None,
+                max_per_publish=1,
+                target_exposure_goal=int(spec.count),
+                selection_policy=spec.slot_policy,
+                enabled=True,
+            )
+        else:
+            activity = PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_VK_REPOST,
+                profile_key=None,
+                slot=None,
+                max_per_publish=1,
+                target_exposure_goal=int(spec.count),
+                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+                enabled=True,
+            )
+        campaign.updated_at = now_utc
+        session.add(campaign)
+        session.add(activity)
+        await session.commit()
+        await session.refresh(campaign)
+
+    return PromoCreateResult(
+        campaign,
+        "created",
+        f"Добавил активность к #{campaign.id}: {spec.surface}"
+        + (f"/{spec.profile_key}" if spec.profile_key else "")
+        + f" · {spec.count} показ(ов).",
+    )
+
+
 async def ensure_initial_80_stories_campaign(
     db: Database,
     *,

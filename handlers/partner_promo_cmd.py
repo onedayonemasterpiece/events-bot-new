@@ -435,35 +435,56 @@ async def render_step5_mode(
     await _send_or_edit(bot, callback, text, markup)
 
 
-def _confirm_rows(event_id: int) -> list[list[types.InlineKeyboardButton]]:
-    return [
+def _confirm_rows(
+    event_id: int, *, session: PartnerPromoSession | None = None
+) -> list[list[types.InlineKeyboardButton]]:
+    is_add_activity = session is not None and session.add_to_campaign_id is not None
+    primary_label = "✅ Добавить активность" if is_add_activity else "✅ Запустить"
+    rows: list[list[types.InlineKeyboardButton]] = [
         [
             types.InlineKeyboardButton(
-                text="✅ Запустить",
+                text=primary_label,
                 callback_data=f"ppromo:confirm:{event_id}",
             )
         ],
-        [
+    ]
+    # Rename is only meaningful when creating a new campaign — in add-activity
+    # mode the campaign already has a fixed title.
+    secondary_row: list[types.InlineKeyboardButton] = []
+    if not is_add_activity:
+        secondary_row.append(
             types.InlineKeyboardButton(
                 text="✏ Переименовать",
                 callback_data=f"ppromo:rename_input:{event_id}",
-            ),
-            types.InlineKeyboardButton(
-                text="✕ Отмена",
-                callback_data=f"ppromo:cancel:{event_id}",
-            ),
-        ],
+            )
+        )
+    secondary_row.append(
+        types.InlineKeyboardButton(
+            text="✕ Отмена", callback_data=f"ppromo:cancel:{event_id}"
+        )
+    )
+    rows.append(secondary_row)
+    # In add-activity mode the previous step is step 3 (count) — Back goes to
+    # the count picker, skipping end-date/mode which aren't asked.
+    back_step = 4 if is_add_activity else 6
+    rows.append(
         [
             types.InlineKeyboardButton(
                 text="◀ Назад",
-                callback_data=f"ppromo:back:{event_id}:6",
+                callback_data=f"ppromo:back:{event_id}:{back_step}",
             )
-        ],
-    ]
+        ]
+    )
+    return rows
 
 
 def _summary_text(
-    event: Event, sess: PartnerPromoSession, *, suggested_title: str, mode_label: str
+    event: Event,
+    sess: PartnerPromoSession,
+    *,
+    suggested_title: str,
+    mode_label: str,
+    campaign: PromoCampaign | None = None,
 ) -> str:
     profile = (
         PARTNER_PROMO_VIDEO_PROFILES.get(sess.profile_key or "", sess.profile_key or "—")
@@ -475,6 +496,28 @@ def _summary_text(
         if sess.surface == PROMO_SURFACE_VIDEO_GENERAL
         else "—"
     )
+    if sess.add_to_campaign_id is not None and campaign is not None:
+        # Add-activity mode: campaign already exists; show its parameters as
+        # the inherited context and only highlight the new placement.
+        end = (
+            campaign.ends_at.date().isoformat() if campaign.ends_at else "—"
+        )
+        disclosure = campaign.sponsorship_disclosure or "редакционный (без подписи)"
+        lines = [
+            "<b>Добавление активности</b>",
+            "",
+            f"К кампании: #{campaign.id} <i>{html.escape(campaign.title)}</i>",
+            f"Событие: #{event.id} {html.escape(event.title or '')}",
+            f"Период (наследуется): до {end}",
+            f"Режим (наследуется): {disclosure}",
+            "",
+            f"Новая активность: {html.escape(profile)}" + (
+                f", {html.escape(slot)}" if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else ""
+            ),
+            f"Количество показов: {sess.count}",
+        ]
+        return "\n".join(lines)
+
     end = sess.ends_at.isoformat() if sess.ends_at else "—"
     disclosure = sess.sponsorship_disclosure or "—"
     title = sess.title_override or suggested_title
@@ -513,8 +556,16 @@ async def render_step6_confirm(
         is_superadmin=bool(user.is_superadmin),
     )
     mode_label = "редакционный" if session.is_editorial else "партнёрский"
-    text = _summary_text(event, session, suggested_title=suggested, mode_label=mode_label)
-    markup = types.InlineKeyboardMarkup(inline_keyboard=_confirm_rows(int(event.id)))
+    campaign: PromoCampaign | None = None
+    if session.add_to_campaign_id is not None:
+        async with db.get_session() as ses:
+            campaign = await ses.get(PromoCampaign, int(session.add_to_campaign_id))
+    text = _summary_text(
+        event, session, suggested_title=suggested, mode_label=mode_label, campaign=campaign
+    )
+    markup = types.InlineKeyboardMarkup(
+        inline_keyboard=_confirm_rows(int(event.id), session=session)
+    )
     await _send_or_edit(bot, callback, text, markup)
 
 
@@ -561,6 +612,62 @@ async def _open_new_form(
         return
     partner_promo_sessions[int(callback.from_user.id)] = PartnerPromoSession(
         event_id=int(event_id), step=1
+    )
+    await callback.answer()
+    await render_step1_surface(callback, db, bot, event=event, user=user)
+
+
+async def _open_add_activity_form(
+    callback: types.CallbackQuery, db: Database, bot: Bot, *, campaign_id: int
+) -> None:
+    """Start the abbreviated FSM that appends an activity to a campaign.
+
+    Period, mode and disclosure are taken from the campaign — the user only
+    picks surface/slot/count, then confirms.
+    """
+
+    user_id = int(callback.from_user.id)
+    user = await _load_user(db, user_id)
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(
+        db, user=user, campaign_id=campaign_id
+    )
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    if campaign.status == "archived":
+        await callback.answer(
+            "Кампания в архиве. Сначала восстановите её.", show_alert=True
+        )
+        return
+    # Find the campaign's event target so we can reuse the existing
+    # event-bound rendering and FSM helpers.
+    async with db.get_session() as session:
+        target = (
+            await session.execute(
+                select(PromoTarget)
+                .where(PromoTarget.campaign_id == campaign.id)
+                .where(PromoTarget.target_type == "event")
+            )
+        ).scalars().first()
+    if target is None or not target.event_id:
+        await callback.answer(
+            "У кампании нет связанного события — добавление активности доступно "
+            "только для event-targeted кампаний.",
+            show_alert=True,
+        )
+        return
+    event_id = int(target.event_id)
+    event, _ = await _load_event_and_user(db, event_id=event_id, user_id=user_id)
+    if event is None:
+        await callback.answer("Событие не найдено.", show_alert=True)
+        return
+    partner_promo_sessions[user_id] = PartnerPromoSession(
+        event_id=event_id,
+        step=1,
+        add_to_campaign_id=int(campaign.id),
     )
     await callback.answer()
     await render_step1_surface(callback, db, bot, event=event, user=user)
@@ -653,6 +760,15 @@ async def _handle_count(
         await callback.answer("Not authorized", show_alert=True)
         return
     sess.count = int(n)
+    if sess.add_to_campaign_id is not None:
+        # Add-activity mode skips end-date + mode and jumps to confirm —
+        # those values are inherited from the existing campaign.
+        sess.step = 6
+        await callback.answer()
+        await render_step6_confirm(
+            callback, db, bot, event=event, user=user, session=sess
+        )
+        return
     sess.step = 4
     await callback.answer()
     await render_step4_end(callback, bot, event=event)
@@ -758,43 +874,67 @@ async def _handle_confirm(
     if not _is_authorized(user, event):
         await callback.answer("Not authorized", show_alert=True)
         return
-    if not all(
+    is_add_activity = sess.add_to_campaign_id is not None
+    minimum_filled = all(
         [
             sess.surface,
             sess.profile_key if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else True,
             sess.slot_policy if sess.surface == PROMO_SURFACE_VIDEO_GENERAL else True,
             sess.count,
-            sess.ends_at,
         ]
-    ):
+    )
+    if not is_add_activity:
+        minimum_filled = minimum_filled and bool(sess.ends_at)
+    if not minimum_filled:
         await callback.answer("Не все шаги заполнены.", show_alert=True)
         return
     organization = await _load_partner_organization(db, user)
-    spec = PartnerPromoSpec(
-        event_id=int(event.id),
-        creator_user_id=int(user.user_id),
-        organization_name=(organization.name if organization else (user.organization or None)),
-        surface=str(sess.surface),
-        profile_key=sess.profile_key,
-        slot_policy=str(sess.slot_policy or PROMO_POLICY_GUARANTEED_ANY_POSITION),
-        count=int(sess.count or 0),
-        ends_at=sess.ends_at,
-        is_editorial=bool(sess.is_editorial),
-        sponsorship_disclosure=sess.sponsorship_disclosure,
-        title_override=sess.title_override,
-        priority=normalize_promo_priority(
-            1 if user.is_superadmin else PROMO_DEFAULT_PRIORITY
-        ),
-    )
-    result = await create_partner_event_promo_campaign(db, spec)
+    if is_add_activity:
+        from promo import PartnerActivitySpec, add_partner_activity_to_campaign
+
+        result = await add_partner_activity_to_campaign(
+            db,
+            PartnerActivitySpec(
+                campaign_id=int(sess.add_to_campaign_id),
+                surface=str(sess.surface),
+                profile_key=sess.profile_key,
+                slot_policy=str(sess.slot_policy or PROMO_POLICY_GUARANTEED_ANY_POSITION),
+                count=int(sess.count or 0),
+            ),
+            actor_user_id=int(user.user_id),
+        )
+    else:
+        spec = PartnerPromoSpec(
+            event_id=int(event.id),
+            creator_user_id=int(user.user_id),
+            organization_name=(organization.name if organization else (user.organization or None)),
+            surface=str(sess.surface),
+            profile_key=sess.profile_key,
+            slot_policy=str(sess.slot_policy or PROMO_POLICY_GUARANTEED_ANY_POSITION),
+            count=int(sess.count or 0),
+            ends_at=sess.ends_at,
+            is_editorial=bool(sess.is_editorial),
+            sponsorship_disclosure=sess.sponsorship_disclosure,
+            title_override=sess.title_override,
+            priority=normalize_promo_priority(
+                1 if user.is_superadmin else PROMO_DEFAULT_PRIORITY
+            ),
+        )
+        result = await create_partner_event_promo_campaign(db, spec)
     partner_promo_sessions.pop(int(callback.from_user.id), None)
     if result.status != "created" or result.campaign is None:
         await callback.answer(result.message[:200], show_alert=True)
         return
-    text = (
-        f"✅ Кампания #{result.campaign.id} активна.\n"
-        f"{html.escape(result.message)}"
-    )
+    if is_add_activity:
+        text = (
+            f"✅ Активность добавлена к #{result.campaign.id}.\n"
+            f"{html.escape(result.message)}"
+        )
+    else:
+        text = (
+            f"✅ Кампания #{result.campaign.id} активна.\n"
+            f"{html.escape(result.message)}"
+        )
     rows = [
         [
             types.InlineKeyboardButton(
@@ -989,7 +1129,9 @@ async def handle_partner_promo_reply(
             await bot.send_message(message.chat.id, "Допускаются числа 1..365.")
             return True
         sess.count = n
-        sess.step = 4
+        # In add-activity mode jump straight to confirm (period/mode are
+        # inherited from the campaign).
+        sess.step = 6 if sess.add_to_campaign_id is not None else 4
     elif pending.field == PARTNER_PROMO_INPUT_END_DATE:
         parsed = _parse_date_input(raw)
         if parsed is None:
@@ -1065,6 +1207,63 @@ class _DummyCallback:
 
 from sqlalchemy import func
 from models import PromoActivity, PromoExposure
+
+
+_SURFACE_LABELS: dict[str, str] = {
+    "video_general": "🎬 Видеоанонс",
+    "video_slot": "🎬 Видеоанонс (слот)",
+    "daily_highlight": "📅 Ежедневная подборка",
+    "telegraph_month": "📰 Telegraph: месяц",
+    "telegraph_weekend": "📰 Telegraph: выходные",
+    "vk_repost": "📨 Репост ВК",
+    "placeholder": "—",
+}
+
+_PROFILE_LABELS: dict[str, str] = {
+    "popular_review": "Популярное",
+    "default": "Завтра",
+    "konb": "КОНБ",
+    "cherryflash_libsvtav1": "CherryFlash (тех.)",
+}
+
+_SLOT_POLICY_LABELS: dict[str, str] = {
+    "guaranteed_any_position": "любая позиция",
+    "first_two_slots": "слот 1–2",
+    "first_slot": "только слот 1",
+    "diverse_shuffle": "органическая ротация",
+    "least_recent": "ротация по давности",
+    "fixed_event": "фиксированное событие",
+}
+
+
+def _humanize_activity(activity: PromoActivity) -> str:
+    """Render a PromoActivity row in partner-friendly Russian.
+
+    Technical keys (``video_general``, ``popular_review``, ``first_two_slots``)
+    are not shown — the operator reading the card might not be on the
+    engineering team. Falls back to the raw key when no translation exists.
+    """
+
+    surface = _SURFACE_LABELS.get(activity.surface, activity.surface or "—")
+    bits: list[str] = [surface]
+    if activity.profile_key:
+        bits.append(_PROFILE_LABELS.get(activity.profile_key, activity.profile_key))
+    if activity.surface == "video_general":
+        policy_label = _SLOT_POLICY_LABELS.get(
+            activity.selection_policy or "", activity.selection_policy or ""
+        )
+        if policy_label:
+            bits.append(policy_label)
+    elif activity.surface == "vk_repost":
+        # ВК-репост — слотовая политика не применима; покажем целевую группу.
+        bits.append("в партнёрский паблик")
+    if activity.daily_cap:
+        bits.append(f"не более {int(activity.daily_cap)} в день")
+    if activity.target_exposure_goal:
+        bits.append(f"всего показов: {int(activity.target_exposure_goal)}")
+    if not activity.enabled:
+        bits.append("выключена")
+    return " · ".join(bits)
 
 
 def _is_role_authorized_for_menu(user: User | None) -> bool:
@@ -1231,17 +1430,9 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
         elif t.target_type == "festival":
             target_lines.append(f"Фестиваль: {html.escape(t.festival_name or '')}")
 
-    act_lines: list[str] = []
-    for a in activities:
-        bits = [a.surface]
-        if a.profile_key:
-            bits.append(a.profile_key)
-        if a.slot:
-            bits.append(f"slot={a.slot}")
-        if a.selection_policy:
-            bits.append(a.selection_policy)
-        bits.append("on" if a.enabled else "off")
-        act_lines.append("• " + " · ".join(bits))
+    act_lines: list[str] = [
+        "• " + _humanize_activity(a) for a in activities
+    ]
 
     ends = campaign.ends_at.date().isoformat() if campaign.ends_at else "—"
     disclosure = campaign.sponsorship_disclosure or "редакционно (без подписи)"
@@ -1314,6 +1505,15 @@ def _campaign_card_keyboard(
             ),
         ]
     )
+    if status != "archived":
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="➕ Активность",
+                    callback_data=f"ppromo:addact:{cid}",
+                )
+            ]
+        )
     if is_superadmin:
         rows.append(
             [
@@ -1756,6 +1956,11 @@ async def handle_partner_promo_callback(  # noqa: F811 — extend dispatch
         if action == "cren" and len(parts) >= 3:
             await _handle_campaign_rename_request(
                 callback, db, campaign_id=int(parts[2])
+            )
+            return True
+        if action == "addact" and len(parts) >= 3:
+            await _open_add_activity_form(
+                callback, db, bot, campaign_id=int(parts[2])
             )
             return True
     except Exception:
