@@ -430,6 +430,29 @@ def _kernel_slug(kernel_ref: str) -> str:
     return ref
 
 
+def resolve_kaggle_slug(kernel_ref: str | None) -> str | None:
+    """Resolve a kernel_ref (local: or owner/slug) to the Kaggle kernel id used at push time.
+
+    `local:CherryFlash` and `zigomaro/cherryflash` both refer to the same
+    Kaggle kernel; the lock against concurrent same-kernel pushes must
+    normalize them. For ``local:`` refs we read ``kernel-metadata.json`` (the
+    same file ``kernels_push`` would send) and return its ``id`` field; for
+    other refs we return them unchanged.
+    """
+
+    ref = str(kernel_ref or "").strip()
+    if not ref:
+        return None
+    if not ref.startswith(LOCAL_KERNEL_PREFIX):
+        return ref
+    local = find_local_kernel(ref)
+    if local:
+        kernel_id = str(local.get("id") or "").strip()
+        if kernel_id:
+            return kernel_id
+    return ref
+
+
 def find_local_kernel(kernel_ref: str) -> dict[str, Any] | None:
     """Return the repo-local kernel matching a requested local or Kaggle ref."""
     normalized_ref = str(kernel_ref or "").strip()
@@ -692,13 +715,21 @@ class KaggleClient:
         api.kernels_pull(kernel_ref, path=str(path), metadata=metadata)
 
     def deploy_kernel_update(
-        self, kernel_ref: str, dataset_sources: str | list[str]
+        self,
+        kernel_ref: str,
+        dataset_sources: str | list[str],
+        *,
+        machine_shape: str | None = None,
     ) -> str:
         """Deploy kernel with dataset sources updated.
-        
+
         HYBRID approach:
         - If a matching repo-local kernel exists, use repo code/metadata as source of truth
         - Otherwise, pull from Kaggle as a fallback
+
+        ``machine_shape`` overrides the accelerator (e.g. ``NvidiaTeslaT4``).
+        Pass ``None`` to keep the kernel's default. Used by the accel-pref
+        fallback (INC-2026-05-26 round 3).
         """
         import time
         api = self._get_api()
@@ -798,11 +829,20 @@ class KaggleClient:
             if is_local and _should_force_gpu_for_local_kernel(local_kernel_name, meta_data):
                 meta_data["enable_gpu"] = True
 
+            if machine_shape:
+                meta_data["machine_shape"] = machine_shape
+                logger.warning(
+                    "kaggle: applying accel-pref override id=%s machine_shape=%s",
+                    meta_data.get("id"),
+                    machine_shape,
+                )
+
             logger.info(
-                "kaggle: kernel metadata updated id=%s dataset_sources=%s enable_gpu=%s",
+                "kaggle: kernel metadata updated id=%s dataset_sources=%s enable_gpu=%s machine_shape=%s",
                 meta_data.get("id"),
                 meta_data.get("dataset_sources"),
                 meta_data.get("enable_gpu"),
+                meta_data.get("machine_shape"),
             )
 
             meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2))

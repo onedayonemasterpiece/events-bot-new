@@ -52,7 +52,9 @@ from .kaggle_client import (
     KaggleClient,
     await_dataset_ready,
     await_kernel_dataset_sources,
+    find_local_kernel,
     list_local_kernels,
+    resolve_kaggle_slug as _resolve_kaggle_slug,
 )
 from .popular_review import (
     POPULAR_REVIEW_ANTI_REPEAT_DAYS,
@@ -895,16 +897,23 @@ class VideoAnnounceScenario:
         return None
 
     async def has_rendering(
-        self, *, profile_key: str | None = None
+        self,
+        *,
+        profile_key: str | None = None,
+        kaggle_slug: str | None = None,
     ) -> VideoAnnounceSession | None:
         """Return an in-flight rendering session.
 
-        When ``profile_key`` is given, the lock is scoped to that profile.
-        Different cherryflash profiles (e.g. partner tracks
-        ``popular_review_konb`` and ``popular_review_eco``) have independent
-        DB/session lanes, so blocking one behind the other turns a delayed eco
-        run into a missed КОНБ publish. Global callers (default
-        ``profile_key=None``) keep the legacy any-session lock.
+        Two scopes are supported:
+        - ``profile_key``: legacy per-profile filter (kept for backward compat
+          and callers that genuinely run on independent kernels).
+        - ``kaggle_slug``: filter by the resolved Kaggle kernel slug. This is
+          what actually serializes on Kaggle's side — see INC-2026-05-26 round
+          2: partner tracks `popular_review_konb` and `popular_review_eco` are
+          different `profile_key`s but BOTH push to the same `zigomaro/cherryflash`
+          kernel slug, so a `profile_key`-only lock lets them clash on Kaggle
+          (multiple QUEUED versions piling on the same kernel, contending for
+          the account's concurrent-kernel quota and never starting).
         """
 
         async with self.db.get_session() as session:
@@ -914,7 +923,17 @@ class VideoAnnounceScenario:
             if profile_key:
                 query = query.where(VideoAnnounceSession.profile_key == profile_key)
             res = await session.execute(query)
-            return res.scalars().first()
+            rendering_sessions = list(res.scalars().all())
+        if not rendering_sessions:
+            return None
+        if kaggle_slug is None:
+            return rendering_sessions[0]
+        target = (kaggle_slug or "").strip().casefold()
+        for sess in rendering_sessions:
+            sess_slug = _resolve_kaggle_slug(sess.kaggle_kernel_ref)
+            if sess_slug and sess_slug.casefold() == target:
+                return sess
+        return None
 
     async def _load_session(self, session_id: int) -> VideoAnnounceSession | None:
         async with self.db.get_session() as session:
@@ -1757,12 +1776,23 @@ class VideoAnnounceScenario:
         if not await self.ensure_access():
             self.last_partner_track_skip_reason = "access_denied"
             return None
-        # Scope the render lock to this partner's profile_key so a slow eco
-        # render does not block the КОНБ slot scheduled 7 minutes later
-        # (see 2026-05-18 incident: «Сессия #325 уже рендерится» loops
-        # 12:37→13:09 then "selected=0 min=1" at 13:19 because КОНБ never
-        # got a chance to start).
-        existing = await self.has_rendering(profile_key=partner_track.profile_key)
+        # Scope the render lock to the resolved Kaggle slug. Partner tracks
+        # (``popular_review_konb`` / ``popular_review_eco``) have independent
+        # ``profile_key`` lanes per the 2026-05-18 design, but they share the
+        # same ``local:CherryFlash`` kernel which resolves to a single Kaggle
+        # slug — so they must serialize on Kaggle even when DB profiles
+        # differ (INC-2026-05-26 round 2: profile-scoped lock caused both
+        # tracks to push different kernel versions into the same QUEUE and
+        # contend for the account's concurrent-kernel quota).
+        prospective_kernel_ref = (
+            self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
+        )
+        prospective_slug = _resolve_kaggle_slug(prospective_kernel_ref)
+        existing = (
+            await self.has_rendering(kaggle_slug=prospective_slug)
+            if prospective_slug
+            else await self.has_rendering(profile_key=partner_track.profile_key)
+        )
         if existing:
             self.last_partner_track_skip_reason = "render_in_progress"
             await self.bot.send_message(
@@ -3644,14 +3674,15 @@ class VideoAnnounceScenario:
     ) -> str:
         if not await self._has_access():
             return "Not authorized"
-        if await self.has_rendering():
-            return "Уже есть активный рендер"
         if not payload_json.strip():
             return "Payload не найден"
         async with self.db.get_session() as session:
             sess = await session.get(VideoAnnounceSession, session_id)
             if not sess:
                 return "Сессия не найдена"
+            sess_slug = _resolve_kaggle_slug(sess.kaggle_kernel_ref)
+            if sess_slug and await self.has_rendering(kaggle_slug=sess_slug):
+                return "Уже есть активный рендер"
             if not sess.kaggle_kernel_ref:
                 return "Kernel не выбран"
             if sess.status == VideoAnnounceSessionStatus.RENDERING:
@@ -3710,7 +3741,12 @@ class VideoAnnounceScenario:
     ) -> str:
         if not await self._has_access():
             return "Not authorized"
-        if await self.has_rendering():
+        sess_kaggle_slug: str | None = None
+        async with self.db.get_session() as session:
+            sess_preview = await session.get(VideoAnnounceSession, session_id)
+            if sess_preview is not None:
+                sess_kaggle_slug = _resolve_kaggle_slug(sess_preview.kaggle_kernel_ref)
+        if sess_kaggle_slug and await self.has_rendering(kaggle_slug=sess_kaggle_slug):
             return "Уже есть активный рендер"
         ranked = await self._load_ranked_events(session_id, ready_only=True)
         if limit_scenes is not None:
@@ -4554,8 +4590,32 @@ class VideoAnnounceScenario:
             # Fallback (old behavior) should be avoided if we enforce selection
             raise RuntimeError("Kernel reference not provided")
 
+        from .accel_pref import read_active_pref, tier_to_machine_shape
+
+        slug = _resolve_kaggle_slug(kernel_ref) or kernel_ref
+        machine_shape: str | None = None
+        try:
+            pref = await read_active_pref(self.db, slug)
+            if pref:
+                machine_shape = tier_to_machine_shape(pref.tier)
+                if machine_shape:
+                    logger.info(
+                        "video_announce: accel-pref active slug=%s tier=%s expires=%s",
+                        slug,
+                        pref.tier,
+                        pref.expires_at.isoformat(),
+                    )
+        except Exception:
+            logger.exception(
+                "video_announce: accel-pref read failed slug=%s; falling back to default",
+                slug,
+            )
+
         return await asyncio.to_thread(
-            client.deploy_kernel_update, kernel_ref, dataset_sources
+            client.deploy_kernel_update,
+            kernel_ref,
+            dataset_sources,
+            machine_shape=machine_shape,
         )
 
     async def refresh_status(self) -> None:
