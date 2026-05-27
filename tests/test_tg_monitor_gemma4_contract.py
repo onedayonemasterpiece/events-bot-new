@@ -658,6 +658,17 @@ def test_tg_monitor_runner_bootstraps_google_ai_bundle_for_kaggle_notebook() -> 
     assert "tg_monitor.google_ai bootstrap" in source
 
 
+def test_tg_monitor_title_prompt_prefers_caption_event_name_over_poster_slogan() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    master_prompt = Path("docs/llm/prompts.md").read_text(encoding="utf-8")
+
+    for text in (source, master_prompt):
+        assert "Живой сундук" in text
+        assert "Читайте бумажные книги" in text
+        assert "poster" in text.casefold() or "poster_titles" in text
+        assert "slogan" in text.casefold() or "лозунг" in text.casefold()
+
+
 def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() -> None:
     source = Path("source_parsing/telegram/service.py").read_text(encoding="utf-8")
 

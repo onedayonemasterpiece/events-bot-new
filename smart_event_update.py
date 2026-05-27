@@ -2338,6 +2338,7 @@ async def _llm_g4_split_create_writer(
         "Верни JSON:\n"
         "- `description`: Markdown-текст; лид одним абзацем, затем 2-3 информативных `###` раздела; не сухая выжимка.\n"
         "- Сохрани цитаты, имена, названия, цифры и элементы списков из фактов; списки лучше оформить markdown-пунктами.\n"
+        "- Identity facts (организатор, сообщество, площадка, название мира/франшизы/источника вдохновения) сохраняй точно по фактам; не заменяй их редакционными догадками.\n"
         "- Не добавляй фактов, которых нет в facts_text_clean.\n"
         "- Не пиши CTA/рекламу: «приходите», «не пропустите», «ждём вас», «приглашаем», «успейте», «присоединяйтесь».\n"
         "- Не используй корень «посвящ» и конструкцию «это ... не ..., а ...».\n"
@@ -5541,6 +5542,51 @@ def _location_matches(a: str | None, b: str | None) -> bool:
     return False
 
 
+_LOCATION_VALUE_ADDRESS_HINT_RE = re.compile(
+    r"(?iu)\b(?:ул(?:ица)?|пр(?:оспект|осп)?|пр-?т|пер(?:еулок)?|наб(?:ережная)?|пл(?:ощадь)?|бульвар|дом|д\.)\b"
+)
+_LOCATION_VALUE_PROSE_VERB_RE = re.compile(
+    r"(?iu)\b(?:"
+    r"раскрыт\w*|раскрыва\w*|сумел\w*|стоит\w*|стоя\w*|"
+    r"представ\w*|покаж\w*|расскаж\w*|приглаша\w*|"
+    r"пройд[её]т|состоится|будут|можно|созда\w*"
+    r")\b"
+)
+
+
+def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    compact = re.sub(r"\s+", " ", raw)
+    words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+    if "\n" in raw:
+        return True
+    if len(compact) > 90:
+        return True
+    if len(words) >= 8 and not _LOCATION_VALUE_ADDRESS_HINT_RE.search(compact):
+        return True
+    if len(words) >= 4 and _LOCATION_VALUE_PROSE_VERB_RE.search(compact):
+        return True
+    if len(words) >= 4 and re.search(r"[.!?]\s*$", compact):
+        return True
+    return False
+
+
+def _candidate_location_looks_unsupported_prose(candidate: "EventCandidate") -> bool:
+    if not _location_value_looks_like_prose_fragment(candidate.location_name):
+        return False
+    payload = {
+        "location_name": candidate.location_name,
+        "location_address": candidate.location_address,
+        "city": candidate.city,
+    }
+    try:
+        return normalise_event_location_from_reference(payload) is None
+    except Exception:
+        return True
+
+
 _ADDRESS_NOISE_RE = re.compile(
     r"(?iu)\b(?:ул(?:ица)?|пр(?:оспект|осп)?|пр-?т|пер(?:еулок)?|б-р|бульвар|пл(?:ощадь)?|наб(?:ережная)?)\.?\b"
 )
@@ -6971,6 +7017,12 @@ async def _llm_extract_candidate_facts(
             "- public_core_facts: суть события, формат, цель, что будет происходить, что получает/делает участник.\n"
             "- context_methodology_facts: методология, исследование, источник концепции, важные числа, background, который объясняет событие.\n"
             "- people_org_facts: организаторы, институции, авторы, ведущие, исполнители, спикеры. "
+            "Имена организаторов/сообществ/площадок, а также названия вымышленных миров, франшиз и культурных источников "
+            "(например `Плоский мир Терри Пратчетта`) — identity facts: сохраняй их буквально из source_text/raw_excerpt/poster_texts. "
+            "Не заменяй организатора тематическим сообществом, площадку организатором или источник вдохновения названием другого сообщества. "
+            "Если в источнике есть формула `организовано ...`, `от ...`, `вокруг ...`, `вдохновлено ...`, верни отдельный точный факт "
+            "про организатора/сообщество/источник вдохновения; при противоречии разных строк помести сомнительную строку в uncertain_or_drop, "
+            "не сглаживай её редакционной догадкой. "
             "Если у спикера/лектора/ведущего/гостя/автора в источнике явно указаны ИМЯ и ДОЛЖНОСТЬ/РЕГАЛИИ "
             "(главный архитектор, профессор, режиссёр-постановщик, кандидат наук, художественный руководитель, "
             "член Союза и т.п.) — сохрани их в ОДНОМ именованном факте вида "
@@ -7164,6 +7216,9 @@ async def _llm_remove_infoblock_logistics(
         "Правила:\n"
         "- Верни ПОЛНЫЙ обновлённый текст описания.\n"
         "- Не вырезай смысловые фрагменты и не ломай грамматику.\n"
+        "- Не вырезай identity-факты: организатор, сообщество, площадка как организаторская точка сборки, "
+        "мир/франшиза/источник вдохновения. Если фраза вида `организовано ...`, `от ...`, `вокруг ...`, "
+        "`вдохновлено ...` содержит площадку или адрес, это не логистический повтор, а смысловой факт: сохрани её.\n"
         "- Не добавляй новых фактов. Не меняй стиль.\n"
         "- Сохраняй пунктуацию и абзацы. Не превращай текст в список, если он был прозой.\n"
         f"{SMART_UPDATE_YO_RULE}\n\n"
@@ -8354,11 +8409,14 @@ async def _llm_create_description_facts_and_digest(
         "- НЕ включай дату/время/адрес/город/цены/ссылки.\n"
         "- Если `poster_titles` содержит крупный заголовок афиши и он относится к событию, используй его как основу title.\n"
         "- Если в source_text/raw_excerpt/poster_texts есть явное собственное название (проект/тур/постановка/шоу), используй его как основу title.\n"
+        "- Если caption/source_text называет событие/проект, а poster_titles содержит лозунг, жанровую фразу или CTA, заголовок из caption/source_text важнее poster_titles.\n"
         "- НЕ делай title в формате «<event_type> — <площадка>», если в данных есть имя/бренд события (пример: «ЕвроДэнс'90», а не «Концерт — Янтарь холл»).\n"
         "- Не теряй ключевые смысловые маркеры (например «Масленица», «концерт», «кинопоказ», «лекция»), если они есть в данных, но НЕ подменяй ими собственное название.\n\n"
         "1) description:\n"
         "- Напиши ПОЛНОЕ развернутое описание события как культурный журналист.\n"
         "- Сохрани ВСЕ значимые факты из source_text/raw_excerpt/poster_texts (кроме логистики).\n"
+        "- Организаторы, сообщества, площадки, названия миров/франшиз/источников вдохновения и связи вида `организовано ...`/`вдохновлено ...` переписывай только из явного source evidence. "
+        "Не выводи организатора из тематики, названия сообщества или декоративного текста; если source_text говорит `ОКЦ на Горького 116` и `Плоский мир Терри Пратчетта`, нельзя заменить это на другое сообщество или `мир <сообщества>`.\n"
         "- Если source_text короткий или пустой, опирайся на poster_texts (OCR афиш) как на основной источник фактов.\n"
         "- Объём: описание должно быть близко по объёму к источникам и НЕ превышать `description_budget_chars` символов.\n"
         "  Если источники короткие, описание тоже должно быть коротким (без воды/«атмосферных» вступлений).\n"
@@ -8841,11 +8899,13 @@ async def _llm_match_or_create_bundle(
         "- Без эмодзи.\n"
         "- Если `candidate.poster_titles` содержит крупный заголовок афиши и он относится к событию, используй его как основу.\n"
         "- Если в candidate.source_text/raw_excerpt/poster_texts есть явное собственное название (проект/тур/постановка/шоу), используй его как основу.\n"
+        "- Если candidate.source_text/caption называет событие/проект, а poster_titles содержит лозунг, жанровую фразу или CTA, заголовок из source_text/caption важнее poster_titles.\n"
         "- НЕ делай title в формате «<event_type> — <площадка>», если в данных есть имя/бренд события (пример: «ЕвроДэнс'90», а не «Концерт — Янтарь холл»).\n"
         "- Не экранируй кавычки обратным слэшем (не пиши `\\\"...\\\"`).\n\n"
         "Правила для bundle.description:\n"
         "- Напиши ПОЛНОЕ развернутое описание как культурный журналист.\n"
         "- Сохрани ВСЕ значимые факты из source_text/raw_excerpt/poster_texts (кроме логистики).\n"
+        "- Организаторы, сообщества, площадки, названия миров/франшиз/источников вдохновения и связи вида `организовано ...`/`вдохновлено ...` переписывай только из явного source evidence; не заменяй их тематическими догадками.\n"
         "- Если source_text короткий или пустой, опирайся на poster_texts (OCR афиш) как на основной источник фактов.\n"
         "- Не копируй дословно длинными кусками; перефразируй, но не сокращай смысл.\n"
         "- Структура: абзацы, разделяй пустой строкой; 1–2 предложения в абзаце.\n"
@@ -10774,6 +10834,48 @@ def _deterministic_copy_post_source_text_match(
     return None, ""
 
 
+def _deterministic_prose_location_same_slot_text_match(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> tuple[Event | None, str]:
+    """Merge obvious copies when the candidate venue is an extractor prose leak.
+
+    The venue value is explicitly not used as identity evidence here. The match
+    requires the safer anchors that survived extraction: same date, same explicit
+    time, related title, and near-identical source text.
+    """
+
+    if not _candidate_location_looks_unsupported_prose(candidate):
+        return None, ""
+    cand_date = str(candidate.date or "").strip()
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    source_text = candidate.source_text or candidate.raw_excerpt
+    if not (cand_date and cand_time and source_text):
+        return None, ""
+
+    matches: list[Event] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if str(getattr(ev, "date", "") or "").strip() != cand_date:
+            continue
+        if _event_anchor_time(ev) != cand_time:
+            continue
+        if not _titles_look_related(candidate.title, getattr(ev, "title", None)):
+            continue
+        if not _source_texts_look_nearly_identical(source_text, getattr(ev, "source_text", None)):
+            continue
+        matches.append(ev)
+
+    if len(matches) == 1:
+        return matches[0], "deterministic_prose_location_same_slot_text"
+    if matches:
+        sigs = {_anchor_signature_for_duplicate_event(ev) for ev in matches}
+        if len(sigs) == 1:
+            return _pick_best_duplicate_event(matches), "deterministic_prose_location_same_slot_text"
+    return None, ""
+
+
 async def _match_existing_event_by_city_noise_rescue(
     db: Database,
     candidate: EventCandidate,
@@ -11375,6 +11477,7 @@ async def _smart_event_update_impl(
             candidate.source_url,
         )
         return SmartUpdateResult(status="invalid", reason="missing_title")
+    candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
     if not candidate.location_name:
         logger.warning(
             "smart_update.invalid reason=missing_location source_type=%s source_url=%s title=%s",
@@ -11398,6 +11501,7 @@ async def _smart_event_update_impl(
         return SmartUpdateResult(status="skipped_past_event", reason="past_event")
 
     await _maybe_disambiguate_telegram_default_location_city(candidate)
+    candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
 
     # Deterministic region filter (project scope: Kaliningrad Oblast).
     # If extracted city/settlement is outside the region (or cannot be reliably resolved),
@@ -12109,7 +12213,12 @@ async def _smart_event_update_impl(
                 candidate.source_url,
             )
 
-    if (not anchor_forced) and (not city_noise_rescued) and candidate.location_name:
+    if (
+        (not anchor_forced)
+        and (not city_noise_rescued)
+        and candidate.location_name
+        and (not candidate_location_unsupported_prose)
+    ):
         shortlist = [
             ev for ev in shortlist if _event_candidate_location_matches(ev, candidate)
         ]
@@ -12133,6 +12242,7 @@ async def _smart_event_update_impl(
         and (not city_noise_rescued)
         and (not cand_time_norm)
         and candidate.location_name
+        and (not candidate_location_unsupported_prose)
         and len(shortlist) > 1
     ):
         related = [
@@ -12166,7 +12276,11 @@ async def _smart_event_update_impl(
         event_ids = [ev.id for ev in shortlist if ev.id]
         posters_map = await _fetch_event_posters_map(db, event_ids)
 
-    allow_parallel = _allow_parallel_events(candidate.location_name)
+    allow_parallel = (
+        False
+        if candidate_location_unsupported_prose
+        else _allow_parallel_events(candidate.location_name)
+    )
     candidate_poster_texts = [p.ocr_text for p in candidate.posters if p.ocr_text]
     candidate_hall = _extract_hall_hint(
         (candidate.source_text or "") + "\n" + "\n".join(candidate_poster_texts)
@@ -12303,6 +12417,20 @@ async def _smart_event_update_impl(
             if text_copy_match is not None:
                 match_event = text_copy_match
                 match_reason = text_copy_reason
+                logger.info(
+                    "smart_update.match type=%s event_id=%s",
+                    match_reason,
+                    getattr(match_event, "id", None),
+                )
+
+        if match_event is None and candidate_location_unsupported_prose:
+            prose_text_match, prose_text_reason = _deterministic_prose_location_same_slot_text_match(
+                candidate,
+                shortlist,
+            )
+            if prose_text_match is not None:
+                match_event = prose_text_match
+                match_reason = prose_text_reason
                 logger.info(
                     "smart_update.match type=%s event_id=%s",
                     match_reason,
@@ -12467,6 +12595,7 @@ async def _smart_event_update_impl(
                     "deterministic_specific_ticket_same_place",
                     "deterministic_same_slot_near_text",
                     "deterministic_doors_start_ticket_bridge",
+                    "deterministic_prose_location_same_slot_text",
                 }
                 try:
                     if (not safe_single) and len(shortlist) == 1:
@@ -12569,6 +12698,16 @@ async def _smart_event_update_impl(
             )
 
     if match_event is None:
+        if candidate_location_unsupported_prose:
+            logger.warning(
+                "smart_update.invalid reason=prose_location source_type=%s source_url=%s title=%s location=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(candidate.title),
+                _clip_title(candidate.location_name, 120),
+            )
+            return SmartUpdateResult(status="invalid", reason="prose_location")
+
         normalized_event_type = _normalize_event_type_value(
             candidate.title, candidate.raw_excerpt or candidate.source_text, candidate.event_type
         )

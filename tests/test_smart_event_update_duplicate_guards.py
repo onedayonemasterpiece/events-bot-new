@@ -106,6 +106,38 @@ async def _seed_tretyakov_art_breakfast_event(db: Database) -> int:
         return int(ev.id or 0)
 
 
+async def _seed_dachniki_event(db: Database) -> int:
+    async with db.get_session() as session:
+        ev = Event(
+            title="Дачники",
+            description="Существующая карточка спектакля.",
+            date="2026-06-02",
+            time="19:00",
+            location_name="Драматический театр, Мира 4, Калининград",
+            location_address="Мира 4",
+            city="Калининград",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/spektakli/dachniki",
+            source_text=(
+                "БАШНЯ-2026\n\n"
+                "- 02.06 в 19:00 | Дачники\n"
+                "- Школа-студия МХАТ (Москва)\n"
+                "- Билеты и подробная информация https://dramteatr39.ru/spektakli/dachniki\n\n"
+                "Дипломный спектакль IV курса Актерского факультета.\n"
+                "В сегодняшней постановке именно эта несостоявшаяся любовь становится основной темой спектакля. "
+                "Ее необходимо найти в любых ее проявлениях - абсурдных, нелепых, подчас жестоких, "
+                "но столь необходимых театру для того, чтобы он сумел раскрыть человека."
+            ),
+            source_post_url="https://dramteatr39.ru/spektakli/dachniki",
+            source_vk_post_url="https://vk.com/wall-132625599_17342",
+            telegraph_url="https://telegra.ph/Dachniki-04-08",
+            telegraph_path="Dachniki-04-08",
+        )
+        session.add(ev)
+        await session.commit()
+        return int(ev.id or 0)
+
+
 @pytest.mark.asyncio
 async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_differs(
     tmp_path,
@@ -155,6 +187,99 @@ async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_diff
                 )
             ).scalars().all()
             assert [int(ev.id or 0) for ev in rows] == [eid]
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_smart_update_merges_dachniki_when_location_is_prose_leak(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+        eid = await _seed_dachniki_event(db)
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/dramteatr39/4179",
+            source_chat_id=1371643671,
+            source_message_id=4179,
+            source_text=(
+                "БАШНЯ-2026\n\n"
+                "02.06 в 19:00 | Дачники\n"
+                "Школа-студия МХАТ (Москва)\n\n"
+                "Дипломный спектакль IV курса Актерского факультета.\n"
+                "В сегодняшней постановке именно эта несостоявшаяся любовь становится основной темой спектакля. "
+                "Ее необходимо найти в любых ее проявлениях - абсурдных, нелепых, подчас жестоких, "
+                "но столь необходимых театру для того, чтобы он сумел раскрыть человека."
+            ),
+            title="Дачники",
+            date="2026-06-02",
+            time="19:00",
+            location_name=(
+                "нелепых, подчас жестоких, но столь необходимых театру для того, "
+                "чтобы он сумел раскрыть человека, стоящего на сцене во всем его многообразии и красоте."
+            ),
+            city="Калининград",
+            event_type="спектакль",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        assert int(result.event_id or 0) == eid
+
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    su.select(Event).where(Event.title == "Дачники").order_by(Event.id)
+                )
+            ).scalars().all()
+            assert [int(ev.id or 0) for ev in rows] == [eid]
+            assert rows[0].location_name == "Драматический театр, Мира 4, Калининград"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_smart_update_rejects_unmatched_prose_location_candidate(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/example/1",
+            source_text=(
+                "02.06 в 19:00 | Новый спектакль\n"
+                "Описание постановки без явной площадки."
+            ),
+            title="Новый спектакль",
+            date="2026-06-02",
+            time="19:00",
+            location_name=(
+                "нелепых, подчас жестоких, но столь необходимых театру для того, "
+                "чтобы он сумел раскрыть человека"
+            ),
+            city="Калининград",
+            event_type="спектакль",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "invalid"
+        assert result.reason == "prose_location"
     finally:
         await db.close()
 

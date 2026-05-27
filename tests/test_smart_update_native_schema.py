@@ -301,6 +301,93 @@ async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_tit
 
 
 @pytest.mark.asyncio
+async def test_g4_split_create_rich_facts_prompt_preserves_organizer_and_inspiration_identity(
+    monkeypatch,
+):
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"public_core_facts":["Своп-мероприятие с книжным обменом."],'
+                '"program_or_examples":[],'
+                '"context_methodology_facts":["Событие вдохновлено Плоским миром Терри Пратчетта."],'
+                '"people_org_facts":["Организатор — сообщество вокруг ОКЦ на Горького 116."],'
+                '"logistics_facts":[],'
+                '"uncertain_or_drop":[]}'
+            )
+        ]
+    )
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES", {"rich_facts_extract"})
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/example/2705",
+        source_text=(
+            "Живой сундук\n"
+            "Своп-мероприятие от ОКЦ на Горького 116.\n"
+            "Событие организовано сообществом вокруг ОКЦ на Горького 116 "
+            "и вдохновлено Плоским миром Терри Пратчетта."
+        ),
+        title="Живой сундук",
+        date="2026-06-06",
+        time="12:00",
+        location_name="ОКЦ на Горького",
+        location_address="Горького 116",
+        city="Калининград",
+        event_type="ярмарка",
+    )
+
+    await su._llm_extract_candidate_facts(candidate)
+    prompt = client.calls[0]["prompt"]
+
+    assert "identity facts" in prompt
+    assert "Плоский мир Терри Пратчетта" in prompt
+    assert "организовано" in prompt
+    assert "вдохновлено" in prompt
+    assert "не заменяй" in prompt.casefold()
+
+
+@pytest.mark.asyncio
+async def test_infoblock_logistics_cleanup_prompt_keeps_identity_location_clauses(monkeypatch):
+    prompts: list[str] = []
+
+    async def fake_ask_gemma_text(prompt, **_kwargs):
+        prompts.append(prompt)
+        return "Событие «Живой сундук» организовано сообществом вокруг ОКЦ на Горького 116."
+
+    monkeypatch.setattr(su, "_ask_gemma_text", fake_ask_gemma_text)
+    candidate = su.EventCandidate(
+        source_type="telegraph_render",
+        source_url="https://t.me/okcng/376",
+        source_text="Живой сундук. Своп-мероприятие от ОКЦ на Горького 116.",
+        title="Живой сундук",
+        date="2026-06-06",
+        time="12:00-18:00",
+        location_name="ОКЦ на Горького",
+        location_address="Горького 116",
+        city="Калининград",
+        event_type="своп",
+    )
+
+    await su._llm_remove_infoblock_logistics(
+        description=(
+            "Событие «Живой сундук» организовано сообществом вокруг ОКЦ на Горького 116, "
+            "вдохновлённым Плоским миром Терри Пратчетта."
+        ),
+        candidate=candidate,
+        label="test",
+    )
+
+    prompt = prompts[0]
+    assert "identity-факты" in prompt
+    assert "организовано" in prompt
+    assert "вокруг" in prompt
+    assert "вдохновлено" in prompt
+    assert "это не логистический повтор" in prompt
+
+
+@pytest.mark.asyncio
 async def test_g4_split_create_rich_facts_prompt_requires_bullet_preservation(monkeypatch):
     """Regression for INC-2026-05-11-zoo-lecture (event 4798): the source post
     had two distinct bullet blocks (`О чём поговорим` with 3 items and

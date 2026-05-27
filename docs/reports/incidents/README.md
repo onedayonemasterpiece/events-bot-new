@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-27-dachniki-prose-venue-duplicates.md`
+  - Scope: Telegram/VK/parser event location extraction, Smart Update shortlist filtering and duplicate matching, future active event Telegraph pages.
+  - Must not regress: a prose fragment in `location_name` must not be trusted as a venue anchor; if source text/title/date/time prove identity with an existing event, merge without changing the public venue, otherwise fail closed instead of creating a public prose-venue card.
+- `INC-2026-05-27-zhivoy-sunduk-writer-identity.md`
+  - Scope: Telegram Monitor title extraction, poster OCR title priority, Smart Update rich-facts/create-bundle/split-writer prompts, public Telegraph descriptions.
+  - Must not regress: caption/source attendee-facing names such as `Живой сундук` beat poster slogans like `Читайте бумажные книги!`; organizer/community/inspiration identity facts must stay source-grounded (`ОКЦ на Горького 116`, `Плоский мир Терри Пратчетта`) and must not be replaced by thematic guesses.
 - `INC-2026-05-19-vk-posts-personal-author.md`
   - Scope: shared VK `post_to_vk` wall publishing for `kenigeventsofficial` daily posts and `klgdevents` event posts, especially group-token actor calls.
   - Must not regress: every new community wall post created through `post_to_vk` must send `owner_id=-<group_id>`, `from_group=1`, and `signed=0`, so VK records `from_id=-<group_id>` and normal wall/community forwarding stays available.
