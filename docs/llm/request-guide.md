@@ -143,7 +143,16 @@ calculated from the events added to the festival.
 
 ## Logging
 
-OpenAI usage resets daily at 00:00 UTC. The `four_o.usage` log records each
+OpenAI usage resets daily at 00:00 UTC. The `four_o.usage` log records each
 request with its token count and the remaining budget as defined by
-`FOUR_O_DAILY_TOKEN_LIMIT` (1 000 000 tokens by default). Grafana dashboards can
+`FOUR_O_DAILY_TOKEN_LIMIT` (1,000,000 tokens by default). Grafana dashboards can
 filter by the `four_o.usage` key to visualise daily token spend.
+
+Direct `gpt-4o` calls also have a model-specific hard guard:
+`FOUR_O_GPT4O_DAILY_TOKEN_LIMIT` defaults to `950000`. Before sending a
+`gpt-4o` request, the bot reads today's persisted `token_usage` total for
+`gpt-4o`/`gpt-4o-2024-08-06` and adds a conservative estimate for the next
+request. If that would exceed the cap, the request is sent to
+`FOUR_O_GPT4O_FALLBACK_MODEL` (`gpt-4o-mini` by default) and logs
+`four_o.budget_fallback`. The fallback model is not counted against this
+model-specific `gpt-4o` cap.

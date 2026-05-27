@@ -2197,6 +2197,12 @@ FOUR_O_PITCH_MAX_TOKENS = int(os.getenv("FOUR_O_PITCH_MAX_TOKENS", "200"))
 
 # Track OpenAI usage against a daily budget.  OpenAI resets usage at midnight UTC.
 FOUR_O_DAILY_TOKEN_LIMIT = int(os.getenv("FOUR_O_DAILY_TOKEN_LIMIT", "1000000"))
+FOUR_O_GPT4O_DAILY_TOKEN_LIMIT = int(os.getenv("FOUR_O_GPT4O_DAILY_TOKEN_LIMIT", "950000"))
+FOUR_O_GPT4O_FALLBACK_MODEL = os.getenv("FOUR_O_GPT4O_FALLBACK_MODEL", "gpt-4o-mini")
+FOUR_O_GPT4O_BUDGET_MODELS = frozenset({"gpt-4o", "gpt-4o-2024-08-06"})
+FOUR_O_GPT4O_USAGE_CACHE_SECONDS = float(
+    os.getenv("FOUR_O_GPT4O_USAGE_CACHE_SECONDS", "10")
+)
 
 FOUR_O_TRACKED_MODELS: tuple[str, str] = ("gpt-4o", "gpt-4o-mini")
 
@@ -2220,6 +2226,11 @@ _four_o_usage_state = {
     "total": 0,
     "used": 0,
     "models": {model: 0 for model in FOUR_O_TRACKED_MODELS},
+}
+_gpt4o_daily_usage_cache: dict[str, Any] = {
+    "date": None,
+    "used": 0,
+    "loaded_at": 0.0,
 }
 _last_ask_4o_request_id: str | None = None
 _token_usage_log_disabled = os.getenv("DISABLE_TOKEN_USAGE_LOG", "").strip().lower() in {
@@ -2253,6 +2264,136 @@ def _get_four_o_usage_snapshot() -> dict[str, Any]:
         "used": _four_o_usage_state.get("used", 0),
         "models": models,
     }
+
+
+def _is_budgeted_gpt4o_model(model: str | None) -> bool:
+    return (model or "").strip() in FOUR_O_GPT4O_BUDGET_MODELS
+
+
+def _estimate_openai_chat_tokens(
+    messages: Sequence[Mapping[str, Any]],
+    *,
+    max_tokens: int | None = None,
+) -> int:
+    content_bytes = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            content_bytes += len(content.encode("utf-8"))
+        elif content is not None:
+            content_bytes += len(str(content).encode("utf-8"))
+    prompt_estimate = max(1, math.ceil(content_bytes / 3))
+    completion_estimate = max(0, int(max_tokens or 0))
+    return prompt_estimate + completion_estimate
+
+
+async def _fetch_gpt4o_daily_usage_from_supabase(today: date) -> int | None:
+    client = get_supabase_client()
+    if client is None:
+        return None
+    start = datetime.combine(today, time.min, tzinfo=timezone.utc).isoformat()
+    end = datetime.combine(
+        today + timedelta(days=1),
+        time.min,
+        tzinfo=timezone.utc,
+    ).isoformat()
+
+    def _fetch() -> int:
+        total = 0
+        offset = 0
+        page_size = 1000
+        while True:
+            response = (
+                client.table("token_usage")
+                .select("model,total_tokens,prompt_tokens,completion_tokens")
+                .in_("model", list(FOUR_O_GPT4O_BUDGET_MODELS))
+                .gte("at", start)
+                .lt("at", end)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            rows = getattr(response, "data", None) or []
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    continue
+                try:
+                    total_tokens = row.get("total_tokens")
+                    if total_tokens is not None:
+                        total += max(int(total_tokens), 0)
+                    else:
+                        total += max(int(row.get("prompt_tokens") or 0), 0)
+                        total += max(int(row.get("completion_tokens") or 0), 0)
+                except (TypeError, ValueError):
+                    continue
+            if len(rows) < page_size:
+                break
+            offset += page_size
+        return total
+
+    try:
+        return await asyncio.to_thread(_fetch)
+    except Exception as exc:
+        logging.warning("four_o.budget_usage_fetch_failed: %s", exc)
+        return None
+
+
+async def _get_gpt4o_daily_usage_total(today: date | None = None) -> int:
+    today = today or _current_utc_date()
+    now = _time.monotonic()
+    if (
+        _gpt4o_daily_usage_cache.get("date") == today
+        and now - float(_gpt4o_daily_usage_cache.get("loaded_at") or 0.0)
+        < FOUR_O_GPT4O_USAGE_CACHE_SECONDS
+    ):
+        return int(_gpt4o_daily_usage_cache.get("used") or 0)
+
+    fetched = await _fetch_gpt4o_daily_usage_from_supabase(today)
+    if fetched is None:
+        snapshot = _get_four_o_usage_snapshot()
+        models = snapshot.get("models") or {}
+        fetched = sum(
+            int(models.get(model) or 0)
+            for model in FOUR_O_GPT4O_BUDGET_MODELS
+        )
+    _gpt4o_daily_usage_cache.update(
+        {
+            "date": today,
+            "used": int(fetched),
+            "loaded_at": now,
+        }
+    )
+    return int(fetched)
+
+
+async def _resolve_openai_model_for_budget(
+    requested_model: str,
+    messages: Sequence[Mapping[str, Any]],
+    *,
+    max_tokens: int | None,
+    operation: str,
+    meta: Mapping[str, Any] | None = None,
+) -> str:
+    if not _is_budgeted_gpt4o_model(requested_model):
+        return requested_model
+    limit = max(FOUR_O_GPT4O_DAILY_TOKEN_LIMIT, 0)
+    fallback = (FOUR_O_GPT4O_FALLBACK_MODEL or "").strip()
+    if not limit or not fallback or fallback == requested_model:
+        return requested_model
+    estimated = _estimate_openai_chat_tokens(messages, max_tokens=max_tokens)
+    used = await _get_gpt4o_daily_usage_total()
+    if used + estimated <= limit:
+        return requested_model
+    logging.warning(
+        "four_o.budget_fallback op=%s requested=%s fallback=%s used=%d estimate=%d limit=%d meta=%s",
+        operation,
+        requested_model,
+        fallback,
+        used,
+        estimated,
+        limit,
+        dict(meta or {}),
+    )
+    return fallback
 
 
 def get_last_ask_4o_request_id() -> str | None:
@@ -2311,6 +2452,14 @@ def _record_four_o_usage(
     models = _four_o_usage_state.setdefault("models", {})
     models.setdefault(model, 0)
     models[model] += spent
+    if _is_budgeted_gpt4o_model(model):
+        if _gpt4o_daily_usage_cache.get("date") != today:
+            _gpt4o_daily_usage_cache["used"] = 0
+        _gpt4o_daily_usage_cache["date"] = today
+        _gpt4o_daily_usage_cache["used"] = (
+            int(_gpt4o_daily_usage_cache.get("used") or 0) + spent
+        )
+        _gpt4o_daily_usage_cache["loaded_at"] = _time.monotonic()
     new_total = _four_o_usage_state.get("total", 0) + spent
     _four_o_usage_state["total"] = new_total
     previous_used = _four_o_usage_state.get("used", 0)
@@ -9235,12 +9384,25 @@ async def _parse_event_via_4o(
     if poster_lines:
         user_msg += "\n" + "\n".join(poster_lines)
     user_msg += text
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": user_msg},
+    ]
+    meta_payload = {
+        key: extra[key]
+        for key in ("feature", "version")
+        if extra.get(key) is not None
+    }
+    model_name = await _resolve_openai_model_for_budget(
+        "gpt-4o",
+        messages,
+        max_tokens=FOUR_O_RESPONSE_LIMIT,
+        operation="parse",
+        meta=meta_payload or None,
+    )
     payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_msg},
-        ],
+        "model": model_name,
+        "messages": messages,
         "temperature": 0,
     }
     # ensure we start the network request with as little memory as possible
@@ -9286,11 +9448,6 @@ async def _parse_event_via_4o(
         usage,
     )
     request_id = data_raw.get("id")
-    meta_payload = {
-        key: extra[key]
-        for key in ("feature", "version")
-        if extra.get(key) is not None
-    }
     await log_token_usage(
         BOT_CODE,
         model_name,
@@ -9647,8 +9804,16 @@ async def ask_4o(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": text})
+    requested_model = model or "gpt-4o"
+    selected_model = await _resolve_openai_model_for_budget(
+        requested_model,
+        messages,
+        max_tokens=max_tokens,
+        operation="ask",
+        meta=meta,
+    )
     payload: dict[str, Any] = {
-        "model": model or "gpt-4o",
+        "model": selected_model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
