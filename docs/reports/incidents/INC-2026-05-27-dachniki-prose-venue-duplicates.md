@@ -1,10 +1,10 @@
 # INC-2026-05-27-dachniki-prose-venue-duplicates
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / Telegraph event pages
 Opened: 2026-05-27
-Closed: —
+Closed: 2026-05-27
 Owners: events-bot
 Related incidents: `INC-2026-05-17-future-event-quality-regressions`, `INC-2026-05-16-tg-location-prose-cityjazz-recurrence`, `INC-2026-05-09-event-location-alias-free-dup-regressions`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`
@@ -90,12 +90,12 @@ Production exposed multiple public cards for the same `Дачники` performan
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `bde043ab` (reachable from `origin/main`)
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; Fly release `1146`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KSM74EW8XSYV94M5N1Z38JXY`
 - regression checks: `pytest tests/test_smart_event_update_duplicate_guards.py -k 'dachniki or prose_location'`; `pytest tests/test_smart_event_update_duplicate_guards.py tests/test_pre_create_duplicate_probe.py`; `python3 -m compileall -q smart_event_update.py ...`
 - production runtime logs: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, `RUNTIME_LOG_RETENTION_HOURS=24`; source import dates 2026-04-08/2026-05-07/2026-05-19 are outside file retention, so DB `event_source` rows are the canonical evidence.
 - production repair: backup `/data/repair_backups/db_inc_2026_05_27_20260527T074945Z.sqlite`; inserted 2 duplicate source rows into event `3723`; event `4659` and `5146` set `lifecycle_status=duplicate`, `silent=1`, canonical venue `Драматический театр, Мира 4, Калининград`.
-- post-deploy verification:
+- post-deploy verification: `/healthz` ready with `job_outbox_worker=ok`; production SQL shows exactly one active non-silent `Дачники` row for 2026-06-02 19:00 (`3723`), while `4659` and `5146` are `lifecycle_status=duplicate`, `silent=1`; duplicate Telegraph rebuild jobs `20726`/`20727` completed and no page contains the leaked prose venue.
 
 ## Prevention
 

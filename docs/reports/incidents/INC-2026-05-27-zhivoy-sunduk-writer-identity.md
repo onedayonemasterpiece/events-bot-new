@@ -1,10 +1,10 @@
 # INC-2026-05-27-zhivoy-sunduk-writer-identity
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / Smart Update writer / Telegraph event pages
 Opened: 2026-05-27
-Closed: —
+Closed: 2026-05-27
 Owners: events-bot
 Related incidents: `INC-2026-05-17-future-event-quality-regressions`, `INC-2026-05-11-vasnetsov-30may-stochastic-title-clone`, `INC-2026-05-11-lecturer-name-and-title-dropped-from-description`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/llm/prompts.md`, `docs/llm/request-guide.md`
@@ -86,12 +86,12 @@ The public Telegraph card `https://telegra.ph/CHitajte-bumazhnye-knigi-05-27` pu
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `bde043ab` (reachable from `origin/main`)
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; Fly release `1146`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KSM74EW8XSYV94M5N1Z38JXY`
 - regression checks: `pytest tests/test_smart_update_native_schema.py -k 'organizer_and_inspiration_identity'`; `pytest tests/test_tg_monitor_gemma4_contract.py -k 'caption_event_name_over_poster_slogan'`; `pytest tests/test_smart_update_native_schema.py tests/test_tg_monitor_gemma4_contract.py`; `python3 -m compileall -q smart_event_update.py kaggle/TelegramMonitor/telegram_monitor.py ...`
 - production runtime logs: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, `RUNTIME_LOG_RETENTION_HOURS=24`; 2026-05-27 import is inside retention, while source-of-truth evidence for the correction is preserved in `event_source` and operator report.
 - production repair: backup `/data/repair_backups/db_inc_2026_05_27_20260527T074945Z.sqlite`; event `5342` retitled to `Живой сундук`, short description and description corrected to `ОКЦ на Горького 116` and `Плоский мир Терри Пратчетта`; rebuild jobs `20728` (Telegraph), `20729` (month page), `20730` (weekend page) enqueued.
-- post-deploy verification:
+- post-deploy verification: `/healthz` ready with `job_outbox_worker=ok`; post-deploy rebuild job `20732` completed for `https://telegra.ph/CHitajte-bumazhnye-knigi-05-27`; public page contains `Живой сундук`, `Своп-мероприятие от ОКЦ на Горького 116`, `Событие «Живой сундук» организовано сообществом вокруг ОКЦ на Горького 116`, and `Плоским миром Терри Пратчетта`; public page does not contain `Читайте бумажные книги` or the wrong `Живой Замок` attribution.
 
 ## Prevention
 
