@@ -77,7 +77,7 @@ async def _regen_description(session, su, event) -> str | None:
             event_type=getattr(event, "event_type", None),
             facts_text_clean=facts_text_clean,
             anchors=anchors,
-            label=f"inc20260529:{event.id}",
+            label=f"inc20260529_{event.id}",
         )
     except Exception:
         log.exception("event %s: regen LLM call failed", event.id)
@@ -179,9 +179,17 @@ async def main() -> None:
                 continue
             if fix_desc:
                 new_desc = await _regen_description(session, su, event)
-                notes.append(f"desc={'regen' if new_desc else 'cleared'}")
+                if new_desc:
+                    notes.append("desc=regen")
+                else:
+                    # event.description is NOT NULL — never set None. When regen
+                    # fails, fall back to the (clean) source text so the dump is
+                    # still removed; the next natural Smart Update will improve it.
+                    fb = su._clip((getattr(event, "source_text", None) or "").strip(), su.SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+                    new_desc = fb if (fb and not looks_like_genai_response_dump(fb)) else ""
+                    notes.append(f"desc=source_text_fallback(len={len(new_desc)})")
                 if args.apply:
-                    event.description = new_desc  # None clears the dump
+                    event.description = new_desc
                 changed = True
             if fix_title:
                 new_title = await _recover_title(session, su, event)
