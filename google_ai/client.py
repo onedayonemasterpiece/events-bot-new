@@ -1522,20 +1522,72 @@ class GoogleAIClient:
             except Exception:
                 pass
 
-            # Last resort: stringify.
+            # No usable answer text. This happens when the model returns only
+            # thought-channel parts (e.g. Gemma 4 spent the whole output-token
+            # budget "thinking" and never emitted an answer part) or an otherwise
+            # empty candidate. NEVER stringify the raw SDK response here: str(resp)
+            # dumps the entire GenerateContentResponse repr (thought text, token
+            # counts, http headers) and callers treat that as model output, which
+            # is exactly how the SDK repr leaked into public posts. It also
+            # silently defeats the empty_response guard below. Return "" so the
+            # caller raises ProviderError and retries / falls back.
+            return ""
+
+        def _diagnose_empty(resp: Any) -> str:
+            """Best-effort, repr-safe summary of why extraction yielded no text.
+
+            Must not embed the raw response (that is the leak we are fixing): only
+            small scalar signals (finish reasons, whether any thought-only part was
+            present, token counts) so the failure is visible in logs/metrics.
+            """
+            finish_reasons: list[str] = []
+            had_thought_part = False
+            had_any_part = False
             try:
-                return str(resp).strip()
+                for cand in list(getattr(resp, "candidates", None) or []):
+                    fr = getattr(cand, "finish_reason", None)
+                    if fr is None and isinstance(cand, dict):
+                        fr = cand.get("finish_reason")
+                    if fr is not None:
+                        finish_reasons.append(getattr(fr, "name", None) or str(fr))
+                    content = getattr(cand, "content", None)
+                    if content is None and isinstance(cand, dict):
+                        content = cand.get("content")
+                    cand_parts = getattr(content, "parts", None)
+                    if cand_parts is None and isinstance(content, dict):
+                        cand_parts = content.get("parts")
+                    for part in list(cand_parts or []):
+                        had_any_part = True
+                        th = getattr(part, "thought", None)
+                        if th is None and isinstance(part, dict):
+                            th = part.get("thought")
+                        if th:
+                            had_thought_part = True
             except Exception:
-                return ""
+                pass
+            meta = getattr(resp, "usage_metadata", None)
+            thoughts_tokens = getattr(meta, "thoughts_token_count", None) if meta else None
+            return (
+                f"finish_reasons={finish_reasons or None} "
+                f"thought_only={had_thought_part and not response_text and had_any_part} "
+                f"thoughts_token_count={thoughts_tokens}"
+            )
 
         usage = _get_usage(response)
         response_text = _extract_text(response)
         if not response_text:
+            diag = _diagnose_empty(response)
+            logger.warning(
+                "google_ai.empty_response requested_model=%s provider_model_name=%s %s",
+                model,
+                model_name,
+                diag,
+            )
             raise ProviderError(
                 error_type="empty_response",
                 error_message=(
                     "Provider returned empty text "
-                    f"(requested_model={model}, provider_model_name={model_name})"
+                    f"(requested_model={model}, provider_model_name={model_name}; {diag})"
                 ),
                 retryable=True,
             )

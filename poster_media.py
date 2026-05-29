@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -31,6 +32,7 @@ class PosterMedia:
     catbox_url: str | None = None
     supabase_url: str | None = None
     digest: str | None = None
+    phash: str | None = None
     ocr_text: str | None = None
     ocr_title: str | None = None
     prompt_tokens: int | None = None
@@ -166,6 +168,18 @@ async def process_media(
         detail = os.getenv("POSTER_OCR_DETAIL", "auto")
         for poster in posters:
             await _run_ocr(poster, model=model, detail=detail)
+
+    # Perceptual hash for near-duplicate poster dedup downstream (best-effort;
+    # value matches the Supabase/Yandex storage object key). Computed before the
+    # raw payload is released below.
+    try:
+        from media_dedup import compute_dhash_hex
+
+        for poster in posters:
+            if poster.phash is None and poster.data:
+                poster.phash = await asyncio.to_thread(compute_dhash_hex, poster.data)
+    except Exception:
+        logging.warning("poster_media: phash computation failed", exc_info=True)
 
     for poster in posters:
         poster.clear_payload()

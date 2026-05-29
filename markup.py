@@ -347,8 +347,44 @@ def _format_vk_plain_headings(text: str) -> str:
     return "\n".join(out)
 
 
+# Signature tokens of a raw google-genai ``GenerateContentResponse`` that was
+# accidentally stringified (``str(resp)``) and used as model output. Such a dump
+# (thought text, token counts, http headers) must never reach a public surface.
+# See INC-2026-05-17 / google_ai.client._extract_text.
+_GENAI_RESPONSE_DUMP_MARKERS = (
+    "sdk_http_response=HttpResponse",
+    "GenerateContentResponseUsageMetadata",
+    "usage_metadata=GenerateContentResponse",
+    "candidates=[Candidate(",
+    "parts=[Part(",
+    "automatic_function_calling_history=",
+    "finish_reason=, index=",
+)
+
+
+def looks_like_genai_response_dump(text: str | None) -> bool:
+    """True if ``text`` looks like a stringified provider SDK response object.
+
+    Requires >=2 distinct internal markers so legitimate prose (which would never
+    contain these SDK-internal field names) is not misclassified.
+    """
+    s = text or ""
+    if not s:
+        return False
+    hits = 0
+    for marker in _GENAI_RESPONSE_DUMP_MARKERS:
+        if marker in s:
+            hits += 1
+            if hits >= 2:
+                return True
+    return False
+
+
 def sanitize_for_vk(text_or_html: str) -> str:
     """Expose links and strip unsupported HTML for VK posts."""
+    # Last-line defense: never publish a stringified provider SDK response.
+    if looks_like_genai_response_dump(text_or_html):
+        return ""
     s = expose_links_for_vk(text_or_html)
     s = html.unescape(s)
     s = s.replace("\xa0", " ")

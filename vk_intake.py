@@ -3526,7 +3526,7 @@ def _build_smart_update_posters(
                 catbox_url=catbox_url,
                 supabase_url=supabase_url,
                 sha256=item.digest,
-                phash=None,
+                phash=getattr(item, "phash", None),
                 ocr_text=item.ocr_text,
                 ocr_title=item.ocr_title,
                 prompt_tokens=int(getattr(item, "prompt_tokens", 0) or 0),

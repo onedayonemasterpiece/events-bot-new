@@ -10,6 +10,7 @@ from google_ai.client import (
     GoogleAIClient,
     RequestContext,
 )
+from google_ai.exceptions import ProviderError
 
 
 class _FakeModel:
@@ -120,6 +121,56 @@ async def test_gemma4_keeps_native_json_config_and_filters_thought_parts():
     assert fake_genai.calls[0]["generation_config"]["response_mime_type"] == "application/json"
     assert fake_genai.calls[0]["generation_config"]["response_schema"] == {"type": "object"}
     assert "response_schema_name" not in fake_genai.calls[0]["generation_config"]
+
+
+@pytest.mark.asyncio
+async def test_thought_only_response_raises_instead_of_leaking_sdk_repr():
+    # Regression for INC-2026-05-17: the model emitted only a thought-channel part
+    # (and ran out of the output-token budget before producing an answer). The
+    # extractor must NOT stringify the raw SDK response as a last resort — that is
+    # exactly how the GenerateContentResponse repr leaked into public VK/Telegraph
+    # posts. It must raise empty_response so the caller falls back / retries.
+    class _Resp:
+        candidates = [
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[{"text": "* Task: Edit/Rewrite ...", "thought": True}]
+                ),
+                finish_reason="MAX_TOKENS",
+            )
+        ]
+        usage_metadata = SimpleNamespace(
+            prompt_token_count=2562,
+            candidates_token_count=0,
+            total_token_count=4459,
+            thoughts_token_count=1897,
+        )
+
+        def __repr__(self) -> str:
+            return (
+                "sdk_http_response=HttpResponse(headers=) candidates=[Candidate("
+                "content=Content(parts=[Part(text=\"...\", thought=True)]))]"
+            )
+
+    fake_genai = _FakeGenAI(_Resp())
+    client = GoogleAIClient()
+    client._genai = fake_genai
+
+    with pytest.raises(ProviderError) as exc_info:
+        await client._call_provider(
+            api_key="test-key",
+            model="gemma-4-31b",
+            prompt="hello",
+            generation_config={"temperature": 0},
+            safety_settings=None,
+            max_output_tokens=64,
+        )
+
+    err = exc_info.value
+    assert getattr(err, "error_type", "") == "empty_response"
+    # The raw SDK repr must never be surfaced as model output or in the error.
+    assert "sdk_http_response" not in str(err)
+    assert "HttpResponse" not in str(err)
 
 
 @pytest.mark.asyncio

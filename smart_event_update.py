@@ -21,7 +21,8 @@ from sqlalchemy import and_, delete, or_, select
 
 from db import Database
 from location_reference import normalise_event_location_from_reference
-from markup import unescape_public_text_escapes
+from markup import looks_like_genai_response_dump, unescape_public_text_escapes
+from media_dedup import hamming_distance_hex
 from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCache
 from sections import MONTHS_RU
 
@@ -371,6 +372,14 @@ SMART_UPDATE_GEMMA_TEXT_WALL_CLOCK_SEC = _env_int(
 # Default matches the operator expectation: > 6 months ahead requires more scrutiny.
 SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
     "SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS", 6, lo=0, hi=24
+)
+
+# Max Hamming distance (over the 256-bit dh16 perceptual hash) at which two
+# posters are treated as the same image and collapsed before publishing. The
+# offline thumbnail composer uses 12; we use a slightly tighter default here to
+# avoid dropping genuinely different posters. 0 disables near-dup dedup.
+SMART_UPDATE_POSTER_NEAR_DUP_HAMMING = _env_int(
+    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 10, lo=0, hi=64
 )
 
 # Optional: allow light emoji usage in *full* public descriptions (Telegraph/body).
@@ -1140,6 +1149,12 @@ def _sanitize_description_output(
     """
     raw = (text or "").strip()
     if not raw:
+        return None
+    # Reject a stringified provider SDK response outright (INC-2026-05-17): if the
+    # model output ever looks like a GenerateContentResponse repr, drop it entirely
+    # so the caller falls back instead of publishing the dump to any surface.
+    if looks_like_genai_response_dump(raw):
+        logger.warning("smart_update: dropped genai SDK response dump from description output")
         return None
     raw = unescape_public_text_escapes(raw) or raw
 
@@ -14797,6 +14812,59 @@ async def _smart_event_update_impl(
     )
 
 
+def _poster_relevance_quality(p: PosterCandidate) -> int:
+    """Cheap quality score to pick the survivor of a near-duplicate cluster."""
+    q = 0
+    title = getattr(p, "ocr_title", None)
+    if title:
+        q += len(title)
+    text = getattr(p, "ocr_text", None)
+    if text:
+        q += len(text)
+    if getattr(p, "supabase_url", None):
+        q += 1
+    return q
+
+
+def _dedup_near_duplicate_posters(
+    posters: Sequence[PosterCandidate],
+) -> list[PosterCandidate]:
+    """Collapse visually near-identical posters by perceptual-hash Hamming distance.
+
+    Exact-byte (sha256) and exact-URL dedup elsewhere only catch identical files;
+    two re-encodes / crops / resolutions of the same poster have different bytes
+    (and often slightly different dh16 hashes), so both used to survive and publish
+    as a duplicate image (INC-2026-05-17). Here we keep, per near-dup cluster, the
+    highest-quality poster. Posters without a phash are always kept (we cannot prove
+    they are duplicates).
+    """
+    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
+    if threshold <= 0 or len(posters) < 2:
+        return list(posters)
+    kept: list[PosterCandidate] = []
+    kept_phashes: list[str] = []
+    for p in posters:
+        ph = (getattr(p, "phash", None) or "").strip().lower()
+        if ph:
+            dup_idx = None
+            for i, kph in enumerate(kept_phashes):
+                if kph and hamming_distance_hex(ph, kph) <= threshold:
+                    dup_idx = i
+                    break
+            if dup_idx is not None:
+                if _poster_relevance_quality(p) > _poster_relevance_quality(kept[dup_idx]):
+                    kept[dup_idx] = p
+                    kept_phashes[dup_idx] = ph
+                logger.info(
+                    "smart_update: dropped near-duplicate poster (hamming<=%d)",
+                    threshold,
+                )
+                continue
+        kept.append(p)
+        kept_phashes.append(ph)
+    return kept
+
+
 async def _apply_posters(
     session,
     event_id: int | None,
@@ -14806,6 +14874,7 @@ async def _apply_posters(
 ) -> tuple[int, list[str], bool, int, bool]:
     if not event_id:
         return 0, [], False, 0, False
+    posters = _dedup_near_duplicate_posters(posters)
     existing_rows = (
         await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
     ).scalars().all()

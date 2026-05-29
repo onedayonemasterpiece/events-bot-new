@@ -245,6 +245,7 @@ from markup import (
     FEST_INDEX_INTRO_START,
     FEST_INDEX_INTRO_END,
     linkify_for_telegraph,
+    looks_like_genai_response_dump,
     sanitize_for_vk,
     format_tel_link_for_display,
 )
@@ -19012,7 +19013,17 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     if not ev:
         return
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
-    text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
+    description_for_vk = (getattr(ev, "description", None) or "").strip()
+    # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
+    # must never be published. If the stored description looks like such a dump, fall
+    # back to the raw source text instead.
+    if description_for_vk and looks_like_genai_response_dump(description_for_vk):
+        logging.warning(
+            "job_sync_vk_source_post: description for event %s looks like a genai SDK dump; using source_text",
+            event_id,
+        )
+        description_for_vk = ""
+    text_for_vk = description_for_vk or (ev.source_text or "")
     new_hash = content_hash(text_for_vk)
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False
