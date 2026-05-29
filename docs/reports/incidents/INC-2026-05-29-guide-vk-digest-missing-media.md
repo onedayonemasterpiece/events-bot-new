@@ -35,7 +35,8 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 
 1. The guide VK fanout reused the guide issue item ids to rebuild text, but ignored the issue's `media_items_json`.
 2. The shared VK photo uploader only accepted remote URLs; guide media assets are materialized local files under `GUIDE_MEDIA_STORE_ROOT`.
-3. Tests asserted VK text and target storage, but did not assert uploaded photo attachments.
+3. Shared postponed `post_to_vk` stored VK's returned `post_id` as the final wall URL, but for postponed posts VK exposes that value as `postponed_id` while the actual `wall.get` item has a different `id`. Later repair/edit attempts addressed `wall-..._<postponed_id>` and VK returned an empty/deleted post.
+4. Tests asserted VK text and target storage, but did not assert uploaded photo attachments or real wall id resolution for postponed posts.
 
 ## Contributing Factors
 
@@ -54,6 +55,7 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 
 - `guide_excursions/service.py` VK digest render/publish/repair path.
 - `main.py` VK photo upload helpers.
+- `main_part2.py::post_to_vk` postponed id resolution.
 - `guide_digest_issue.published_targets_json` release evidence.
 - External VK API: `photos.getWallUploadServer`, `photos.saveWallPhoto`, `wall.post`, `wall.edit`.
 - Production target `vk.com/uhtykaliningrad`.
@@ -84,6 +86,7 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 - Added `upload_vk_photo_bytes` for in-memory/local guide media upload to VK.
 - `publish_latest_guide_digest_to_vk` now reads `media_items_json`, uploads materialized photo assets, passes attachments to the same `post_to_vk`, and fails closed if usable media cannot be uploaded.
 - The same function can repair an already published VK digest via `wall.edit` with attachments.
+- Shared `post_to_vk` now resolves postponed VK ids to the actual wall id before returning/storing the URL.
 - VK first line now uses exact dates/ranges instead of only months.
 - Added regression coverage for VK guide attachments.
 

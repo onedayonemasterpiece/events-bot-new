@@ -3417,6 +3417,45 @@ async def _reserve_vk_postponed_publish_date(
         return publish_ts
 
 
+async def _resolve_vk_postponed_wall_id(
+    *,
+    owner_id: int,
+    post_id: int,
+    actor: VkActor,
+    token: str | None,
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    try:
+        response = await _vk_api(
+            "wall.get",
+            {"owner_id": str(owner_id), "filter": "all", "count": 100},
+            db,
+            bot,
+            token=token,
+            token_kind=actor.kind,
+            skip_captcha=(actor.kind == "group"),
+        )
+    except Exception as exc:
+        logging.warning(
+            "post_to_vk resolve postponed id failed owner_id=%s post_id=%s actor=%s error=%s",
+            owner_id,
+            post_id,
+            actor.label,
+            exc,
+        )
+        return None
+    for item in _vk_postponed_items(response):
+        try:
+            item_id = int(item.get("id") or 0)
+            postponed_id = int(item.get("postponed_id") or 0)
+        except Exception:
+            continue
+        if item_id > 0 and (postponed_id == int(post_id) or item_id == int(post_id)):
+            return item_id
+    return None
+
+
 async def post_to_vk(
     group_id: str,
     message: str,
@@ -3477,11 +3516,24 @@ async def post_to_vk(
                 mem_info("VK post after")
             post_id = data.get("response", {}).get("post_id")
             if post_id:
-                url = f"https://vk.com/wall-{group_id.lstrip('-')}_{post_id}"
+                actual_post_id = int(post_id)
+                if publish_date:
+                    resolved_id = await _resolve_vk_postponed_wall_id(
+                        owner_id=owner_id,
+                        post_id=actual_post_id,
+                        actor=actor,
+                        token=token,
+                        db=db,
+                        bot=bot,
+                    )
+                    if resolved_id:
+                        actual_post_id = resolved_id
+                url = f"https://vk.com/wall-{group_id.lstrip('-')}_{actual_post_id}"
                 logging.info(
-                    "post_to_vk ok group=%s post_id=%s len=%d attachments=%d",
+                    "post_to_vk ok group=%s post_id=%s actual_post_id=%s len=%d attachments=%d",
                     group_id,
                     post_id,
+                    actual_post_id,
                     len(message),
                     len(attachments or []),
                 )

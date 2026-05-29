@@ -253,6 +253,7 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     tz = ZoneInfo("Europe/Kaliningrad")
     expected = int(datetime(2026, 5, 19, 10, 40, tzinfo=tz).timestamp())
     captured_wall_post = {}
+    calls = []
 
     async def fake_reserve(owner_id, actors, db, bot, *, now=None):
         assert owner_id == -2
@@ -268,23 +269,30 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
         token_kind="group",
         skip_captcha=False,
     ):
-        assert method == "wall.post"
-        captured_wall_post.update(
-            {
-                "params": params,
-                "token": token,
-                "token_kind": token_kind,
-                "skip_captcha": skip_captcha,
-            }
-        )
-        return {"response": {"post_id": 124}}
+        calls.append(method)
+        if method == "wall.post":
+            captured_wall_post.update(
+                {
+                    "params": params,
+                    "token": token,
+                    "token_kind": token_kind,
+                    "skip_captcha": skip_captcha,
+                }
+            )
+            return {"response": {"post_id": 124}}
+        if method == "wall.get":
+            assert params["owner_id"] == "-2"
+            assert params["filter"] == "all"
+            return {"response": {"items": [{"id": 125, "postponed_id": 124, "date": expected}]}}
+        raise AssertionError(method)
 
     monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
 
     url = await main.post_to_vk("2", "hello")
 
-    assert url == "https://vk.com/wall-2_124"
+    assert url == "https://vk.com/wall-2_125"
+    assert calls == ["wall.post", "wall.get"]
     assert captured_wall_post["token"] == "ga"
     assert captured_wall_post["token_kind"] == "group"
     assert captured_wall_post["skip_captcha"] is True
