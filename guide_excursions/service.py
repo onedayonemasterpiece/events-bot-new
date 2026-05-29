@@ -4506,7 +4506,13 @@ async def publish_latest_guide_digest_to_vk(
         edited = await edit_vk_post_fn(post_urls[0], text, db, bot, attachments=attachments)
         next_targets = dict(published_targets_raw) if isinstance(published_targets_raw, Mapping) else {}
         current_payload = dict(existing_target_payload) if isinstance(existing_target_payload, Mapping) else {}
-        current_payload["media_message_ids"] = [post_id for post_id in current_payload.get("message_ids", [])]
+        actual_post_id = _extract_wall_post_id(post_urls[0])
+        if actual_post_id:
+            current_payload["message_ids"] = [int(actual_post_id)]
+            current_payload["text_message_ids"] = [int(actual_post_id)]
+            current_payload["media_message_ids"] = [int(actual_post_id)]
+        else:
+            current_payload["media_message_ids"] = [post_id for post_id in current_payload.get("message_ids", [])]
         current_payload["attachments_count"] = len(attachments)
         current_payload["transport"] = "vk_wall"
         next_targets[target_key] = current_payload

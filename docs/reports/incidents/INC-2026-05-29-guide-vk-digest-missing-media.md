@@ -87,6 +87,7 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 - `publish_latest_guide_digest_to_vk` now reads `media_items_json`, uploads materialized photo assets, passes attachments to the same `post_to_vk`, and fails closed if usable media cannot be uploaded.
 - The same function can repair an already published VK digest via `wall.edit` with attachments.
 - Shared `post_to_vk` now resolves postponed VK ids to the actual wall id before returning/storing the URL.
+- VK repair metadata now stores the same actual wall id in `message_ids`, `text_message_ids`, and `media_message_ids`, so future checks do not address stale postponed ids.
 - VK first line now uses exact dates/ranges instead of only months.
 - Added regression coverage for VK guide attachments.
 
