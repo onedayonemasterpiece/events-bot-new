@@ -1,64 +1,66 @@
 #!/usr/bin/env python3
-"""INC-2026-05-29 cleanup: repair events whose `description` is a stringified
-google-genai `GenerateContentResponse` dump.
+"""INC-2026-05-29 repair: fix events damaged by the genai-repr leak and by the
+location-as-title placeholder fallback, then re-render the public surfaces.
 
-For each affected event:
-  1. detect the SDK-repr dump (markup.looks_like_genai_response_dump);
-  2. regenerate a fact-first description via the (now-fixed) Smart Update
-     pipeline from canonical EventSourceFact rows (same chain as
-     `/rebuild_event <id> --regen-desc`);
-  3. if regeneration fails/empty, CLEAR the dump (description -> None) so no
-     public surface can read it;
-  4. enqueue the standard rebuild jobs (Telegraph + VK sync + pages) which the
-     running bot drains, re-rendering the public surfaces.
+Two independent defects, repaired in one pass (run AFTER the fix is deployed):
+
+  (A) description = stringified google-genai `GenerateContentResponse` dump.
+      -> regenerate a fact-first description via the (now-fixed) pipeline; if
+         regeneration is empty, CLEAR the dump (description -> None) so no public
+         surface can read it.
+
+  (B) title = generic "<event_type> — <venue>" placeholder.
+      -> recover a grounded real title via the new native-schema title-recovery
+         stage; keep the placeholder only if nothing grounded is found.
+
+Affected events are discovered dynamically (no hardcoded list), then for each
+changed event the standard rebuild jobs are enqueued (Telegraph + VK sync +
+pages) which the running bot drains.
 
 Dry-run by default; pass --apply to mutate. Run on the prod machine so it shares
-`/data/db.sqlite` and the JobOutbox the live bot drains.
+`/data/db.sqlite` and the JobOutbox the live bot drains:
 
-Usage:
-  python -m scripts.incident.regen_genai_leak_descriptions [--db /data/db.sqlite] \
-      [--ids 5419,5398,...] [--apply]
+  cd /app && PYTHONPATH=/app python -u scripts/incident/regen_genai_leak_descriptions.py [--apply] [--ids 1,2]
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime
 import logging
+from types import SimpleNamespace
 
 from sqlalchemy import select
 
 from db import Database
-from models import Event, EventSource, EventSourceFact
+from models import Event, EventPoster, EventSource, EventSourceFact
 from markup import looks_like_genai_response_dump
 
-# Events found leaking the SDK repr in the 2026-05-29 production scan.
-DEFAULT_IDS = [
-    3979, 4006, 4775, 4776, 4899, 4957, 5081, 5083,
-    5229, 5351, 5398, 5410, 5411, 5419, 5424, 5429,
-]
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("regen_genai_leak")
+log = logging.getLogger("repair_inc_20260529")
 
 
-async def _regen_description(session, su, event) -> str | None:
-    """Mirror of handle_rebuild_event_command(--regen-desc) regen chain."""
-    if getattr(su, "SMART_UPDATE_LLM_DISABLED", False):
-        log.warning("event %s: SMART_UPDATE_LLM_DISABLED — cannot regenerate", event.id)
-        return None
+async def _canonical_facts(session, su, eid: int) -> list[str]:
     rows = (
         await session.execute(
             select(EventSourceFact.fact)
             .join(EventSource, EventSourceFact.source_id == EventSource.id)
             .where(
-                EventSourceFact.event_id == int(event.id),
+                EventSourceFact.event_id == int(eid),
                 EventSourceFact.status.in_(("added", "duplicate")),
             )
             .order_by(EventSourceFact.created_at.asc(), EventSourceFact.id.asc())
         )
     ).all()
-    canonical_facts = [str(r[0]).strip() for r in (rows or []) if (r and str(r[0] or "").strip())]
-    canonical_facts = su._dedupe_source_facts(canonical_facts)[:120]
+    facts = [str(r[0]).strip() for r in (rows or []) if (r and str(r[0] or "").strip())]
+    return su._dedupe_source_facts(facts)[:120]
+
+
+async def _regen_description(session, su, event) -> str | None:
+    """Mirror of handle_rebuild_event_command(--regen-desc) regen chain."""
+    if getattr(su, "SMART_UPDATE_LLM_DISABLED", False):
+        return None
+    canonical_facts = await _canonical_facts(session, su, event.id)
     anchors = [
         getattr(event, "date", None) or "",
         getattr(event, "time", None) or "",
@@ -68,7 +70,6 @@ async def _regen_description(session, su, event) -> str | None:
     ]
     facts_text_clean = su._facts_text_clean_from_facts(canonical_facts, max_items=36, anchors=anchors)
     if not facts_text_clean:
-        log.warning("event %s: no canonical facts for fact-first regen", event.id)
         return None
     try:
         ff_desc = await su._llm_fact_first_description_md(
@@ -96,40 +97,105 @@ async def _regen_description(session, su, event) -> str | None:
     return cleaned
 
 
+async def _recover_title(session, su, event) -> str | None:
+    """Recover a grounded title for a generic '<type> — <venue>' placeholder."""
+    posters = (
+        await session.execute(select(EventPoster).where(EventPoster.event_id == int(event.id)))
+    ).scalars().all()
+    cand = SimpleNamespace(
+        source_text=getattr(event, "source_text", None) or "",
+        raw_excerpt=None,
+        location_name=getattr(event, "location_name", None) or "",
+        event_type=getattr(event, "event_type", None) or "",
+        city=getattr(event, "city", None) or "",
+        source_type="repair",
+        source_url=f"event:{event.id}",
+        posters=[SimpleNamespace(ocr_title=p.ocr_title, ocr_text=p.ocr_text) for p in posters],
+    )
+    facts = await _canonical_facts(session, su, event.id)
+    try:
+        return await su._llm_recover_event_title(
+            cand, normalized_event_type=getattr(event, "event_type", None), facts=facts
+        )
+    except Exception:
+        log.exception("event %s: title recovery failed", event.id)
+        return None
+
+
+def _is_placeholder_title(su, event) -> bool:
+    return su._is_generic_title_event_type_venue(
+        getattr(event, "title", None),
+        event_type=getattr(event, "event_type", None),
+        location_name=getattr(event, "location_name", None),
+        city=getattr(event, "city", None),
+    )
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="/data/db.sqlite")
-    ap.add_argument("--ids", default="")
-    ap.add_argument("--apply", action="store_true", help="commit changes + enqueue rebuilds")
+    ap.add_argument("--ids", default="", help="explicit comma-separated ids (default: dynamic scan)")
+    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--mode", choices=["both", "desc", "title"], default="both")
     args = ap.parse_args()
-
-    ids = [int(x) for x in args.ids.split(",") if x.strip()] if args.ids.strip() else list(DEFAULT_IDS)
 
     db = Database(args.db)
     await db.init()
     import main as main_mod
     import smart_event_update as su
 
+    today = datetime.date.today().isoformat()
+    async with db.get_session() as session:
+        if args.ids.strip():
+            ids = [int(x) for x in args.ids.split(",") if x.strip()]
+            rows = []
+            for eid in ids:
+                e = await session.get(Event, eid)
+                if e:
+                    rows.append(e)
+        else:
+            rows = (
+                await session.execute(select(Event).where(Event.date >= today))
+            ).scalars().all()
+
+        targets: list[tuple[int, bool, bool]] = []  # (id, fix_desc, fix_title)
+        for e in rows:
+            fix_desc = args.mode in ("both", "desc") and looks_like_genai_response_dump(
+                getattr(e, "description", None) or ""
+            )
+            fix_title = args.mode in ("both", "title") and _is_placeholder_title(su, e)
+            if fix_desc or fix_title:
+                targets.append((e.id, fix_desc, fix_title))
+
+    log.info("scan: %d events need repair (apply=%s)", len(targets), args.apply)
+
     summary: list[str] = []
-    for eid in ids:
+    for eid, fix_desc, fix_title in targets:
+        changed = False
+        notes = []
         async with db.get_session() as session:
             event = await session.get(Event, eid)
             if not event:
-                summary.append(f"{eid}: MISSING")
                 continue
-            desc = (getattr(event, "description", None) or "").strip()
-            is_dump = looks_like_genai_response_dump(desc)
-            if not is_dump:
-                summary.append(f"{eid}: clean (skip)")
-                continue
-            new_desc = await _regen_description(session, su, event)
-            action = "regen" if new_desc else "cleared(no_regen)"
-            if args.apply:
-                event.description = new_desc  # None clears the dump
+            if fix_desc:
+                new_desc = await _regen_description(session, su, event)
+                notes.append(f"desc={'regen' if new_desc else 'cleared'}")
+                if args.apply:
+                    event.description = new_desc  # None clears the dump
+                changed = True
+            if fix_title:
+                new_title = await _recover_title(session, su, event)
+                if new_title:
+                    notes.append(f"title={new_title!r}")
+                    if args.apply:
+                        event.title = new_title
+                    changed = True
+                else:
+                    notes.append("title=kept(no_recovery)")
+            if args.apply and changed:
                 await session.commit()
-            summary.append(f"{eid}: dump -> {action} (len={len(new_desc or '')})")
-        if args.apply:
-            # Re-render Telegraph + re-sync VK + pages; running bot drains the queue.
+        summary.append(f"{eid}: {', '.join(notes)}")
+        if args.apply and changed:
             async with db.get_session() as session:
                 event = await session.get(Event, eid)
             if event:
@@ -139,7 +205,7 @@ async def main() -> None:
                 except Exception:
                     log.exception("event %s: schedule_event_update_tasks failed", eid)
 
-    log.info("apply=%s", args.apply)
+    log.info("=== summary (apply=%s) ===", args.apply)
     for line in summary:
         log.info("  %s", line)
 

@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
 import markup
 import media_dedup
+import smart_event_update as su
 from smart_event_update import (
     PosterCandidate,
     _dedup_near_duplicate_posters,
+    _is_generic_title_event_type_venue,
+    _llm_recover_event_title,
     _sanitize_description_output,
 )
 
@@ -86,3 +93,72 @@ def test_posters_without_phash_are_kept():
     p2 = _poster(phash=None, sha256="s2", catbox_url="c2")
     out = _dedup_near_duplicate_posters([p1, p2])
     assert len(out) == 2
+
+
+# --- Grounded title recovery (INC-2026-05-29 location-as-title) -----------------
+
+def test_generic_title_detector():
+    assert _is_generic_title_event_type_venue(
+        "Концерт — Филармония им. Светланова",
+        event_type="концерт",
+        location_name="Филармония им. Светланова",
+        city="Калининград",
+    ) is True
+    # A real title is not generic.
+    assert _is_generic_title_event_type_venue(
+        "Саундтреки на органе",
+        event_type="концерт",
+        location_name="Филармония им. Светланова",
+        city="Калининград",
+    ) is False
+
+
+def _candidate(source_text, *, event_type="концерт", venue="Филармония им. Светланова"):
+    return SimpleNamespace(
+        source_text=source_text,
+        raw_excerpt=None,
+        location_name=venue,
+        event_type=event_type,
+        city="Калининград",
+        source_type="vk",
+        source_url="https://vk.com/wall-1_1",
+        posters=[],
+    )
+
+
+def _patch_llm(monkeypatch, returned_title):
+    async def _fake(prompt, *, max_tokens, label, temperature=0.0):
+        return returned_title
+    monkeypatch.setattr(su, "_ask_gemma_text", _fake)
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_accepts_grounded(monkeypatch):
+    cand = _candidate("⭐ Мелодии кино в живом звучании. «Саундтреки на органе». Мария Гаврилюк исполнит музыку из фильмов.")
+    _patch_llm(monkeypatch, "Саундтреки на органе")
+    out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
+    assert out == "Саундтреки на органе"
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_rejects_ungrounded(monkeypatch):
+    cand = _candidate("Концерт органной музыки в соборе.")
+    _patch_llm(monkeypatch, "Полёт валькирий и драконы")  # not in source
+    out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_rejects_generic_result(monkeypatch):
+    cand = _candidate("Какой-то текст про филармонию и концерт.")
+    _patch_llm(monkeypatch, "Концерт — Филармония им. Светланова")  # still a placeholder
+    out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_empty_result(monkeypatch):
+    cand = _candidate("Текст без явного названия.")
+    _patch_llm(monkeypatch, "")
+    out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
+    assert out is None

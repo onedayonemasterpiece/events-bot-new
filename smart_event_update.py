@@ -9915,6 +9915,113 @@ def _is_generic_title_event_type_venue(
     return title_toks.issubset(allowed)
 
 
+_EVENT_TITLE_RECOVERY_INSTRUCTIONS = (
+    "Ты — редактор афиши. По данным ниже определи КОРОТКОЕ собственное название "
+    "события — так, как его назвал бы организатор (имя/тема программы, "
+    "исполнитель/коллектив, название праздника или шоу).\n"
+    "Жёсткие правила:\n"
+    "- бери название ТОЛЬКО из предоставленных данных, ничего не придумывай и не обобщай;\n"
+    "- НЕ используй шаблон «<тип события> — <площадка>» (например «Концерт — Филармония»): "
+    "название площадки само по себе не является названием события;\n"
+    "- не включай дату, время, город, адрес, цену, ссылки, телефон;\n"
+    "- 2–8 слов;\n"
+    "- если узнаваемого названия в данных нет — верни ровно: НЕТ.\n"
+    "Верни ТОЛЬКО название одной строкой, без кавычек, без пояснений и без префиксов."
+)
+
+
+def _recovered_title_grounded(title: str | None, candidate: "EventCandidate") -> bool:
+    """Stricter grounding check for recovered titles.
+
+    Unlike `_is_title_grounded_in_candidate_sources`, this ignores source tokens
+    shorter than 3 chars so common prepositions ("в", "и", "о", "с") cannot make an
+    arbitrary title word look grounded via prefix matching. Requires the full title
+    to appear verbatim, or at least one meaningful title token grounded against the
+    long-token source set.
+    """
+    corpus_norm = _candidate_title_grounding_corpus_norm(candidate)
+    if not corpus_norm:
+        return False
+    title_norm = _normalize_text_for_grounding(title)
+    if not title_norm:
+        return False
+    if len(title_norm) >= 6 and title_norm in corpus_norm:
+        return True
+    source_tokens = {t for t in corpus_norm.split() if len(t) >= 3}
+    tokens = _meaningful_title_tokens(title)
+    if not tokens:
+        return title_norm in corpus_norm
+    return any(_token_is_grounded(token, source_tokens) for token in tokens)
+
+
+async def _llm_recover_event_title(
+    candidate: "EventCandidate",
+    *,
+    normalized_event_type: str | None,
+    facts: Sequence[str] | None,
+) -> str | None:
+    """Recover a grounded event title when the only title we have is the generic
+    ``"<event_type> — <venue>"`` placeholder.
+
+    Single-purpose call routed through the text path (which carries the existing
+    Gemma→GPT-4o fallback): the description model ``gemma-4-31b-it`` often spends
+    its whole budget on thought-channel output, so a tiny native-schema call would
+    reliably hit MAX_TOKENS with no answer — the text path's 4o fallback makes the
+    recovery actually succeed. The result is accepted only when it is grounded in
+    the candidate's own source/facts/OCR corpus and is not itself a generic
+    ``<type> — <venue>`` placeholder; otherwise returns ``None`` and the caller
+    keeps the placeholder. This never overrides a non-generic title.
+    """
+    if SMART_UPDATE_LLM_DISABLED:
+        return None
+    if not _candidate_title_grounding_corpus_norm(candidate):
+        return None
+    poster_titles = [
+        str(getattr(p, "ocr_title", "") or "").strip()
+        for p in list(getattr(candidate, "posters", None) or [])[:4]
+        if (getattr(p, "ocr_title", None) or "").strip()
+    ]
+    facts_list = [str(f).strip() for f in list(facts or [])[:24] if str(f or "").strip()]
+    lines = [
+        _EVENT_TITLE_RECOVERY_INSTRUCTIONS,
+        "",
+        "Данные:",
+        f"Тип события: {normalized_event_type or candidate.event_type or ''}",
+        f"Площадка: {candidate.location_name or ''}",
+    ]
+    if poster_titles:
+        lines.append("Текст афиши (OCR): " + " / ".join(poster_titles))
+    if facts_list:
+        lines.append("Факты:\n- " + "\n- ".join(facts_list))
+    lines.append("Исходный текст:")
+    lines.append(_clip(candidate.source_text or candidate.raw_excerpt or "", 1800))
+    prompt = "\n".join(lines)
+    try:
+        # Budget must comfortably exceed the model's thinking tokens so the short
+        # answer survives; the text path falls back to 4o if Gemma still fails.
+        raw = await _ask_gemma_text(prompt, max_tokens=1024, label="title_recover", temperature=0.0)
+    except Exception:
+        logger.warning("smart_update: title recovery call failed", exc_info=True)
+        return None
+    first_line = next((ln for ln in (raw or "").splitlines() if ln.strip()), "")
+    recovered = re.sub(r"\s+", " ", first_line.strip())
+    recovered = (_strip_private_use(recovered) or recovered).strip().strip("«»\"'`*").strip()
+    recovered = re.sub(r"(?i)^(?:название|заголовок|title)\s*[:\-—]\s*", "", recovered).strip()
+    if not recovered or recovered.casefold() in {"нет", "none", "нет.", "n/a"}:
+        return None
+    if _is_generic_title_event_type_venue(
+        recovered,
+        event_type=normalized_event_type or candidate.event_type,
+        location_name=candidate.location_name,
+        city=candidate.city,
+    ):
+        return None
+    if not _recovered_title_grounded(recovered, candidate):
+        logger.info("smart_update.title_recover_rejected reason=ungrounded recovered=%r", recovered)
+        return None
+    return _clip_title(recovered, 160) or None
+
+
 def _is_candidate_title_weak_for_llm_override(
     title: str | None,
     *,
@@ -12852,6 +12959,32 @@ async def _smart_event_update_impl(
         final_title = re.sub(r"\s+", " ", (final_title or "").strip())
         # Safety-net: Telegraph + Telegram UI behave poorly with extremely long titles.
         final_title = _clip_title(final_title, 160) or clean_title
+
+        # Recover a real title when all we have is the generic "<event_type> — <venue>"
+        # placeholder (the vk_intake suspicious-title fallback). The source almost always
+        # contains a usable event name; a single grounded native-schema call retrieves it.
+        # Gated on the placeholder detector + grounding validation, so good titles are
+        # never touched and the recovered title cannot hallucinate.
+        if _is_generic_title_event_type_venue(
+            final_title,
+            event_type=normalized_event_type or candidate.event_type,
+            location_name=candidate.location_name,
+            city=candidate.city,
+        ):
+            recovered_title = await _llm_recover_event_title(
+                candidate,
+                normalized_event_type=normalized_event_type,
+                facts=bundled_facts,
+            )
+            if recovered_title:
+                logger.info(
+                    "smart_update.title_recovered source_type=%s source_url=%s placeholder=%r recovered=%r",
+                    candidate.source_type,
+                    candidate.source_url,
+                    _clip_title(final_title),
+                    _clip_title(recovered_title),
+                )
+                final_title = recovered_title
 
         lollipop_light_used = False
         if (
