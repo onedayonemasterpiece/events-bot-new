@@ -7,8 +7,11 @@ import pytest
 import markup
 import media_dedup
 import smart_event_update as su
+from db import Database
+from models import Event
 from smart_event_update import (
     PosterCandidate,
+    _apply_posters,
     _dedup_near_duplicate_posters,
     _is_generic_title_event_type_venue,
     _llm_recover_event_title,
@@ -93,6 +96,64 @@ def test_posters_without_phash_are_kept():
     p2 = _poster(phash=None, sha256="s2", catbox_url="c2")
     out = _dedup_near_duplicate_posters([p1, p2])
     assert len(out) == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_posters_dedupes_legacy_photo_urls_by_phash(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    legacy_url = "https://cdn.example/poster.jpg"
+    managed_url = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/ab/"
+        + ("ab" * 32)
+        + ".webp"
+    )
+
+    async def fake_photo_hash(url):
+        if url == legacy_url:
+            return "ab" * 32
+        return su._extract_dhash_from_managed_photo_url(url)
+
+    monkeypatch.setattr(su, "_photo_url_dhash", fake_photo_hash)
+
+    async with db.get_session() as session:
+        event = Event(
+            title="T",
+            description="D",
+            date="2026-06-01",
+            time="20:00",
+            location_name="Place",
+            source_text="T",
+            photo_urls=[legacy_url],
+            photo_count=1,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+        added, added_urls, _preview, pruned, changed = await _apply_posters(
+            session,
+            event.id,
+            [
+                PosterCandidate(
+                    supabase_url=managed_url,
+                    sha256="sha-new",
+                    phash="ab" * 32,
+                    ocr_title="T",
+                )
+            ],
+            event_title="T",
+        )
+        await session.commit()
+        await session.refresh(event)
+
+    assert added == 1
+    assert added_urls == [managed_url]
+    assert pruned == 0
+    assert changed is True
+    assert event.photo_urls == [managed_url]
+    assert event.photo_count == 1
 
 
 # --- Grounded title recovery (INC-2026-05-29 location-as-title) -----------------

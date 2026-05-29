@@ -16,13 +16,14 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+import urllib.request
 
 from sqlalchemy import and_, delete, or_, select
 
 from db import Database
 from location_reference import normalise_event_location_from_reference
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
-from media_dedup import hamming_distance_hex
+from media_dedup import compute_dhash_hex, hamming_distance_hex
 from models import Event, EventPoster, EventSource, EventSourceFact, PosterOcrCache
 from sections import MONTHS_RU
 
@@ -14998,6 +14999,118 @@ def _dedup_near_duplicate_posters(
     return kept
 
 
+def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
+    match = re.search(
+        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
+        str(url or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).lower() if match else None
+
+
+def _download_photo_for_hash(url: str, *, max_bytes: int) -> bytes | None:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "events-bot-media-dedup/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        length = resp.headers.get("Content-Length")
+        if length:
+            try:
+                if int(length) > max_bytes:
+                    return None
+            except ValueError:
+                pass
+        data = resp.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            return None
+        return data
+
+
+async def _photo_url_dhash(url: str | None) -> str | None:
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    parsed = _extract_dhash_from_managed_photo_url(raw)
+    if parsed:
+        return parsed
+    if not raw.startswith(("http://", "https://")):
+        return None
+    try:
+        max_bytes = int(os.getenv("SMART_UPDATE_PHOTO_HASH_MAX_BYTES", "8000000") or "8000000")
+    except ValueError:
+        max_bytes = 8_000_000
+    try:
+        payload = await asyncio.to_thread(_download_photo_for_hash, raw, max_bytes=max_bytes)
+        if not payload:
+            return None
+        return await asyncio.to_thread(compute_dhash_hex, payload)
+    except Exception as exc:
+        logger.info("smart_update.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
+        return None
+
+
+async def _dedupe_photo_urls_by_phash(
+    photo_urls: Sequence[str],
+    *,
+    preferred_urls: set[str] | None = None,
+) -> list[str]:
+    """Collapse visually duplicate persisted image URLs.
+
+    `_dedup_near_duplicate_posters` handles the current candidate batch, but
+    events can already carry legacy `photo_urls` from a site/CDN import. When a
+    later Smart Update adds the same poster through managed storage, both URLs
+    used to survive in `Event.photo_urls` and then publish as duplicate VK
+    attachments. This normalizes the persisted image set itself.
+    """
+    urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
+    if len(urls) < 2:
+        return urls
+    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
+    if threshold <= 0:
+        out: list[str] = []
+        seen: set[str] = set()
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                out.append(url)
+        return out
+    preferred = {str(u or "").strip() for u in (preferred_urls or set()) if str(u or "").strip()}
+    kept: list[str] = []
+    kept_hashes: list[str | None] = []
+    seen: set[str] = set()
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        phash = await _photo_url_dhash(url)
+        duplicate_idx: int | None = None
+        if phash:
+            for idx, existing in enumerate(kept_hashes):
+                if existing and hamming_distance_hex(phash, existing) <= threshold:
+                    duplicate_idx = idx
+                    break
+        if duplicate_idx is None:
+            kept.append(url)
+            kept_hashes.append(phash)
+            continue
+        current_preferred = url in preferred
+        existing_preferred = kept[duplicate_idx] in preferred
+        if current_preferred and not existing_preferred:
+            logger.info(
+                "smart_update.photo_dedup replacing legacy near-duplicate with preferred url hamming<=%d",
+                threshold,
+            )
+            kept[duplicate_idx] = url
+            kept_hashes[duplicate_idx] = phash
+        else:
+            logger.info(
+                "smart_update.photo_dedup dropped near-duplicate photo_url hamming<=%d",
+                threshold,
+            )
+    return kept
+
+
 async def _apply_posters(
     session,
     event_id: int | None,
@@ -15133,6 +15246,11 @@ async def _apply_posters(
         for url in extra_urls:
             if url not in current:
                 current.append(url)
+        preferred_display_urls = {
+            _pick_display_url(poster)
+            for poster in posters
+            if _pick_display_url(poster)
+        }
         # Prefer posters that are *relevant* to this event (by OCR vs event title/date/time),
         # then fall back to OCR "quality" as a tie-breaker.
         preferred_urls: list[str] = []
@@ -15219,6 +15337,10 @@ async def _apply_posters(
                 if url not in preferred_urls:
                     preferred_urls.append(url)
             current = preferred_urls + [url for url in current if url not in preferred_urls]
+        current = await _dedupe_photo_urls_by_phash(
+            current,
+            preferred_urls={str(u) for u in preferred_display_urls if u},
+        )
         photo_urls_changed = (current != before_urls) or (len(current) != before_count)
         event.photo_urls = current
         event.photo_count = len(current)

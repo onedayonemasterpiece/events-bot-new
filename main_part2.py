@@ -3759,6 +3759,103 @@ def build_vk_source_message(
     return "\n".join(lines)
 
 
+def _vk_photo_near_dup_hamming_threshold() -> int:
+    raw = (
+        os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
+        or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
+        or "10"
+    )
+    try:
+        return max(0, int(str(raw).strip()))
+    except (TypeError, ValueError):
+        return 10
+
+
+def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
+    match = re.search(
+        r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
+        str(url or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).lower() if match else None
+
+
+async def _compute_vk_photo_url_dhash(url: str | None) -> str | None:
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    parsed = _extract_dhash_from_managed_photo_url(raw)
+    if parsed:
+        return parsed
+    try:
+        from media_dedup import compute_dhash_hex
+    except Exception:
+        return None
+    try:
+        session = get_http_session()
+        async with span("http"):
+            async with HTTP_SEMAPHORE:
+                async with session.get(raw) as resp:
+                    resp.raise_for_status()
+                    if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
+                        return None
+                    buf = bytearray()
+                    async for chunk in resp.content.iter_chunked(64 * 1024):
+                        buf.extend(chunk)
+                        if len(buf) > MAX_DOWNLOAD_SIZE:
+                            return None
+        return await asyncio.to_thread(compute_dhash_hex, bytes(buf))
+    except Exception as exc:
+        logging.info("vk.photo_dedup hash_failed url=%s err=%s", raw[:160], exc)
+        return None
+
+
+async def _dedupe_vk_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
+    """Drop visually duplicate image URLs before uploading a VK media group."""
+    urls = [str(u or "").strip() for u in (photo_urls or []) if str(u or "").strip()]
+    if len(urls) < 2:
+        return urls
+    threshold = _vk_photo_near_dup_hamming_threshold()
+    if threshold <= 0:
+        out: list[str] = []
+        seen: set[str] = set()
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                out.append(url)
+        return out
+
+    try:
+        from media_dedup import hamming_distance_hex
+    except Exception:
+        hamming_distance_hex = None
+
+    kept: list[str] = []
+    kept_hashes: list[str | None] = []
+    seen_urls: set[str] = set()
+    for url in urls:
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        phash = await _compute_vk_photo_url_dhash(url)
+        duplicate = False
+        if phash and hamming_distance_hex is not None:
+            for existing in kept_hashes:
+                if existing and hamming_distance_hex(phash, existing) <= threshold:
+                    logging.info(
+                        "vk.photo_dedup dropped near-duplicate hamming<=%d url=%s",
+                        threshold,
+                        url[:160],
+                    )
+                    duplicate = True
+                    break
+        if duplicate:
+            continue
+        kept.append(url)
+        kept_hashes.append(phash)
+    return kept
+
+
 async def sync_vk_source_post(
     event: Event,
     text: str,
@@ -3851,7 +3948,9 @@ async def sync_vk_source_post(
                     )
     if VK_PHOTOS_ENABLED and photo_urls_source:
         ids: list[str] = []
-        photo_urls = photo_urls_source[:VK_MAX_ATTACHMENTS]
+        photo_urls = (await _dedupe_vk_photo_urls_for_publish(photo_urls_source))[
+            :VK_MAX_ATTACHMENTS
+        ]
         for url in photo_urls:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:

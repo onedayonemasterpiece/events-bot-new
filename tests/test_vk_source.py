@@ -280,6 +280,54 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_TOKEN_AFISHA = "ga"
+    main.VK_MAX_ATTACHMENTS = 10
+
+    event = main.Event(
+        title="Title",
+        description="",
+        date="2024-01-01",
+        time="00:00",
+        location_name="Place",
+        photo_urls=["http://img1", "http://img2", "http://img3"],
+    )
+
+    hashes = {
+        "http://img1": "ab" * 32,
+        "http://img2": ("ab" * 31) + "aa",
+        "http://img3": "00" * 32,
+    }
+
+    async def fake_hash(url):
+        return hashes[url]
+
+    uploaded: list[str] = []
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        uploaded.append(url)
+        return f"ph{len(uploaded)}"
+
+    posted: dict[str, list[str] | None] = {}
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+        posted["vals"] = attachments
+        return "https://vk.com/wall-1_2"
+
+    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_hash)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    url = await main.sync_vk_source_post(event, "Text", None, None)
+
+    assert url == "https://vk.com/wall-1_2"
+    assert uploaded == ["http://img1", "http://img3"]
+    assert posted["vals"] == ["ph1", "ph2"]
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_skips_group_only_photo_upload(monkeypatch, caplog):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
