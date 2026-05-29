@@ -4087,6 +4087,127 @@ async def upload_vk_photo(
         return None
 
 
+async def upload_vk_photo_bytes(
+    group_id: str,
+    image_bytes: bytes,
+    db: Database | None = None,
+    bot: Bot | None = None,
+    *,
+    filename: str = "image.jpg",
+    token: str | None = None,
+    token_kind: str = "group",
+) -> str | None:
+    """Upload in-memory image bytes to VK and return attachment id."""
+    if not group_id or not image_bytes:
+        return None
+    try:
+        owner_id = -int(group_id.lstrip("-"))
+        if len(image_bytes) > MAX_DOWNLOAD_SIZE:
+            raise ValueError("file too large")
+        if token:
+            actors = [VkActor(token_kind, token, f"{token_kind}:explicit")]
+        else:
+            actors = choose_vk_actor(owner_id, "photos.getWallUploadServer")
+            user_actors = [actor for actor in actors if actor.kind == "user"]
+            if user_actors:
+                actors = user_actors
+        if not actors:
+            raise VKAPIError(None, "VK token missing", method="photos.getWallUploadServer")
+        if all(actor.kind == "group" for actor in actors):
+            logging.info(
+                "vk.upload.bytes skipped owner_id=%s reason=user_token_required",
+                owner_id,
+            )
+            return None
+
+        try:
+            image_bytes, filename = ensure_jpeg(image_bytes, filename or "image.jpg")
+        except Exception as exc:
+            logging.warning("vk.upload.bytes convert_failed filename=%s error=%s", filename, exc)
+            return None
+        if detect_image_type(image_bytes) == "jpeg":
+            validate_jpeg_markers(image_bytes)
+
+        session = get_http_session()
+        for idx, actor in enumerate(actors, start=1):
+            logging.info(
+                "vk.call method=photos.getWallUploadServer owner_id=%s try=%d/%d actor=%s source=bytes",
+                owner_id,
+                idx,
+                len(actors),
+                actor.label,
+            )
+            actor_token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+            try:
+                data = await _vk_api(
+                    "photos.getWallUploadServer",
+                    {"group_id": group_id.lstrip("-")},
+                    db,
+                    bot,
+                    token=actor_token,
+                    token_kind=actor.kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+                upload_url = data["response"]["upload_url"]
+                form = FormData()
+                form.add_field(
+                    "photo",
+                    image_bytes,
+                    filename=filename or "image.jpg",
+                    content_type="image/jpeg",
+                )
+
+                async def _upload():
+                    async with span("http"):
+                        async with HTTP_SEMAPHORE:
+                            async with session.post(upload_url, data=form) as up:
+                                return await up.json()
+
+                upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                save = await _vk_api(
+                    "photos.saveWallPhoto",
+                    {
+                        "group_id": group_id.lstrip("-"),
+                        "photo": upload_result.get("photo"),
+                        "server": upload_result.get("server"),
+                        "hash": upload_result.get("hash"),
+                    },
+                    db,
+                    bot,
+                    token=actor_token,
+                    token_kind=actor.kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+                info = save["response"][0]
+                return f"photo{info['owner_id']}_{info['id']}"
+            except VKAPIError as e:
+                logging.warning(
+                    "vk.upload.bytes error actor=%s token=%s code=%s msg=%s",
+                    e.actor,
+                    e.token,
+                    e.code,
+                    e.message,
+                )
+                msg_l = (e.message or "").lower()
+                perm = (
+                    e.code in VK_FALLBACK_CODES
+                    or "method is unavailable with group auth" in msg_l
+                    or "access denied" in msg_l
+                )
+                if idx < len(actors) and perm:
+                    logging.info(
+                        "vk.retry reason=%s actor_next=%s",
+                        e.code or e.message,
+                        actors[idx].label,
+                    )
+                    continue
+                raise
+        return None
+    except Exception as e:
+        logging.error("VK byte photo upload failed: %s", e)
+        return None
+
+
 class VkImportRejectCode(str, Enum):
     MANUAL_REVIEW = "manual_review"
     PAST_EVENT = "past_event"

@@ -42,7 +42,7 @@ async def test_build_guide_vk_digest_text_starts_with_count_and_months_and_short
         vk_api_fn=fake_vk_api,
     )
 
-    assert text.splitlines()[0] == "Новые экскурсии: 2 выхода на май и июнь"
+    assert text.splitlines()[0] == "Новые экскурсии: 2 выхода, 30 мая и 2 июня"
     assert "Запись: записаться в Telegram · vk.cc/1" in text
     assert "Анонс: vk.cc/2" in text
     assert "Автор: Игорь Селин · https://vk.com/ivsguide" in text
@@ -53,6 +53,8 @@ async def test_build_guide_vk_digest_text_starts_with_count_and_months_and_short
 @pytest.mark.asyncio
 async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_target(tmp_path):
     db = Database(str(tmp_path / "guide.sqlite"))
+    media_path = tmp_path / "guide.jpg"
+    media_path.write_bytes(b"fake-jpeg")
     async with db.raw_conn() as conn:
         await conn.executescript(
             """
@@ -107,6 +109,7 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
                 family TEXT,
                 status TEXT,
                 items_json TEXT,
+                media_items_json TEXT,
                 published_targets_json TEXT
             );
             """
@@ -138,18 +141,36 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
             "INSERT INTO guide_occurrence_source(occurrence_id, post_id, role) VALUES(10,1,'primary')"
         )
         await conn.execute(
-            "INSERT INTO guide_digest_issue(id, family, status, items_json, published_targets_json) VALUES(5,'new_occurrences','published','[10]','{}')"
+            """
+            INSERT INTO guide_digest_issue(
+                id, family, status, items_json, media_items_json, published_targets_json
+            ) VALUES(5,'new_occurrences','published','[10]',?,'{}')
+            """,
+            (
+                (
+                    '[{"occurrence_id":10,"media_asset":'
+                    f'{{"kind":"photo","path":"{media_path}"}}'
+                    "}]"
+                ),
+            ),
         )
         await conn.commit()
 
     async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
         return {"response": {"short_url": "https://vk.cc/demo", "key": "demo"}}
 
-    posted: dict[str, str] = {}
+    uploaded: list[tuple[str, bytes, str]] = []
+
+    async def fake_upload_vk_photo_bytes(group_id, image_bytes, db=None, bot=None, filename="image.jpg", **kwargs):
+        uploaded.append((group_id, image_bytes, filename))
+        return "photo-123_1"
+
+    posted: dict[str, object] = {}
 
     async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None):
         posted["group_id"] = group_id
         posted["message"] = message
+        posted["attachments"] = attachments
         return "https://vk.com/wall-123_99"
 
     result = await publish_latest_guide_digest_to_vk(
@@ -158,14 +179,19 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
         group_id="123",
         vk_api_fn=fake_vk_api,
         post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_bytes_fn=fake_upload_vk_photo_bytes,
     )
 
     assert result["published"] is True
     assert posted["group_id"] == "123"
-    assert posted["message"].splitlines()[0] == "Новые экскурсии: 1 выход на май"
+    assert posted["message"].splitlines()[0] == "Новые экскурсии: 1 выход, 30 мая"
+    assert uploaded == [("123", b"fake-jpeg", "guide.jpg")]
+    assert posted["attachments"] == ["photo-123_1"]
+    assert result["attachments_count"] == 1
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=5")
         row = await cur.fetchone()
     assert "vk:uhtykaliningrad" in row[0]
     assert "wall-123_99" in row[0]
+    assert "attachments_count" in row[0]
     await db.close()

@@ -1,7 +1,7 @@
 import logging
 import pytest
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import main
 
@@ -299,7 +299,7 @@ async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
     monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
     tz = ZoneInfo("Europe/Kaliningrad")
-    postponed_ts = int(datetime(2026, 5, 20, 10, 30, tzinfo=tz).timestamp())
+    postponed_ts = int((datetime.now(tz) + timedelta(days=1)).timestamp())
     calls = []
 
     async def fake_vk_api(

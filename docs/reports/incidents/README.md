@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-29-guide-vk-digest-missing-media.md`
+  - Scope: Guide excursions VK digest fanout to `vk.com/uhtykaliningrad`, materialized guide media assets, shared VK photo upload, and one-post VK digest rendering.
+  - Must not regress: a guide VK digest issue with media items must upload those assets to VK and publish/edit one wall post with both text and `photo...` attachments; first line must carry count + exact dates/range; media upload failure must fail closed instead of producing a text-only post.
 - `INC-2026-05-27-dachniki-prose-venue-duplicates.md`
   - Scope: Telegram/VK/parser event location extraction, Smart Update shortlist filtering and duplicate matching, future active event Telegraph pages.
   - Must not regress: a prose fragment in `location_name` must not be trusted as a venue anchor; if source text/title/date/time prove identity with an existing event, merge without changing the public venue, otherwise fail closed instead of creating a public prose-venue card.

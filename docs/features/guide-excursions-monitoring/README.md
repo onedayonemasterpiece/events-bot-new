@@ -271,7 +271,7 @@ Target channels для manual/scheduled publish задаются через `GUI
 
 Цель ближайшего запуска: публиковать тот же `new_occurrences` fact-pack в VK-паблик `https://vk.com/uhtykaliningrad` отдельным от Telegram surface. VK-пост должен быть одним wall-постом, без Telegram-style split на несколько частей, пока итоговый plain-text payload проходит лимит VK. Если однажды payload не помещается, runtime должен явно остановить публикацию и показать оператору причину, а не резать выпуск молча.
 
-Формат первой строки важен для ленты VK: она должна сразу сообщать количество и месяцы найденных новых выходов, например `Новые экскурсии: 7 выходов на май и июнь`. Месяцы считаются по `guide_occurrence.date` после финальной dedup/editorial фильтрации, то есть по тем карточкам, которые реально попали в VK-пост. Следующие строки могут давать короткий редакционный lead, но первая строка не должна начинаться с приветствия, hashtag'ов, служебной метки или длинной интро-фразы.
+Формат первой строки важен для ленты VK: она должна сразу сообщать количество и точные даты найденных новых выходов, например `Новые экскурсии: 3 выхода, 30 мая, 2 июня и 7 июня` или диапазон для длинного выпуска. Даты считаются по `guide_occurrence.date` после финальной dedup/editorial фильтрации, то есть по тем карточкам, которые реально попали в VK-пост. Следующие строки могут давать короткий редакционный lead, но первая строка не должна начинаться с приветствия, hashtag'ов, служебной метки или длинной интро-фразы.
 
 VK-render отличается от Telegram-render:
 
@@ -282,13 +282,14 @@ VK-render отличается от Telegram-render:
 - если экскурсия пришла с личной VK-стены, public attribution должен показывать VK user mention/link на автора (`https://vk.com/<screen_name>` или `[id...|Имя]`, если resolve доступен), а не только обезличенное `Источник: VK`;
 - если экскурсия пришла из VK-сообщества, attribution использует community label/source link, но не притворяется персональным гидом без occurrence-level evidence;
 - VK-пост должен идти через общий community wall publishing contract из [VK Publishing](../vk-publishing/README.md): `owner_id=-<group_id>`, `from_group=1`, `signed=0`, `publish_date` минимум через 10 минут.
+- VK-пост должен прикладывать те же materialized guide media assets, которые были сохранены в `guide_digest_issue.media_items_json`; текст и картинки идут одним `wall.post`, без Telegram-style разделения на media album + отдельный текст. Если materialized assets недоступны или upload в VK не дал ни одного `photo...` attachment, VK fanout должен fail-closed вместо text-only поста.
 
 Минимальный rollout для `uhtykaliningrad`:
 
 1. Добавить env/настройку целевой группы для guide VK digest отдельно от `VK_EVENTS_GROUP_ID`, чтобы не смешивать `uhtykaliningrad` с `klgdevents`.
 2. Добавить VK-render поверх уже существующего `build_guide_digest_preview(..., family="new_occurrences")`, чтобы dedup, writer, repeat-policy и published marks не расходились между Telegram и VK.
 3. Сохранять VK publication evidence в `guide_digest_issue.published_targets_json` или совместимом per-target поле, чтобы повторный запуск видел, что выпуск уже ушёл в VK, и не дублировал тот же digest.
-4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`.
+4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk` с photo attachments из `media_items_json`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`, `attachments[].type=photo`.
 
 Runtime flags:
 
@@ -300,6 +301,7 @@ Runtime flags:
 Подводные камни, которые считаются blocking для запуска:
 
 - нельзя переиспользовать Telegram split text как есть: VK должен получить один связный plain-text пост с собственной первой строкой;
+- нельзя публиковать VK guide digest без картинок, если preview/materialization выбрали media items: отсутствие usable assets или upload failure является blocking ошибкой;
 - нельзя отмечать occurrence опубликованным только из-за VK-failure/partial: published mark ставится только после успешного wall.post/postponed result;
 - shortener failure не блокирует digest, но должен быть видимым, потому что Telegram-ссылки в VK без сокращения часто выглядят длинно и плохо меряются;
 - personal VK source требует owner/user awareness. `vk.com/ivsguide`, `vk.ru/natakkaz` и будущие личные страницы нельзя обрабатывать как negative group wall id;

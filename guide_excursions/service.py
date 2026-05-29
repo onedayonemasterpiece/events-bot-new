@@ -362,16 +362,28 @@ def _ru_exit_word(count: int) -> str:
     return "выходов"
 
 
+def _guide_digest_vk_period_label(rows: Sequence[Mapping[str, Any]]) -> str | None:
+    parsed_dates = sorted(
+        {
+            parsed
+            for parsed in (_parse_iso_date(collapse_ws(_mapping_value(row, "date"))) for row in rows)
+            if parsed is not None
+        }
+    )
+    if not parsed_dates:
+        return None
+    if len(parsed_dates) <= 3:
+        labels = [
+            build_media_caption_period_label([item.isoformat()])
+            for item in parsed_dates
+        ]
+        return _join_ru_list([label for label in labels if label])
+    return build_media_caption_period_label([item.isoformat() for item in parsed_dates])
+
+
 def _guide_digest_vk_lead(rows: Sequence[Mapping[str, Any]], *, family: str) -> str:
-    months: list[str] = []
-    for row in rows:
-        parsed = _parse_iso_date(collapse_ws(_mapping_value(row, "date")))
-        if not parsed:
-            continue
-        month = VK_MONTH_NOM.get(parsed.month)
-        if month and month not in months:
-            months.append(month)
-    period = f" на {_join_ru_list(months)}" if months else ""
+    period_label = _guide_digest_vk_period_label(rows)
+    period = f", {period_label}" if period_label else ""
     count = len(rows)
     if family == "last_call":
         return f"Last call по экскурсиям: {count} сигналов{period}"
@@ -424,6 +436,65 @@ def _extract_wall_post_id(url: str | None) -> int | None:
         return int(match.group(1))
     except Exception:
         return None
+
+
+def _guide_vk_media_asset_paths(media_items: Sequence[Mapping[str, Any]] | None) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for item in media_items or []:
+        if not isinstance(item, Mapping):
+            continue
+        asset = item.get("media_asset")
+        if not isinstance(asset, Mapping):
+            continue
+        if collapse_ws(asset.get("kind") or "photo") != "photo":
+            continue
+        raw_path = collapse_ws(asset.get("path"))
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(path)
+        if len(paths) >= MAX_MEDIA_ITEMS:
+            break
+    return paths
+
+
+async def _upload_guide_vk_media_attachments(
+    *,
+    group_id: int,
+    media_items: Sequence[Mapping[str, Any]] | None,
+    db: Database | None,
+    bot: Bot | None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]],
+) -> list[str]:
+    paths = _guide_vk_media_asset_paths(media_items)
+    if not paths:
+        raise RuntimeError("Guide VK digest requires materialized media assets")
+    attachments: list[str] = []
+    missing_paths: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            missing_paths.append(str(path))
+            continue
+        attachment = await upload_vk_photo_bytes_fn(
+            str(group_id),
+            path.read_bytes(),
+            db,
+            bot,
+            filename=path.name or "guide.jpg",
+        )
+        if attachment:
+            attachments.append(attachment)
+    if not attachments:
+        details = f"; missing={missing_paths[:3]}" if missing_paths else ""
+        raise RuntimeError(f"Guide VK digest media upload failed{details}")
+    if missing_paths:
+        logger.warning("guide_digest_vk_media_missing paths=%s", missing_paths[:5])
+    return attachments
 
 
 def _vk_public_target_key(*, group_id: int, target: str | None = None) -> str:
@@ -4313,13 +4384,16 @@ async def publish_latest_guide_digest_to_vk(
     target: str | None = None,
     vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
+    edit_vk_post_fn: Callable[..., Awaitable[bool]] | None = None,
+    repair_existing: bool = False,
 ) -> dict[str, Any]:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         if issue_id is not None:
             cur = await conn.execute(
                 """
-                SELECT id, family, status, items_json, published_targets_json
+                SELECT id, family, status, items_json, media_items_json, published_targets_json
                 FROM guide_digest_issue
                 WHERE id=? AND family=?
                 """,
@@ -4328,7 +4402,7 @@ async def publish_latest_guide_digest_to_vk(
         else:
             cur = await conn.execute(
                 """
-                SELECT id, family, status, items_json, published_targets_json
+                SELECT id, family, status, items_json, media_items_json, published_targets_json
                 FROM guide_digest_issue
                 WHERE family=? AND status IN ('published', 'partial')
                 ORDER BY id DESC
@@ -4341,6 +4415,7 @@ async def publish_latest_guide_digest_to_vk(
             return {"published": False, "reason": "no_issue", "family": family}
         issue_id_resolved = int(issue["id"] or 0)
         occurrence_ids = _issue_occurrence_ids(issue["items_json"])
+        media_items = _issue_media_items(issue["media_items_json"])
         rows = await _fetch_digest_rows_by_ids(conn, occurrence_ids)
 
     if not rows:
@@ -4354,6 +4429,14 @@ async def publish_latest_guide_digest_to_vk(
         import main
 
         post_to_vk_fn = main.post_to_vk  # type: ignore[attr-defined]
+    if upload_vk_photo_bytes_fn is None:
+        import main
+
+        upload_vk_photo_bytes_fn = main.upload_vk_photo_bytes  # type: ignore[attr-defined]
+    if edit_vk_post_fn is None:
+        import main
+
+        edit_vk_post_fn = main.edit_vk_post  # type: ignore[attr-defined]
 
     vk_group_id = await _resolve_vk_digest_group_id(
         db=db,
@@ -4371,7 +4454,12 @@ async def publish_latest_guide_digest_to_vk(
         )
         current = await cur.fetchone()
     published_targets_raw = _json_load(current["published_targets_json"] if current else None, fallback={})
-    if isinstance(published_targets_raw, Mapping) and target_key in published_targets_raw:
+    existing_target_payload = (
+        published_targets_raw.get(target_key)
+        if isinstance(published_targets_raw, Mapping)
+        else None
+    )
+    if existing_target_payload is not None and not repair_existing:
         return {
             "published": False,
             "reason": "already_published",
@@ -4391,7 +4479,57 @@ async def publish_latest_guide_digest_to_vk(
         raise RuntimeError(
             f"Guide VK digest too long for one post: {len(text)} > {GUIDE_DIGEST_VK_MAX_CHARS}"
         )
-    url = await post_to_vk_fn(str(vk_group_id), text, db, bot)
+    attachments = await _upload_guide_vk_media_attachments(
+        group_id=vk_group_id,
+        media_items=media_items,
+        db=db,
+        bot=bot,
+        upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
+    )
+
+    if existing_target_payload is not None and repair_existing:
+        post_urls = []
+        if isinstance(existing_target_payload, Mapping):
+            post_urls = [
+                collapse_ws(item)
+                for item in (existing_target_payload.get("post_urls") or [])
+                if collapse_ws(item)
+            ]
+        if not post_urls:
+            return {
+                "published": False,
+                "reason": "no_existing_vk_url",
+                "issue_id": issue_id_resolved,
+                "target": target_key,
+                "group_id": vk_group_id,
+            }
+        edited = await edit_vk_post_fn(post_urls[0], text, db, bot, attachments=attachments)
+        next_targets = dict(published_targets_raw) if isinstance(published_targets_raw, Mapping) else {}
+        current_payload = dict(existing_target_payload) if isinstance(existing_target_payload, Mapping) else {}
+        current_payload["media_message_ids"] = [post_id for post_id in current_payload.get("message_ids", [])]
+        current_payload["attachments_count"] = len(attachments)
+        current_payload["transport"] = "vk_wall"
+        next_targets[target_key] = current_payload
+        async with db.raw_conn() as conn:
+            await _enable_row_factory(conn)
+            await conn.execute(
+                "UPDATE guide_digest_issue SET published_targets_json=? WHERE id=?",
+                (_json_dump(next_targets), issue_id_resolved),
+            )
+            await conn.commit()
+        return {
+            "published": False,
+            "repaired": bool(edited),
+            "issue_id": issue_id_resolved,
+            "family": family,
+            "target": target_key,
+            "group_id": vk_group_id,
+            "url": post_urls[0],
+            "attachments_count": len(attachments),
+            "text": text,
+        }
+
+    url = await post_to_vk_fn(str(vk_group_id), text, db, bot, attachments=attachments)
     if not url:
         raise RuntimeError("Guide VK digest wall.post failed")
 
@@ -4400,10 +4538,11 @@ async def publish_latest_guide_digest_to_vk(
     next_targets[target_key] = {
         "message_ids": [int(post_id)] if post_id else [],
         "text_message_ids": [int(post_id)] if post_id else [],
-        "media_message_ids": [],
+        "media_message_ids": [int(post_id)] if post_id else [],
         "post_urls": [url],
         "group_id": int(vk_group_id),
         "transport": "vk_wall",
+        "attachments_count": len(attachments),
     }
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
@@ -4419,6 +4558,7 @@ async def publish_latest_guide_digest_to_vk(
         "target": target_key,
         "group_id": vk_group_id,
         "url": url,
+        "attachments_count": len(attachments),
         "text": text,
     }
 
