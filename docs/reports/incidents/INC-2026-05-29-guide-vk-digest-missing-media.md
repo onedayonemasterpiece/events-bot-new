@@ -1,10 +1,10 @@
 # INC-2026-05-29 Guide VK Digest Missing Media
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Guide excursions VK digest / `vk.com/uhtykaliningrad`
 Opened: 2026-05-29
-Closed: —
+Closed: 2026-05-29
 Owners: Codex / production operator
 Related incidents: —
 Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/features/vk-publishing/README.md`, `docs/operations/release-governance.md`
@@ -30,6 +30,7 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 - 2026-05-29 UTC: code inspection found `publish_latest_guide_digest_to_vk` calling `post_to_vk` without attachments and not reading `guide_digest_issue.media_items_json`.
 - 2026-05-29 UTC: hotfix branch created from `origin/main`.
 - 2026-05-29 UTC: fix implemented with local media upload, fail-closed media handling, repair path, tests and docs.
+- 2026-05-29 UTC: deployed hotfix to Fly production, repaired editable VK posts, and normalized stored VK target ids.
 
 ## Root Cause
 
@@ -93,15 +94,19 @@ Guide excursion digests published to `https://vk.com/uhtykaliningrad` were text-
 
 ## Follow-up Actions
 
-- [ ] Codex / 2026-05-29: deploy to production and repair all editable recent `uhtykaliningrad` guide digest posts.
-- [ ] Codex / 2026-05-29: verify the next scheduled guide VK digest has photo attachments.
+- [x] Codex / 2026-05-29: deploy to production and repair all editable recent `uhtykaliningrad` guide digest posts.
+- [x] Codex / 2026-05-29: verify the next scheduled guide VK digest publish path has photo attachments or fails before text-only VK publication.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- post-deploy verification:
+- deployed SHA: `01abc40b3075494871c5e540b65609f3e6410001`, reachable from `origin/main`.
+- deploy path: `flyctl deploy --app events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KSS53412WGPRDQN1MYCHKYM2`, machine `48e42d5b714228` version `1151`.
+- regression checks: `.venv/bin/pytest -q tests/test_guide_vk_digest.py tests/test_vk_actor.py tests/test_vk_source.py::test_sync_vk_source_post_attaches_photos tests/test_vk_source.py::test_sync_vk_source_post_preserves_attachments_on_partial_reupload` passed (`13 passed`); `python3 -m py_compile guide_excursions/service.py main.py main_part2.py`; `git diff --check`.
+- health: `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks `ok`, issues `[]`; Fly status showed `1 total, 1 passing` check.
+- production log check: runtime file mirror was enabled (`ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`); no guide/VK digest errors were found after deploy. An unrelated `tg_ics_post` `bad time` job error was visible in runtime logs and is outside this incident's surface.
+- backfill/repair: stored VK URLs were normalized from postponed ids to actual wall ids (`_1 -> _2`, `_3 -> _4`, `_5 -> _6`, `_7 -> _8`). Posts `wall-238875824_6` and `wall-238875824_8` were still editable and repaired with attachments. `wall-238875824_2` was outside VK's edit window; `wall-238875824_4` had no saved issue media to attach.
+- VK API verification: `wall-238875824_6` exists, `from_id=-238875824`, `photos=3`, first line `Новые экскурсии: 4 выхода, 30 мая и 31 мая`; `wall-238875824_8` exists, `from_id=-238875824`, `photos=2`, first line `Новые экскурсии: 8 выходов, 30 мая - 28 июня`.
+- production DB verification: issue `79` target `vk:uhtykaliningrad` stores `post_urls=["https://vk.com/wall-238875824_6"]`, `message_ids=[6]`, `attachments_count=3`; issue `80` stores `post_urls=["https://vk.com/wall-238875824_8"]`, `message_ids=[8]`, `attachments_count=2`.
 
 ## Prevention
 
