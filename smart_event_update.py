@@ -227,6 +227,12 @@ SMART_UPDATE_G4_SPLIT_CREATE = (os.getenv("SMART_UPDATE_G4_SPLIT_CREATE", "0") o
 SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE = (
     os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
+# INC-2026-05-30 opt 1: LLM dedup adjudicator over widened (date+city+blocking-key)
+# recall on the create path. Default ON; set to 0 to roll back to the pre-incident
+# anchor-gated behaviour.
+SMART_UPDATE_DEDUP_ADJUDICATOR = (
+    os.getenv("SMART_UPDATE_DEDUP_ADJUDICATOR", "1") or ""
+).strip().lower() in {"1", "true", "yes", "on"}
 SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE = (
     os.getenv("SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE", "adaptive") or "adaptive"
 ).strip().lower()
@@ -584,6 +590,48 @@ MATCH_CREATE_BUNDLE_RESPONSE_FORMAT = {
 }
 
 MATCH_CREATE_BUNDLE_SCHEMA = MATCH_CREATE_BUNDLE_RESPONSE_FORMAT["json_schema"]["schema"]
+
+# INC-2026-05-30 opt 1: decision-only schema for the widened-recall dedup adjudicator.
+# No create bundle here (lollipop tightening): this call only answers match-vs-create.
+_DEDUP_ADJUDICATOR_MERGE_CODES = {
+    "doors_start_skew",
+    "venue_variant",
+    "junk_location_same_venue",
+    "two_vendor_same_slot",
+    "identical_anchors_dup",
+    "title_wrapper_only",
+}
+_DEDUP_ADJUDICATOR_KEEP_CODES = {
+    "session_split_keep",
+    "matinee_evening_keep",
+    "distinct_show_keep",
+    "parallel_venue_keep",
+    "no_candidate_match",
+}
+DEDUP_ADJUDICATOR_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "EventDedupAdjudication",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["match", "create"]},
+                "match_event_id": {"type": ["integer", "null"]},
+                "confidence": {"type": "number"},
+                "reason_code": {
+                    "type": "string",
+                    "enum": sorted(
+                        _DEDUP_ADJUDICATOR_MERGE_CODES | _DEDUP_ADJUDICATOR_KEEP_CODES
+                    ),
+                },
+                "reason": {"type": "string"},
+            },
+            "required": ["action", "match_event_id", "confidence", "reason_code", "reason"],
+            "additionalProperties": False,
+        },
+    },
+}
+DEDUP_ADJUDICATOR_SCHEMA = DEDUP_ADJUDICATOR_RESPONSE_FORMAT["json_schema"]["schema"]
 
 
 def _norm_space(text: str) -> str:
@@ -8908,6 +8956,307 @@ async def _llm_match_or_create_bundle(
     }
 
 
+def _is_generic_ticket_url(url: str | None) -> bool:
+    """True for season-subscription / generic landing ticket pages (not per-event).
+
+    Used so that ``two_vendor_same_slot`` / ``identical_anchors_dup`` cannot be
+    "proven" by a shared generic ticket page (see ``_pre_create_duplicate_probe``
+    season-subscription caveat). Conservative: only flags obvious generic paths.
+    """
+    norm = _normalize_url(url)
+    if not norm:
+        return False
+    path = re.sub(r"^https?://[^/]+", "", norm).strip("/").lower()
+    if not path:
+        # bare domain → generic
+        return True
+    generic_tokens = ("season", "subscription", "abonement", "afisha", "events", "schedule", "raspisanie")
+    last = path.rsplit("/", 1)[-1]
+    if last in generic_tokens:
+        return True
+    # A per-event link usually ends in a numeric/slug id segment; a path that is a
+    # single generic word is a landing page.
+    if "/" not in path and path in generic_tokens:
+        return True
+    return False
+
+
+def _dedup_adjudicator_block_candidates(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+    posters_map: dict[int, list[EventPoster]] | None,
+    *,
+    limit: int = 8,
+) -> list[Event]:
+    """Cheap, recall-biased blocking over the widened candidate set (INC-2026-05-30 opt 1).
+
+    A row qualifies if ANY signal fires (title-relatedness / venue / ticket parity /
+    poster-hash overlap), then we rank by signal strength + date proximity and keep
+    the top ``limit``. False inclusions are cheap (the LLM rejects them); false
+    omissions are the bug we are fixing, so the predicate is a union, not an AND.
+    """
+    posters_map = posters_map or {}
+    cand_ticket = _normalize_ticket_url_for_match(candidate.ticket_link)
+    cand_poster_hashes = _poster_hashes(getattr(candidate, "posters", None) or [])
+    cand_start, _cand_end = _candidate_date_range(candidate)
+
+    scored: list[tuple[int, int, Event]] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        b1 = _titles_look_related(candidate.title, getattr(ev, "title", None))
+        b2 = _event_candidate_location_matches(ev, candidate)
+        ev_ticket = _normalize_ticket_url_for_match(getattr(ev, "ticket_link", None))
+        b3 = bool(cand_ticket and ev_ticket and cand_ticket == ev_ticket)
+        ev_poster_hashes = {
+            getattr(p, "sha256", None) for p in posters_map.get(ev.id or 0, []) if getattr(p, "sha256", None)
+        }
+        b4 = bool(cand_poster_hashes and (cand_poster_hashes & ev_poster_hashes))
+        if not (b1 or b2 or b3 or b4):
+            continue
+        score = b4 * 4 + b3 * 3 + b1 * 2 + b2 * 1
+        # Date proximity as a tiebreaker (smaller is better → negate for desc sort).
+        proximity = 0
+        try:
+            ev_start, _ = _event_date_range(ev)
+            if ev_start and cand_start:
+                proximity = -abs((ev_start - cand_start).days)
+        except Exception:
+            proximity = 0
+        scored.append((score, proximity, ev))
+
+    scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return [ev for _s, _p, ev in scored[:limit]]
+
+
+async def _llm_dedup_adjudicator(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+    *,
+    posters_map: dict[int, list[EventPoster]] | None = None,
+) -> dict[str, Any] | None:
+    """Decision-only widened-recall dedup gate (INC-2026-05-30 opt 1).
+
+    Runs on the create branch only (after every deterministic matcher, the
+    match/create bundle, the rescue pass, and ``_pre_create_duplicate_probe`` said
+    "no match"), over a recall set that is NOT gated by exact location/time. Answers
+    match-vs-create so a sibling whose venue string or time framing drifted can still
+    be merged, while genuinely-distinct same-venue/same-day events stay separate.
+    """
+    if not events or SMART_UPDATE_LLM_DISABLED:
+        return None
+
+    posters_map = posters_map or {}
+    candidates_payload: list[dict[str, Any]] = []
+    for ev in events:
+        posters = posters_map.get(ev.id or 0, [])
+        poster_texts = [p.ocr_text for p in posters if getattr(p, "ocr_text", None)][:2]
+        poster_titles = [p.ocr_title for p in posters if (getattr(p, "ocr_title", None) or "").strip()][:2]
+        candidates_payload.append(
+            {
+                "id": ev.id,
+                "title": ev.title,
+                "date": ev.date,
+                "time": ev.time,
+                "time_is_default": bool(getattr(ev, "time_is_default", False)),
+                "end_date": ev.end_date,
+                "location_name": ev.location_name,
+                "location_address": ev.location_address,
+                "city": ev.city,
+                "ticket_link": ev.ticket_link,
+                "source_url": getattr(ev, "source_post_url", None) or getattr(ev, "source_vk_post_url", None),
+                "allow_parallel": _allow_parallel_events(ev.location_name),
+                "description": _clip(ev.description, 500),
+                "source_text": _clip(ev.source_text, 600),
+                "poster_texts": poster_texts,
+                "poster_titles": poster_titles,
+            }
+        )
+
+    payload = {
+        "candidate": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "time_is_default": bool(getattr(candidate, "time_is_default", False)),
+            "end_date": candidate.end_date,
+            "location_name": candidate.location_name,
+            "location_address": candidate.location_address,
+            "city": candidate.city,
+            "ticket_link": candidate.ticket_link,
+            "source_url": candidate.source_url,
+            "allow_parallel": _allow_parallel_events(candidate.location_name),
+            "source_text": _clip(candidate.source_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
+            "raw_excerpt": _clip(candidate.raw_excerpt or "", 1200),
+            "poster_texts": [_clip(p.ocr_text, 400) for p in candidate.posters if p.ocr_text][:3],
+            "poster_titles": [
+                _clip(p.ocr_title, 140) for p in candidate.posters if (p.ocr_title or "").strip()
+            ][:3],
+        },
+        "events": candidates_payload[:10],
+    }
+    prompt = (
+        "Ты — арбитр дубликатов. Дан НОВЫЙ анонс события `candidate` и список уже "
+        "существующих событий `events` (тот же город, близкие даты). Реши: новый анонс "
+        "описывает ТО ЖЕ САМОЕ реальное событие, что одно из `events` (дубль → match), "
+        "или это ОТДЕЛЬНОЕ событие, которое нужно создать (create). Верни JSON строго по схеме.\n\n"
+        "ГЛАВНЫЙ ПРИНЦИП: одно реальное событие = одна карточка. Но два разных показа/"
+        "сеанса/спектакля — это РАЗНЫЕ события, их нельзя сливать. Решай по смыслу "
+        "источника (source_text/poster_texts/poster_titles), а не по совпадению строк.\n\n"
+        "Что НЕ является признаком различия (это всё ещё ОДНО событие → match):\n"
+        "- Время «вход/двери» против «начало/старт» (например 19:00 vs 20:00 у одного концерта) — "
+        "это один показ, а не два. Так же дневной сдвиг на ±1–1.5 часа в формулировке времени.\n"
+        "- Площадка записана по-разному: алиас vs официальное название vs касса/адрес "
+        "кассы vs название билетного оператора (qtickets, edinoepole, kassir и т.п.). Это одна площадка.\n"
+        "- В `location_name` у одного из событий мусор/проза/название юрлица "
+        "(«ООО «Уиандекс…»», «театральный трамвай», «весь июнь каждый…»), а реальная "
+        "площадка видна из текста/афиши — считай площадку той же.\n"
+        "- У события ДВЕ разные ссылки на билеты от РАЗНЫХ операторов на ОДИН и тот же показ "
+        "(дата+время+площадка совпадают по сути) — это всё равно ОДНО событие → match. "
+        "Разные билетные операторы НЕ доказывают, что событий два.\n"
+        "- Декоративные эмодзи и обёртка «Спектакль/Концерт/Экскурсия «…»» в названии — это шум, не различие.\n\n"
+        "Когда события РАЗНЫЕ (НЕ сливай, → create) — это важнее, чем найти дубль:\n"
+        "- Несколько сеансов из ОДНОГО поста. Если `candidate.source_text` (или текст "
+        "существующего события) перечисляет несколько времён начала одного дня "
+        "(«В 11:00 … В 13:00 …», «начало в 12:00 и 17:00», «сеансы в 14:00 и 18:00») — "
+        "каждое время это ОТДЕЛЬНЫЙ сеанс/событие. Если `candidate` и кандидат из `events` "
+        "имеют ОДИН и тот же `source_url`, но РАЗНОЕ время — это почти наверняка два "
+        "легитимных сеанса из одного анонса → create.\n"
+        "- Утренник + вечерний показ одного спектакля в один день (например 11:00 и 19:00) — "
+        "это два показа → два события → create.\n"
+        "- Два РАЗНЫХ спектакля/концерта/мероприятия на одной площадке в один день "
+        "(разные названия/программа/состав) → create.\n"
+        "- Если у `candidate.allow_parallel=true` или у кандидата `allow_parallel=true` "
+        "(площадка с несколькими залами/параллельными событиями), не сливай разные события "
+        "только из-за общей площадки и даты — требуй совпадения КОНКРЕТНОГО события "
+        "(название/программа/афиша/зал/ссылка).\n\n"
+        "Работа со временем:\n"
+        "- `time=00:00` и/или `time_is_default=true` считай НЕИЗВЕСТНЫМ временем: это слабый "
+        "якорь, он НЕ создаёт конфликт и НЕ доказывает совпадение. Решай по названию/тексту/афише.\n"
+        "- Явно разные ненулевые времена в один день — это конфликт ТОЛЬКО если из текста не "
+        "видно, что это «двери vs начало» одного показа. Если видно перечисление сеансов — это разные события.\n\n"
+        "Заземление (обязательно):\n"
+        "- Не выдумывай совпадение. Ставь `action=match` только если в данных есть КОНКРЕТНОЕ "
+        "доказательство тождества (та же программа/состав/афиша/ссылка/название одного показа), "
+        "а не просто «похожая тема и тот же день».\n"
+        "- Если сомневаешься между match и create — выбирай create (лучше дубль, который "
+        "поймает следующий проход, чем ошибочно слитые разные события).\n"
+        "- `match_event_id` обязан быть одним из `events[].id`. Если ни один не подходит — "
+        "`action=create`, `match_event_id=null`.\n\n"
+        "Верни: `action` (match|create); `match_event_id` (id из events при match, иначе null); "
+        "`confidence` (0..1); `reason_code` (один код из закрытого списка схемы); "
+        "`reason` (1 короткая фраза по-русски, без выдумок).\n\n"
+        f"{SMART_UPDATE_YO_RULE}\n\n"
+        f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+
+    data = await _ask_gemma_json(
+        prompt,
+        DEDUP_ADJUDICATOR_SCHEMA,
+        max_tokens=400,
+        label="dedup_adjudicator",
+    )
+    if not isinstance(data, dict):
+        return None
+    action = (data.get("action") or "").strip().lower()
+    if action not in {"match", "create"}:
+        return None
+    reason_code = (data.get("reason_code") or "").strip()
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    match_id = data.get("match_event_id")
+    try:
+        match_id = int(match_id) if match_id is not None else None
+    except Exception:
+        match_id = None
+    return {
+        "action": action,
+        "match_event_id": match_id,
+        "confidence": confidence,
+        "reason_code": reason_code,
+        "reason": (data.get("reason") or "").strip(),
+    }
+
+
+def _dedup_adjudicator_accept_merge(
+    candidate: EventCandidate,
+    match_event: Event | None,
+    *,
+    decision: dict[str, Any],
+    allow_parallel: bool,
+) -> tuple[bool, str]:
+    """Deterministic guard ladder over the adjudicator's decision (INC-2026-05-30 opt 1).
+
+    The adjudicator can only ever convert a "create" into a "match", so the only risk
+    it introduces is a false merge. This pure function applies the §4 vetoes and is the
+    primary unit-test surface (it must reject a bad merge even when the LLM said match).
+
+    Returns ``(accept_merge, code)`` — ``code`` is the merge ``reason_code`` when accepted,
+    otherwise a veto reason string.
+    """
+    action = str(decision.get("action") or "").strip().lower()
+    if action != "match":
+        return False, "llm_create"
+    if match_event is None:
+        return False, "no_match_event"
+    reason_code = str(decision.get("reason_code") or "").strip()
+    if reason_code not in _DEDUP_ADJUDICATOR_MERGE_CODES:
+        return False, f"non_merge_code:{reason_code or 'empty'}"
+    try:
+        confidence = float(decision.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    threshold = 0.90 if allow_parallel else 0.80
+    if confidence < threshold:
+        return False, f"low_conf_{confidence:.2f}<{threshold:.2f}"
+
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    ev_time = _event_anchor_time(match_event)
+    time_conflict = _has_explicit_time_conflict(cand_time, ev_time)
+
+    # §4.5 hard invariant: same source post + different time = legitimate multi-session
+    # split (e.g. 5426/5427 from t.me/gusmuseum/4509). Always create, regardless of LLM.
+    if time_conflict and _event_has_source_url_hint(match_event, candidate.source_url):
+        return False, "same_source_url_time_split"
+
+    # §4.3 explicit-time conflict is allowed only for a doors/start skew within 90 min.
+    if time_conflict:
+        gap = None
+        cm = _time_to_minutes_for_match(cand_time)
+        em = _time_to_minutes_for_match(ev_time)
+        if cm is not None and em is not None:
+            gap = abs(cm - em)
+        if not (reason_code == "doors_start_skew" and gap is not None and gap <= 90):
+            return False, "time_conflict_veto"
+
+    # §4.2 unrelated-title overrule — except junk-location, where the title may have
+    # genuinely drifted but the venue + source text prove identity.
+    if (
+        _title_has_meaningful_tokens(candidate.title)
+        and _title_has_meaningful_tokens(getattr(match_event, "title", None))
+        and not _titles_look_related(candidate.title, getattr(match_event, "title", None))
+        and reason_code != "junk_location_same_venue"
+    ):
+        return False, "unrelated_titles"
+
+    # §4.4 generic-ticket false friend: a two-vendor / identical-anchor merge must not
+    # rest solely on a shared GENERIC ticket landing page.
+    if reason_code in {"two_vendor_same_slot", "identical_anchors_dup"}:
+        cand_tk = candidate.ticket_link
+        ev_tk = getattr(match_event, "ticket_link", None)
+        if (
+            cand_tk
+            and ev_tk
+            and _normalize_ticket_url_for_match(cand_tk) == _normalize_ticket_url_for_match(ev_tk)
+            and _is_generic_ticket_url(cand_tk)
+        ):
+            return False, "generic_ticket_false_friend"
+
+    return True, reason_code
+
+
 async def _llm_merge_event(
     candidate: EventCandidate,
     event: Event,
@@ -12566,6 +12915,91 @@ async def _smart_event_update_impl(
                 getattr(match_event, "id", None),
                 _clip_title(candidate.title),
                 _clip_title(getattr(match_event, "title", None)),
+            )
+
+    # LLM dedup adjudicator over WIDENED recall (INC-2026-05-30 opt 1).
+    # Last-line, create-path only: even after every deterministic matcher + the
+    # match/create bundle + rescue + probe said "no match", the genuine sibling may
+    # simply never have entered the anchor-gated shortlist (drifted venue string or
+    # doors/start time). Re-fetch a wider date+city recall, block it down by a cheap
+    # title/venue/ticket/poster key, and let an LLM decide match-vs-create while a
+    # deterministic guard ladder keeps multi-session / parallel events separate.
+    if (
+        SMART_UPDATE_DEDUP_ADJUDICATOR
+        and match_event is None
+        and not anchor_forced
+        and not is_canonical_site
+        and not SMART_UPDATE_LLM_DISABLED
+        and _title_has_meaningful_tokens(candidate.title)
+    ):
+        try:
+            from datetime import timedelta
+
+            wide_lo = (cand_start - timedelta(days=1)).isoformat()
+            wide_hi = (cand_end + timedelta(days=1)).isoformat()
+            async with db.get_session() as session:
+                wide_stmt = select(Event).where(
+                    and_(
+                        Event.date <= wide_hi,
+                        or_(
+                            and_(Event.end_date.is_(None), Event.date >= wide_lo),
+                            Event.end_date >= wide_lo,
+                        ),
+                        Event.lifecycle_status == "active",
+                    )
+                )
+                wide_stmt = _apply_soft_city_filter(wide_stmt, candidate.city)
+                wide_res = await session.execute(wide_stmt)
+                wide_pool = list(wide_res.scalars().all())
+            wide_posters = await _fetch_event_posters_map(
+                db, [ev.id for ev in wide_pool if ev.id]
+            )
+            blocked = _dedup_adjudicator_block_candidates(candidate, wide_pool, wide_posters)
+            if blocked:
+                decision = await _llm_dedup_adjudicator(
+                    candidate, blocked, posters_map=wide_posters
+                )
+                if decision:
+                    adj_id = decision.get("match_event_id")
+                    adj_event = (
+                        next((ev for ev in blocked if ev.id == adj_id), None) if adj_id else None
+                    )
+                    allow_parallel_adj = _allow_parallel_events(candidate.location_name) or (
+                        _allow_parallel_events(getattr(adj_event, "location_name", None))
+                        if adj_event is not None
+                        else False
+                    )
+                    accept, code = _dedup_adjudicator_accept_merge(
+                        candidate,
+                        adj_event,
+                        decision=decision,
+                        allow_parallel=allow_parallel_adj,
+                    )
+                    if accept and adj_event is not None:
+                        match_event = adj_event
+                        match_reason = f"dedup_adjudicator:{code}"
+                        note = "Матчинг: предотвращён дубль (LLM dedup adjudicator)"
+                        if note not in text_filter_facts:
+                            text_filter_facts.append(note)
+                        logger.info(
+                            "smart_update.match type=dedup_adjudicator code=%s conf=%.2f event_id=%s candidate_title=%s existing_title=%s",
+                            code,
+                            float(decision.get("confidence") or 0.0),
+                            getattr(match_event, "id", None),
+                            _clip_title(candidate.title),
+                            _clip_title(getattr(match_event, "title", None)),
+                        )
+                    else:
+                        logger.info(
+                            "smart_update.dedup_adjudicator no_merge code=%s action=%s conf=%.2f candidate_title=%s",
+                            code,
+                            decision.get("action"),
+                            float(decision.get("confidence") or 0.0),
+                            _clip_title(candidate.title),
+                        )
+        except Exception:
+            logger.warning(
+                "smart_update: dedup adjudicator failed (fallback to create)", exc_info=True
             )
 
     if match_event is None:
