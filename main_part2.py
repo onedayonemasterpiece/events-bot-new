@@ -7,6 +7,7 @@ import time as _time
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
+from urllib.parse import quote, urlsplit, urlunsplit
 from aiogram import Bot, types
 
 from aiohttp import web
@@ -3456,6 +3457,33 @@ async def _resolve_vk_postponed_wall_id(
     return None
 
 
+def _vk_wall_get_actors(owner_id: int) -> list[VkActor]:
+    actors = choose_vk_actor(owner_id, "wall.get")
+    return sorted(actors, key=lambda actor: 0 if actor.kind == "user" else 1)
+
+
+async def _resolve_vk_postponed_wall_id_any_actor(
+    *,
+    owner_id: int,
+    post_id: int,
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    for actor in _vk_wall_get_actors(owner_id):
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        resolved_id = await _resolve_vk_postponed_wall_id(
+            owner_id=owner_id,
+            post_id=post_id,
+            actor=actor,
+            token=token,
+            db=db,
+            bot=bot,
+        )
+        if resolved_id:
+            return resolved_id
+    return None
+
+
 async def _resolve_existing_vk_post_url(
     post_url: str,
     *,
@@ -3483,24 +3511,20 @@ async def _resolve_existing_vk_post_url(
     except (TypeError, ValueError):
         return post_url
 
-    for actor in choose_vk_actor(owner_id_num, "wall.get"):
-        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
-        resolved_id = await _resolve_vk_postponed_wall_id(
-            owner_id=owner_id_num,
-            post_id=post_id_num,
-            actor=actor,
-            token=token,
-            db=db,
-            bot=bot,
+    resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+        owner_id=owner_id_num,
+        post_id=post_id_num,
+        db=db,
+        bot=bot,
+    )
+    if resolved_id and resolved_id != post_id_num:
+        resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
+        logging.info(
+            "sync_vk_source_post resolved stale postponed id %s -> %s",
+            post_url,
+            resolved,
         )
-        if resolved_id and resolved_id != post_id_num:
-            resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
-            logging.info(
-                "sync_vk_source_post resolved stale postponed id %s -> %s",
-                post_url,
-                resolved,
-            )
-            return resolved
+        return resolved
     return post_url
 
 
@@ -3566,11 +3590,9 @@ async def post_to_vk(
             if post_id:
                 actual_post_id = int(post_id)
                 if publish_date:
-                    resolved_id = await _resolve_vk_postponed_wall_id(
+                    resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
                         owner_id=owner_id,
                         post_id=actual_post_id,
-                        actor=actor,
-                        token=token,
                         db=db,
                         bot=bot,
                     )
@@ -3811,12 +3833,28 @@ def _vk_photo_near_dup_hamming_threshold() -> int:
     raw = (
         os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
         or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
-        or "10"
+        or "20"
     )
     try:
         return max(0, int(str(raw).strip()))
     except (TypeError, ValueError):
-        return 10
+        return 20
+
+
+def _quote_photo_url_for_request(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe="/%:@"),
+                quote(parts.query, safe="=&?/:+,%"),
+                parts.fragment,
+            )
+        )
+    except Exception:
+        return url
 
 
 def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
@@ -3841,9 +3879,10 @@ async def _compute_vk_photo_url_dhash(url: str | None) -> str | None:
         return None
     try:
         session = get_http_session()
+        request_url = _quote_photo_url_for_request(raw)
         async with span("http"):
             async with HTTP_SEMAPHORE:
-                async with session.get(raw) as resp:
+                async with session.get(request_url) as resp:
                     resp.raise_for_status()
                     if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
                         return None

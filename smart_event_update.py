@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import urllib.request
 
 from sqlalchemy import and_, delete, or_, select
@@ -15010,8 +15010,9 @@ def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
 
 
 def _download_photo_for_hash(url: str, *, max_bytes: int) -> bytes | None:
+    request_url = _quote_photo_url_for_request(url)
     req = urllib.request.Request(
-        url,
+        request_url,
         headers={"User-Agent": "events-bot-media-dedup/1.0"},
     )
     with urllib.request.urlopen(req, timeout=20) as resp:
@@ -15026,6 +15027,22 @@ def _download_photo_for_hash(url: str, *, max_bytes: int) -> bytes | None:
         if len(data) > max_bytes:
             return None
         return data
+
+
+def _quote_photo_url_for_request(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe="/%:@"),
+                quote(parts.query, safe="=&?/:+,%"),
+                parts.fragment,
+            )
+        )
+    except Exception:
+        return url
 
 
 async def _photo_url_dhash(url: str | None) -> str | None:

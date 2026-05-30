@@ -327,6 +327,12 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     assert posted["vals"] == ["ph1", "ph2"]
 
 
+def test_vk_photo_near_dup_default_threshold(monkeypatch):
+    monkeypatch.delenv("VK_PHOTO_NEAR_DUP_HAMMING", raising=False)
+    monkeypatch.delenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", raising=False)
+    assert main._vk_photo_near_dup_hamming_threshold() == 20
+
+
 @pytest.mark.asyncio
 async def test_sync_vk_source_post_skips_group_only_photo_upload(monkeypatch, caplog):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
