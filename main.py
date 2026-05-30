@@ -19024,7 +19024,9 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         description_for_vk = ""
     text_for_vk = description_for_vk or (ev.source_text or "")
-    new_hash = content_hash(text_for_vk)
+    # VK wall text includes event metadata built from `ev` (title/date/place)
+    # plus the body text, so title-only repairs must not be invisible here.
+    new_hash = content_hash(f"{getattr(ev, 'title', '') or ''}\n{text_for_vk}")
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False
     if existing_vk_post_url:

@@ -610,6 +610,46 @@ async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+
+    event = main.Event(
+        title="New title",
+        description="Same body",
+        source_text="Same body",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+        source_vk_post_url="https://vk.com/wall-1_1",
+        vk_source_hash=main.content_hash("Same body"),
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = event.id
+
+    calls = []
+
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+        calls.append((ev.title, text_for_vk))
+        return "https://vk.com/wall-1_1"
+
+    monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
+
+    await main.job_sync_vk_source_post(event_id, db, None)
+
+    assert calls == [("New title", "Same body")]
+    async with db.get_session() as session:
+        updated = await session.get(main.Event, event_id)
+    assert updated.vk_source_hash == main.content_hash("New title\nSame body")
+
+
+@pytest.mark.asyncio
 async def test_add_events_from_text_preserves_links(tmp_path: Path, monkeypatch):
     main.VK_AFISHA_GROUP_ID = ""
     db = main.Database(str(tmp_path / "db.sqlite"))
