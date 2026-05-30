@@ -183,11 +183,30 @@ def read_known_place_aliases() -> dict[str, str]:
     return aliases
 
 
+@lru_cache(maxsize=1)
+def read_known_place_names() -> dict[str, str]:
+    names: dict[str, str] = {}
+    path = os.path.join("docs", "reference", "kaliningrad_oblast_places.md")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f]
+    except Exception:
+        return names
+    for line in lines:
+        if not line or line.startswith("#"):
+            continue
+        value = line.split("=>", 1)[1].strip() if "=>" in line else line
+        key = normalize_venue_key(value)
+        if key and value:
+            names[key] = value
+    return names
+
+
 def canonicalize_known_place_name(value: str | None) -> str | None:
     key = normalize_venue_key(value)
     if not key:
         return None
-    return read_known_place_aliases().get(key)
+    return read_known_place_aliases().get(key) or read_known_place_names().get(key)
 
 
 def _filter_venues_by_city(

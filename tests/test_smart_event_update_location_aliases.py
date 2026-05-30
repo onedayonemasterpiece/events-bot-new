@@ -50,6 +50,7 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
 
 def test_place_alias_canonicalizes_yantarnoe_to_yantarny() -> None:
     assert canonicalize_known_place_name("Янтарное") == "Янтарный"
+    assert canonicalize_known_place_name("Янтарный") == "Янтарный"
     payload = {
         "location_name": "Янтарное",
         "location_address": None,
@@ -58,6 +59,15 @@ def test_place_alias_canonicalizes_yantarnoe_to_yantarny() -> None:
     normalise_event_location_from_reference(payload)
     assert payload["location_name"] == "Янтарный"
     assert payload["city"] == "Янтарный"
+
+    already_canonical = {
+        "location_name": "Янтарный",
+        "location_address": None,
+        "city": "Янтарный",
+    }
+    normalise_event_location_from_reference(already_canonical)
+    assert already_canonical["location_name"] == "Янтарный"
+    assert already_canonical["city"] == "Янтарный"
 
 
 def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
