@@ -183,7 +183,7 @@ SMART_UPDATE_WRITER_MODEL = (
 def _resolve_smart_update_model(label: str | None) -> str:
     label_l = (label or "").strip().lower()
     # Pure facts extraction stages (split-create / fact-first paths).
-    if label_l in {"facts_extract", "rich_facts_extract"}:
+    if label_l in {"facts_extract", "rich_facts_extract", "title_recover", "title_recover_public"}:
         return SMART_UPDATE_FACTS_MODEL
     # Pure writer stages (split-create / fact-first paths). The fact-first
     # writer label is composed as ``f"{label}:fact_first_desc"`` (e.g.
