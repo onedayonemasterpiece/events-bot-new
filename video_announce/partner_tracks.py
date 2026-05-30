@@ -105,12 +105,19 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         },
     ),
     prod_story_targets=(
-        # Round-3 prod contract (2026-05-17): both targets are independent
-        # best-effort — neither is `required`. Success in one does not gate
-        # the other, and failure of one does not fail the overall publish.
+        # Round-3 prod contract (2026-05-17): all targets are independent
+        # best-effort — none is `required`. Success in one does not gate
+        # the others, and failure of one does not fail the overall publish.
         # Operator brief: «публикация в сторис телеграм и в сторис вк
         # сообщества, вне зависимости от успеха публикации в какой-либо
         # из них».
+        #
+        # Round-4 (2026-05-30): дополнительно к сторис ВК тот же видеоанонс
+        # публикуется постом на стену VK-сообщества научной библиотеки
+        # (`konb39`, transport `vk_wall`). Тоже best-effort. Подпись поста
+        # авто-собирается `build_vk_video_announce_caption` (города/даты),
+        # т.к. явный caption у таргета не задан. `_dedupe_targets` различает
+        # `vk_story:konb39` и `vk_wall:konb39` по transport — коллизии нет.
         {
             "peer": "@kaliningradlibrary",
             "label": "tg:@kaliningradlibrary:story",
@@ -125,6 +132,15 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
             "delay_seconds": 0,
             "mode": "upload",
             "transport": "vk_story",
+            "blocking": False,
+            "required": False,
+        },
+        {
+            "peer": "konb39",
+            "label": "vk:konb39:wall",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "transport": "vk_wall",
             "blocking": False,
             "required": False,
         },
