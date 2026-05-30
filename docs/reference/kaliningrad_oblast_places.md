@@ -26,6 +26,9 @@
 Черняховск
 Янтарный
 
+# Common aliases / inflected forms (alias => canonical display)
+Янтарное => Янтарный
+
 # Common settlements used in event posts
 Гвардейский городской округ
 Светлогорский городской округ
@@ -48,4 +51,3 @@
 Рыбачий
 Сосновка
 Ушаково
-

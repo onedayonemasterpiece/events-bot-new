@@ -3456,6 +3456,54 @@ async def _resolve_vk_postponed_wall_id(
     return None
 
 
+async def _resolve_existing_vk_post_url(
+    post_url: str,
+    *,
+    target_group_id: str,
+    db: Database | None,
+    bot: Bot | None,
+) -> str:
+    ids = _vk_owner_and_post_id(post_url)
+    if not ids:
+        return post_url
+    owner_id, post_id = ids
+    try:
+        response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
+        items = response.get("response") if isinstance(response, dict) else response
+        if not isinstance(items, list):
+            items = [items] if items else []
+        if items:
+            return post_url
+    except Exception:
+        logging.debug("resolve existing VK post getById failed: %s", post_url, exc_info=True)
+
+    try:
+        owner_id_num = int(owner_id)
+        post_id_num = int(post_id)
+    except (TypeError, ValueError):
+        return post_url
+
+    for actor in choose_vk_actor(owner_id_num, "wall.get"):
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        resolved_id = await _resolve_vk_postponed_wall_id(
+            owner_id=owner_id_num,
+            post_id=post_id_num,
+            actor=actor,
+            token=token,
+            db=db,
+            bot=bot,
+        )
+        if resolved_id and resolved_id != post_id_num:
+            resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
+            logging.info(
+                "sync_vk_source_post resolved stale postponed id %s -> %s",
+                post_url,
+                resolved,
+            )
+            return resolved
+    return post_url
+
+
 async def post_to_vk(
     group_id: str,
     message: str,
@@ -3885,6 +3933,16 @@ async def sync_vk_source_post(
         target_id = str(target_group_id).lstrip("-")
         if not ids or str(abs(int(ids[0]))) != target_id:
             existing_vk_post_url = ""
+        else:
+            resolved_vk_post_url = await _resolve_existing_vk_post_url(
+                existing_vk_post_url,
+                target_group_id=str(target_group_id),
+                db=db,
+                bot=bot,
+            )
+            if resolved_vk_post_url != existing_vk_post_url:
+                existing_vk_post_url = resolved_vk_post_url
+                event.source_vk_post_url = resolved_vk_post_url
 
     attachments: list[str] | None = None
     photo_urls_source: list[str] = list(event.photo_urls or [])

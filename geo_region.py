@@ -70,9 +70,11 @@ def _load_allowlist_norm() -> set[str]:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        norm = _normalize_city(line)
-        if norm:
-            out.add(norm)
+        values = line.split("=>", 1) if "=>" in line else [line]
+        for value in values:
+            norm = _normalize_city(value)
+            if norm:
+                out.add(norm)
     return out
 
 

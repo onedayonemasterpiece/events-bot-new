@@ -31,6 +31,21 @@ def test_sanitize_for_vk_renders_markdown_headings_as_plain_blocks():
     assert sanitize_for_vk(src) == expected
 
 
+def test_sanitize_for_vk_breaks_inline_markdown_headings():
+    src = (
+        "Лид одним абзацем. ### Музыкальная палитра В программу включены "
+        "знаковые произведения. ### Исполнители На сцене выступят: * Оркестр; * Солисты."
+    )
+    expected = (
+        "Лид одним абзацем.\n\n"
+        "МУЗЫКАЛЬНАЯ ПАЛИТРА\n\n"
+        "В программу включены знаковые произведения.\n\n"
+        "ИСПОЛНИТЕЛИ\n\n"
+        "На сцене выступят: * Оркестр; * Солисты."
+    )
+    assert sanitize_for_vk(src) == expected
+
+
 def test_sanitize_for_vk_renders_html_headings_as_plain_blocks():
     src = "<h3>О событии</h3><p>Текст</p><h4><b>Что обсудим</b></h4>Детали"
     expected = "О СОБЫТИИ\n\nТекст\n\nЧТО ОБСУДИМ\n\nДетали"

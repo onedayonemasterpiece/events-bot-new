@@ -408,6 +408,51 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_resolves_stale_postponed_id(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = False
+
+    event = main.Event(
+        title="T",
+        description="",
+        date="2024-01-01",
+        time="00:00",
+        location_name="Place",
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_10"
+
+    async def fake_vk_api(method, **kwargs):
+        posts = kwargs.get("posts", "")
+        if method == "wall.getById" and posts == "-1_10":
+            return {"response": []}
+        if method == "wall.getById" and posts == "-1_11":
+            msg = main.build_vk_source_message(event, "old")
+            return {"response": [{"text": msg}]}
+        return {"response": []}
+
+    async def fake_resolve(**kwargs):
+        assert kwargs["post_id"] == 10
+        return 11
+
+    edited: dict[str, str] = {}
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+        edited["url"] = url
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id", fake_resolve)
+    monkeypatch.setattr(main, "choose_vk_actor", lambda owner_id, intent: [main.VkActor("user", "u", "user")])
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    url = await main.sync_vk_source_post(event, "new", None, None)
+
+    assert url == "https://vk.com/wall-1_11"
+    assert event.source_vk_post_url == "https://vk.com/wall-1_11"
+    assert edited["url"] == "https://vk.com/wall-1_11"
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_preserves_attachments_on_partial_reupload(
     monkeypatch,
 ):

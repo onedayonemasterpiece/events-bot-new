@@ -377,10 +377,11 @@ SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
 
 # Max Hamming distance (over the 256-bit dh16 perceptual hash) at which two
 # posters are treated as the same image and collapsed before publishing. The
-# offline thumbnail composer uses 12; we use a slightly tighter default here to
-# avoid dropping genuinely different posters. 0 disables near-dup dedup.
+# offline thumbnail composer uses 12; the live VK feed has shown same-frame
+# re-encodes/crops at distance 19, so keep a still-conservative 256-bit default
+# above that. 0 disables near-dup dedup.
 SMART_UPDATE_POSTER_NEAR_DUP_HAMMING = _env_int(
-    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 10, lo=0, hi=64
+    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 20, lo=0, hi=64
 )
 
 # Optional: allow light emoji usage in *full* public descriptions (Telegraph/body).

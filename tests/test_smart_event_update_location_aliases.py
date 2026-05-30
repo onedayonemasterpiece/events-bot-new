@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smart_event_update as su
 from location_reference import (
+    canonicalize_known_place_name,
     find_known_venue_in_text,
     match_known_venue,
     normalise_event_location_from_reference,
@@ -45,6 +46,18 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     assert fort is not None
     assert fort.name == "Форт №11 Дёнхофф"
     assert fort.city == "Калининград"
+
+
+def test_place_alias_canonicalizes_yantarnoe_to_yantarny() -> None:
+    assert canonicalize_known_place_name("Янтарное") == "Янтарный"
+    payload = {
+        "location_name": "Янтарное",
+        "location_address": None,
+        "city": "Янтарное",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload["location_name"] == "Янтарный"
+    assert payload["city"] == "Янтарный"
 
 
 def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:

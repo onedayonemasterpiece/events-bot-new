@@ -311,6 +311,49 @@ def _upper_vk_heading_text(value: str) -> str:
     )
 
 
+_VK_INLINE_HEADING_PREFIXES = (
+    "Акцент на классике",
+    "Ключевые постановки",
+    "Маршрут и детали",
+    "Музыкальная палитра",
+    "Место проведения",
+    "Программа и участники",
+    "Сценическое воплощение и эстетика",
+    "Формат события",
+    "Что вас ждёт",
+    "Исполнители",
+    "Маршрут",
+    "Программа",
+)
+
+
+def _break_inline_markdown_headings(text: str) -> str:
+    text = re.sub(r"(?<!^)(?<!\n)\s+(?=#{1,6}\s+\S)", "\n\n", text)
+    text = re.sub(r"(?<!\n)\n(?=#{1,6}\s+\S)", "\n\n", text)
+    return text
+
+
+def _split_markdown_heading_body(value: str) -> tuple[str, str | None]:
+    raw = re.sub(r"\s+", " ", value).strip()
+    if not raw:
+        return "", None
+    punct = re.match(r"^(.{3,80}?[.!?:])\s+([А-ЯA-ZЁ].+)$", raw)
+    if punct:
+        heading = punct.group(1).rstrip(" .:!?").strip()
+        body = punct.group(2).strip()
+        if heading and body:
+            return heading, body
+
+    raw_cf = raw.casefold().replace("ё", "е")
+    for prefix in sorted(_VK_INLINE_HEADING_PREFIXES, key=len, reverse=True):
+        prefix_cf = prefix.casefold().replace("ё", "е")
+        if raw_cf == prefix_cf:
+            return raw, None
+        if raw_cf.startswith(prefix_cf + " "):
+            return raw[: len(prefix)].strip(), raw[len(prefix) :].strip() or None
+    return raw, None
+
+
 def _format_vk_plain_headings(text: str) -> str:
     """Render Markdown/HTML headings as VK-friendly plain text blocks."""
 
@@ -334,16 +377,22 @@ def _format_vk_plain_headings(text: str) -> str:
     )
 
     out: list[str] = []
+    text = _break_inline_markdown_headings(text)
     for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         match = re.match(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", line)
         if not match:
             out.append(line)
             continue
-        heading = clean_heading(match.group(1))
+        heading_raw, body = _split_markdown_heading_body(match.group(1))
+        heading = clean_heading(heading_raw)
         if not heading:
+            if body:
+                out.append(body)
             continue
         out.append(heading)
         out.append("")
+        if body:
+            out.append(body)
     return "\n".join(out)
 
 
