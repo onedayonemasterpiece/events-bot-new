@@ -10025,7 +10025,7 @@ async def _call_title_recovery_prompt(
     lines.append("Исходный текст:")
     lines.append(_clip(candidate.source_text or candidate.raw_excerpt or "", 1800))
     prompt = "\n".join(lines)
-    raw = await _ask_gemma_text(prompt, max_tokens=1024, label=label, temperature=0.0)
+    raw = await _ask_gemma_text(prompt, max_tokens=2048, label=label, temperature=0.0)
     return _normalize_recovered_title_output(raw)
 
 
@@ -10076,7 +10076,7 @@ async def _llm_recover_event_title(
         return None
     try:
         # Budget must comfortably exceed the model's thinking tokens so the short
-        # answer survives; the text path falls back to 4o if Gemma still fails.
+        # answer survives; the text path falls back if Gemma still fails.
         recovered = await _call_title_recovery_prompt(
             _EVENT_TITLE_RECOVERY_INSTRUCTIONS,
             candidate,
