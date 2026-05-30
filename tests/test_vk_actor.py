@@ -303,6 +303,55 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_post_to_vk_retries_postponed_id_resolution_with_user_actor(monkeypatch):
+    monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "ga")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", True)
+    expected = int(datetime(2026, 5, 19, 10, 40, tzinfo=ZoneInfo("Europe/Kaliningrad")).timestamp())
+    wall_get_calls = 0
+    sleep_calls = []
+
+    async def fake_reserve(owner_id, actors, db, bot, *, now=None):
+        return expected
+
+    async def fake_sleep(delay):
+        sleep_calls.append(delay)
+
+    async def fake_vk_api(
+        method,
+        params,
+        db=None,
+        bot=None,
+        token=None,
+        token_kind="group",
+        skip_captcha=False,
+    ):
+        nonlocal wall_get_calls
+        if method == "wall.post":
+            return {"response": {"post_id": 124}}
+        if method == "wall.get":
+            wall_get_calls += 1
+            assert token == "u"
+            assert token_kind == "user"
+            if wall_get_calls == 1:
+                return {"response": {"items": []}}
+            return {"response": {"items": [{"id": 125, "postponed_id": 124, "date": expected}]}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk("2", "hello")
+
+    assert url == "https://vk.com/wall-2_125"
+    assert wall_get_calls == 2
+    assert sleep_calls == [0.8]
+
+
+@pytest.mark.asyncio
 async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
     monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")

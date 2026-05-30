@@ -3459,7 +3459,10 @@ async def _resolve_vk_postponed_wall_id(
 
 def _vk_wall_get_actors(owner_id: int) -> list[VkActor]:
     actors = choose_vk_actor(owner_id, "wall.get")
-    return sorted(actors, key=lambda actor: 0 if actor.kind == "user" else 1)
+    user_actors = [actor for actor in actors if actor.kind == "user"]
+    if user_actors:
+        return user_actors
+    return actors
 
 
 async def _resolve_vk_postponed_wall_id_any_actor(
@@ -3469,18 +3472,22 @@ async def _resolve_vk_postponed_wall_id_any_actor(
     db: Database | None,
     bot: Bot | None,
 ) -> int | None:
-    for actor in _vk_wall_get_actors(owner_id):
-        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
-        resolved_id = await _resolve_vk_postponed_wall_id(
-            owner_id=owner_id,
-            post_id=post_id,
-            actor=actor,
-            token=token,
-            db=db,
-            bot=bot,
-        )
-        if resolved_id:
-            return resolved_id
+    actors = _vk_wall_get_actors(owner_id)
+    for attempt in range(3):
+        for actor in actors:
+            token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+            resolved_id = await _resolve_vk_postponed_wall_id(
+                owner_id=owner_id,
+                post_id=post_id,
+                actor=actor,
+                token=token,
+                db=db,
+                bot=bot,
+            )
+            if resolved_id:
+                return resolved_id
+        if attempt < 2:
+            await asyncio.sleep(0.8 * (attempt + 1))
     return None
 
 
