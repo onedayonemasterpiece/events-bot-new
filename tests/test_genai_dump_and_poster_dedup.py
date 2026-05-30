@@ -193,6 +193,15 @@ def _patch_llm(monkeypatch, returned_title):
     monkeypatch.setattr(su, "_ask_gemma_text", _fake)
 
 
+def _patch_llm_sequence(monkeypatch, returned_titles):
+    calls = iter(returned_titles)
+
+    async def _fake(prompt, *, max_tokens, label, temperature=0.0):
+        return next(calls)
+
+    monkeypatch.setattr(su, "_ask_gemma_text", _fake)
+
+
 @pytest.mark.asyncio
 async def test_title_recovery_accepts_grounded(monkeypatch):
     cand = _candidate("⭐ Мелодии кино в живом звучании. «Саундтреки на органе». Мария Гаврилюк исполнит музыку из фильмов.")
@@ -221,5 +230,29 @@ async def test_title_recovery_rejects_generic_result(monkeypatch):
 async def test_title_recovery_empty_result(monkeypatch):
     cand = _candidate("Текст без явного названия.")
     _patch_llm(monkeypatch, "")
+    out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_falls_back_to_public_grounded_heading(monkeypatch):
+    cand = _candidate(
+        "Приглашаем на летний фестиваль фортепианной музыки Pianissimo. "
+        "26 июня выступит Илья Папоян.",
+        venue="Филиал Третьяковской галереи",
+    )
+    _patch_llm_sequence(monkeypatch, ["НЕТ", "Pianissimo: Илья Папоян"])
+    out = await _llm_recover_event_title(
+        cand,
+        normalized_event_type="концерт",
+        facts=["Фестиваль: Pianissimo", "Исполнитель: Илья Папоян"],
+    )
+    assert out == "Pianissimo: Илья Папоян"
+
+
+@pytest.mark.asyncio
+async def test_title_recovery_public_heading_requires_all_meaningful_tokens_grounded(monkeypatch):
+    cand = _candidate("В центре внимания — Розовый натюрморт К. Петрова-Водкина.")
+    _patch_llm_sequence(monkeypatch, ["НЕТ", "Розовый космос"])
     out = await _llm_recover_event_title(cand, normalized_event_type="концерт", facts=[])
     assert out is None

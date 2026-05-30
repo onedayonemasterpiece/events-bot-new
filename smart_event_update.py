@@ -9821,7 +9821,11 @@ def _meaningful_title_tokens(title: str | None) -> set[str]:
     return toks
 
 
-def _candidate_title_grounding_corpus_norm(candidate: "EventCandidate") -> str:
+def _candidate_title_grounding_corpus_norm(
+    candidate: "EventCandidate",
+    *,
+    facts: Sequence[str] | None = None,
+) -> str:
     parts: list[str] = []
     if (candidate.source_text or "").strip():
         parts.append(_clip(candidate.source_text, 9000))
@@ -9832,6 +9836,10 @@ def _candidate_title_grounding_corpus_norm(candidate: "EventCandidate") -> str:
             parts.append(_clip(str(poster.ocr_title), 320))
         if (getattr(poster, "ocr_text", None) or "").strip():
             parts.append(_clip(str(poster.ocr_text), 1200))
+    for fact in list(facts or [])[:24]:
+        fact_text = str(fact or "").strip()
+        if fact_text:
+            parts.append(_clip(fact_text, 420))
     return _normalize_text_for_grounding("\n".join(parts))
 
 
@@ -9931,17 +9939,40 @@ _EVENT_TITLE_RECOVERY_INSTRUCTIONS = (
     "Верни ТОЛЬКО название одной строкой, без кавычек, без пояснений и без префиксов."
 )
 
+_EVENT_TITLE_PUBLIC_RECOVERY_INSTRUCTIONS = (
+    "Ты — редактор афиши. По данным ниже сделай КОРОТКИЙ публичный заголовок "
+    "для события, у которого сейчас только технический шаблон «тип — площадка».\n"
+    "Это не креативный нейминг: заголовок должен быть собран только из явно "
+    "grounded деталей источника — темы, программы, участника/коллектива, праздника, "
+    "проекта/фестиваля, центрального произведения или объекта события.\n"
+    "Жёсткие правила:\n"
+    "- используй только слова/имена/названия из предоставленных данных; ничего не выдумывай;\n"
+    "- можно взять не формальное название, а attendee-facing тему/программу, если формального "
+    "названия нет (например «Pianissimo: Илья Папоян», «Розовый натюрморт», "
+    "«День защиты детей в Юности»);\n"
+    "- НЕ используй шаблон «<тип события> — <площадка>» и не делай заголовок из одной площадки;\n"
+    "- не включай дату, время, город, адрес, цену, ссылки, телефон;\n"
+    "- 2–10 слов;\n"
+    "- если даже grounded публичный заголовок невозможен — верни ровно: НЕТ.\n"
+    "Верни ТОЛЬКО заголовок одной строкой, без кавычек, без пояснений и без префиксов."
+)
 
-def _recovered_title_grounded(title: str | None, candidate: "EventCandidate") -> bool:
+
+def _recovered_title_grounded(
+    title: str | None,
+    candidate: "EventCandidate",
+    *,
+    facts: Sequence[str] | None = None,
+) -> bool:
     """Stricter grounding check for recovered titles.
 
     Unlike `_is_title_grounded_in_candidate_sources`, this ignores source tokens
-    shorter than 3 chars so common prepositions ("в", "и", "о", "с") cannot make an
-    arbitrary title word look grounded via prefix matching. Requires the full title
-    to appear verbatim, or at least one meaningful title token grounded against the
-    long-token source set.
+    shorter than 3 chars so common prepositions ("в", "и", "о", "с") cannot make
+    an arbitrary title word look grounded via prefix matching. Requires the full
+    title to appear verbatim, or every meaningful title token to be grounded
+    against the long-token source/fact/OCR set.
     """
-    corpus_norm = _candidate_title_grounding_corpus_norm(candidate)
+    corpus_norm = _candidate_title_grounding_corpus_norm(candidate, facts=facts)
     if not corpus_norm:
         return False
     title_norm = _normalize_text_for_grounding(title)
@@ -9953,7 +9984,71 @@ def _recovered_title_grounded(title: str | None, candidate: "EventCandidate") ->
     tokens = _meaningful_title_tokens(title)
     if not tokens:
         return title_norm in corpus_norm
-    return any(_token_is_grounded(token, source_tokens) for token in tokens)
+    return all(_token_is_grounded(token, source_tokens) for token in tokens)
+
+
+def _normalize_recovered_title_output(raw: str | None) -> str | None:
+    first_line = next((ln for ln in (raw or "").splitlines() if ln.strip()), "")
+    recovered = re.sub(r"\s+", " ", first_line.strip())
+    recovered = (_strip_private_use(recovered) or recovered).strip().strip("«»\"'`*").strip()
+    recovered = re.sub(r"(?i)^(?:название|заголовок|title)\s*[:\-—]\s*", "", recovered).strip()
+    if not recovered or recovered.casefold() in {"нет", "none", "нет.", "n/a"}:
+        return None
+    return recovered
+
+
+async def _call_title_recovery_prompt(
+    instructions: str,
+    candidate: "EventCandidate",
+    *,
+    normalized_event_type: str | None,
+    facts: Sequence[str] | None,
+    label: str,
+) -> str | None:
+    poster_titles = [
+        str(getattr(p, "ocr_title", "") or "").strip()
+        for p in list(getattr(candidate, "posters", None) or [])[:4]
+        if (getattr(p, "ocr_title", None) or "").strip()
+    ]
+    facts_list = [str(f).strip() for f in list(facts or [])[:24] if str(f or "").strip()]
+    lines = [
+        instructions,
+        "",
+        "Данные:",
+        f"Тип события: {normalized_event_type or candidate.event_type or ''}",
+        f"Площадка: {candidate.location_name or ''}",
+    ]
+    if poster_titles:
+        lines.append("Текст афиши (OCR): " + " / ".join(poster_titles))
+    if facts_list:
+        lines.append("Факты:\n- " + "\n- ".join(facts_list))
+    lines.append("Исходный текст:")
+    lines.append(_clip(candidate.source_text or candidate.raw_excerpt or "", 1800))
+    prompt = "\n".join(lines)
+    raw = await _ask_gemma_text(prompt, max_tokens=1024, label=label, temperature=0.0)
+    return _normalize_recovered_title_output(raw)
+
+
+def _validate_recovered_event_title(
+    recovered: str | None,
+    candidate: "EventCandidate",
+    *,
+    normalized_event_type: str | None,
+    facts: Sequence[str] | None,
+) -> str | None:
+    if not recovered:
+        return None
+    if _is_generic_title_event_type_venue(
+        recovered,
+        event_type=normalized_event_type or candidate.event_type,
+        location_name=candidate.location_name,
+        city=candidate.city,
+    ):
+        return None
+    if not _recovered_title_grounded(recovered, candidate, facts=facts):
+        logger.info("smart_update.title_recover_rejected reason=ungrounded recovered=%r", recovered)
+        return None
+    return _clip_title(recovered, 160) or None
 
 
 async def _llm_recover_event_title(
@@ -9976,52 +10071,51 @@ async def _llm_recover_event_title(
     """
     if SMART_UPDATE_LLM_DISABLED:
         return None
-    if not _candidate_title_grounding_corpus_norm(candidate):
-        return None
-    poster_titles = [
-        str(getattr(p, "ocr_title", "") or "").strip()
-        for p in list(getattr(candidate, "posters", None) or [])[:4]
-        if (getattr(p, "ocr_title", None) or "").strip()
-    ]
     facts_list = [str(f).strip() for f in list(facts or [])[:24] if str(f or "").strip()]
-    lines = [
-        _EVENT_TITLE_RECOVERY_INSTRUCTIONS,
-        "",
-        "Данные:",
-        f"Тип события: {normalized_event_type or candidate.event_type or ''}",
-        f"Площадка: {candidate.location_name or ''}",
-    ]
-    if poster_titles:
-        lines.append("Текст афиши (OCR): " + " / ".join(poster_titles))
-    if facts_list:
-        lines.append("Факты:\n- " + "\n- ".join(facts_list))
-    lines.append("Исходный текст:")
-    lines.append(_clip(candidate.source_text or candidate.raw_excerpt or "", 1800))
-    prompt = "\n".join(lines)
+    if not _candidate_title_grounding_corpus_norm(candidate, facts=facts_list):
+        return None
     try:
         # Budget must comfortably exceed the model's thinking tokens so the short
         # answer survives; the text path falls back to 4o if Gemma still fails.
-        raw = await _ask_gemma_text(prompt, max_tokens=1024, label="title_recover", temperature=0.0)
+        recovered = await _call_title_recovery_prompt(
+            _EVENT_TITLE_RECOVERY_INSTRUCTIONS,
+            candidate,
+            normalized_event_type=normalized_event_type,
+            facts=facts_list,
+            label="title_recover",
+        )
     except Exception:
         logger.warning("smart_update: title recovery call failed", exc_info=True)
-        return None
-    first_line = next((ln for ln in (raw or "").splitlines() if ln.strip()), "")
-    recovered = re.sub(r"\s+", " ", first_line.strip())
-    recovered = (_strip_private_use(recovered) or recovered).strip().strip("«»\"'`*").strip()
-    recovered = re.sub(r"(?i)^(?:название|заголовок|title)\s*[:\-—]\s*", "", recovered).strip()
-    if not recovered or recovered.casefold() in {"нет", "none", "нет.", "n/a"}:
-        return None
-    if _is_generic_title_event_type_venue(
+        recovered = None
+    validated = _validate_recovered_event_title(
         recovered,
-        event_type=normalized_event_type or candidate.event_type,
-        location_name=candidate.location_name,
-        city=candidate.city,
-    ):
+        candidate,
+        normalized_event_type=normalized_event_type,
+        facts=facts_list,
+    )
+    if validated:
+        return validated
+
+    try:
+        public_recovered = await _call_title_recovery_prompt(
+            _EVENT_TITLE_PUBLIC_RECOVERY_INSTRUCTIONS,
+            candidate,
+            normalized_event_type=normalized_event_type,
+            facts=facts_list,
+            label="title_recover_public",
+        )
+    except Exception:
+        logger.warning("smart_update: public title recovery call failed", exc_info=True)
         return None
-    if not _recovered_title_grounded(recovered, candidate):
-        logger.info("smart_update.title_recover_rejected reason=ungrounded recovered=%r", recovered)
-        return None
-    return _clip_title(recovered, 160) or None
+    validated = _validate_recovered_event_title(
+        public_recovered,
+        candidate,
+        normalized_event_type=normalized_event_type,
+        facts=facts_list,
+    )
+    if validated:
+        logger.info("smart_update.title_public_recovered recovered=%r", _clip_title(validated))
+    return validated
 
 
 def _is_candidate_title_weak_for_llm_override(
