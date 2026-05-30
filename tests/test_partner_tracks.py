@@ -87,16 +87,21 @@ def test_partner_tracks_carry_default_business_selector():
 
 
 def test_konb_track_defaults_to_prod_story_targets():
-    # Round-3 prod launch (2026-05-17): КОНБ default mode is `prod`. Both
-    # story targets (`@kaliningradlibrary` TG story + `konb39` VK story)
-    # are independent best-effort — neither has `required=True`, so a
-    # failure on one transport does not fail the overall publish.
+    # Round-3 prod launch (2026-05-17): КОНБ default mode is `prod`. Story
+    # targets (`@kaliningradlibrary` TG story + `konb39` VK story) are
+    # independent best-effort — none has `required=True`, so a failure on one
+    # transport does not fail the overall publish.
+    # Round-4 (2026-05-30): a third best-effort target publishes the same
+    # video announce as a `vk_wall` post into the КОНБ VK community (`konb39`).
     assert PARTNER_KONB_LIBRARY.default_publish_mode == "prod"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["peer"] == "@keniggpt"
     assert PARTNER_KONB_LIBRARY.test_story_targets[0]["transport"] == "telegram_chat"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[0]["peer"] == "@kaliningradlibrary"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["peer"] == "konb39"
     assert PARTNER_KONB_LIBRARY.prod_story_targets[1]["transport"] == "vk_story"
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[2]["peer"] == "konb39"
+    assert PARTNER_KONB_LIBRARY.prod_story_targets[2]["transport"] == "vk_wall"
+    assert len(PARTNER_KONB_LIBRARY.prod_story_targets) == 3
     for target in PARTNER_KONB_LIBRARY.prod_story_targets:
         assert target.get("required") is False, target
         assert target.get("blocking") is False, target
