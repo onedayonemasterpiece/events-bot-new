@@ -46,6 +46,22 @@ def test_sanitize_for_vk_breaks_inline_markdown_headings():
     assert sanitize_for_vk(src) == expected
 
 
+def test_sanitize_for_vk_prefers_known_inline_heading_prefix_before_punctuation():
+    src = (
+        "Лид. ### Формат события Мероприятие организовано как песчаный марафон. "
+        "Основная цель рядом с морем. ### Маршрут Дистанция проложена вдоль берега. "
+        "Финиш в Балтийске."
+    )
+    expected = (
+        "Лид.\n\n"
+        "ФОРМАТ СОБЫТИЯ\n\n"
+        "Мероприятие организовано как песчаный марафон. Основная цель рядом с морем.\n\n"
+        "МАРШРУТ\n\n"
+        "Дистанция проложена вдоль берега. Финиш в Балтийске."
+    )
+    assert sanitize_for_vk(src) == expected
+
+
 def test_sanitize_for_vk_renders_html_headings_as_plain_blocks():
     src = "<h3>О событии</h3><p>Текст</p><h4><b>Что обсудим</b></h4>Детали"
     expected = "О СОБЫТИИ\n\nТекст\n\nЧТО ОБСУДИМ\n\nДетали"

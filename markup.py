@@ -337,12 +337,6 @@ def _split_markdown_heading_body(value: str) -> tuple[str, str | None]:
     raw = re.sub(r"\s+", " ", value).strip()
     if not raw:
         return "", None
-    punct = re.match(r"^(.{3,80}?[.!?:])\s+([А-ЯA-ZЁ].+)$", raw)
-    if punct:
-        heading = punct.group(1).rstrip(" .:!?").strip()
-        body = punct.group(2).strip()
-        if heading and body:
-            return heading, body
 
     raw_cf = raw.casefold().replace("ё", "е")
     for prefix in sorted(_VK_INLINE_HEADING_PREFIXES, key=len, reverse=True):
@@ -351,6 +345,13 @@ def _split_markdown_heading_body(value: str) -> tuple[str, str | None]:
             return raw, None
         if raw_cf.startswith(prefix_cf + " "):
             return raw[: len(prefix)].strip(), raw[len(prefix) :].strip() or None
+
+    punct = re.match(r"^(.{3,80}?[.!?:])\s+([А-ЯA-ZЁ].+)$", raw)
+    if punct:
+        heading = punct.group(1).rstrip(" .:!?").strip()
+        body = punct.group(2).strip()
+        if heading and body:
+            return heading, body
     return raw, None
 
 
