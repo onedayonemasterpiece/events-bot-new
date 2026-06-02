@@ -1,10 +1,10 @@
 # INC-2026-06-02-vk-captcha-text-only-posts
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: VK outbound publishing (`klgdevents`, `kenigeventsofficial`)
 Opened: 2026-06-02
-Closed: —
+Closed: 2026-06-02
 Owners: Codex
 Related incidents: `INC-2026-05-19-vk-posts-personal-author`, `INC-2026-05-29-guide-vk-digest-missing-media`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -96,15 +96,29 @@ VK event posts in `vk.com/klgdevents` started appearing without photo attachment
 
 ## Follow-up Actions
 
-- [ ] After deploy, verify the next `klgdevents` event post or a controlled smoke post has photo attachments.
+- [x] After deploy, verify the next `klgdevents` event post or a controlled smoke post has photo attachments.
 - [ ] Consider an operator-visible alert when `_vk_captcha_needed` is set by a media upload path and no manual captcha prompt is attached to the current workflow.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `33f0441c9c2ba09eec37919dc6846185de1bea6a`
+- deploy path: manual `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only` from clean hotfix worktree `/tmp/events-bot-vk-captcha-hotfix`
+- production secret mitigation:
+  - `flyctl secrets import --app events-bot-new-wngqia` updated `VK_USER_TOKEN` from local `VK_ACCESS_TOKEN7` and stored `VK_ACCESS_TOKEN7`; Fly rolled machine `48e42d5b714228` from version `1165` to `1166`.
+  - Post-mitigation direct checks returned `photos.getWallUploadServer ok` for `231920894` and `231828790` without captcha.
 - regression checks:
+  - `python3 -m py_compile main.py main_part2.py tests/test_vk_source.py tests/test_vk_actor.py` -> passed.
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_vk_source.py::test_sync_vk_source_post_captcha_pauses_before_text_only_post tests/test_vk_source.py::test_sync_vk_source_post_attaches_photos tests/test_vk_actor.py` -> `12 passed in 2.65s`.
+  - Broader `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_vk_source.py` -> `21 passed, 1 failed`; failure is existing unrelated LLM-fixture drift in `test_add_events_from_text_preserves_links`, which monkeypatches old `parse_event_via_4o` while current code enters Gemma and fails without `GOOGLE_API_KEY`.
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q ... tests/test_job_captcha_pause.py` -> `12 passed, 1 failed`; failure is adjacent existing worker-tick expectation after captcha resume (`week_pages` remains pending until the next tick), not the new media-upload propagation guard.
 - post-deploy verification:
+  - Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KT48E5BKPCSMG87X1HTSJ1AP`; machine `48e42d5b714228`, version `1167`, checks `1 passing`.
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "issues": []}` after deploy.
+  - Controlled deployed-code smoke uploaded a VK photo through `main.upload_vk_photo`, then created delayed smoke post `https://vk.com/wall-231920894_1879` through `main.post_to_vk(..., attachments=[photo])`.
+  - VK API evidence before deletion: `photos=1`, `attachments=1`, `from_id=-231920894`, no API error.
+  - Runtime log evidence: `2026-06-02 13:32:29 UTC photos.getWallUploadServer status=200`, `2026-06-02 13:32:40 UTC post_to_vk ok group=231920894 post_id=1879 ... attachments=1`, `2026-06-02 13:33:12 UTC delete_vk_post done`.
+  - Smoke post `wall-231920894_1879` was deleted immediately after verification.
+  - Release-governance check: deployed SHA is reachable from `origin/main`; no remote `origin/release/*` or `origin/hotfix/*` branch was ahead of `origin/main` before deploy.
 
 ## Prevention
 
