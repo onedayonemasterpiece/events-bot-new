@@ -4083,6 +4083,12 @@ async def upload_vk_photo(
                     continue
                 raise
         return None
+    except VKAPIError as e:
+        if e.code == 14:
+            logging.error("VK photo upload blocked by captcha: %s", e)
+            raise
+        logging.error("VK photo upload failed: %s", e)
+        return None
     except Exception as e:
         logging.error("VK photo upload failed: %s", e)
         return None
@@ -4203,6 +4209,12 @@ async def upload_vk_photo_bytes(
                     )
                     continue
                 raise
+        return None
+    except VKAPIError as e:
+        if e.code == 14:
+            logging.error("VK byte photo upload blocked by captcha: %s", e)
+            raise
+        logging.error("VK byte photo upload failed: %s", e)
         return None
     except Exception as e:
         logging.error("VK byte photo upload failed: %s", e)

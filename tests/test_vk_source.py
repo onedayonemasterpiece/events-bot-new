@@ -280,6 +280,36 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_captcha_pauses_before_text_only_post(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_MAX_ATTACHMENTS = 1
+
+    event = main.Event(
+        title="Title",
+        description="",
+        date="2024-01-01",
+        time="00:00",
+        location_name="Place",
+        photo_urls=["http://img1"],
+    )
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        raise main.VKAPIError(14, "Captcha needed", method="photos.getWallUploadServer")
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+        raise AssertionError("wall.post must wait for captcha instead of publishing text-only")
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(main.VKAPIError) as exc:
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+    assert exc.value.code == 14
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True

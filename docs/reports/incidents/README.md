@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-02-vk-captcha-text-only-posts.md`
+  - Scope: VK event media upload (`upload_vk_photo`, `upload_vk_photo_bytes`), `sync_vk_source_post`, `post_to_vk`, user-token captcha handling, and `vk_sync` job pause behavior.
+  - Must not regress: if VK returns captcha (`code=14`) while uploading photos for an event post, `vk_sync` must pause/fail closed before `wall.post`; it must never create a `klgdevents` event post with `attachments=0` solely because the user-token photo upload path is blocked by captcha.
 - `INC-2026-05-29-genai-response-repr-leak.md`
   - Scope: `google_ai/client.py` response→text extraction and empty-response guard; Smart Update description generation and grounded title recovery, `_sanitize_description_output`, `sanitize_for_vk`, VK source-post publish boundary; poster dedup (`media_dedup`, `_apply_posters`).
   - Must not regress: a stringified provider SDK response (`GenerateContentResponse` repr) must never be returned as model output or published to any surface — empty/thought-only responses must raise `empty_response` and fall back; visually near-duplicate posters (Hamming-close `phash`) must collapse to one image before publishing; a generic `<event_type> — <venue>` placeholder title must be replaced by a grounded title recovered from the source when one is available.
