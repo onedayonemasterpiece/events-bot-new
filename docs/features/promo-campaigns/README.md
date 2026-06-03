@@ -181,6 +181,21 @@ The initial `80 историй о главном` campaign now includes:
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
 
+### Card UI and per-activity statistics
+
+The interactive `/promo` card (no-args / partner+admin menu, served by
+`handlers/partner_promo_cmd.py`) renders `vk_publication` and `vk_repost`
+activities with human-readable labels: target community, repost
+`source → target`, and the rolling minimum (`минимум N/окно`). The «📊
+Статистика» screen is a per-activity breakdown: for each activity it shows the
+total action count, a rolling-window counter (`промо-действий за Nч: X / цель`),
+and the latest posts/reposts as clickable VK links (the repost line also links
+its source post). Exposures are attributed by `promo_exposure.activity_id`;
+counts include `VK_SCHEDULED` (promo VK posts sit in the community postponed
+queue), and exposures without a current `activity_id` fold into a «Прочее»
+section. Note the separate admin text interface `/promo <args>`
+(`handlers/promo_cmd.py`) renders its own VK report in `/promo report`.
+
 ## Daily Marker
 
 The "добавили в анонс" daily section can mark promoted events with standard
