@@ -24,7 +24,10 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   caps/disclosure fields.
 - `promo_target`: either one real `event.id` or one existing `festival.name`.
 - `promo_activity`: where the campaign can act. MVP surfaces are
-  `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`.
+  `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
+  `vk_publication`, `vk_repost`. VK activity parameters live in
+  `promo_activity.config_json` (`target_group`, `source_group`,
+  `window_hours`, `active_start_hour`, `active_end_hour`, dedup policy).
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
@@ -46,7 +49,9 @@ events whose start date is today or later.
 - `/promo report` lists all campaigns, including archived, with current future
   event count, video publication count, promo-show count, and per-session
   CherryFlash publication details: date/time, profile, session id, stored
-  status, target count, positions, and event ids/titles.
+  status, target count, positions, and event ids/titles. VK promo activities
+  are shown as concrete exposure rows with event id/date, status, source URL
+  for reposts, and target VK post URL.
 - `/promo add festival НАЗВАНИЕ [до ДАТА]` creates an active festival campaign.
 - `/promo add event ПРИМЕРНОЕ НАЗВАНИЕ [до ДАТА]` finds a future event and
   creates an active event campaign. If several future events are too similar,
@@ -132,6 +137,50 @@ public exposure. The scheduled `@keniggpt` CherryFlash target is an exception to
 the old status wording: it is viewer-facing production output even when the row
 status is `PUBLISHED_TEST`, so it is reported and recorded as a promo show.
 
+## VK Activities
+
+`vk_publication` keeps a rolling-window minimum of event posts in a configured
+VK community. The lightweight `promo_vk` scheduler runs every 30 minutes by
+default, but new actions are started only inside the activity's local active
+window (default 09:00-21:00 Europe/Kaliningrad). For each activity the daily
+minimum is split into even due-slots at the midpoint of equal slices: for
+`max_per_publish=2`, the slots are about 12:00 and 18:00; for `1`, about
+15:00. One scheduler tick can create at most one missing post per activity, so
+catch-up is gradual rather than a same-minute batch.
+
+For each active campaign/activity the scheduler:
+
+- resolves the target campaign events (festival campaigns rotate through future
+  active event rows);
+- counts organic Smart Update posts in the target community during the last
+  `window_hours` (default 24) via `event.source_vk_post_url` + VK `wall.getById`;
+- counts already recorded promo VK exposures in the same window;
+- if the count is below the number of slots due by the current local time,
+  publishes one missing post as a postponed community wall post through the
+  standard VK wall contract (`post_to_vk`, community author, postponed queue),
+  using the same source-style event message format as Smart Update;
+- records each scheduled post in `promo_exposure` with
+  `surface='vk_publication'`, `publish_status='VK_SCHEDULED'` and
+  `details_json.target_url`.
+
+`vk_repost` watches a source community and reposts a recent campaign event post
+to a target community. It considers both organic `event.source_vk_post_url` rows
+and `vk_publication` exposure URLs from the last `window_hours`, but only after
+VK `wall.getById` shows that the source post's publish date is not in the
+future. The repost caption uses the short VK rewrite helper's text-only summary
+(`build_short_vk_text`): no title infoblock, no logistics block, no hashtags.
+The repost result is recorded in `promo_exposure` with
+`surface='vk_repost'`, `details_json.source_url` and
+`details_json.target_url`.
+
+The initial `80 историй о главном` campaign now includes:
+
+- `vk_publication` to `https://vk.com/klgdevents`, `max_per_publish=2`,
+  `daily_cap=2`, 24-hour window, active window 09:00-21:00;
+- `vk_repost` from `https://vk.com/klgdevents` to
+  `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
+  24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
+
 ## Daily Marker
 
 The "добавили в анонс" daily section can mark promoted events with standard
@@ -144,6 +193,10 @@ activation.
 ## Current Limits
 
 - MVP implements CherryFlash general boost and daily-section highlighting.
+- VK publication/repost promo activities are implemented through the scheduled
+  `promo_vk` runner and normalized `promo_exposure` reporting. The current
+  publication formatter uses the source-style Smart Update VK message; later UX
+  can add per-activity copy style controls without changing the exposure model.
 - Telegraph month/weekend activities are stored for campaigns, but page-render
   adapters are still pending.
 - First-slot video promo is implemented through `slot=1` /

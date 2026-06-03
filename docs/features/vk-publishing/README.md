@@ -45,6 +45,33 @@
 - Feature-owned digest не должен молча наследовать Telegram formatting. Перед вызовом `wall.post` он должен быть plain text, с VK-safe ссылками, без HTML/Markdown и без Telegram-only caption/media mechanics.
 - Guide excursions VK digest должен загружать materialized local media assets в VK через user-token photo upload и передавать полученные `photo...` attachments в тот же `wall.post`, что и текст. Silent text-only fallback запрещён, если у issue есть media items.
 
+## Promo VK
+
+- Promo campaign activity `vk_publication` can create additional event posts in
+  a configured community when organic Smart Update posts for the same campaign
+  target did not reach the rolling 24-hour minimum. It uses the same outgoing
+  wall contract as Smart Update event posts: `post_to_vk`, community author,
+  postponed queue, and source-style event text.
+- The promo VK runner checks every 30 minutes by default. It starts new promo
+  VK actions only during the activity's local active window (default
+  09:00-21:00 Europe/Kaliningrad) and spreads the daily target into even
+  due-slots, so two daily posts are normally attempted around midday and early
+  evening rather than as one batch.
+- Promo campaign activity `vk_repost` reposts a recent source-community event
+  post into a configured target community. The repost caption is the short
+  rewrite text only (`build_short_vk_text`), without the title/logistics
+  infoblock and without hashtags. Promo-publication URLs are eligible for
+  repost only after VK `wall.getById` reports a publish date that is no longer
+  in the future; scheduled source posts are not reposted immediately.
+- VK promo evidence is stored in `promo_exposure`: `details_json.target_url`
+  for each created post/repost and `details_json.source_url` for reposts. The
+  `/promo report` output must show those concrete links.
+- The built-in `80 историй о главном` campaign is configured for
+  `https://vk.com/klgdevents` (minimum two festival event posts in the last
+  24 hours) plus one repost from `klgdevents` to
+  `https://vk.com/kenigeventsofficial` when a source post exists in the same
+  window.
+
 ## Operational Checks
 
 - `vk_source.owner_type` distinguishes community walls (`group`, negative owner id) from personal pages (`user`, positive owner id). Operator-seeded personal sources such as `ivsguide` and `natakkaz` must keep `owner_type='user'` so crawl/review/repost URLs use `wall<user_id>_<post_id>` instead of `wall-<group_id>_<post_id>`.
@@ -55,3 +82,5 @@
 - Для нового daily/event smoke проверять через VK API не только URL, но и авторство: `from_id` должен быть `-<group_id>`, а `likes.can_publish` должен быть `1`. Новые smoke-посты ожидаемо появляются в postponed queue; проверять `publish_date`/`date` и удалять из отложки после проверки, если smoke не должен выйти публично.
 - Для guide digest smoke в `uhtykaliningrad` дополнительно проверять, что первая строка содержит count + точные даты/диапазон, пост один, `publish_date` стоит минимум на 10 минут вперёд, есть photo attachments, а Telegram registration/source links либо сокращены через `vk.cc`, либо явно залогированы как shortener fallback.
 - Runtime-параметры отложки: `VK_POSTPONED_ENABLED` (default `true`), `VK_POSTPONED_TZ` (default `Europe/Kaliningrad`), `VK_POSTPONED_MIN_INTERVAL_SECONDS` (default `600`), `VK_POSTPONED_START_HOUR` (default `6`).
+- Runtime-параметры promo VK: `ENABLE_PROMO_VK_SCHEDULER` (default `true`) и
+  `PROMO_VK_INTERVAL_MINUTES` (default `30`).

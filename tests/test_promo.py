@@ -22,9 +22,12 @@ from models import (
 from promo import (
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_POLICY_FIRST_SLOT,
+    PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_REPOST,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     ensure_initial_80_stories_campaign,
+    run_promo_vk_activities,
     resolve_video_promo_candidates,
 )
 
@@ -189,6 +192,89 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
     assert stored.priority == 1
     assert activity.selection_policy == PROMO_POLICY_GUARANTEED_ANY_POSITION
     assert activity.max_per_publish == 2
+    async with db.get_session() as session:
+        vk_activities = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign.id,
+                    PromoActivity.surface.in_([PROMO_SURFACE_VK_PUBLICATION, PROMO_SURFACE_VK_REPOST]),
+                )
+            )
+        ).scalars().all()
+    assert {activity.surface for activity in vk_activities} == {
+        PROMO_SURFACE_VK_PUBLICATION,
+        PROMO_SURFACE_VK_REPOST,
+    }
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monkeypatch) -> None:
+    import main
+    from types import SimpleNamespace
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 3, 16, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="80 историй о главном"))
+        session.add(_event("Фестиваль 1", "2026-06-10", festival="80 историй о главном"))
+        session.add(_event("Фестиваль 2", "2026-06-11", festival="80 историй о главном"))
+        await session.commit()
+
+    async def fake_resolve(ref: str):
+        if ref == "klgdevents":
+            return 111, "Events", "klgdevents", "group"
+        if ref == "kenigeventsofficial":
+            return 222, "Main", "kenigeventsofficial", "group"
+        raise AssertionError(ref)
+
+    posted: list[tuple[str, str]] = []
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None):
+        post_id = len(posted) + 1
+        posted.append((group_id, message))
+        return f"https://vk.com/wall-{group_id}_{post_id}"
+
+    async def fake_repost_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        assert method == "wall.repost"
+        assert params["group_id"] == 222
+        assert params["message"] == "короткий рерайт?"
+        return {"response": {"post_id": 9}}
+
+    async def fake_vk_api(method, **params):
+        assert method == "wall.getById"
+        return {"response": [{"date": int(now_utc.timestamp())}]}
+
+    async def fake_short_text(*args, **kwargs):
+        return "короткий рерайт?"
+
+    monkeypatch.setattr(main, "vk_resolve_group", fake_resolve)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", False)
+    monkeypatch.setattr(main, "upload_vk_photo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "build_short_vk_text", fake_short_text)
+    monkeypatch.setattr(main, "choose_vk_actor", lambda owner_id, intent: [SimpleNamespace(kind="group", token="tok", label="group")])
+    monkeypatch.setattr(main, "_vk_api", fake_repost_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+    results.extend(await run_promo_vk_activities(db, None, now_utc=now_utc))
+
+    assert [item.status for item in results].count("scheduled") == 2
+    assert [item.status for item in results].count("published") == 1
+    assert len(posted) == 2
+    async with db.get_session() as session:
+        exposures = (await session.execute(select(PromoExposure))).scalars().all()
+    assert {exposure.surface for exposure in exposures} == {
+        PROMO_SURFACE_VK_PUBLICATION,
+        PROMO_SURFACE_VK_REPOST,
+    }
+    repost = [exposure for exposure in exposures if exposure.surface == PROMO_SURFACE_VK_REPOST][0]
+    assert repost.details_json["source_url"].startswith("https://vk.com/wall-111_")
+    assert repost.details_json["target_url"] == "https://vk.com/wall-222_9"
     await db.close()
 
 

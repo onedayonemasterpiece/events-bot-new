@@ -65,6 +65,15 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - **VK daily posts and polls** – publishes daily announcements and festival polls when posting times are reached and a VK group is configured.
   - VK daily announcements are split into multiple `wall.post` calls when the generated section exceeds `VK_DAILY_POST_MAX_CHARS` (default `12000`) so a busy day does not fail with VK `message_character_limit`. The split preserves event cards when possible and the slot is marked sent only after every chunk returns a VK post URL.
   - VK daily has two compact slots configured by `/vktime`: morning `today` publishes `НЕ ПРОПУСТИТЕ СЕГОДНЯ` plus a separate full-date line, evening `added` publishes `N ДОБАВИЛИ В АНОНС`. Event rows are one-line entries and link to the event VK post when one exists.
+- **Promo VK runner** – every `PROMO_VK_INTERVAL_MINUTES` (default `30`) checks
+  active promo activities with `surface IN ('vk_publication', 'vk_repost')`.
+  It counts organic Smart Update posts and recorded promo exposures inside each
+  activity's rolling window, schedules missing VK event posts, and reposts a
+  recent source-community post when the repost activity is below its daily
+  target. New actions start only inside the activity active window (default
+  09:00-21:00 Europe/Kaliningrad) and are spread across even due-slots rather
+  than published as one batch. The runner is enabled by default via
+  `ENABLE_PROMO_VK_SCHEDULER`.
 - **VK auto queue import** – imports queued VK posts (`vk_inbox`) via Smart Update on a fixed schedule when enabled.
 - **Telegraph pages sync** – refreshes month and weekend Telegraph pages after 01:00 local time. Disabled by default; enable with `ENABLE_NIGHTLY_PAGE_SYNC=1`. Nightly runs update both page content and the month navigation block.
 - **Telegraph cache sanitizer** – probes and warms Telegram web preview for Telegraph pages (via Kaggle/Telethon), tracks missing `cached_page` (Instant View) and warns on missing preview `photo`, and enqueues rebuilds for persistent “no cached_page” failures. Skips past pages (ended events / past weekends / past months). Manual `/telegraph_cache_sanitize` updates a single Kaggle status message while polling (like `/tg`), scheduled runs post a final summary to `ADMIN_CHAT_ID` when configured. Disabled by default; enable with `ENABLE_TELEGRAPH_CACHE_SANITIZER=1`.
@@ -136,6 +145,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VK_EVENTS_GROUP_ID` – target group id for Smart Update event posts with photos/video attachments; defaults to `VK_AFISHA_GROUP_ID`.
 - `VK_PHOTOS_ENABLED_DEFAULT` – default for VK event-post media attachments before `/vkphotos` writes an explicit DB setting; default `true`.
 - `VK_ACCESS_TOKEN5` – VK user token bundled into CherryFlash Kaggle story secrets for VK wall/story publication.
+- `ENABLE_PROMO_VK_SCHEDULER` – enable the lightweight promo VK runner; default
+  `true`.
+- `PROMO_VK_INTERVAL_MINUTES` – promo VK runner interval; default `30`.
 - `EVBOT_DEBUG` – enables extra logging and queue statistics.
 - `ENABLE_SOURCE_PARSING` – enable nightly source parsing schedule.
 - `SOURCE_PARSING_TIME_LOCAL` / `SOURCE_PARSING_TZ` – nightly parse time in local time zone.

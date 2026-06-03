@@ -1808,6 +1808,9 @@ class Database:
             await _add_column(
                 conn, "promo_campaign", "priority INTEGER NOT NULL DEFAULT 2"
             )
+            await _add_column(
+                conn, "promo_activity", "config_json JSON NOT NULL DEFAULT '{}'"
+            )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_target_campaign ON promo_target(campaign_id)"
             )

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Promo VK activities for festival campaigns**: added `vk_publication` and
+  `vk_repost` promo surfaces backed by `promo_activity.config_json` and
+  normalized `promo_exposure` evidence. The built-in `80 историй о главном`
+  campaign now carries a 24-hour minimum of two source-style VK event posts in
+  `vk.com/klgdevents` plus one repost from `klgdevents` to
+  `vk.com/kenigeventsofficial`; `/promo report` shows concrete VK post/repost
+  URLs. A lightweight `promo_vk` scheduler runs every 30 minutes, starts new
+  actions only in the 09:00-21:00 Kaliningrad active window, spreads daily
+  targets across even due-slots, and creates at most one missing action per
+  activity per tick so catch-up is not batched.
 - **Incident / VK captcha caused text-only `klgdevents` posts (INC-2026-06-02)**: `upload_vk_photo` / `upload_vk_photo_bytes` now propagate VK `code=14` captcha errors instead of swallowing them as an optional media failure. `vk_sync` therefore pauses before `wall.post` and no longer creates event posts without photo attachments when the user-token photo upload path is blocked by captcha. Production mitigation updated `VK_USER_TOKEN` from the operator-provided `VK_ACCESS_TOKEN7` and restarted the Fly machine to clear stale in-memory `_vk_captcha_needed`.
 - **CherryFlash / КОНБ — video announce also posts to the VK community wall (Round-4, 2026-05-30)**: the КОНБ partner track's prod fanout gained a third best-effort target — a `vk_wall` post of the same video announce into the КОНБ VK community (`konb39`), alongside the existing Telegram story and VK story (prod story targets 2 → 3). Operator brief: «Видеоанонс КОНБ нужно в Вк помимо публикации в историю опубликовать ещё и в виде поста в вк-сообщество научной библиотеки». Reuses the already-shipped `vk_wall` transport (`_publish_vk_wall_video`: `video.save` → `wall.post`) — no new publishing code. Caption auto-fills via `build_vk_video_announce_caption`; the target is neither `required` nor `blocking`, and `_dedupe_targets` keeps `vk_story:konb39` and `vk_wall:konb39` distinct. Doc: `docs/features/cherryflash/partner-story-tracks.md`; test: `test_konb_track_defaults_to_prod_story_targets`.
 

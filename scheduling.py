@@ -2782,6 +2782,56 @@ def startup(
             "ENABLE_V_POPULAR_REVIEW_SCHEDULED!=1",
         )
 
+    if _env_enabled("ENABLE_PROMO_VK_SCHEDULER", default=True):
+        async def promo_vk_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            from promo import run_promo_vk_activities
+
+            results = await run_promo_vk_activities(db_obj, bot_obj)
+            if results:
+                logging.info(
+                    "SCHED promo_vk results=%s",
+                    [
+                        {
+                            "campaign_id": item.campaign_id,
+                            "activity_id": item.activity_id,
+                            "surface": item.surface,
+                            "event_id": item.event_id,
+                            "status": item.status,
+                            "target_url": item.target_url,
+                            "reason": item.reason,
+                        }
+                        for item in results
+                    ],
+                )
+
+        try:
+            promo_vk_interval = max(
+                5,
+                int(os.getenv("PROMO_VK_INTERVAL_MINUTES", "30")),
+            )
+        except ValueError:
+            promo_vk_interval = 30
+        _register_job(
+            "promo_vk",
+            _job_wrapper("promo_vk", promo_vk_scheduler, notify_skip=_notify_admin_skip),
+            "interval",
+            id="promo_vk",
+            minutes=promo_vk_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=300,
+        )
+    else:
+        logging.info("SCHED skipping promo_vk (ENABLE_PROMO_VK_SCHEDULER!=1)")
+        _notify_admin_skip("promo_vk", "ENABLE_PROMO_VK_SCHEDULER!=1")
+
     # CherryFlash partner tracks. Intentionally always on:
     # the user asked NOT to gate this behind a feature flag. Times still
     # overridable via env without redeploy.

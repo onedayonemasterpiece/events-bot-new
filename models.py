@@ -522,6 +522,7 @@ class PromoActivity(SQLModel, table=True):
     target_exposure_goal: Optional[int] = None
     daily_cap: Optional[int] = None
     selection_policy: str = "diverse_shuffle"
+    config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     enabled: bool = Field(default=True, sa_column=Column(Boolean, default=True))
     created_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
