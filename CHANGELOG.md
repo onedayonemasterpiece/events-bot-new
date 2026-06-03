@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Promo VK repost — recover live URL after postponed publish**: the `vk_repost`
+  activity could never find an eligible source because promo `vk_publication`
+  posts were recorded with the VK **postponed-draft** post id returned by
+  `post_to_vk` (e.g. `wall-..._1938`); VK assigns a different id when the
+  postponed post actually publishes (`..._1939`), and the postponed-queue
+  resolver only works before publish. The repost branch now reconciles each
+  recent publication exposure to its **live** wall post by scanning the source
+  community wall (`vk_wall_since`) and matching the event title
+  (`_match_published_post_for_event`), repoints the exposure `target_url`
+  (also fixing the `/promo` stats links), and only then treats it as an eligible
+  repost source. Covered by `tests/test_promo.py`.
 - **Promo VK activities for festival campaigns**: added `vk_publication` and
   `vk_repost` promo surfaces backed by `promo_activity.config_json` and
   normalized `promo_exposure` evidence. The built-in `80 историй о главном`

@@ -1328,6 +1328,62 @@ async def _recent_event_vk_posts(
     return rows
 
 
+def _post_text_matches_event(text: str | None, ev: Event) -> bool:
+    """Whether a VK wall post text is the source post for ``ev``.
+
+    Promo publications post the event via ``build_vk_source_message`` whose
+    body contains the event title, so a normalized title-substring match
+    identifies the published post even after VK reassigns the wall id on
+    postponed publication. Short/generic titles (<8 chars) are not trusted.
+    """
+
+    title = _norm_text(getattr(ev, "title", None))
+    if len(title) < 8:
+        return False
+    return title in _norm_text(text)
+
+
+def _match_published_post_for_event(
+    recent_wall: list[dict], ev: Event
+) -> dict | None:
+    """Pick the most recent wall post (from ``vk_wall_since``) matching ``ev``."""
+    best: dict | None = None
+    for post in recent_wall:
+        if not isinstance(post, dict):
+            continue
+        if not _post_text_matches_event(post.get("text"), ev):
+            continue
+        if best is None or int(post.get("date") or 0) > int(best.get("date") or 0):
+            best = post
+    return best
+
+
+async def _reconcile_exposure_target_url(
+    db: Database,
+    *,
+    exposure_id: int,
+    url: str,
+    published_at: datetime,
+) -> None:
+    """Repoint a vk_publication exposure to its live published wall URL.
+
+    Fixes both repost eligibility and the ``/promo`` stats links, which
+    otherwise reference the no-longer-resolvable postponed-draft id.
+    """
+    async with db.get_session() as session:
+        exposure = await session.get(PromoExposure, exposure_id)
+        if exposure is None:
+            return
+        details = dict(exposure.details_json) if isinstance(exposure.details_json, dict) else {}
+        details["target_url"] = url
+        details["vk_post_date"] = published_at.isoformat()
+        details["reconciled_published_url"] = True
+        exposure.details_json = details
+        exposure.public_targets_json = [{"type": "vk_wall", "url": url}]
+        session.add(exposure)
+        await session.commit()
+
+
 async def _recent_activity_exposures(
     db: Database,
     *,
@@ -1646,17 +1702,69 @@ async def run_promo_vk_activities(
                 since_utc=since_utc,
             )
             event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+            # Recent source-community wall, used to reconcile promo publications
+            # to their live published URL (post_to_vk returns the postponed-draft
+            # id, which VK reassigns when the postponed post actually publishes).
+            recent_wall: list[dict] = []
+            if publication_exposures:
+                try:
+                    from main import vk_wall_since
+
+                    recent_wall = await vk_wall_since(
+                        source_group_id,
+                        int(since_utc.timestamp()),
+                        owner_type="group",
+                        count=80,
+                    )
+                except Exception:
+                    logger.warning(
+                        "promo.vk repost: vk_wall_since failed group_id=%s",
+                        source_group_id,
+                        exc_info=True,
+                    )
+                    recent_wall = []
             for exposure in publication_exposures:
+                ev = event_by_id.get(int(exposure.event_id))
+                if ev is None:
+                    continue
                 details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
                 url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()
-                ev = event_by_id.get(int(exposure.event_id))
-                if ev is not None and url and _vk_url_matches_group(url, source_group_id):
+                source_at: datetime | None = None
+                if url and _vk_url_matches_group(url, source_group_id):
                     try:
                         source_at = await _vk_post_datetime(url)
                     except Exception:
                         source_at = None
-                    if source_at is not None and source_at <= now_utc:
-                        source_candidates.append((ev, url, source_at))
+                if source_at is None:
+                    # Stored postponed-draft id no longer resolves once published
+                    # under a new id; find the live post on the source wall.
+                    match = _match_published_post_for_event(recent_wall, ev)
+                    if match is not None:
+                        live_url = str(match.get("url") or "").strip()
+                        ts = match.get("date")
+                        live_at = (
+                            datetime.fromtimestamp(int(ts), timezone.utc)
+                            if isinstance(ts, int)
+                            else None
+                        )
+                        if live_url and live_at is not None and _vk_url_matches_group(live_url, source_group_id):
+                            url, source_at = live_url, live_at
+                            if exposure.id is not None:
+                                try:
+                                    await _reconcile_exposure_target_url(
+                                        db,
+                                        exposure_id=int(exposure.id),
+                                        url=live_url,
+                                        published_at=live_at,
+                                    )
+                                except Exception:
+                                    logger.warning(
+                                        "promo.vk repost: exposure url reconcile failed id=%s",
+                                        exposure.id,
+                                        exc_info=True,
+                                    )
+                if source_at is not None and source_at <= now_utc and _vk_url_matches_group(url, source_group_id):
+                    source_candidates.append((ev, url, source_at))
 
             dedup_since = now_utc - timedelta(hours=int(cfg.get("dedup_hours") or PROMO_VK_REPOST_DEDUP_HOURS))
             prior = await _recent_activity_exposures(

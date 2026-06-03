@@ -546,3 +546,30 @@ async def test_promo_report_counts_viewer_facing_cherryflash_test_status(tmp_pat
     assert "статус PUBLISHED_TEST" in report
     assert "Заводы и пароходы" in report
     await db.close()
+
+
+def test_repost_matches_published_post_after_postponed_id_shift() -> None:
+    """Promo publication reconciles to the live wall post by event title.
+
+    Regression: post_to_vk returns the postponed-draft id; VK reassigns the id
+    when the postponed post publishes, so the stored URL stops resolving and the
+    repost found no eligible source. The wall-scan matcher recovers the live post.
+    """
+    from promo import _match_published_post_for_event, _post_text_matches_event
+
+    ev = _event("Большой летний крафт-маркет «Полюбить 39»", "2026-06-20")
+    # Stored draft was wall-231920894_1938; the live published post is _1939.
+    recent_wall = [
+        {"post_id": 1937, "date": 1000, "text": "Другое событие", "url": "https://vk.com/wall-231920894_1937"},
+        {"post_id": 1939, "date": 2000, "text": "🎪 Большой летний крафт-маркет «Полюбить 39»\n20 июня", "url": "https://vk.com/wall-231920894_1939"},
+    ]
+    assert _post_text_matches_event(recent_wall[1]["text"], ev) is True
+    assert _post_text_matches_event(recent_wall[0]["text"], ev) is False
+    match = _match_published_post_for_event(recent_wall, ev)
+    assert match is not None
+    assert match["url"] == "https://vk.com/wall-231920894_1939"
+
+    # Short/generic titles are not trusted for substring matching.
+    short = _event("Шоу", "2026-06-20")
+    assert _post_text_matches_event("Шоу сегодня", short) is False
+    assert _match_published_post_for_event(recent_wall, short) is None
