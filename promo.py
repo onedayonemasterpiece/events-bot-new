@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from db import Database
 from models import (
     Event,
+    EventSource,
     Festival,
     PromoActivity,
     PromoCampaign,
@@ -46,6 +47,14 @@ PROMO_VK_ACTIVE_START_HOUR = 9
 PROMO_VK_ACTIVE_END_HOUR = 21
 PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
+
+# Target that matches events by their Telegram source chat + post author.
+# query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
+PROMO_TARGET_TYPE_TG_CHAT_AUTHOR = "tg_chat_author"
+# Concrete kraftmarket39 / @LANGEANNA -> video announce campaign.
+KRAFTMARKET_AUTHOR_CHAT = "kraftmarket39"
+KRAFTMARKET_AUTHOR_USERNAME = "langeanna"
+KRAFTMARKET_AUTHOR_CAMPAIGN_TITLE = "kraftmarket39 · @LANGEANNA → видеоанонс"
 
 
 def clamp_campaign_end_to_event(
@@ -948,6 +957,98 @@ async def ensure_initial_80_stories_campaign(
         return campaign
 
 
+async def ensure_kraftmarket_langeanna_campaign(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+    created_by: int | None = None,
+) -> PromoCampaign:
+    """Idempotently ensure the kraftmarket39 / @LANGEANNA → video announce campaign.
+
+    Trigger: events sourced from the Telegram chat ``kraftmarket39`` whose post
+    author is ``@LANGEANNA`` (``Event.tg_source_author``). The activity is a
+    single guaranteed-any-position video promo (``max_per_publish=1``); the event
+    still has to pass each video announce's own content filter — that is enforced
+    by the shared video promo pipeline (`resolve_video_promo_candidates` +
+    `video_announce/popular_review.py`), not bypassed here.
+    """
+    now_utc = now_utc or datetime.now(timezone.utc)
+    query_text = f"{KRAFTMARKET_AUTHOR_CHAT}:{KRAFTMARKET_AUTHOR_USERNAME}"
+    async with db.get_session() as session:
+        campaign = (
+            await session.execute(
+                select(PromoCampaign).where(
+                    PromoCampaign.title == KRAFTMARKET_AUTHOR_CAMPAIGN_TITLE
+                )
+            )
+        ).scalars().first()
+        if campaign is None:
+            campaign = PromoCampaign(
+                title=KRAFTMARKET_AUTHOR_CAMPAIGN_TITLE,
+                status="active",
+                goal_comment=(
+                    "автоматически продвигать в видеоанонс события автора "
+                    f"@{KRAFTMARKET_AUTHOR_USERNAME} из чата {KRAFTMARKET_AUTHOR_CHAT}"
+                ),
+                starts_at=now_utc,
+                ends_at=None,
+                priority=normalize_promo_priority(2),
+                created_by=created_by,
+            )
+            session.add(campaign)
+            await session.commit()
+            await session.refresh(campaign)
+        campaign_id = int(campaign.id)
+        changed = False
+        target = (
+            await session.execute(
+                select(PromoTarget)
+                .where(PromoTarget.campaign_id == campaign_id)
+                .where(PromoTarget.target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR)
+            )
+        ).scalars().first()
+        if target is None:
+            session.add(
+                PromoTarget(
+                    campaign_id=campaign_id,
+                    target_type=PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
+                    query_text=query_text,
+                )
+            )
+            changed = True
+        activity = (
+            await session.execute(
+                select(PromoActivity)
+                .where(PromoActivity.campaign_id == campaign_id)
+                .where(PromoActivity.surface == PROMO_SURFACE_VIDEO_GENERAL)
+            )
+        ).scalars().first()
+        if activity is None:
+            session.add(
+                PromoActivity(
+                    campaign_id=campaign_id,
+                    surface=PROMO_SURFACE_VIDEO_GENERAL,
+                    profile_key=None,
+                    max_per_publish=1,
+                    selection_policy=PROMO_POLICY_GUARANTEED_ANY_POSITION,
+                    enabled=True,
+                )
+            )
+            changed = True
+        if changed:
+            await session.commit()
+        return campaign
+
+
+def _parse_chat_author_query(query_text: str | None) -> tuple[str, str]:
+    """Split a ``<chat>:<author>`` tg_chat_author target into lowercased parts."""
+    raw = str(query_text or "").strip()
+    if ":" not in raw:
+        return "", ""
+    chat, _, author = raw.partition(":")
+    return chat.strip().lstrip("@").lower(), author.strip().lstrip("@").lower()
+
+
 async def _events_for_target(
     db: Database,
     *,
@@ -966,6 +1067,29 @@ async def _events_for_target(
             ):
                 return []
             return [ev]
+        if target.target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR:
+            chat, author = _parse_chat_author_query(target.query_text)
+            if not chat or not author:
+                return []
+            query = (
+                select(Event)
+                .join(EventSource, EventSource.event_id == Event.id)
+                .where(func.lower(EventSource.source_chat_username) == chat)
+                .where(func.lower(Event.tg_source_author) == author)
+                .where(Event.date >= today.isoformat())
+                .where(Event.lifecycle_status == "active")
+                .where(Event.silent.is_(False))
+                .order_by(Event.date, Event.time, Event.id)
+                .distinct()
+            )
+            if campaign.ends_at is not None:
+                query = query.where(Event.date <= campaign.ends_at.date().isoformat())
+            res = await session.execute(query)
+            return [
+                ev
+                for ev in res.scalars().all()
+                if _event_is_promo_eligible(ev, today=today, campaign=campaign)
+            ]
         if target.target_type != "festival" or not target.festival_name:
             return []
         query = (
@@ -1051,6 +1175,7 @@ async def resolve_video_promo_candidates(
     today = now_utc.date()
     day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
     await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
+    await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
 
     async with db.get_session() as session:
         query = (

@@ -573,3 +573,96 @@ def test_repost_matches_published_post_after_postponed_id_shift() -> None:
     short = _event("Шоу", "2026-06-20")
     assert _post_text_matches_event("Шоу сегодня", short) is False
     assert _match_published_post_for_event(recent_wall, short) is None
+
+
+def test_parse_chat_author_query_splits_and_normalizes() -> None:
+    from promo import _parse_chat_author_query
+
+    assert _parse_chat_author_query("kraftmarket39:langeanna") == ("kraftmarket39", "langeanna")
+    assert _parse_chat_author_query("@Kraftmarket39:@LangeAnna") == ("kraftmarket39", "langeanna")
+    assert _parse_chat_author_query("nocolon") == ("", "")
+    assert _parse_chat_author_query(None) == ("", "")
+
+
+def test_chat_post_author_username_chat_only() -> None:
+    from source_parsing.telegram.handlers import _chat_post_author_username
+
+    chat_msg = {"source_type": "supergroup", "post_author": {"is_user": True, "username": "LangeAnna"}}
+    assert _chat_post_author_username(chat_msg) == "langeanna"
+    # Channels: author is the channel, not a user -> no trigger.
+    channel_msg = {"source_type": "channel", "post_author": {"is_channel": True, "username": "kraftmarket39"}}
+    assert _chat_post_author_username(channel_msg) is None
+    # Group message without a resolved user author.
+    assert _chat_post_author_username({"source_type": "group", "post_author": None}) is None
+
+
+@pytest.mark.asyncio
+async def test_tg_chat_author_target_matches_only_that_author(tmp_path) -> None:
+    from models import EventSource, PromoTarget
+    from promo import (
+        PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
+        _events_for_target,
+        ensure_kraftmarket_langeanna_campaign,
+    )
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc)
+    today = now_utc.date()
+
+    campaign = await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
+    # Idempotent: second call keeps a single target + activity.
+    await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
+
+    async with db.get_session() as session:
+        targets = (
+            await session.execute(
+                select(PromoTarget).where(PromoTarget.campaign_id == campaign.id)
+            )
+        ).scalars().all()
+        assert len(targets) == 1
+        assert targets[0].target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR
+        activities = (
+            await session.execute(
+                select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
+            )
+        ).scalars().all()
+        assert len(activities) == 1
+        assert activities[0].surface == "video_general"
+        assert activities[0].profile_key is None
+        assert int(activities[0].max_per_publish) == 1
+        assert activities[0].selection_policy == PROMO_POLICY_GUARANTEED_ANY_POSITION
+
+        # Matching event: kraftmarket39 chat + langeanna author.
+        ev_match = _event("Большой крафт-маркет «Полюбить 39»", "2026-06-20")
+        ev_match.tg_source_author = "langeanna"
+        # Same chat, different author -> must NOT match.
+        ev_other = _event("Чужое событие из того же чата", "2026-06-21")
+        ev_other.tg_source_author = "someoneelse"
+        session.add_all([ev_match, ev_other])
+        await session.commit()
+        await session.refresh(ev_match)
+        await session.refresh(ev_other)
+        session.add_all([
+            EventSource(
+                event_id=int(ev_match.id),
+                source_type="telegram",
+                source_url="https://t.me/kraftmarket39/95",
+                source_chat_username="kraftmarket39",
+                source_message_id=95,
+            ),
+            EventSource(
+                event_id=int(ev_other.id),
+                source_type="telegram",
+                source_url="https://t.me/kraftmarket39/96",
+                source_chat_username="kraftmarket39",
+                source_message_id=96,
+            ),
+        ])
+        await session.commit()
+        target = targets[0]
+
+    matched = await _events_for_target(db, target=target, campaign=campaign, today=today)
+    matched_ids = {int(e.id) for e in matched}
+    assert int(ev_match.id) in matched_ids
+    assert int(ev_other.id) not in matched_ids

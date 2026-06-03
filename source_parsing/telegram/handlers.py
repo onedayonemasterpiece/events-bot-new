@@ -2767,6 +2767,23 @@ def _infer_ticket_link_from_group_post_author(
     return _build_tg_user_link(author.get("username"), author.get("user_id"))
 
 
+def _chat_post_author_username(message: dict[str, Any]) -> str | None:
+    """Lowercased post-author username for group/supergroup messages.
+
+    Used by the author-in-chat promo trigger. Only chats (group/supergroup)
+    have per-message user authors; channels post as the channel itself, so we
+    return ``None`` for them. Requires a resolved ``is_user`` author username.
+    """
+    source_type = str(message.get("source_type") or "").strip().lower()
+    if source_type not in {"group", "supergroup"}:
+        return None
+    author = message.get("post_author")
+    if not isinstance(author, dict) or not author.get("is_user"):
+        return None
+    username = str(author.get("username") or "").strip().lstrip("@").lower()
+    return username or None
+
+
 def _norm_match(s: str | None) -> str:
     raw = (s or "").strip().lower()
     if not raw:
@@ -4154,6 +4171,7 @@ def _build_candidate(
         source_chat_username=username or None,
         source_chat_id=_to_int(message.get("source_chat_id")),
         source_message_id=message_id,
+        tg_source_author=_chat_post_author_username(message),
         trust_level=source.trust_level,
         metrics=metrics,
         links_payload=[message.get("links"), event_data.get("links")],

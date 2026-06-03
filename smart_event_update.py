@@ -483,6 +483,7 @@ class EventCandidate:
     source_chat_username: str | None = None
     source_chat_id: int | None = None
     source_message_id: int | None = None
+    tg_source_author: str | None = None
     creator_id: int | None = None
     trust_level: str | None = None
     metrics: dict[str, Any] | None = None
@@ -13548,6 +13549,7 @@ async def _smart_event_update_impl(
             source_post_url=candidate.source_url if _is_http_url(candidate.source_url) else None,
             source_chat_id=candidate.source_chat_id,
             source_message_id=candidate.source_message_id,
+            tg_source_author=candidate.tg_source_author,
             creator_id=candidate.creator_id,
             search_digest=normalized_digest,
             photo_urls=[

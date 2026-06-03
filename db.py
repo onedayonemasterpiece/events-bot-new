@@ -401,6 +401,7 @@ class Database:
             dbg("event core columns")
             await _add_column(conn, "event", "photo_urls JSON")
             await _add_column(conn, "event", "source_texts JSON")
+            await _add_column(conn, "event", "tg_source_author TEXT")
             await _add_column(conn, "event", "ics_hash TEXT")
             await _add_column(conn, "event", "ics_file_id TEXT")
             await _add_column(conn, "event", "ics_updated_at TIMESTAMP")

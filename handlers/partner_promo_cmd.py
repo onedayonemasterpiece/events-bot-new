@@ -1529,6 +1529,13 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
             target_lines.append(f"Событие #{t.event_id}: {html.escape(t.query_text or '')}")
         elif t.target_type == "festival":
             target_lines.append(f"Фестиваль: {html.escape(t.festival_name or '')}")
+        elif t.target_type == "tg_chat_author":
+            chat, _, author = str(t.query_text or "").partition(":")
+            chat = chat.strip().lstrip("@")
+            author = author.strip().lstrip("@")
+            target_lines.append(
+                f"Чат: t.me/{html.escape(chat)} · автор @{html.escape(author)}"
+            )
 
     act_lines: list[str] = [
         "• " + _humanize_activity(a) for a in activities

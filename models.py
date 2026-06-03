@@ -428,6 +428,10 @@ class Event(SQLModel, table=True):
     ics_post_id: Optional[int] = None
     source_chat_id: Optional[int] = None
     source_message_id: Optional[int] = None
+    # Telegram chat post author username (lowercased, no @). Set only for
+    # group/supergroup sources where the post was sent by a user — used by the
+    # author-in-chat promo trigger. None for channels and non-Telegram sources.
+    tg_source_author: Optional[str] = None
     creator_id: Optional[int] = None
     tourist_label: Optional[int] = Field(
         default=None, sa_column=Column(SmallInteger)

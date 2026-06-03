@@ -22,7 +22,9 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,
   start/end dates, priority (`0..3`, where `0` is highest), optional exposure
   caps/disclosure fields.
-- `promo_target`: either one real `event.id` or one existing `festival.name`.
+- `promo_target`: one real `event.id`, one existing `festival.name`, or a
+  Telegram source author (`target_type='tg_chat_author'`, `query_text`
+  `"<chat>:<author>"`). See "Author-in-chat trigger" below.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
   `vk_publication`, `vk_repost`. VK activity parameters live in
@@ -195,6 +197,34 @@ counts include `VK_SCHEDULED` (promo VK posts sit in the community postponed
 queue), and exposures without a current `activity_id` fold into a «Прочее»
 section. Note the separate admin text interface `/promo <args>`
 (`handlers/promo_cmd.py`) renders its own VK report in `/promo report`.
+
+## Author-in-chat trigger (video announce)
+
+`promo_target.target_type='tg_chat_author'` promotes events by their Telegram
+provenance instead of by event/festival id. `query_text` is
+`"<chat_username>:<author_username>"` (both lowercased, no `@`). `_events_for_target`
+selects active future events that have an `event_source` row with
+`source_chat_username == chat` **and** `event.tg_source_author == author`.
+
+- **Author capture**: `Event.tg_source_author` is set at ingest
+  (`source_parsing/telegram/handlers.py` → `EventCandidate` →
+  `smart_event_update` create path) from the Telegram message `post_author`
+  **only for `group`/`supergroup` sources** with a resolved user author;
+  channels post as the channel itself, so they get `None` and never trigger.
+  Future-only — there is no backfill for events imported before this shipped.
+  The Kaggle `TelegramMonitor` already includes `post_author` in its payload,
+  so no monitor change is needed.
+- **Filters still apply**: matched events go through the normal video promo
+  pipeline (`resolve_video_promo_candidates` + `video_announce/popular_review.py`),
+  which filters every promo candidate by the announce's own content filter
+  (КОНБ/eco). An event that fails a filter does not appear in that announce.
+- **Concrete campaign**: `ensure_kraftmarket_langeanna_campaign` idempotently
+  seeds `kraftmarket39 · @LANGEANNA → видеоанонс` — target
+  `tg_chat_author`/`kraftmarket39:langeanna`, one `video_general` activity with
+  `selection_policy=guaranteed_any_position`, `max_per_publish=1`,
+  `profile_key=None` (eligible across general tracks), no daily cap (so the same
+  day's several announces can each include it where it passes filters). Seeded on
+  every `resolve_video_promo_candidates` run.
 
 ## Daily Marker
 

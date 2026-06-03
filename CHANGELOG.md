@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **Promo trigger by Telegram chat author → video announce**: a new
+  `promo_target.target_type='tg_chat_author'` matches events by their Telegram
+  source chat + post author (`query_text="<chat>:<author>"`). Events authored by
+  that user in that chat are auto-promoted into video announces via the existing
+  `video_general` / `guaranteed_any_position` pipeline — and still pass each
+  announce's own content filter (КОНБ/eco), since promo candidates are already
+  filtered in `video_announce/popular_review.py` (not bypassed). The author is
+  persisted as `Event.tg_source_author` (lowercased username) at ingest, set
+  **only for group/supergroup sources** with a resolved user author (channels
+  excluded); future-only (no backfill). Concrete campaign seeded idempotently:
+  `kraftmarket39 · @LANGEANNA → видеоанонс` (single any-position video promo per
+  publish). The Kaggle `TelegramMonitor` already ships `post_author` for chats,
+  so no monitor change is required. Covered by `tests/test_promo.py`.
 - **Promo VK repost — recover live URL after postponed publish**: the `vk_repost`
   activity could never find an eligible source because promo `vk_publication`
   posts were recorded with the VK **postponed-draft** post id returned by
