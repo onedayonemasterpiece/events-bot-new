@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 IncidentNotifier = Callable[[str, dict[str, Any]], Any]
 
 _DEFAULT_ENV_CANDIDATE_CACHE: dict[tuple[str, tuple[str, ...]], tuple[str, ...] | None] = {}
+# Cache of active key ids for the emergency-overflow env names (keyed by the
+# normalized alias tuple). Separate from the scoped default-env cache so the
+# two lookups never clobber each other.
+_OVERFLOW_ENV_CANDIDATE_CACHE: dict[tuple[str, ...], tuple[str, ...] | None] = {}
 
 
 @dataclass
@@ -117,6 +121,13 @@ class GoogleAIClient:
     RESERVE_DIRECT_RETRY_ENV = "GOOGLE_AI_RESERVE_DIRECT_RETRY"
     RESERVE_DIRECT_SCHEMA_ENV = "GOOGLE_AI_RESERVE_DIRECT_SCHEMA"
     RESERVE_SCOPE_TO_DEFAULT_ENV_ENV = "GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV"
+    # Comma-separated env names whose keys may be borrowed as emergency overflow
+    # when the scoped lane is exhausted for the day. Empty = no overflow.
+    RESERVE_OVERFLOW_KEY_ENVS_ENV = "GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"
+    # A scoped reservation only spills into the overflow pool when it is blocked
+    # for a *day-level* reason (the lane is out of daily budget) — never for a
+    # per-minute spike (rpm/tpm), where waiting on the same key is correct.
+    _RESERVE_OVERFLOW_TRIGGER_REASONS = frozenset({"rpd", "no_keys"})
     PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
 
     # Process-local limiter (used when Supabase reserve RPC is missing/flaky).
@@ -195,6 +206,7 @@ class GoogleAIClient:
         default_env_var_name: Optional[str] = None,
         dry_run: bool = False,
         incident_notifier: Optional[IncidentNotifier] = None,
+        reserve_overflow_key_envs: Optional[Any] = None,
     ):
         """Initialize the client.
         
@@ -244,6 +256,14 @@ class GoogleAIClient:
         self.scope_reserve_to_default_env = (
             os.getenv(self.RESERVE_SCOPE_TO_DEFAULT_ENV_ENV, "1").strip().lower()
             in {"1", "true", "yes", "on"}
+        )
+        # Emergency overflow: when the scoped lane is out of daily budget, these
+        # extra env-named keys may be borrowed. Explicit constructor arg wins;
+        # otherwise fall back to the global env (unset = disabled).
+        self.reserve_overflow_key_envs = self._normalize_overflow_envs(
+            reserve_overflow_key_envs
+            if reserve_overflow_key_envs is not None
+            else os.getenv(self.RESERVE_OVERFLOW_KEY_ENVS_ENV, "")
         )
 
         # Cache missing Supabase RPCs to avoid noisy per-request fallbacks when
@@ -363,6 +383,131 @@ class GoogleAIClient:
             return []
         _DEFAULT_ENV_CANDIDATE_CACHE[cache_key] = ids
         return list(ids)
+
+    @staticmethod
+    def _normalize_overflow_envs(value: Any) -> list[str]:
+        """Parse the overflow-key-env configuration (CSV string or list)."""
+        if value is None:
+            return []
+        raw_items = value.split(",") if isinstance(value, str) else list(value)
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            name = str(item or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append(name)
+        return out
+
+    def _resolve_overflow_candidate_key_ids(
+        self,
+        *,
+        exclude: list[str] | None,
+    ) -> list[str] | None:
+        """Active key ids for the configured overflow env names, minus ``exclude``.
+
+        Returns the ids ordered by ``priority`` so the RPC borrows the
+        cheapest-priority spare key first. None when overflow is unconfigured,
+        unavailable, or fully covered by the scoped pool.
+        """
+        if self.supabase is None or not self.reserve_overflow_key_envs:
+            return None
+        env_names: list[str] = []
+        seen: set[str] = set()
+        for raw in self.reserve_overflow_key_envs:
+            for alias in self._default_env_aliases(raw):
+                if alias not in seen:
+                    seen.add(alias)
+                    env_names.append(alias)
+        env_tuple = tuple(env_names)
+        if not env_tuple:
+            return None
+        if env_tuple in _OVERFLOW_ENV_CANDIDATE_CACHE:
+            ids = _OVERFLOW_ENV_CANDIDATE_CACHE[env_tuple]
+        else:
+            try:
+                result = (
+                    self.supabase.table("google_ai_api_keys")
+                    .select("id, env_var_name, priority")
+                    .eq("is_active", True)
+                    .in_("env_var_name", list(env_tuple))
+                    .order("priority")
+                    .order("id")
+                    .execute()
+                )
+                rows = list(result.data or [])
+                ids = tuple(
+                    str(row.get("id"))
+                    for row in rows
+                    if row.get("id") and str(row.get("env_var_name") or "") in env_tuple
+                )
+            except Exception as exc:
+                logger.warning(
+                    "google_ai.overflow_candidates_failed envs=%s err=%s",
+                    ",".join(env_tuple),
+                    exc,
+                )
+                ids = None
+            _OVERFLOW_ENV_CANDIDATE_CACHE[env_tuple] = ids
+        if not ids:
+            return None
+        exclude_set = set(exclude or [])
+        out = [key_id for key_id in ids if key_id not in exclude_set]
+        return out or None
+
+    @staticmethod
+    def _reserve_result_from_data(data: dict[str, Any]) -> "ReserveResult":
+        return ReserveResult(
+            ok=data.get("ok", False),
+            api_key_id=data.get("api_key_id"),
+            env_var_name=data.get("env_var_name"),
+            key_alias=data.get("key_alias"),
+            minute_bucket=data.get("minute_bucket"),
+            day_bucket=data.get("day_bucket"),
+            limits=data.get("limits"),
+            used_after=data.get("used_after"),
+            blocked_reason=data.get("blocked_reason"),
+            retry_after_ms=data.get("retry_after_ms"),
+        )
+
+    async def _run_reserve_rpc(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call ``google_ai_reserve`` with short transient retries; return parsed row."""
+        retry_attempts = self._read_int_env(self.RESERVE_RPC_RETRY_ATTEMPTS_ENV, 2)
+        retry_attempts = max(1, min(retry_attempts, 6))
+        retry_base_delay_ms = self._read_int_env(self.RESERVE_RPC_RETRY_BASE_DELAY_MS_ENV, 350)
+        retry_base_delay_ms = max(50, min(retry_base_delay_ms, 5000))
+        rpc_error: Exception | None = None
+        result = None
+        for rpc_attempt in range(1, retry_attempts + 1):
+            try:
+                result = self.supabase.rpc("google_ai_reserve", payload).execute()
+                rpc_error = None
+                break
+            except Exception as exc:
+                rpc_error = exc
+                transient = self._is_transient_reserve_rpc_error(exc)
+                if not transient or rpc_attempt >= retry_attempts:
+                    raise
+                delay_ms = int(retry_base_delay_ms * (2 ** (rpc_attempt - 1)))
+                delay_ms += random.randint(0, max(30, retry_base_delay_ms // 2))
+                delay_ms = min(delay_ms, 7000)
+                logger.warning(
+                    "google_ai.reserve_rpc_transient_retry attempt=%s/%s delay_ms=%s err=%s",
+                    rpc_attempt,
+                    retry_attempts,
+                    delay_ms,
+                    str(exc)[:260],
+                )
+                await asyncio.sleep(delay_ms / 1000.0)
+        if result is None:
+            if rpc_error:
+                raise rpc_error
+            raise RuntimeError("google_ai_reserve returned no result")
+        data = result.data
+        if isinstance(data, list) and data:
+            data = data[0]
+        return data
 
     async def _call_supabase_rpc_with_retries(
         self,
@@ -882,66 +1027,69 @@ class GoogleAIClient:
         }
 
         try:
-            retry_attempts = self._read_int_env(self.RESERVE_RPC_RETRY_ATTEMPTS_ENV, 2)
-            retry_attempts = max(1, min(retry_attempts, 6))
-            retry_base_delay_ms = self._read_int_env(self.RESERVE_RPC_RETRY_BASE_DELAY_MS_ENV, 350)
-            retry_base_delay_ms = max(50, min(retry_base_delay_ms, 5000))
-            rpc_error: Exception | None = None
-            result = None
-            for rpc_attempt in range(1, retry_attempts + 1):
-                try:
-                    result = self.supabase.rpc("google_ai_reserve", payload).execute()
-                    rpc_error = None
-                    break
-                except Exception as exc:
-                    rpc_error = exc
-                    transient = self._is_transient_reserve_rpc_error(exc)
-                    if not transient or rpc_attempt >= retry_attempts:
-                        raise
-                    delay_ms = int(retry_base_delay_ms * (2 ** (rpc_attempt - 1)))
-                    delay_ms += random.randint(0, max(30, retry_base_delay_ms // 2))
-                    delay_ms = min(delay_ms, 7000)
-                    logger.warning(
-                        "google_ai.reserve_rpc_transient_retry consumer=%s model=%s attempt=%s/%s delay_ms=%s err=%s",
+            data = await self._run_reserve_rpc(payload)
+            result = self._reserve_result_from_data(data)
+
+            if result.ok:
+                if was_cached_missing:
+                    logger.info(
+                        "google_ai.reserve_rpc_recovered consumer=%s model=%s",
                         ctx.consumer,
                         ctx.model,
-                        rpc_attempt,
-                        retry_attempts,
-                        delay_ms,
-                        str(exc)[:260],
                     )
-                    await asyncio.sleep(delay_ms / 1000.0)
-            if result is None:
-                if rpc_error:
-                    raise rpc_error
-                raise RuntimeError("google_ai_reserve returned no result")
-            
-            data = result.data
-            if isinstance(data, list) and data:
-                data = data[0]
+                    self._reserve_rpc_missing_since = 0.0
+                    self._missing_rpc_logged.discard("google_ai_reserve")
+                return result
 
-            if was_cached_missing:
-                logger.info(
-                    "google_ai.reserve_rpc_recovered consumer=%s model=%s",
-                    ctx.consumer,
-                    ctx.model,
+            # Scoped lane refused. If it is out of *daily* budget (rpd/no_keys)
+            # and an emergency overflow pool is configured, retry the reservation
+            # once with the scoped + spare keys merged. The RPC orders by priority
+            # and skips the exhausted scoped key, so it borrows the cheapest spare
+            # key only when the lane is genuinely out of daily budget. The same
+            # request_uid/attempt_no is safe to reuse: a blocked reservation never
+            # writes a request_attempts row, so there is no idempotency conflict.
+            blocked = (result.blocked_reason or "").strip().lower()
+            if (
+                isinstance(scoped_candidate_key_ids, list)
+                and scoped_candidate_key_ids
+                and blocked in self._RESERVE_OVERFLOW_TRIGGER_REASONS
+            ):
+                overflow_ids = self._resolve_overflow_candidate_key_ids(
+                    exclude=scoped_candidate_key_ids
                 )
-                self._reserve_rpc_missing_since = 0.0
-                self._missing_rpc_logged.discard("google_ai_reserve")
-            
-            return ReserveResult(
-                ok=data.get("ok", False),
-                api_key_id=data.get("api_key_id"),
-                env_var_name=data.get("env_var_name"),
-                key_alias=data.get("key_alias"),
-                minute_bucket=data.get("minute_bucket"),
-                day_bucket=data.get("day_bucket"),
-                limits=data.get("limits"),
-                used_after=data.get("used_after"),
-                blocked_reason=data.get("blocked_reason"),
-                retry_after_ms=data.get("retry_after_ms"),
-            )
-            
+                if overflow_ids:
+                    payload["p_candidate_key_ids"] = list(scoped_candidate_key_ids) + overflow_ids
+                    overflow_data = await self._run_reserve_rpc(payload)
+                    overflow_result = self._reserve_result_from_data(overflow_data)
+                    if overflow_result.ok:
+                        if was_cached_missing:
+                            self._reserve_rpc_missing_since = 0.0
+                            self._missing_rpc_logged.discard("google_ai_reserve")
+                        self._log_event(
+                            "google_ai.reserve_overflow_used",
+                            ctx,
+                            attempt_no=attempt_no,
+                            reserve=overflow_result,
+                        )
+                        await self._notify_incident(
+                            "reserve_overflow_used",
+                            ctx=ctx,
+                            severity="warning",
+                            message=(
+                                f"Scoped lane out of daily budget ({blocked}); "
+                                f"borrowed spare key {overflow_result.env_var_name}"
+                            ),
+                            details={
+                                "blocked_reason": blocked,
+                                "overflow_env_var_name": overflow_result.env_var_name,
+                            },
+                        )
+                        return overflow_result
+                    # Overflow pool also exhausted: surface the overflow verdict.
+                    return overflow_result
+
+            return result
+
         except Exception as e:
             if (
                 self.allow_reserve_fallback

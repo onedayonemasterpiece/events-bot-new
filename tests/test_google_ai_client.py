@@ -7,6 +7,7 @@ import pytest
 
 from google_ai.client import (
     _DEFAULT_ENV_CANDIDATE_CACHE,
+    _OVERFLOW_ENV_CANDIDATE_CACHE,
     GoogleAIClient,
     RequestContext,
 )
@@ -357,3 +358,142 @@ async def test_provider_call_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch)
             safety_settings=None,
             max_output_tokens=None,
         )
+
+
+# --- Emergency reserve overflow (INC-2026-06-03) -------------------------------
+
+_OVERFLOW_KEY_ROWS = [
+    {"id": "id-key1", "env_var_name": "GOOGLE_API_KEY", "priority": 10},
+    {"id": "id-key3", "env_var_name": "GOOGLE_API_KEY3", "priority": 3},
+    {"id": "id-key2", "env_var_name": "GOOGLE_API_KEY2", "priority": 5},
+]
+_SPARE_KEY_IDS = {"id-key3", "id-key2"}
+
+
+class _OverflowFakeSupabase:
+    """Reserve RPC that blocks the scoped lane and frees up once a spare joins."""
+
+    def __init__(self, *, scoped_block: str = "rpd", spare_ok: bool = True):
+        self.scoped_block = scoped_block
+        self.spare_ok = spare_ok
+        self.rpc_calls: list[dict] = []
+
+    def table(self, _name: str):
+        return _FakeSupabaseQuery(_OVERFLOW_KEY_ROWS)
+
+    def rpc(self, _name: str, payload: dict):
+        self.rpc_calls.append(dict(payload))
+        candidates = payload.get("p_candidate_key_ids") or []
+        has_spare = any(c in _SPARE_KEY_IDS for c in candidates)
+        if has_spare and self.spare_ok:
+            data = {
+                "ok": True,
+                "env_var_name": "GOOGLE_API_KEY3",
+                "key_alias": "k3",
+                "api_key_id": "id-key3",
+            }
+        elif has_spare:  # spare present but still exhausted
+            data = {"ok": False, "blocked_reason": "rpd", "api_key_id": None}
+        else:
+            data = {
+                "ok": False,
+                "blocked_reason": self.scoped_block,
+                "api_key_id": None,
+                "retry_after_ms": 1000 if self.scoped_block in {"rpm", "tpm"} else None,
+            }
+        return SimpleNamespace(execute=lambda d=data: SimpleNamespace(data=d))
+
+
+def _overflow_client(supabase, monkeypatch, **kwargs):
+    _DEFAULT_ENV_CANDIDATE_CACHE.clear()
+    _OVERFLOW_ENV_CANDIDATE_CACHE.clear()
+    monkeypatch.setenv("GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV", "1")
+    return GoogleAIClient(
+        supabase_client=supabase,
+        consumer="smart_update",
+        default_env_var_name="GOOGLE_API_KEY",
+        **kwargs,
+    )
+
+
+def _overflow_ctx(uid: str = "req-of") -> RequestContext:
+    return RequestContext(
+        request_uid=uid,
+        consumer="smart_update",
+        account_name=None,
+        model="gemini-3.1-flash-lite",
+        requested_model="gemini-3.1-flash-lite",
+        reserved_tpm=100,
+    )
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_borrows_spare_key_on_rpd(monkeypatch: pytest.MonkeyPatch) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx(), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is True
+    assert reserve.env_var_name == "GOOGLE_API_KEY3"
+    # Phase 1 = scoped lane only; phase 2 = scoped + spares (scoped key first).
+    assert len(supabase.rpc_calls) == 2
+    assert supabase.rpc_calls[0]["p_candidate_key_ids"] == ["id-key1"]
+    assert supabase.rpc_calls[1]["p_candidate_key_ids"] == ["id-key1", "id-key3", "id-key2"]
+    # Same request/attempt reused across phases (no idempotency conflict).
+    assert supabase.rpc_calls[0]["p_request_uid"] == supabase.rpc_calls[1]["p_request_uid"]
+    assert supabase.rpc_calls[0]["p_attempt_no"] == supabase.rpc_calls[1]["p_attempt_no"]
+
+
+@pytest.mark.asyncio
+async def test_reserve_no_overflow_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=True)
+    client = _overflow_client(supabase, monkeypatch)  # no overflow envs
+
+    reserve = await client._reserve(_overflow_ctx("req-noof"), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpd"
+    assert len(supabase.rpc_calls) == 1  # never expands
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_not_triggered_on_per_minute_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpm", spare_ok=True)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx("req-rpm"), attempt_no=1, candidate_key_ids=None)
+
+    # rpm is a per-minute spike: stay on the scoped key, do not borrow spares.
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpm"
+    assert len(supabase.rpc_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_reserve_overflow_returns_block_when_spares_also_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    supabase = _OverflowFakeSupabase(scoped_block="rpd", spare_ok=False)
+    client = _overflow_client(
+        supabase, monkeypatch, reserve_overflow_key_envs="GOOGLE_API_KEY3,GOOGLE_API_KEY2"
+    )
+
+    reserve = await client._reserve(_overflow_ctx("req-allfull"), attempt_no=1, candidate_key_ids=None)
+
+    assert reserve.ok is False
+    assert reserve.blocked_reason == "rpd"
+    assert len(supabase.rpc_calls) == 2  # tried overflow, still blocked
+
+
+def test_normalize_overflow_envs_parses_csv_and_list() -> None:
+    assert GoogleAIClient._normalize_overflow_envs(None) == []
+    assert GoogleAIClient._normalize_overflow_envs("") == []
+    assert GoogleAIClient._normalize_overflow_envs(" A , B ,A, ") == ["A", "B"]
+    assert GoogleAIClient._normalize_overflow_envs(["A", "B", "A"]) == ["A", "B"]
