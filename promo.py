@@ -1662,7 +1662,14 @@ async def _publish_vk_repost(
     source_owner_id, source_post_id = ids
     from main import VK_USER_TOKEN, _vk_api, choose_vk_actor
 
-    actors = choose_vk_actor(-abs(int(target_group_id)), "wall.post")
+    actors: list[tuple[str, str]] = []
+    if VK_USER_TOKEN:
+        actors.append(("user", VK_USER_TOKEN))
+    actors.extend(
+        (actor.kind, actor.token)
+        for actor in choose_vk_actor(-abs(int(target_group_id)), "wall.post")
+        if actor.kind != "user"
+    )
     if not actors:
         raise RuntimeError("VK token missing for wall.repost")
     params = {
@@ -1670,16 +1677,15 @@ async def _publish_vk_repost(
         "group_id": int(target_group_id),
         "message": message,
     }
-    for actor in actors:
-        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+    for kind, token in actors:
         data = await _vk_api(
             "wall.repost",
             params,
             db,
             bot,
             token=token,
-            token_kind=actor.kind,
-            skip_captcha=(actor.kind == "group"),
+            token_kind=kind,
+            skip_captcha=(kind == "group"),
         )
         post_id = (data.get("response") or {}).get("post_id") if isinstance(data, dict) else None
         if post_id:

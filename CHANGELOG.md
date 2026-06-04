@@ -14,7 +14,8 @@
   ready Telegram imports do not wait behind every older rebuild before reaching VK. After a successful managed VK
   `wall.post`/`wall.edit`, `vk_sync` now retries the final `source_vk_post_url` / `vk_source_hash` DB write on transient
   SQLite locks before the outbox can retry, preventing duplicate VK posts when the external side effect already
-  happened.
+  happened. Promo VK reposts now call `wall.repost` with the user actor first, because VK rejects `wall.repost` under
+  group authorization; this restores the `80 историй о главном` repost path from `klgdevents` to `kenigeventsofficial`.
 - **Incident / Telegram Monitoring missed `kraftmarket39/271` promo event (INC-2026-06-04)**: recovery no longer
   skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
   Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after

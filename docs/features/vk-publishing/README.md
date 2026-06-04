@@ -70,6 +70,9 @@
 - VK promo evidence is stored in `promo_exposure`: `details_json.target_url`
   for each created post/repost and `details_json.source_url` for reposts. The
   `/promo report` output must show those concrete links.
+- `vk_repost` must call VK `wall.repost` with a user actor first. VK rejects
+  `wall.repost` under group authorization (`code=27`), so group-token-only
+  retries are not a valid fallback for promo repost delivery.
 - The built-in `80 историй о главном` campaign is configured for
   `https://vk.com/klgdevents` (minimum two festival event posts in the last
   24 hours) plus one repost from `klgdevents` to

@@ -51,6 +51,10 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 7. A `vk_sync` handler could successfully create a managed VK wall post and then fail on the final SQLite commit that
    stores `event.source_vk_post_url` / `vk_source_hash`. Because the outbox saw the handler as failed while the external
    side effect already happened, later retries could create duplicate public VK posts for the same event.
+8. The promo `vk_repost` activity selected `@kraftmarket39/271` / event `5656` correctly, but `_publish_vk_repost`
+   called `wall.repost` through group authorization. VK rejects that method under group auth (`code=27`), so the
+   `80 историй о главном` repost path from `klgdevents` to `kenigeventsofficial` failed even after the event had a
+   valid source VK post.
 
 ## Contributing Factors
 
@@ -118,6 +122,7 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   prerequisite check (`id < current and pending/running`) so an event still waits for its own Telegraph/ICS jobs.
 - Persist already-created VK source post results with a short SQLite-lock retry before allowing `vk_sync` to fail/retry,
   so a transient DB lock after `wall.post` does not create duplicate VK posts.
+- Use the VK user actor first for promo `wall.repost`; group actor remains only as fallback for paths where VK allows it.
 
 ## Follow-up Actions
 
@@ -184,6 +189,9 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   - Post-follow-up queue evidence: active future Telegram-origin events with no pending/running/done `vk_sync` and no
     managed VK URL: `[]`; `vk_sync` done count reached `1143`, pending `33`, with one fresh running job and a new managed
     VK post `https://vk.com/wall-231920894_2038` created after the deploy.
+  - Manual `run_promo_vk_activities` catch-up selected event `5656` for `vk_repost` from
+    `https://vk.com/wall-231920894_1974`, but failed before the repost fix with VK `code=27 Group authorization failed`
+    because `wall.repost` was sent with group auth.
 
 ## Prevention
 

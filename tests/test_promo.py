@@ -241,6 +241,8 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
         assert method == "wall.repost"
         assert params["group_id"] == 222
         assert params["message"] == "короткий рерайт?"
+        assert kwargs["token"] == "user-token"
+        assert kwargs["token_kind"] == "user"
         return {"response": {"post_id": 9}}
 
     async def fake_vk_api(method, **params):
@@ -256,6 +258,7 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
     monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", False)
     monkeypatch.setattr(main, "upload_vk_photo", lambda *args, **kwargs: None)
     monkeypatch.setattr(main, "build_short_vk_text", fake_short_text)
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
     monkeypatch.setattr(main, "choose_vk_actor", lambda owner_id, intent: [SimpleNamespace(kind="group", token="tok", label="group")])
     monkeypatch.setattr(main, "_vk_api", fake_repost_api)
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
