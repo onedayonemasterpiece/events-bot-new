@@ -122,12 +122,19 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `68fccbf4036827c89f834ccd9c58e39420ef0f60` (`origin/main`)
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9F2PB6ASX73JH1KY1EPKDM`
 - regression checks: `tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_job_dedup.py`
   printed `35 passed`; the pytest process hung after the passing summary and was terminated. A broader
   `tests/test_vk_source.py` run exposed an unrelated local missing-`GOOGLE_API_KEY` test issue in
   `test_add_events_from_text_preserves_links`.
+- follow-up regression checks after retry/priority fixes:
+  - `tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_job_dedup.py`
+    printed `36 passed`; pytest again hung after the passing summary and was terminated.
+  - `tests/test_job_due_filter.py tests/test_job_dedup.py tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py`
+    printed `38 passed`; pytest again hung after the passing summary and was terminated.
+  - `compileall` passed for `main.py`, `smart_event_update.py`, and the changed tests.
 - post-deploy verification:
   - `/healthz` after deploy: `ok=true`, `ready=true`, `job_outbox_worker=ok`, `issues=[]`.
   - VK catch-up reconciliation enqueued missing Telegram-origin VK jobs; active future non-silent Telegram-origin
@@ -135,7 +142,20 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   - Production log evidence at `2026-06-04T13:46Z`: one `telegraph_render_remove_logistics` Gemma 4 provider
     `500 INTERNAL` created three `google_ai.reserve_ok` attempts against `gemma-4-31b` before this retry-cap follow-up.
     This is the reason for `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES=1`.
+  - Production env evidence after retry-cap deploy: `smart_update_client_max_retries=1`,
+    `SMART_UPDATE_4O_FALLBACK=1`, `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=4`,
+    `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS=GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY2`,
+    `GOOGLE_API_KEY4` present.
+  - Production log evidence after retry-cap deploy: reserve overflow used `GOOGLE_API_KEY4` for
+    `gemini-3.1-flash-lite`; `smart_update_gemma_fallback_4o` count was `0` in the checked post-deploy window, with
+    old `4o fallback budget exhausted` lines only before the retry-cap deploy.
+  - Production catch-up after `vk_sync` priority deploy: `vk_sync` done count increased from `1086` to `1103`, pending
+    decreased from `88` to `70`, and fresh Telegram-origin events reached VK, including
+    `https://vk.com/wall-231920894_1983` through `https://vk.com/wall-231920894_1993`.
+    The original `@kraftmarket39/271` event remains at `https://vk.com/wall-231920894_1974`.
+    Active future non-silent Telegram-origin events with neither VK job nor managed VK URL remained `0`.
 
 ## Prevention
 
-- Pending.
+- Keep `vk_sync` priority regression covered so VK fanout cannot be starved by unrelated rebuild backlog.
+- Add alert/reporting for active future Telegram-origin events with no VK job/managed VK URL.
