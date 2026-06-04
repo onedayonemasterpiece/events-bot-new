@@ -1,6 +1,6 @@
 # INC-2026-06-04-kraftmarket271 Telegram Monitoring TPM zero-events and import cancellation
 
-Status: open
+Status: mitigated
 Severity: sev1
 Service: Telegram Monitoring producer/importer and promo-campaign event intake
 Opened: 2026-06-04
@@ -50,6 +50,11 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   for the scheduled monitor and later `kaggle_recovery` import-only path.
 - 2026-06-04 — investigation confirms production DB cursor for `@kraftmarket39` is still `268`; there are no prod
   rows for `@kraftmarket39/269..271`.
+- 2026-06-04 08:31:22..09:23:03 UTC — after deploy, stale-recovery import-only `ops_run id=1882` completes
+  (`status=partial`, 190 messages processed) and advances `@kraftmarket39` through message `271`, preserving
+  diagnostics for `269`/`271` and importing part of `270`.
+- 2026-06-04 10:05:29..10:10:43 UTC — focused forced catch-up `ops_run id=1884`,
+  `run_id=inc_kraftmarket271_force_20260604a`, processes only `@kraftmarket39/271` and creates event `5656`.
 
 ## Root Cause
 
@@ -133,24 +138,40 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 
 - Done: recovery now skips same-process jobs only while the current process still holds the Telegram Monitoring
   `_RUN_LOCK`; stale registry entries with the same pid can be imported after cancellation/restart.
+- Done: deployed recovery fix to Fly release `v1175` from `bf527e6f`.
+- Done: compensating catch-up restored `@kraftmarket39/271` as event `5656` with
+  `event_source.source_url='https://t.me/kraftmarket39/271'`, date `2026-07-08`, time `18:30`,
+  location `Историко-художественный музей`, and one poster.
 - Pending: producer must distinguish provider/rate-limit failure from legitimate zero-event output, retry bounded
   minute TPM blocks when safe, and persist failure diagnostics into the result payload.
-- Pending: run compensating catch-up for `@kraftmarket39/269..271` and verify promo visibility.
+- Pending: verify promo-campaign reporting/selection visibility for event `5656`.
 
 ## Follow-up Actions
 
-- [ ] Fix/verify `GOOGLE_API_KEY3` registry drift for Telegram Monitoring producer runs.
-- [ ] Add a focused regression test/smoke for `@kraftmarket39/271`.
+- [x] Fix/verify `GOOGLE_API_KEY3` registry drift for Telegram Monitoring producer runs.
+- [x] Add a focused regression test/smoke for `@kraftmarket39/271`.
 - [x] Add cancellation-tail regression coverage for Telegram result import/recovery.
 - [ ] Add alert/reporting for scanned event-like messages with producer `events=[]` and no durable prod diagnostic.
-- [ ] Complete compensating catch-up for `@kraftmarket39/269..271`.
+- [x] Complete compensating catch-up for `@kraftmarket39/269..271`.
+- [ ] Add producer-side retry/failure payload handling for TPM/provider failures.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `bf527e6fbcb38a7262eb7f7963c744c0db5ff572` (`origin/main`).
+- deploy path: manual `flyctl deploy --remote-only` from clean linked worktree; Fly release `v1175`,
+  machine `48e42d5b714228`, health check passing.
+- regression checks:
+  - `tests/test_tg_monitor_recovery.py tests/test_google_ai_client.py` — 17 passed.
+  - `GOOGLE_API_KEY3` currently has an active `google_ai_api_keys` row in Supabase.
+  - stale registry import-only rerun `ops_run id=1882` completed instead of being skipped by same-PID recovery.
+- post-deploy verification:
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`.
+  - Before focused catch-up: `event_source` and matching event queries for `https://t.me/kraftmarket39/271` were empty.
+  - Focused catch-up: `ops_run id=1884`, `status=success`, `messages_processed=1`, `messages_forced=1`,
+    `events_created=1`, `errors_count=0`.
+  - Production DB after catch-up: `telegram_scanned_message(1177,271)` is `status='done'`,
+    `events_extracted=1`, `events_imported=1`, `error=NULL`; `event_source` links event `5656` to
+    `https://t.me/kraftmarket39/271`; `telegram_source.last_scanned_message_id=271`.
 
 ## Prevention
 
