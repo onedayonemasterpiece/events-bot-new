@@ -6,8 +6,10 @@
   active future Telegram-origin events missing VK fanout and re-enqueues `vk_sync` instead of leaving imported events
   invisible in VK. `enqueue_job(vk_sync)` requeues stale `done` jobs when the event still has no managed klgdevents
   VK URL. Smart Update keeps 4o as an emergency fallback but can cap mass fallback with
-  `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR`; production key rotation was corrected by adding `GOOGLE_API_KEY4` both as
-  a Fly secret and as `google_ai_api_keys` metadata, because reserve overflow cannot borrow env-only keys.
+  `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR`, and its internal Google AI provider retries are capped with
+  `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES` (default `1`) so provider `500/504` does not multiply Gemma RPM/RPD before the
+  small 4o emergency budget is reached. Production key rotation was corrected by adding `GOOGLE_API_KEY4` both as a
+  Fly secret and as `google_ai_api_keys` metadata, because reserve overflow cannot borrow env-only keys.
 - **Incident / Telegram Monitoring missed `kraftmarket39/271` promo event (INC-2026-06-04)**: recovery no longer
   skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
   Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after

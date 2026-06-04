@@ -5688,12 +5688,18 @@ def _get_gemma_client():
         logger.warning("smart_update: gemma client unavailable: %s", exc)
         return None
     supabase = get_supabase_client()
-    return GoogleAIClient(
+    client = GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),
         consumer="smart_update",
         incident_notifier=notify_llm_incident,
     )
+    raw_max_retries = (os.getenv("SMART_UPDATE_GOOGLE_AI_MAX_RETRIES", "1") or "").strip()
+    try:
+        client.max_retries = max(1, min(int(raw_max_retries), 3))
+    except Exception:
+        client.max_retries = 1
+    return client
 
 
 def _strip_code_fences(text: str) -> str:

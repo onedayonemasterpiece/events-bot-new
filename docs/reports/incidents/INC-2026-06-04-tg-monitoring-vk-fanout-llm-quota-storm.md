@@ -43,6 +43,9 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
    `GOOGLE_API_KEY4` was initially only local/prod env. An env-only key is invisible to the shared reserve RPC.
 4. Smart Update's Gemma→4o fallback was binary and unbudgeted, so a mass Gemma quota/provider failure could convert many
    cheap-stage requests into expensive 4o calls.
+5. Production logs after catch-up showed `smart_update` stages hitting Gemma 4 provider `500 INTERNAL`; the shared
+   `GoogleAIClient` default retry loop retried the provider call three times, and each retry made a fresh reservation
+   against Gemma 4 31B RPM/RPD before Smart Update reached its own fallback decision.
 
 ## Contributing Factors
 
@@ -100,6 +103,9 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 
 - Add Smart Update 4o fallback hourly budget (`SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR`) while keeping 4o available for
   isolated emergency calls.
+- Cap Smart Update's internal Google AI provider retries separately (`SMART_UPDATE_GOOGLE_AI_MAX_RETRIES`, default `1`)
+  so mass Smart Update catch-up does not multiply Gemma RPM/RPD burn on provider `500/504` before reaching the bounded
+  4o fallback path.
 - Requeue `vk_sync` when a stale `done` job exists but the event has no managed VK URL.
 - Add Telegram Monitoring post-import reconciliation for active future non-silent Telegram-origin events missing VK
   fanout.
@@ -119,6 +125,12 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   `tests/test_vk_source.py` run exposed an unrelated local missing-`GOOGLE_API_KEY` test issue in
   `test_add_events_from_text_preserves_links`.
 - post-deploy verification:
+  - `/healthz` after deploy: `ok=true`, `ready=true`, `job_outbox_worker=ok`, `issues=[]`.
+  - VK catch-up reconciliation enqueued missing Telegram-origin VK jobs; active future non-silent Telegram-origin
+    events with no VK job and no managed VK URL: `0`.
+  - Production log evidence at `2026-06-04T13:46Z`: one `telegraph_render_remove_logistics` Gemma 4 provider
+    `500 INTERNAL` created three `google_ai.reserve_ok` attempts against `gemma-4-31b` before this retry-cap follow-up.
+    This is the reason for `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES=1`.
 
 ## Prevention
 

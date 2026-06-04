@@ -150,6 +150,9 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 *   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
     переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
     incident kill-switch, не steady-state policy.
+*   **Smart Update provider retry cap**: `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES` отдельно ограничивает внутренние
+    `GoogleAIClient` retry для массового Smart Update (default `1`). Это не запрещает 4o fallback: оно предотвращает
+    умножение Gemma RPM/RPD на provider `500/504`, после чего маленький 4o budget остаётся последним аварийным хвостом.
 
 ### 3.1. Логирование конкретной модели (обязательно)
 В JSON-логах клиента теперь фиксируются **оба** имени модели:

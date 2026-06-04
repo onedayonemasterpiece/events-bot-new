@@ -145,6 +145,30 @@ def test_smart_update_4o_fallback_budget_limits_mass_fallback(monkeypatch):
     assert su._smart_update_4o_fallback_budget_allows("create_bundle") is False
 
 
+def test_smart_update_gemma_client_uses_mass_task_retry_cap(monkeypatch):
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            self.max_retries = 3
+
+    fake_google_ai = types.ModuleType("google_ai")
+    fake_google_ai.GoogleAIClient = FakeGoogleAIClient
+    fake_google_ai.SecretsProvider = lambda: object()
+    fake_main = types.ModuleType("main")
+    fake_main.get_supabase_client = lambda: None
+    fake_main.notify_llm_incident = None
+    monkeypatch.setitem(sys.modules, "google_ai", fake_google_ai)
+    monkeypatch.setitem(sys.modules, "main", fake_main)
+    monkeypatch.setenv("SMART_UPDATE_GOOGLE_AI_MAX_RETRIES", "1")
+
+    su._get_gemma_client.cache_clear()
+    try:
+        client = su._get_gemma_client()
+    finally:
+        su._get_gemma_client.cache_clear()
+
+    assert client.max_retries == 1
+
+
 @pytest.mark.asyncio
 async def test_ask_gemma_json_uses_native_schema_when_enabled(monkeypatch):
     client = _FakeGemmaClient(['{"facts":["Факт"]}'])
