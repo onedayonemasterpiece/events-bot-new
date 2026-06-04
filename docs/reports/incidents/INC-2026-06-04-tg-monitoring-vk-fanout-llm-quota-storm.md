@@ -130,6 +130,8 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 - deployed SHA: `68fccbf4036827c89f834ccd9c58e39420ef0f60` (`origin/main`)
 - deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9F2PB6ASX73JH1KY1EPKDM`
+- follow-up deployed SHA: `6b0d116f711f7a19037a8291d7458f55d3e71717` (`origin/main`)
+- follow-up deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9GH12EEQECGT3CAVK6M36H`
 - regression checks: `tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_job_dedup.py`
   printed `35 passed`; the pytest process hung after the passing summary and was terminated. A broader
   `tests/test_vk_source.py` run exposed an unrelated local missing-`GOOGLE_API_KEY` test issue in
@@ -140,6 +142,10 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   - `tests/test_job_due_filter.py tests/test_job_dedup.py tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py`
     printed `38 passed`; pytest again hung after the passing summary and was terminated.
   - `compileall` passed for `main.py`, `smart_event_update.py`, and the changed tests.
+  - After the VK post-result persistence follow-up,
+    `tests/test_vk_source.py tests/test_job_due_filter.py tests/test_job_dedup.py tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py`
+    printed `61 passed`; pytest again stayed alive after the passing summary and was terminated.
+  - `compileall` passed for `main.py` and `tests/test_vk_source.py`.
 - post-deploy verification:
   - `/healthz` after deploy: `ok=true`, `ready=true`, `job_outbox_worker=ok`, `issues=[]`.
   - VK catch-up reconciliation enqueued missing Telegram-origin VK jobs; active future non-silent Telegram-origin
@@ -167,6 +173,17 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   - After the duplicate cleanup, the queue continued draining: `vk_sync` done count reached `1121`, pending decreased to
     `48`, and fresh Telegram-origin events included `https://vk.com/wall-231920894_2014` through
     `https://vk.com/wall-231920894_2018`.
+  - The same pre-deploy SQLite-lock wave had five additional orphan managed VK posts. Production compensation verified
+    the posts through `wall.getById` and persisted them instead of re-posting:
+    event `5567 -> https://vk.com/wall-231920894_2001`, `5428 -> ..._2008`, `5391 -> ..._2012`,
+    `5278 -> ..._2017`, and `4327 -> ..._2028`.
+  - Three active future events with no `vk_sync` row at all (`4812`, `5203`, `5512`) were enqueued through
+    `enqueue_job(..., JobTask.vk_sync)`.
+  - Post-follow-up deploy health: `/healthz ok=true ready=true`, `job_outbox_worker=ok`, `issues=[]`, Fly machine checks
+    passing on image `deployment-01KT9GH12EEQECGT3CAVK6M36H`.
+  - Post-follow-up queue evidence: active future Telegram-origin events with no pending/running/done `vk_sync` and no
+    managed VK URL: `[]`; `vk_sync` done count reached `1143`, pending `33`, with one fresh running job and a new managed
+    VK post `https://vk.com/wall-231920894_2038` created after the deploy.
 
 ## Prevention
 
