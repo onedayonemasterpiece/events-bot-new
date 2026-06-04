@@ -59,3 +59,91 @@ async def test_future_job_does_not_block_month_pages(tmp_path, monkeypatch):
     statuses = {j.task: j.status for j in jobs}
     assert statuses[JobTask.month_pages] == JobStatus.done
     assert statuses[JobTask.vk_sync] == JobStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_vk_sync_is_not_starved_by_unrelated_telegraph_backlog(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        telegraph_event = Event(
+            title="Telegraph backlog",
+            description="d",
+            date="2026-06-06",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+        )
+        vk_event = Event(
+            title="Ready for VK",
+            description="d",
+            date="2026-06-07",
+            time="13:00",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(telegraph_event)
+        session.add(vk_event)
+        await session.commit()
+        await session.refresh(telegraph_event)
+        await session.refresh(vk_event)
+        session.add(
+            JobOutbox(
+                event_id=telegraph_event.id,
+                task=JobTask.telegraph_build,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=vk_event.id,
+                task=JobTask.vk_sync,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+        vk_event_id = int(vk_event.id)
+
+    calls: list[tuple[str, int]] = []
+
+    async def fake_telegraph(eid, db_obj, bot_obj):
+        calls.append(("telegraph_build", eid))
+        return True
+
+    async def fake_vk(eid, db_obj, bot_obj):
+        calls.append(("vk_sync", eid))
+        async with db_obj.get_session() as session:
+            ev = await session.get(Event, eid)
+            ev.source_vk_post_url = "https://vk.com/wall-231920894_1"
+            session.add(ev)
+            await session.commit()
+        return True
+
+    monkeypatch.setattr(
+        main,
+        "JOB_HANDLERS",
+        {
+            "telegraph_build": fake_telegraph,
+            "vk_sync": fake_vk,
+        },
+    )
+
+    await main._run_due_jobs_once(db, None)
+
+    assert calls[0] == ("vk_sync", vk_event_id)
+    async with db.get_session() as session:
+        vk_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == vk_event_id,
+                    JobOutbox.task == JobTask.vk_sync,
+                )
+            )
+        ).scalar_one()
+    assert vk_job.status == JobStatus.done

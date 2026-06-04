@@ -15989,6 +15989,7 @@ async def _run_due_jobs_once_locked(
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
     priority = {
+        JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
         JobTask.ics_publish: 0,
         JobTask.tg_ics_post: 0,
@@ -15996,7 +15997,6 @@ async def _run_due_jobs_once_locked(
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
-        JobTask.vk_sync: 2,
     }
     jobs.sort(key=lambda j: (priority.get(j.task, 99), j.id))
     processed = 0

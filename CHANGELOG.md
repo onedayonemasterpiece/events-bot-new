@@ -9,7 +9,9 @@
   `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR`, and its internal Google AI provider retries are capped with
   `SMART_UPDATE_GOOGLE_AI_MAX_RETRIES` (default `1`) so provider `500/504` does not multiply Gemma RPM/RPD before the
   small 4o emergency budget is reached. Production key rotation was corrected by adding `GOOGLE_API_KEY4` both as a
-  Fly secret and as `google_ai_api_keys` metadata, because reserve overflow cannot borrow env-only keys.
+  Fly secret and as `google_ai_api_keys` metadata, because reserve overflow cannot borrow env-only keys. JobOutbox now
+  prioritizes `vk_sync` ahead of unrelated Telegraph/page backlog while preserving per-event prerequisite ordering, so
+  ready Telegram imports do not wait behind every older rebuild before reaching VK.
 - **Incident / Telegram Monitoring missed `kraftmarket39/271` promo event (INC-2026-06-04)**: recovery no longer
   skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
   Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after

@@ -46,6 +46,8 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 5. Production logs after catch-up showed `smart_update` stages hitting Gemma 4 provider `500 INTERNAL`; the shared
    `GoogleAIClient` default retry loop retried the provider call three times, and each retry made a fresh reservation
    against Gemma 4 31B RPM/RPD before Smart Update reached its own fallback decision.
+6. After VK fanout reconciliation, `vk_sync` jobs were present but still starved: the outbox global priority put
+   `vk_sync` after all Telegraph/ICS/page jobs, so ready VK publications could wait behind unrelated rebuild backlog.
 
 ## Contributing Factors
 
@@ -109,6 +111,8 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 - Requeue `vk_sync` when a stale `done` job exists but the event has no managed VK URL.
 - Add Telegram Monitoring post-import reconciliation for active future non-silent Telegram-origin events missing VK
   fanout.
+- Raise `vk_sync` global outbox priority above unrelated rebuild tasks while preserving the existing per-event
+  prerequisite check (`id < current and pending/running`) so an event still waits for its own Telegraph/ICS jobs.
 
 ## Follow-up Actions
 
