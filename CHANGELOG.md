@@ -6,7 +6,14 @@
   skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
   Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after
   cancellation/restart instead of leaving the source tail without `event_source` or `telegram_scanned_message` evidence.
-  Added regression coverage in `tests/test_tg_monitor_recovery.py`.
+  Follow-up fix: the primary Telegram result import no longer calls Smart Update with `schedule_kwargs.skip_vk_sync`,
+  so created/merged Telegram events enter the normal Smart Update → `JobOutbox` → `vk_sync` publication path. Replayed
+  imports that return `skipped_nochange` for an already-created event now also re-arm the standard event tasks, repairing
+  old "event exists, VK job missing" states; forced single-event replays whose exact Telegram `event_source` already
+  maps to one event use that same re-arm path without rerunning the LLM merge pipeline. Auxiliary linked-source Smart
+  Update passes still suppress VK sync to avoid duplicate publication work. Added regression coverage in
+  `tests/test_tg_monitor_recovery.py` and
+  `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
 - **Promo trigger by Telegram chat author → video announce**: a new
   `promo_target.target_type='tg_chat_author'` matches events by their Telegram
   source chat + post author (`query_text="<chat>:<author>"`). Events authored by

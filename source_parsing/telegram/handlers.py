@@ -20,6 +20,7 @@ from event_utils import strip_city_from_address
 from location_reference import find_known_venue_in_text, normalise_event_location_from_reference
 from models import (
     Channel,
+    Event,
     EventMediaAsset,
     EventSource,
     TelegramScannedMessage,
@@ -27,7 +28,7 @@ from models import (
     TelegramSourceForceMessage,
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
-from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
 from telegram_sources import normalize_tg_username
 from source_parsing.post_metrics import (
     PopularityBaseline,
@@ -4318,6 +4319,41 @@ def _dedupe_message_events(
     return [grouped[k] for k in order]
 
 
+async def _schedule_primary_import_event_tasks(db: Database, event_id: int) -> None:
+    """Ensure the primary Telegram import can repair missing publication jobs.
+
+    Smart Update schedules tasks on create/merge. A replay can legitimately
+    return ``skipped_nochange`` for an already-created event; in that case the
+    import boundary still has to restore the standard publication pipeline.
+    """
+
+    from main import schedule_event_update_tasks
+
+    async with db.get_session() as session:
+        event = await session.get(Event, int(event_id))
+    if event is not None:
+        await schedule_event_update_tasks(db, event)
+
+
+async def _single_event_id_for_source_url(db: Database, source_url: str | None) -> int | None:
+    source = _clean_url(source_url)
+    if not source:
+        return None
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(EventSource.event_id)
+                .where(EventSource.source_type == "telegram")
+                .where(EventSource.source_url == source)
+                .limit(2)
+            )
+        ).all()
+    ids = {int(row[0]) for row in rows if row and row[0]}
+    if len(ids) == 1:
+        return next(iter(ids))
+    return None
+
+
 async def process_telegram_results(
     results_path: str | Path,
     db: Database,
@@ -5417,14 +5453,42 @@ async def process_telegram_results(
                         candidate.event_type,
                     )
                     continue
-                # Telegram monitoring should not enqueue VK publishing jobs: they are irrelevant
-                # for the monitoring workflow and slow down local/E2E environments.
-                result = await smart_event_update(
-                    db,
-                    candidate,
-                    check_source_url=False,
-                    schedule_kwargs={"skip_vk_sync": True},
-                )
+                # The primary Telegram import is a real event-ingest boundary:
+                # Smart Update must enqueue the standard publication jobs,
+                # including VK sync, so promo events can flow through VK and
+                # downstream promo surfaces. Auxiliary linked-source passes
+                # below still skip VK sync to avoid duplicate publication work.
+                result: SmartUpdateResult | None = None
+                nochange_tasks_rearmed = False
+                if forced and is_single_event_post:
+                    existing_source_event_id = await _single_event_id_for_source_url(db, candidate.source_url)
+                    if existing_source_event_id is not None:
+                        await _schedule_primary_import_event_tasks(db, int(existing_source_event_id))
+                        nochange_tasks_rearmed = True
+                        result = SmartUpdateResult(
+                            status="skipped_nochange",
+                            event_id=int(existing_source_event_id),
+                            reason="forced_existing_source_rearmed",
+                        )
+                if result is None:
+                    result = await smart_event_update(
+                        db,
+                        candidate,
+                        check_source_url=False,
+                    )
+                if (
+                    result.status == "skipped_nochange"
+                    and getattr(result, "event_id", None)
+                    and not nochange_tasks_rearmed
+                ):
+                    try:
+                        await _schedule_primary_import_event_tasks(db, int(result.event_id))
+                    except Exception:
+                        logger.warning(
+                            "tg_monitor: failed to schedule nochange event tasks event_id=%s",
+                            result.event_id,
+                            exc_info=True,
+                        )
                 if (
                     is_single_event_post
                     and getattr(result, "event_id", None)

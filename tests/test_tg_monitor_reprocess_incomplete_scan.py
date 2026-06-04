@@ -9,6 +9,14 @@ from smart_event_update import SmartUpdateResult
 from source_parsing.telegram import handlers as tg_handlers
 
 
+@pytest.fixture(autouse=True)
+def _disable_public_tg_fallback(monkeypatch):
+    async def fake_fetch_posters(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(tg_handlers, "_fallback_fetch_posters_from_public_tg_page", fake_fetch_posters)
+
+
 def _results_path(tmp_path: Path) -> Path:
     payload = {
         "schema_version": 2,
@@ -29,14 +37,14 @@ def _results_path(tmp_path: Path) -> Path:
                 "source_link": "https://t.me/kraftmarket39/193",
                 "text": (
                     "Продолжается регистрация на лекцию\n\n"
-                    "15 мая 16:00\n"
+                    "15 июля 16:00\n"
                     "Лекторий ОКЕАНиЯ\n"
                     "Музей Мирового океана, наб. Петра Великого 1, #Калининград"
                 ),
                 "events": [
                     {
                         "title": "О чём мечтали в советском Калининграде, куда стремились и куда попали",
-                        "date": "2026-05-15",
+                        "date": "2026-07-15",
                         "time": "16:00",
                         "location_name": "Лекторий ОКЕАНиЯ, Музей Мирового океана",
                         "location_address": "наб. Петра Великого 1",
@@ -54,6 +62,18 @@ def _results_path(tmp_path: Path) -> Path:
 
 async def _seed_source(db: Database) -> int:
     async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT id FROM telegram_source WHERE username=? ORDER BY id LIMIT 1",
+            ("kraftmarket39",),
+        )
+        row = await cur.fetchone()
+        if row:
+            await conn.execute(
+                "UPDATE telegram_source SET title=?, enabled=1 WHERE id=?",
+                ("Полюбить 39 | Маркет", int(row[0])),
+            )
+            await conn.commit()
+            return int(row[0])
         cur = await conn.execute(
             """
             INSERT INTO telegram_source(username, title, enabled)
@@ -105,6 +125,84 @@ async def test_reprocesses_legacy_skipped_scan_without_reason(tmp_path, monkeypa
         )
         row = await cur.fetchone()
     assert row == ("done", 1, 1, None)
+
+
+@pytest.mark.asyncio
+async def test_primary_telegram_import_does_not_suppress_vk_sync(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+
+    calls = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(kwargs)
+        return SmartUpdateResult(status="created", event_id=5656)
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_created == 1
+    assert len(calls) == 1
+    assert "schedule_kwargs" not in calls[0]
+
+
+@pytest.mark.asyncio
+async def test_primary_telegram_import_rearms_tasks_for_nochange_event(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+
+    scheduled = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        scheduled.append(event_id)
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+    assert scheduled == [5656]
+
+
+@pytest.mark.asyncio
+async def test_forced_existing_single_source_rearms_tasks_without_llm_reimport(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_id = await _seed_source(db)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT OR IGNORE INTO telegram_source_force_message(source_id, message_id) VALUES(?, 193)",
+            (source_id,),
+        )
+        await conn.commit()
+
+    scheduled = []
+
+    async def fake_existing_source_event_id(db_arg, source_url):
+        assert source_url == "https://t.me/kraftmarket39/193"
+        return 5656
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        scheduled.append(event_id)
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        raise AssertionError("forced exact-source replay must not rerun Smart Update")
+
+    monkeypatch.setattr(tg_handlers, "_single_event_id_for_source_url", fake_existing_source_event_id)
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+    assert scheduled == [5656]
 
 
 @pytest.mark.asyncio

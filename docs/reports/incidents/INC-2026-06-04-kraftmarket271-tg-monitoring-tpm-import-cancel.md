@@ -72,6 +72,10 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
    `meta.pid` matched the current process id even when the process no longer held the Telegram Monitoring run lock.
 6. Because import did not reach the source, production did not even persist `producer_zero_events` diagnostics for
    messages `269`/`271`; the source cursor remained at `268`.
+7. Follow-up process gap: after focused catch-up created event `5656`, the primary Telegram import path was found
+   to call Smart Update with `schedule_kwargs={"skip_vk_sync": True}`. That allowed `event_source`/Telegraph/festival
+   queue restoration while suppressing the normal Smart Update → `JobOutbox(vk_sync)` → VK publication path required
+   for promo events.
 
 ## Contributing Factors
 
@@ -82,6 +86,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   or a scheduled job is cancelled.
 - The promo-campaign surface depends on upstream event inventory; it had no independent alert that a known
   `80 историй о главном` source post was scanned but absent from DB.
+- The Telegram Monitoring import boundary treated VK sync as optional workflow overhead, but for promo-campaign
+  sources VK sync is part of the user-visible product contract.
 
 ## Automation Contract
 
@@ -112,6 +118,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - Verify import/recovery can complete or resume after cancellation without losing an unprocessed result tail.
 - Production DB must contain durable evidence for `@kraftmarket39/271`: either an imported event/source row or a
   terminal diagnostic row explaining why import is impossible.
+- For imported active/non-silent Telegram events, the primary Smart Update pass must not suppress standard scheduling:
+  `JobOutbox` must contain a `vk_sync` job or the event must already have a managed VK post.
 - Production DB must show `telegram_source.last_scanned_message_id >= 271` for `kraftmarket39` after catch-up.
 - If `@kraftmarket39/270` remains relevant, verify its five producer-extracted events are imported or deliberately
   rejected with per-event reasons.
@@ -142,15 +150,23 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - Done: compensating catch-up restored `@kraftmarket39/271` as event `5656` with
   `event_source.source_url='https://t.me/kraftmarket39/271'`, date `2026-07-08`, time `18:30`,
   location `Историко-художественный музей`, and one poster.
+- Done: primary Telegram result import no longer passes `schedule_kwargs.skip_vk_sync` to Smart Update; linked-source
+  auxiliary passes still suppress VK sync so source-log enrichment cannot duplicate VK publication work.
+- Done: repeated primary imports that return `skipped_nochange` for an existing event now re-arm standard event tasks,
+  so catch-up can repair old "event exists, VK job missing" states without deleting/recreating the event.
+- Done: forced single-event replay with an exact existing Telegram `event_source` now uses the same re-arm path without
+  rerunning the LLM merge pipeline, avoiding unnecessary provider/SQLite contention during repair.
 - Pending: producer must distinguish provider/rate-limit failure from legitimate zero-event output, retry bounded
   minute TPM blocks when safe, and persist failure diagnostics into the result payload.
-- Pending: verify promo-campaign reporting/selection visibility for event `5656`.
+- Pending: redeploy this import-boundary fix, rerun the focused import from `@kraftmarket39/271`, and verify
+  `JobOutbox(vk_sync)`, managed VK publication, video promo candidacy, and VK repost eligibility for event `5656`.
 
 ## Follow-up Actions
 
 - [x] Fix/verify `GOOGLE_API_KEY3` registry drift for Telegram Monitoring producer runs.
 - [x] Add a focused regression test/smoke for `@kraftmarket39/271`.
 - [x] Add cancellation-tail regression coverage for Telegram result import/recovery.
+- [x] Add regression coverage that primary Telegram import does not suppress Smart Update `vk_sync` scheduling.
 - [ ] Add alert/reporting for scanned event-like messages with producer `events=[]` and no durable prod diagnostic.
 - [x] Complete compensating catch-up for `@kraftmarket39/269..271`.
 - [ ] Add producer-side retry/failure payload handling for TPM/provider failures.

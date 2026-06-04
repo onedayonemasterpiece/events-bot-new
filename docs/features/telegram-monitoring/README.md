@@ -30,6 +30,13 @@
   - создаёт новые события;
   - мерджит существующие;
   - добавляет источники в `event_source`.
+  - запускает основной event-pass в стандартном scheduling-режиме Smart Update: созданные/обновлённые события
+    должны получить обычные `JobOutbox` задачи, включая `vk_sync`, если само событие не `silent`/не отменено.
+    Это обязательный контракт для промо-событий, которые дальше должны попасть в VK-публикацию и VK/promo surfaces.
+    При повторном импорте уже созданного события результат `skipped_nochange` также re-arm'ит стандартные задачи,
+    чтобы catch-up мог чинить старое состояние "event есть, VK job отсутствует".
+    Forced single-event replay, где точный `event_source.source_url` уже однозначно указывает на одно событие,
+    использует тот же re-arm путь без повторного LLM merge.
   - обрабатывает Telegram-посты в хронологическом порядке (старые → новые), чтобы старые посты не перезатирали более свежие обновления того же события.
   - во время импорта в `/tg` показывает live-прогресс по каждому посту (`X/Y`, ссылка на пост, `Smart Update: ✅/🔄`, `event_ids`, иллюстрации, `took_sec`), чтобы оператор видел, что импорт не завис.
   - отправляет подробный блок `Smart Update (детали событий)` сразу после обработки конкретного поста (не дожидаясь завершения всего импорта).
@@ -46,7 +53,7 @@
   - fallback полного текста из публичной страницы `t.me/s/...` остаётся single-event only.
   - если в fallback сломалась загрузка poster media в Catbox/Supabase, импорт не обнуляет иллюстрации: используется прямой CDN URL целевого Telegram media (`cdn*.telesco.pe`) как последний аварийный fallback.
   - `linked_source_urls` теперь обогащают медиа события: сервер пытается подтянуть афиши из linked Telegram постов (сначала из того же `telegram_results.json`, затем через `t.me/s/...` fallback) и добавляет их в candidate до Smart Update.
-- `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам.
+- `linked_source_urls` также обогащают факты: для single-event постов сервер (best-effort) скачивает текст linked Telegram постов (payload-first, затем `t.me/s/...`) и прогоняет Smart Update по каждому linked источнику, чтобы в source log были факты по всем ссылкам. Эти вспомогательные linked-pass вызовы подавляют `vk_sync`, потому что публикационную задачу должен ставить только основной источник события.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
