@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import logging
@@ -1763,22 +1764,41 @@ async def _record_vk_promo_exposure(
     details: dict[str, Any],
     target_type: str = "vk_wall",
 ) -> None:
-    async with db.get_session() as session:
-        session.add(
-            PromoExposure(
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                event_id=event_id,
-                surface=surface,
-                placement_kind=placement_kind,
-                publish_status=status,
-                public_target_count=1,
-                public_targets_json=[{"type": target_type, "url": url}],
-                published_at=published_at,
-                details_json=details,
+    last_exc: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            async with db.get_session() as session:
+                session.add(
+                    PromoExposure(
+                        campaign_id=campaign_id,
+                        activity_id=activity_id,
+                        event_id=event_id,
+                        surface=surface,
+                        placement_kind=placement_kind,
+                        publish_status=status,
+                        public_target_count=1,
+                        public_targets_json=[{"type": target_type, "url": url}],
+                        published_at=published_at,
+                        details_json=details,
+                    )
+                )
+                await session.commit()
+                return
+        except Exception as exc:
+            last_exc = exc
+            if "database is locked" not in str(exc).lower() or attempt >= 3:
+                raise
+            delay = 0.35 * attempt
+            logger.warning(
+                "promo.vk exposure sqlite locked surface=%s event_id=%s attempt=%s/3 retry_in=%.2fs",
+                surface,
+                event_id,
+                attempt,
+                delay,
             )
-        )
-        await session.commit()
+            await asyncio.sleep(delay)
+    if last_exc is not None:
+        raise last_exc
 
 
 def _first_event_photo_url(ev: Event) -> str | None:

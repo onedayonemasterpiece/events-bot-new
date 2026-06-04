@@ -165,7 +165,9 @@ For each active campaign/activity the scheduler:
   using the same source-style event message format as Smart Update;
 - records each scheduled post in `promo_exposure` with
   `surface='vk_publication'`, `publish_status='VK_SCHEDULED'` and
-  `details_json.target_url`.
+  `details_json.target_url`. Because the VK wall/story call is an external side
+  effect, exposure recording retries transient SQLite locks before the scheduler
+  is allowed to treat the action as failed.
 
 `vk_repost` watches a source community and reposts a recent campaign event post
 to a target community. It considers both organic `event.source_vk_post_url` rows

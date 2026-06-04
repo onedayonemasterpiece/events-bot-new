@@ -57,32 +57,35 @@ stories from recent source-community event posts.
   built-in `80 историй о главном` campaign was updated to seed two story
   activities: `klgdevents -> klgdevents` and
   `klgdevents -> kenigeventsofficial`, each two stories per day.
-- 2026-06-04, compensation: one operator-approved immediate repost was created
-  from existing festival event post `https://vk.com/wall-231920894_1974` into
-  `https://vk.com/kenigeventsofficial` as
-  `https://vk.com/wall-231828790_989`. VK API verification:
-  `owner_id=-231828790`, `from_id=-231828790`,
-  `copy_history=[wall-231920894_1974]`, `likes.can_publish=1`.
+- 2026-06-04 14:45 UTC: live `promo_exposure` showed the deployed promo runner
+  had already created the intended main-community repost
+  `https://vk.com/wall-231828790_984` from existing festival event post
+  `https://vk.com/wall-231920894_1974`.
+- 2026-06-04 21:44 UTC: a manual compensation repost
+  `https://vk.com/wall-231828790_989` was briefly created before the live DB
+  evidence was available. After discovering it duplicated `wall-231828790_984`,
+  the manual duplicate was deleted; VK API reports `is_deleted=true` for `989`.
 
 ## Root Cause
 
 1. Confirmed product gap: `promo_activity` had `vk_publication` and `vk_repost`,
    but no `vk_story` surface, so the requested story contract could not run.
-2. Confirmed observability gap from this workstation: Fly SSH/file mirror and
-   live production DB evidence were unavailable because local Fly auth was not
-   configured.
-3. Pending live evidence: the exact reason the 2026-06-04 `vk_publication`
-   cadence produced only one visible festival post still needs live
-   `promo_exposure`, scheduler logs, and VK wall evidence. Related June 4
-   incidents already show upstream Telegram import/VK fanout/promo repost
-   issues that could have reduced the eligible source-post pool.
+2. Confirmed delivery gap before the repost hotfix reached production:
+   `vk_repost` attempted to use group authorization and failed with
+   `Group authorization failed: method is unavailable with group auth`.
+3. Confirmed publication cadence detail: after one public organic/promo source
+   post, the second `vk_publication` attempt at 16:15 UTC created a VK wall post
+   but failed to record `promo_exposure` due to a transient SQLite lock; the
+   next tick at 16:45 UTC recorded `wall-231920894_2057`, scheduled by VK for
+   2026-06-05 06:50 UTC because the shared postponed queue had later slots.
 
 ## Contributing Factors
 
 - `promo_vk` is an interval runner without a dedicated `ops_run` row per tick,
   so scheduler evidence depends on runtime logs and `promo_exposure`.
-- The current local workspace contained dirty parallel work and no Fly auth,
-  increasing the cost of live incident evidence collection.
+- The current local workspace initially contained dirty parallel work and
+  `flyctl` did not auto-read the saved token; passing the saved token through
+  `FLY_API_TOKEN` was required before live logs/DB evidence could be collected.
 - `vk_publication` posts use postponed VK wall publishing; without live URL
   reconciliation and recent wall checks, operator-visible timing can lag behind
   the scheduler action.
@@ -141,12 +144,12 @@ stories from recent source-community event posts.
 
 - Implemented `vk_story` as a first-class promo activity and seeded it into the
   built-in `80 историй о главном` campaign.
-- Kept compensation scope aligned with the operator request: prepare one
-  immediate VK post/repost compensation only; do not launch extra overnight
-  `klgdevents` event-post compensation.
-- Published exactly one immediate compensation repost:
-  `https://vk.com/wall-231828790_989` from source
-  `https://vk.com/wall-231920894_1974`.
+- Kept compensation scope aligned with the operator request: no extra overnight
+  `klgdevents` event-post compensation was launched.
+- Verified that the automated repost compensation already existed:
+  `https://vk.com/wall-231828790_984` from source
+  `https://vk.com/wall-231920894_1974`; removed the brief manual duplicate
+  `https://vk.com/wall-231828790_989`.
 
 ## Corrective Actions
 
@@ -155,6 +158,9 @@ stories from recent source-community event posts.
 - Added vertical event story image rendering from stored event poster, title,
   date/time and venue.
 - Added normalized story evidence in `promo_exposure`.
+- Added retries for transient SQLite locks while recording VK promo exposure, so
+  a successful external wall/story side effect is not immediately repeated only
+  because audit persistence was briefly locked.
 - Updated `/promo` and `/promo report` to show story activity/report rows.
 - Added focused tests in `tests/test_promo.py`.
 
@@ -163,23 +169,40 @@ stories from recent source-community event posts.
 - [ ] Add durable per-tick `ops_run` or equivalent diagnostics for `promo_vk`.
 - [ ] Add a small admin command/runbook for controlled `promo_vk` catch-up and
   target-specific dry-run reporting.
-- [ ] Complete live production evidence once Fly auth or another production DB
-  path is available from the workstation.
 
 ## Release And Closure Evidence
 
 - deployed SHA:
+  - `5b55316dae249483fe4dcdf8a9299ae71a33d440`
 - deploy path:
+  - pushed `5b55316d` to `origin/main`;
+  - GitHub Actions deploy workflow was triggered on `main` but failed because
+    repository secret `FLY_API_TOKEN` was empty;
+  - manual Fly deploy succeeded from clean worktree using the saved Fly token
+    passed as process-local `FLY_API_TOKEN`;
+  - Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KTA9TVXY349C1E608VQJR93C`,
+    machine `48e42d5b714228`, version `1190`.
 - regression checks:
   - `python3 -m py_compile promo.py handlers/promo_cmd.py handlers/partner_promo_cmd.py tests/test_promo.py`
-  - `/home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q tests/test_promo.py` -> `16 passed`
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q tests/test_promo.py tests/test_vk_actor.py` -> `26 passed`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+  - Fly status: app image `deployment-01KTA9TVXY349C1E608VQJR93C`, machine
+    `48e42d5b714228`, version `1190`, `1 total, 1 passing`.
+  - Runtime file mirror verified: `ENABLE_RUNTIME_FILE_LOGGING=1`,
+    `RUNTIME_LOG_DIR=/data/runtime_logs`, active `events-bot.log` plus rotated
+    2026-06-04 files.
+  - Production campaign `#1` now has `vk_story` activities `#11`
+    (`klgdevents:story`) and `#12`
+    (`klgdevents->kenigeventsofficial:story`), both enabled with
+    `max_per_publish=2`, `daily_cap=2`.
 - compensation evidence:
-  - `https://vk.com/wall-231828790_989`
+  - automated promo repost: `https://vk.com/wall-231828790_984`
   - source: `https://vk.com/wall-231920894_1974`
-  - VK API: `owner_id=-231828790`, `from_id=-231828790`,
-    `copy_history=[{"owner_id": -231920894, "id": 1974}]`,
-    `likes.can_publish=1`
+  - prod `promo_exposure.id=44`, `activity_id=9`, `surface='vk_repost'`,
+    `publish_status='PUBLISHED_MAIN'`, `event_id=5656`
+  - manual duplicate `https://vk.com/wall-231828790_989` was deleted;
+    VK API reports `is_deleted=true`.
 
 ## Prevention
 
