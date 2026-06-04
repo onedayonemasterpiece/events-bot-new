@@ -144,6 +144,39 @@ async def test_tg_build_candidate_drops_section_label_location_and_uses_default(
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_drops_reaction_text_location_without_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    message = {
+        "source_username": "molod_kld",
+        "message_id": 3709,
+        "source_link": "https://t.me/molod_kld/3709",
+        "text": "🏠 Дайджест, мы его очень ждали",
+        "posters": [
+            {
+                "sha256": "poster-digest",
+                "ocr_text": "1-7 июня",
+                "ocr_title": "Дайджест мероприятий",
+            }
+        ],
+    }
+    event_data = {
+        "title": "Дайджест",
+        "date": "2026-06-07",
+        "time": "",
+        "location_name": "мы его очень ждали",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name is None
+    assert cand.location_address is None
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_does_not_replace_unsupported_offsite_location_with_default():
     from source_parsing.telegram.handlers import _build_candidate
 

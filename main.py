@@ -9220,19 +9220,6 @@ def _event_parse_title_looks_bare(title: str | None) -> bool:
     return True
 
 
-_EVENT_PARSE_GENERIC_DIGEST_TITLE_RE = re.compile(
-    r"(?iu)^\s*(?:[^\w\s]{0,3}\s*)?(?:дайджест|афиша|подборка)\b|"
-    r"\bмы\s+давно\s+его\s+ждали\b"
-)
-
-
-def _event_parse_title_looks_generic_digest_shell(title: str | None) -> bool:
-    cleaned = re.sub(r"\s+", " ", str(title or "").strip())
-    if not cleaned:
-        return False
-    return bool(_EVENT_PARSE_GENERIC_DIGEST_TITLE_RE.search(cleaned))
-
-
 def _event_parse_defender_check(events: Sequence[dict[str, Any]] | None) -> list[str]:
     """Return the list of human-readable defender reasons for a parsed list.
 
@@ -9251,11 +9238,6 @@ def _event_parse_defender_check(events: Sequence[dict[str, Any]] | None) -> list
         title = str(ev.get("title") or "")
         if _event_parse_title_looks_bare(title):
             reasons.append(f"events[{idx}].title_bare:{title}")
-        if _event_parse_title_looks_generic_digest_shell(title):
-            time_value = str(ev.get("time") or "").strip()
-            location_value = str(ev.get("location_name") or "").strip()
-            if not time_value and not location_value:
-                reasons.append(f"events[{idx}].generic_digest_shell:{title}")
     return reasons
 
 

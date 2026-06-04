@@ -19,28 +19,33 @@
       }
     },
     {
-      "reported_title": "Дайджест, Мы давно его ждали",
-      "bad_fact": "Generic digest wrapper was reported as published without event-local venue/time.",
+      "source_url": "https://t.me/molod_kld/3709",
+      "event_id": 5569,
+      "vk_post": "https://vk.com/wall-231920894_2000",
+      "bad_fact": "A one-line Telegram post was materialized as an event; reaction prose became location_name.",
       "minimal_source_truth": {
-        "source_text": "Мы давно его ждали",
+        "source_text": "🏠 Дайджест, мы его очень ждали",
+        "poster_ocr_text": "1-7 июня",
+        "poster_ocr_title": "Дайджест мероприятий",
         "candidate": {
-          "title": "Дайджест, Мы давно его ждали",
-          "date": "2026-06-04",
+          "title": "Дайджест",
+          "date": "2026-06-07",
           "time": "",
-          "location_name": "Не указано",
+          "location_name": "мы его очень ждали",
           "city": "Калининград"
         },
-        "expected_behavior": "Parser/Smart Update must fail closed or retry through LLM; the wrapper must not become an event row."
+        "expected_behavior": "The reaction phrase must be dropped as prose, not treated as a venue; with no real venue/address/meeting point the candidate must fail closed."
       }
     }
   ],
   "negative_controls": [
     {
-      "title": "Дайджест летних концертов",
-      "date": "2026-06-04",
-      "time": "19:00",
-      "location_name": "Дом китобоя",
-      "expected_behavior": "Named event-like title with its own logistics is not blocked by the generic wrapper guard."
+      "title": "Дайджест событий в музее",
+      "date": "2026-05-01",
+      "time": "14:00",
+      "location_name": "Кинозал",
+      "source_text": "Дайджест событий в музее: 1 мая в 14:00 - мастер-класс в Кинозале.",
+      "expected_behavior": "A digest post can still yield a real event when a concrete time and venue/room are present."
     }
   ]
 }
