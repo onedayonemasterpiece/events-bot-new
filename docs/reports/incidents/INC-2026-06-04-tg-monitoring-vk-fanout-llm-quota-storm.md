@@ -48,6 +48,9 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
    against Gemma 4 31B RPM/RPD before Smart Update reached its own fallback decision.
 6. After VK fanout reconciliation, `vk_sync` jobs were present but still starved: the outbox global priority put
    `vk_sync` after all Telegraph/ICS/page jobs, so ready VK publications could wait behind unrelated rebuild backlog.
+7. A `vk_sync` handler could successfully create a managed VK wall post and then fail on the final SQLite commit that
+   stores `event.source_vk_post_url` / `vk_source_hash`. Because the outbox saw the handler as failed while the external
+   side effect already happened, later retries could create duplicate public VK posts for the same event.
 
 ## Contributing Factors
 
@@ -113,6 +116,8 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   fanout.
 - Raise `vk_sync` global outbox priority above unrelated rebuild tasks while preserving the existing per-event
   prerequisite check (`id < current and pending/running`) so an event still waits for its own Telegraph/ICS jobs.
+- Persist already-created VK source post results with a short SQLite-lock retry before allowing `vk_sync` to fail/retry,
+  so a transient DB lock after `wall.post` does not create duplicate VK posts.
 
 ## Follow-up Actions
 
@@ -154,6 +159,14 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
     `https://vk.com/wall-231920894_1983` through `https://vk.com/wall-231920894_1993`.
     The original `@kraftmarket39/271` event remains at `https://vk.com/wall-231920894_1974`.
     Active future non-silent Telegram-origin events with neither VK job nor managed VK URL remained `0`.
+  - During continued catch-up, event `5526` (`https://t.me/signalkld/10882`, `Лаборатория "Читка пьес"`) hit the
+    post-success SQLite lock bug: VK posts `2002`, `2010`, and `2013` were created by retries while the DB URL stayed
+    empty/stale. Production compensation persisted canonical `source_vk_post_url=https://vk.com/wall-231920894_2010`,
+    marked job `21963` done, and deleted duplicate public VK posts `2002` and `2013` through `wall.delete`; `wall.getById`
+    after cleanup returned only canonical post `2010`.
+  - After the duplicate cleanup, the queue continued draining: `vk_sync` done count reached `1121`, pending decreased to
+    `48`, and fresh Telegram-origin events included `https://vk.com/wall-231920894_2014` through
+    `https://vk.com/wall-231920894_2018`.
 
 ## Prevention
 

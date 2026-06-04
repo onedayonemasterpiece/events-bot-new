@@ -14080,6 +14080,11 @@ def _event_has_managed_vk_post(ev: Event) -> bool:
     return str(abs(int(owner_ids[0]))) == target_group_id
 
 
+def _is_sqlite_locked_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "database is locked" in msg or "database table is locked" in msg
+
+
 async def schedule_event_update_tasks(
     db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
 ) -> dict[JobTask, str]:
@@ -19057,25 +19062,71 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
         return
     vk_url = await sync_vk_source_post(ev, text_for_vk, db, bot, ics_url=ev.ics_url)
-    partner_user: User | None = None
-    event_for_notice: Event | None = None
-    async with db.get_session() as session:
-        obj = await session.get(Event, event_id)
-        if obj:
-            if vk_url:
-                obj.source_vk_post_url = vk_url
-            obj.vk_source_hash = new_hash
-            session.add(obj)
-            if bot and obj.creator_id:
-                partner_user = await session.get(User, obj.creator_id)
-            await session.commit()
-            event_for_notice = obj
+    event_for_notice, partner_user = await _persist_vk_source_post_result(
+        event_id,
+        db,
+        vk_url,
+        new_hash,
+        bot=bot,
+    )
     if vk_url:
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(
                 db, bot, event_for_notice, user=partner_user
             )
+
+
+async def _persist_vk_source_post_result(
+    event_id: int,
+    db: Database,
+    vk_url: str | None,
+    new_hash: str,
+    *,
+    bot: Bot | None,
+    attempts: int = 5,
+) -> tuple[Event | None, User | None]:
+    """Persist an already-created/updated VK post without re-running wall.post on lock."""
+
+    last_locked: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            async with db.get_session() as session:
+                obj = await session.get(Event, event_id)
+                if not obj:
+                    return None, None
+                if vk_url:
+                    obj.source_vk_post_url = vk_url
+                obj.vk_source_hash = new_hash
+                session.add(obj)
+                partner_user: User | None = None
+                if bot and obj.creator_id:
+                    partner_user = await session.get(User, obj.creator_id)
+                await session.commit()
+                if attempt > 1:
+                    logging.info(
+                        "job_sync_vk_source_post: persisted after sqlite lock retry event_id=%s attempt=%s",
+                        event_id,
+                        attempt,
+                    )
+                return obj, partner_user
+        except Exception as exc:
+            if not _is_sqlite_locked_error(exc):
+                raise
+            last_locked = exc
+            if attempt >= attempts:
+                break
+            delay = min(3.0, 0.25 * attempt * attempt)
+            logging.warning(
+                "job_sync_vk_source_post: sqlite locked while persisting vk result event_id=%s attempt=%s/%s retry_in=%.2fs",
+                event_id,
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    assert last_locked is not None
+    raise last_locked
 
 
 @dataclass

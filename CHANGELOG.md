@@ -11,7 +11,10 @@
   small 4o emergency budget is reached. Production key rotation was corrected by adding `GOOGLE_API_KEY4` both as a
   Fly secret and as `google_ai_api_keys` metadata, because reserve overflow cannot borrow env-only keys. JobOutbox now
   prioritizes `vk_sync` ahead of unrelated Telegraph/page backlog while preserving per-event prerequisite ordering, so
-  ready Telegram imports do not wait behind every older rebuild before reaching VK.
+  ready Telegram imports do not wait behind every older rebuild before reaching VK. After a successful managed VK
+  `wall.post`/`wall.edit`, `vk_sync` now retries the final `source_vk_post_url` / `vk_source_hash` DB write on transient
+  SQLite locks before the outbox can retry, preventing duplicate VK posts when the external side effect already
+  happened.
 - **Incident / Telegram Monitoring missed `kraftmarket39/271` promo event (INC-2026-06-04)**: recovery no longer
   skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
   Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after

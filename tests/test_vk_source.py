@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 import logging
+import sqlite3
 import main
 
 
@@ -680,12 +681,80 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_persist_vk_source_post_result_retries_sqlite_lock(monkeypatch):
+    event = main.Event(
+        id=123,
+        title="T",
+        description="d",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+    )
+    sleep_delays = []
+
+    async def fake_sleep(delay):
+        sleep_delays.append(delay)
+
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+
+    class FakeDB:
+        def __init__(self):
+            self.commit_calls = 0
+
+        def get_session(self):
+            db = self
+
+            class FakeSession:
+                async def get(self, model, obj_id):
+                    if model is main.Event and obj_id == event.id:
+                        return event
+                    return None
+
+                def add(self, obj):
+                    return None
+
+                async def commit(self):
+                    db.commit_calls += 1
+                    if db.commit_calls == 1:
+                        raise sqlite3.OperationalError("database is locked")
+
+            class Ctx:
+                async def __aenter__(self):
+                    return FakeSession()
+
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+
+            return Ctx()
+
+    db = FakeDB()
+    vk_url = "https://vk.com/wall-231920894_2002"
+    new_hash = main.content_hash("T\nd")
+
+    saved, user = await main._persist_vk_source_post_result(
+        event.id,
+        db,
+        vk_url,
+        new_hash,
+        bot=None,
+    )
+
+    assert saved is event
+    assert user is None
+    assert db.commit_calls == 2
+    assert sleep_delays
+    assert event.source_vk_post_url == vk_url
+    assert event.vk_source_hash == new_hash
+
+
+@pytest.mark.asyncio
 async def test_add_events_from_text_preserves_links(tmp_path: Path, monkeypatch):
     main.VK_AFISHA_GROUP_ID = ""
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
-    async def fake_parse(text: str, source_channel: str | None = None, festival_names=None):
+    async def fake_parse(text: str, source_channel: str | None = None, **kwargs):
         return [
             {
                 "title": "T",
@@ -699,7 +768,7 @@ async def test_add_events_from_text_preserves_links(tmp_path: Path, monkeypatch)
     async def fake_create(title, text, source, html_text=None, media=None, ics_url=None, db=None, **kwargs):
         return "url", "p"
 
-    monkeypatch.setattr(main, "parse_event_via_4o", fake_parse)
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse)
     monkeypatch.setattr(main, "create_source_page", fake_create)
 
     html = "<a href='http://reg'>Регистрация</a>"
