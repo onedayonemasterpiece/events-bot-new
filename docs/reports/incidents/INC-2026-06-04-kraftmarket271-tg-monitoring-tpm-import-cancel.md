@@ -167,11 +167,11 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - Done: promo VK recent-post detection now lazy-resolves stale `event.source_vk_post_url` values after VK postponed
   publish, falls back to the VK user actor for live post-date lookup when the service actor returns an empty
   `wall.getById`, persists the live wall URL, and can use the restored `vk_sync` post as a future repost source.
+- Done: import-boundary fix and promo URL reconciliation follow-ups were deployed from `origin/main`; focused import
+  replay and promo VK catch-up verified event `5656` end-to-end through `vk_sync`, video promo selection, and repost
+  eligibility.
 - Pending: producer must distinguish provider/rate-limit failure from legitimate zero-event output, retry bounded
   minute TPM blocks when safe, and persist failure diagnostics into the result payload.
-- Pending: redeploy the promo URL reconciliation follow-up, rerun the focused promo VK check, and verify
-  `JobOutbox(vk_sync)`, managed VK publication, video promo candidacy, live `event.source_vk_post_url`, and VK repost
-  eligibility for event `5656`.
 
 ## Follow-up Actions
 
@@ -179,6 +179,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - [x] Add a focused regression test/smoke for `@kraftmarket39/271`.
 - [x] Add cancellation-tail regression coverage for Telegram result import/recovery.
 - [x] Add regression coverage that primary Telegram import does not suppress Smart Update `vk_sync` scheduling.
+- [x] Add regression coverage that promo VK resolves stale `event.source_vk_post_url` postponed ids before repost
+  eligibility checks.
 - [ ] Add alert/reporting for scanned event-like messages with producer `events=[]` and no durable prod diagnostic.
 - [x] Complete compensating catch-up for `@kraftmarket39/269..271`.
 - [ ] Add producer-side retry/failure payload handling for TPM/provider failures.
@@ -188,8 +190,18 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - deployed SHA: `bf527e6fbcb38a7262eb7f7963c744c0db5ff572` (`origin/main`).
 - deploy path: manual `flyctl deploy --remote-only` from clean linked worktree; Fly release `v1175`,
   machine `48e42d5b714228`, health check passing.
+- import-boundary follow-up deployed SHA: `e46f292dee4178f4b72a8372ccb31a90ffc6fd41`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KT941THXEVBJ3DXXPG4XEWBF`, `/healthz ok=true ready=true`.
+- promo URL reconciliation follow-ups deployed from `origin/main`:
+  - `71cb26408473c38a609c68911913b04383552fed` (`fix(promo): resolve vk postponed ids for event posts`),
+    image `registry.fly.io/events-bot-new-wngqia:deployment-01KT9572WJT5XCCBHPTV6Q599F`;
+  - `93bdfd3159e03e9c59074895806729bb055e4780` (`fix(promo): use user actor for vk post date lookup`),
+    image `registry.fly.io/events-bot-new-wngqia:deployment-01KT95GB7ZY19N8Q77ZPBEWR0S`, `/healthz ok=true ready=true`.
 - regression checks:
   - `tests/test_tg_monitor_recovery.py tests/test_google_ai_client.py` — 17 passed.
+  - `tests/test_promo.py tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_tg_monitor_recovery.py` —
+    24 passed after the import-boundary fix.
+  - `tests/test_promo.py` — 16 passed after the promo URL reconciliation follow-up.
   - `GOOGLE_API_KEY3` currently has an active `google_ai_api_keys` row in Supabase.
   - stale registry import-only rerun `ops_run id=1882` completed instead of being skipped by same-PID recovery.
 - post-deploy verification:
@@ -200,6 +212,16 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   - Production DB after catch-up: `telegram_scanned_message(1177,271)` is `status='done'`,
     `events_extracted=1`, `events_imported=1`, `error=NULL`; `event_source` links event `5656` to
     `https://t.me/kraftmarket39/271`; `telegram_source.last_scanned_message_id=271`.
+  - Focused re-arm replay after the import-boundary fix: `ops_run id=1892`, `status=success`,
+    `messages_processed=1`, `messages_forced=1`, `events_imported=0`, `errors_count=0`.
+  - Standard `JobOutbox(vk_sync)` for event `5656`: job `21914`, `status=done`, result initially
+    `https://vk.com/wall-231920894_1973`; after VK postponed publish, promo catch-up resolved and persisted the live
+    URL `https://vk.com/wall-231920894_1974`.
+  - Current video promo selection (`popular_review`) includes event `5656` as `source_window='promo'`,
+    `promo_campaign_id=1`, `promo_activity_id=1`, `promo_placement_kind='guaranteed_any_position'`.
+  - Current promo VK check sees event `5656` as a recent source post for both `vk_publication` and `vk_repost`
+    activities (`posted_at=2026-06-04T11:03:00+00:00`). At verification time `vk_repost.due_count=0`, so no early
+    repost was published before the configured one-per-day slot around `15:00` Europe/Kaliningrad (`13:00 UTC`).
 
 ## Prevention
 
