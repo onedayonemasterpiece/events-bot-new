@@ -575,6 +575,59 @@ def test_repost_matches_published_post_after_postponed_id_shift() -> None:
     assert _match_published_post_for_event(recent_wall, short) is None
 
 
+@pytest.mark.asyncio
+async def test_recent_event_vk_posts_resolves_stale_postponed_event_url(tmp_path, monkeypatch) -> None:
+    import main
+    import promo as promo_module
+
+    from promo import _recent_event_vk_posts
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 4, 11, 5, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        ev = _event("Калининград корабельный", "2026-07-08", festival="80 историй о главном")
+        ev.source_vk_post_url = "https://vk.com/wall-231920894_1973"
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        event_id = int(ev.id)
+
+    async def fake_post_datetime(url: str | None):
+        if url == "https://vk.com/wall-231920894_1974":
+            return datetime(2026, 6, 4, 11, 3, tzinfo=timezone.utc)
+        return None
+
+    async def fake_resolve_existing_vk_post_url(url, *, target_group_id, db, bot):
+        assert url == "https://vk.com/wall-231920894_1973"
+        assert target_group_id == "231920894"
+        return "https://vk.com/wall-231920894_1974"
+
+    monkeypatch.setattr(promo_module, "_vk_post_datetime", fake_post_datetime)
+    monkeypatch.setattr(main, "_resolve_existing_vk_post_url", fake_resolve_existing_vk_post_url)
+
+    rows = await _recent_event_vk_posts(
+        [ev],
+        group_id=231920894,
+        since_utc=now_utc.replace(hour=10),
+        until_utc=now_utc,
+        db=db,
+    )
+
+    assert [(int(item.id), url, posted_at) for item, url, posted_at in rows] == [
+        (
+            event_id,
+            "https://vk.com/wall-231920894_1974",
+            datetime(2026, 6, 4, 11, 3, tzinfo=timezone.utc),
+        )
+    ]
+    async with db.get_session() as session:
+        saved = await session.get(Event, event_id)
+    assert saved.source_vk_post_url == "https://vk.com/wall-231920894_1974"
+    await db.close()
+
+
 def test_parse_chat_author_query_splits_and_normalizes() -> None:
     from promo import _parse_chat_author_query
 

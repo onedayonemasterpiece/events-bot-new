@@ -11,9 +11,12 @@
   imports that return `skipped_nochange` for an already-created event now also re-arm the standard event tasks, repairing
   old "event exists, VK job missing" states; forced single-event replays whose exact Telegram `event_source` already
   maps to one event use that same re-arm path without rerunning the LLM merge pipeline. Auxiliary linked-source Smart
-  Update passes still suppress VK sync to avoid duplicate publication work. Added regression coverage in
+  Update passes still suppress VK sync to avoid duplicate publication work. Promo VK repost eligibility now also
+  lazy-resolves stale `Event.source_vk_post_url` values left after VK postponed publish (`postponed_id -> live id`)
+  and persists the live URL, so a completed `vk_sync` can be used as a repost source once the source wall post is
+  actually public. Added regression coverage in
   `tests/test_tg_monitor_recovery.py` and
-  `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
+  `tests/test_tg_monitor_reprocess_incomplete_scan.py`, plus the postponed-id promo regression in `tests/test_promo.py`.
 - **Promo trigger by Telegram chat author → video announce**: a new
   `promo_target.target_type='tg_chat_author'` matches events by their Telegram
   source chat + post author (`query_text="<chat>:<author>"`). Events authored by
@@ -37,7 +40,9 @@
   community wall (`vk_wall_since`) and matching the event title
   (`_match_published_post_for_event`), repoints the exposure `target_url`
   (also fixing the `/promo` stats links), and only then treats it as an eligible
-  repost source. Covered by `tests/test_promo.py`.
+  repost source. The same lazy resolution now applies to organic
+  `event.source_vk_post_url` rows created by `vk_sync`, and persists the live URL
+  back to the event. Covered by `tests/test_promo.py`.
 - **Promo VK activities for festival campaigns**: added `vk_publication` and
   `vk_repost` promo surfaces backed by `promo_activity.config_json` and
   normalized `promo_exposure` evidence. The built-in `80 историй о главном`

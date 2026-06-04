@@ -76,6 +76,10 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
    to call Smart Update with `schedule_kwargs={"skip_vk_sync": True}`. That allowed `event_source`/Telegraph/festival
    queue restoration while suppressing the normal Smart Update → `JobOutbox(vk_sync)` → VK publication path required
    for promo events.
+8. Follow-up VK promo gap: after `vk_sync` was restored, VK postponed publishing returned draft id
+   `wall-231920894_1973`, while the public wall post became `wall-231920894_1974` with `postponed_id=1973`.
+   `vk_repost` looked only at `Event.source_vk_post_url` via `wall.getById`, so it could miss an otherwise valid
+   source post until another sync/edit happened to reconcile the URL.
 
 ## Contributing Factors
 
@@ -88,6 +92,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   `80 историй о главном` source post was scanned but absent from DB.
 - The Telegram Monitoring import boundary treated VK sync as optional workflow overhead, but for promo-campaign
   sources VK sync is part of the user-visible product contract.
+- Promo VK URL reconciliation covered `vk_publication` exposure rows, but not organic `vk_sync` URLs stored on
+  `event.source_vk_post_url`.
 
 ## Automation Contract
 
@@ -120,6 +126,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   terminal diagnostic row explaining why import is impossible.
 - For imported active/non-silent Telegram events, the primary Smart Update pass must not suppress standard scheduling:
   `JobOutbox` must contain a `vk_sync` job or the event must already have a managed VK post.
+- VK repost eligibility must resolve stale VK postponed ids (`postponed_id -> live id`) for `event.source_vk_post_url`
+  and persist the live wall URL before declaring that no recent source post exists.
 - Production DB must show `telegram_source.last_scanned_message_id >= 271` for `kraftmarket39` after catch-up.
 - If `@kraftmarket39/270` remains relevant, verify its five producer-extracted events are imported or deliberately
   rejected with per-event reasons.
@@ -156,10 +164,13 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
   so catch-up can repair old "event exists, VK job missing" states without deleting/recreating the event.
 - Done: forced single-event replay with an exact existing Telegram `event_source` now uses the same re-arm path without
   rerunning the LLM merge pipeline, avoiding unnecessary provider/SQLite contention during repair.
+- Done: promo VK recent-post detection now lazy-resolves stale `event.source_vk_post_url` values after VK postponed
+  publish, persists the live wall URL, and can use the restored `vk_sync` post as a future repost source.
 - Pending: producer must distinguish provider/rate-limit failure from legitimate zero-event output, retry bounded
   minute TPM blocks when safe, and persist failure diagnostics into the result payload.
-- Pending: redeploy this import-boundary fix, rerun the focused import from `@kraftmarket39/271`, and verify
-  `JobOutbox(vk_sync)`, managed VK publication, video promo candidacy, and VK repost eligibility for event `5656`.
+- Pending: redeploy the promo URL reconciliation follow-up, rerun the focused promo VK check, and verify
+  `JobOutbox(vk_sync)`, managed VK publication, video promo candidacy, live `event.source_vk_post_url`, and VK repost
+  eligibility for event `5656`.
 
 ## Follow-up Actions
 

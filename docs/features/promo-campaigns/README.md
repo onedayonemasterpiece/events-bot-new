@@ -156,6 +156,8 @@ For each active campaign/activity the scheduler:
   active event rows);
 - counts organic Smart Update posts in the target community during the last
   `window_hours` (default 24) via `event.source_vk_post_url` + VK `wall.getById`;
+  if the stored URL is a stale VK postponed id, it is resolved to the live wall
+  id and saved back to the event before the count is evaluated;
 - counts already recorded promo VK exposures in the same window;
 - if the count is below the number of slots due by the current local time,
   publishes one missing post as a postponed community wall post through the
@@ -169,7 +171,10 @@ For each active campaign/activity the scheduler:
 to a target community. It considers both organic `event.source_vk_post_url` rows
 and `vk_publication` exposure URLs from the last `window_hours`, but only after
 VK `wall.getById` shows that the source post's publish date is not in the
-future. The repost caption uses the short VK rewrite helper's text-only summary
+future. If VK reassigned the wall id when a postponed post became public, the
+runner resolves `postponed_id -> live id` before source selection; organic event
+URLs are persisted back to `event.source_vk_post_url`, and promo exposure URLs
+are reconciled in `promo_exposure`. The repost caption uses the short VK rewrite helper's text-only summary
 (`build_short_vk_text`): no title infoblock, no logistics block, no hashtags.
 The repost result is recorded in `promo_exposure` with
 `surface='vk_repost'`, `details_json.source_url` and

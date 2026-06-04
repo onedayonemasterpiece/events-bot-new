@@ -62,7 +62,10 @@
   rewrite text only (`build_short_vk_text`), without the title/logistics
   infoblock and without hashtags. Promo-publication URLs are eligible for
   repost only after VK `wall.getById` reports a publish date that is no longer
-  in the future; scheduled source posts are not reposted immediately.
+  in the future; scheduled source posts are not reposted immediately. If VK
+  changed the id after postponed publish (`postponed_id -> live id`), the promo
+  runner must lazy-resolve both promo exposure URLs and organic
+  `event.source_vk_post_url` values before deciding that no source post exists.
 - VK promo evidence is stored in `promo_exposure`: `details_json.target_url`
   for each created post/repost and `details_json.source_url` for reposts. The
   `/promo report` output must show those concrete links.

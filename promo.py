@@ -1437,6 +1437,7 @@ async def _recent_event_vk_posts(
     group_id: int,
     since_utc: datetime,
     until_utc: datetime,
+    db: Database | None = None,
 ) -> list[tuple[Event, str, datetime]]:
     rows: list[tuple[Event, str, datetime]] = []
     for ev in events:
@@ -1447,6 +1448,52 @@ async def _recent_event_vk_posts(
             posted_at = await _vk_post_datetime(url)
         except Exception:
             logger.warning("promo.vk post date lookup failed url=%s", url, exc_info=True)
+            posted_at = None
+        if posted_at is None:
+            try:
+                from main import _resolve_existing_vk_post_url
+
+                resolved_url = await _resolve_existing_vk_post_url(
+                    url,
+                    target_group_id=str(abs(int(group_id))),
+                    db=db,
+                    bot=None,
+                )
+            except Exception:
+                logger.warning(
+                    "promo.vk post postponed-id resolution failed url=%s",
+                    url,
+                    exc_info=True,
+                )
+                resolved_url = url
+            if resolved_url and resolved_url != url and _vk_url_matches_group(resolved_url, group_id):
+                try:
+                    resolved_posted_at = await _vk_post_datetime(resolved_url)
+                except Exception:
+                    logger.warning(
+                        "promo.vk resolved post date lookup failed url=%s",
+                        resolved_url,
+                        exc_info=True,
+                    )
+                    resolved_posted_at = None
+                if resolved_posted_at is not None:
+                    logger.info(
+                        "promo.vk resolved stale event source post event_id=%s %s -> %s",
+                        getattr(ev, "id", None),
+                        url,
+                        resolved_url,
+                    )
+                    url = resolved_url
+                    posted_at = resolved_posted_at
+                    ev.source_vk_post_url = resolved_url
+                    if db is not None and getattr(ev, "id", None) is not None:
+                        async with db.get_session() as session:
+                            fresh = await session.get(Event, int(ev.id))
+                            if fresh is not None and (fresh.source_vk_post_url or "").strip() != resolved_url:
+                                fresh.source_vk_post_url = resolved_url
+                                session.add(fresh)
+                                await session.commit()
+        if posted_at is None:
             continue
         if posted_at and since_utc <= posted_at <= until_utc:
             rows.append((ev, url, posted_at))
@@ -1717,6 +1764,7 @@ async def run_promo_vk_activities(
                 group_id=target_group_id,
                 since_utc=since_utc,
                 until_utc=now_utc,
+                db=db,
             )
             recent_exposures = await _recent_activity_exposures(
                 db,
@@ -1818,6 +1866,7 @@ async def run_promo_vk_activities(
                 group_id=source_group_id,
                 since_utc=since_utc,
                 until_utc=now_utc,
+                db=db,
             )
             publication_exposures = await _recent_activity_exposures(
                 db,
