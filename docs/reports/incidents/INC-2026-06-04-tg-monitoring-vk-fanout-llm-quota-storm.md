@@ -137,6 +137,8 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
 - deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9F2PB6ASX73JH1KY1EPKDM`
 - follow-up deployed SHA: `6b0d116f711f7a19037a8291d7458f55d3e71717` (`origin/main`)
 - follow-up deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9GH12EEQECGT3CAVK6M36H`
+- promo repost follow-up deployed SHA: `476c0191bfb5e4c979af20ac3390e5bdc2d36c80` (`origin/main`)
+- promo repost follow-up deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KT9HFRYHDG93M5M1KMP64FEF`
 - regression checks: `tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py tests/test_job_dedup.py`
   printed `35 passed`; the pytest process hung after the passing summary and was terminated. A broader
   `tests/test_vk_source.py` run exposed an unrelated local missing-`GOOGLE_API_KEY` test issue in
@@ -151,6 +153,10 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
     `tests/test_vk_source.py tests/test_job_due_filter.py tests/test_job_dedup.py tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py`
     printed `61 passed`; pytest again stayed alive after the passing summary and was terminated.
   - `compileall` passed for `main.py` and `tests/test_vk_source.py`.
+  - After the promo repost actor follow-up,
+    `tests/test_promo.py tests/test_vk_source.py tests/test_job_due_filter.py tests/test_job_dedup.py tests/test_smart_update_native_schema.py tests/test_tg_monitor_reprocess_incomplete_scan.py`
+    printed `77 passed`; pytest again stayed alive after the passing summary and was terminated.
+  - `compileall` passed for `promo.py`, `main.py`, `tests/test_promo.py`, and `tests/test_vk_source.py`.
 - post-deploy verification:
   - `/healthz` after deploy: `ok=true`, `ready=true`, `job_outbox_worker=ok`, `issues=[]`.
   - VK catch-up reconciliation enqueued missing Telegram-origin VK jobs; active future non-silent Telegram-origin
@@ -192,6 +198,12 @@ After the focused `@kraftmarket39/271` repair, the named event reached VK, but o
   - Manual `run_promo_vk_activities` catch-up selected event `5656` for `vk_repost` from
     `https://vk.com/wall-231920894_1974`, but failed before the repost fix with VK `code=27 Group authorization failed`
     because `wall.repost` was sent with group auth.
+  - After the repost actor fix and deploy, manual `run_promo_vk_activities` catch-up published the repost:
+    source `https://vk.com/wall-231920894_1974`, target `https://vk.com/wall-231828790_984`, event `5656`,
+    `promo_exposure id=44`, `surface='vk_repost'`, `publish_status='PUBLISHED_MAIN'`, `public_target_count=1`.
+    This used one direct 4o call for the short repost caption (`710` tokens), not a mass Smart Update fallback.
+  - As of the same verification, `videoannounce_item` for event `5656` was still empty; the event is campaign-eligible
+    via active festival target `80 историй о главном`, but had not yet been selected into a video session.
 
 ## Prevention
 
