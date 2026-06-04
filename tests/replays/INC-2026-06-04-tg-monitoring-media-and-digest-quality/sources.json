@@ -1,0 +1,46 @@
+{
+  "incident_id": "INC-2026-06-04-tg-monitoring-media-and-digest-quality",
+  "reported_at": "2026-06-04",
+  "production_symptoms": [
+    {
+      "source_url": "https://t.me/k_mira101/424",
+      "event_ids": [5640, 5641, 5642],
+      "created_at_utc": "2026-06-04T08:32:39Z..2026-06-04T08:33:05Z",
+      "vk_posts": [
+        "https://vk.com/wall-231920894_1985",
+        "https://vk.com/wall-231920894_1984",
+        "https://vk.com/wall-231920894_1983"
+      ],
+      "bad_fact": "Telegram-origin events were published to managed klgdevents VK posts with attachments=0.",
+      "minimal_source_truth": {
+        "source_text": "Дамы и господа, друзья\nА у нас весь июнь гастроли!\nВсего 3 концерта в июне и их нельзя пропустить\n\nЗнаменита органистка\n6 июня (суббота) 18:00 Лауреат межреспубликанского конкурса им. Чюрлениса Евгения Лисицина (орган, Москва, Рига) с программой \"Времена года\": А. Вивальди, И. С. Бах, М. П. Мусорский и др.\n\nЕще один известный органист и гитарист\n13 июня (суббота) 19:00 Федор Строганов (орган, Москва); Аркадий Резник (гитара, Москва). В программе А. Вивальди, И. С. Бах, Л. Боккерини, Х. Родриго, М. де Фалья, А. К. Жобим и др.\n\nУникальный ансамбль играющий на странных инструментах\n19 июня (пятница) 19:00 Ансамбль музыки ренессанс \"Pfeyffer\".",
+        "media": [],
+        "expected_behavior": "DB rows may exist, but vk_sync must fail closed until at least one renderable attachment is available."
+      }
+    },
+    {
+      "reported_title": "Дайджест, Мы давно его ждали",
+      "bad_fact": "Generic digest wrapper was reported as published without event-local venue/time.",
+      "minimal_source_truth": {
+        "source_text": "Мы давно его ждали",
+        "candidate": {
+          "title": "Дайджест, Мы давно его ждали",
+          "date": "2026-06-04",
+          "time": "",
+          "location_name": "Не указано",
+          "city": "Калининград"
+        },
+        "expected_behavior": "Parser/Smart Update must fail closed or retry through LLM; the wrapper must not become an event row."
+      }
+    }
+  ],
+  "negative_controls": [
+    {
+      "title": "Дайджест летних концертов",
+      "date": "2026-06-04",
+      "time": "19:00",
+      "location_name": "Дом китобоя",
+      "expected_behavior": "Named event-like title with its own logistics is not blocked by the generic wrapper guard."
+    }
+  ]
+}

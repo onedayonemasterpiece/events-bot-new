@@ -42,6 +42,10 @@
     публикационную задачу. Это делает `/tg` полноценным catch-up для старых импортов, а не только для текущего поста.
     `vk_sync` в outbox имеет высокий глобальный priority, но всё ещё ждёт свои per-event prerequisites; готовые
     Telegram imports не должны стоять за чужим Telegraph/page backlog.
+    Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
+    и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
+    Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media
+    ingestion/source parsing, а не принимать silent text-only публикацию.
   - обрабатывает Telegram-посты в хронологическом порядке (старые → новые), чтобы старые посты не перезатирали более свежие обновления того же события.
   - во время импорта в `/tg` показывает live-прогресс по каждому посту (`X/Y`, ссылка на пост, `Smart Update: ✅/🔄`, `event_ids`, иллюстрации, `took_sec`), чтобы оператор видел, что импорт не завис.
   - отправляет подробный блок `Smart Update (детали событий)` сразу после обработки конкретного поста (не дожидаясь завершения всего импорта).
@@ -289,6 +293,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
     только если OCR уверенно матчит `title/date/time` события (иначе лучше не прикреплять вовсе, чем прикрепить “чужую” афишу).
 - Smart Update не “вымывает” уже прикреплённые афиши, если новая выборка `posters[]` оказалась пустой
   (защита от ложного prune).
+- Для multi-event текстовых постов без приложенных афиш допустимы события без media в БД, но они не должны silently
+  становиться текстовыми VK-постами: публикационная граница требует хотя бы одно renderable VK attachment для
+  Telegram-origin managed post.
 - Если в payload мониторинга `posters[]` отсутствуют из-за upstream media сбоев, сервер может сделать best-effort
   fallback: вытащить фото из публичной HTML страницы `t.me/s/<username>/<message_id>`.
   Этот fallback извлекает **только** медиа‑изображения из самого поста (photo wrap + video thumbnail) и **не** должен подхватывать

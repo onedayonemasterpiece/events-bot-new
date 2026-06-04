@@ -3950,6 +3950,46 @@ async def _dedupe_vk_photo_urls_for_publish(photo_urls: Sequence[str] | None) ->
     return kept
 
 
+def _vk_require_media_for_telegram_source_posts() -> bool:
+    raw = os.getenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", "1")
+    return str(raw or "").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _url_looks_like_telegram_source(url: str | None) -> bool:
+    value = str(url or "").strip().lower()
+    return value.startswith("https://t.me/") or value.startswith("http://t.me/")
+
+
+async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:
+    if _url_looks_like_telegram_source(getattr(event, "source_post_url", None)):
+        return True
+    if getattr(event, "source_chat_id", None) or getattr(event, "source_message_id", None):
+        return True
+    event_id = getattr(event, "id", None)
+    if not db or not event_id:
+        return False
+    try:
+        async with db.get_session() as session:
+            exists = (
+                await session.execute(
+                    select(EventSource.id)
+                    .where(
+                        EventSource.event_id == int(event_id),
+                        EventSource.source_type.in_(("telegram", "tg")),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        return exists is not None
+    except Exception:
+        logging.warning(
+            "sync_vk_source_post: failed to inspect event telegram origin event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
+
+
 async def sync_vk_source_post(
     event: Event,
     text: str,
@@ -4183,6 +4223,17 @@ async def sync_vk_source_post(
         message = build_vk_source_message(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
+        if (
+            _vk_require_media_for_telegram_source_posts()
+            and not attachments
+            and await _event_has_telegram_origin(event, db)
+        ):
+            logging.error(
+                "sync_vk_source_post blocked text-only telegram source post event_id=%s source_url=%s",
+                event.id,
+                getattr(event, "source_post_url", None),
+            )
+            raise RuntimeError("vk_sync_missing_media_for_telegram_event")
         url = await post_to_vk(
             target_group_id,
             message,

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`
+  - Scope: Telegram Monitoring media/poster intake, `event.photo_urls`/`eventposter`, `sync_vk_source_post`, Smart Update parser defender, digest/multi-event prompt rules, and video announce poster eligibility.
+  - Must not regress: Telegram-origin events may exist in DB without media, but a new managed `klgdevents` VK post must not be created with `attachments=0`; missing media must fail closed as `vk_sync_missing_media_for_telegram_event`. Generic digest wrapper titles such as `Дайджест`, `Афиша`, `Подборка`, or `Мы давно его ждали` must not become standalone event rows unless a concrete event-local title, time, and venue/address are present.
 - `INC-2026-06-04-tg-monitoring-vk-fanout-llm-quota-storm.md`
   - Scope: Telegram Monitoring import boundary, Smart Update fallback policy, Google AI key reserve/overflow metadata,
     `JobOutbox(vk_sync)`, VK fanout, CherryFlash S22 session usage, and promo/video/repost downstream surfaces.

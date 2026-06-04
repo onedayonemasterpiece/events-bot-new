@@ -311,6 +311,34 @@ async def test_sync_vk_source_post_captcha_pauses_before_text_only_post(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_blocks_text_only_telegram_event(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.delenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", raising=False)
+
+    event = main.Event(
+        id=5640,
+        title="Title",
+        description="",
+        date="2026-06-06",
+        time="18:00",
+        location_name="Place",
+        source_text="Text",
+        source_post_url="https://t.me/k_mira101/424",
+        photo_urls=[],
+    )
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+        raise AssertionError("telegram-origin vk_sync must not publish without media")
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True

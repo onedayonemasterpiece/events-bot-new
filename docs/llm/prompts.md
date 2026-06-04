@@ -106,6 +106,7 @@ If an array of events is returned, `search_digest` must be present in every obje
 - If the post is a roundup/digest where each event is ONE short line with only `<date>. <city>. <"NAME">. Билеты: <link or name>` and there is NO per-event description, time, venue/address, programme, or independent OCR poster — return `[]`.
 - Detection heuristic: 3+ bulleted items (e.g. lines starting with `🌿`, `•`, `-`, `🟥`, or numbered) where every item is just date+city+title (and optional ticket marker) without further details. Such posts point readers to other organizers' standalone announcements; the bot ingests each concrete event from its own dedicated post.
 - Anti-fabrication: do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` or `time` from another; do NOT invent a programme to compensate for the missing per-event detail.
+- A generic wrapper title such as `Дайджест`, `Афиша`, `Подборка`, or promo wording like `Мы давно его ждали` is never an event title by itself. If the post does not contain one concrete event-local title plus its own time and venue/address, return `[]` instead of creating an event named after the wrapper.
 
 **venue / city grounding rule (anti-fabrication):**
 - `location_name`, `location_address`, and `city` MUST be grounded in the source text or poster OCR. Do NOT invent a venue or address that does not appear in the source.

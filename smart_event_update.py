@@ -9819,6 +9819,34 @@ def _looks_like_schedule_digest(text: str | None, *, event_date: str | None, end
     return False
 
 
+_GENERIC_DIGEST_SHELL_TITLE_RE = re.compile(
+    r"(?iu)^\s*(?:[^\w\s]{0,3}\s*)?(?:дайджест|афиша|подборка)\b|"
+    r"\bмы\s+давно\s+его\s+ждали\b"
+)
+
+
+_GENERIC_LOCATION_PLACEHOLDER_RE = re.compile(
+    r"(?iu)^\s*(?:место|площадка|локация|адрес|город|не\s*указан[ао]?|tbd|n/?a)\s*$"
+)
+
+
+def _looks_like_generic_digest_shell_candidate(candidate: EventCandidate) -> bool:
+    """Detect a generic digest wrapper that slipped past LLM extraction.
+
+    This is a fail-closed safety-net for already-LLM-produced candidates. It only
+    rejects title shells with no event-local logistics; it does not try to parse
+    or reinterpret the source text.
+    """
+    title = re.sub(r"\s+", " ", str(candidate.title or "").strip())
+    if not title or not _GENERIC_DIGEST_SHELL_TITLE_RE.search(title):
+        return False
+    time_value = str(candidate.time or "").strip()
+    if time_value:
+        return False
+    loc_value = str(candidate.location_name or "").strip()
+    return not loc_value or bool(_GENERIC_LOCATION_PLACEHOLDER_RE.match(loc_value))
+
+
 def _normalize_title_for_match(title: str | None) -> str:
     if not title:
         return ""
@@ -11818,6 +11846,14 @@ async def _smart_event_update_impl(
             candidate.source_url,
         )
         return SmartUpdateResult(status="invalid", reason="empty_title_after_clean")
+    if _looks_like_generic_digest_shell_candidate(candidate):
+        logger.info(
+            "smart_update.skip reason=generic_digest_shell source_type=%s source_url=%s title=%s",
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(clean_title),
+        )
+        return SmartUpdateResult(status="skipped_non_event", reason="generic_digest_shell")
     context_value = (candidate.festival_context or "").strip().lower()
     if context_value == "festival_post":
         logger.info(

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Incident / Telegram Monitoring media + digest quality (INC-2026-06-04)**: Telegram-origin managed VK event posts now fail closed when no renderable media survives `event.photo_urls`, Telegraph fallback, and VK photo upload; `sync_vk_source_post` raises `vk_sync_missing_media_for_telegram_event` instead of creating a text-only `klgdevents` wall post with `attachments=0`. The event parser and Smart Update also gained a LLM-first guard for generic digest wrapper titles (`Дайджест`, `Афиша`, `Подборка`, `Мы давно его ждали`) without event-local time and venue/address, so such wrappers retry/fail closed instead of becoming standalone event rows. Added regression tests and replay fixture for `INC-2026-06-04-tg-monitoring-media-and-digest-quality`.
 - **Incident / Telegram Monitoring VK fanout + LLM quota storm (INC-2026-06-04)**: Telegram result import now reconciles
   active future Telegram-origin events missing VK fanout and re-enqueues `vk_sync` instead of leaving imported events
   invisible in VK. `enqueue_job(vk_sync)` requeues stale `done` jobs when the event still has no managed klgdevents
