@@ -173,29 +173,32 @@ stories from recent source-community event posts.
 ## Release And Closure Evidence
 
 - deployed SHA:
-  - `5b55316dae249483fe4dcdf8a9299ae71a33d440`
+  - `98e5e34ea8a513044d9f4cfcfac9a12ff34f0602`
 - deploy path:
-  - pushed `5b55316d` to `origin/main`;
-  - GitHub Actions deploy workflow was triggered on `main` but failed because
-    repository secret `FLY_API_TOKEN` was empty;
+  - pushed `5b55316d` to `origin/main` for the feature delivery, then
+    `98e5e34e` to `origin/main` for VK exposure SQLite-lock retry;
+  - GitHub Actions deploy workflow was triggered manually while diagnosing the
+    release path, but failed because repository secret `FLY_API_TOKEN` was empty;
   - manual Fly deploy succeeded from clean worktree using the saved Fly token
     passed as process-local `FLY_API_TOKEN`;
-  - Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KTA9TVXY349C1E608VQJR93C`,
-    machine `48e42d5b714228`, version `1190`.
+  - Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KTAACX8HNH15444T62PHK529`,
+    machine `48e42d5b714228`, version `1191`.
 - regression checks:
   - `python3 -m py_compile promo.py handlers/promo_cmd.py handlers/partner_promo_cmd.py tests/test_promo.py`
   - `/home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q tests/test_promo.py tests/test_vk_actor.py` -> `26 passed`
 - post-deploy verification:
   - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
-  - Fly status: app image `deployment-01KTA9TVXY349C1E608VQJR93C`, machine
-    `48e42d5b714228`, version `1190`, `1 total, 1 passing`.
+  - Fly status: app image `deployment-01KTAACX8HNH15444T62PHK529`, machine
+    `48e42d5b714228`, version `1191`, `1 total, 1 passing`.
   - Runtime file mirror verified: `ENABLE_RUNTIME_FILE_LOGGING=1`,
     `RUNTIME_LOG_DIR=/data/runtime_logs`, active `events-bot.log` plus rotated
     2026-06-04 files.
-  - Production campaign `#1` now has `vk_story` activities `#11`
-    (`klgdevents:story`) and `#12`
-    (`klgdevents->kenigeventsofficial:story`), both enabled with
-    `max_per_publish=2`, `daily_cap=2`.
+  - Production campaign `#1` now has `vk_publication` activity `#8`
+    (`klgdevents`, `max_per_publish=2`, `daily_cap=2`), `vk_repost` activity
+    `#9` (`klgdevents->kenigeventsofficial`, `max_per_publish=1`,
+    `daily_cap=1`), and `vk_story` activities `#11` (`klgdevents:story`) and
+    `#12` (`klgdevents->kenigeventsofficial:story`), both enabled with
+    `source_group=klgdevents`, `max_per_publish=2`, `daily_cap=2`.
 - compensation evidence:
   - automated promo repost: `https://vk.com/wall-231828790_984`
   - source: `https://vk.com/wall-231920894_1974`
