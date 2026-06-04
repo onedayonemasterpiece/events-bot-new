@@ -79,10 +79,10 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 
 ### Required evidence
 
-- deployed SHA:
-- tests:
-- production DB/log evidence:
-- confirmation that fix is reachable from `origin/main`:
+- deployed SHA: `e76cec2c`
+- tests: `24 passed` (`test_vk_source` media/captcha subset, `test_tg_candidate_location_grounding.py`, Smart Update prose-location regressions)
+- production DB/log evidence: `event_id=5569` row from `https://t.me/molod_kld/3709`; `post_to_vk ok ... post_id=2000 ... attachments=0`; `event_id=5640/5641/5642` rows from `https://t.me/k_mira101/424`; `post_id=1983/1984/1985 ... attachments=0`
+- confirmation that fix is reachable from `origin/main`: `e76cec2c` pushed to `origin/main`
 
 ## Immediate Mitigation
 
@@ -104,10 +104,10 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- post-deploy verification:
+- deployed SHA: `e76cec2c`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean worktree, commit reachable from `origin/main`
+- regression checks: `24 passed` target set covering Telegram media fail-closed, VK captcha no-text-only regression, Telegram location grounding, and Smart Update `prose_location`
+- post-deploy verification: Fly machine `48e42d5b714228` version `1189` started with `1 total, 1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, worker/scheduler tasks ok; container check confirmed `generic_guard_absent=True`, `reaction_prose_fix=True`, `vk_guard=True`
 
 ## Prevention
 
