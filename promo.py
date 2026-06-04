@@ -1419,6 +1419,25 @@ async def _vk_post_datetime(url: str | None) -> datetime | None:
     if not isinstance(items, list):
         items = [items] if items else []
     if not items:
+        try:
+            from main import VK_USER_TOKEN, _vk_api
+        except Exception:
+            VK_USER_TOKEN = None
+            _vk_api = None
+        if VK_USER_TOKEN and _vk_api is not None:
+            try:
+                response = await _vk_api(
+                    "wall.getById",
+                    {"posts": f"{owner_id}_{post_id}"},
+                    token=VK_USER_TOKEN,
+                    token_kind="user",
+                )
+                items = response.get("response") if isinstance(response, dict) else response
+                if not isinstance(items, list):
+                    items = [items] if items else []
+            except Exception:
+                logger.warning("promo.vk user post date lookup failed url=%s", url, exc_info=True)
+    if not items:
         return None
     raw_ts = items[0].get("date") or items[0].get("publish_date")
     if not isinstance(raw_ts, int):

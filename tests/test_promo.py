@@ -576,6 +576,33 @@ def test_repost_matches_published_post_after_postponed_id_shift() -> None:
 
 
 @pytest.mark.asyncio
+async def test_vk_post_datetime_falls_back_to_user_actor(monkeypatch) -> None:
+    import main
+
+    from promo import _vk_post_datetime
+
+    async def fake_service_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        return {"response": []}
+
+    async def fake_user_vk_api(method, params, **kwargs):
+        assert method == "wall.getById"
+        assert params["posts"] == "-231920894_1974"
+        assert kwargs["token"] == "user-token"
+        assert kwargs["token_kind"] == "user"
+        return {"response": [{"date": 1780570980}]}
+
+    monkeypatch.setattr(main, "vk_api", fake_service_vk_api)
+    monkeypatch.setattr(main, "_vk_api", fake_user_vk_api)
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+
+    assert await _vk_post_datetime("https://vk.com/wall-231920894_1974") == datetime.fromtimestamp(
+        1780570980,
+        timezone.utc,
+    )
+
+
+@pytest.mark.asyncio
 async def test_recent_event_vk_posts_resolves_stale_postponed_event_url(tmp_path, monkeypatch) -> None:
     import main
     import promo as promo_module

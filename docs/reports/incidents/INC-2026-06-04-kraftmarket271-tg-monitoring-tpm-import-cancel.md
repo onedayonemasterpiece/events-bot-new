@@ -165,7 +165,8 @@ cursor state at message `268`, while the latest scanned Telegram message in the 
 - Done: forced single-event replay with an exact existing Telegram `event_source` now uses the same re-arm path without
   rerunning the LLM merge pipeline, avoiding unnecessary provider/SQLite contention during repair.
 - Done: promo VK recent-post detection now lazy-resolves stale `event.source_vk_post_url` values after VK postponed
-  publish, persists the live wall URL, and can use the restored `vk_sync` post as a future repost source.
+  publish, falls back to the VK user actor for live post-date lookup when the service actor returns an empty
+  `wall.getById`, persists the live wall URL, and can use the restored `vk_sync` post as a future repost source.
 - Pending: producer must distinguish provider/rate-limit failure from legitimate zero-event output, retry bounded
   minute TPM blocks when safe, and persist failure diagnostics into the result payload.
 - Pending: redeploy the promo URL reconciliation follow-up, rerun the focused promo VK check, and verify

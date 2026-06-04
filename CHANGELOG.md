@@ -13,8 +13,9 @@
   maps to one event use that same re-arm path without rerunning the LLM merge pipeline. Auxiliary linked-source Smart
   Update passes still suppress VK sync to avoid duplicate publication work. Promo VK repost eligibility now also
   lazy-resolves stale `Event.source_vk_post_url` values left after VK postponed publish (`postponed_id -> live id`)
-  and persists the live URL, so a completed `vk_sync` can be used as a repost source once the source wall post is
-  actually public. Added regression coverage in
+  and persists the live URL; the live-date probe falls back from service actor to user actor when VK hides community
+  wall items from the service token, so a completed `vk_sync` can be used as a repost source once the source wall post
+  is actually public. Added regression coverage in
   `tests/test_tg_monitor_recovery.py` and
   `tests/test_tg_monitor_reprocess_incomplete_scan.py`, plus the postponed-id promo regression in `tests/test_promo.py`.
 - **Promo trigger by Telegram chat author → video announce**: a new
@@ -42,7 +43,8 @@
   (also fixing the `/promo` stats links), and only then treats it as an eligible
   repost source. The same lazy resolution now applies to organic
   `event.source_vk_post_url` rows created by `vk_sync`, and persists the live URL
-  back to the event. Covered by `tests/test_promo.py`.
+  back to the event; post-date lookup falls back to the user actor when the
+  service actor returns an empty `wall.getById`. Covered by `tests/test_promo.py`.
 - **Promo VK activities for festival campaigns**: added `vk_publication` and
   `vk_repost` promo surfaces backed by `promo_activity.config_json` and
   normalized `promo_exposure` evidence. The built-in `80 историй о главном`
