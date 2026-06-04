@@ -208,6 +208,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - если kernel ещё работает в Kaggle, запись остаётся в реестре и будет проверена позже;
   - если kernel завершился `complete`, бот заново скачивает `telegram_results.json` из Kaggle и запускает обычный server-import;
   - если kernel рано сообщает `failed/error/cancelled`, запись не удаляется мгновенно: recovery ещё несколько часов перепроверяет output, потому что Kaggle иногда дозавершает `telegram_results.json` уже после раннего terminal-status; только после истечения `TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES` (default `360`) запись удаляется как окончательно невосстановимая.
+- Recovery пропускает job, принадлежащий текущему PID, только пока текущий процесс реально держит Telegram Monitoring `_RUN_LOCK`.
+  После cancellation/restart stale registry entry с тем же `pid` обязан снова импортироваться, иначе хвост `telegram_results.json`
+  может остаться без prod-side `event_source` / `telegram_scanned_message` evidence (`INC-2026-06-04-kraftmarket271`).
 - Локальный poll-timeout в сервере тоже не считается окончательной потерей результата: recovery продолжает проверять kernel в фоне и подхватывает поздно дозавершившийся output без ручного пересканирования.
 - Это значит, что для восстановления **не требуется** сохранять `telegram_results.json` в `/data`: источником истины остаётся Kaggle output, а локальный `/tmp` используется только как временный download/cache путь.
 

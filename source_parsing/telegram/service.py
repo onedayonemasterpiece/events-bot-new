@@ -3285,7 +3285,7 @@ async def resume_telegram_monitor_jobs(
         try:
             meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
             owner_pid = meta.get("pid")
-            if owner_pid == os.getpid():
+            if owner_pid == os.getpid() and _RUN_LOCK.locked():
                 continue
 
             run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-04-kraftmarket271-tg-monitoring-tpm-import-cancel.md`
+  - Scope: Telegram Monitoring producer extraction/OCR/rate-limit retry for `@kraftmarket39`, Google AI key registry and reserve fallback for `GOOGLE_API_KEY3`, server-side Telegram result import/recovery cancellation handling, scanned-message diagnostics, and `80 историй о главном` promo-campaign intake.
+  - Must not regress: a clear event-like festival promo post such as `@kraftmarket39/271` (`Калининград корабельный`, 2026-07-08, registration URL on `kgd80.ru`) must not be silently recorded as `events=[]` because of TPM; rate-limit/provider failures must be distinguishable from legitimate zero-event output; cancelled import/recovery must resume or rerun until the source tail is imported or has durable diagnostics; closure requires production DB evidence that `kraftmarket39` cursor/source rows are caught up through message `271`.
 - `INC-2026-06-02-vk-captcha-text-only-posts.md`
   - Scope: VK event media upload (`upload_vk_photo`, `upload_vk_photo_bytes`), `sync_vk_source_post`, `post_to_vk`, user-token captcha handling, and `vk_sync` job pause behavior.
   - Must not regress: if VK returns captcha (`code=14`) while uploading photos for an event post, `vk_sync` must pause/fail closed before `wall.post`; it must never create a `klgdevents` event post with `attachments=0` solely because the user-token photo upload path is blocked by captcha.

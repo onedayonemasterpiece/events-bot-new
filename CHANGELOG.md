@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Incident / Telegram Monitoring missed `kraftmarket39/271` promo event (INC-2026-06-04)**: recovery no longer
+  skips a stale `tg_monitoring` Kaggle registry entry solely because its stored `meta.pid` matches the current process.
+  Same-process jobs are skipped only while `_RUN_LOCK` is held, so a completed Kaggle output can be re-imported after
+  cancellation/restart instead of leaving the source tail without `event_source` or `telegram_scanned_message` evidence.
+  Added regression coverage in `tests/test_tg_monitor_recovery.py`.
 - **Promo trigger by Telegram chat author → video announce**: a new
   `promo_target.target_type='tg_chat_author'` matches events by their Telegram
   source chat + post author (`query_text="<chat>:<author>"`). Events authored by
