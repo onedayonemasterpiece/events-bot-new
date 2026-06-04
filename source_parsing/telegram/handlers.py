@@ -23,6 +23,9 @@ from models import (
     Event,
     EventMediaAsset,
     EventSource,
+    JobOutbox,
+    JobStatus,
+    JobTask,
     TelegramScannedMessage,
     TelegramSource,
     TelegramSourceForceMessage,
@@ -4335,6 +4338,54 @@ async def _schedule_primary_import_event_tasks(db: Database, event_id: int) -> N
         await schedule_event_update_tasks(db, event)
 
 
+async def _reconcile_primary_import_vk_sync_jobs(db: Database) -> int:
+    """Repair missing VK fanout for active Telegram-origin events.
+
+    This is intentionally scoped to Telegram origins and current/future active
+    events. A successful `/tg` replay should restore the whole downstream
+    publication pipeline, including historical rows that were imported before a
+    scheduler bug was fixed.
+    """
+
+    from main import schedule_event_update_tasks
+
+    today = date.today().isoformat()
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event)
+                .outerjoin(
+                    JobOutbox,
+                    (JobOutbox.event_id == Event.id)
+                    & (JobOutbox.task == JobTask.vk_sync)
+                    & (JobOutbox.status.in_([JobStatus.pending, JobStatus.running])),
+                )
+                .where(Event.source_post_url.like("%t.me/%"))
+                .where(Event.date >= today)
+                .where(Event.lifecycle_status == "active")
+                .where(Event.silent.is_(False))
+                .where(JobOutbox.id.is_(None))
+                .order_by(Event.id.desc())
+                .limit(250)
+            )
+        ).scalars().all()
+    repaired = 0
+    for event in rows:
+        try:
+            result = await schedule_event_update_tasks(db, event)
+            if JobTask.vk_sync in result:
+                repaired += 1
+        except Exception:
+            logger.warning(
+                "tg_monitor: failed to reconcile vk_sync for event_id=%s",
+                getattr(event, "id", None),
+                exc_info=True,
+            )
+    if repaired:
+        logger.info("tg_monitor.reconciled_vk_sync_jobs count=%s", repaired)
+    return repaired
+
+
 async def _single_event_id_for_source_url(db: Database, source_url: str | None) -> int | None:
     source = _clean_url(source_url)
     if not source:
@@ -5860,5 +5911,10 @@ async def process_telegram_results(
                     poster_bridge.pop(username, None)
         except Exception:
             pass
+
+    try:
+        await _reconcile_primary_import_vk_sync_jobs(db)
+    except Exception:
+        logger.warning("tg_monitor: failed to reconcile primary import vk_sync jobs", exc_info=True)
 
     return report

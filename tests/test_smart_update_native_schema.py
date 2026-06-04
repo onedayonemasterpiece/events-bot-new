@@ -128,6 +128,23 @@ def test_g4_split_create_disables_4o_fallback_for_experimental_stages(monkeypatc
     assert su._smart_update_4o_fallback_enabled("create_bundle") is True
 
 
+def test_smart_update_4o_fallback_env_can_disable_all_stages(monkeypatch):
+    monkeypatch.setenv("SMART_UPDATE_4O_FALLBACK", "0")
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", False)
+
+    assert su._smart_update_4o_fallback_enabled("create_bundle") is False
+
+
+def test_smart_update_4o_fallback_budget_limits_mass_fallback(monkeypatch):
+    monkeypatch.setenv("SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR", "2")
+    su._SMART_UPDATE_4O_FALLBACK_BUDGET["window_start"] = 0.0
+    su._SMART_UPDATE_4O_FALLBACK_BUDGET["count"] = 0
+
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is True
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is True
+    assert su._smart_update_4o_fallback_budget_allows("create_bundle") is False
+
+
 @pytest.mark.asyncio
 async def test_ask_gemma_json_uses_native_schema_when_enabled(monkeypatch):
     client = _FakeGemmaClient(['{"facts":["Факт"]}'])

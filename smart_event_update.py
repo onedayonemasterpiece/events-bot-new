@@ -5771,7 +5771,41 @@ def _smart_update_prompt_schema_fallback_enabled(label: str) -> bool:
     }
 
 
+_SMART_UPDATE_4O_FALLBACK_BUDGET = {"window_start": 0.0, "count": 0}
+
+
+def _smart_update_4o_fallback_budget_allows(label: str) -> bool:
+    raw_limit = (os.getenv("SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR", "") or "").strip()
+    if not raw_limit:
+        return True
+    try:
+        max_per_hour = int(raw_limit)
+    except ValueError:
+        max_per_hour = 0
+    if max_per_hour <= 0:
+        return False
+    now = time.monotonic()
+    window_start = float(_SMART_UPDATE_4O_FALLBACK_BUDGET.get("window_start") or 0.0)
+    if not window_start or now - window_start >= 3600:
+        _SMART_UPDATE_4O_FALLBACK_BUDGET["window_start"] = now
+        _SMART_UPDATE_4O_FALLBACK_BUDGET["count"] = 0
+    count = int(_SMART_UPDATE_4O_FALLBACK_BUDGET.get("count") or 0)
+    if count >= max_per_hour:
+        logger.warning(
+            "smart_update: 4o fallback budget exhausted label=%s count=%s max_per_hour=%s",
+            label,
+            count,
+            max_per_hour,
+        )
+        return False
+    _SMART_UPDATE_4O_FALLBACK_BUDGET["count"] = count + 1
+    return True
+
+
 def _smart_update_4o_fallback_enabled(label: str) -> bool:
+    env_value = (os.getenv("SMART_UPDATE_4O_FALLBACK", "1") or "").strip().lower()
+    if env_value in {"0", "false", "no", "off"}:
+        return False
     if SMART_UPDATE_G4_SPLIT_CREATE and label in {
         "rich_facts_extract",
         "split_description_writer",
@@ -6151,7 +6185,10 @@ async def _ask_gemma_json_unbounded(
         attempt += 1
 
     # Fallback to 4o after Gemma retries.
-    if not _smart_update_4o_fallback_enabled(label):
+    if not (
+        _smart_update_4o_fallback_enabled(label)
+        and _smart_update_4o_fallback_budget_allows(label)
+    ):
         _finish_llm_trace_record(trace_record, status="failed", error=last_exc or "4o fallback disabled")
         return None
     try:
@@ -6342,6 +6379,12 @@ async def _ask_gemma_text_unbounded(
         attempt += 1
 
     # Fallback to 4o after Gemma retries.
+    if not (
+        _smart_update_4o_fallback_enabled(label)
+        and _smart_update_4o_fallback_budget_allows(label)
+    ):
+        _finish_llm_trace_record(trace_record, status="failed", error=last_exc or "4o fallback disabled")
+        return None
     try:
         from main import ask_4o, notify_llm_incident
     except Exception:

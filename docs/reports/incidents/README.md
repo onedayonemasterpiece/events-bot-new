@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-04-tg-monitoring-vk-fanout-llm-quota-storm.md`
+  - Scope: Telegram Monitoring import boundary, Smart Update fallback policy, Google AI key reserve/overflow metadata,
+    `JobOutbox(vk_sync)`, VK fanout, CherryFlash S22 session usage, and promo/video/repost downstream surfaces.
+  - Must not regress: a successful Telegram import or `/tg` replay must leave active future non-silent Telegram-origin
+    events with pending/running/done `vk_sync` evidence or a managed VK URL; Google reserve overflow keys must be present
+    both as runtime secrets and in `google_ai_api_keys`; RPD/RPM failures in mass Gemma tasks must not cause unbounded
+    4o fallback spend.
 - `INC-2026-06-04-kraftmarket271-tg-monitoring-tpm-import-cancel.md`
   - Scope: Telegram Monitoring producer extraction/OCR/rate-limit retry for `@kraftmarket39`, Google AI key registry and reserve fallback for `GOOGLE_API_KEY3`, server-side Telegram result import/recovery cancellation handling, scanned-message diagnostics, and `80 историй о главном` promo-campaign intake.
   - Must not regress: a clear event-like festival promo post such as `@kraftmarket39/271` (`Калининград корабельный`, 2026-07-08, registration URL on `kgd80.ru`) must not be silently recorded as `events=[]` because of TPM; rate-limit/provider failures must be distinguishable from legitimate zero-event output; cancelled import/recovery must resume or rerun until the source tail is imported or has durable diagnostics; closure requires production DB evidence that `kraftmarket39` cursor/source rows are caught up through message `271`.

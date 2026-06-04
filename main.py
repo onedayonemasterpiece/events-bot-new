@@ -13883,8 +13883,15 @@ async def enqueue_job(
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
             if job.status == JobStatus.done and task == JobTask.vk_sync:
-                logline("ENQ", event_id, "skipped", job_key=job_key)
-                return "skipped"
+                if ev is None or _event_has_managed_vk_post(ev):
+                    logline("ENQ", event_id, "skipped", job_key=job_key)
+                    return "skipped"
+                logging.warning(
+                    "ENQ vk_sync done_without_managed_vk_requeue event_id=%s job_id=%s source_vk_post_url=%s",
+                    event_id,
+                    job.id,
+                    getattr(ev, "source_vk_post_url", None) if ev is not None else None,
+                )
             if job.status == JobStatus.running:
                 age = (now - job.updated_at).total_seconds()
                 if age > 600:
@@ -14062,6 +14069,17 @@ async def enqueue_job(
         return "new"
 
 
+def _event_has_managed_vk_post(ev: Event) -> bool:
+    existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
+    if not existing_vk_url:
+        return False
+    owner_ids = _vk_owner_and_post_id(existing_vk_url)
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not owner_ids or not target_group_id:
+        return False
+    return str(abs(int(owner_ids[0]))) == target_group_id
+
+
 async def schedule_event_update_tasks(
     db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
 ) -> dict[JobTask, str]:
@@ -14193,16 +14211,7 @@ async def schedule_event_update_tasks(
         # Schedule vk_sync unless we already have a managed klgdevents post for this event.
         # Imported VK events keep `source_vk_post_url` pointing at the external source wall
         # post; those must still get a redactional post in `VK_EVENTS_GROUP_ID`.
-        existing_vk_url = (ev.source_vk_post_url or "").strip()
-        managed_klgdevents_post = False
-        if existing_vk_url:
-            owner_ids = _vk_owner_and_post_id(existing_vk_url)
-            target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
-            if owner_ids and target_group_id:
-                managed_klgdevents_post = (
-                    str(abs(int(owner_ids[0]))) == target_group_id
-                )
-        if not managed_klgdevents_post:
+        if not _event_has_managed_vk_post(ev):
             results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:

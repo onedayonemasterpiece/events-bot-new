@@ -1,7 +1,7 @@
 import logging
 import pytest
 import main
-from main import Database, JobTask, JobOutbox, JobStatus
+from main import Database, Event, JobTask, JobOutbox, JobStatus
 from sqlalchemy import select
 from datetime import datetime, timedelta, timezone
 
@@ -73,3 +73,45 @@ async def test_enqueue_job_requeue_and_skip(tmp_path, caplog):
         r.message.startswith("ENQ") and "job_key=vk_sync:1" in r.message and "skipped" in r.message
         for r in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_enqueue_job_requeues_done_vk_sync_without_managed_vk_post(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = Event(
+            title="Telegram event",
+            description="d",
+            date="2026-06-06",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+            source_post_url="https://t.me/example/1",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=int(ev.id),
+                task=JobTask.vk_sync,
+                status=JobStatus.done,
+            )
+        )
+        await session.commit()
+        event_id = int(ev.id)
+
+    action = await main.enqueue_job(db, event_id, JobTask.vk_sync)
+
+    assert action == "requeued"
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.vk_sync,
+                )
+            )
+        ).scalar_one()
+    assert job.status == JobStatus.pending

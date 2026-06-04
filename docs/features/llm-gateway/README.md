@@ -143,6 +143,13 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 *   **Model fallback chain**: при финальном провале основной модели клиент переключается на запасные модели из `GOOGLE_AI_FALLBACK_MODELS` (через запятую) и логирует `google_ai.model_fallback`.
     * Gateway уважает `requested_model`: первой в цепочке всегда идёт запрошенная модель, а запасные модели остаются только fallback-хвостом.
     * Gemma-модели меньше `12b` (`1b/4b`) автоматически исключаются из цепочки и не используются для текста.
+*   **Emergency overflow keys**: `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS` может дать scoped consumer запасные ключи только при
+    daily-budget отказах (`rpd`/`no_keys`). Per-minute (`rpm`/`tpm`) не расширяется, чтобы параллельные задачи не пробивали
+    минутные лимиты. Каждый env в этом списке должен существовать и как runtime secret, и как активная строка
+    `google_ai_api_keys.env_var_name`; env-only ключ не виден атомарному reserve RPC.
+*   **Smart Update 4o fallback budget**: 4o остаётся аварийным fallback после Gemma/Gemini ошибок, но массовые Smart Update
+    переливы можно ограничить `SMART_UPDATE_4O_FALLBACK_MAX_PER_HOUR=N`. `SMART_UPDATE_4O_FALLBACK=0` — временный
+    incident kill-switch, не steady-state policy.
 
 ### 3.1. Логирование конкретной модели (обязательно)
 В JSON-логах клиента теперь фиксируются **оба** имени модели:
