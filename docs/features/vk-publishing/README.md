@@ -68,9 +68,15 @@
   changed the id after postponed publish (`postponed_id -> live id`), the promo
   runner must lazy-resolve both promo exposure URLs and organic
   `event.source_vk_post_url` values before deciding that no source post exists.
+- Promo campaign activity `vk_story` publishes a vertical image story into a
+  configured community from a recent source-community event post. It uses the
+  event poster/title/date/venue as the story image, passes the source wall URL as
+  VK internal `link_url` when possible, and treats upload as successful only
+  after `stories.save` returns a saved story. `stories.getPhotoUploadServer` is
+  called with a user actor; group-token-only story delivery is not valid.
 - VK promo evidence is stored in `promo_exposure`: `details_json.target_url`
-  for each created post/repost and `details_json.source_url` for reposts. The
-  `/promo report` output must show those concrete links.
+  for each created post/repost/story and `details_json.source_url` for reposts
+  and stories. The `/promo report` output must show those concrete links.
 - `vk_repost` must call VK `wall.repost` with a user actor first. VK rejects
   `wall.repost` under group authorization (`code=27`), so group-token-only
   retries are not a valid fallback for promo repost delivery.
@@ -78,7 +84,9 @@
   `https://vk.com/klgdevents` (minimum two festival event posts in the last
   24 hours) plus one repost from `klgdevents` to
   `https://vk.com/kenigeventsofficial` when a source post exists in the same
-  window.
+  window. It also publishes two story cards per day from recent `klgdevents`
+  festival event posts into each target community:
+  `https://vk.com/klgdevents` and `https://vk.com/kenigeventsofficial`.
 
 ## Operational Checks
 

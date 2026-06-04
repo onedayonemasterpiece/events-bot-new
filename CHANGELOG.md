@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Promo VK stories for campaign activity**: added `vk_story` promo activity
+  support. The runner now builds a vertical story image from a promoted event's
+  poster/title/date/venue, uploads it to a configured VK community with
+  `stories.getPhotoUploadServer`, finalizes through `stories.save`, and records
+  normalized `promo_exposure` evidence. The built-in `80 историй о главном`
+  campaign now idempotently seeds two daily stories from recent `klgdevents`
+  festival event posts into both `vk.com/klgdevents` and
+  `vk.com/kenigeventsofficial`; `/promo` and `/promo report` include story
+  activity/report rows. Covered by `tests/test_promo.py`.
 - **Incident / Telegram Monitoring media + prose-location quality (INC-2026-06-04)**: Telegram-origin managed VK event posts now fail closed when no renderable media survives `event.photo_urls`, Telegraph fallback, and VK photo upload; `sync_vk_source_post` raises `vk_sync_missing_media_for_telegram_event` instead of creating a text-only `klgdevents` wall post with `attachments=0`. The Telegram candidate builder and Smart Update prose-location guard now treat reaction text such as `мы его очень ждали` as prose, not a venue; without a real venue/address/meeting point the candidate fails closed instead of creating a public event row. Added regression tests and replay fixture for `INC-2026-06-04-tg-monitoring-media-and-digest-quality`.
 - **Incident / Telegram Monitoring VK fanout + LLM quota storm (INC-2026-06-04)**: Telegram result import now reconciles
   active future Telegram-origin events missing VK fanout and re-enqueues `vk_sync` instead of leaving imported events

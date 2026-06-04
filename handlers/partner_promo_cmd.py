@@ -51,6 +51,7 @@ from promo import (
     PROMO_SURFACE_VIDEO_GENERAL,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
+    PROMO_SURFACE_VK_STORY,
     PROMO_VK_DEFAULT_WINDOW_HOURS,
     PartnerPromoSpec,
     build_partner_campaign_title,
@@ -1299,6 +1300,7 @@ _SURFACE_LABELS: dict[str, str] = {
     "telegraph_weekend": "📰 Telegraph: выходные",
     "vk_publication": "📢 VK-публикация",
     "vk_repost": "📨 VK-репост",
+    "vk_story": "VK-история",
     "placeholder": "—",
 }
 
@@ -1345,6 +1347,15 @@ def _humanize_activity(activity: PromoActivity) -> str:
             bits.append(f"vk.com/{source} → vk.com/{target}")
         elif activity.profile_key:
             bits.append(str(activity.profile_key))
+    elif activity.surface == PROMO_SURFACE_VK_STORY:
+        source = str(cfg.get("source_group") or "").strip()
+        target = str(cfg.get("target_group") or activity.profile_key or "").strip()
+        if source and target:
+            bits.append(f"vk.com/{source} → story vk.com/{target}")
+        elif target:
+            bits.append(f"story vk.com/{target}")
+        window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+        bits.append(f"историй {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
     else:
         if activity.profile_key:
             bits.append(_PROFILE_LABELS.get(activity.profile_key, activity.profile_key))
@@ -1357,6 +1368,7 @@ def _humanize_activity(activity: PromoActivity) -> str:
     if activity.daily_cap and activity.surface not in (
         PROMO_SURFACE_VK_PUBLICATION,
         PROMO_SURFACE_VK_REPOST,
+        PROMO_SURFACE_VK_STORY,
     ):
         bits.append(f"не более {int(activity.daily_cap)} в день")
     if activity.target_exposure_goal:
@@ -1817,6 +1829,7 @@ async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
         is_vk = activity.surface in (
             PROMO_SURFACE_VK_PUBLICATION,
             PROMO_SURFACE_VK_REPOST,
+            PROMO_SURFACE_VK_STORY,
         )
         lines.append(f"<b>{html.escape(_humanize_activity(activity))}</b>")
         if is_vk:
@@ -1866,6 +1879,7 @@ async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
             is_vk = exposure.surface in (
                 PROMO_SURFACE_VK_PUBLICATION,
                 PROMO_SURFACE_VK_REPOST,
+                PROMO_SURFACE_VK_STORY,
             )
             lines.append(_stats_exposure_line(exposure, title, is_vk=is_vk))
 

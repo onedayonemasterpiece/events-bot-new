@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
+import textwrap
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from difflib import SequenceMatcher
@@ -41,12 +43,15 @@ PROMO_DAILY_TZ = "Europe/Kaliningrad"
 PROMO_SURFACE_VIDEO_GENERAL = "video_general"
 PROMO_SURFACE_VK_PUBLICATION = "vk_publication"
 PROMO_SURFACE_VK_REPOST = "vk_repost"
+PROMO_SURFACE_VK_STORY = "vk_story"
 PROMO_VK_DEFAULT_WINDOW_HOURS = 24
 PROMO_VK_REPOST_DEDUP_HOURS = 72
 PROMO_VK_ACTIVE_START_HOUR = 9
 PROMO_VK_ACTIVE_END_HOUR = 21
 PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
+PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
+PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 
 # Target that matches events by their Telegram source chat + post author.
 # query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
@@ -814,6 +819,33 @@ def _initial_80_vk_repost_activity(campaign_id: int) -> PromoActivity:
     )
 
 
+def _initial_80_vk_story_activity(
+    campaign_id: int,
+    *,
+    profile_key: str,
+    source_group: str,
+    target_group: str,
+) -> PromoActivity:
+    return PromoActivity(
+        campaign_id=campaign_id,
+        surface=PROMO_SURFACE_VK_STORY,
+        profile_key=profile_key,
+        max_per_publish=2,
+        daily_cap=2,
+        selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+        enabled=True,
+        config_json={
+            "source_group": source_group,
+            "target_group": target_group,
+            "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
+            "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
+            "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
+            "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
+            "link_text": "Подробнее",
+        },
+    )
+
+
 async def ensure_initial_80_stories_campaign(
     db: Database,
     *,
@@ -856,6 +888,18 @@ async def ensure_initial_80_stories_campaign(
             for required in (
                 _initial_80_vk_publication_activity(int(existing.id)),
                 _initial_80_vk_repost_activity(int(existing.id)),
+                _initial_80_vk_story_activity(
+                    int(existing.id),
+                    profile_key=PROMO_VK_80_STORY_KLGD_PROFILE,
+                    source_group="klgdevents",
+                    target_group="klgdevents",
+                ),
+                _initial_80_vk_story_activity(
+                    int(existing.id),
+                    profile_key=PROMO_VK_80_STORY_MAIN_PROFILE,
+                    source_group="klgdevents",
+                    target_group="kenigeventsofficial",
+                ),
             ):
                 key = (str(required.surface or ""), str(required.profile_key or ""))
                 if key not in existing_keys:
@@ -945,6 +989,18 @@ async def ensure_initial_80_stories_campaign(
                 telegraph_weekend,
                 _initial_80_vk_publication_activity(int(campaign.id)),
                 _initial_80_vk_repost_activity(int(campaign.id)),
+                _initial_80_vk_story_activity(
+                    int(campaign.id),
+                    profile_key=PROMO_VK_80_STORY_KLGD_PROFILE,
+                    source_group="klgdevents",
+                    target_group="klgdevents",
+                ),
+                _initial_80_vk_story_activity(
+                    int(campaign.id),
+                    profile_key=PROMO_VK_80_STORY_MAIN_PROFILE,
+                    source_group="klgdevents",
+                    target_group="kenigeventsofficial",
+                ),
             ]
         )
         await session.commit()
@@ -1705,6 +1761,7 @@ async def _record_vk_promo_exposure(
     url: str,
     published_at: datetime,
     details: dict[str, Any],
+    target_type: str = "vk_wall",
 ) -> None:
     async with db.get_session() as session:
         session.add(
@@ -1716,12 +1773,331 @@ async def _record_vk_promo_exposure(
                 placement_kind=placement_kind,
                 publish_status=status,
                 public_target_count=1,
-                public_targets_json=[{"type": "vk_wall", "url": url}],
+                public_targets_json=[{"type": target_type, "url": url}],
                 published_at=published_at,
                 details_json=details,
             )
         )
         await session.commit()
+
+
+def _first_event_photo_url(ev: Event) -> str | None:
+    for url in list(getattr(ev, "photo_urls", None) or []):
+        text = str(url or "").strip()
+        if text:
+            return text
+    return None
+
+
+async def _download_story_source_image(url: str) -> bytes:
+    from main import HTTP_SEMAPHORE, MAX_DOWNLOAD_SIZE, get_http_session, span
+
+    session = get_http_session()
+    async with span("http"):
+        async with HTTP_SEMAPHORE:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                buf = bytearray()
+                async for chunk in resp.content.iter_chunked(64 * 1024):
+                    buf.extend(chunk)
+                    if len(buf) > MAX_DOWNLOAD_SIZE:
+                        raise ValueError("file too large")
+                return bytes(buf)
+
+
+def _promo_story_font(size: int):
+    from PIL import ImageFont
+
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _wrap_story_text(text: str, *, width: int) -> list[str]:
+    lines: list[str] = []
+    for paragraph in " ".join(str(text or "").split()).split("\n"):
+        lines.extend(textwrap.wrap(paragraph, width=width) or [""])
+    return lines
+
+
+def _story_event_date_line(ev: Event) -> str:
+    months = (
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+    )
+    raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
+    try:
+        day = date.fromisoformat(raw)
+        value = f"{day.day} {months[day.month - 1]}"
+    except ValueError:
+        value = raw
+    ev_time = str(getattr(ev, "time", "") or "").strip()
+    if ev_time:
+        value = f"{value} в {ev_time}" if value else ev_time
+    return value
+
+
+async def _build_vk_story_image_bytes(ev: Event, *, source_url: str) -> bytes:
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+
+    photo_url = _first_event_photo_url(ev)
+    if not photo_url:
+        raise RuntimeError("event has no photo for VK story")
+    raw = await _download_story_source_image(photo_url)
+    poster = Image.open(io.BytesIO(raw)).convert("RGB")
+    width, height = 1080, 1920
+    bg = ImageOps.fit(poster, (width, height), method=Image.Resampling.LANCZOS)
+    bg = bg.filter(ImageFilter.GaussianBlur(28))
+    bg = ImageEnhance.Brightness(bg).enhance(0.42)
+
+    card = Image.new("RGB", (width, height), "#101010")
+    card.paste(bg)
+    draw = ImageDraw.Draw(card)
+
+    poster_box = (120, 140, 960, 1120)
+    poster_fit = ImageOps.contain(
+        poster,
+        (poster_box[2] - poster_box[0], poster_box[3] - poster_box[1]),
+        method=Image.Resampling.LANCZOS,
+    )
+    px = poster_box[0] + ((poster_box[2] - poster_box[0]) - poster_fit.width) // 2
+    py = poster_box[1] + ((poster_box[3] - poster_box[1]) - poster_fit.height) // 2
+    shadow = Image.new("RGBA", (poster_fit.width + 36, poster_fit.height + 36), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.rounded_rectangle((18, 18, poster_fit.width + 18, poster_fit.height + 18), radius=34, fill=(0, 0, 0, 120))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(16))
+    card.paste(shadow.convert("RGB"), (px - 18, py - 18), shadow)
+    mask = Image.new("L", poster_fit.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, poster_fit.width, poster_fit.height), radius=28, fill=255)
+    card.paste(poster_fit, (px, py), mask)
+
+    panel_top = 1190
+    draw.rounded_rectangle((92, panel_top, 988, 1810), radius=36, fill=(250, 248, 241))
+    title_font = _promo_story_font(64)
+    meta_font = _promo_story_font(42)
+    small_font = _promo_story_font(34)
+    y = panel_top + 62
+    for line in _wrap_story_text(str(getattr(ev, "title", "") or ""), width=22)[:5]:
+        draw.text((140, y), line, font=title_font, fill=(26, 28, 30))
+        y += 76
+    y += 26
+    meta_parts = [
+        _story_event_date_line(ev),
+        str(getattr(ev, "location_name", "") or "").strip(),
+    ]
+    for part in [item for item in meta_parts if item]:
+        for line in _wrap_story_text(part, width=33)[:2]:
+            draw.text((140, y), line, font=meta_font, fill=(60, 64, 68))
+            y += 54
+    footer = "Подробнее в посте сообщества"
+    draw.text((140, 1746), footer, font=small_font, fill=(100, 74, 32))
+    out = io.BytesIO()
+    card.save(out, format="JPEG", quality=92, optimize=True)
+    return out.getvalue()
+
+
+async def _publish_vk_story_photo(
+    db: Database,
+    bot: object | None,
+    *,
+    target_group_id: int,
+    image_bytes: bytes,
+    source_url: str | None = None,
+    link_text: str | None = None,
+) -> dict[str, Any]:
+    from aiohttp import FormData
+
+    from main import HTTP_SEMAPHORE, VK_USER_TOKEN, _vk_api, choose_vk_actor, get_http_session, span
+
+    actors = [
+        actor
+        for actor in choose_vk_actor(-abs(int(target_group_id)), "stories.getPhotoUploadServer")
+        if actor.kind == "user"
+    ]
+    if not actors and VK_USER_TOKEN:
+        from types import SimpleNamespace
+
+        actors = [SimpleNamespace(kind="user", token=None, label="user")]
+    if not actors:
+        raise RuntimeError("VK user token missing for community story")
+
+    params: dict[str, Any] = {
+        "group_id": abs(int(target_group_id)),
+        "add_to_news": 1,
+    }
+    if source_url and str(source_url).startswith("https://vk.com/"):
+        params["link_url"] = source_url
+        params["link_text"] = link_text or "Подробнее"
+
+    last_error: Exception | None = None
+    for actor in actors:
+        token = getattr(actor, "token", None) or VK_USER_TOKEN
+        try:
+            data = await _vk_api(
+                "stories.getPhotoUploadServer",
+                params,
+                db,
+                bot,
+                token=token,
+                token_kind="user",
+            )
+            upload_url = ((data.get("response") or {}).get("upload_url") if isinstance(data, dict) else None)
+            if not upload_url:
+                raise RuntimeError("stories.getPhotoUploadServer returned no upload_url")
+            form = FormData()
+            form.add_field("file", image_bytes, filename="story.jpg", content_type="image/jpeg")
+            session = get_http_session()
+
+            async def _upload() -> dict[str, Any]:
+                async with span("http"):
+                    async with HTTP_SEMAPHORE:
+                        async with session.post(upload_url, data=form) as up:
+                            return await up.json()
+
+            upload_result_data = await _upload()
+            upload_result = None
+            if isinstance(upload_result_data, dict):
+                response = upload_result_data.get("response")
+                if isinstance(response, dict):
+                    upload_result = response.get("upload_result")
+                upload_result = upload_result or upload_result_data.get("upload_result")
+            if not upload_result:
+                raise RuntimeError("VK story upload returned no upload_result")
+            saved = await _vk_api(
+                "stories.save",
+                {"upload_results": upload_result, "extended": 1},
+                db,
+                bot,
+                token=token,
+                token_kind="user",
+            )
+            response = saved.get("response") if isinstance(saved, dict) else None
+            items = response.get("items") if isinstance(response, dict) else None
+            count = int(response.get("count") or 0) if isinstance(response, dict) else 0
+            if count < 1 and not items:
+                raise RuntimeError("stories.save returned no saved story")
+            item = items[0] if isinstance(items, list) and items else {}
+            owner_id = int(item.get("owner_id") or -abs(int(target_group_id)))
+            story_id = int(item.get("id") or 0)
+            url = f"https://vk.com/story{owner_id}_{story_id}" if story_id else f"vk:story:{owner_id}"
+            return {
+                "url": url,
+                "owner_id": owner_id,
+                "story_id": story_id,
+                "expires_at": item.get("expires_at"),
+                "raw_count": count,
+            }
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                "promo.vk story actor failed group_id=%s actor=%s error=%s",
+                target_group_id,
+                getattr(actor, "label", "user"),
+                exc,
+            )
+    raise last_error or RuntimeError("VK story publish failed")
+
+
+async def _recent_campaign_source_wall_candidates(
+    db: Database,
+    *,
+    campaign_id: int,
+    events: list[Event],
+    source_group_id: int,
+    since_utc: datetime,
+    until_utc: datetime,
+) -> list[tuple[Event, str, datetime]]:
+    source_candidates: list[tuple[Event, str, datetime]] = await _recent_event_vk_posts(
+        events,
+        group_id=source_group_id,
+        since_utc=since_utc,
+        until_utc=until_utc,
+        db=db,
+    )
+    publication_exposures = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=None,
+        surface=PROMO_SURFACE_VK_PUBLICATION,
+        since_utc=since_utc,
+    )
+    event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+    recent_wall: list[dict] = []
+    if publication_exposures:
+        try:
+            from main import vk_wall_since
+
+            recent_wall = await vk_wall_since(
+                source_group_id,
+                int(since_utc.timestamp()),
+                owner_type="group",
+                count=80,
+            )
+        except Exception:
+            logger.warning(
+                "promo.vk source candidates: vk_wall_since failed group_id=%s",
+                source_group_id,
+                exc_info=True,
+            )
+            recent_wall = []
+    for exposure in publication_exposures:
+        ev = event_by_id.get(int(exposure.event_id))
+        if ev is None:
+            continue
+        details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
+        url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()
+        source_at: datetime | None = None
+        if url and _vk_url_matches_group(url, source_group_id):
+            try:
+                source_at = await _vk_post_datetime(url)
+            except Exception:
+                source_at = None
+        if source_at is None:
+            match = _match_published_post_for_event(recent_wall, ev)
+            if match is not None:
+                live_url = str(match.get("url") or "").strip()
+                ts = match.get("date")
+                live_at = (
+                    datetime.fromtimestamp(int(ts), timezone.utc)
+                    if isinstance(ts, int)
+                    else None
+                )
+                if live_url and live_at is not None and _vk_url_matches_group(live_url, source_group_id):
+                    url, source_at = live_url, live_at
+                    if exposure.id is not None:
+                        try:
+                            await _reconcile_exposure_target_url(
+                                db,
+                                exposure_id=int(exposure.id),
+                                url=live_url,
+                                published_at=live_at,
+                            )
+                        except Exception:
+                            logger.warning(
+                                "promo.vk source candidates: exposure url reconcile failed id=%s",
+                                exposure.id,
+                                exc_info=True,
+                            )
+        if source_at is not None and source_at <= until_utc and _vk_url_matches_group(url, source_group_id):
+            source_candidates.append((ev, url, source_at))
+    return source_candidates
 
 
 async def run_promo_vk_activities(
@@ -1755,7 +2131,15 @@ async def run_promo_vk_activities(
                     .where(PromoCampaign.starts_at <= now_utc)
                     .where(or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc))
                     .where(PromoActivity.enabled.is_(True))
-                    .where(PromoActivity.surface.in_([PROMO_SURFACE_VK_PUBLICATION, PROMO_SURFACE_VK_REPOST]))
+                    .where(
+                        PromoActivity.surface.in_(
+                            [
+                                PROMO_SURFACE_VK_PUBLICATION,
+                                PROMO_SURFACE_VK_REPOST,
+                                PROMO_SURFACE_VK_STORY,
+                            ]
+                        )
+                    )
                     .order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id)
                 )
             ).all()
@@ -2020,6 +2404,99 @@ async def run_promo_vk_activities(
                 )
             except Exception as exc:
                 logger.exception("promo.vk repost failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", source_url=source_url, reason=str(exc) or type(exc).__name__)
+                )
+        elif activity.surface == PROMO_SURFACE_VK_STORY:
+            cfg = _activity_config(activity)
+            source_group_id = await _resolve_vk_group_id(cfg.get("source_group"))
+            target_group_id = await _resolve_vk_group_id(cfg.get("target_group") or activity.profile_key)
+            if not source_group_id or not target_group_id:
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="source_or_target_group_missing")
+                )
+                continue
+            due_count = _vk_activity_due_count(activity, now_utc)
+            if due_count <= 0:
+                continue
+            recent_stories = await _recent_activity_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_VK_STORY,
+                since_utc=since_utc,
+            )
+            if len(recent_stories) >= due_count:
+                continue
+            source_candidates = await _recent_campaign_source_wall_candidates(
+                db,
+                campaign_id=campaign_id,
+                events=events,
+                source_group_id=source_group_id,
+                since_utc=since_utc,
+                until_utc=now_utc,
+            )
+            dedup_since = now_utc - timedelta(hours=int(cfg.get("dedup_hours") or PROMO_VK_REPOST_DEDUP_HOURS))
+            prior = await _recent_activity_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_VK_STORY,
+                since_utc=dedup_since,
+            )
+            used_source_urls = {
+                str((exposure.details_json or {}).get("source_url") or "").strip()
+                for exposure in prior
+                if isinstance(exposure.details_json, dict)
+            }
+            picked: tuple[Event, str, datetime] | None = None
+            for candidate in sorted(source_candidates, key=lambda item: (item[2], int(item[0].id or 0))):
+                if candidate[1] not in used_source_urls and _first_event_photo_url(candidate[0]):
+                    picked = candidate
+                    break
+            if picked is None:
+                continue
+            ev, source_url, source_at = picked
+            try:
+                image_bytes = await _build_vk_story_image_bytes(ev, source_url=source_url)
+                story = await _publish_vk_story_photo(
+                    db,
+                    bot,
+                    target_group_id=target_group_id,
+                    image_bytes=image_bytes,
+                    source_url=source_url,
+                    link_text=str(cfg.get("link_text") or "Подробнее"),
+                )
+                url = str(story.get("url") or "").strip()
+                if not url:
+                    raise RuntimeError("stories.save returned no story URL")
+                await _record_vk_promo_exposure(
+                    db,
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
+                    event_id=int(ev.id),
+                    surface=PROMO_SURFACE_VK_STORY,
+                    placement_kind="rolling_window_story",
+                    status="PUBLISHED_MAIN",
+                    url=url,
+                    published_at=now_utc,
+                    details={
+                        "source_group_id": source_group_id,
+                        "target_group_id": target_group_id,
+                        "source_url": source_url,
+                        "source_published_at": source_at.isoformat(),
+                        "target_url": url,
+                        "owner_id": story.get("owner_id"),
+                        "story_id": story.get("story_id"),
+                        "expires_at": story.get("expires_at"),
+                    },
+                    target_type="vk_story",
+                )
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "published", source_url=source_url, target_url=url)
+                )
+            except Exception as exc:
+                logger.exception("promo.vk story failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
                 results.append(
                     PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", source_url=source_url, reason=str(exc) or type(exc).__name__)
                 )

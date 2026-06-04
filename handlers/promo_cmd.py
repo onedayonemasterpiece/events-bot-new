@@ -14,6 +14,7 @@ from promo import (
     INITIAL_80_STORIES_PRIORITY,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
+    PROMO_SURFACE_VK_STORY,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     default_campaign_end,
@@ -326,6 +327,7 @@ def _activity_label(activity: PromoActivity) -> str:
         "telegraph_weekend": "Telegraph: выходные",
         PROMO_SURFACE_VK_PUBLICATION: "VK-публикация",
         PROMO_SURFACE_VK_REPOST: "VK-репост",
+        PROMO_SURFACE_VK_STORY: "VK-история",
     }.get(activity.surface, activity.surface)
     parts = [surface_label]
     if activity.profile_key:
@@ -347,7 +349,15 @@ async def _vk_exposures_for_campaign(
                 select(PromoExposure, Event.title, Event.date)
                 .join(Event, Event.id == PromoExposure.event_id)
                 .where(PromoExposure.campaign_id == campaign.id)
-                .where(PromoExposure.surface.in_([PROMO_SURFACE_VK_PUBLICATION, PROMO_SURFACE_VK_REPOST]))
+                .where(
+                    PromoExposure.surface.in_(
+                        [
+                            PROMO_SURFACE_VK_PUBLICATION,
+                            PROMO_SURFACE_VK_REPOST,
+                            PROMO_SURFACE_VK_STORY,
+                        ]
+                    )
+                )
                 .order_by(PromoExposure.published_at.desc(), PromoExposure.id.desc())
                 .limit(12)
             )
@@ -493,7 +503,11 @@ async def _campaign_lines(
         if include_details and vk_exposures:
             block.append("VK:")
             for item in vk_exposures[:8]:
-                label = "публикация" if item["surface"] == PROMO_SURFACE_VK_PUBLICATION else "репост"
+                label = {
+                    PROMO_SURFACE_VK_PUBLICATION: "публикация",
+                    PROMO_SURFACE_VK_REPOST: "репост",
+                    PROMO_SURFACE_VK_STORY: "история",
+                }.get(str(item["surface"]), str(item["surface"]))
                 source = f" ← {item['source_url']}" if item.get("source_url") else ""
                 url = str(item.get("url") or "")
                 block.append(

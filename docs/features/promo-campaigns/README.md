@@ -180,6 +180,16 @@ The repost result is recorded in `promo_exposure` with
 `surface='vk_repost'`, `details_json.source_url` and
 `details_json.target_url`.
 
+`vk_story` watches the same kind of source-community event posts and publishes a
+vertical image story into a configured target community. The story renderer uses
+the promoted event's stored poster, title, date/time and venue, then links the
+story back to the source VK wall post when VK accepts an internal `link_url`.
+Like reposts, story source selection waits until the source wall post is public
+and reconciles stale postponed ids before publishing. Story delivery is complete
+only after `stories.save`; the exposure row uses `surface='vk_story'`,
+`public_targets_json.type='vk_story'`, and stores `details_json.source_url`,
+`details_json.target_url`, `owner_id`, `story_id`, and `expires_at`.
+
 The initial `80 историй о главном` campaign now includes:
 
 - `vk_publication` to `https://vk.com/klgdevents`, `max_per_publish=2`,
@@ -187,17 +197,24 @@ The initial `80 историй о главном` campaign now includes:
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
+- `vk_story` from `https://vk.com/klgdevents` to
+  `https://vk.com/klgdevents`, `max_per_publish=2`, `daily_cap=2`, 24-hour
+  window, active window 09:00-21:00, and 72-hour source-post dedup;
+- `vk_story` from `https://vk.com/klgdevents` to
+  `https://vk.com/kenigeventsofficial`, `max_per_publish=2`, `daily_cap=2`,
+  24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
 
 ### Card UI and per-activity statistics
 
 The interactive `/promo` card (no-args / partner+admin menu, served by
-`handlers/partner_promo_cmd.py`) renders `vk_publication` and `vk_repost`
+`handlers/partner_promo_cmd.py`) renders `vk_publication`, `vk_repost`, and `vk_story`
 activities with human-readable labels: target community, repost
-`source → target`, and the rolling minimum (`минимум N/окно`). The «📊
+`source → target`, story target, and the rolling minimum (`минимум N/окно`). The «📊
 Статистика» screen is a per-activity breakdown: for each activity it shows the
 total action count, a rolling-window counter (`промо-действий за Nч: X / цель`),
-and the latest posts/reposts as clickable VK links (the repost line also links
-its source post). Exposures are attributed by `promo_exposure.activity_id`;
+and the latest posts/reposts/stories as clickable VK links (the repost/story
+line also links its source post). Exposures are attributed by
+`promo_exposure.activity_id`;
 counts include `VK_SCHEDULED` (promo VK posts sit in the community postponed
 queue), and exposures without a current `activity_id` fold into a «Прочее»
 section. Note the separate admin text interface `/promo <args>`
@@ -243,7 +260,7 @@ activation.
 ## Current Limits
 
 - MVP implements CherryFlash general boost and daily-section highlighting.
-- VK publication/repost promo activities are implemented through the scheduled
+- VK publication/repost/story promo activities are implemented through the scheduled
   `promo_vk` runner and normalized `promo_exposure` reporting. The current
   publication formatter uses the source-style Smart Update VK message; later UX
   can add per-activity copy style controls without changing the exposure model.

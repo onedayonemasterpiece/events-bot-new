@@ -18,6 +18,17 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-04-80-stories-promo-vk-scheduler-gap.md`
+  - Scope: Promo VK scheduler for the built-in `80 историй о главном` campaign,
+    `vk_publication` cadence, `vk_repost`, new `vk_story` activity delivery,
+    `/promo` reporting, VK wall/story actor selection, and same-day
+    compensation discipline.
+  - Must not regress: the built-in campaign must idempotently seed two daily
+    `klgdevents` event posts, one daily repost into `kenigeventsofficial`, and
+    two daily story cards into each target community from recent public festival
+    event posts; story upload is complete only after `stories.save`; closure
+    requires production evidence for tomorrow's expected VK posts/reposts/stories
+    plus explicit same-day compensation evidence.
 - `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`
   - Scope: Telegram Monitoring media/poster intake, `event.photo_urls`/`eventposter`, `sync_vk_source_post`, Smart Update parser defender, digest/multi-event prompt rules, and video announce poster eligibility.
   - Must not regress: Telegram-origin events may exist in DB without media, but a new managed `klgdevents` VK post must not be created with `attachments=0`; missing media must fail closed as `vk_sync_missing_media_for_telegram_event`. Prose fragments such as `мы его очень ждали` must never survive as `location_name`; without a real venue/address/meeting point the candidate must fail closed instead of creating a public event row.
