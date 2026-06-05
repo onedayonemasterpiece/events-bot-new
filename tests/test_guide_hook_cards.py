@@ -30,8 +30,10 @@ def test_sanitize_hook_accepts_clean_question():
         "Запись в t.me/guide",  # url
         "Пишите на @guidekln прямо сейчас",  # username
         "Экскурсия 6 июня по фортам",  # date
-        "Да",  # too short
+        "Да?",  # too short
         "Слово " * 20,  # too long
+        "Старинный парк и его тайны",  # statement, no question mark
+        "Что прячут форты? Узнайте это?",  # more than one question
     ],
 )
 def test_sanitize_hook_rejects_contract_violations(bad):
@@ -39,8 +41,8 @@ def test_sanitize_hook_rejects_contract_violations(bad):
 
 
 def test_sanitize_hook_strips_emoji_and_collapses_space():
-    assert hc.sanitize_hook("Город 🌊 у моря, который вы не знали") == (
-        "Город у моря, который вы не знали"
+    assert hc.sanitize_hook("Город 🌊 у моря, который вы не знали?") == (
+        "Город у моря, который вы не знали?"
     )
 
 

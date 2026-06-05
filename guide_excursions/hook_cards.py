@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
-from .hook_card_render import CardPalette, load_palettes, render_hook_card
+from .hook_card_render import CardPalette, load_palettes, main_fit_px, render_hook_card
 from .parser import collapse_ws
 
 logger = logging.getLogger(__name__)
@@ -66,10 +66,14 @@ class HookCard:
     sub_text: str | None
     theme: str
     palette: CardPalette
+    main_px: int | None = None  # shared main type size across the publication
 
     def render_png(self) -> bytes:
         return render_hook_card(
-            main_text=self.main_text, sub_text=self.sub_text, palette=self.palette
+            main_text=self.main_text,
+            sub_text=self.sub_text,
+            palette=self.palette,
+            main_px=self.main_px,
         )
 
 
@@ -131,6 +135,10 @@ def sanitize_hook(value: Any) -> str | None:
     if _URLISH_RE.search(text) or _PHONE_RE.search(text):
         return None
     if _PRICE_RE.search(text) or _TIME_RE.search(text) or _DATE_RE.search(text):
+        return None
+    # Cards must be a question hook (same principle as the announce rewrite hook):
+    # exactly one curiosity question, ending with "?", no statements.
+    if not text.endswith("?") or text.count("?") != 1:
         return None
     words = _word_count(text)
     if words < HOOK_MIN_WORDS or words > HOOK_MAX_WORDS:
@@ -214,7 +222,9 @@ def _build_prompt(payload_rows: Sequence[Mapping[str, Any]], *, cap: int) -> str
         "цепляющие и РАЗНОТИПНЫЕ (разные темы/форматы, не похожие друг на друга). "
         "Не обязательно охватывать все экскурсии.\n\n"
         "Поле hook:\n"
-        "- одна фраза, лучше всего вопрос или интригующая деталь, которая вызывает любопытство;\n"
+        "- ОБЯЗАТЕЛЬНО вопрос-крючок, заканчивающийся знаком «?» (как первая фраза-крючок в рерайте "
+        "анонса) — сильный маркетинговый вопрос, вызывающий любопытство; НЕ утверждение и НЕ заголовок;\n"
+        "- ровно один вопрос, без второго предложения;\n"
         "- 4–12 слов, идеально 5–9; это текст КРУПНО на картинке, поэтому коротко и ёмко;\n"
         "- строго на основе данных экскурсии (особенно полей `main_hook`, `route`, `summary`); "
         "не выдумывай конкретные объекты, проекты, имена или события, которых нет во входных данных;\n"
@@ -340,12 +350,28 @@ async def generate_hook_cards(
         logger.info("hook_cards.empty rejected=%s returned=0", rejected)
         return []
 
+    # One shared main type size for the whole post (smallest that fits every
+    # card) so adjacent cards don't look like different weights/widths.
+    shared_main_px = min(main_fit_px(c.main_text) for c in cards)
+    cards = [
+        HookCard(
+            occurrence_id=c.occurrence_id,
+            main_text=c.main_text,
+            sub_text=c.sub_text,
+            theme=c.theme,
+            palette=c.palette,
+            main_px=shared_main_px,
+        )
+        for c in cards
+    ]
+
     logger.info(
-        "hook_cards.generated cap=%s returned=%s rejected=%s occ=%s palette=%s",
+        "hook_cards.generated cap=%s returned=%s rejected=%s occ=%s palette=%s main_px=%s",
         cap,
         len(cards),
         rejected,
         [c.occurrence_id for c in cards],
         palette.id,
+        shared_main_px,
     )
     return cards

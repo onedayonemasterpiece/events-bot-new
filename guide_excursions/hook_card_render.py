@@ -42,12 +42,15 @@ SAFE_Y1 = SAFE_Y0 + SAFE_H
 
 MAIN_MAX_PX = 104
 MAIN_MIN_PX = 56
-SUB_MAX_PX = 56
-SUB_MIN_PX = 40
+SUB_FIXED_PX = 46          # footer is one fixed size for visual consistency
 MAIN_MAX_LINES = 5
 SUB_MAX_LINES = 2
 MAIN_LINE_HEIGHT = 1.04
 SUB_LINE_HEIGHT = 1.06
+# Footer area is reserved uniformly so the main hook is fitted against the same
+# height on every card — that keeps the main type size (and thus its apparent
+# weight/width) identical across all cards in a publication.
+SUB_AREA = 196
 
 
 @dataclass(frozen=True)
@@ -196,13 +199,44 @@ def _draw_centered_block(
     return int(round(top + step * (len(lines) - 1) + line_px))
 
 
+_SCRATCH_DRAW = ImageDraw.Draw(Image.new("RGB", (CANVAS, CANVAS)))
+
+
+def main_fit_px(text: str) -> int:
+    """Largest main-font size (≤ ``MAIN_MAX_PX``) that fits ``text`` in the box.
+
+    Uses the uniform layout box (``SAFE_H − SUB_AREA``) so a shared size can be
+    computed across a publication's cards.
+    """
+    text = (text or "").strip()
+    if not text:
+        return MAIN_MAX_PX
+    font, _lines = _fit_lines(
+        _SCRATCH_DRAW,
+        text,
+        str(_MAIN_FONT_PATH),
+        max_width=SAFE_W,
+        max_height=SAFE_H - SUB_AREA,
+        max_px=MAIN_MAX_PX,
+        min_px=MAIN_MIN_PX,
+        max_lines=MAIN_MAX_LINES,
+        line_height=MAIN_LINE_HEIGHT,
+    )
+    return int(font.size)
+
+
 def render_hook_card(
     *,
     main_text: str,
     sub_text: str | None,
     palette: CardPalette,
+    main_px: int | None = None,
 ) -> bytes:
-    """Render a single hook card and return PNG bytes."""
+    """Render a single hook card and return PNG bytes.
+
+    ``main_px`` forces the main type size (so all cards in one post share it);
+    when ``None`` the size is auto-fitted for this card alone.
+    """
     main_text = (main_text or "").strip()
     if not main_text:
         raise ValueError("hook card requires non-empty main_text")
@@ -215,7 +249,7 @@ def render_hook_card(
     image = Image.new("RGB", (CANVAS, CANVAS), bg)
     draw = ImageDraw.Draw(image)
 
-    # Reserve vertical room for an optional subline + accent rule.
+    # Footer (date · guide): one fixed size on every card.
     rule_gap = 28
     rule_h = 6
     rule_w = 132
@@ -223,30 +257,15 @@ def render_hook_card(
     sub_font = None
     sub_lines: list[str] = []
     if sub_text:
-        sub_font, sub_lines = _fit_lines(
-            draw,
-            sub_text,
-            str(_SUB_FONT_PATH),
-            max_width=SAFE_W,
-            max_height=int(SAFE_H * 0.22),
-            max_px=SUB_MAX_PX,
-            min_px=SUB_MIN_PX,
-            max_lines=SUB_MAX_LINES,
-            line_height=SUB_LINE_HEIGHT,
-        )
+        sub_font = _font(str(_SUB_FONT_PATH), SUB_FIXED_PX)
+        sub_lines = _wrap(draw, sub_text, sub_font, SAFE_W)[:SUB_MAX_LINES]
         sub_reserved = _block_height(sub_lines, sub_font, SUB_LINE_HEIGHT) + rule_gap + rule_h + rule_gap
 
-    main_font, main_lines = _fit_lines(
-        draw,
-        main_text,
-        str(_MAIN_FONT_PATH),
-        max_width=SAFE_W,
-        max_height=SAFE_H - sub_reserved,
-        max_px=MAIN_MAX_PX,
-        min_px=MAIN_MIN_PX,
-        max_lines=MAIN_MAX_LINES,
-        line_height=MAIN_LINE_HEIGHT,
-    )
+    # Main hook: shared size across the post when main_px is given; the layout
+    # box is the same on every card so the size — and apparent weight/width — match.
+    size = int(main_px) if main_px else main_fit_px(main_text)
+    main_font = _font(str(_MAIN_FONT_PATH), size)
+    main_lines = _wrap(draw, main_text, main_font, SAFE_W)[:MAIN_MAX_LINES]
 
     main_h = _block_height(main_lines, main_font, MAIN_LINE_HEIGHT)
     total_h = main_h + sub_reserved
