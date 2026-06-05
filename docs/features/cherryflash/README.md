@@ -702,9 +702,18 @@ This section captures the latest intro-direction request as an explicit delta to
   - CherryFlash now bundles the same Kaggle-side `story_publish.py` helper used by `CrumpleVideo`;
   - the CherryFlash notebook now runs the same story preflight/publish hook chain when a story config is actually present;
   - the `popular_review` path now requests `story_publish_enabled=true` by default in its session params, so scheduled CherryFlash runs exercise the same shared story path instead of a separate post-render uploader;
-  - the shared helper supports `telethon`, `telegram_business`, `vk_wall`, and `vk_story` targets in one ordered queue;
-  - the mixed queue uses `300` second per-target delays and relies on target order to maintain the required `600` seconds between VK story publications;
-  - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall post; `vk_story` uploads via `stories.getVideoUploadServer` and finalizes with `stories.save`;
+  - the shared helper supports `telethon`, `telegram_business`, `telegram_chat`,
+    `vk_wall`, legacy direct `vk_story`, and wall-linked `vk_wall_story` targets
+    in one ordered queue;
+  - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall
+    post; `vk_wall_story` publishes a photo-story with `link_url` pointing at
+    the previous wall post instead of uploading the mp4 separately to stories.
+    If VK rejects cross-community linking, the helper creates a wall post in
+    the target community and links that local post instead;
+  - for `popular_review`, VK fanout is wall-first: publish the clip to
+    `vk.com/kenigeventsofficial`, link that wall post into the same community
+    story immediately, then after `600` seconds link it into
+    `vk.com/klgdevents` stories or use a local `klgdevents` wall post fallback;
   - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.

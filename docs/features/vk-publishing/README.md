@@ -83,12 +83,13 @@
   changed the id after postponed publish (`postponed_id -> live id`), the promo
   runner must lazy-resolve both promo exposure URLs and organic
   `event.source_vk_post_url` values before deciding that no source post exists.
-- Promo campaign activity `vk_story` publishes a vertical image story into a
-  configured community from a recent source-community event post. It uses the
-  event poster/title/date/venue as the story image, passes the source wall URL as
-  VK internal `link_url` when possible, and treats upload as successful only
-  after `stories.save` returns a saved story. `stories.getPhotoUploadServer` is
-  called with a user actor; group-token-only story delivery is not valid.
+- Promo campaign activity `vk_story` publishes a caption-free image story into
+  a configured community from a recent source-community event post. It uploads
+  the source wall image/poster, passes the source wall URL as VK internal
+  `link_url` when possible, and treats upload as successful only after
+  `stories.save` returns a saved story. It must not render title/date/venue into
+  a white text card under the image. `stories.getPhotoUploadServer` is called
+  with a user actor; group-token-only story delivery is not valid.
 - VK promo evidence is stored in `promo_exposure`: `details_json.target_url`
   for each created post/repost/story and `details_json.source_url` for reposts
   and stories. The `/promo report` output must show those concrete links.

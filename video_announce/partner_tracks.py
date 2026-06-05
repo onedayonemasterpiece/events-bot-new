@@ -112,12 +112,9 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         # сообщества, вне зависимости от успеха публикации в какой-либо
         # из них».
         #
-        # Round-4 (2026-05-30): дополнительно к сторис ВК тот же видеоанонс
-        # публикуется постом на стену VK-сообщества научной библиотеки
-        # (`konb39`, transport `vk_wall`). Тоже best-effort. Подпись поста
-        # авто-собирается `build_vk_video_announce_caption` (города/даты),
-        # т.к. явный caption у таргета не задан. `_dedupe_targets` различает
-        # `vk_story:konb39` и `vk_wall:konb39` по transport — коллизии нет.
+        # Round-5 (2026-06-05): VK story is wall-first. The video is first
+        # published as a community wall clip, then the story target links that
+        # wall post into the same community story.
         {
             "peer": "@kaliningradlibrary",
             "label": "tg:@kaliningradlibrary:story",
@@ -128,19 +125,19 @@ PARTNER_KONB_LIBRARY = PartnerTrack(
         },
         {
             "peer": "konb39",
-            "label": "vk:konb39:story",
+            "label": "vk:konb39:wall",
             "delay_seconds": 0,
             "mode": "upload",
-            "transport": "vk_story",
+            "transport": "vk_wall",
             "blocking": False,
             "required": False,
         },
         {
             "peer": "konb39",
-            "label": "vk:konb39:wall",
+            "label": "vk:konb39:story",
             "delay_seconds": 0,
             "mode": "upload",
-            "transport": "vk_wall",
+            "transport": "vk_wall_story",
             "blocking": False,
             "required": False,
         },

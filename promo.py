@@ -1921,6 +1921,34 @@ def _first_event_photo_url(ev: Event) -> str | None:
     return None
 
 
+async def _source_wall_photo_url(source_url: str | None) -> str | None:
+    ids = _vk_owner_post_from_url(source_url)
+    if not ids:
+        return None
+    owner_id, post_id = ids
+    from main import vk_api
+
+    response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
+    items = response.get("response") if isinstance(response, dict) else response
+    if not isinstance(items, list):
+        items = [items] if items else []
+    if not items:
+        return None
+    for attachment in items[0].get("attachments") or []:
+        if not isinstance(attachment, dict) or attachment.get("type") != "photo":
+            continue
+        sizes = (attachment.get("photo") or {}).get("sizes") or []
+        candidates = [item for item in sizes if isinstance(item, dict) and item.get("url")]
+        if not candidates:
+            continue
+        best = max(
+            candidates,
+            key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0),
+        )
+        return str(best.get("url") or "").strip() or None
+    return None
+
+
 async def _download_story_source_image(url: str) -> bytes:
     from main import HTTP_SEMAPHORE, MAX_DOWNLOAD_SIZE, get_http_session, span
 
@@ -1987,62 +2015,12 @@ def _story_event_date_line(ev: Event) -> str:
 
 
 async def _build_vk_story_image_bytes(ev: Event, *, source_url: str) -> bytes:
-    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
-
-    photo_url = _first_event_photo_url(ev)
+    photo_url = await _source_wall_photo_url(source_url)
+    if not photo_url:
+        photo_url = _first_event_photo_url(ev)
     if not photo_url:
         raise RuntimeError("event has no photo for VK story")
-    raw = await _download_story_source_image(photo_url)
-    poster = Image.open(io.BytesIO(raw)).convert("RGB")
-    width, height = 1080, 1920
-    bg = ImageOps.fit(poster, (width, height), method=Image.Resampling.LANCZOS)
-    bg = bg.filter(ImageFilter.GaussianBlur(28))
-    bg = ImageEnhance.Brightness(bg).enhance(0.42)
-
-    card = Image.new("RGB", (width, height), "#101010")
-    card.paste(bg)
-    draw = ImageDraw.Draw(card)
-
-    poster_box = (120, 140, 960, 1120)
-    poster_fit = ImageOps.contain(
-        poster,
-        (poster_box[2] - poster_box[0], poster_box[3] - poster_box[1]),
-        method=Image.Resampling.LANCZOS,
-    )
-    px = poster_box[0] + ((poster_box[2] - poster_box[0]) - poster_fit.width) // 2
-    py = poster_box[1] + ((poster_box[3] - poster_box[1]) - poster_fit.height) // 2
-    shadow = Image.new("RGBA", (poster_fit.width + 36, poster_fit.height + 36), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle((18, 18, poster_fit.width + 18, poster_fit.height + 18), radius=34, fill=(0, 0, 0, 120))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(16))
-    card.paste(shadow.convert("RGB"), (px - 18, py - 18), shadow)
-    mask = Image.new("L", poster_fit.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, poster_fit.width, poster_fit.height), radius=28, fill=255)
-    card.paste(poster_fit, (px, py), mask)
-
-    panel_top = 1190
-    draw.rounded_rectangle((92, panel_top, 988, 1810), radius=36, fill=(250, 248, 241))
-    title_font = _promo_story_font(64)
-    meta_font = _promo_story_font(42)
-    small_font = _promo_story_font(34)
-    y = panel_top + 62
-    for line in _wrap_story_text(str(getattr(ev, "title", "") or ""), width=22)[:5]:
-        draw.text((140, y), line, font=title_font, fill=(26, 28, 30))
-        y += 76
-    y += 26
-    meta_parts = [
-        _story_event_date_line(ev),
-        str(getattr(ev, "location_name", "") or "").strip(),
-    ]
-    for part in [item for item in meta_parts if item]:
-        for line in _wrap_story_text(part, width=33)[:2]:
-            draw.text((140, y), line, font=meta_font, fill=(60, 64, 68))
-            y += 54
-    footer = "Подробнее в посте сообщества"
-    draw.text((140, 1746), footer, font=small_font, fill=(100, 74, 32))
-    out = io.BytesIO()
-    card.save(out, format="JPEG", quality=92, optimize=True)
-    return out.getvalue()
+    return await _download_story_source_image(photo_url)
 
 
 async def _publish_vk_story_photo(
