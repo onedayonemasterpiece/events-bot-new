@@ -135,6 +135,10 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 - Public repair: replacement promo `https://vk.com/wall-231920894_2182` is scheduled for `2026-06-05T17:20:00+00:00`, text starts `Калининградский морской торговый порт: история и современность`, and VK API verification shows `attachments_count=1`.
 - Audit repair: `promo_exposure.id=45` remains `FAILED_NO_MEDIA` with `replacement_url=https://vk.com/wall-231920894_2182` and `recovered_media_url=...`; new `promo_exposure.id=47` is `VK_SCHEDULED`, `placement_kind=manual_incident_media_recovery`, `event_id=4417`, target `https://vk.com/wall-231920894_2182`.
 - Regression checks for the corrected behavior: `tests/test_promo.py::test_promo_vk_publication_recovers_telegraph_media_before_posting` and `tests/test_promo.py::test_promo_vk_publication_records_no_media_candidate_as_failed` plus existing promo media tests passed locally (`5 passed` targeted subset).
+- Deployed correction SHA: `1c5a53ab313f80536236c918c842beea54354b0f`, pushed to `origin/main`.
+- Deploy evidence: Fly image `events-bot-new-wngqia:deployment-01KTBG2ZYWTMYCJA8Z0EMHABW5`, machine `48e42d5b714228` version `1195`, checks `1 total, 1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+- Container probe after deploy confirmed `/app/promo.py` contains Telegraph recovery (`_ensure_promo_vk_photo_urls` + `extract_telegraph_image_urls`), `FAILED_NO_MEDIA` audit action `investigate_source_media_and_rehydrate_before_publication`, and `recent_failed_no_media_event_ids` dedupe.
+- Release checks: `23 passed` (`tests/test_promo.py` plus two VK source no-text-only/captcha regressions), `py_compile promo.py`, `git diff --check`.
 
 ## Prevention
 
