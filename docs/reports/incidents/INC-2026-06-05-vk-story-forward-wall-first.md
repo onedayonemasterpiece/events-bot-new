@@ -36,6 +36,12 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 - 2026-06-05 16:10 UTC: fresh wall-linked photo stories were published:
   `-231920894_456239036` and `-231828790_456239039`, both linked to
   `https://vk.com/wall-231920894_1974`.
+- 2026-06-05 16:24 UTC: hotfix `d5b8a1dc` was deployed to Fly from clean
+  `origin/main` through local `flyctl`; GitHub Actions deploy run
+  `27026657785` failed earlier because repository secret `FLY_API_TOKEN` was
+  empty.
+- 2026-06-05 16:26 UTC: production `/healthz` returned `ok=true`,
+  `ready=true`, `db=ok`, and no scheduler/task issues.
 
 ## Root Cause
 
@@ -110,9 +116,31 @@ communities.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
+- deployed SHA: `d5b8a1dc82e8c395569fbee468cce433d8105912`
+  (`origin/main`)
+- deploy path: local `flyctl deploy --remote-only --app events-bot-new-wngqia
+  --config fly.toml`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KTC9KGC9R9MP206FG4C5AE0R`,
+  machine `48e42d5b714228` version `1198`
+- blocked deploy path: GitHub Actions run
+  `https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/27026657785`
+  failed at Fly deploy with empty `FLY_API_TOKEN`
+- regression checks:
+  - `python3 -m py_compile promo.py video_announce/story_publish.py
+    video_announce/scenario.py video_announce/partner_tracks.py
+    kaggle/CrumpleVideo/story_publish.py`
+  - `pytest -q tests/test_promo.py::test_vk_story_image_uses_source_post_photo_without_text_panel
+    tests/test_video_announce_story_publish.py
+    tests/test_kaggle_story_publish.py::test_vk_wall_story_links_previous_wall_post_without_video_story_upload
+    tests/test_partner_tracks.py::test_konb_track_defaults_to_prod_story_targets`
+    passed: `14 passed`
+  - `pytest -q tests/test_promo.py` passed: `22 passed`
+- postdeploy health: `https://events-bot-new-wngqia.fly.dev/healthz` returned
+  `ok=true`, `ready=true`, `issues=[]`
+- live VK verification: `klgdevents` and `kenigeventsofficial` active story
+  lists contain only `has_photo=true`, `has_video=false` wall-linked stories;
+  fresh repair stories are `-231920894_456239036` and `-231828790_456239039`
+  with `link.url=https://vk.com/wall-231920894_1974`
 - manual same-day repair evidence:
   `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-fresh-story-forward-2026-06-05.json`
 
