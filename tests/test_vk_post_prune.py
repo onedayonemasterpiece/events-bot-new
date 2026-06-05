@@ -72,7 +72,7 @@ def _patch_vk(monkeypatch, *, posts_by_id: dict[int, dict], deletes: list):
 async def test_prune_deletes_past_zero_repost(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
-    await _add_event(db, source_vk_post_url=_wall_url(101))
+    event_id = await _add_event(db, source_vk_post_url=_wall_url(101))
 
     deletes: list = []
     _patch_vk(monkeypatch, posts_by_id={101: {"reposts": {"count": 0}}}, deletes=deletes)
@@ -82,6 +82,10 @@ async def test_prune_deletes_past_zero_repost(tmp_path, monkeypatch):
     assert stats["candidates"] == 1
     assert stats["deleted"] == 1
     assert deletes == [(OWNER_ID, 101)]
+    # URL is cleared after a successful delete so the backlog can drain.
+    async with db.get_session() as session:
+        stored = await session.get(Event, event_id)
+    assert stored.source_vk_post_url is None
 
 
 @pytest.mark.asyncio
@@ -234,3 +238,52 @@ async def test_prune_limit_caps_candidates(tmp_path, monkeypatch):
     assert stats["candidates"] == 3
     assert stats["deleted"] == 2
     assert len(deletes) == 2
+
+
+@pytest.mark.asyncio
+async def test_prune_dry_run_keeps_url(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event_id = await _add_event(db, source_vk_post_url=_wall_url(110))
+
+    deletes: list = []
+    _patch_vk(monkeypatch, posts_by_id={110: {"reposts": {"count": 0}}}, deletes=deletes)
+
+    stats = await main.prune_past_event_vk_posts(db, dry_run=True)
+
+    assert stats["deleted"] == 1
+    assert stats["dry_run"] == 1
+    assert deletes == []
+    async with db.get_session() as session:
+        stored = await session.get(Event, event_id)
+    assert stored.source_vk_post_url == _wall_url(110)
+
+
+@pytest.mark.asyncio
+async def test_prune_backlog_drains_across_runs(tmp_path, monkeypatch):
+    """Clearing the URL on delete lets a capped run reach the rest next time."""
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    for pid in (301, 302):
+        await _add_event(db, source_vk_post_url=_wall_url(pid))
+
+    deletes: list = []
+    posts = {pid: {"reposts": {"count": 0}} for pid in (301, 302)}
+    _patch_vk(monkeypatch, posts_by_id=posts, deletes=deletes)
+
+    # First run with limit=1 deletes exactly one and clears its URL.
+    stats1 = await main.prune_past_event_vk_posts(db, limit=1)
+    assert stats1["candidates"] == 2
+    assert stats1["deleted"] == 1
+
+    # Simulate VK no longer returning the already-deleted post.
+    deleted_pid = deletes[0][1]
+    posts.pop(deleted_pid, None)
+
+    # Second run reaches the remaining candidate instead of re-processing the
+    # already-deleted one.
+    stats2 = await main.prune_past_event_vk_posts(db, limit=1)
+    assert stats2["candidates"] == 1
+    assert stats2["deleted"] == 1
+    assert len(deletes) == 2
+    assert {d[1] for d in deletes} == {301, 302}

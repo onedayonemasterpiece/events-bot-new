@@ -5013,10 +5013,13 @@ async def prune_past_event_vk_posts(
       ``reposts.count == 0`` is the combined "no reposts and no story" guard. If
       the count is missing/unknown the post is kept.
     - **Pinned posts are kept.**
-    - The stored URL is intentionally *not* cleared: a successful delete makes the
-      next ``wall.getById`` report the post as missing (skipped), while a failed
-      delete (captcha / transient) is naturally retried on the next run. The event
-      row is removed by :func:`cleanup_old_events` after the 7-day window.
+    - On a successful real delete the stored ``source_vk_post_url`` (and a
+      matching ``vk_repost_url``) is cleared. This lets a large backlog drain:
+      otherwise deleted-but-still-referenced events keep occupying the first
+      ``limit`` candidate slots (their rows linger until the 7-day
+      :func:`cleanup_old_events`) and the job never reaches the rest. A *failed*
+      delete keeps the URL so it is retried; a *missing* post (already gone) is
+      left for the 7-day row cleanup. ``dry_run`` never clears anything.
     """
     stats: dict[str, int] = {
         "candidates": 0,
@@ -5025,6 +5028,7 @@ async def prune_past_event_vk_posts(
         "kept_pinned": 0,
         "missing": 0,
         "errors": 0,
+        "dry_run": 0,
     }
 
     group_raw = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").strip()
@@ -5050,6 +5054,7 @@ async def prune_past_event_vk_posts(
             limit = int(os.getenv("VK_POST_PRUNE_LIMIT", "50"))
         except ValueError:
             limit = 50
+    stats["dry_run"] = 1 if dry_run else 0
 
     today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
 
@@ -5129,6 +5134,36 @@ async def prune_past_event_vk_posts(
                 post_state[int(it_id)] = it
 
     # 3. Decide + delete.
+    cleared: list[tuple[int, str]] = []  # (event_id, deleted_url) to unlink
+
+    async def _flush_cleared() -> None:
+        if not cleared:
+            return
+        ids = [eid for eid, _ in cleared]
+        try:
+            async with db.get_session() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(Event)
+                        .where(Event.id.in_(ids))
+                        .values(source_vk_post_url=None)
+                    )
+                    for eid, deleted_url in cleared:
+                        await session.execute(
+                            update(Event)
+                            .where(
+                                Event.id == eid,
+                                Event.vk_repost_url == deleted_url,
+                            )
+                            .values(vk_repost_url=None)
+                        )
+        except Exception:
+            logging.warning(
+                "vk_post_prune: failed to clear %d urls after delete",
+                len(cleared),
+                exc_info=True,
+            )
+
     for event_id, url, pid in candidates:
         item = post_state.get(pid)
         if item is None:
@@ -5161,6 +5196,7 @@ async def prune_past_event_vk_posts(
             stats["errors"] += 1
             if e.code == 14:
                 logging.warning("vk_post_prune: captcha required, aborting run")
+                await _flush_cleared()
                 return stats
             logging.warning("vk_post_prune: delete failed %s: %s", url, e)
             continue
@@ -5169,8 +5205,10 @@ async def prune_past_event_vk_posts(
             logging.warning("vk_post_prune: delete failed %s: %s", url, e)
             continue
         stats["deleted"] += 1
+        cleared.append((event_id, url))
         logging.info("vk_post_prune deleted %s event_id=%s", url, event_id)
 
+    await _flush_cleared()
     return stats
 
 
@@ -5183,10 +5221,12 @@ async def vk_post_prune_scheduler(
         async with db.ensure_connection():
             stats = await prune_past_event_vk_posts(db, bot)
         took_ms = (_time.perf_counter() - start) * 1000
+        is_dry = bool(stats.get("dry_run"))
         logging.info(
-            "vk_post_prune_ok run_id=%s candidates=%s deleted=%s kept_reposts=%s "
-            "kept_pinned=%s missing=%s errors=%s took_ms=%.0f",
+            "vk_post_prune_ok run_id=%s dry_run=%s candidates=%s deleted=%s "
+            "kept_reposts=%s kept_pinned=%s missing=%s errors=%s took_ms=%.0f",
             run_id,
+            int(is_dry),
             stats["candidates"],
             stats["deleted"],
             stats["kept_reposts"],
@@ -5196,12 +5236,16 @@ async def vk_post_prune_scheduler(
             took_ms,
         )
         if stats["deleted"] or stats["errors"]:
+            prefix = "VK prune (dry-run)" if is_dry else "VK prune"
+            verb = "would delete" if is_dry else "deleted"
             try:
                 await notify_superadmin(
                     db,
                     bot,
-                    "VK prune: deleted={deleted} kept_reposts={kept_reposts} "
-                    "pinned={kept_pinned} errors={errors}".format(**stats),
+                    f"{prefix}: {verb}={stats['deleted']} of {stats['candidates']} "
+                    f"candidates, kept_reposts={stats['kept_reposts']} "
+                    f"pinned={stats['kept_pinned']} missing={stats['missing']} "
+                    f"errors={stats['errors']}",
                 )
             except Exception as e:
                 logging.warning("vk_post_prune notify failed: %s", e)
