@@ -43,11 +43,14 @@
    «нет репостов и нет историй». Если счётчик отсутствует/неизвестен — пост
    сохраняется.
 5. **Закреплённые посты не трогаем** (`is_pinned`).
-6. **URL намеренно не очищается** после удаления: при следующем проходе
-   `wall.getById` уже не вернёт пост (он попадёт в `missing` и будет пропущен),
-   а неудачное удаление (captcha/временная ошибка) естественным образом
-   повторится на следующем запуске. Сама строка события убирается из БД
-   `cleanup_old_events` после 7-дневного окна.
+6. **После успешного реального удаления `source_vk_post_url` (и совпадающий
+   `vk_repost_url`) очищается.** Это позволяет дренировать большой бэклог: иначе
+   удалённые, но всё ещё привязанные события занимают первые `limit` слотов
+   кандидатов (их строки живут до 7-дневного `cleanup_old_events`), и проход
+   никогда не добирается до остальных. Неудачное удаление (captcha/временная
+   ошибка) **не** очищает URL и повторяется на следующем запуске; уже
+   отсутствующий пост (`missing`) оставляется 7-дневному cleanup. `dry_run`
+   ничего не очищает.
 
 ### Concurrency / scheduling
 
@@ -68,12 +71,21 @@
 ### Limits and observability
 
 - `VK_POST_PRUNE_LIMIT` (default `50`) ограничивает число удаляемых постов за один
-  проход (blast-radius cap).
+  проход (blast-radius cap). Для разовой быстрой чистки большого бэклога можно
+  временно поднять (напр. `300`).
 - `VK_POST_PRUNE_DRY_RUN=1` логирует, что было бы удалено, без вызова
-  `wall.delete` — безопасный режим наблюдения.
-- Каждый проход пишет в лог строку `vk_post_prune_ok run_id=… candidates=…
-  deleted=… kept_reposts=… kept_pinned=… missing=… errors=… took_ms=…`.
-  `ADMIN_CHAT_ID` уведомляется только когда что-то удалено или были ошибки.
+  `wall.delete` и без очистки URL — безопасный режим наблюдения.
+- **Где смотреть результат:**
+  - `flyctl logs -a <app> | grep vk_post_prune` — итоговая строка
+    `vk_post_prune_ok run_id=… dry_run=1 candidates=… deleted=… kept_reposts=…
+    kept_pinned=… missing=… errors=… took_ms=…` плюс по строке
+    `vk_post_prune dry_run would delete <url> event_id=…` на каждый кандидат;
+  - сообщение superadmin/`ADMIN_CHAT_ID` (только если есть удаления/ошибки):
+    в dry-run — `VK prune (dry-run): would delete=N of M candidates …`, в live —
+    `VK prune: deleted=N of M candidates …`.
+  - Запустить разовый dry-run вне расписания можно прямо на машине:
+    `prune_past_event_vk_posts(db, None, dry_run=True)` (см. историю в README
+    фичи).
 
 ### Known limitation
 
