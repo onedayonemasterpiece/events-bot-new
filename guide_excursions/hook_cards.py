@@ -87,11 +87,10 @@ HOOK_CARDS_RESPONSE_FORMAT: dict[str, Any] = {
                         "properties": {
                             "occurrence_id": {"type": "integer"},
                             "hook": {"type": "string"},
-                            "subline": {"type": "string"},
                             "theme": {"type": "string"},
                             "strength": {"type": "integer"},
                         },
-                        "required": ["occurrence_id", "hook", "subline", "theme", "strength"],
+                        "required": ["occurrence_id", "hook", "theme", "strength"],
                         "additionalProperties": False,
                     },
                 }
@@ -152,47 +151,43 @@ def sanitize_subline(value: Any) -> str | None:
     return text
 
 
-def select_palettes(n: int, *, seed: int = 0) -> list[CardPalette]:
-    """Pick ``n`` palettes spread across families, deterministic per ``seed``."""
+def select_post_palette(seed: int = 0) -> CardPalette:
+    """Pick ONE palette for the whole publication, deterministic per ``seed``.
+
+    All cards in a single VK post share this palette; a different ``seed``
+    (issue id / day) rotates to a different colour, so different publication
+    days look different while one day stays consistent.
+    """
     palettes = list(load_palettes())
-    if n <= 0:
-        return []
-    families: list[str] = []
-    by_family: dict[str, list[CardPalette]] = {}
-    for pal in palettes:
-        by_family.setdefault(pal.family, []).append(pal)
-        if pal.family not in families:
-            families.append(pal.family)
-    seed = abs(int(seed))
-    fam_order = families[seed % len(families):] + families[: seed % len(families)]
-    chosen: list[CardPalette] = []
-    used_ids: set[str] = set()
-    round_idx = 0
-    # Round-robin one palette per family until we have enough (family may repeat
-    # only after every family has contributed once).
-    while len(chosen) < n:
-        progressed = False
-        for fam in fam_order:
-            bucket = by_family[fam]
-            pal = bucket[(seed + round_idx) % len(bucket)]
-            if pal.id in used_ids:
-                # try the next palette in this family
-                for offset in range(1, len(bucket)):
-                    alt = bucket[(seed + round_idx + offset) % len(bucket)]
-                    if alt.id not in used_ids:
-                        pal = alt
-                        break
-                else:
-                    continue
-            chosen.append(pal)
-            used_ids.add(pal.id)
-            progressed = True
-            if len(chosen) >= n:
-                break
-        round_idx += 1
-        if not progressed:
-            break
-    return chosen
+    return palettes[abs(int(seed)) % len(palettes)]
+
+
+_RU_MONTH_GEN = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня",
+    7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
+}
+
+
+def _short_date(value: Any) -> str | None:
+    text = _normalize_text(value)
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        month = _RU_MONTH_GEN.get(mo)
+        if month:
+            return f"{d} {month}"
+    return None
+
+
+def _format_card_subline(row: Mapping[str, Any]) -> str | None:
+    """Card footer: date + guide (who leads it), as short as possible."""
+    date = _short_date(row.get("date"))
+    guides = row.get("guide_names") if isinstance(row.get("guide_names"), Sequence) else []
+    guide = next((_normalize_text(g) for g in list(guides) if _normalize_text(g)), None)
+    if guide and len(guide) > 24:
+        guide = guide.split()[0][:24]
+    parts = [p for p in (date, guide) if p]
+    return " · ".join(parts) if parts else None
 
 
 def _card_payload_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -227,8 +222,6 @@ def _build_prompt(payload_rows: Sequence[Mapping[str, Any]], *, cap: int) -> str
         "джип-тур/выезд не превращай в экскурсию;\n"
         "- без эмодзи, без URL, имён пользователей, телефонов, цен, дат, времени и призывов «записаться/купить билет»;\n"
         "- не повторяй дословно название — заинтригуй.\n"
-        "Поле subline: короткая нейтральная подпись 2–4 слова (например «Экскурсия недели», "
-        "«Маршрут недели» или короткая тема), без дублирования hook.\n"
         "Поле theme: короткий тег темы (история, природа, архитектура, море, индустриальное и т.п.) — для разнообразия.\n"
         "Поле strength: 0..100, насколько крючок цепляет. Сортируй карточки по убыванию strength.\n\n"
         f"Экскурсии (JSON):\n{json.dumps(list(payload_rows), ensure_ascii=False)}"
@@ -294,12 +287,20 @@ async def generate_hook_cards(
         logger.warning("hook_cards.bad_payload cards_not_list")
         return []
 
+    by_id: dict[int, Mapping[str, Any]] = {}
+    for r in rows:
+        oid = int(r.get("occurrence_id") or r.get("id") or 0)
+        if oid:
+            by_id[oid] = r
     valid_ids = {int(p["occurrence_id"]) for p in payload_rows}
     items = sorted(
         items,
         key=lambda it: int(it.get("strength") or 0) if isinstance(it, Mapping) else 0,
         reverse=True,
     )
+
+    # One palette per publication; rotates by seed (issue id / day).
+    palette = select_post_palette(seed=seed)
 
     cards: list[HookCard] = []
     seen_occ: set[int] = set()
@@ -320,7 +321,8 @@ async def generate_hook_cards(
         dedup_key = hook.casefold()
         if dedup_key in seen_hooks:
             continue
-        sub = sanitize_subline(item.get("subline"))
+        # Footer is deterministic: date + guide (who leads it), not a slogan.
+        sub = _format_card_subline(by_id[occ_id])
         theme = _normalize_text(item.get("theme"))[:40]
         seen_occ.add(occ_id)
         seen_hooks.add(dedup_key)
@@ -330,7 +332,7 @@ async def generate_hook_cards(
                 main_text=hook,
                 sub_text=sub,
                 theme=theme,
-                palette=load_palettes()[0],  # placeholder; reassigned below
+                palette=palette,
             )
         )
 
@@ -338,23 +340,12 @@ async def generate_hook_cards(
         logger.info("hook_cards.empty rejected=%s returned=0", rejected)
         return []
 
-    palettes = select_palettes(len(cards), seed=seed)
-    cards = [
-        HookCard(
-            occurrence_id=c.occurrence_id,
-            main_text=c.main_text,
-            sub_text=c.sub_text,
-            theme=c.theme,
-            palette=palettes[idx],
-        )
-        for idx, c in enumerate(cards)
-    ]
     logger.info(
-        "hook_cards.generated cap=%s returned=%s rejected=%s occ=%s palettes=%s",
+        "hook_cards.generated cap=%s returned=%s rejected=%s occ=%s palette=%s",
         cap,
         len(cards),
         rejected,
         [c.occurrence_id for c in cards],
-        [c.palette.id for c in cards],
+        palette.id,
     )
     return cards

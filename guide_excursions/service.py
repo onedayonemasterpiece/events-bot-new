@@ -4553,12 +4553,13 @@ async def publish_latest_guide_digest_to_vk(
         seed=issue_id_resolved,
     )
     if hook_card_attachments:
-        attachments = attachments + hook_card_attachments
+        # Hook cards lead the VK grid (most catchy first), afishas follow.
+        attachments = hook_card_attachments + attachments
         logger.info(
-            "guide_digest_vk_attachments issue_id=%s afishas=%s hook_cards=%s total=%s",
+            "guide_digest_vk_attachments issue_id=%s hook_cards=%s afishas=%s total=%s",
             issue_id_resolved,
-            afisha_attachments_count,
             len(hook_card_attachments),
+            afisha_attachments_count,
             len(attachments),
         )
 

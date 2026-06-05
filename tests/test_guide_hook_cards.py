@@ -50,19 +50,23 @@ def test_sanitize_subline_limits():
 
 
 # --------------------------------------------------------------------------- #
-# Palette selection
+# Palette selection: one palette per publication, rotates per seed/day
 # --------------------------------------------------------------------------- #
-def test_select_palettes_distinct_and_deterministic():
-    a = hc.select_palettes(3, seed=14)
-    b = hc.select_palettes(3, seed=14)
-    assert [p.id for p in a] == [p.id for p in b]
-    assert len({p.id for p in a}) == 3
-    # spread across families when possible
-    assert len({p.family for p in a}) >= 2
+def test_select_post_palette_deterministic_per_seed():
+    assert hc.select_post_palette(seed=86).id == hc.select_post_palette(seed=86).id
 
 
-def test_select_palettes_zero():
-    assert hc.select_palettes(0) == []
+def test_select_post_palette_varies_across_days():
+    seen = {hc.select_post_palette(seed=s).id for s in range(12)}
+    assert len(seen) > 1  # different publication days get different colours
+
+
+def test_short_date_and_subline():
+    row = {"date": "2026-06-07", "guide_names": ["Анна Иванова"]}
+    assert hc._format_card_subline(row) == "7 июня · Анна Иванова"
+    assert hc._format_card_subline({"date": "2026-06-07"}) == "7 июня"
+    assert hc._format_card_subline({"guide_names": ["Игорь"]}) == "Игорь"
+    assert hc._format_card_subline({}) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -72,14 +76,18 @@ def _rows():
     return [
         {"occurrence_id": 101, "canonical_title": "Прогулка по Амалиенау",
          "summary_one_liner": "Виллы и легенды", "city": "Калининград",
+         "date": "2026-06-07", "guide_names": ["Анна Иванова"],
          "fact_pack": {"main_hook": "немецкие виллы"}},
         {"occurrence_id": 102, "canonical_title": "Поездка к кирхам",
          "summary_one_liner": "Старые кирхи", "city": "Гвардейск", "fact_pack": {}},
         {"occurrence_id": 103, "canonical_title": "Джип-тур по косе",
          "summary_one_liner": "Песок и форты", "city": "Балтийск",
+         "date": "2026-06-08", "guide_names": ["Игорь Селин"],
          "fact_pack": {"main_hook": "форты"}},
         {"occurrence_id": 104, "canonical_title": "Вечерний Кёнигсберг",
-         "summary_one_liner": "Сумерки", "city": "Калининград", "fact_pack": {}},
+         "summary_one_liner": "Сумерки", "city": "Калининград",
+         "date": "2026-06-09", "guide_names": ["Мария П."],
+         "fact_pack": {}},
     ]
 
 
@@ -113,7 +121,12 @@ async def test_generate_hook_cards_slot_math_and_filtering():
         _rows(), existing_image_count=5, seed=14, ask_fn=_fake_ask_factory(_LLM_CARDS)
     )
     assert [c.occurrence_id for c in cards] == [103, 101, 104]  # sorted by strength
-    assert len({c.palette.id for c in cards}) == 3
+    # one palette per publication (all cards share it)
+    assert len({c.palette.id for c in cards}) == 1
+    # footer is date + guide, not a slogan
+    subs = {c.occurrence_id: c.sub_text for c in cards}
+    assert subs[103] == "8 июня · Игорь Селин"
+    assert subs[101] == "7 июня · Анна Иванова"
     assert all(c.main_text for c in cards)
 
 
