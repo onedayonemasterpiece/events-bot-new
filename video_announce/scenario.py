@@ -1990,9 +1990,9 @@ class VideoAnnounceScenario:
                 {
                     "peer": "club231828790",
                     "label": "vk:club231828790:story",
-                    "delay_seconds": 300,
+                    "delay_seconds": 0,
                     "mode": "upload",
-                    "transport": "vk_story",
+                    "transport": "vk_wall_story",
                 },
                 {
                     "peer": "@loving_guide39",
@@ -2002,9 +2002,9 @@ class VideoAnnounceScenario:
                 {
                     "peer": "klgdevents",
                     "label": "vk:klgdevents:story",
-                    "delay_seconds": 300,
+                    "delay_seconds": 600,
                     "mode": "upload",
-                    "transport": "vk_story",
+                    "transport": "vk_wall_story",
                 },
                 {
                     "peer": "@catwithbag",

@@ -516,7 +516,17 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
 
     story_posts: list[tuple[int, bytes, str | None]] = []
 
-    async def fake_story_publish(db_arg, bot_arg, *, target_group_id, image_bytes, source_url=None, link_text=None):
+    async def fake_story_publish(
+        db_arg,
+        bot_arg,
+        *,
+        target_group_id,
+        image_bytes,
+        source_url=None,
+        link_text=None,
+        include_source_link=True,
+    ):
+        assert include_source_link is False
         story_posts.append((target_group_id, image_bytes, source_url))
         return {
             "url": f"https://vk.com/story-{target_group_id}_{len(story_posts)}",
@@ -865,6 +875,36 @@ def test_repost_matches_published_post_after_postponed_id_shift() -> None:
     short = _event("Шоу", "2026-06-20")
     assert _post_text_matches_event("Шоу сегодня", short) is False
     assert _match_published_post_for_event(recent_wall, short) is None
+
+
+@pytest.mark.asyncio
+async def test_vk_story_image_uses_source_post_photo_without_text_panel(monkeypatch) -> None:
+    import promo as promo_module
+
+    ev = _event("Калининград корабельный", "2026-07-08")
+    calls: list[str] = []
+
+    async def fake_source_photo(source_url):
+        calls.append(f"source:{source_url}")
+        return "https://example.test/source.jpg"
+
+    async def fake_download(url):
+        calls.append(f"download:{url}")
+        return b"raw-source-image"
+
+    monkeypatch.setattr(promo_module, "_source_wall_photo_url", fake_source_photo)
+    monkeypatch.setattr(promo_module, "_download_story_source_image", fake_download)
+
+    data = await promo_module._build_vk_story_image_bytes(
+        ev,
+        source_url="https://vk.com/wall-231920894_1974",
+    )
+
+    assert data == b"raw-source-image"
+    assert calls == [
+        "source:https://vk.com/wall-231920894_1974",
+        "download:https://example.test/source.jpg",
+    ]
 
 
 @pytest.mark.asyncio

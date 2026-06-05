@@ -56,17 +56,17 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
         {
             "peer": "club231828790",
             "label": "vk:club231828790:story",
-            "delay_seconds": 300,
+            "delay_seconds": 0,
             "mode": "upload",
-            "transport": "vk_story",
+            "transport": "vk_wall_story",
         },
         {"peer": "@loving_guide39", "delay_seconds": 300, "mode": "repost_previous"},
         {
             "peer": "klgdevents",
             "label": "vk:klgdevents:story",
-            "delay_seconds": 300,
+            "delay_seconds": 600,
             "mode": "upload",
-            "transport": "vk_story",
+            "transport": "vk_wall_story",
         },
         {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
     ]
@@ -102,9 +102,9 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         ("@kenigevents", "telethon"),
         ("club231828790", "vk_wall"),
         ("@lovekenig", "telethon"),
-        ("club231828790", "vk_story"),
+        ("club231828790", "vk_wall_story"),
         ("@loving_guide39", "telethon"),
-        ("klgdevents", "vk_story"),
+        ("klgdevents", "vk_wall_story"),
         ("@catwithbag", "telethon"),
     ]
 

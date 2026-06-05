@@ -946,6 +946,122 @@ def _publish_vk_story_video(
     }
 
 
+def _vk_wall_ids_from_url(url: str) -> tuple[int, int] | None:
+    import re
+
+    match = re.search(r"wall(-?\d+)_(\d+)", str(url or ""))
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _vk_story_image_from_media(media_path: Path) -> Path:
+    suffix = media_path.suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+        return media_path
+
+    output_path = media_path.with_name(f"{media_path.stem}_vk_wall_story.jpg")
+    cap = cv2.VideoCapture(str(media_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open media for VK wall-story cover: {media_path}")
+    try:
+        total = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+        if total > 8:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, min(total - 1, max(0, int(total * 0.12))))
+        ok, frame = cap.read()
+    finally:
+        cap.release()
+    if not ok or frame is None:
+        raise RuntimeError(f"Cannot read media frame for VK wall-story cover: {media_path}")
+
+    target_w, target_h = STORY_VIDEO_WIDTH, STORY_VIDEO_HEIGHT
+    h, w = frame.shape[:2]
+    scale = min(target_w / max(1, w), target_h / max(1, h))
+    new_w = max(1, int(w * scale))
+    new_h = max(1, int(h * scale))
+    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    canvas = cv2.copyMakeBorder(
+        resized,
+        (target_h - new_h) // 2,
+        target_h - new_h - (target_h - new_h) // 2,
+        (target_w - new_w) // 2,
+        target_w - new_w - (target_w - new_w) // 2,
+        cv2.BORDER_CONSTANT,
+        value=(0, 0, 0),
+    )
+    if not cv2.imwrite(str(output_path), canvas, [int(cv2.IMWRITE_JPEG_QUALITY), 92]):
+        raise RuntimeError(f"Cannot write VK wall-story cover: {output_path}")
+    return output_path
+
+
+def _publish_vk_wall_story_forward(
+    *,
+    auth: dict[str, Any],
+    config: dict[str, Any],
+    target_cfg: dict[str, Any],
+    media_path: Path,
+    source_wall: dict[str, Any],
+) -> dict[str, Any]:
+    group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
+    source_url = str(source_wall.get("post_url") or "").strip()
+    if not source_url:
+        raise RuntimeError("VK wall-story target has no source wall post URL")
+    server = _vk_api(
+        "stories.getPhotoUploadServer",
+        auth=auth,
+        config=config,
+        group_id=str(group_id),
+        add_to_news="1",
+        link_text=str(target_cfg.get("link_text") or "watch"),
+        link_url=source_url,
+    )
+    upload_url = server.get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        raise RuntimeError("VK stories.getPhotoUploadServer returned no upload_url")
+    image_path = _vk_story_image_from_media(media_path)
+    with image_path.open("rb") as handle:
+        upload_response = requests.post(
+            str(upload_url),
+            files={
+                "file": (
+                    image_path.name,
+                    handle,
+                    mimetypes.guess_type(str(image_path))[0] or "image/jpeg",
+                )
+            },
+            timeout=600,
+        )
+    try:
+        upload_payload = upload_response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"VK wall-story upload returned non-json status={upload_response.status_code}"
+        ) from exc
+    if upload_response.status_code >= 400 or "error" in upload_payload:
+        raise RuntimeError(f"VK wall-story upload failed: {upload_payload}")
+    upload_result = (upload_payload.get("response") or {}).get("upload_result")
+    if not upload_result:
+        raise RuntimeError("VK wall-story upload response missing upload_result")
+    saved = _vk_api(
+        "stories.save",
+        auth=auth,
+        config=config,
+        upload_results=upload_result,
+        extended="1",
+    )
+    items = saved.get("items") if isinstance(saved, dict) else None
+    item = items[0] if isinstance(items, list) and items else {}
+    return {
+        "group_id": group_id,
+        "story_id": item.get("id"),
+        "owner_id": item.get("owner_id"),
+        "expires_at": item.get("expires_at"),
+        "source_wall_post_url": source_url,
+        "source_wall_group_id": source_wall.get("group_id"),
+        "story_media_path": str(image_path),
+    }
+
+
 async def _story_targets_report(
     client: TelegramClient,
     *,
@@ -968,6 +1084,7 @@ async def _story_targets_report(
         media_path=media_path,
     )
     previous_story: dict[str, Any] | None = None
+    previous_vk_wall: dict[str, Any] | None = None
     for idx, target_cfg in enumerate(config.get("targets") or []):
         peer_ref = str(target_cfg.get("peer") or "").strip()
         label = str(target_cfg.get("label") or peer_ref or f"target-{idx + 1}")
@@ -996,7 +1113,7 @@ async def _story_targets_report(
             "ok": False,
         }
         try:
-            if transport in {"vk_story", "vk_wall"}:
+            if transport in {"vk_story", "vk_wall", "vk_wall_story"}:
                 group_id = _vk_group_id(peer_ref, auth=auth, config=config)
                 target_report["group_id"] = group_id
                 if media_path is not None:
@@ -1017,14 +1134,64 @@ async def _story_targets_report(
                             )
                         )
                     else:
-                        result = _publish_vk_wall_video(
-                            auth=auth,
-                            config=config,
-                            target_cfg=target_cfg,
-                            media_path=media_path,
-                        )
-                        target_report.update(result)
-                        log(f"✅ VK wall video published to {label}: {result['post_url']}")
+                        if transport == "vk_wall":
+                            result = _publish_vk_wall_video(
+                                auth=auth,
+                                config=config,
+                                target_cfg=target_cfg,
+                                media_path=media_path,
+                            )
+                            previous_vk_wall = result
+                            target_report.update(result)
+                            log(f"✅ VK wall video published to {label}: {result['post_url']}")
+                        else:
+                            source_wall = previous_vk_wall
+                            if source_wall is None:
+                                source_wall = _publish_vk_wall_video(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                )
+                                previous_vk_wall = source_wall
+                            try:
+                                result = _publish_vk_wall_story_forward(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                    source_wall=source_wall,
+                                )
+                            except Exception:
+                                source_ids = _vk_wall_ids_from_url(
+                                    str(source_wall.get("post_url") or "")
+                                )
+                                source_group_id = abs(source_ids[0]) if source_ids else None
+                                if source_group_id == group_id:
+                                    raise
+                                log(
+                                    f"⚠️ VK wall-story cross-community forward failed for {label}; "
+                                    "publishing local wall post and retrying"
+                                )
+                                source_wall = _publish_vk_wall_video(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                )
+                                previous_vk_wall = source_wall
+                                result = _publish_vk_wall_story_forward(
+                                    auth=auth,
+                                    config=config,
+                                    target_cfg=target_cfg,
+                                    media_path=media_path,
+                                    source_wall=source_wall,
+                                )
+                            target_report.update(result)
+                            log(
+                                f"✅ VK wall-story published to {label}: "
+                                f"{result['source_wall_post_url']}"
+                            )
                 else:
                     log(f"✅ VK {transport} preflight passed for {label} (club{group_id})")
                 target_report["ok"] = True

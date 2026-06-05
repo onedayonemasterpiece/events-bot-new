@@ -549,6 +549,88 @@ async def test_telegram_chat_target_posts_without_story_preflight(
 
 
 @pytest.mark.asyncio
+async def test_vk_wall_story_links_previous_wall_post_without_video_story_upload(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+    client = _FakeStoryClient(boost_fail_peers=set(), story_ids={})
+    media_path = tmp_path / "cover.jpg"
+    media_path.write_bytes(b"image")
+
+    api_calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_vk_api(method: str, *, auth, config, **params):  # noqa: ANN001,ANN003
+        api_calls.append((method, dict(params)))
+        if method == "video.save":
+            return {
+                "upload_url": "https://upload.example/video",
+                "owner_id": -231828790,
+                "video_id": 77,
+            }
+        if method == "wall.post":
+            return {"post_id": 123}
+        if method == "stories.getPhotoUploadServer":
+            assert params["group_id"] == "231828790"
+            assert params["link_url"] == "https://vk.com/wall-231828790_123"
+            return {"upload_url": "https://upload.example/story-photo"}
+        if method == "stories.getVideoUploadServer":
+            raise AssertionError("vk_wall_story must not upload a video story")
+        if method == "stories.save":
+            assert params["upload_results"] == "story-upload-result"
+            return {"items": [{"id": 456, "owner_id": -231828790, "expires_at": 1}]}
+        raise AssertionError(method)
+
+    class _Response:
+        status_code = 200
+
+        def __init__(self, payload: dict[str, object]):
+            self._payload = payload
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_post(url, files=None, timeout=None):  # noqa: ANN001,ARG001
+        if str(url).endswith("/video"):
+            return _Response({})
+        if str(url).endswith("/story-photo"):
+            return _Response({"response": {"upload_result": "story-upload-result"}})
+        raise AssertionError(url)
+
+    monkeypatch.setattr(helper, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(helper.requests, "post", fake_post)
+
+    report = await helper._story_targets_report(
+        client,
+        auth={"vk_access_token": "tok"},
+        config={
+            "targets": [
+                {
+                    "peer": "club231828790",
+                    "label": "vk:wall",
+                    "transport": "vk_wall",
+                    "caption": "Видеоанонс",
+                },
+                {
+                    "peer": "club231828790",
+                    "label": "vk:story",
+                    "transport": "vk_wall_story",
+                },
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][1]["source_wall_post_url"] == "https://vk.com/wall-231828790_123"
+    assert report["targets"][1]["story_id"] == 456
+    assert "stories.getVideoUploadServer" not in [method for method, _ in api_calls]
+
+
+@pytest.mark.asyncio
 async def test_story_publish_falls_back_to_secondary_peer_when_channel_blocked(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
