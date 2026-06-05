@@ -549,26 +549,12 @@ def _draw_listai(draw: ImageDraw.ImageDraw, right_x: int, top_y: int, palette: C
     return h
 
 
-def _draw_down_squiggle(draw: ImageDraw.ImageDraw, cx: int, y0: int, y1: int, palette: CardPalette):
-    """A lively dashed wavy arrow pointing down — asymmetric amplitude/phase,
-    arrowhead aligned to the curve's end tangent."""
+def _draw_down_arrow(draw: ImageDraw.ImageDraw, cx: int, y0: int, y1: int, palette: CardPalette, *, w: int = 18, head: int = 46):
+    """A simple, bold, clearly-readable downward arrow (read the post below)."""
     accent = _hex_to_rgb(palette.accent)
-    n = 60
-    pts = []
-    for i in range(n + 1):
-        t = i / n
-        amp = 34 * (1.0 - 0.55 * t)              # tapers toward the tip
-        x = cx + math.sin(t * math.pi * 2.6 + 0.62) * amp   # golden-ish phase offset
-        pts.append((x, y0 + (y1 - y0) * t))
-    for i in range(0, len(pts) - 2, 3):          # dashed
-        _round_line(draw, [pts[i], pts[i + 1]], accent, 9)
-    hx, hy = pts[-1]
-    gx, gy = pts[-5]
-    ang = math.atan2(hy - gy, hx - gx)
-    L, sp = 30, math.radians(33)
-    a1 = (hx - L * math.cos(ang - sp), hy - L * math.sin(ang - sp))
-    a2 = (hx - L * math.cos(ang + sp), hy - L * math.sin(ang + sp))
-    draw.polygon([(hx, hy), a1, a2], fill=accent)
+    _round_line(draw, [(cx, y0), (cx, y1)], accent, w)
+    _round_line(draw, [(cx - head, y1 - head), (cx, y1)], accent, w)
+    _round_line(draw, [(cx + head, y1 - head), (cx, y1)], accent, w)
 
 
 def render_carousel_slide(
@@ -706,8 +692,58 @@ def render_cta_slide(
         draw.text((SLIDE_MX + (inner_w - w) / 2, y), line, font=cta_font, fill=accent)
         y += cstep
 
-    _draw_down_squiggle(draw, SLIDE_W // 2, int(y + 56), int(y + 56 + squiggle_h), palette)
+    _draw_down_arrow(draw, SLIDE_W // 2, int(y + 64), int(y + 64 + squiggle_h), palette)
 
+    if index and total:
+        _draw_counter(draw, index, total, palette)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def _draw_listai_badge(draw: ImageDraw.ImageDraw, palette: CardPalette):
+    """Self-contained 'листай →' pill (bottom-right) for slides that already carry
+    their own text (afishas) — gives the swipe cue without a hook block."""
+    accent = _hex_to_rgb(palette.accent)
+    bg = _hex_to_rgb(palette.background)
+    f = _font(str(_SUB_FONT_PATH), 38)
+    label = "листай"
+    lw = draw.textlength(label, font=f)
+    fa, fd = f.getmetrics()
+    arrow_w = 68
+    pad = 26
+    inner = lw + 20 + arrow_w
+    w = inner + 2 * pad
+    h = (fa + fd) + 2 * pad
+    x1 = SLIDE_W - 44
+    y1 = SLIDE_H - 44
+    x0 = x1 - w
+    y0 = y1 - h
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=h / 2, fill=bg)
+    draw.text((x0 + pad, y0 + pad), label, font=f, fill=accent)
+    _draw_arrow(draw, x0 + pad + lw + 20, x1 - pad, y0 + pad + (fa + fd) / 2, accent, w=10, head=18)
+
+
+def render_afisha_slide(
+    *,
+    afisha: bytes,
+    palette: CardPalette,
+    index: int | None = None,
+    total: int | None = None,
+    swipe: bool = True,
+) -> bytes:
+    """Carousel slide for an event whose media is already a finished afisha (has
+    its own text): show it in full (contain + letterbox) and only overlay the
+    'i/N' counter and a 'листай' swipe badge."""
+    bg = _hex_to_rgb(palette.background)
+    image = Image.new("RGB", (SLIDE_W, SLIDE_H), bg)
+    af = ImageOps.contain(Image.open(io.BytesIO(afisha)).convert("RGB"), (SLIDE_W, SLIDE_H), method=Image.LANCZOS)
+    image.paste(af, ((SLIDE_W - af.width) // 2, (SLIDE_H - af.height) // 2))
+    draw = ImageDraw.Draw(image)
+
+    if swipe:
+        _draw_listai_badge(draw, palette)
     if index and total:
         _draw_counter(draw, index, total, palette)
 
