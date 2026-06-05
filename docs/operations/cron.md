@@ -75,6 +75,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   than published as one batch. The runner is enabled by default via
   `ENABLE_PROMO_VK_SCHEDULER`.
 - **VK auto queue import** – imports queued VK posts (`vk_inbox`) via Smart Update on a fixed schedule when enabled.
+- **VK past-event post prune** – twice a day deletes managed `klgdevents` event posts whose event is already in the past and that gained no reposts/story shares (`reposts.count == 0`), so the community feed stops surfacing stale events. Default times `02:30,14:30` Europe/Kaliningrad (`VK_POST_PRUNE_TIMES_LOCAL`), enabled in production via `ENABLE_VK_POST_PRUNE`. Only posts whose `Event.source_vk_post_url` points at `-VK_EVENTS_GROUP_ID` are eligible; external VK-import source walls, pinned posts, future/ongoing events (`end_date`), and daily/poll/promo posts (not stored in `source_vk_post_url`) are never touched. The job is part of `_HEAVY_JOB_IDS`, so it skips (and notifies `ADMIN_CHAT_ID`) when another heavy job holds the gate instead of competing for the VK token. Canonical doc: `docs/features/vk-publishing/autodeletevkposts.md`.
 - **Telegraph pages sync** – refreshes month and weekend Telegraph pages after 01:00 local time. Disabled by default; enable with `ENABLE_NIGHTLY_PAGE_SYNC=1`. Nightly runs update both page content and the month navigation block.
 - **Telegraph cache sanitizer** – probes and warms Telegram web preview for Telegraph pages (via Kaggle/Telethon), tracks missing `cached_page` (Instant View) and warns on missing preview `photo`, and enqueues rebuilds for persistent “no cached_page” failures. Skips past pages (ended events / past weekends / past months). Manual `/telegraph_cache_sanitize` updates a single Kaggle status message while polling (like `/tg`), scheduled runs post a final summary to `ADMIN_CHAT_ID` when configured. Disabled by default; enable with `ENABLE_TELEGRAPH_CACHE_SANITIZER=1`.
 - **festival navigation rebuild** – rebuilds festival navigation and landing page nightly.
@@ -217,6 +218,10 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` – max seconds per VK inbox row before auto-import marks that post as `failed` and continues with the next row (default `1800`; set `<=0` to disable).
 - `VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS` – per-job APScheduler misfire window for VK auto-import (default: `1800`).
 - `VK_AUTO_IMPORT_CATCHUP_LOOKBACK_SECONDS` – startup/watchdog lookback for the last missed VK auto-import slot (default: `86400`).
+- `ENABLE_VK_POST_PRUNE` – enable twice-daily auto-deletion of past-event `klgdevents` VK posts (default: enabled in production).
+- `VK_POST_PRUNE_TIMES_LOCAL` / `VK_POST_PRUNE_TZ` – prune schedule times in local time zone (default `02:30,14:30` Europe/Kaliningrad).
+- `VK_POST_PRUNE_LIMIT` – max posts deleted per run (blast-radius cap, default `50`).
+- `VK_POST_PRUNE_DRY_RUN` – when enabled, log what would be deleted without calling `wall.delete`.
 - `CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS` / `CRITICAL_SCHED_WATCHDOG_INTERVAL_SECONDS` – live watchdog grace and polling interval for critical scheduled jobs (`tg_monitoring`, `guide_excursions_full`, `vk_auto_import`; defaults: `300` / `60` seconds).
 - `ENABLE_KAGGLE_RECOVERY` – enable background Kaggle recovery loop.
 - `KAGGLE_RECOVERY_INTERVAL_MINUTES` – recovery interval in minutes (default: 5).
