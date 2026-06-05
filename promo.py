@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import os
 import textwrap
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -53,6 +54,10 @@ PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
+VK_SYNC_MISSING_TG_MEDIA_ERROR = "vk_sync_missing_media_for_telegram_event"
+PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
+    {"VK_SCHEDULED", "PUBLISHED", "PUBLISHED_MAIN", "PUBLISHED_TEST"}
+)
 
 # Target that matches events by their Telegram source chat + post author.
 # query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
@@ -195,6 +200,26 @@ def _event_has_stored_poster(ev: Event) -> bool:
     if int(getattr(ev, "photo_count", 0) or 0) > 0:
         return True
     return any(str(url or "").strip() for url in (getattr(ev, "photo_urls", None) or []))
+
+
+def _is_telegram_origin_event(ev: Event) -> bool:
+    source_url = str(getattr(ev, "source_post_url", None) or "").strip().lower()
+    if "t.me/" in source_url or "telegram.me/" in source_url:
+        return True
+    if getattr(ev, "source_chat_id", None) or getattr(ev, "source_message_id", None):
+        return True
+    return False
+
+
+def _require_media_for_telegram_vk_posts() -> bool:
+    raw = os.getenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def _promo_vk_publication_missing_required_media(ev: Event) -> bool:
+    if not _require_media_for_telegram_vk_posts() or not _is_telegram_origin_event(ev):
+        return False
+    return not any(str(url or "").strip() for url in (getattr(ev, "photo_urls", None) or []))
 
 
 def _stable_shuffle_key(*parts: object) -> str:
@@ -1640,6 +1665,7 @@ async def _recent_activity_exposures(
     surface: str,
     since_utc: datetime,
     until_utc: datetime | None = None,
+    public_only: bool = True,
 ) -> list[PromoExposure]:
     async with db.get_session() as session:
         query = (
@@ -1652,6 +1678,8 @@ async def _recent_activity_exposures(
             query = query.where(PromoExposure.activity_id == activity_id)
         if until_utc is not None:
             query = query.where(PromoExposure.published_at <= until_utc)
+        if public_only:
+            query = query.where(PromoExposure.publish_status.in_(PUBLIC_PROMO_EXPOSURE_STATUSES))
         res = await session.execute(query.order_by(PromoExposure.published_at.desc()))
         return list(res.scalars().all())
 
@@ -1661,6 +1689,8 @@ async def _build_promo_vk_source_post(
     bot: object | None,
     ev: Event,
     *,
+    campaign_id: int | None = None,
+    activity_id: int | None = None,
     target_group_id: int,
 ) -> str | None:
     from main import (
@@ -1679,11 +1709,42 @@ async def _build_promo_vk_source_post(
     text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
     message = build_vk_source_message(ev, text_for_vk, festival=festival)
     attachments: list[str] = []
+    photo_urls = list(getattr(ev, "photo_urls", None) or [])[:VK_MAX_ATTACHMENTS]
     if VK_PHOTOS_ENABLED:
-        for photo_url in list(getattr(ev, "photo_urls", None) or [])[:VK_MAX_ATTACHMENTS]:
+        for photo_url in photo_urls:
             photo_id = await upload_vk_photo(str(target_group_id), photo_url, db, bot)
             if photo_id:
                 attachments.append(photo_id)
+    source_kind = "telegram" if _is_telegram_origin_event(ev) else "other"
+    require_media = _require_media_for_telegram_vk_posts()
+    logger.info(
+        "promo.vk publication media campaign_id=%s activity_id=%s event_id=%s target_group_id=%s "
+        "source_kind=%s source_post_url=%s photos_enabled=%s photo_urls_count=%s attachments_count=%s require_media=%s",
+        campaign_id,
+        activity_id,
+        getattr(ev, "id", None),
+        target_group_id,
+        source_kind,
+        getattr(ev, "source_post_url", None),
+        bool(VK_PHOTOS_ENABLED),
+        len(photo_urls),
+        len(attachments),
+        require_media,
+    )
+    if source_kind == "telegram" and require_media and not attachments:
+        logger.error(
+            "promo.vk publication missing media campaign_id=%s activity_id=%s event_id=%s target_group_id=%s "
+            "source_post_url=%s photo_urls_count=%s attachments_count=%s reason=%s",
+            campaign_id,
+            activity_id,
+            getattr(ev, "id", None),
+            target_group_id,
+            getattr(ev, "source_post_url", None),
+            len(photo_urls),
+            len(attachments),
+            VK_SYNC_MISSING_TG_MEDIA_ERROR,
+        )
+        raise RuntimeError(VK_SYNC_MISSING_TG_MEDIA_ERROR)
     return await post_to_vk(
         str(target_group_id),
         message,
@@ -2227,13 +2288,30 @@ async def run_promo_vk_activities(
                     int(ev.id),
                 )
 
-            candidates = [ev for ev in sorted(events, key=sort_key) if int(ev.id) not in recent_event_ids]
+            candidates: list[Event] = []
+            for ev in sorted(events, key=sort_key):
+                if int(ev.id) in recent_event_ids:
+                    continue
+                if _promo_vk_publication_missing_required_media(ev):
+                    logger.warning(
+                        "promo.vk publication candidate missing media campaign_id=%s activity_id=%s event_id=%s "
+                        "source_post_url=%s photo_urls_count=0 reason=%s",
+                        campaign_id,
+                        activity_id,
+                        getattr(ev, "id", None),
+                        getattr(ev, "source_post_url", None),
+                        VK_SYNC_MISSING_TG_MEDIA_ERROR,
+                    )
+                    continue
+                candidates.append(ev)
             for ev in candidates[:needed]:
                 try:
                     url = await _build_promo_vk_source_post(
                         db,
                         bot,
                         ev,
+                        campaign_id=campaign_id,
+                        activity_id=activity_id,
                         target_group_id=target_group_id,
                     )
                     if not url:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timezone
 
 import pytest
@@ -218,6 +219,137 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
         "klgdevents:story",
         "klgdevents->kenigeventsofficial:story",
     }
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_vk_publication_blocks_text_only_telegram_event(tmp_path, monkeypatch, caplog) -> None:
+    import main
+    from promo import _build_promo_vk_source_post
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.delenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", raising=False)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+
+    async def fake_post_to_vk(*args, **kwargs):
+        raise AssertionError("Telegram-origin promo VK publication must not post without media")
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    ev = _event("Калининградский порт", "2026-07-07", festival="80 историй о главном")
+    ev.id = 4417
+    ev.source_post_url = "https://t.me/kraftmarket39/199"
+    ev.photo_urls = []
+    ev.photo_count = 0
+
+    caplog.set_level(logging.INFO, logger="promo")
+    with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await _build_promo_vk_source_post(
+            db,
+            None,
+            ev,
+            campaign_id=1,
+            activity_id=8,
+            target_group_id=231920894,
+        )
+
+    assert "promo.vk publication media" in caplog.text
+    assert "source_kind=telegram" in caplog.text
+    assert "photo_urls_count=0" in caplog.text
+    assert "attachments_count=0" in caplog.text
+    await db.close()
+
+
+def test_promo_vk_publication_candidate_requires_media_only_for_telegram(monkeypatch) -> None:
+    from promo import _promo_vk_publication_missing_required_media
+
+    monkeypatch.delenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", raising=False)
+    telegram_no_media = _event("No media", "2026-07-07", festival="80 историй о главном")
+    telegram_no_media.source_post_url = "https://t.me/kraftmarket39/199"
+    telegram_no_media.photo_urls = []
+    assert _promo_vk_publication_missing_required_media(telegram_no_media) is True
+
+    telegram_with_media = _event("With media", "2026-07-07", festival="80 историй о главном")
+    telegram_with_media.source_post_url = "https://t.me/kraftmarket39/200"
+    assert _promo_vk_publication_missing_required_media(telegram_with_media) is False
+
+    vk_no_media = _event("VK no media", "2026-07-07", festival="80 историй о главном")
+    vk_no_media.source_post_url = "https://vk.com/wall-1_2"
+    vk_no_media.photo_urls = []
+    assert _promo_vk_publication_missing_required_media(vk_no_media) is False
+
+    monkeypatch.setenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", "0")
+    assert _promo_vk_publication_missing_required_media(telegram_no_media) is False
+
+
+@pytest.mark.asyncio
+async def test_recent_activity_exposures_ignore_failed_status_by_default(tmp_path) -> None:
+    from promo import _recent_activity_exposures
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        campaign = PromoCampaign(title="80 stories", status="active", starts_at=now_utc)
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_PUBLICATION,
+            enabled=True,
+        )
+        failed_event = _event("Failed event", "2026-07-07", festival="80 историй о главном")
+        scheduled_event = _event("Scheduled event", "2026-07-08", festival="80 историй о главном")
+        session.add_all([activity, failed_event, scheduled_event])
+        await session.flush()
+        campaign_id = int(campaign.id)
+        activity_id = int(activity.id)
+        failed_event_id = int(failed_event.id)
+        scheduled_event_id = int(scheduled_event.id)
+        session.add(
+            PromoExposure(
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                event_id=failed_event_id,
+                surface=PROMO_SURFACE_VK_PUBLICATION,
+                placement_kind="rolling_window_deficit",
+                publish_status="FAILED_NO_MEDIA",
+                published_at=now_utc,
+            )
+        )
+        session.add(
+            PromoExposure(
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                event_id=scheduled_event_id,
+                surface=PROMO_SURFACE_VK_PUBLICATION,
+                placement_kind="rolling_window_deficit",
+                publish_status="VK_SCHEDULED",
+                published_at=now_utc,
+            )
+        )
+        await session.commit()
+
+    public_rows = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        surface=PROMO_SURFACE_VK_PUBLICATION,
+        since_utc=now_utc.replace(hour=0),
+    )
+    all_rows = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        surface=PROMO_SURFACE_VK_PUBLICATION,
+        since_utc=now_utc.replace(hour=0),
+        public_only=False,
+    )
+
+    assert [row.event_id for row in public_rows] == [scheduled_event_id]
+    assert {row.event_id for row in all_rows} == {failed_event_id, scheduled_event_id}
     await db.close()
 
 

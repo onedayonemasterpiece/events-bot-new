@@ -47,6 +47,18 @@ def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     assert fort.name == "Форт №11 Дёнхофф"
     assert fort.city == "Калининград"
 
+    cultural_place_payload = {
+        "location_name": "Культурное место на Острове Канта",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(cultural_place_payload)
+    assert cultural_place_payload == {
+        "location_name": "Культурное место",
+        "location_address": "Остров Канта",
+        "city": "Калининград",
+    }
+
 
 def test_place_alias_canonicalizes_yantarnoe_to_yantarny() -> None:
     assert canonicalize_known_place_name("Янтарное") == "Янтарный"

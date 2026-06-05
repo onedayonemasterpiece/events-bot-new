@@ -124,6 +124,10 @@ If an array of events is returned, `search_digest` must be present in every obje
 - Concrete prod regression that shipped without this rule: `АгроПарк "Некрасово поле"` post `Аренда куполов для отдыха` → was extracted as a fake `2026-05-11 10:00` event (4568/4570). Such posts are a price-list / rental ad, not an attendable event.
 - Distinguish from a real event at a rental-friendly venue: if the post names a specific concrete dated session (`9 мая 14:00 мастер-класс по флористике в наших куполах`), extract that single session normally; do NOT skip the whole post because the venue also rents out spaces.
 
+**historical/background date rule:**
+- Do NOT use historical/background dates from a story, exhibit text, document quote, or noisy poster OCR as the event date. For example, a line like `9 октября 1947 года...` inside an exhibition narrative is historical content, not an upcoming schedule anchor.
+- If the source only says an exhibition already opened and can be visited during institution work hours, return no future event unless it also gives an explicit future attendee-facing opening, lecture, curator talk, excursion, or other scheduled slot.
+
 **report / recap rule:**
 - If the text is mainly a post-event report / recap about something that already happened, return no events.
 - Typical clues: past-tense narrative ("мы провели/исследовали/работали"), after-the-fact summary ("было здорово"),
@@ -189,6 +193,11 @@ Guidelines:
   an address like "Музейная аллея", weekdays, dates, or times. If it announces attendee-facing
   lectures, shows, talks, workshops, excursions, or festival program slots with concrete dates/times,
   extract those events even when they happen at a museum or library.
+- Do NOT use historical/background dates from a story, exhibit text, document quote, or noisy poster OCR
+  as the event date. For example, a line like "9 октября 1947 года..." inside an exhibition narrative is
+  historical content, not an upcoming schedule anchor. If the source only says an exhibition already opened
+  and can be visited during institution work hours, return no future event unless it also gives an explicit
+  future attendee-facing opening, lecture, curator talk, excursion, or other scheduled slot.
 - Do NOT create events out of post-event reports / recaps. If the text mainly describes what already happened
   (past-tense narrative like "мы провели/исследовали/работали", after-the-fact summary like "было здорово",
   gratitude/wrap-up like "спасибо ...", "скоро увидимся вновь") and there is no concrete attendable future anchor,

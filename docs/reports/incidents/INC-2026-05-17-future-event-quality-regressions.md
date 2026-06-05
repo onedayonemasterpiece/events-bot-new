@@ -17,6 +17,10 @@ The operator-reported examples are confirmed:
 
 - event `5052`, `Кураторский тур по выставке «Общая кухня»`, 2026-05-17 15:30-16:30, has `location_name='ТАТЬЯНА БОРИСОВА'` although the source post is from `barn_kaliningrad/1002` and the speaker name is not a venue.
 - `GROZA` on 2026-05-17 survives as several active cards: official/parser event `3688` (`Groza`, 18:00), Telegram event `4843` (`неделя в театре`, 18:00), Telegram/VK event `4744` (`GROZA`, 17:05), and Telegram event `4800` with an announcement sentence as title and no time.
+- Follow-up 2026-06-05 examples add the same classes on public VK surfaces:
+  `event_id=4327` used a historical narrative/OCR date (`9 октября 1947...`) as
+  a future exhibition date, and `event_id=5461` published `Культурное место на
+  Острове Канта` as the unrelated known venue `Место Силы`.
 
 The wider audit over 355 active future rows found more high-confidence examples below. The first durable prevention patch now hardens the Telegram producer/import boundary, but production data repair, deploy, catch-up, and Telegraph rebuild have not been performed yet.
 
@@ -44,6 +48,10 @@ The wider audit over 355 active future rows found more high-confidence examples 
 - 2026-05-16 23:39 UTC — Telegram Monitoring created event `5052` with `location_name='ТАТЬЯНА БОРИСОВА'`.
 - 2026-05-17 07:13 UTC — fresh production snapshot downloaded and verified.
 - 2026-05-17 UTC — heuristic future audit over active rows found the candidate inventory below and this incident record was opened.
+- 2026-06-05 UTC — operator supplied public VK regressions `wall-231920894_2141`
+  (historical date used as future date) and `wall-231920894_1663` (source-grounded
+  `Культурное место` mapped to `Место Силы`); prod DB/log evidence confirmed
+  affected `event_id=4327` and `event_id=5461`.
 
 ## Confirmed / High-Confidence Candidate Inventory
 
@@ -83,6 +91,7 @@ Still-open investigation areas:
 
 1. **Duplicate probes miss same-event variants when one side lacks ticket/time, has source-default venue drift, or comes from parser vs Telegram/VK.** The `GROZA` cluster combines official parser, Telegram digest, VK digest, missing ticket, wrong time, and section title variants.
 2. **Linked-source aggregation can promote non-event prose into an event venue.** `open_fest/606` appears attached to an actual festival row and leaked its narrative sentence into `location_name`.
+3. **Historical dates from narrative/OCR text can be mistaken for future event dates.** Exhibition/story posts that mention document dates such as `9 октября 1947 года` must not become upcoming event rows unless the source also gives a concrete future attendee-facing slot.
 
 ## Contributing Factors
 
@@ -155,6 +164,11 @@ Still-open investigation areas:
 - [x] Server import drops unsupported `time` when it exactly matches the event day/month marker.
 - [x] Reference fuzzy matching ignores city names as one-token venue identity, preventing unknown defaults like `Barn, ..., Калининград` from mapping to unrelated city-branded venues.
 - [x] Regression coverage added for Barn person-name venue and GROZA date-marker time.
+- [x] `docs/reference/locations.md` and `location-aliases.md` now distinguish
+  `Культурное место, Остров Канта, Калининград` from the generic island and from
+  unrelated `Место Силы`; regression coverage asserts canonicalization.
+- [x] LLM-first extraction prompts now explicitly reject historical/background
+  dates from exhibition/story prose or noisy OCR as future event dates.
 - [ ] Replay full candidate inventory and repair production rows.
 - [ ] Improve duplicate handling for parser + Telegram/VK same-event clusters.
 

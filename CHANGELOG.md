@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Incident / VK published event quality batch (2026-06-05)**: promo `vk_publication` now shares the Telegram-origin no-media fail-closed guard with managed `vk_sync`, skipping no-media Telegram candidates during source selection, ignoring failed/invalidated exposures in rolling-window counts, logging `campaign_id` / `activity_id` / `event_id` / `photo_urls_count` / `attachments_count`, and raising `vk_sync_missing_media_for_telegram_event` before `wall.post` instead of publishing text-only promo VK posts. Added `Культурное место, Остров Канта, Калининград` plus aliases to the location reference so source-grounded island venue mentions do not normalize to unrelated `Место Силы`. Tightened LLM-first extraction prompts to reject historical/background exhibition dates such as `9 октября 1947 года` as future event dates unless the source also provides a concrete upcoming attendee slot.
 - **Promo VK stories for campaign activity**: added `vk_story` promo activity
   support. The runner now builds a vertical story image from a promoted event's
   poster/title/date/venue, uploads it to a configured VK community with

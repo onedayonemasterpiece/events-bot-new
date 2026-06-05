@@ -163,11 +163,21 @@ For each active campaign/activity the scheduler:
   publishes one missing post as a postponed community wall post through the
   standard VK wall contract (`post_to_vk`, community author, postponed queue),
   using the same source-style event message format as Smart Update;
+- for Telegram-origin events, applies the same no-text-only media guard as
+  Smart Update VK sync: when no VK photo attachment is available, the action
+  fails with `vk_sync_missing_media_for_telegram_event` and logs
+  `photo_urls_count` / `attachments_count` evidence instead of publishing a
+  promo wall post without an image; Telegram-origin candidates that already
+  have empty `event.photo_urls` are skipped during source selection so the
+  rolling slot can fall through to another campaign event with media;
 - records each scheduled post in `promo_exposure` with
   `surface='vk_publication'`, `publish_status='VK_SCHEDULED'` and
   `details_json.target_url`. Because the VK wall/story call is an external side
   effect, exposure recording retries transient SQLite locks before the scheduler
-  is allowed to treat the action as failed.
+  is allowed to treat the action as failed. Rolling-window counts consider only
+  public-success statuses (`VK_SCHEDULED`, `PUBLISHED`, `PUBLISHED_MAIN`,
+  `PUBLISHED_TEST`); failed/invalidated rows such as `FAILED_NO_MEDIA` remain
+  audit evidence but do not satisfy the promo minimum.
 
 `vk_repost` watches a source community and reposts a recent campaign event post
 to a target community. It considers both organic `event.source_vk_post_url` rows

@@ -16,6 +16,7 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 ## User / Business Impact
 
 - Telegram Monitoring could create legitimate event rows that looked complete enough for `vk_sync`, but public VK posts appeared without illustrations.
+- Promo `vk_publication` could bypass the `vk_sync` no-media guard and create a text-only promoted VK post for a Telegram-origin event.
 - Events without renderable posters were invisible to video announce selection and therefore could miss promo surfaces.
 - Reaction/prose text could survive as `location_name`, letting a weak one-line post become a public event row and later a managed VK post.
 
@@ -40,6 +41,7 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 - 2026-06-04 14:07:48 UTC: VK created `wall-231920894_2000` for `event_id=5569` with `attachments=0`.
 - 2026-06-04 20:00-21:00 UTC: initial investigation confirmed media evidence but added an over-broad digest-title guard.
 - 2026-06-04 21:00 UTC: follow-up investigation found the exact `event_id=5569` row and replaced the broad digest-title guard with a prose-location regression.
+- 2026-06-05 06:40 UTC: promo `vk_publication` created a text-only `80 историй о главном` post for Telegram-origin `event_id=4417` (`https://t.me/kraftmarket39/199`) even though organic `vk_sync` for the same event failed closed as `vk_sync_missing_media_for_telegram_event`.
 
 ## Root Cause
 
@@ -63,6 +65,7 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 ### Affected surfaces
 
 - `main_part2.py::sync_vk_source_post`
+- `promo.py::_build_promo_vk_source_post`
 - `source_parsing/telegram/handlers.py::_build_candidate`
 - `smart_event_update.py::_smart_event_update_impl`
 - `docs/llm/prompts.md`
@@ -72,6 +75,7 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 ### Mandatory checks before closure or deploy
 
 - Unit coverage that Telegram-origin `vk_sync` raises `vk_sync_missing_media_for_telegram_event` before `wall.post` when no attachment is available.
+- Unit coverage that promo `vk_publication` skips no-media Telegram candidates during selection, ignores failed/invalidated exposures in rolling-window counts, and applies the same fail-closed media gate/logs `photo_urls_count` / `attachments_count` before `wall.post`.
 - Existing VK captcha text-only regression still passes.
 - Telegram candidate builder and Smart Update tests for `location_name=мы его очень ждали` as prose, plus a real digest negative control where time and venue/room are present.
 - Production evidence collected from `/data/runtime_logs` and `/data/db.sqlite`.
@@ -93,6 +97,7 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 ## Corrective Actions
 
 - `main_part2.py`: new Telegram-origin media requirement before creating a managed VK event post.
+- `promo.py`: promo `vk_publication` skips Telegram-origin candidates with empty `event.photo_urls`, ignores failed/invalidated exposure rows when evaluating rolling-window delivery, logs per-event media evidence, and raises `vk_sync_missing_media_for_telegram_event` before `post_to_vk` for Telegram-origin promoted events with no uploaded VK photo attachments.
 - `source_parsing/telegram/handlers.py`: `location_name` prose detector now drops `мы его очень ждали`-style reaction text.
 - `smart_event_update.py`: direct candidates with the same prose `location_name` fail closed as `invalid:prose_location`.
 - Docs and changelog updated; replay fixture added in `tests/replays/INC-2026-06-04-tg-monitoring-media-and-digest-quality/`.
