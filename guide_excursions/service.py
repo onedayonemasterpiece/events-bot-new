@@ -497,6 +497,61 @@ async def _upload_guide_vk_media_attachments(
     return attachments
 
 
+async def _build_guide_vk_hook_card_attachments(
+    *,
+    group_id: int,
+    rows: Sequence[Mapping[str, Any]],
+    existing_image_count: int,
+    db: Database | None,
+    bot: Bot | None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]],
+    seed: int = 0,
+) -> list[str]:
+    """Render + upload marketing hook cards as extra VK attachments (best-effort).
+
+    Cards only fill grid slots not taken by real afishas (see
+    :func:`guide_excursions.hook_cards.generate_hook_cards`). Any failure here is
+    swallowed so the digest still publishes with its afishas.
+    """
+    try:
+        from .hook_cards import generate_hook_cards
+    except Exception as exc:  # pragma: no cover - optional dependency (Pillow)
+        logger.warning("guide_hook_cards unavailable: %s", exc)
+        return []
+    try:
+        cards = await generate_hook_cards(
+            rows, existing_image_count=existing_image_count, seed=seed
+        )
+    except Exception as exc:
+        logger.warning("guide_hook_cards generate failed: %s", exc)
+        return []
+    attachments: list[str] = []
+    for idx, card in enumerate(cards):
+        try:
+            png = card.render_png()
+        except Exception as exc:
+            logger.warning("guide_hook_cards render failed occ=%s: %s", card.occurrence_id, exc)
+            continue
+        try:
+            attachment = await upload_vk_photo_bytes_fn(
+                str(group_id), png, db, bot, filename=f"hook_{seed}_{idx}.png"
+            )
+        except Exception as exc:
+            logger.warning("guide_hook_cards upload failed occ=%s: %s", card.occurrence_id, exc)
+            continue
+        if attachment:
+            attachments.append(attachment)
+    if cards:
+        logger.info(
+            "guide_hook_cards uploaded cards=%s attachments=%s occ=%s palettes=%s",
+            len(cards),
+            len(attachments),
+            [c.occurrence_id for c in cards],
+            [c.palette.id for c in cards],
+        )
+    return attachments
+
+
 def _vk_public_target_key(*, group_id: int, target: str | None = None) -> str:
     label = collapse_ws(target) or str(group_id)
     return f"vk:{label}"
@@ -4486,6 +4541,26 @@ async def publish_latest_guide_digest_to_vk(
         bot=bot,
         upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
     )
+
+    afisha_attachments_count = len(attachments)
+    hook_card_attachments = await _build_guide_vk_hook_card_attachments(
+        group_id=vk_group_id,
+        rows=rows,
+        existing_image_count=afisha_attachments_count,
+        db=db,
+        bot=bot,
+        upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
+        seed=issue_id_resolved,
+    )
+    if hook_card_attachments:
+        attachments = attachments + hook_card_attachments
+        logger.info(
+            "guide_digest_vk_attachments issue_id=%s afishas=%s hook_cards=%s total=%s",
+            issue_id_resolved,
+            afisha_attachments_count,
+            len(hook_card_attachments),
+            len(attachments),
+        )
 
     if existing_target_payload is not None and repair_existing:
         post_urls = []
