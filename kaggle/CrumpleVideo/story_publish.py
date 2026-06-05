@@ -894,15 +894,17 @@ def _publish_vk_story_video(
     config: dict[str, Any],
     target_cfg: dict[str, Any],
     media_path: Path,
+    source_url: str | None = None,
 ) -> dict[str, Any]:
     group_id = _vk_group_id(str(target_cfg.get("peer") or ""), auth=auth, config=config)
-    server = _vk_api(
-        "stories.getVideoUploadServer",
-        auth=auth,
-        config=config,
-        group_id=str(group_id),
-        add_to_news="1",
-    )
+    params: dict[str, str] = {
+        "group_id": str(group_id),
+        "add_to_news": "1",
+    }
+    if source_url:
+        params["link_text"] = str(target_cfg.get("link_text") or "watch")
+        params["link_url"] = source_url
+    server = _vk_api("stories.getVideoUploadServer", auth=auth, config=config, **params)
     upload_url = server.get("upload_url") if isinstance(server, dict) else None
     if not upload_url:
         raise RuntimeError("VK stories.getVideoUploadServer returned no upload_url")
@@ -943,6 +945,7 @@ def _publish_vk_story_video(
         "story_id": item.get("id"),
         "owner_id": item.get("owner_id"),
         "expires_at": item.get("expires_at"),
+        "source_wall_post_url": source_url,
     }
 
 
@@ -953,45 +956,6 @@ def _vk_wall_ids_from_url(url: str) -> tuple[int, int] | None:
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
-
-
-def _vk_story_image_from_media(media_path: Path) -> Path:
-    suffix = media_path.suffix.lower()
-    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
-        return media_path
-
-    output_path = media_path.with_name(f"{media_path.stem}_vk_wall_story.jpg")
-    cap = cv2.VideoCapture(str(media_path))
-    if not cap.isOpened():
-        raise RuntimeError(f"Cannot open media for VK wall-story cover: {media_path}")
-    try:
-        total = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
-        if total > 8:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, min(total - 1, max(0, int(total * 0.12))))
-        ok, frame = cap.read()
-    finally:
-        cap.release()
-    if not ok or frame is None:
-        raise RuntimeError(f"Cannot read media frame for VK wall-story cover: {media_path}")
-
-    target_w, target_h = STORY_VIDEO_WIDTH, STORY_VIDEO_HEIGHT
-    h, w = frame.shape[:2]
-    scale = min(target_w / max(1, w), target_h / max(1, h))
-    new_w = max(1, int(w * scale))
-    new_h = max(1, int(h * scale))
-    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    canvas = cv2.copyMakeBorder(
-        resized,
-        (target_h - new_h) // 2,
-        target_h - new_h - (target_h - new_h) // 2,
-        (target_w - new_w) // 2,
-        target_w - new_w - (target_w - new_w) // 2,
-        cv2.BORDER_CONSTANT,
-        value=(0, 0, 0),
-    )
-    if not cv2.imwrite(str(output_path), canvas, [int(cv2.IMWRITE_JPEG_QUALITY), 92]):
-        raise RuntimeError(f"Cannot write VK wall-story cover: {output_path}")
-    return output_path
 
 
 def _publish_vk_wall_story_forward(
@@ -1006,60 +970,20 @@ def _publish_vk_wall_story_forward(
     source_url = str(source_wall.get("post_url") or "").strip()
     if not source_url:
         raise RuntimeError("VK wall-story target has no source wall post URL")
-    server = _vk_api(
-        "stories.getPhotoUploadServer",
+    result = _publish_vk_story_video(
         auth=auth,
         config=config,
-        group_id=str(group_id),
-        add_to_news="1",
-        link_text=str(target_cfg.get("link_text") or "watch"),
-        link_url=source_url,
+        target_cfg=target_cfg,
+        media_path=media_path,
+        source_url=source_url,
     )
-    upload_url = server.get("upload_url") if isinstance(server, dict) else None
-    if not upload_url:
-        raise RuntimeError("VK stories.getPhotoUploadServer returned no upload_url")
-    image_path = _vk_story_image_from_media(media_path)
-    with image_path.open("rb") as handle:
-        upload_response = requests.post(
-            str(upload_url),
-            files={
-                "file": (
-                    image_path.name,
-                    handle,
-                    mimetypes.guess_type(str(image_path))[0] or "image/jpeg",
-                )
-            },
-            timeout=600,
-        )
-    try:
-        upload_payload = upload_response.json()
-    except Exception as exc:
-        raise RuntimeError(
-            f"VK wall-story upload returned non-json status={upload_response.status_code}"
-        ) from exc
-    if upload_response.status_code >= 400 or "error" in upload_payload:
-        raise RuntimeError(f"VK wall-story upload failed: {upload_payload}")
-    upload_result = (upload_payload.get("response") or {}).get("upload_result")
-    if not upload_result:
-        raise RuntimeError("VK wall-story upload response missing upload_result")
-    saved = _vk_api(
-        "stories.save",
-        auth=auth,
-        config=config,
-        upload_results=upload_result,
-        extended="1",
+    result.update(
+        {
+            "source_wall_group_id": source_wall.get("group_id"),
+            "story_media_path": str(media_path),
+        }
     )
-    items = saved.get("items") if isinstance(saved, dict) else None
-    item = items[0] if isinstance(items, list) and items else {}
-    return {
-        "group_id": group_id,
-        "story_id": item.get("id"),
-        "owner_id": item.get("owner_id"),
-        "expires_at": item.get("expires_at"),
-        "source_wall_post_url": source_url,
-        "source_wall_group_id": source_wall.get("group_id"),
-        "story_media_path": str(image_path),
-    }
+    return result
 
 
 async def _story_targets_report(

@@ -706,14 +706,15 @@ This section captures the latest intro-direction request as an explicit delta to
     `vk_wall`, legacy direct `vk_story`, and wall-linked `vk_wall_story` targets
     in one ordered queue;
   - `vk_wall` uploads the final mp4 via VK `video.save` and publishes a wall
-    post; `vk_wall_story` publishes a photo-story with `link_url` pointing at
-    the previous wall post instead of uploading the mp4 separately to stories.
+    post; `vk_wall_story` then uploads the same mp4 as a VK video story with
+    `link_url` pointing at the previous wall post.
     If VK rejects cross-community linking, the helper creates a wall post in
     the target community and links that local post instead;
   - for `popular_review`, VK fanout is wall-first: publish the clip to
-    `vk.com/kenigeventsofficial`, link that wall post into the same community
-    story immediately, then after `600` seconds link it into
-    `vk.com/klgdevents` stories or use a local `klgdevents` wall post fallback;
+    `vk.com/kenigeventsofficial`, publish a linked video story in the same
+    community immediately, then after `600` seconds publish the same linked
+    video story into `vk.com/klgdevents` or use a local `klgdevents` wall post
+    fallback;
   - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.

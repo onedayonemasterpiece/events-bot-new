@@ -20,7 +20,7 @@
 
 - `INC-2026-06-05-vk-story-forward-wall-first.md`
   - Scope: CherryFlash/Kaggle VK story fanout (`vk_wall`, `vk_wall_story`, legacy `vk_story`), `popular_review` target order for `kenigeventsofficial`/`klgdevents`, КОНБ `konb39` VK targets, and promo VK story image generation.
-  - Must not regress: video announcements for these VK communities must publish a wall clip first and link/forward that wall post into stories instead of uploading the mp4 separately to stories; promo poster stories must use the source image/poster plus internal wall `link_url` without rendering a white text card; `80 историй о главном` daily VK story surfaces must remain caption-free.
+  - Must not regress: video announcements for these VK communities must publish a wall clip first, then upload the mp4 as a VK video story with `link_url` pointing at that wall post; promo poster stories must use the source image/poster without VK `link_url`, so VK does not render a white wall-post card; `80 историй о главном` daily VK story surfaces must remain caption-free.
 - `INC-2026-06-04-80-stories-promo-vk-scheduler-gap.md`
   - Scope: Promo VK scheduler for the built-in `80 историй о главном` campaign,
     `vk_publication` cadence, `vk_repost`, new `vk_story` activity delivery,
