@@ -692,7 +692,10 @@ def render_cta_slide(
         draw.text((SLIDE_MX + (inner_w - w) / 2, y), line, font=cta_font, fill=accent)
         y += cstep
 
-    _draw_down_arrow(draw, SLIDE_W // 2, int(y + 64), int(y + 64 + squiggle_h), palette)
+    # Long arrow pushed toward the bottom edge for more downward momentum.
+    arrow_y1 = SLIDE_H - 118
+    arrow_y0 = max(int(y + 72), arrow_y1 - 360)
+    _draw_down_arrow(draw, SLIDE_W // 2, arrow_y0, arrow_y1, palette)
 
     if index and total:
         _draw_counter(draw, index, total, palette)
@@ -744,6 +747,74 @@ def render_afisha_slide(
 
     if swipe:
         _draw_listai_badge(draw, palette)
+    if index and total:
+        _draw_counter(draw, index, total, palette)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def render_hook_only_slide(
+    *,
+    hook: str,
+    footer: str | None,
+    palette: CardPalette,
+    index: int | None = None,
+    total: int | None = None,
+    swipe: bool = True,
+) -> bytes:
+    """Text-only hook card (vertical 4:5) for a strong hook whose event has no
+    usable photo — full-colour background, centred question, date·guide footer,
+    counter and a 'листай →' swipe cue."""
+    hook = (hook or "").strip()
+    footer = (footer or "").strip() or None
+    bg = _hex_to_rgb(palette.background)
+    fg = _hex_to_rgb(palette.text)
+    accent = _hex_to_rgb(palette.accent)
+
+    image = Image.new("RGB", (SLIDE_W, SLIDE_H), bg)
+    draw = ImageDraw.Draw(image)
+    inner_w = SLIDE_W - 2 * SLIDE_MX
+
+    head_font, head_lines = _fit_block_text(
+        draw, hook, str(_MAIN_FONT_PATH),
+        max_width=inner_w, max_height=int(SLIDE_H * 0.46),
+        max_px=104, min_px=58, max_lines=4, line_height=1.06,
+    )
+    head_h = _block_height(head_lines, head_font, 1.06)
+    foot_font = _font(str(_SUB_FONT_PATH), 40)
+    fo_a, fo_d = foot_font.getmetrics()
+    footer_h = (fo_a + fo_d) if footer else 0
+    rule_gap = 36
+    total_h = head_h + (rule_gap + 7 + rule_gap + footer_h if footer else 0)
+    top = (SLIDE_H - total_h) // 2
+
+    ha, hd = head_font.getmetrics()
+    hstep = (ha + hd) * 1.06
+    y = top
+    for line in head_lines:
+        w = draw.textlength(line, font=head_font)
+        draw.text((SLIDE_MX + (inner_w - w) / 2, y), line, font=head_font, fill=fg)
+        y += hstep
+    if footer:
+        ry = top + head_h + rule_gap
+        draw.rounded_rectangle([SLIDE_W / 2 - 70, ry, SLIDE_W / 2 + 70, ry + 7], radius=3.5, fill=accent)
+        fw = draw.textlength(footer, font=foot_font)
+        draw.text((SLIDE_MX + (inner_w - fw) / 2, ry + 7 + rule_gap), footer, font=foot_font, fill=accent)
+
+    if swipe:
+        f = _font(str(_SUB_FONT_PATH), 36)
+        label = "листай"
+        lw = draw.textlength(label, font=f)
+        fa, fd = f.getmetrics()
+        arrow_w = 66
+        right_x = SLIDE_W - SLIDE_MX
+        y0 = SLIDE_H - 96
+        x0 = right_x - (lw + 18 + arrow_w)
+        draw.text((x0, y0 - (fa + fd) / 2), label, font=f, fill=accent)
+        _draw_arrow(draw, x0 + lw + 18, right_x, y0, accent, w=10, head=18)
+
     if index and total:
         _draw_counter(draw, index, total, palette)
 
