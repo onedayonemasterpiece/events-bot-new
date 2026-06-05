@@ -516,7 +516,17 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
 
     story_posts: list[tuple[int, bytes, str | None]] = []
 
-    async def fake_story_publish(db_arg, bot_arg, *, target_group_id, image_bytes, source_url=None, link_text=None):
+    async def fake_story_publish(
+        db_arg,
+        bot_arg,
+        *,
+        target_group_id,
+        image_bytes,
+        source_url=None,
+        link_text=None,
+        include_source_link=True,
+    ):
+        assert include_source_link is False
         story_posts.append((target_group_id, image_bytes, source_url))
         return {
             "url": f"https://vk.com/story-{target_group_id}_{len(story_posts)}",

@@ -198,7 +198,9 @@ The repost result is recorded in `promo_exposure` with
 caption-free image story into a configured target community. The story media is
 the source wall post's first photo, with fallback to the promoted event's stored
 poster; title/date/venue text is not rendered into a white card. The story links
-back to the source VK wall post when VK accepts an internal `link_url`.
+do not pass the source wall URL as VK `link_url`: VK renders wall links as a
+large white post/caption card under the image, which breaks the poster-only
+story contract.
 Like reposts, story source selection waits until the source wall post is public
 and reconciles stale postponed ids before publishing. Story delivery is complete
 only after `stories.save`; the exposure row uses `surface='vk_story'`,

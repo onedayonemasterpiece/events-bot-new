@@ -83,9 +83,11 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 - Unit tests must prove `vk_wall_story` uses `stories.getPhotoUploadServer` with
   `link_url` to the wall post and does not call `stories.getVideoUploadServer`.
 - Promo tests must prove the story image builder returns the source wall image /
-  poster bytes without rendering a text panel.
+  poster bytes without rendering a text panel, and that promo story uploads do
+  not pass a VK wall `link_url`.
 - Live VK verification must show current stories in `klgdevents` and
-  `kenigeventsofficial` are wall-linked/caption-free.
+  `kenigeventsofficial` include the CherryFlash video wall story and
+  caption-free promo image stories.
 
 ### Required evidence
 
@@ -109,6 +111,8 @@ communities.
   `konb39`.
 - Changed promo `vk_story` image generation to use the source wall image/poster
   directly instead of drawing title/date/venue into a white panel.
+- Changed promo `vk_story` upload to omit VK `link_url`, because VK renders wall
+  links as a white wall-post/caption card under the story image.
 
 ## Follow-up Actions
 
@@ -137,12 +141,22 @@ communities.
   - `pytest -q tests/test_promo.py` passed: `22 passed`
 - postdeploy health: `https://events-bot-new-wngqia.fly.dev/healthz` returned
   `ok=true`, `ready=true`, `issues=[]`
-- live VK verification: `klgdevents` and `kenigeventsofficial` active story
-  lists contain only `has_photo=true`, `has_video=false` wall-linked stories;
-  fresh repair stories are `-231920894_456239036` and `-231828790_456239039`
-  with `link.url=https://vk.com/wall-231920894_1974`
-- manual same-day repair evidence:
+- superseded manual repair evidence (wrong wall post; kept for audit trail):
   `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-fresh-story-forward-2026-06-05.json`
+- corrective manual repair after operator follow-up:
+  - deleted stale/wrong linked promo stories for `wall-231920894_1974` and
+    `wall-231920894_2214` from `klgdevents` and `kenigeventsofficial`;
+  - republished clean image-only promo stories with `link=null`:
+    `-231920894_456239038`, `-231920894_456239039`,
+    `-231828790_456239041`, `-231828790_456239043`;
+  - published the actual CherryFlash video wall post
+    `https://vk.com/wall-231828790_992` into stories:
+    `-231920894_456239040` and `-231828790_456239042`, both with
+    `link.url=https://vk.com/wall-231828790_992`;
+  - evidence:
+    `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-cherryflash-992-and-clean-promo-2026-06-05.json`
+    and
+    `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-clean-promo-2214-kenig-retry-2026-06-05.json`
 
 ## Prevention
 

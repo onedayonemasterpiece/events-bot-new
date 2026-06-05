@@ -2031,6 +2031,7 @@ async def _publish_vk_story_photo(
     image_bytes: bytes,
     source_url: str | None = None,
     link_text: str | None = None,
+    include_source_link: bool = True,
 ) -> dict[str, Any]:
     from aiohttp import FormData
 
@@ -2052,7 +2053,7 @@ async def _publish_vk_story_photo(
         "group_id": abs(int(target_group_id)),
         "add_to_news": 1,
     }
-    if source_url and str(source_url).startswith("https://vk.com/"):
+    if include_source_link and source_url and str(source_url).startswith("https://vk.com/"):
         params["link_url"] = source_url
         params["link_text"] = link_text or "Подробнее"
 
@@ -2641,6 +2642,7 @@ async def run_promo_vk_activities(
                     image_bytes=image_bytes,
                     source_url=source_url,
                     link_text=str(cfg.get("link_text") or "Подробнее"),
+                    include_source_link=bool(cfg.get("include_source_link") or False),
                 )
                 url = str(story.get("url") or "").strip()
                 if not url:
