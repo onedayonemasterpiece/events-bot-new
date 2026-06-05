@@ -459,8 +459,8 @@ SLIDE_HOOK_MAX_PX = 80
 SLIDE_HOOK_MIN_PX = 48
 SLIDE_FOOTER_PX = 36
 SLIDE_HOOK_LH = 1.1
-DEFAULT_SLIDE_CTA_HEADLINE = "Куда сходить в Калининграде?"
-DEFAULT_SLIDE_CTA = "Все экскурсии, даты и запись — в тексте поста ниже"
+DEFAULT_SLIDE_CTA_HEADLINE = "Полный дайджест — в посте"
+DEFAULT_SLIDE_CTA = "Все экскурсии, даты и запись — в тексте ниже"
 
 
 def _quad_bezier(p0, p1, p2, steps: int = 48):
@@ -474,10 +474,53 @@ def _quad_bezier(p0, p1, p2, steps: int = 48):
     return pts
 
 
-def _broken_edge(y_base: int) -> list[tuple[int, int]]:
-    """An asymmetric rising slash with one kink — modern, not a mountain range."""
+def _jit(seed: int, i: int, amp: float) -> float:
+    """Deterministic small jitter in [-amp, amp] from a seed (≤20% variation)."""
+    return math.sin(seed * 12.9898 + i * 7.137) * amp
+
+
+def _broken_edge(y_base: int, seed: int = 0) -> list[tuple[int, int]]:
+    """Asymmetric rising slash with golden-ratio facets; jitters ≤20% per seed."""
     W = SLIDE_W
-    return [(0, y_base + 64), (int(W * 0.58), y_base + 2), (int(W * 0.64), y_base + 2), (W, y_base - 62)]
+    k1 = 0.382 + _jit(seed, 1, 0.03)
+    k2 = 0.618 + _jit(seed, 2, 0.03)
+    return [
+        (0, int(y_base + 60 + _jit(seed, 3, 10))),
+        (int(W * k1), int(y_base + 24 + _jit(seed, 4, 9))),
+        (int(W * k2), int(y_base - 8 + _jit(seed, 5, 9))),
+        (W, int(y_base - 58 + _jit(seed, 6, 10))),
+    ]
+
+
+def _round_line(draw, pts, color, width):
+    draw.line(pts, fill=color, width=width, joint="curve")
+    r = width / 2
+    for px, py in (pts[0], pts[-1]):
+        draw.ellipse([px - r, py - r, px + r, py + r], fill=color)
+
+
+def _draw_arrow(draw, x0, x1, y, color, *, w=11, head=22):
+    """Clean horizontal right arrow with rounded caps; tip exactly at (x1, y)."""
+    _round_line(draw, [(x0, y), (x1, y)], color, w)
+    _round_line(draw, [(x1 - head, y - head), (x1, y)], color, w)
+    _round_line(draw, [(x1 - head, y + head), (x1, y)], color, w)
+
+
+def _draw_counter(draw, index: int, total: int, palette: CardPalette):
+    """Small '1/6' counter pill, top-right, readable over a photo."""
+    accent = _hex_to_rgb(palette.accent)
+    bg = _hex_to_rgb(palette.background)
+    f = _font(str(_SUB_FONT_PATH), 34)
+    txt = f"{index}/{total}"
+    tw = draw.textlength(txt, font=f)
+    fa, fd = f.getmetrics()
+    pad_x, pad_y = 24, 12
+    w = tw + 2 * pad_x
+    h = (fa + fd) + 2 * pad_y
+    x1 = SLIDE_W - 44
+    y0 = 44
+    draw.rounded_rectangle([x1 - w, y0, x1, y0 + h], radius=h / 2, fill=bg)
+    draw.text((x1 - w + pad_x, y0 + pad_y), txt, font=f, fill=accent)
 
 
 def _fit_block_text(draw, text, font_path, *, max_width, max_height, max_px, min_px, max_lines, line_height):
@@ -490,40 +533,42 @@ def _fit_block_text(draw, text, font_path, *, max_width, max_height, max_px, min
     return font, _wrap(draw, text, font, max_width)[:max_lines]
 
 
-def _draw_listai(draw: ImageDraw.ImageDraw, right_x: int, mid_y: int, palette: CardPalette):
-    """Small 'листай' + a clean curved arrow, right-aligned, inside the block."""
+def _draw_listai(draw: ImageDraw.ImageDraw, right_x: int, top_y: int, palette: CardPalette) -> int:
+    """'листай →' (clean arrow), right-aligned. Returns its block height."""
     accent = _hex_to_rgb(palette.accent)
-    f = _font(str(_SUB_FONT_PATH), 34)
+    f = _font(str(_SUB_FONT_PATH), 36)
     label = "листай"
     lw = draw.textlength(label, font=f)
     fa, fd = f.getmetrics()
-    aw = 60
-    x0 = right_x - (lw + 16 + aw)
-    draw.text((x0, mid_y - (fa + fd) / 2), label, font=f, fill=accent)
-    ax0 = x0 + lw + 16
-    p0 = (ax0, mid_y + 8)
-    p1 = ((ax0 + right_x) / 2, mid_y - 14)
-    p2 = (right_x, mid_y - 2)
-    pts = _quad_bezier(p0, p1, p2, steps=32)
-    draw.line(pts, fill=accent, width=9, joint="curve")
-    hx, hy = pts[-1]
-    gx, gy = pts[-5]
-    ang = math.atan2(hy - gy, hx - gx)
-    L, sp = 24, math.radians(34)
-    a1 = (hx - L * math.cos(ang - sp), hy - L * math.sin(ang - sp))
-    a2 = (hx - L * math.cos(ang + sp), hy - L * math.sin(ang + sp))
-    draw.polygon([(hx, hy), a1, a2], fill=accent)
+    h = fa + fd
+    arrow_w = 66
+    x0 = right_x - (lw + 18 + arrow_w)
+    draw.text((x0, top_y), label, font=f, fill=accent)
+    ay = top_y + h / 2
+    _draw_arrow(draw, x0 + lw + 18, right_x, ay, accent, w=10, head=18)
+    return h
 
 
 def _draw_down_squiggle(draw: ImageDraw.ImageDraw, cx: int, y0: int, y1: int, palette: CardPalette):
-    """A playful dashed wavy arrow pointing down (towards the post text)."""
+    """A lively dashed wavy arrow pointing down — asymmetric amplitude/phase,
+    arrowhead aligned to the curve's end tangent."""
     accent = _hex_to_rgb(palette.accent)
-    n = 56
-    pts = [(cx + math.sin(i / n * math.pi * 3) * 26, y0 + (y1 - y0) * i / n) for i in range(n + 1)]
-    for i in range(0, len(pts) - 2, 3):  # dashed
-        draw.line([pts[i], pts[i + 1]], fill=accent, width=9)
-    bx, by = pts[-1]
-    draw.polygon([(bx, by + 8), (bx - 20, by - 22), (bx + 20, by - 22)], fill=accent)
+    n = 60
+    pts = []
+    for i in range(n + 1):
+        t = i / n
+        amp = 34 * (1.0 - 0.55 * t)              # tapers toward the tip
+        x = cx + math.sin(t * math.pi * 2.6 + 0.62) * amp   # golden-ish phase offset
+        pts.append((x, y0 + (y1 - y0) * t))
+    for i in range(0, len(pts) - 2, 3):          # dashed
+        _round_line(draw, [pts[i], pts[i + 1]], accent, 9)
+    hx, hy = pts[-1]
+    gx, gy = pts[-5]
+    ang = math.atan2(hy - gy, hx - gx)
+    L, sp = 30, math.radians(33)
+    a1 = (hx - L * math.cos(ang - sp), hy - L * math.sin(ang - sp))
+    a2 = (hx - L * math.cos(ang + sp), hy - L * math.sin(ang + sp))
+    draw.polygon([(hx, hy), a1, a2], fill=accent)
 
 
 def render_carousel_slide(
@@ -533,6 +578,9 @@ def render_carousel_slide(
     footer: str | None,
     palette: CardPalette,
     swipe: bool = True,
+    index: int | None = None,
+    total: int | None = None,
+    edge_seed: int = 0,
 ) -> bytes:
     """Vertical 4:5 slide: photo band on top, dynamic-height angular text block below."""
     hook = (hook or "").strip()
@@ -543,10 +591,9 @@ def render_carousel_slide(
     accent = _hex_to_rgb(palette.accent)
 
     inner_w = SLIDE_W - 2 * SLIDE_MX - 38  # leave room for the accent tab
-    scratch = _SCRATCH_DRAW
     hook_font, hook_lines = _fit_block_text(
-        scratch, hook, str(SLIDE_HOOK_FONT_PATH),
-        max_width=inner_w, max_height=420,
+        _SCRATCH_DRAW, hook, str(SLIDE_HOOK_FONT_PATH),
+        max_width=inner_w, max_height=440,
         max_px=SLIDE_HOOK_MAX_PX, min_px=SLIDE_HOOK_MIN_PX,
         max_lines=3, line_height=SLIDE_HOOK_LH,
     )
@@ -555,44 +602,53 @@ def render_carousel_slide(
     foot_font = _font(str(_SUB_FONT_PATH), SLIDE_FOOTER_PX)
     fa, fd = foot_font.getmetrics()
     footer_h = fa + fd
+    listai_h = (fa + fd) if swipe else 0      # "листай" row sits above the hook
 
-    pad_top = 86          # below the slash to the first hook line
+    pad_top = 64          # below the slash to the "листай"/hook
+    listai_gap = 24
     pad_gap = 30          # hook -> footer
-    pad_bottom = 92
-    block_h = pad_top + hook_h + pad_gap + footer_h + pad_bottom
+    pad_bottom = 84
+    # taller block when the hook needs more lines (covers more photo), shorter
+    # when there's little text — the dynamic "golden middle".
+    block_h = pad_top + listai_h + (listai_gap if swipe else 0) + hook_h + pad_gap + footer_h + pad_bottom
     y_base = SLIDE_H - block_h
-    y_base = max(int(SLIDE_H * 0.42), min(y_base, int(SLIDE_H * 0.72)))
+    y_base = max(int(SLIDE_H * 0.40), min(y_base, int(SLIDE_H * 0.72)))
 
-    # photo as a top band (not behind the block) — balanced centre crop so the
-    # subject is not swallowed by the block.
+    # photo as a top band (not behind the block) — balanced centre crop.
     band_h = y_base + 70
     image = Image.new("RGB", (SLIDE_W, SLIDE_H), bg)
     band = ImageOps.fit(Image.open(io.BytesIO(photo)).convert("RGB"), (SLIDE_W, band_h), method=Image.LANCZOS)
     image.paste(band, (0, 0))
     draw = ImageDraw.Draw(image)
 
-    # angular block with a thin accent rim tracing the slash (depth)
-    edge = _broken_edge(y_base)
+    # angular block with a thin accent rim tracing the slash (depth), per-slide jitter
+    edge = _broken_edge(y_base, seed=edge_seed)
     accent_edge = [(x, y - 14) for x, y in edge]
     draw.polygon(accent_edge + [(SLIDE_W, SLIDE_H), (0, SLIDE_H)], fill=accent)
     draw.polygon(edge + [(SLIDE_W, SLIDE_H), (0, SLIDE_H)], fill=bg)
 
     text_x = SLIDE_MX + 38
-    hook_top = max(p[1] for p in edge) + pad_top - 24
-    # accent tab to the left of the hook (replaces the old marker/diamonds)
-    draw.rounded_rectangle([SLIDE_MX, hook_top + 6, SLIDE_MX + 12, hook_top + hook_h - 6], radius=6, fill=accent)
+    content_top = max(p[1] for p in edge) + pad_top
 
+    if swipe:
+        _draw_listai(draw, SLIDE_W - SLIDE_MX, content_top, palette)
+        hook_top = content_top + listai_h + listai_gap
+    else:
+        hook_top = content_top
+
+    # accent tab to the left of the hook
+    draw.rounded_rectangle([SLIDE_MX, hook_top + 6, SLIDE_MX + 12, hook_top + hook_h - 6], radius=6, fill=accent)
     step = (ha + hd) * SLIDE_HOOK_LH
     y = hook_top
     for line in hook_lines:
         draw.text((text_x, y), line, font=hook_font, fill=fg)
         y += step
 
-    foot_y = hook_top + hook_h + pad_gap
     if footer:
-        draw.text((text_x, foot_y), footer, font=foot_font, fill=accent)
-    if swipe:
-        _draw_listai(draw, SLIDE_W - SLIDE_MX, int(foot_y + footer_h / 2), palette)
+        draw.text((text_x, hook_top + hook_h + pad_gap), footer, font=foot_font, fill=accent)
+
+    if index and total:
+        _draw_counter(draw, index, total, palette)
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
@@ -604,6 +660,8 @@ def render_cta_slide(
     palette: CardPalette,
     headline: str = DEFAULT_SLIDE_CTA_HEADLINE,
     cta: str = DEFAULT_SLIDE_CTA,
+    index: int | None = None,
+    total: int | None = None,
 ) -> bytes:
     """Final carousel slide (vertical 4:5): explicit CTA + a wavy arrow down to the post."""
     bg = _hex_to_rgb(palette.background)
@@ -628,7 +686,6 @@ def render_cta_slide(
     cta_h = _block_height(cta_lines, cta_font, 1.16)
     squiggle_h = 168
     gap = 70
-    total = head_h + gap + cta_h + 64 + squiggle_h
     top = int(SLIDE_H * 0.30)
 
     ha, hd = head_font.getmetrics()
@@ -650,6 +707,9 @@ def render_cta_slide(
         y += cstep
 
     _draw_down_squiggle(draw, SLIDE_W // 2, int(y + 56), int(y + 56 + squiggle_h), palette)
+
+    if index and total:
+        _draw_counter(draw, index, total, palette)
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=True)
