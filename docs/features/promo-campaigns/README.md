@@ -163,13 +163,15 @@ For each active campaign/activity the scheduler:
   publishes one missing post as a postponed community wall post through the
   standard VK wall contract (`post_to_vk`, community author, postponed queue),
   using the same source-style event message format as Smart Update;
-- for Telegram-origin events, applies the same no-text-only media guard as
-  Smart Update VK sync: when no VK photo attachment is available, the action
-  fails with `vk_sync_missing_media_for_telegram_event` and logs
-  `photo_urls_count` / `attachments_count` evidence instead of publishing a
-  promo wall post without an image; Telegram-origin candidates that already
-  have empty `event.photo_urls` are skipped during source selection so the
-  rolling slot can fall through to another campaign event with media;
+- for Telegram-origin events, treats missing media as a promo data incident, not
+  as a reason to silently degrade reach. The runner first tries to recover
+  renderable media from the event Telegraph page; if no VK photo attachment is
+  still available, it fails closed with `vk_sync_missing_media_for_telegram_event`,
+  records `FAILED_NO_MEDIA` audit evidence (`source_post_url`, `photo_urls_count`,
+  `attachments_count`, recovery action), and lets the rolling slot fall through
+  to another campaign event with media. Operator follow-up must investigate the
+  source media path and rehydrate the original promo event before treating the
+  campaign as repaired.
 - records each scheduled post in `promo_exposure` with
   `surface='vk_publication'`, `publish_status='VK_SCHEDULED'` and
   `details_json.target_url`. Because the VK wall/story call is an external side

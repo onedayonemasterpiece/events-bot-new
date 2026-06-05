@@ -262,6 +262,55 @@ async def test_promo_vk_publication_blocks_text_only_telegram_event(tmp_path, mo
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_promo_vk_publication_recovers_telegraph_media_before_posting(tmp_path, monkeypatch) -> None:
+    import main
+    from promo import _build_promo_vk_source_post
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+
+    async def fake_extract(url: str):
+        assert url == "https://telegra.ph/Port-07-07"
+        return ["https://example.com/recovered.jpg"]
+
+    async def fake_upload(group_id, photo_url, db_arg=None, bot_arg=None):
+        assert photo_url == "https://example.com/recovered.jpg"
+        return "photo-231920894_1"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None):
+        assert attachments == ["photo-231920894_1"]
+        return "https://vk.com/wall-231920894_1"
+
+    monkeypatch.setattr(main, "extract_telegraph_image_urls", fake_extract)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+
+    ev = _event("Калининградский порт", "2026-07-07", festival="80 историй о главном")
+    ev.id = 4417
+    ev.source_post_url = "https://t.me/kraftmarket39/199"
+    ev.telegraph_url = "https://telegra.ph/Port-07-07"
+    ev.photo_urls = []
+    ev.photo_count = 0
+
+    url = await _build_promo_vk_source_post(
+        db,
+        None,
+        ev,
+        campaign_id=1,
+        activity_id=8,
+        target_group_id=231920894,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1"
+    assert ev.photo_urls == ["https://example.com/recovered.jpg"]
+    assert ev.photo_count == 1
+    await db.close()
+
+
 def test_promo_vk_publication_candidate_requires_media_only_for_telegram(monkeypatch) -> None:
     from promo import _promo_vk_publication_missing_required_media
 
@@ -350,6 +399,71 @@ async def test_recent_activity_exposures_ignore_failed_status_by_default(tmp_pat
 
     assert [row.event_id for row in public_rows] == [scheduled_event_id]
     assert {row.event_id for row in all_rows} == {failed_event_id, scheduled_event_id}
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_vk_publication_records_no_media_candidate_as_failed(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 5, 16, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        campaign = PromoCampaign(
+            title="80 stories",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(month=9, day=1),
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_PUBLICATION,
+            enabled=True,
+            profile_key="klgdevents",
+            config_json={"target_group": "klgdevents", "window_hours": 24, "daily_slots": ["12:00"]},
+        )
+        missing = _event("No media", "2026-07-07", festival="80 историй о главном")
+        missing.source_post_url = "https://t.me/kraftmarket39/199"
+        missing.photo_urls = []
+        missing.photo_count = 0
+        ok = _event("With media", "2026-07-08", festival="80 историй о главном")
+        ok.source_post_url = "https://t.me/kraftmarket39/200"
+        session.add_all([activity, missing, ok])
+        await session.commit()
+
+    async def fake_resolve(ref: str):
+        return 231920894, "Events", "klgdevents", "group"
+
+    async def fake_upload(*args, **kwargs):
+        return "photo-231920894_1"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None):
+        return "https://vk.com/wall-231920894_99"
+
+    async def fake_extract(url: str):
+        return []
+
+    monkeypatch.setattr(main, "vk_resolve_group", fake_resolve)
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+    monkeypatch.setattr(main, "extract_telegraph_image_urls", fake_extract)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [item.status for item in results] == ["failed", "scheduled"]
+    async with db.get_session() as session:
+        exposures = (await session.execute(select(PromoExposure).order_by(PromoExposure.id))).scalars().all()
+    assert [row.publish_status for row in exposures] == ["FAILED_NO_MEDIA", "VK_SCHEDULED"]
+    assert exposures[0].public_target_count == 0
+    assert exposures[0].public_targets_json == []
+    assert exposures[0].details_json["action"] == "investigate_source_media_and_rehydrate_before_publication"
     await db.close()
 
 

@@ -222,6 +222,57 @@ def _promo_vk_publication_missing_required_media(ev: Event) -> bool:
     return not any(str(url or "").strip() for url in (getattr(ev, "photo_urls", None) or []))
 
 
+async def _ensure_promo_vk_photo_urls(db: Database, ev: Event) -> list[str]:
+    existing = [
+        str(url or "").strip()
+        for url in (getattr(ev, "photo_urls", None) or [])
+        if str(url or "").strip()
+    ]
+    if existing:
+        return existing
+
+    telegraph_source = str(
+        getattr(ev, "telegraph_url", None) or getattr(ev, "telegraph_path", None) or ""
+    ).strip()
+    if not telegraph_source:
+        return []
+
+    try:
+        from main import extract_telegraph_image_urls
+
+        recovered = await extract_telegraph_image_urls(telegraph_source)
+    except Exception:
+        logger.exception(
+            "promo.vk media recovery failed source=telegraph event_id=%s telegraph_url=%s",
+            getattr(ev, "id", None),
+            telegraph_source,
+        )
+        return []
+
+    recovered_urls = [str(url or "").strip() for url in recovered if str(url or "").strip()]
+    if not recovered_urls:
+        return []
+
+    ev.photo_urls = recovered_urls
+    ev.photo_count = len(recovered_urls)
+    event_id = getattr(ev, "id", None)
+    if event_id:
+        async with db.get_session() as session:
+            stored = await session.get(Event, int(event_id))
+            if stored is not None:
+                stored.photo_urls = recovered_urls
+                stored.photo_count = len(recovered_urls)
+                session.add(stored)
+                await session.commit()
+    logger.info(
+        "promo.vk media recovered source=telegraph event_id=%s telegraph_url=%s photo_urls_count=%s",
+        event_id,
+        telegraph_source,
+        len(recovered_urls),
+    )
+    return recovered_urls
+
+
 def _stable_shuffle_key(*parts: object) -> str:
     text = "|".join(str(part) for part in parts)
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
@@ -1709,7 +1760,7 @@ async def _build_promo_vk_source_post(
     text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
     message = build_vk_source_message(ev, text_for_vk, festival=festival)
     attachments: list[str] = []
-    photo_urls = list(getattr(ev, "photo_urls", None) or [])[:VK_MAX_ATTACHMENTS]
+    photo_urls = (await _ensure_promo_vk_photo_urls(db, ev))[:VK_MAX_ATTACHMENTS]
     if VK_PHOTOS_ENABLED:
         for photo_url in photo_urls:
             photo_id = await upload_vk_photo(str(target_group_id), photo_url, db, bot)
@@ -1820,7 +1871,7 @@ async def _record_vk_promo_exposure(
     surface: str,
     placement_kind: str,
     status: str,
-    url: str,
+    url: str | None,
     published_at: datetime,
     details: dict[str, Any],
     target_type: str = "vk_wall",
@@ -1837,8 +1888,8 @@ async def _record_vk_promo_exposure(
                         surface=surface,
                         placement_kind=placement_kind,
                         publish_status=status,
-                        public_target_count=1,
-                        public_targets_json=[{"type": target_type, "url": url}],
+                        public_target_count=1 if url else 0,
+                        public_targets_json=[{"type": target_type, "url": url}] if url else [],
                         published_at=published_at,
                         details_json=details,
                     )
@@ -2263,6 +2314,19 @@ async def run_promo_vk_activities(
                 surface=PROMO_SURFACE_VK_PUBLICATION,
                 since_utc=since_utc,
             )
+            recent_audit_exposures = await _recent_activity_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_VK_PUBLICATION,
+                since_utc=since_utc,
+                public_only=False,
+            )
+            recent_failed_no_media_event_ids = {
+                int(exposure.event_id)
+                for exposure in recent_audit_exposures
+                if str(exposure.publish_status or "") == "FAILED_NO_MEDIA"
+            }
             needed = max(0, due_count - len(organic) - len(recent_exposures))
             needed = min(needed, 1)
             if needed <= 0:
@@ -2293,6 +2357,10 @@ async def run_promo_vk_activities(
                 if int(ev.id) in recent_event_ids:
                     continue
                 if _promo_vk_publication_missing_required_media(ev):
+                    recovered_urls = await _ensure_promo_vk_photo_urls(db, ev)
+                    if recovered_urls:
+                        candidates.append(ev)
+                        continue
                     logger.warning(
                         "promo.vk publication candidate missing media campaign_id=%s activity_id=%s event_id=%s "
                         "source_post_url=%s photo_urls_count=0 reason=%s",
@@ -2301,6 +2369,37 @@ async def run_promo_vk_activities(
                         getattr(ev, "id", None),
                         getattr(ev, "source_post_url", None),
                         VK_SYNC_MISSING_TG_MEDIA_ERROR,
+                    )
+                    if int(ev.id) not in recent_failed_no_media_event_ids:
+                        await _record_vk_promo_exposure(
+                            db,
+                            campaign_id=campaign_id,
+                            activity_id=activity_id,
+                            event_id=int(ev.id),
+                            surface=PROMO_SURFACE_VK_PUBLICATION,
+                            placement_kind="rolling_window_deficit",
+                            status="FAILED_NO_MEDIA",
+                            url=None,
+                            published_at=now_utc,
+                            details={
+                                "target_group_id": target_group_id,
+                                "source_post_url": getattr(ev, "source_post_url", None),
+                                "photo_urls_count": 0,
+                                "attachments_count": 0,
+                                "reason": VK_SYNC_MISSING_TG_MEDIA_ERROR,
+                                "action": "investigate_source_media_and_rehydrate_before_publication",
+                            },
+                        )
+                        recent_failed_no_media_event_ids.add(int(ev.id))
+                    results.append(
+                        PromoVkActionResult(
+                            campaign_id,
+                            activity_id,
+                            activity.surface,
+                            int(ev.id),
+                            "failed",
+                            reason=VK_SYNC_MISSING_TG_MEDIA_ERROR,
+                        )
                     )
                     continue
                 candidates.append(ev)
