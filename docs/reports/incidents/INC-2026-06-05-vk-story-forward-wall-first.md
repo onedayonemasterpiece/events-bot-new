@@ -120,12 +120,12 @@ communities.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `d5b8a1dc82e8c395569fbee468cce433d8105912`
+- deployed SHA: `e61fa7362d2afa4bb7493787da5e9a46a1f32658`
   (`origin/main`)
 - deploy path: local `flyctl deploy --remote-only --app events-bot-new-wngqia
   --config fly.toml`, image
-  `registry.fly.io/events-bot-new-wngqia:deployment-01KTC9KGC9R9MP206FG4C5AE0R`,
-  machine `48e42d5b714228` version `1198`
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KTCFH65WKS8M8DY14NAGP8ES`,
+  machine `48e42d5b714228` version `1199`
 - blocked deploy path: GitHub Actions run
   `https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/27026657785`
   failed at Fly deploy with empty `FLY_API_TOKEN`
@@ -134,10 +134,11 @@ communities.
     video_announce/scenario.py video_announce/partner_tracks.py
     kaggle/CrumpleVideo/story_publish.py`
   - `pytest -q tests/test_promo.py::test_vk_story_image_uses_source_post_photo_without_text_panel
+    tests/test_promo.py::test_promo_vk_runner_schedules_publications_and_repost
     tests/test_video_announce_story_publish.py
     tests/test_kaggle_story_publish.py::test_vk_wall_story_links_previous_wall_post_without_video_story_upload
     tests/test_partner_tracks.py::test_konb_track_defaults_to_prod_story_targets`
-    passed: `14 passed`
+    passed: `15 passed`
   - `pytest -q tests/test_promo.py` passed: `22 passed`
 - postdeploy health: `https://events-bot-new-wngqia.fly.dev/healthz` returned
   `ok=true`, `ready=true`, `issues=[]`
