@@ -114,6 +114,15 @@ Three Telegram-origin events from `https://t.me/k_mira101/424` were created with
 - regression checks: `24 passed` target set covering Telegram media fail-closed, VK captcha no-text-only regression, Telegram location grounding, and Smart Update `prose_location`
 - post-deploy verification: Fly machine `48e42d5b714228` version `1189` started with `1 total, 1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, worker/scheduler tasks ok; container check confirmed `generic_guard_absent=True`, `reaction_prose_fix=True`, `vk_guard=True`
 
+### 2026-06-05 Promo VK Follow-Up
+
+- deployed SHA: `fa49b73095046ff468895e324c5809aabd62badb`
+- deploy image: `events-bot-new-wngqia:deployment-01KTBD1N9H2HWMXPWV4M2J9ARD`
+- Fly evidence: machine `48e42d5b714228` version `1194`, checks `1 total, 1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`; container probe confirmed `PUBLIC_PROMO_EXPOSURE_STATUSES` and promo missing-media candidate guard in `/app/promo.py`.
+- regression checks: `28 passed` (`tests/test_promo.py`, two VK source no-text-only regressions, location aliases, Telegram Monitor prompt contract, master prompt historical-date contract) plus `py_compile promo.py kaggle/TelegramMonitor/telegram_monitor.py` and `git diff --check`.
+- runtime logging evidence: production container has `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, `RUNTIME_LOG_BASENAME=events-bot.log`, `RUNTIME_LOG_RETENTION_HOURS=24`; active file `/data/runtime_logs/events-bot.log` present.
+- compensating catch-up: text-only promo exposure `45` for `event_id=4417` was invalidated as `FAILED_NO_MEDIA`; public text-only post `https://vk.com/wall-231920894_2157` was deleted via `wall.delete` (`response=1`); replacement exposure `46` scheduled `event_id=4446` with media at `https://vk.com/wall-231920894_2166`, `vk_post_date=2026-06-05T15:40:00+00:00`.
+
 ## Prevention
 
 - Telegram-origin VK publication now fails closed when the media set is empty, so a missing-media import issue remains visible as a `vk_sync` failure instead of becoming a text-only public VK post.
