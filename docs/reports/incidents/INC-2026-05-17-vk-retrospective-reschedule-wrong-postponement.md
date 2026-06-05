@@ -128,6 +128,10 @@ inspection showed event `4617` in `lifecycle_status='postponed'` with
   - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, scheduler/tasks ok, `issues=[]`
   - production event `4617` remains `active`; no `event_source` for `wall-190663987_8758` remains attached to it; `vk_inbox.id=6935` is `skipped` with `imported_event_id=NULL`.
 
+### 2026-06-05 Public VK Copy Repair
+
+- Operator-reported `https://vk.ru/wall-231920894_2082` was edited via `wall.edit` (`response.post_id=2082`) to include the source-grounded transfer note: the concert was planned for 29 May, moved to 1 July, and purchased tickets remain valid. Existing photo attachment was preserved.
+
 ## Prevention
 
 The incident record is now a regression contract for VK lifecycle shortcuts:

@@ -187,6 +187,13 @@ Still-open investigation areas:
 - regression checks: `/home/dev/projects/events-bot-new/.venv/bin/pytest tests/test_promo.py tests/test_video_announce_popular_review.py tests/test_vk_auto_queue_import.py tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py -q` -> `91 passed`; `py_compile` for touched Python modules passed.
 - post-deploy verification: Fly image `events-bot-new-wngqia:deployment-01KRTH9RXB7P1NV3X86S4CDWAT`; Fly machine `48e42d5b714228`, version `1100`, checks `1 passing`; `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
 
+### 2026-06-05 Follow-Up
+
+- Prevention deployed in code SHA `fa49b73095046ff468895e324c5809aabd62badb` and documented in `origin/main`.
+- Public VK repairs:
+  - `https://vk.ru/wall-231920894_1663` edited via `wall.edit` (`response.post_id=1663`) from `Место Силы, Галицкого 18` to `Культурное место, Остров Канта`; existing photo attachment was preserved.
+  - `https://vk.ru/wall-231920894_2141` edited via `wall.edit` (`response.post_id=2141`) to remove the false `9 октября 10:30` event date and state that the exhibition is already open with archive visiting hours `Пн-пт 10:30–17:00`.
+
 ## Prevention
 
 The durable prevention should be a reusable future-event quality audit plus replay-backed LLM-first import hardening. Row-level cleanup alone is not sufficient because this batch repeats already-known May quality incident classes.
