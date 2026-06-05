@@ -1890,6 +1890,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "festival_queue",
     "nightly_page_sync",
     "telegraph_cache_sanitize",
+    "vk_post_prune",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
@@ -2419,6 +2420,45 @@ def startup(
     else:
         logging.info("SCHED skipping vk_auto_import (ENABLE_VK_AUTO_IMPORT!=1)")
         _notify_admin_skip("vk_auto_import", "ENABLE_VK_AUTO_IMPORT!=1")
+
+    # Auto-delete past-event VK posts in the klgdevents community. Runs twice a
+    # day at quiet local times and shares the heavy-ops gate, so it never
+    # competes with VK-writing/Kaggle heavy jobs (skips if one is busy).
+    enable_vk_post_prune = _env_enabled("ENABLE_VK_POST_PRUNE", default=is_prod)
+    if enable_vk_post_prune:
+        vk_post_prune_scheduler = resolve("vk_post_prune_scheduler", None)
+        prune_times = os.getenv("VK_POST_PRUNE_TIMES_LOCAL", "02:30,14:30").strip()
+        prune_tz = os.getenv("VK_POST_PRUNE_TZ", "Europe/Kaliningrad").strip()
+        for idx, t in enumerate(prune_times.split(",")):
+            t = t.strip()
+            if not t:
+                continue
+            hour, minute = _cron_from_local(
+                t,
+                prune_tz,
+                default_hour="2",
+                default_minute="30",
+                label="VK_POST_PRUNE_TIMES_LOCAL",
+            )
+            _register_job(
+                f"vk_post_prune_{idx}",
+                _job_wrapper(
+                    "vk_post_prune",
+                    vk_post_prune_scheduler,
+                    notify_skip=_notify_admin_skip,
+                ),
+                "cron",
+                id=f"vk_post_prune_{idx}",
+                hour=hour,
+                minute=minute,
+                args=[db, bot],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=30,
+            )
+    else:
+        logging.info("SCHED skipping vk_post_prune (ENABLE_VK_POST_PRUNE!=1)")
 
     enable_festival_queue = _env_enabled("ENABLE_FESTIVAL_QUEUE", default=False)
     if enable_festival_queue:

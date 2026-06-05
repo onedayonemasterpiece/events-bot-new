@@ -4981,6 +4981,234 @@ async def cleanup_scheduler(
             logging.error("Cleanup failed: %s", e)
             break
 
+
+async def prune_past_event_vk_posts(
+    db: Database,
+    bot: Bot | None = None,
+    *,
+    now: datetime | None = None,
+    dry_run: bool | None = None,
+    limit: int | None = None,
+) -> dict[str, int]:
+    """Delete managed ``klgdevents`` VK event posts whose event is already in the
+    past, so the community feed stops surfacing stale events and VK no longer
+    recommends them.
+
+    Safety contract (see ``docs/features/vk-publishing/autodeletevkposts.md``):
+
+    - **Only our community.** A post is deleted only when its stored
+      ``source_vk_post_url`` resolves to ``owner_id == -VK_EVENTS_GROUP_ID``.
+      VK-imported events keep ``source_vk_post_url`` pointing at the external
+      source wall, so they are filtered out and never touched.
+    - **Only past events.** Mirrors :func:`cleanup_old_events` past-event logic
+      but with a *today* cutoff: ``end_date`` strictly before today (``LOCAL_TZ``),
+      or, when ``end_date`` is null, ``date`` strictly before today. Same-day and
+      future events are never deleted.
+    - **Only DB-tracked event posts.** We act on events still present in the DB
+      (kept until 7 days after they end by :func:`cleanup_old_events`). Daily
+      announcements, polls and promo reposts are not stored in
+      ``Event.source_vk_post_url`` and therefore are never matched/deleted.
+    - **No reposts / no story shares.** VK's wall API folds story shares into the
+      ``reposts`` object and exposes no separate story counter, so
+      ``reposts.count == 0`` is the combined "no reposts and no story" guard. If
+      the count is missing/unknown the post is kept.
+    - **Pinned posts are kept.**
+    - The stored URL is intentionally *not* cleared: a successful delete makes the
+      next ``wall.getById`` report the post as missing (skipped), while a failed
+      delete (captcha / transient) is naturally retried on the next run. The event
+      row is removed by :func:`cleanup_old_events` after the 7-day window.
+    """
+    stats: dict[str, int] = {
+        "candidates": 0,
+        "deleted": 0,
+        "kept_reposts": 0,
+        "kept_pinned": 0,
+        "missing": 0,
+        "errors": 0,
+    }
+
+    group_raw = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").strip()
+    if not group_raw:
+        logging.info("vk_post_prune: no VK_EVENTS_GROUP_ID configured, skip")
+        return stats
+    try:
+        group_id = abs(int(str(group_raw).lstrip("-")))
+    except (TypeError, ValueError):
+        logging.warning("vk_post_prune: invalid group id %r", group_raw)
+        return stats
+    target_owner_id = -group_id
+
+    if dry_run is None:
+        dry_run = (os.getenv("VK_POST_PRUNE_DRY_RUN") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+    if limit is None:
+        try:
+            limit = int(os.getenv("VK_POST_PRUNE_LIMIT", "50"))
+        except ValueError:
+            limit = 50
+
+    today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
+
+    # 1. Collect past events that still carry a managed klgdevents post URL.
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event.id, Event.source_vk_post_url).where(
+                    Event.source_vk_post_url.is_not(None),
+                    or_(
+                        and_(
+                            Event.end_date.is_not(None), Event.end_date < today_str
+                        ),
+                        and_(Event.end_date.is_(None), Event.date < today_str),
+                    ),
+                )
+            )
+        ).all()
+
+    candidates: list[tuple[int, str, int]] = []  # (event_id, post_url, post_id)
+    for event_id, url in rows:
+        url = (url or "").strip()
+        if not url:
+            continue
+        ids = _vk_owner_and_post_id(url)
+        if not ids:
+            continue
+        try:
+            owner = int(ids[0])
+            pid = int(ids[1])
+        except (TypeError, ValueError):
+            continue
+        # External source walls (VK-imported events) have a different owner_id
+        # and must never be deleted.
+        if owner != target_owner_id:
+            continue
+        candidates.append((int(event_id), url, pid))
+
+    stats["candidates"] = len(candidates)
+    if not candidates:
+        return stats
+    if limit and limit > 0:
+        candidates = candidates[:limit]
+
+    # 2. Read reposts/pinned state in batches via wall.getById (up to 100 ids).
+    post_state: dict[int, dict] = {}
+    BATCH = 100
+    for i in range(0, len(candidates), BATCH):
+        chunk = candidates[i : i + BATCH]
+        posts_param = ",".join(
+            f"{target_owner_id}_{pid}" for _eid, _url, pid in chunk
+        )
+        try:
+            resp = await vk_api("wall.getById", posts=posts_param)
+        except VKAPIError as e:
+            stats["errors"] += 1
+            if e.code == 14:
+                logging.warning("vk_post_prune: captcha required, aborting run")
+                return stats
+            logging.warning("vk_post_prune: wall.getById failed: %s", e)
+            continue
+        except Exception as e:
+            stats["errors"] += 1
+            logging.warning("vk_post_prune: wall.getById failed: %s", e)
+            continue
+        if isinstance(resp, dict):
+            items = resp.get("items") or []
+        elif isinstance(resp, list):
+            items = resp
+        else:
+            items = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            it_id = it.get("id")
+            if it_id is not None:
+                post_state[int(it_id)] = it
+
+    # 3. Decide + delete.
+    for event_id, url, pid in candidates:
+        item = post_state.get(pid)
+        if item is None:
+            # Already deleted/unavailable: nothing to do (left for the 7-day
+            # event-row cleanup). A transient lookup miss simply retries later.
+            stats["missing"] += 1
+            continue
+        if item.get("is_pinned"):
+            stats["kept_pinned"] += 1
+            continue
+        reposts = item.get("reposts") or {}
+        count = reposts.get("count")
+        if not isinstance(count, int) or count > 0:
+            stats["kept_reposts"] += 1
+            continue
+        if dry_run:
+            stats["deleted"] += 1
+            logging.info(
+                "vk_post_prune dry_run would delete %s event_id=%s", url, event_id
+            )
+            continue
+        try:
+            await _vk_api(
+                "wall.delete",
+                {"owner_id": target_owner_id, "post_id": pid},
+                db,
+                bot,
+            )
+        except VKAPIError as e:
+            stats["errors"] += 1
+            if e.code == 14:
+                logging.warning("vk_post_prune: captcha required, aborting run")
+                return stats
+            logging.warning("vk_post_prune: delete failed %s: %s", url, e)
+            continue
+        except Exception as e:
+            stats["errors"] += 1
+            logging.warning("vk_post_prune: delete failed %s: %s", url, e)
+            continue
+        stats["deleted"] += 1
+        logging.info("vk_post_prune deleted %s event_id=%s", url, event_id)
+
+    return stats
+
+
+async def vk_post_prune_scheduler(
+    db: Database, bot: Bot, run_id: str | None = None
+) -> None:
+    """Scheduled twice-daily pruning of past-event klgdevents VK posts."""
+    try:
+        start = _time.perf_counter()
+        async with db.ensure_connection():
+            stats = await prune_past_event_vk_posts(db, bot)
+        took_ms = (_time.perf_counter() - start) * 1000
+        logging.info(
+            "vk_post_prune_ok run_id=%s candidates=%s deleted=%s kept_reposts=%s "
+            "kept_pinned=%s missing=%s errors=%s took_ms=%.0f",
+            run_id,
+            stats["candidates"],
+            stats["deleted"],
+            stats["kept_reposts"],
+            stats["kept_pinned"],
+            stats["missing"],
+            stats["errors"],
+            took_ms,
+        )
+        if stats["deleted"] or stats["errors"]:
+            try:
+                await notify_superadmin(
+                    db,
+                    bot,
+                    "VK prune: deleted={deleted} kept_reposts={kept_reposts} "
+                    "pinned={kept_pinned} errors={errors}".format(**stats),
+                )
+            except Exception as e:
+                logging.warning("vk_post_prune notify failed: %s", e)
+    except Exception as e:
+        logging.error("vk_post_prune failed run_id=%s: %s", run_id, e)
+
+
 async def rebuild_pages(
     db: Database,
     months: list[str],
