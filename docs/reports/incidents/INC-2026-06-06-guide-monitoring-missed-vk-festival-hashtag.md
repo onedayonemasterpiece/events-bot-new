@@ -50,6 +50,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T20:26Z-20:33Z: fresh Kaggle output for `run_id=5273f7f8a26f` was downloaded and imported server-side without launching another Telethon/Kaggle scan. Recovery import `ops_run_id=1977` completed as partial: `sources_scanned=20`, `posts_scanned=42`, `posts_prefiltered=19`, `occurrences_created=2`, `occurrences_updated=11`, `llm_ok=19`, with `AuthKeyDuplicatedError` on sources still affected by the duplicated S22 session.
 - 2026-06-06T20:33Z: same-day `new_occurrences` digest issue `92` was published to Telegram targets `@wheretogo39` (`message_id=150`) and `@youwillsee39` (`message_id=168`).
 - 2026-06-06T20:33Z: VK fanout for issue `92` failed with `RuntimeError: Guide VK digest requires materialized media assets`; the new production carousel path was attempted only after afisha upload, so hook-only cards could not publish when `media_items_json=[]`.
+- 2026-06-06T20:46Z: issue `92` was published to VK postponed post `https://vk.com/wall-238875824_33` with 2 rendered hook-only carousel attachments. Follow-up inspection found the source post `https://vk.com/wall-99453147_1475` had a public photo attachment, but imported `guide_monitor_post.id=920` had `media_refs_json=[]`, `media_assets_json=[]`; the image was lost in the VK guide scanner before digest materialization.
 
 ## Root Cause
 
@@ -61,6 +62,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 6. Guide Kaggle polling treated `GetKernelSessionStatus` HTTP 5xx as fatal instead of transient, so a Kaggle API outage aborted the catch-up immediately after the stale registry was cleared.
 7. During incident handling, a `guide_monitoring` registry entry was manually removed while Kaggle status was `UNKNOWN` because `GetKernelSessionStatus` returned HTTP 5xx. That bypassed the existing `remote_telegram_session_busy` guard and could start two Kaggle kernels with the same `TELEGRAM_AUTH_BUNDLE_S22`, risking Telegram `AuthKeyDuplicatedError`.
 8. Guide VK fanout required materialized afisha assets before attempting the new carousel renderer. A digest issue with no usable source media could therefore fail before generating hook-only carousel cards, even though the production format supports text-derived card images plus CTA.
+9. The guide Kaggle VK scanner parsed `attachments` from `wall.get`, but `_vk_post_to_scanned_post()` returned `media_refs=[]` / `media_assets=[]` for VK posts and `process_source()` materialized media only for Telegram. VK source photos were therefore dropped during the normal scan, not during card rendering.
 
 ## Contributing Factors
 
@@ -90,6 +92,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Fly `/healthz`
 - `ops_run(kind='guide_monitoring')`
 - `kaggle_registry` / `/data/kaggle_jobs.json`
+- `kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py` VK media materialization
 - `TELEGRAM_AUTH_BUNDLE_S22` remote-session boundary
 
 ### Mandatory checks before closure or deploy
@@ -130,6 +133,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
 - Treat `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement.
 - Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
+- Materialize VK guide source `photo` attachments during the normal Kaggle scan (`media_refs/media_assets`) and keep server-side VK media recovery only as repair insurance for already-imported rows that predate the scanner fix.
 
 ## Follow-up Actions
 
@@ -154,10 +158,10 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
   - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py` -> passed
   - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_kaggle_service.py` -> `2 passed`
-  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py` -> `3 passed`
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py` -> `4 passed`
 - VK mitigation verification: `wall-231920894_2314` re-fetch shows `#Кантата` present and `#Кантаты` absent, with 2 attachments preserved
 - post-deploy verification: `/healthz` shows guide scheduler slots and Fly machine is healthy
-- guide same-day catch-up/digest evidence: recovery import `ops_run_id=1977` completed partial from fresh Kaggle output and digest issue `92` published to Telegram; VK publication pending hook-carousel hotfix deploy
+- guide same-day catch-up/digest evidence: recovery import `ops_run_id=1977` completed partial from fresh Kaggle output and digest issue `92` published to Telegram; VK postponed post `https://vk.com/wall-238875824_33` published but initially used hook-only cards because VK source media was not materialized
 
 ## Prevention
 

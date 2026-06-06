@@ -4298,6 +4298,7 @@ async def edit_vk_post(
     db: Database | None = None,
     bot: Bot | None = None,
     attachments: list[str] | None = None,
+    carousel: bool = False,
 ) -> bool:
     """Edit an existing VK post.
 
@@ -4439,9 +4440,9 @@ async def edit_vk_post(
         params["attachments"] = ",".join(current) if current else ""
     elif current:
         params["attachments"] = ",".join(current)
-    if len(current) > 1:
-        # Mirror post_to_vk: keep multi-photo posts as a grid (default
-        # rendering is carousel in current VK clients).
+    if len(current) > 1 and not carousel:
+        # Mirror post_to_vk: keep multi-photo posts as a grid unless the caller
+        # intentionally edits a swipeable carousel.
         params["primary_attachments_mode"] = "grid"
     if not edit_token:
         raise VKAPIError(None, "VK_USER_TOKEN missing", method="wall.edit")

@@ -23,6 +23,13 @@
   can still publish as rendered hook-only cards plus CTA. It still fails closed
   instead of creating a text-only VK wall post if neither carousel nor afisha
   attachments can be uploaded. Covered by `tests/test_guide_vk_digest.py`.
+- **Fixed: guide VK source media materialization (INC-2026-06-06)**:
+  guide VK monitoring now preserves public VK `photo` attachments as
+  `media_refs/media_assets` during the normal Kaggle scan, so digest carousel
+  slides can combine the source picture with the marketing hook. Server-side VK
+  media recovery is available only as a repair path for already-imported rows
+  that predate this fix, and `repair_existing` can edit an existing postponed
+  VK digest as a carousel. Covered by `tests/test_guide_vk_digest.py`.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to

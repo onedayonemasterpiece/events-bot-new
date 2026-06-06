@@ -783,6 +783,100 @@ def _vk_post_text(post: dict[str, Any]) -> str:
     return html.unescape(text).strip()
 
 
+def _safe_media_fragment(value: Any) -> str:
+    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip())
+    return text.strip("._") or "media"
+
+
+def _vk_best_photo_url(photo: dict[str, Any]) -> str | None:
+    sizes = photo.get("sizes") if isinstance(photo.get("sizes"), list) else []
+    best_url: str | None = None
+    best_score = -1
+    for size in sizes:
+        if not isinstance(size, dict):
+            continue
+        url = str(size.get("url") or "").strip()
+        if not url:
+            continue
+        try:
+            score = int(size.get("width") or 0) * int(size.get("height") or 0)
+        except Exception:
+            score = 0
+        if score > best_score:
+            best_score = score
+            best_url = url
+    return best_url
+
+
+def _vk_photo_media_refs(post: dict[str, Any]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
+    message_id = int(post.get("id") or 0)
+    for idx, att in enumerate(attachments[:GUIDE_MEDIA_OUTPUT_LIMIT_PER_POST]):
+        if not isinstance(att, dict) or att.get("type") != "photo":
+            continue
+        photo = att.get("photo") if isinstance(att.get("photo"), dict) else {}
+        url = _vk_best_photo_url(photo)
+        if not url:
+            continue
+        refs.append(
+            {
+                "message_id": message_id,
+                "kind": "photo",
+                "attachment_index": idx,
+                "owner_id": int(photo.get("owner_id") or 0) or None,
+                "id": int(photo.get("id") or 0) or None,
+                "url": url,
+            }
+        )
+    return refs
+
+
+def materialize_vk_post_media_assets(*, username: str, post: ScannedPost) -> list[dict[str, Any]]:
+    if not post.media_refs:
+        return []
+    MEDIA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out: list[dict[str, Any]] = []
+    max_bytes = GUIDE_MEDIA_OUTPUT_MAX_MB * 1024 * 1024
+    for idx, media_ref in enumerate(post.media_refs[:GUIDE_MEDIA_OUTPUT_LIMIT_PER_POST]):
+        if str(media_ref.get("kind") or "").strip().lower() != "photo":
+            continue
+        url = str(media_ref.get("url") or "").strip()
+        if not url:
+            continue
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "events-bot-guide-monitor/1.0"})
+            with urllib.request.urlopen(request, timeout=VK_TIMEOUT_SECONDS) as response:
+                payload = response.read(max_bytes + 1)
+        except Exception as exc:
+            print(
+                f"[guide:vk-media:error] source=vk:{username} message_id={post.message_id} error={type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            continue
+        if not payload or len(payload) > max_bytes:
+            continue
+        rel_path = (
+            f"guide_media/{_safe_media_fragment(username)}_"
+            f"{int(post.message_id)}_{int(media_ref.get('attachment_index') or idx)}_{idx}.jpg"
+        )
+        asset_path = WORK_DIR / rel_path
+        asset_path.parent.mkdir(parents=True, exist_ok=True)
+        asset_path.write_bytes(payload)
+        out.append(
+            {
+                "message_id": int(media_ref.get("message_id") or post.message_id),
+                "kind": "photo",
+                "attachment_index": int(media_ref.get("attachment_index") or idx),
+                "owner_id": media_ref.get("owner_id"),
+                "id": media_ref.get("id"),
+                "relative_path": rel_path,
+                "size_bytes": len(payload),
+            }
+        )
+    return out
+
+
 def _vk_post_to_scanned_post(
     post: dict[str, Any],
     *,
@@ -822,7 +916,7 @@ def _vk_post_to_scanned_post(
         forwards=reposts or None,
         reactions_total=sum(reactions_json.values()) or None,
         reactions_json=reactions_json or None,
-        media_refs=[],
+        media_refs=_vk_photo_media_refs(post),
         media_assets=[],
     )
 
@@ -2706,11 +2800,12 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
                 )
         flags = prefilter_flags(post, ocr_chunks=ocr_chunks)
         passes = prefilter_pass(post, source_kind, flags)
-        media_assets = (
-            await materialize_post_media_assets(client, username=username, post=post)
-            if passes and platform == "telegram" and client is not None
-            else []
-        )
+        if passes and platform == "telegram" and client is not None:
+            media_assets = await materialize_post_media_assets(client, username=username, post=post)
+        elif passes and platform == "vk":
+            media_assets = materialize_vk_post_media_assets(username=username, post=post)
+        else:
+            media_assets = []
         payload: dict[str, Any] = {
             "message_id": post.message_id,
             "grouped_id": post.grouped_id,
