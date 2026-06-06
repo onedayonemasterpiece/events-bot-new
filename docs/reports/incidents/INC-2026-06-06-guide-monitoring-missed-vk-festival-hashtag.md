@@ -137,6 +137,8 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - When status lookup is `UNKNOWN`/HTTP 5xx but matching output is already downloadable, treat output as terminal evidence, import it, and clear the registry without starting another remote Telegram session.
 - Treat a same-day `recovery_import` `success`/`partial` full import as daily full-slot delivery, so output recovery does not lead to a duplicate scheduled full scan after cooldown.
 - Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
+- If guide VK carousel slides are built but fewer than two slide attachments upload, fail closed/retry instead of publishing the plain source-image fallback; a source-only VK post is a regression for this incident.
+- Telegram and VK digest media must share the generated digest carousel files for a given issue. For a single photo candidate Telegram must send `slide_0.jpg` generated card, while multi-photo Telegram digests keep the existing album layout and VK keeps carousel layout.
 - Materialize VK guide source `photo` attachments during the normal Kaggle scan (`media_refs/media_assets`) and keep server-side VK media recovery only as repair insurance for already-imported rows that predate the scanner fix.
 - Defer critical guide watchdog retries after `remote_telegram_session_busy` by `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` instead of retrying every minute while the same `UNKNOWN` Kaggle/session lock is still present.
 

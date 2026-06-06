@@ -472,6 +472,50 @@ def _guide_vk_media_asset_paths(media_items: Sequence[Mapping[str, Any]] | None)
     return paths
 
 
+def _guide_digest_carousel_dir(issue_id: int) -> Path:
+    return GUIDE_MEDIA_STORE_ROOT / "_digest_carousel" / str(int(issue_id))
+
+
+def _existing_guide_digest_carousel_slide_paths(issue_id: int) -> list[Path]:
+    root = _guide_digest_carousel_dir(issue_id)
+    if not root.is_dir():
+        return []
+    paths = sorted(root.glob("slide_*.jpg"))
+    return [path for path in paths if path.is_file() and path.stat().st_size > 0]
+
+
+async def _ensure_guide_digest_carousel_slide_paths(
+    *,
+    issue_id: int,
+    rows: Sequence[Mapping[str, Any]],
+    media_items: Sequence[Mapping[str, Any]] | None,
+) -> list[Path]:
+    existing = _existing_guide_digest_carousel_slide_paths(issue_id)
+    if len(existing) >= 2:
+        return existing
+    from .hook_carousel import build_carousel_slides
+
+    slides = await build_carousel_slides(rows, media_items, seed=int(issue_id))
+    if len(slides) < 2:
+        return []
+    root = _guide_digest_carousel_dir(issue_id)
+    root.mkdir(parents=True, exist_ok=True)
+    for stale in root.glob("slide_*.jpg"):
+        try:
+            stale.unlink()
+        except OSError:
+            logger.warning("guide_digest_carousel stale_unlink_failed path=%s", stale, exc_info=True)
+    paths: list[Path] = []
+    for idx, payload in enumerate(slides):
+        path = root / f"slide_{idx}.jpg"
+        tmp = root / f".slide_{idx}.jpg.tmp"
+        tmp.write_bytes(payload)
+        tmp.replace(path)
+        paths.append(path)
+    logger.info("guide_digest_carousel_prepared issue_id=%s slides=%s dir=%s", issue_id, len(paths), root)
+    return paths
+
+
 async def _upload_guide_vk_media_attachments(
     *,
     group_id: int,
@@ -4490,6 +4534,29 @@ async def publish_guide_digest(
         media_payload: list[types.InputMediaPhoto | types.InputMediaVideo] = []
         requested_media = list(preview["media_items"][:MAX_MEDIA_ITEMS])
         missing_media_assets: list[str] = []
+        generated_single_slide_path: Path | None = None
+        if len(requested_media) == 1:
+            item = requested_media[0]
+            media_asset = dict(item.get("media_asset") or {})
+            media_ref = dict(item.get("media_ref") or {})
+            asset_kind = collapse_ws(media_asset.get("kind")) or collapse_ws(media_ref.get("kind")) or "photo"
+            if asset_kind == "photo":
+                try:
+                    slide_paths = await _ensure_guide_digest_carousel_slide_paths(
+                        issue_id=issue_id,
+                        rows=preview["items"],
+                        media_items=requested_media,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "guide_digest: single-card generation failed issue_id=%s target=%s: %s",
+                        issue_id,
+                        target,
+                        exc,
+                    )
+                    slide_paths = []
+                if slide_paths:
+                    generated_single_slide_path = slide_paths[0]
         for idx, item in enumerate(requested_media):
             media_asset = dict(item.get("media_asset") or {})
             media_ref = dict(item.get("media_ref") or {})
@@ -4499,7 +4566,7 @@ async def publish_guide_digest(
             if not asset_path_raw:
                 missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=no_path")
                 continue
-            asset_path = Path(asset_path_raw)
+            asset_path = generated_single_slide_path if generated_single_slide_path is not None else Path(asset_path_raw)
             if not asset_path.is_file():
                 missing_media_assets.append(f"occurrence_id={occurrence_id or '?'} reason=missing_file")
                 continue
@@ -4523,7 +4590,7 @@ async def publish_guide_digest(
                 _build_media_input(
                     payload=payload,
                     filename=asset_path.name or f"guide_{idx}.jpg",
-                    asset_kind=asset_kind,
+                    asset_kind="photo" if generated_single_slide_path is not None else asset_kind,
                     caption=caption,
                 )
             )
@@ -4834,21 +4901,25 @@ async def publish_latest_guide_digest_to_vk(
     # to the plain afisha-grid post below. Build it before requiring materialized
     # afishas so imageless digests can still publish hook-only cards.
     carousel_mode = False
-    carousel_slides: list[bytes] = []
+    carousel_slide_paths: list[Path] = []
     try:
-        from .hook_carousel import build_carousel_slides
-
-        carousel_slides = await build_carousel_slides(
-            rows, media_items, seed=issue_id_resolved
+        carousel_slide_paths = await _ensure_guide_digest_carousel_slide_paths(
+            issue_id=issue_id_resolved,
+            rows=rows,
+            media_items=media_items,
         )
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("guide_digest_vk_carousel_build_failed: %s", exc)
-    if carousel_slides and len(carousel_slides) >= 2:
+    if carousel_slide_paths and len(carousel_slide_paths) >= 2:
         slide_atts: list[str] = []
-        for idx, jpg in enumerate(carousel_slides):
+        for idx, slide_path in enumerate(carousel_slide_paths):
             try:
                 att = await upload_vk_photo_bytes_fn(
-                    str(vk_group_id), jpg, db, bot, filename=f"slide_{idx}.jpg"
+                    str(vk_group_id),
+                    slide_path.read_bytes(),
+                    db,
+                    bot,
+                    filename=slide_path.name or f"slide_{idx}.jpg",
                 )
             except Exception as exc:
                 logger.warning("guide_digest_vk_carousel_upload_failed idx=%s: %s", idx, exc)
@@ -4863,9 +4934,9 @@ async def publish_latest_guide_digest_to_vk(
                 issue_id_resolved, len(slide_atts), afisha_attachments_count,
             )
         else:
-            logger.warning(
-                "guide_digest_vk_carousel few uploads (%s) — afisha grid fallback",
-                len(slide_atts),
+            raise RuntimeError(
+                "Guide VK digest carousel upload failed: "
+                f"uploaded {len(slide_atts)}/{len(carousel_slide_paths)} slides"
             )
     if not attachments:
         attachments = await _upload_guide_vk_media_attachments(

@@ -33,6 +33,16 @@
   media recovery is available only as a repair path for already-imported rows
   that predate this fix, and `repair_existing` can edit an existing postponed
   VK digest as a carousel. Covered by `tests/test_guide_vk_digest.py`.
+- **Fixed: guide digest generated-card media pipeline (INC-2026-06-06)**:
+  guide digest carousel slides are now prepared once per digest issue and reused
+  by both Telegram and VK. Telegram sends the generated card instead of the raw
+  source photo when the digest has exactly one photo candidate; VK uses the same
+  cached slides for the carousel. When carousel slides are built but fewer than
+  two slides upload, VK fails closed instead of publishing the old plain
+  source-image fallback. VK byte photo upload also retries the upload-server
+  step when VK returns an empty `photo` payload before `photos.saveWallPhoto`.
+  Covered by `tests/test_guide_digest_publish.py` and
+  `tests/test_guide_vk_digest.py`.
 - **Fixed: guide critical watchdog remote-busy retry storm (INC-2026-06-06)**:
   the live watchdog no longer retries a `guide_excursions_full` catch-up every
   minute after a `remote_telegram_session_busy` skip. The daily slot remains
