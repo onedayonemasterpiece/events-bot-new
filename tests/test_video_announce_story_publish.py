@@ -69,6 +69,7 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "transport": "vk_wall_story",
         },
         {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
+        {"peer": "@i_love_kaliningrad", "delay_seconds": 600, "mode": "repost_previous"},
     ]
 
 
@@ -106,6 +107,7 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         ("@loving_guide39", "telethon"),
         ("klgdevents", "vk_wall_story"),
         ("@catwithbag", "telethon"),
+        ("@i_love_kaliningrad", "telethon"),
     ]
 
 

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- **Changed: CherryFlash story fanout**: added the Telegram channel story
+  repost target `@i_love_kaliningrad` at the end of the base CherryFlash queue,
+  with the standard `600` second delay after the previous story publication.
 - **Changed: release governance uses manual Fly deploy only**:
   GitHub Actions deploy is no longer an allowed production release path for this
   repo; the stale auto Fly workflow was removed so pushes to `main` no longer

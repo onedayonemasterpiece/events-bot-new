@@ -667,14 +667,16 @@ This section captures the latest intro-direction request as an explicit delta to
 ### Publication target
 
 - Production publication is a mixed Telegram/VK fanout, not a single Telegram-only phase target.
-- The current ordered chain interleaves surfaces with 5-minute pauses so VK users do not wait for the whole Telegram fanout:
+- The current ordered chain interleaves Telegram and VK surfaces with short
+  per-target pauses so VK users do not wait for the whole Telegram fanout:
   - upload primary Telegram story to `@kenigevents`;
   - after `300` seconds publish the same video as a VK wall post in `https://vk.com/club231828790`;
   - after `300` seconds repost the Telegram story to `@lovekenig`;
   - after `300` seconds publish VK story in `https://vk.com/club231828790`;
   - after `300` seconds repost the Telegram story to `@loving_guide39`;
   - after `300` seconds publish VK story in `https://vk.com/klgdevents`;
-  - after `300` seconds repost the Telegram story to `@catwithbag`.
+  - after `300` seconds repost the Telegram story to `@catwithbag`;
+  - after `600` seconds repost the Telegram story to `@i_love_kaliningrad`.
 - The two VK story targets therefore stay `600` seconds apart even though the overall queue alternates Telegram and VK every `300` seconds.
 - Telegram channel-story failures such as `BOOSTS_REQUIRED` must not abort CherryFlash publication for the rest of the surfaces. Business partner stories and VK publications are independent best-effort fanout targets and should continue even if the main Telegram channel lacks story boosts.
 
@@ -780,7 +782,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] The phone-screen CTA stack reads in depth above/below the poster without text-on-text collisions.
 - [ ] Critical CTA/date/city content stays inside story-safe bounds and avoids common Telegram / Instagram story UI overlay zones.
 - [ ] Phase-1 fallback publication to `@keniggpt` remains available for validation/debug runs when story rollout is intentionally bypassed.
-- [ ] Story autopublish publishes the current mixed ordered fanout `@kenigevents -> VK wall club231828790 -> @lovekenig -> VK story club231828790 -> @loving_guide39 -> VK story klgdevents -> @catwithbag`, preserving `600` second spacing between the two VK story targets.
+- [ ] Story autopublish publishes the current mixed ordered fanout `@kenigevents -> VK wall club231828790 -> @lovekenig -> VK story club231828790 -> @loving_guide39 -> VK story klgdevents -> @catwithbag -> @i_love_kaliningrad`, preserving `600` second spacing between the two VK story targets and the final `@i_love_kaliningrad` repost.
 - [ ] `cherryflash_libsvtav1` requests story publish by default while still using the same shared CherryFlash story helper path.
 - [ ] The target operating expectation remains that the story fanout is already published by `12:30 Europe/Kaliningrad`.
 
