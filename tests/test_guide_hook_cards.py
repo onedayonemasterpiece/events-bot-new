@@ -259,3 +259,55 @@ async def test_build_vk_hook_card_attachments_swallows_generate_failure(monkeypa
         upload_vk_photo_bytes_fn=fake_upload,
     )
     assert out == []
+
+
+# --------------------------------------------------------------------------- #
+# Carousel builder (offline, stubbed vision + LLM)
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_build_carousel_slides_mixes_photo_afisha_text_and_cta(tmp_path):
+    import json as _json
+    from guide_excursions.hook_carousel import build_carousel_slides
+
+    # two on-disk media images: one "afisha" (reddish), one "photo" (greenish)
+    afi = tmp_path / "afi.jpg"
+    pho = tmp_path / "pho.jpg"
+    Image.new("RGB", (900, 1200), (180, 60, 60)).save(afi)
+    Image.new("RGB", (900, 1200), (80, 150, 90)).save(pho)
+    media_items = [
+        {"occurrence_id": 501, "media_asset": {"path": str(afi), "kind": "photo"}},
+        {"occurrence_id": 502, "media_asset": {"path": str(pho), "kind": "photo"}},
+    ]
+    rows = [
+        {"occurrence_id": 501, "canonical_title": "Фестиваль", "city": "Калининград",
+         "date": "2026-06-06", "guide_names": ["Орг"], "fact_pack": {"main_hook": "лекции"}},
+        {"occurrence_id": 502, "canonical_title": "Амалиенау", "city": "Калининград",
+         "date": "2026-06-21", "guide_names": ["Таня"], "fact_pack": {"main_hook": "виллы"}},
+        {"occurrence_id": 503, "canonical_title": "Байдарка", "city": "Калининград",
+         "date": "2026-05-30", "guide_names": ["Синдикат"], "fact_pack": {"main_hook": "река"}},
+    ]
+
+    async def fake_ask(prompt, *, system_prompt=None, response_format=None, max_tokens=0, temperature=0.0, meta=None):
+        ids = [int(x) for x in re.findall(r'"occurrence_id":\s*(\d+)', prompt)]
+        return _json.dumps({"cards": [
+            {"occurrence_id": i, "hook": f"Что скрывает место {i}?", "theme": "x", "strength": 90 - i}
+            for i in ids
+        ]})
+
+    async def fake_classify(image_bytes):
+        im = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((1, 1))
+        r, g, b = im.getpixel((0, 0))
+        return r > g  # reddish -> afisha
+
+    slides = await build_carousel_slides(rows, media_items, seed=80, ask_fn=fake_ask, classify_fn=fake_classify)
+    # photo+hook (502) + afisha (501) + text card (503) + CTA
+    assert len(slides) >= 3
+    for s in slides:
+        img = Image.open(io.BytesIO(s))
+        assert img.size == (1080, 1350)
+
+
+@pytest.mark.asyncio
+async def test_build_carousel_slides_empty_without_media_or_rows():
+    from guide_excursions.hook_carousel import build_carousel_slides
+    assert await build_carousel_slides([], [], seed=1) == []

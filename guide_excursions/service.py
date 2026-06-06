@@ -4543,25 +4543,44 @@ async def publish_latest_guide_digest_to_vk(
     )
 
     afisha_attachments_count = len(attachments)
-    hook_card_attachments = await _build_guide_vk_hook_card_attachments(
-        group_id=vk_group_id,
-        rows=rows,
-        existing_image_count=afisha_attachments_count,
-        db=db,
-        bot=bot,
-        upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
-        seed=issue_id_resolved,
-    )
-    if hook_card_attachments:
-        # Hook cards lead the VK grid (most catchy first), afishas follow.
-        attachments = hook_card_attachments + attachments
-        logger.info(
-            "guide_digest_vk_attachments issue_id=%s hook_cards=%s afishas=%s total=%s",
-            issue_id_resolved,
-            len(hook_card_attachments),
-            afisha_attachments_count,
-            len(attachments),
-        )
+    # Best-effort: replace the afisha grid with a swipeable carousel of slides
+    # (photo+hook / afisha / text-only hook cards + CTA). Any failure falls back
+    # to the plain afisha-grid post below.
+    carousel_mode = False
+    if not (existing_target_payload is not None and repair_existing):
+        carousel_slides: list[bytes] = []
+        try:
+            from .hook_carousel import build_carousel_slides
+
+            carousel_slides = await build_carousel_slides(
+                rows, media_items, seed=issue_id_resolved
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("guide_digest_vk_carousel_build_failed: %s", exc)
+        if carousel_slides and len(carousel_slides) >= 2:
+            slide_atts: list[str] = []
+            for idx, jpg in enumerate(carousel_slides):
+                try:
+                    att = await upload_vk_photo_bytes_fn(
+                        str(vk_group_id), jpg, db, bot, filename=f"slide_{idx}.jpg"
+                    )
+                except Exception as exc:
+                    logger.warning("guide_digest_vk_carousel_upload_failed idx=%s: %s", idx, exc)
+                    att = None
+                if att:
+                    slide_atts.append(att)
+            if len(slide_atts) >= 2:
+                attachments = slide_atts
+                carousel_mode = True
+                logger.info(
+                    "guide_digest_vk_carousel issue_id=%s slides=%s afishas=%s",
+                    issue_id_resolved, len(slide_atts), afisha_attachments_count,
+                )
+            else:
+                logger.warning(
+                    "guide_digest_vk_carousel few uploads (%s) — afisha grid fallback",
+                    len(slide_atts),
+                )
 
     if existing_target_payload is not None and repair_existing:
         post_urls = []
@@ -4611,7 +4630,9 @@ async def publish_latest_guide_digest_to_vk(
             "text": text,
         }
 
-    url = await post_to_vk_fn(str(vk_group_id), text, db, bot, attachments=attachments)
+    url = await post_to_vk_fn(
+        str(vk_group_id), text, db, bot, attachments=attachments, carousel=carousel_mode
+    )
     if not url:
         raise RuntimeError("Guide VK digest wall.post failed")
 

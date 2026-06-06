@@ -3541,14 +3541,16 @@ async def post_to_vk(
     db: Database | None = None,
     bot: Bot | None = None,
     attachments: list[str] | None = None,
+    carousel: bool = False,
 ) -> str | None:
     if not group_id:
         return None
     logging.info(
-        "post_to_vk start: group=%s len=%d attachments=%d",
+        "post_to_vk start: group=%s len=%d attachments=%d carousel=%s",
         group_id,
         len(message),
         len(attachments or []),
+        carousel,
     )
     owner_id = -int(group_id.lstrip("-"))
     params_base = {
@@ -3559,9 +3561,11 @@ async def post_to_vk(
     }
     if attachments:
         params_base["attachments"] = ",".join(attachments)
-        if len(attachments) > 1:
+        if len(attachments) > 1 and not carousel:
             # Multi-photo posts default to carousel in modern VK clients;
-            # publish as a grid so all images are visible at once.
+            # publish as a grid so all images are visible at once. When
+            # ``carousel`` is set we intentionally leave the default carousel
+            # rendering (swipeable) instead of forcing a grid.
             params_base["primary_attachments_mode"] = "grid"
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
