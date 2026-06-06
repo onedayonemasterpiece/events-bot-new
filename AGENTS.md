@@ -115,6 +115,8 @@
 - Для prod-bound задач агент обязан сам привести deploy/tooling в рабочее состояние:
   - сначала проверить стандартные локальные пути и user-level install locations для нужных CLI (`flyctl`, `gh`, и т.п.), а не только текущий `PATH`;
   - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` в текущем процессе;
+  - для Fly auth нельзя останавливаться на `flyctl auth whoami` / `no access token available`: обязательно проверить `~/.fly/config.yml` на `access_token` и попробовать process-local `FLY_ACCESS_TOKEN=<redacted>` или `FLY_API_TOKEN=<redacted>`; токен не печатать, в отчёте писать только факт наличия/отсутствия и результат `whoami`;
+  - отсутствие именно `FLY_API_TOKEN` в `.env` не означает отсутствие release auth, если есть user-level Fly config;
   - если CLI действительно отсутствует, агент должен установить его или предложить минимальный reproducible bootstrap, а не объявлять отсутствие инструмента достаточным оправданием остановки;
   - фразы вида "локально нет `flyctl`" не считаются допустимым closure/release explanation, если агент ещё не попытался self-bootstrap tooling.
 - Перед deploy обязательно:
