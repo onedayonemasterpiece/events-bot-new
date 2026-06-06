@@ -273,6 +273,7 @@ features:
     status: implemented
     docs: docs/features/vk-publishing/README.md
     entrypoints:
+      - vk_hashtags.py
       - main.py
       - main_part2.py
       - video_announce/story_publish.py

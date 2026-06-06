@@ -1,7 +1,9 @@
 from datetime import date
+from types import SimpleNamespace
 
 from vk_hashtags import (
     build_vk_announce_hashtags,
+    build_vk_event_hashtags,
     build_vk_video_announce_caption,
     normalize_vk_hashtag,
     vk_date_hashtags,
@@ -29,6 +31,18 @@ def test_build_vk_announce_hashtags_adds_base_city_and_dates():
         "#17мая",
         "#17_мая",
     ]
+
+
+def test_build_vk_event_hashtags_adds_festival_name_without_spaces():
+    event = SimpleNamespace(
+        city="Калининград",
+        date="2026-06-06",
+        festival="80 историй о главном",
+    )
+
+    tags = build_vk_event_hashtags(event)
+
+    assert tags[-1] == "#80историйоглавном"
 
 
 def test_normalize_vk_hashtag_compacts_city_names():

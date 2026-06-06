@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- **VK Publishing**: event VK posts now add an extra festival hashtag when
+  `event.festival` is set, using the festival name without spaces/separators
+  (for example `#80историйоглавном`).
 - **Fixed: VK past-event prune scheduler + comment guard (INC-2026-06-06)**:
   scheduled `vk_post_prune` no longer calls the non-existent
   `Database.ensure_connection`, so the twice-daily cleanup can run normally in

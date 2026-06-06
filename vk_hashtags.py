@@ -32,6 +32,7 @@ _MONTHS_GENITIVE: tuple[str, ...] = (
 class HashtagEvent(Protocol):
     date: str
     city: str | None
+    festival: str | None
 
 
 def _parse_iso_date(value: str | None) -> date | None:
@@ -52,6 +53,17 @@ def normalize_vk_hashtag(value: str | None) -> str | None:
     raw = raw.lstrip("#").strip()
     raw = re.sub(r"[^\w]+", "_", raw, flags=re.UNICODE)
     raw = re.sub(r"_+", "_", raw).strip("_")
+    if not raw:
+        return None
+    return f"#{raw}"
+
+
+def normalize_vk_festival_hashtag(value: str | None) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    raw = raw.lstrip("#").strip()
+    raw = re.sub(r"[^\w]+", "", raw, flags=re.UNICODE)
     if not raw:
         return None
     return f"#{raw}"
@@ -96,10 +108,14 @@ def build_vk_announce_hashtags(
 
 
 def build_vk_event_hashtags(event: HashtagEvent) -> list[str]:
-    return build_vk_announce_hashtags(
+    tags = build_vk_announce_hashtags(
         cities=[getattr(event, "city", None)],
         dates=[getattr(event, "date", None)],
     )
+    festival_tag = normalize_vk_festival_hashtag(getattr(event, "festival", None))
+    if festival_tag:
+        tags.append(festival_tag)
+    return dedupe_vk_hashtags(tags)
 
 
 def format_vk_hashtag_line(tags: Iterable[str | None]) -> str:
