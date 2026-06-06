@@ -4172,7 +4172,32 @@ async def upload_vk_photo_bytes(
                                 async with session.post(upload_url, data=form) as up:
                                     return await up.json()
 
-                    upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                    try:
+                        upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                    except Exception as exc:
+                        logging.warning(
+                            "vk.upload.bytes upload_request_failed owner_id=%s actor=%s attempt=%s error=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            exc,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        return None
+                    if not isinstance(upload_result, dict):
+                        logging.warning(
+                            "vk.upload.bytes invalid_upload_response owner_id=%s actor=%s attempt=%s type=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            type(upload_result).__name__,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(upload_attempt)
+                            continue
+                        return None
                     upload_photo = upload_result.get("photo")
                     upload_server = upload_result.get("server")
                     upload_hash = upload_result.get("hash")
