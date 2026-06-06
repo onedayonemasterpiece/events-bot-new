@@ -4486,6 +4486,24 @@ async def publish_guide_digest(
 ) -> dict[str, Any]:
     preview = await build_guide_digest_preview(db, family=family)
     issue_id = int(preview["issue_id"])
+    preview_media_items = list(preview.get("media_items") or [])
+    covered_occurrence_ids = [int(item) for item in (preview.get("covered_occurrence_ids") or []) if int(item or 0) > 0]
+    if preview.get("items") and covered_occurrence_ids and not _guide_vk_media_asset_paths(preview_media_items):
+        recovered_media = await recover_missing_vk_media_assets_for_occurrences(
+            db,
+            covered_occurrence_ids,
+            bot=bot,
+        )
+        if recovered_media:
+            preview_media_items = await _media_items_for_occurrence_ids(db, covered_occurrence_ids)
+            preview["media_items"] = preview_media_items
+            async with db.raw_conn() as conn:
+                await _enable_row_factory(conn)
+                await conn.execute(
+                    "UPDATE guide_digest_issue SET media_items_json=? WHERE id=?",
+                    (_json_dump(preview_media_items), issue_id),
+                )
+                await conn.commit()
     targets = list(_resolve_digest_target_chats(target_chat))
     primary_target = targets[0] if targets else GUIDE_DIGEST_TARGET_CHAT
     texts: list[str] = list(preview["texts"])

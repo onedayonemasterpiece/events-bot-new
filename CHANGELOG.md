@@ -41,6 +41,10 @@
   two slides upload, VK fails closed instead of publishing the old plain
   source-image fallback. VK byte photo upload also retries the upload-server
   step when VK returns an empty `photo` payload before `photos.saveWallPhoto`.
+  Publish-time VK media recovery for already-imported rows now runs in the
+  common Telegram digest path before any target fanout and persists recovered
+  `media_items_json`, preventing text-only Telegram posts followed by VK-only
+  card recovery.
   Covered by `tests/test_guide_digest_publish.py` and
   `tests/test_guide_vk_digest.py`.
 - **Fixed: guide critical watchdog remote-busy retry storm (INC-2026-06-06)**:
