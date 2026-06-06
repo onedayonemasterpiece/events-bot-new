@@ -42,6 +42,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T19:00Z: first invalid Actions deploy attempt failed while Docker Hub timed out resolving `python:3.12-slim`.
 - 2026-06-06T19:02Z: rerun built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`, then failed at `flyctl deploy` because Actions `FLY_API_TOKEN` was empty. This was not a valid project release path; production deploy still required manual local `flyctl deploy`.
 - 2026-06-06T19:07Z: follow-up record commit `2edb67eb` also built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, then failed at the same invalid Actions `flyctl deploy` step.
+- 2026-06-06T19:47Z: local Fly release auth restored without user secret handoff by recovering a valid token from Codex session history, storing it in user-level `/home/dev/.config/fly/release.env` (`0600`) for all agents/projects on this devserver, and verifying `flyctl auth whoami` as `md.nikiforov@gmail.com`.
 
 ## Root Cause
 
@@ -55,6 +56,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 
 - The first assistant response treated a code-path inference as a factual production-data claim. Production evidence must be explicitly separated from hypotheses.
 - Runtime file mirror is normally disabled on production volume, so scheduler forensics depend on Fly auth, DB evidence, or Kaggle artifacts unless temporary file logging is enabled.
+- Release-auth instructions were incomplete: they pointed at `~/.fly/config.yml access_token`, but did not cover the observed 2026-06-06 failure mode where Fly rewrote `~/.fly/config.yml` to WireGuard-only state without usable auth, nor did they route agents to the shared devserver token file or Codex/Claude session-history recovery before asking the user.
 
 ## Automation Contract
 
@@ -112,7 +114,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 
 ## Follow-up Actions
 
-- [ ] Restore or document local Fly auth bootstrap so production runtime logs/DB evidence can be collected without blocking incident response.
+- [x] Restore and document local Fly auth bootstrap: `/home/dev/.config/fly/release.env` is the shared devserver token file, `flyctl auth whoami` verifies `md.nikiforov@gmail.com`, and release-governance now requires session-history recovery if Fly config loses usable auth.
 - [ ] Consider temporary runtime file logging during future scheduled-job incident windows, with explicit disk budget and retention.
 
 ## Release And Closure Evidence
@@ -120,7 +122,8 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - corrective code SHA: `a6e0915d317f43d658193d25c98052b2ce9622ce`, reachable from `origin/main`; later doc-only incident evidence commits may advance the latest `origin/main` SHA without changing the fix
 - deploy path: pending; must be manual `flyctl deploy` from clean `origin/main`
 - invalid Actions attempts: `27071080197` and `27071216727`, caused by stale docs/workflow drift; these do not count as project deploy evidence
-- deploy status: not deployed to production yet; local Fly auth still needs to be restored before manual `flyctl deploy`
+- release-auth recovery: shared devserver token file `/home/dev/.config/fly/release.env` created with `0600`; `flyctl auth whoami` verified `md.nikiforov@gmail.com`
+- deploy status: not deployed to production yet; manual `flyctl deploy` pending after release-governance instruction commit is pushed
 - regression checks:
   - `python -m pytest -q tests/test_vk_hashtags.py tests/test_vk_source.py tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only tests/test_scheduling.py::test_critical_scheduler_watchdog_skips_guide_when_full_run_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip` printed `38 passed`; process then had to be stopped because imported runtime threads kept pytest alive after summary
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
