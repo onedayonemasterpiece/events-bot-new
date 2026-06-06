@@ -45,18 +45,92 @@ async def test_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    future_date = (main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat()
 
     async with db.get_session() as session:
         event = main.Event(
             title="T",
             description="",
-            date="2026-06-01",
+            date=future_date,
             time="10:00",
             location_name="Place",
             source_text="T",
             source_post_url="https://vk.com/wall-1_2",
             # Imported VK events also persist the source URL in source_vk_post_url —
             # vk_sync must still be scheduled to publish a managed klgdevents post.
+            source_vk_post_url="https://vk.com/wall-1_2",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event)
+
+    assert main.JobTask.vk_sync in tasks
+
+
+@pytest.mark.asyncio
+async def test_past_vk_wall_source_skips_event_vk_sync(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    past_date = (main.datetime.now(main.LOCAL_TZ).date() - main.timedelta(days=1)).isoformat()
+
+    async with db.get_session() as session:
+        event = main.Event(
+            title="Past",
+            description="",
+            date=past_date,
+            time="10:00",
+            location_name="Place",
+            source_text="Past",
+            source_post_url="https://vk.com/wall-1_2",
+            source_vk_post_url="https://vk.com/wall-1_2",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event)
+
+    assert main.JobTask.vk_sync not in tasks
+
+
+@pytest.mark.asyncio
+async def test_ongoing_vk_wall_source_still_gets_event_vk_sync(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    today = main.datetime.now(main.LOCAL_TZ).date()
+
+    async with db.get_session() as session:
+        event = main.Event(
+            title="Ongoing",
+            description="",
+            date=(today - main.timedelta(days=5)).isoformat(),
+            end_date=(today + main.timedelta(days=1)).isoformat(),
+            time="10:00",
+            location_name="Place",
+            source_text="Ongoing",
+            source_post_url="https://vk.com/wall-1_2",
             source_vk_post_url="https://vk.com/wall-1_2",
         )
         session.add(event)
@@ -674,12 +748,13 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    future_date = (main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat()
 
     event = main.Event(
         title="New title",
         description="Same body",
         source_text="Same body",
-        date="2026-06-03",
+        date=future_date,
         time="18:30",
         location_name="Place",
         city="Калининград",
@@ -706,6 +781,44 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
     assert updated.vk_source_hash == main.content_hash("New title\nSame body")
+
+
+@pytest.mark.asyncio
+async def test_job_sync_vk_source_post_skips_past_event(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    past_date = (main.datetime.now(main.LOCAL_TZ).date() - main.timedelta(days=1)).isoformat()
+
+    event = main.Event(
+        title="Past",
+        description="Same body",
+        source_text="Same body",
+        date=past_date,
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+        source_vk_post_url="https://vk.com/wall-2_1",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = event.id
+
+    calls = []
+
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+        calls.append((ev.id, text_for_vk))
+        return "https://vk.com/wall-1_1"
+
+    monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
+
+    result = await main.job_sync_vk_source_post(event_id, db, None)
+
+    assert result is False
+    assert calls == []
 
 
 @pytest.mark.asyncio
