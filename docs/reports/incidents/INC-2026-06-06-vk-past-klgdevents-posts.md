@@ -1,6 +1,6 @@
 # INC-2026-06-06-vk-past-klgdevents-posts Past events published to klgdevents
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: VK outbound event publishing (`klgdevents`)
 Opened: 2026-06-06
@@ -22,14 +22,19 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
 ## Detection
 
 - Detected by operator report on 2026-06-06 with a concrete VK post URL.
-- Live VK API inspection was blocked in the local environment because the available VK token is IP-bound.
-- Fly production runtime/DB evidence collection was blocked in the local environment because `flyctl` had no auth token.
+- Live VK API inspection was completed with the service VK token after release.
+- Fly production runtime/DB evidence collection was completed with the service Fly token from `~/.fly/config.yml`; `flyctl auth whoami` alone was not a sufficient auth discovery check.
 
 ## Timeline
 
 - 2026-06-06 UTC — operator reported past events appearing in `klgdevents`, example `wall-231920894_2270`.
 - 2026-06-06 UTC — code review found `schedule_event_update_tasks` only skipped `vk_sync` for non-active/silent rows or already-managed `klgdevents` URLs, not for fully past events.
 - 2026-06-06 UTC — prevention fix prepared on `hotfix/vk-past-klgdevents-20260606`.
+- 2026-06-06 UTC — release auth discovery was corrected: Fly service token found in `~/.fly/config.yml`, and AGENTS/release-governance docs updated to require checking that location before declaring auth unavailable.
+- 2026-06-06 UTC — PR #5 merged to `origin/main` as merge commit `428d59d33830f16d9aca0aec0cd0f132443ed9f7`.
+- 2026-06-06 UTC — deployed to Fly app `events-bot-new-wngqia`, release version `1202`.
+- 2026-06-06 UTC — post-deploy health and production DB audit confirmed no pending/running `vk_sync` jobs for fully past events.
+- 2026-06-06 UTC — manual prune pass deleted 40 stale managed VK posts and found 10 already missing posts with zero API errors; scheduled prune remains responsible for draining the remaining backlog.
 
 ## Root Cause
 
@@ -41,7 +46,7 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
 
 - The VK publishing doc explicitly said imported VK events should still receive managed `klgdevents` posts, but did not qualify that with event freshness.
 - Regression tests covered external VK source fanout and managed-post dedupe, but not the fully-past event case.
-- Production runtime file logging is disabled by default, and this local environment lacked Fly auth for immediate live evidence collection.
+- Initial Fly auth discovery stopped too early at `flyctl auth whoami` instead of checking the service token in `~/.fly/config.yml`; release-governance docs now pin the required lookup.
 
 ## Automation Contract
 
@@ -96,18 +101,39 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
 
 ## Follow-up Actions
 
-- [ ] events-bot / after Fly auth is available / collect live production DB evidence for `wall-231920894_2270` and any other managed `klgdevents` posts created for fully past events.
-- [ ] events-bot / after deploy / run a production audit for pending `vk_sync` jobs whose event ended before today and record the result here.
-- [ ] events-bot / after deploy / confirm the VK prune job or manual remediation handled already-created stale managed posts that should not remain visible.
+- [x] events-bot / after Fly auth is available / collect live production DB evidence for `wall-231920894_2270` and any other managed `klgdevents` posts created for fully past events.
+- [x] events-bot / after deploy / run a production audit for pending `vk_sync` jobs whose event ended before today and record the result here.
+- [x] events-bot / after deploy / confirm manual remediation handled the first batch of already-created stale managed posts.
+- [ ] events-bot / scheduled prune follow-up / confirm the remaining stale managed-post backlog continues to drain without VK API errors.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
+- deployed SHA:
+  - PR branch head: `b884266352acbecdbee22726cf54b09f12b90d47`.
+  - `origin/main` merge commit: `428d59d33830f16d9aca0aec0cd0f132443ed9f7`.
+  - `git branch -r --contains b884266352acbecdbee22726cf54b09f12b90d47` includes `origin/main`.
+- deploy path:
+  - Manual Fly deploy from a clean worktree after PR #5 was merged to `origin/main`.
+  - Command: `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`.
+  - Auth: process-local `FLY_ACCESS_TOKEN` loaded from `~/.fly/config.yml`; token value was not printed.
+  - Fly release: version `1202`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KTDY1BM76DYWGFSB6G2TDYDV`, machine `48e42d5b714228`, `1/1` checks passing.
 - regression checks:
   - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/dev/projects/events-bot-new/.venv/bin/pytest -q -p pytest_asyncio.plugin tests/test_vk_source.py tests/test_vk_post_prune.py` -> `39 passed in 7.32s` (pytest process printed the terminal result but did not exit; local hung process was killed after result collection).
   - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py tests/test_vk_source.py` -> passed.
-- post-deploy verification: —
+- runtime log evidence:
+  - Production file mirror enabled: `ENABLE_RUNTIME_FILE_LOGGING=1`, `RUNTIME_LOG_DIR=/data/runtime_logs`, basename `events-bot.log`, retention `24h`.
+  - Active `/data/runtime_logs/events-bot.log` and rotated files exist.
+  - Post-deploy logs contained unrelated Kaggle recovery `GetKernelSessionStatus` 500 noise; `/healthz` stayed ready with no issues.
+- post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "issues": []}` after deploy and again after the prune pass.
+  - Production DB audit for fully past events with pending/running `vk_sync` returned `0` rows for `today_utc=2026-06-06`.
+  - Existing old `vk_sync` rows for fully past events were only historical `error` rows with `next_run_at` in 2035/2036, so they will not execute.
+  - VK API check for `wall-231920894_2270` returned text preview `Пост удалён`; no live `event` row matched that wall URL in `source_vk_post_url`, `source_post_url`, or `vk_repost_url`.
+  - Manual prune dry-run found `853` stale managed-post candidates.
+  - Manual prune real run with `limit=50` deleted `40`, found `10` missing, kept `0` pinned/reposts, and had `0` errors.
+- residual risk:
+  - The prevention fix is deployed; the remaining known risk is backlog drain for already-created stale managed posts. The scheduled prune job should continue cleanup, with a follow-up audit required before marking closed.
+  - Branch drift audit found unrelated remote branch `origin/hotfix/google-ai-reserve-overflow` still ahead of `origin/main` by one commit.
 
 ## Prevention
 
