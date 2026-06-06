@@ -136,7 +136,7 @@ Guide track должен быть проверяемым так же, как Sma
 
 - import-time guide Kaggle config должен быть blank-safe: пустые numeric env overrides (`GUIDE_MONITORING_*`) не должны валить импорт guide runtime, а обязаны откатываться к documented defaults с warning в логах;
 - Статус guide kernel опрашивается с интервалом `GUIDE_MONITORING_POLL_INTERVAL` до динамического лимита ожидания по числу источников.
-- Транзиентные ошибки Kaggle API на polling (`SSL`, сеть, timeout) не должны валить guide run сразу: бот продолжает опрос и показывает в status-update, что это временная ошибка сети.
+- Транзиентные ошибки Kaggle API на polling (`SSL`, сеть, timeout, HTTP 5xx от `GetKernelSessionStatus`) не должны валить guide run сразу: бот продолжает опрос и показывает в status-update, что это временная ошибка Kaggle API.
 - При скачивании output сервер дополнительно валидирует `run_id` внутри `guide_excursions_results.json`; stale output от предыдущей версии kernel не должен импортироваться как свежий scan.
 - Перед polling сервер теперь дополнительно проверяет shape канонического Kaggle kernel: `zigomaro/guide-excursions-monitor` обязан оставаться `kernel_type=notebook` с notebook `code_file`. Если remote kernel внезапно стал `script`, run должен падать сразу с явной инструкцией пересоздать канонический notebook, а не зависать на stale output.
 - Сам guide notebook runner теперь тоже fail-closed по auth boundary: если `TELEGRAM_AUTH_BUNDLE_S22` отсутствует, а в окружении есть только `TELEGRAM_AUTH_BUNDLE_E2E`, `_resolve_auth_bundle()` обязан упасть с явной ошибкой вместо тихого borrow чужой сессии; non-`S22` auth допустим только через явный low-level override `GUIDE_MONITORING_ALLOW_NON_S22_AUTH=1`.

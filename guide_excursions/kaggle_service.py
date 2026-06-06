@@ -28,6 +28,22 @@ from video_announce.kaggle_client import KaggleClient
 logger = logging.getLogger(__name__)
 
 
+def _is_transient_kaggle_status_error(exc: Exception) -> bool:
+    if isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError"):
+        return True
+    if isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError"):
+        return True
+    if exc.__class__.__name__.endswith("Timeout"):
+        return True
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        status_int = int(status_code)
+    except Exception:
+        status_int = 0
+    return 500 <= status_int <= 599
+
+
 def _env_int(name: str, default: int) -> int:
     raw = (os.getenv(name) or "").strip()
     if not raw:
@@ -777,11 +793,7 @@ async def _poll_kaggle_kernel(
             consecutive_poll_errors = 0
         except Exception as exc:
             consecutive_poll_errors += 1
-            is_ssl = isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError")
-            is_conn = isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError")
-            is_timeout = exc.__class__.__name__.endswith("Timeout")
-            is_transient = is_ssl or is_conn or is_timeout
-            if not is_transient:
+            if not _is_transient_kaggle_status_error(exc):
                 raise
             msg = str(exc) or repr(exc)
             if len(msg) > 280:
@@ -801,7 +813,7 @@ async def _poll_kaggle_kernel(
                 "poll_error",
                 {
                     "status": shown_state or "RUNNING",
-                    "failureMessage": f"⚠️ временная ошибка Kaggle API (SSL/сеть), продолжаю опрос: {msg}",
+                    "failureMessage": f"⚠️ временная ошибка Kaggle API, продолжаю опрос: {msg}",
                     "_poll_timeout_minutes": timeout_minutes,
                     "_elapsed_seconds": time.monotonic() - started,
                 },

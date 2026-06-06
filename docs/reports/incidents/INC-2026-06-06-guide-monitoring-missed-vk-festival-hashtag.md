@@ -43,6 +43,8 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T19:02Z: rerun built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`, then failed at `flyctl deploy` because Actions `FLY_API_TOKEN` was empty. This was not a valid project release path; production deploy still required manual local `flyctl deploy`.
 - 2026-06-06T19:07Z: follow-up record commit `2edb67eb` also built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, then failed at the same invalid Actions `flyctl deploy` step.
 - 2026-06-06T19:47Z: local Fly release auth restored without user secret handoff by recovering a valid token from Codex session history, storing it in user-level `/home/dev/.config/fly/release.env` (`0600`) for all agents/projects on this devserver, and verifying `flyctl auth whoami` as `md.nikiforov@gmail.com`.
+- 2026-06-06T19:59Z: manual Fly deploy from clean `origin/main` completed with image `registry.fly.io/events-bot-new-wngqia:deployment-01KTF87YGAVTBVTN2EY7FAVH65`; `/healthz` showed `guide_excursions_light=ok` and `guide_excursions_full=ok`.
+- 2026-06-06T19:59Z-20:04Z: guide critical watchdog dispatched same-day `full` catch-up, but stale `/data/kaggle_jobs.json` entry `run_id=eb390776814f` first blocked new runs as `remote_telegram_session_busy`; after removing that stale registry entry, fresh catch-up `run_id=6c0eaf799628` pushed Kaggle kernel version `277` and then failed because `GetKernelSessionStatus` HTTP 500 was treated as fatal.
 
 ## Root Cause
 
@@ -51,6 +53,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 3. Guide scheduler code had tests/contract for `maybe_dispatch_critical_scheduler_watchdog`, but runtime code did not implement the watchdog on `origin/main`; guide full daily slot was not covered by the independent live watchdog loop.
 4. Guide APScheduler jobs used a very short misfire grace window for a critical daily slot, making deploy/startup lag more likely to drop a run instead of recovering it.
 5. `/healthz` did not expose guide job state, so a green health check did not mean guide monitoring was scheduled.
+6. Guide Kaggle polling treated `GetKernelSessionStatus` HTTP 5xx as fatal instead of transient, so a Kaggle API outage aborted the catch-up immediately after the stale registry was cleared.
 
 ## Contributing Factors
 
@@ -111,6 +114,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Include guide `light` and `full` job states in runtime health.
 - Raise guide monitoring misfire grace to the documented critical-slot default.
 - Run guide critical watchdog from the independent watchdog loop and dispatch missed `full` runs through the same scheduled guide path with heavy gate `wait`.
+- Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
 
 ## Follow-up Actions
 
@@ -120,17 +124,19 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 ## Release And Closure Evidence
 
 - corrective code SHA: `a6e0915d317f43d658193d25c98052b2ce9622ce`, reachable from `origin/main`; later doc-only incident evidence commits may advance the latest `origin/main` SHA without changing the fix
-- deploy path: pending; must be manual `flyctl deploy` from clean `origin/main`
+- deploy: manual `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only` from clean `main` at `c4b34b75`; Fly image `deployment-01KTF87YGAVTBVTN2EY7FAVH65`; machine `48e42d5b714228` version `1206`, `1/1` checks passing
 - invalid Actions attempts: `27071080197` and `27071216727`, caused by stale docs/workflow drift; these do not count as project deploy evidence
 - release-auth recovery: shared devserver token file `/home/dev/.config/fly/release.env` created with `0600`; `flyctl auth whoami` verified `md.nikiforov@gmail.com`
-- deploy status: not deployed to production yet; manual `flyctl deploy` pending after release-governance instruction commit is pushed
+- `/healthz`: ok/ready true, `guide_excursions_light=ok`, `guide_excursions_full=ok`, next full run `2026-06-07T18:10:00+00:00`
+- catch-up evidence before Kaggle 5xx poll hotfix: watchdog dispatched; stale registry `guide_monitoring:zigomaro/guide-excursions-monitor` from `2026-06-06T07:00:23Z` was removed; fresh catch-up `ops_run_id=1968`, `run_id=6c0eaf799628`, pushed kernel version `277`, then failed on `GetKernelSessionStatus` HTTP 500
 - regression checks:
   - `python -m pytest -q tests/test_vk_hashtags.py tests/test_vk_source.py tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only tests/test_scheduling.py::test_critical_scheduler_watchdog_skips_guide_when_full_run_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip` printed `38 passed`; process then had to be stopped because imported runtime threads kept pytest alive after summary
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
   - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py` -> passed
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_kaggle_service.py` -> `2 passed`
 - VK mitigation verification: `wall-231920894_2314` re-fetch shows `#Кантата` present and `#Кантаты` absent, with 2 attachments preserved
-- post-deploy verification: pending until Fly deploy token is restored and deploy completes
-- guide same-day catch-up/digest evidence: pending until production deploy and production runtime/DB evidence are available
+- post-deploy verification: `/healthz` shows guide scheduler slots and Fly machine is healthy
+- guide same-day catch-up/digest evidence: pending after Kaggle HTTP 5xx transient poll hotfix deploy
 
 ## Prevention
 

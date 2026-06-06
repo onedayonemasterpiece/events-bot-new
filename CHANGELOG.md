@@ -19,7 +19,9 @@
   misfire window, and the live watchdog catches up a missed scheduled `full`
   guide run through the same scheduled path instead of leaving the daily slot
   invisible. The already-published VK post `wall-231920894_2314` was repaired
-  to `#Кантата` while preserving attachments.
+  to `#Кантата` while preserving attachments. Guide Kaggle status polling now
+  treats Kaggle `GetKernelSessionStatus` HTTP 5xx as transient and keeps
+  polling instead of aborting the scheduled catch-up immediately.
 - **VK Publishing**: event VK posts now add an extra festival hashtag when
   `event.festival` is set, using the festival name without spaces/separators
   (for example `#80историйоглавном`).
