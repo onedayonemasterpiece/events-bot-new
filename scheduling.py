@@ -76,7 +76,7 @@ async def _run_scheduled_guide_excursions(
     bot,
     *,
     mode: str,
-) -> None:
+) -> Any:
     from guide_excursions.service import (
         guide_digest_vk_enabled,
         publish_guide_digest,
@@ -700,8 +700,18 @@ def _critical_sched_watchdog_grace_seconds() -> int:
     return max(60, value)
 
 
+def _guide_monitoring_remote_busy_retry_seconds() -> int:
+    raw = (os.getenv("GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 3600
+    except ValueError:
+        value = 3600
+    return max(300, value)
+
+
 _critical_catchup_inflight: set[str] = set()
 _critical_catchup_completed: set[str] = set()
+_critical_catchup_deferred_until: dict[str, datetime] = {}
 
 
 def video_tomorrow_watchdog_enabled() -> bool:
@@ -831,6 +841,83 @@ async def _guide_full_dispatch_exists_today(
         if str(status or "").strip() in {"running", "success", "partial"}:
             return True
     return False
+
+
+def _details_have_remote_telegram_busy(details: dict[str, Any]) -> bool:
+    def _walk(value: Any) -> bool:
+        if isinstance(value, str):
+            return "remote_telegram_session_busy" in value
+        if isinstance(value, dict):
+            return any(_walk(item) for item in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return any(_walk(item) for item in value)
+        return False
+
+    return _walk(details)
+
+
+def _parse_ops_run_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        raw = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            try:
+                parsed = datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _latest_guide_full_remote_busy_skip_started_at(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> datetime | None:
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json, started_at
+            FROM ops_run
+            WHERE kind = 'guide_monitoring'
+              AND trigger = 'scheduled'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    status, details_raw, started_at_raw = row
+    if str(status or "").strip() != "skipped":
+        return None
+    details: dict[str, Any] = {}
+    if isinstance(details_raw, str) and details_raw.strip():
+        try:
+            parsed = json.loads(details_raw)
+        except Exception:
+            parsed = {}
+        if isinstance(parsed, dict):
+            details = parsed
+    elif isinstance(details_raw, dict):
+        details = details_raw
+    if str(details.get("mode") or "").strip() != "full":
+        return None
+    if not _details_have_remote_telegram_busy(details):
+        return None
+    return _parse_ops_run_datetime(started_at_raw)
 
 
 async def _video_tomorrow_session_exists_today(
@@ -1337,6 +1424,22 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
         return 0
     if catchup_key in _critical_catchup_inflight:
         return 0
+    retry_seconds = _guide_monitoring_remote_busy_retry_seconds()
+    deferred_until = _critical_catchup_deferred_until.get(catchup_key)
+    if deferred_until is not None:
+        if now_utc < deferred_until:
+            return 0
+        _critical_catchup_deferred_until.pop(catchup_key, None)
+    latest_remote_busy_started = await _latest_guide_full_remote_busy_skip_started_at(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+    )
+    if latest_remote_busy_started is not None:
+        db_deferred_until = latest_remote_busy_started + timedelta(seconds=retry_seconds)
+        if now_utc < db_deferred_until:
+            _critical_catchup_deferred_until[catchup_key] = db_deferred_until
+            return 0
 
     _critical_catchup_inflight.add(catchup_key)
     try:
@@ -1359,6 +1462,26 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
             day_end_utc=day_end_utc,
         ):
             _critical_catchup_completed.add(catchup_key)
+            _critical_catchup_deferred_until.pop(catchup_key, None)
+        else:
+            latest_remote_busy_started = await _latest_guide_full_remote_busy_skip_started_at(
+                db,
+                day_start_utc=day_start_utc,
+                day_end_utc=day_end_utc,
+            )
+            if latest_remote_busy_started is None:
+                return 1
+            _critical_catchup_deferred_until[catchup_key] = (
+                latest_remote_busy_started + timedelta(seconds=retry_seconds)
+            )
+            logging.warning(
+                "SCHED critical watchdog deferring guide_excursions_full retry "
+                "after remote session busy scheduled_local=%s now_local=%s "
+                "retry_seconds=%s",
+                scheduled_local.isoformat(),
+                now_local.isoformat(),
+                retry_seconds,
+            )
         return 1
     finally:
         _critical_catchup_inflight.discard(catchup_key)

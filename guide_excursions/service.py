@@ -3858,29 +3858,47 @@ async def resume_guide_monitor_jobs(
             if results_path is None:
                 try:
                     status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
-                except Exception:
-                    logger.exception("guide_monitor_recovery.status_failed kernel=%s", kernel_ref)
-                    continue
-
-                state = str(status.get("status") or "").lower()
-                if state in {"error", "failed", "cancelled"}:
-                    failure = collapse_ws(extract_guide_failure_message(status))
-                    await remove_job("guide_monitoring", kernel_ref)
-                    if bot and notify_chat_id:
-                        await bot.send_message(
-                            int(notify_chat_id),
-                            (
-                                "⚠️ guide_monitor recovery: "
-                                f"kernel {kernel_ref} завершился ошибкой"
-                                f"{': ' + failure if failure else ''}"
-                            ),
-                            disable_web_page_preview=True,
+                except Exception as exc:
+                    logger.warning(
+                        "guide_monitor_recovery.status_failed_try_output kernel=%s run_id=%s",
+                        kernel_ref,
+                        run_id,
+                        exc_info=True,
+                    )
+                    status = {
+                        "status": "UNKNOWN",
+                        "failureMessage": str(exc) or type(exc).__name__,
+                    }
+                    try:
+                        results_path = await download_guide_results(client, kernel_ref, run_id)
+                    except Exception:
+                        logger.exception(
+                            "guide_monitor_recovery.output_download_failed kernel=%s run_id=%s",
+                            kernel_ref,
+                            run_id,
                         )
-                    continue
-                if state != "complete":
-                    continue
+                        continue
 
-                results_path = await download_guide_results(client, kernel_ref, run_id)
+                if results_path is None:
+                    state = str(status.get("status") or "").lower()
+                    if state in {"error", "failed", "cancelled"}:
+                        failure = collapse_ws(extract_guide_failure_message(status))
+                        await remove_job("guide_monitoring", kernel_ref)
+                        if bot and notify_chat_id:
+                            await bot.send_message(
+                                int(notify_chat_id),
+                                (
+                                    "⚠️ guide_monitor recovery: "
+                                    f"kernel {kernel_ref} завершился ошибкой"
+                                    f"{': ' + failure if failure else ''}"
+                                ),
+                                disable_web_page_preview=True,
+                            )
+                        continue
+                    if state != "complete":
+                        continue
+
+                    results_path = await download_guide_results(client, kernel_ref, run_id)
 
             import_result = await run_guide_import_from_results(
                 db,

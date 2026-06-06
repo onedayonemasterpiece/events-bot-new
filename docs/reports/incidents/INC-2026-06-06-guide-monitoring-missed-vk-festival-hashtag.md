@@ -101,13 +101,14 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Guide critical watchdog tests in `tests/test_scheduling.py`:
   - `test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only`
   - `test_critical_scheduler_watchdog_skips_guide_when_full_run_exists`
-  - `test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip`
+  - `test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip`
 - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py`
 - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py`
 - VK API verification for `wall-231920894_2314`: hashtag line must contain `#Кантата` and must not contain `#Кантаты`.
 - Post-deploy `/healthz` must expose `guide_excursions_light` and `guide_excursions_full` statuses, not only generic scheduler status.
 - Because the incident touched a daily scheduled production task, closure requires same-day guide `full` catch-up evidence: a successful/partial `ops_run(kind='guide_monitoring', details.mode='full')`, a published/empty-candidate scheduled digest evidence, or a clearly documented blocker.
 - Never remove a `guide_monitoring` `kaggle_registry` entry while Kaggle status is `UNKNOWN` or `GetKernelSessionStatus` returns HTTP 5xx/network errors. That state is a live-session lock, not stale evidence. Cleanup is allowed only after terminal Kaggle status, fresh output import, or explicit user approval to abandon the old auth bundle after replacement.
+- If a matching Kaggle output bundle can be downloaded and its `guide_excursions_results.json` has the registry `run_id`, that output is terminal evidence: recovery must import it and clear the `guide_monitoring` registry entry instead of keeping a false `remote_telegram_session_busy` lock.
 
 ### Required evidence
 
@@ -132,8 +133,10 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Run guide critical watchdog from the independent watchdog loop and dispatch missed `full` runs through the same scheduled guide path with heavy gate `wait`.
 - Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
 - Treat `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement.
+- When status lookup is `UNKNOWN`/HTTP 5xx but matching output is already downloadable, treat output as terminal evidence, import it, and clear the registry without starting another remote Telegram session.
 - Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
 - Materialize VK guide source `photo` attachments during the normal Kaggle scan (`media_refs/media_assets`) and keep server-side VK media recovery only as repair insurance for already-imported rows that predate the scanner fix.
+- Defer critical guide watchdog retries after `remote_telegram_session_busy` by `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` instead of retrying every minute while the same `UNKNOWN` Kaggle/session lock is still present.
 
 ## Follow-up Actions
 
@@ -166,6 +169,6 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 ## Prevention
 
 - Canonical festival hashtag tests cover raw inflected event labels and `Festival.name` preference.
-- Guide critical watchdog tests cover missed-full catch-up, full-run idempotence, and retry after remote-session-busy skipped runs.
+- Guide critical watchdog tests cover missed-full catch-up, full-run idempotence, and cooldown deferral after remote-session-busy skipped runs.
 - `/healthz` guide job visibility prevents a green health check from hiding missing guide scheduler slots.
 - Guide/Kaggle recovery instructions now make `UNKNOWN` status a session lock: agents must not manually delete the registry entry or trigger another guide run while status lookup is failing.

@@ -15,8 +15,11 @@
   `guide_monitoring` registry entries with Kaggle status `UNKNOWN` or
   `GetKernelSessionStatus` HTTP 5xx are now documented as active
   `TELEGRAM_AUTH_BUNDLE_S22` locks. Agents must not manually remove those
-  entries or start another guide Kaggle run until terminal evidence, fresh
-  output import, or explicit user-approved auth replacement.
+  entries or start another guide Kaggle run until terminal evidence, matching
+  output import, or explicit user-approved auth replacement. Recovery now tries
+  to download matching `guide_excursions_results.json` when status lookup fails;
+  if output exists, it imports the run and clears the registry instead of
+  keeping a false busy lock.
 - **Fixed: guide VK digest hook carousel without source media (INC-2026-06-06)**:
   guide VK fanout now tries to build/upload the production hook carousel before
   requiring materialized afisha assets, so a digest with no usable source photos
@@ -30,6 +33,13 @@
   media recovery is available only as a repair path for already-imported rows
   that predate this fix, and `repair_existing` can edit an existing postponed
   VK digest as a carousel. Covered by `tests/test_guide_vk_digest.py`.
+- **Fixed: guide critical watchdog remote-busy retry storm (INC-2026-06-06)**:
+  the live watchdog no longer retries a `guide_excursions_full` catch-up every
+  minute after a `remote_telegram_session_busy` skip. The daily slot remains
+  pending, but retries are deferred by
+  `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`) so Kaggle
+  `UNKNOWN` status / session locks do not flood the admin chat or create
+  zero-result `ops_run` rows every watchdog tick.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to
