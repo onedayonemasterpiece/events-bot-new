@@ -5,7 +5,9 @@
 - **Changed: release governance uses manual Fly deploy only**:
   GitHub Actions deploy is no longer an allowed production release path for this
   repo; the stale auto Fly workflow was removed so pushes to `main` no longer
-  start an unsupported deploy route.
+  start an unsupported deploy route. Fly auth recovery now explicitly bootstraps
+  through interactive `flyctl auth login` after user-level config/env token
+  checks fail, never through Actions.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to

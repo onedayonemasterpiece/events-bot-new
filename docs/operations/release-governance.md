@@ -32,6 +32,7 @@
    - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` до начала deploy;
    - для Fly сначала проверить `flyctl auth whoami`; если он отвечает `no access token available`, это **не** blocker само по себе: проверить `~/.fly/config.yml` на наличие `access_token` и повторить команду с process-local export `FLY_ACCESS_TOKEN=<redacted-token>` (или `FLY_API_TOKEN=<redacted-token>`). Значение токена не печатать и не коммитить; в отчёте указывать только факт `~/.fly/config.yml access_token present` и результат `whoami`;
    - также проверить `.env` / shell env на альтернативные service-token имена, но не считать отсутствие именно `FLY_API_TOKEN` доказательством отсутствия Fly release auth;
+   - если user-level config/env действительно не содержат Fly auth, выполнить интерактивный bootstrap `flyctl auth login` и только после успешного `flyctl auth whoami` продолжать manual deploy; GitHub Actions не является fallback для отсутствующей локальной Fly auth;
    - отсутствие CLI или auth не считается достаточным оправданием остановки, пока не проверены user-level install/config paths и не предпринят self-bootstrap/install или не подготовлен минимальный reproducible bootstrap.
 5. Проверить, что deploy-ветка не потеряла связь с `origin/main`
 6. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
