@@ -137,6 +137,7 @@ Guide track должен быть проверяемым так же, как Sma
 - import-time guide Kaggle config должен быть blank-safe: пустые numeric env overrides (`GUIDE_MONITORING_*`) не должны валить импорт guide runtime, а обязаны откатываться к documented defaults с warning в логах;
 - Статус guide kernel опрашивается с интервалом `GUIDE_MONITORING_POLL_INTERVAL` до динамического лимита ожидания по числу источников.
 - Транзиентные ошибки Kaggle API на polling (`SSL`, сеть, timeout, HTTP 5xx от `GetKernelSessionStatus`) не должны валить guide run сразу: бот продолжает опрос и показывает в status-update, что это временная ошибка Kaggle API.
+- Если `kaggle_registry` содержит `guide_monitoring` job, а статус Kaggle не удаётся надёжно прочитать (`UNKNOWN`, `GetKernelSessionStatus` HTTP 5xx, network/timeout), эта запись считается **активной remote Telethon session**, а не stale. Её нельзя удалять вручную и нельзя запускать новый guide Kaggle run с тем же `TELEGRAM_AUTH_BUNDLE_S22`, пока не появится terminal Kaggle evidence, fresh output с ожидаемым `run_id` не будет импортирован, либо пользователь явно подтвердит abandon старой сессии после замены auth bundle. Нарушение этого правила может запустить два Kaggle kernel параллельно и инвалидировать Telegram auth key (`AuthKeyDuplicatedError`).
 - При скачивании output сервер дополнительно валидирует `run_id` внутри `guide_excursions_results.json`; stale output от предыдущей версии kernel не должен импортироваться как свежий scan.
 - Перед polling сервер теперь дополнительно проверяет shape канонического Kaggle kernel: `zigomaro/guide-excursions-monitor` обязан оставаться `kernel_type=notebook` с notebook `code_file`. Если remote kernel внезапно стал `script`, run должен падать сразу с явной инструкцией пересоздать канонический notebook, а не зависать на stale output.
 - Сам guide notebook runner теперь тоже fail-closed по auth boundary: если `TELEGRAM_AUTH_BUNDLE_S22` отсутствует, а в окружении есть только `TELEGRAM_AUTH_BUNDLE_E2E`, `_resolve_auth_bundle()` обязан упасть с явной ошибкой вместо тихого borrow чужой сессии; non-`S22` auth допустим только через явный low-level override `GUIDE_MONITORING_ALLOW_NON_S22_AUTH=1`.
@@ -282,7 +283,7 @@ VK-render отличается от Telegram-render:
 - если экскурсия пришла с личной VK-стены, public attribution должен показывать VK user mention/link на автора (`https://vk.com/<screen_name>` или `[id...|Имя]`, если resolve доступен), а не только обезличенное `Источник: VK`;
 - если экскурсия пришла из VK-сообщества, attribution использует community label/source link, но не притворяется персональным гидом без occurrence-level evidence;
 - VK-пост должен идти через общий community wall publishing contract из [VK Publishing](../vk-publishing/README.md): `owner_id=-<group_id>`, `from_group=1`, `signed=0`, `publish_date` минимум через 10 минут.
-- VK-пост должен прикладывать те же materialized guide media assets, которые были сохранены в `guide_digest_issue.media_items_json`; текст и картинки идут одним `wall.post`, без Telegram-style разделения на media album + отдельный текст. Если materialized assets недоступны или upload в VK не дал ни одного `photo...` attachment, VK fanout должен fail-closed вместо text-only поста.
+- VK-пост должен публиковаться с VK photo attachments: либо production carousel slides, сгенерированными из `guide_digest_issue` fact-pack, либо теми же materialized guide media assets из `guide_digest_issue.media_items_json`. Текст и картинки идут одним `wall.post`, без Telegram-style разделения на media album + отдельный текст. Если ни carousel, ни materialized assets не дали ни одного `photo...` attachment, VK fanout должен fail-closed вместо text-only поста.
 
 Минимальный rollout для `uhtykaliningrad`:
 
@@ -301,7 +302,7 @@ Runtime flags:
 Подводные камни, которые считаются blocking для запуска:
 
 - нельзя переиспользовать Telegram split text как есть: VK должен получить один связный plain-text пост с собственной первой строкой;
-- нельзя публиковать VK guide digest без картинок, если preview/materialization выбрали media items: отсутствие usable assets или upload failure является blocking ошибкой;
+- нельзя публиковать VK guide digest без VK photo attachments: если carousel не собрался и preview/materialization не дали usable assets, отсутствие uploaded `photo...` является blocking ошибкой;
 - нельзя отмечать occurrence опубликованным только из-за VK-failure/partial: published mark ставится только после успешного wall.post/postponed result;
 - shortener failure не блокирует digest, но должен быть видимым, потому что Telegram-ссылки в VK без сокращения часто выглядят длинно и плохо меряются;
 - personal VK source требует owner/user awareness. `vk.com/ivsguide`, `vk.ru/natakkaz` и будущие личные страницы нельзя обрабатывать как negative group wall id;
@@ -334,7 +335,7 @@ Runtime flags:
 - для самых сильных крючков событий **без пригодного фото** добавляется 1–2 текстовые карточки-крючки (`render_hook_only_slide`);
 - последний слайд — CTA со стрелкой вниз к тексту поста (`render_cta_slide`).
 
-Сборка — `guide_excursions/hook_carousel.py::build_carousel_slides` (одна палитра на публикацию, ротация по дню; фото-слайды по силе крючка; ≤9 слайдов + CTA). Пост идёт через `post_to_vk(..., carousel=True)` (без `primary_attachments_mode=grid`, чтобы VK рендерил листалку). Vision-классификация и вся сборка — **best-effort**: при любой ошибке/недоступности токена дайджест откатывается на прежний afisha-grid пост. `repair_existing` edit карусель не использует.
+Сборка — `guide_excursions/hook_carousel.py::build_carousel_slides` (одна палитра на публикацию, ротация по дню; фото-слайды по силе крючка; ≤9 слайдов + CTA). Пост идёт через `post_to_vk(..., carousel=True)` (без `primary_attachments_mode=grid`, чтобы VK рендерил листалку). Carousel build/upload выполняется **до** требования materialized afisha assets: если в выпуске нет пригодных исходных картинок, но есть строки дайджеста, runtime может опубликовать hook-only карточки + CTA как полноценные VK photo attachments. Vision-классификация и вся сборка — **best-effort**: при любой ошибке/недоступности токена дайджест откатывается на прежний afisha-grid пост; если и grid upload невозможен, публикация fail-closed. `repair_existing` edit карусель не использует.
 
 ## Terminology Policy
 

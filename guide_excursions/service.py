@@ -4534,18 +4534,12 @@ async def publish_latest_guide_digest_to_vk(
         raise RuntimeError(
             f"Guide VK digest too long for one post: {len(text)} > {GUIDE_DIGEST_VK_MAX_CHARS}"
         )
-    attachments = await _upload_guide_vk_media_attachments(
-        group_id=vk_group_id,
-        media_items=media_items,
-        db=db,
-        bot=bot,
-        upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
-    )
-
-    afisha_attachments_count = len(attachments)
+    attachments: list[str] = []
+    afisha_attachments_count = 0
     # Best-effort: replace the afisha grid with a swipeable carousel of slides
     # (photo+hook / afisha / text-only hook cards + CTA). Any failure falls back
-    # to the plain afisha-grid post below.
+    # to the plain afisha-grid post below. Build it before requiring materialized
+    # afishas so imageless digests can still publish hook-only cards.
     carousel_mode = False
     if not (existing_target_payload is not None and repair_existing):
         carousel_slides: list[bytes] = []
@@ -4581,6 +4575,15 @@ async def publish_latest_guide_digest_to_vk(
                     "guide_digest_vk_carousel few uploads (%s) — afisha grid fallback",
                     len(slide_atts),
                 )
+    if not attachments:
+        attachments = await _upload_guide_vk_media_attachments(
+            group_id=vk_group_id,
+            media_items=media_items,
+            db=db,
+            bot=bot,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn,
+        )
+        afisha_attachments_count = len(attachments)
 
     if existing_target_payload is not None and repair_existing:
         post_urls = []

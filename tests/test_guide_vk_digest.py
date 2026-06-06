@@ -196,3 +196,155 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
     assert "wall-123_99" in row[0]
     assert "attachments_count" in row[0]
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_publish_latest_guide_digest_to_vk_uses_hook_carousel_without_media_assets(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "guide.sqlite"))
+    async with db.raw_conn() as conn:
+        await conn.executescript(
+            """
+            CREATE TABLE guide_profile(
+                id INTEGER PRIMARY KEY,
+                display_name TEXT,
+                marketing_name TEXT,
+                summary_short TEXT,
+                facts_rollup_json TEXT
+            );
+            CREATE TABLE guide_source(
+                id INTEGER PRIMARY KEY,
+                username TEXT,
+                platform TEXT,
+                title TEXT,
+                source_kind TEXT,
+                flags_json TEXT,
+                about_text TEXT,
+                about_links_json TEXT,
+                priority_weight REAL,
+                primary_profile_id INTEGER
+            );
+            CREATE TABLE guide_occurrence(
+                id INTEGER PRIMARY KEY,
+                primary_source_id INTEGER,
+                guide_names_json TEXT,
+                organizer_names_json TEXT,
+                audience_fit_json TEXT,
+                fact_pack_json TEXT,
+                canonical_title TEXT,
+                date TEXT,
+                time TEXT,
+                city TEXT,
+                digest_blurb TEXT,
+                booking_text TEXT,
+                booking_url TEXT,
+                channel_url TEXT
+            );
+            CREATE TABLE guide_monitor_post(
+                id INTEGER PRIMARY KEY,
+                text TEXT,
+                source_url TEXT,
+                post_date TEXT
+            );
+            CREATE TABLE guide_occurrence_source(
+                occurrence_id INTEGER,
+                post_id INTEGER,
+                role TEXT
+            );
+            CREATE TABLE guide_digest_issue(
+                id INTEGER PRIMARY KEY,
+                family TEXT,
+                status TEXT,
+                items_json TEXT,
+                media_items_json TEXT,
+                published_targets_json TEXT
+            );
+            """
+        )
+        await conn.execute(
+            "INSERT INTO guide_profile(id, display_name, marketing_name, summary_short, facts_rollup_json) VALUES(1,'Guide','Guide','','{}')"
+        )
+        await conn.execute(
+            """
+            INSERT INTO guide_source(
+                id, username, platform, title, source_kind, flags_json,
+                about_text, about_links_json, priority_weight, primary_profile_id
+            ) VALUES(1,'guide','telegram','Guide channel','guide_personal','{}','','[]',1.0,1)
+            """
+        )
+        await conn.execute(
+            """
+            INSERT INTO guide_occurrence(
+                id, primary_source_id, guide_names_json, organizer_names_json,
+                audience_fit_json, fact_pack_json, canonical_title, date, time,
+                city, digest_blurb, booking_text, booking_url, channel_url
+            ) VALUES(20,1,'["Guide Name"]','[]','[]','{}','Маршрут','2026-05-30','12:00','Калининград','Описание','Запись','https://t.me/book/1','')
+            """
+        )
+        await conn.execute(
+            "INSERT INTO guide_monitor_post(id, text, source_url, post_date) VALUES(1,'text','https://t.me/source/20','2026-05-19')"
+        )
+        await conn.execute(
+            "INSERT INTO guide_occurrence_source(occurrence_id, post_id, role) VALUES(20,1,'primary')"
+        )
+        await conn.execute(
+            """
+            INSERT INTO guide_digest_issue(
+                id, family, status, items_json, media_items_json, published_targets_json
+            ) VALUES(6,'new_occurrences','published','[20]','[]','{}')
+            """
+        )
+        await conn.commit()
+
+    async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
+        return {"response": {"short_url": "https://vk.cc/demo", "key": "demo"}}
+
+    async def fake_build_carousel_slides(rows, media_items, seed=0):
+        assert len(rows) == 1
+        assert media_items == []
+        assert seed == 6
+        return [b"slide-one", b"slide-two"]
+
+    import guide_excursions.hook_carousel as hook_carousel
+
+    monkeypatch.setattr(hook_carousel, "build_carousel_slides", fake_build_carousel_slides)
+
+    uploaded: list[tuple[str, bytes, str]] = []
+
+    async def fake_upload_vk_photo_bytes(group_id, image_bytes, db=None, bot=None, filename="image.jpg", **kwargs):
+        uploaded.append((group_id, image_bytes, filename))
+        return f"photo-123_{len(uploaded)}"
+
+    posted: dict[str, object] = {}
+
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None, carousel=False):
+        posted["group_id"] = group_id
+        posted["message"] = message
+        posted["attachments"] = attachments
+        posted["carousel"] = carousel
+        return "https://vk.com/wall-123_100"
+
+    result = await publish_latest_guide_digest_to_vk(
+        db,
+        family="new_occurrences",
+        group_id="123",
+        vk_api_fn=fake_vk_api,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_bytes_fn=fake_upload_vk_photo_bytes,
+    )
+
+    assert result["published"] is True
+    assert posted["carousel"] is True
+    assert posted["attachments"] == ["photo-123_1", "photo-123_2"]
+    assert result["attachments_count"] == 2
+    assert uploaded == [
+        ("123", b"slide-one", "slide_0.jpg"),
+        ("123", b"slide-two", "slide_1.jpg"),
+    ]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=6")
+        row = await cur.fetchone()
+    assert "vk:uhtykaliningrad" in row[0]
+    assert "wall-123_100" in row[0]
+    await db.close()

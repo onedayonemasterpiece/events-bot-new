@@ -41,6 +41,7 @@
 - `TELEGRAM_AUTH_BUNDLE_E2E` (or `TELEGRAM_SESSION`) is reserved for **local live E2E / Telethon human client** runs.
 - Never switch Kaggle guide monitoring from `TELEGRAM_AUTH_BUNDLE_S22` to `TELEGRAM_AUTH_BUNDLE_E2E` on your own, even as a temporary workaround.
 - Never run the same auth bundle concurrently in multiple places when one of them is Kaggle/remote, because Telegram can invalidate the auth key with `AuthKeyDuplicatedError`.
+- For `guide_monitoring`, an existing `kaggle_registry` entry with Kaggle status `UNKNOWN` or Kaggle API status errors (especially `GetKernelSessionStatus` HTTP 5xx) must be treated as an active remote Telethon session. Do not remove that registry entry and do not start a new guide Kaggle run until there is terminal Kaggle evidence, fresh output has been imported, or the user explicitly confirms the old auth bundle/session can be abandoned after replacement.
 - If the intended bundle is broken or missing, stop and report it clearly instead of borrowing another bundle.
 
 ## Правила раскладки

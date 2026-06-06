@@ -45,6 +45,11 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T19:47Z: local Fly release auth restored without user secret handoff by recovering a valid token from Codex session history, storing it in user-level `/home/dev/.config/fly/release.env` (`0600`) for all agents/projects on this devserver, and verifying `flyctl auth whoami` as `md.nikiforov@gmail.com`.
 - 2026-06-06T19:59Z: manual Fly deploy from clean `origin/main` completed with image `registry.fly.io/events-bot-new-wngqia:deployment-01KTF87YGAVTBVTN2EY7FAVH65`; `/healthz` showed `guide_excursions_light=ok` and `guide_excursions_full=ok`.
 - 2026-06-06T19:59Z-20:04Z: guide critical watchdog dispatched same-day `full` catch-up, but stale `/data/kaggle_jobs.json` entry `run_id=eb390776814f` first blocked new runs as `remote_telegram_session_busy`; after removing that stale registry entry, fresh catch-up `run_id=6c0eaf799628` pushed Kaggle kernel version `277` and then failed because `GetKernelSessionStatus` HTTP 500 was treated as fatal.
+- 2026-06-06T20:11Z: hotfix `b8c6c050` was deployed manually through Fly image `registry.fly.io/events-bot-new-wngqia:deployment-01KTF8YJD89JH9WZY2FEFF9MZT`; `/healthz` stayed ok/ready with guide scheduler slots visible.
+- 2026-06-06T20:13Z-20:18Z: after the stale registry entry for `run_id=6c0eaf799628` was manually removed, watchdog launched a fresh `full` catch-up `ops_run_id=1976`, `run_id=5273f7f8a26f`, kernel version `278`. This exposed an additional session-boundary incident: removing a `guide_monitoring` registry entry while Kaggle status is `UNKNOWN` / `GetKernelSessionStatus` 5xx can allow a second Kaggle kernel to run concurrently with the same `TELEGRAM_AUTH_BUNDLE_S22` and invalidate the Telethon auth key. From this point forward, `UNKNOWN` registry entries are treated as active until terminal evidence or explicit user-approved auth replacement.
+- 2026-06-06T20:26Z-20:33Z: fresh Kaggle output for `run_id=5273f7f8a26f` was downloaded and imported server-side without launching another Telethon/Kaggle scan. Recovery import `ops_run_id=1977` completed as partial: `sources_scanned=20`, `posts_scanned=42`, `posts_prefiltered=19`, `occurrences_created=2`, `occurrences_updated=11`, `llm_ok=19`, with `AuthKeyDuplicatedError` on sources still affected by the duplicated S22 session.
+- 2026-06-06T20:33Z: same-day `new_occurrences` digest issue `92` was published to Telegram targets `@wheretogo39` (`message_id=150`) and `@youwillsee39` (`message_id=168`).
+- 2026-06-06T20:33Z: VK fanout for issue `92` failed with `RuntimeError: Guide VK digest requires materialized media assets`; the new production carousel path was attempted only after afisha upload, so hook-only cards could not publish when `media_items_json=[]`.
 
 ## Root Cause
 
@@ -54,12 +59,15 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 4. Guide APScheduler jobs used a very short misfire grace window for a critical daily slot, making deploy/startup lag more likely to drop a run instead of recovering it.
 5. `/healthz` did not expose guide job state, so a green health check did not mean guide monitoring was scheduled.
 6. Guide Kaggle polling treated `GetKernelSessionStatus` HTTP 5xx as fatal instead of transient, so a Kaggle API outage aborted the catch-up immediately after the stale registry was cleared.
+7. During incident handling, a `guide_monitoring` registry entry was manually removed while Kaggle status was `UNKNOWN` because `GetKernelSessionStatus` returned HTTP 5xx. That bypassed the existing `remote_telegram_session_busy` guard and could start two Kaggle kernels with the same `TELEGRAM_AUTH_BUNDLE_S22`, risking Telegram `AuthKeyDuplicatedError`.
+8. Guide VK fanout required materialized afisha assets before attempting the new carousel renderer. A digest issue with no usable source media could therefore fail before generating hook-only carousel cards, even though the production format supports text-derived card images plus CTA.
 
 ## Contributing Factors
 
 - The first assistant response treated a code-path inference as a factual production-data claim. Production evidence must be explicitly separated from hypotheses.
 - Runtime file mirror is normally disabled on production volume, so scheduler forensics depend on Fly auth, DB evidence, or Kaggle artifacts unless temporary file logging is enabled.
 - Release-auth instructions were incomplete: they pointed at `~/.fly/config.yml access_token`, but did not cover the observed 2026-06-06 failure mode where Fly rewrote `~/.fly/config.yml` to WireGuard-only state without usable auth, nor did they route agents to the shared devserver token file or Codex/Claude session-history recovery before asking the user.
+- The incident runbook did not explicitly forbid manual `kaggle_registry` removal for `UNKNOWN` guide jobs; the code path treated `UNKNOWN` as busy, but the manual recovery action bypassed that protection.
 
 ## Automation Contract
 
@@ -67,6 +75,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 
 - Changing `vk_hashtags.py`, `build_vk_source_message`, `sync_vk_source_post`, festival matching, or `Festival`/`event.festival` semantics for VK posts.
 - Changing guide monitoring scheduler registration, `/healthz`, watchdog loops, heavy-operation gating, guide digest scheduled publish, or guide VK digest/card fanout.
+- Touching `kaggle_registry`, `remote_telegram_session.py`, guide Kaggle recovery, or any manual production recovery step that can remove/replace a `guide_monitoring` registry entry.
 - Any incident involving missed daily scheduled guide runs, guide digest publication, or public VK hashtag/search quality.
 
 ### Affected surfaces
@@ -80,6 +89,8 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - VK API `wall.getById` / `wall.edit`
 - Fly `/healthz`
 - `ops_run(kind='guide_monitoring')`
+- `kaggle_registry` / `/data/kaggle_jobs.json`
+- `TELEGRAM_AUTH_BUNDLE_S22` remote-session boundary
 
 ### Mandatory checks before closure or deploy
 
@@ -89,9 +100,11 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
   - `test_critical_scheduler_watchdog_skips_guide_when_full_run_exists`
   - `test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip`
 - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py`
+- `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py`
 - VK API verification for `wall-231920894_2314`: hashtag line must contain `#Кантата` and must not contain `#Кантаты`.
 - Post-deploy `/healthz` must expose `guide_excursions_light` and `guide_excursions_full` statuses, not only generic scheduler status.
 - Because the incident touched a daily scheduled production task, closure requires same-day guide `full` catch-up evidence: a successful/partial `ops_run(kind='guide_monitoring', details.mode='full')`, a published/empty-candidate scheduled digest evidence, or a clearly documented blocker.
+- Never remove a `guide_monitoring` `kaggle_registry` entry while Kaggle status is `UNKNOWN` or `GetKernelSessionStatus` returns HTTP 5xx/network errors. That state is a live-session lock, not stale evidence. Cleanup is allowed only after terminal Kaggle status, fresh output import, or explicit user approval to abandon the old auth bundle after replacement.
 
 ### Required evidence
 
@@ -115,10 +128,13 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Raise guide monitoring misfire grace to the documented critical-slot default.
 - Run guide critical watchdog from the independent watchdog loop and dispatch missed `full` runs through the same scheduled guide path with heavy gate `wait`.
 - Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
+- Treat `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement.
+- Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
 
 ## Follow-up Actions
 
 - [x] Restore and document local Fly auth bootstrap: `/home/dev/.config/fly/release.env` is the shared devserver token file, `flyctl auth whoami` verifies `md.nikiforov@gmail.com`, and release-governance now requires session-history recovery if Fly config loses usable auth.
+- [x] Add session-boundary guard to project instructions and guide runbook: never manually clear `guide_monitoring` registry on `UNKNOWN`/Kaggle status 5xx; this state remains a live lock for `TELEGRAM_AUTH_BUNDLE_S22`.
 - [ ] Consider temporary runtime file logging during future scheduled-job incident windows, with explicit disk budget and retention.
 
 ## Release And Closure Evidence
@@ -129,17 +145,23 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - release-auth recovery: shared devserver token file `/home/dev/.config/fly/release.env` created with `0600`; `flyctl auth whoami` verified `md.nikiforov@gmail.com`
 - `/healthz`: ok/ready true, `guide_excursions_light=ok`, `guide_excursions_full=ok`, next full run `2026-06-07T18:10:00+00:00`
 - catch-up evidence before Kaggle 5xx poll hotfix: watchdog dispatched; stale registry `guide_monitoring:zigomaro/guide-excursions-monitor` from `2026-06-06T07:00:23Z` was removed; fresh catch-up `ops_run_id=1968`, `run_id=6c0eaf799628`, pushed kernel version `277`, then failed on `GetKernelSessionStatus` HTTP 500
+- hotfix deploy: manual `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only` from clean `main` at `b8c6c050`; Fly image `deployment-01KTF8YJD89JH9WZY2FEFF9MZT`; machine `48e42d5b714228` version `1207`, `1/1` checks passing
+- catch-up evidence after Kaggle 5xx poll hotfix: `ops_run_id=1976`, `run_id=5273f7f8a26f`, `mode=full`, `status=running`; logs show repeated `guide_monitor.kernel_poll_transient_error` for `GetKernelSessionStatus` HTTP 500 without aborting; Kaggle output probe still returned no `guide_excursions_results.json` by 2026-06-06T20:18Z
+- recovery import evidence: fresh Kaggle output for `run_id=5273f7f8a26f` was downloaded to `/data/guide_monitoring_results/guide-excursions-5273f7f8a26f/guide_excursions_results.json`; server-side recovery import `ops_run_id=1977` completed partial with `occurrences_created=2`, `occurrences_updated=11`, `llm_ok=19`, and `AuthKeyDuplicatedError` errors on sources affected by the duplicated S22 session
+- digest evidence: guide digest issue `92` published to Telegram (`@wheretogo39` message `150`, `@youwillsee39` message `168`); initial VK fanout failed because hook-only carousel generation was gated behind materialized media upload
 - regression checks:
   - `python -m pytest -q tests/test_vk_hashtags.py tests/test_vk_source.py tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only tests/test_scheduling.py::test_critical_scheduler_watchdog_skips_guide_when_full_run_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip` printed `38 passed`; process then had to be stopped because imported runtime threads kept pytest alive after summary
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
   - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py` -> passed
   - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_kaggle_service.py` -> `2 passed`
+  - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py` -> `3 passed`
 - VK mitigation verification: `wall-231920894_2314` re-fetch shows `#Кантата` present and `#Кантаты` absent, with 2 attachments preserved
 - post-deploy verification: `/healthz` shows guide scheduler slots and Fly machine is healthy
-- guide same-day catch-up/digest evidence: pending after Kaggle HTTP 5xx transient poll hotfix deploy
+- guide same-day catch-up/digest evidence: recovery import `ops_run_id=1977` completed partial from fresh Kaggle output and digest issue `92` published to Telegram; VK publication pending hook-carousel hotfix deploy
 
 ## Prevention
 
 - Canonical festival hashtag tests cover raw inflected event labels and `Festival.name` preference.
 - Guide critical watchdog tests cover missed-full catch-up, full-run idempotence, and retry after remote-session-busy skipped runs.
 - `/healthz` guide job visibility prevents a green health check from hiding missing guide scheduler slots.
+- Guide/Kaggle recovery instructions now make `UNKNOWN` status a session lock: agents must not manually delete the registry entry or trigger another guide run while status lookup is failing.

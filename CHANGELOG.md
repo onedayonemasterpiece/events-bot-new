@@ -11,6 +11,18 @@
   when `~/.fly/config.yml` loses usable auth, then interactive
   `flyctl auth login` only after user-level config/env/session token checks
   fail, never through Actions.
+- **Changed: guide Kaggle session-boundary runbook**:
+  `guide_monitoring` registry entries with Kaggle status `UNKNOWN` or
+  `GetKernelSessionStatus` HTTP 5xx are now documented as active
+  `TELEGRAM_AUTH_BUNDLE_S22` locks. Agents must not manually remove those
+  entries or start another guide Kaggle run until terminal evidence, fresh
+  output import, or explicit user-approved auth replacement.
+- **Fixed: guide VK digest hook carousel without source media (INC-2026-06-06)**:
+  guide VK fanout now tries to build/upload the production hook carousel before
+  requiring materialized afisha assets, so a digest with no usable source photos
+  can still publish as rendered hook-only cards plus CTA. It still fails closed
+  instead of creating a text-only VK wall post if neither carousel nor afisha
+  attachments can be uploaded. Covered by `tests/test_guide_vk_digest.py`.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to
