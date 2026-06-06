@@ -14080,6 +14080,35 @@ def _event_has_managed_vk_post(ev: Event) -> bool:
     return str(abs(int(owner_ids[0]))) == target_group_id
 
 
+def _event_vk_publish_end_date(ev: Event) -> date | None:
+    end_raw = (getattr(ev, "end_date", None) or "").strip()
+    if end_raw:
+        end = parse_iso_date(end_raw.split("..", 1)[-1].strip())
+        if end:
+            return end
+    date_raw = (getattr(ev, "date", None) or "").strip()
+    if ".." in date_raw:
+        end = parse_iso_date(date_raw.split("..", 1)[1].strip())
+        if end:
+            return end
+    if date_raw:
+        return parse_iso_date(date_raw.split("..", 1)[0].strip())
+    return None
+
+
+def _event_has_ended_before_today(ev: Event, *, now: datetime | None = None) -> bool:
+    end_date = _event_vk_publish_end_date(ev)
+    if not end_date:
+        return False
+    now_value = now or datetime.now(LOCAL_TZ)
+    today = (
+        now_value.date()
+        if now_value.tzinfo is None
+        else now_value.astimezone(LOCAL_TZ).date()
+    )
+    return end_date < today
+
+
 def _is_sqlite_locked_error(exc: BaseException) -> bool:
     msg = str(exc).lower()
     return "database is locked" in msg or "database table is locked" in msg
@@ -14101,6 +14130,10 @@ async def schedule_event_update_tasks(
         # calendar messages for them (but keep Telegraph/page rebuilds so they disappear
         # from aggregated pages and the operator can still inspect the record if needed).
         disable_ics_jobs = True
+        skip_vk_sync = True
+    if _event_has_ended_before_today(ev):
+        # Fully past events may still need page rebuild cleanup, but they must not create
+        # a new managed klgdevents wall post.
         skip_vk_sync = True
     if (not disable_ics_jobs) and ev.time and "ics_publish" in JOB_HANDLERS:
         ics_dep = await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
@@ -19037,7 +19070,15 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         is_vk_wall_url(ev.source_post_url) if ev else None,
     )
     if not ev:
-        return
+        return False
+    if _event_has_ended_before_today(ev):
+        logging.info(
+            "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "end_date", None),
+        )
+        return False
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response

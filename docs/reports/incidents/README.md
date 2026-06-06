@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-06-vk-past-klgdevents-posts.md`
+  - Scope: VK outbound event publishing to `klgdevents`, `schedule_event_update_tasks` enqueue behavior for `JobTask.vk_sync`, and `job_sync_vk_source_post` before `wall.post`.
+  - Must not regress: fully past events (`end_date` or, when empty, `date` strictly before today's local date) must not enqueue or execute a new managed `klgdevents` `vk_sync`; current/future events and ongoing long events (`end_date >= today`) must remain publish-eligible; already-managed `klgdevents` URLs must still suppress duplicate sync.
 - `INC-2026-06-05-vk-story-forward-wall-first.md`
   - Scope: CherryFlash/Kaggle VK story fanout (`vk_wall`, `vk_wall_story`, legacy `vk_story`), `popular_review` target order for `kenigeventsofficial`/`klgdevents`, КОНБ `konb39` VK targets, and promo VK story image generation.
   - Must not regress: video announcements for these VK communities must publish a wall clip first, then upload the mp4 as a VK video story with `link_url` pointing at that wall post; promo poster stories must use the source image/poster without VK `link_url`, so VK does not render a white wall-post card; `80 историй о главном` daily VK story surfaces must remain caption-free.

@@ -30,7 +30,9 @@
 4. Проверить локальный deploy-tooling:
    - искать нужные CLI не только в текущем `PATH`, но и в стандартных user-level install locations (`~/.fly/bin/flyctl`, `~/.local/bin`, и т.п.);
    - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` до начала deploy;
-   - отсутствие CLI не считается достаточным оправданием остановки, пока не предпринят self-bootstrap/install или не подготовлен минимальный reproducible bootstrap.
+   - для Fly сначала проверить `flyctl auth whoami`; если он отвечает `no access token available`, это **не** blocker само по себе: проверить `~/.fly/config.yml` на наличие `access_token` и повторить команду с process-local export `FLY_ACCESS_TOKEN=<redacted-token>` (или `FLY_API_TOKEN=<redacted-token>`). Значение токена не печатать и не коммитить; в отчёте указывать только факт `~/.fly/config.yml access_token present` и результат `whoami`;
+   - также проверить `.env` / shell env на альтернативные service-token имена, но не считать отсутствие именно `FLY_API_TOKEN` доказательством отсутствия Fly release auth;
+   - отсутствие CLI или auth не считается достаточным оправданием остановки, пока не проверены user-level install/config paths и не предпринят self-bootstrap/install или не подготовлен минимальный reproducible bootstrap.
 5. Проверить, что deploy-ветка не потеряла связь с `origin/main`
 6. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
 7. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
