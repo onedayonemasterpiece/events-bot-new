@@ -41,6 +41,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T18:59Z: fix `a6e0915d` pushed to `origin/main`; GitHub Actions deploy started.
 - 2026-06-06T19:00Z: first deploy attempt failed while Docker Hub timed out resolving `python:3.12-slim`.
 - 2026-06-06T19:02Z: rerun built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`, then failed at `flyctl deploy` because Actions `FLY_API_TOKEN` was empty. Local `flyctl auth whoami` also reported `no access token available`.
+- 2026-06-06T19:07Z: follow-up record commit `2edb67eb` also built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, then failed at the same `flyctl deploy` step with empty `FLY_API_TOKEN`.
 
 ## Root Cause
 
@@ -116,10 +117,10 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 
 ## Release And Closure Evidence
 
-- committed/pushed SHA: `a6e0915d317f43d658193d25c98052b2ce9622ce`, reachable from `origin/main`
-- deploy path: GitHub Actions `Deploy to Fly via GHCR`, run `27071080197`
+- committed/pushed SHA: `2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, reachable from `origin/main`; corrective code SHA `a6e0915d317f43d658193d25c98052b2ce9622ce` is an ancestor
+- deploy path: GitHub Actions `Deploy to Fly via GHCR`, runs `27071080197` and `27071216727`
 - deploy status: blocked; build succeeded on rerun, but `flyctl deploy` failed because `FLY_API_TOKEN` in the workflow environment was empty and local Fly auth had no token
-- built image: `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`
+- built image: `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`
 - regression checks:
   - `python -m pytest -q tests/test_vk_hashtags.py tests/test_vk_source.py tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only tests/test_scheduling.py::test_critical_scheduler_watchdog_skips_guide_when_full_run_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip` printed `38 passed`; process then had to be stopped because imported runtime threads kept pytest alive after summary
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
