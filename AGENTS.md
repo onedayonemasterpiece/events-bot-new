@@ -124,7 +124,7 @@
   - проверить branch, чистоту worktree и связь с `origin/main`
   - сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
   - проверить, нет ли `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
-- GitHub Actions deploy допустим только если workflow явно checkout-ит и проверяет `main`.
+- Production deploy выполняется только вручную через `flyctl deploy` из clean worktree; GitHub Actions deploy для этого репозитория не используется и не является допустимым release path.
 - Ручной `flyctl deploy` допустим только из clean worktree; если deploy emergency и идёт не из `main`, branch должен быть запушен, SHA зафиксирован, а тот же fix обязан вернуться в `main` в рамках того же инцидента.
 - Для daily/scheduled prod-задач (`cron`, ежедневные публикации, daily import/rebuild jobs) deploy не считается closure сам по себе: если из-за бага сегодняшний слот уже был пропущен или завершился аварийно, после доставки фикса нужно выполнить compensating rerun/catch-up и проверить, что текущий день больше не потерян.
 

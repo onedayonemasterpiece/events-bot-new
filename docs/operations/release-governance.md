@@ -11,8 +11,8 @@
 
 ## Allowed Deploy Paths
 
-- GitHub Actions deploy допустим только если workflow всегда checkout-ит именно `main` и явно проверяет SHA `origin/main`.
-- Ручной `flyctl deploy` допустим из clean worktree, который явно проверен относительно `origin/main`.
+- Единственный штатный production deploy path для этого репозитория — ручной `flyctl deploy` из clean worktree, который явно проверен относительно `origin/main`.
+- GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;
   - в ветке только релевантные fix-коммиты;
@@ -62,7 +62,7 @@
 - incident ID(s), если deploy связан с инцидентом или затрагивает известный incident surface
 - deployed SHA
 - branch name
-- способ deploy (`flyctl` или GitHub Actions)
+- способ deploy: `flyctl` (manual)
 - ссылка на PR / merge commit, который вернул fix в `main`
 - краткий список выполненных incident regression checks и где лежит их evidence
 - краткая заметка, если deploy был emergency и почему нельзя было ждать обычного merge

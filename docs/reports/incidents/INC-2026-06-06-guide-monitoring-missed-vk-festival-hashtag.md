@@ -38,10 +38,10 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - 2026-06-06T18:55Z: VK API evidence confirms `#Кантаты` in `wall-231920894_2314`; post is editable and has 2 attachments.
 - 2026-06-06T18:56Z: immediate mitigation edits the public VK post to replace `#Кантаты` with `#Кантата`, preserving attachments; re-fetch verifies `#Кантата` present and `#Кантаты` absent.
 - 2026-06-06: corrective code changes prepared for canonical festival hashtag resolution, guide scheduler health visibility, and guide critical catch-up watchdog.
-- 2026-06-06T18:59Z: fix `a6e0915d` pushed to `origin/main`; GitHub Actions deploy started.
-- 2026-06-06T19:00Z: first deploy attempt failed while Docker Hub timed out resolving `python:3.12-slim`.
-- 2026-06-06T19:02Z: rerun built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`, then failed at `flyctl deploy` because Actions `FLY_API_TOKEN` was empty. Local `flyctl auth whoami` also reported `no access token available`.
-- 2026-06-06T19:07Z: follow-up record commit `2edb67eb` also built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, then failed at the same `flyctl deploy` step with empty `FLY_API_TOKEN`.
+- 2026-06-06T18:59Z: fix `a6e0915d` pushed to `origin/main`; agent incorrectly attempted GitHub Actions deploy because stale release-governance instructions still allowed it and `.github/workflows/fly-deploy.yml` existed.
+- 2026-06-06T19:00Z: first invalid Actions deploy attempt failed while Docker Hub timed out resolving `python:3.12-slim`.
+- 2026-06-06T19:02Z: rerun built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:a6e0915d317f43d658193d25c98052b2ce9622ce`, then failed at `flyctl deploy` because Actions `FLY_API_TOKEN` was empty. This was not a valid project release path; production deploy still required manual local `flyctl deploy`.
+- 2026-06-06T19:07Z: follow-up record commit `2edb67eb` also built and pushed GHCR image `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, then failed at the same invalid Actions `flyctl deploy` step.
 
 ## Root Cause
 
@@ -91,7 +91,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 ### Required evidence
 
 - Deployed SHA reachable from `origin/main`.
-- Release path: GitHub Actions or manual Fly deploy from clean, pushed main.
+- Release path: manual `flyctl deploy` from clean, pushed main.
 - VK post verification output for `wall-231920894_2314`.
 - `/healthz` after deploy with guide scheduler fields.
 - Guide full catch-up/digest evidence or blocker.
@@ -118,9 +118,9 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 ## Release And Closure Evidence
 
 - corrective code SHA: `a6e0915d317f43d658193d25c98052b2ce9622ce`, reachable from `origin/main`; later doc-only incident evidence commits may advance the latest `origin/main` SHA without changing the fix
-- deploy path: GitHub Actions `Deploy to Fly via GHCR`, runs `27071080197` and `27071216727`
-- deploy status: blocked; build succeeded on rerun, but `flyctl deploy` failed because `FLY_API_TOKEN` in the workflow environment was empty and local Fly auth had no token
-- built image: `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`
+- deploy path: pending; must be manual `flyctl deploy` from clean `origin/main`
+- invalid Actions attempts: `27071080197` and `27071216727`, caused by stale docs/workflow drift; these do not count as project deploy evidence
+- deploy status: not deployed to production yet; local Fly auth still needs to be restored before manual `flyctl deploy`
 - regression checks:
   - `python -m pytest -q tests/test_vk_hashtags.py tests/test_vk_source.py tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only tests/test_scheduling.py::test_critical_scheduler_watchdog_skips_guide_when_full_run_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_retries_guide_after_remote_busy_skip` printed `38 passed`; process then had to be stopped because imported runtime threads kept pytest alive after summary
   - `python -m pytest -q tests/test_scheduling.py::test_runtime_health_status_reports_guide_jobs` -> `1 passed`
