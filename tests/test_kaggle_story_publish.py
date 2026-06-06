@@ -549,14 +549,14 @@ async def test_telegram_chat_target_posts_without_story_preflight(
 
 
 @pytest.mark.asyncio
-async def test_vk_wall_story_links_previous_wall_post_without_video_story_upload(
+async def test_vk_wall_story_uploads_video_with_previous_wall_post_link(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     _patch_story_request_types(monkeypatch)
     client = _FakeStoryClient(boost_fail_peers=set(), story_ids={})
-    media_path = tmp_path / "cover.jpg"
-    media_path.write_bytes(b"image")
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
 
     api_calls: list[tuple[str, dict[str, object]]] = []
 
@@ -571,11 +571,12 @@ async def test_vk_wall_story_links_previous_wall_post_without_video_story_upload
         if method == "wall.post":
             return {"post_id": 123}
         if method == "stories.getPhotoUploadServer":
+            raise AssertionError("vk_wall_story must upload the mp4 as a video story")
+        if method == "stories.getVideoUploadServer":
             assert params["group_id"] == "231828790"
             assert params["link_url"] == "https://vk.com/wall-231828790_123"
-            return {"upload_url": "https://upload.example/story-photo"}
-        if method == "stories.getVideoUploadServer":
-            raise AssertionError("vk_wall_story must not upload a video story")
+            assert params["link_text"] == "watch"
+            return {"upload_url": "https://upload.example/story-video"}
         if method == "stories.save":
             assert params["upload_results"] == "story-upload-result"
             return {"items": [{"id": 456, "owner_id": -231828790, "expires_at": 1}]}
@@ -593,7 +594,7 @@ async def test_vk_wall_story_links_previous_wall_post_without_video_story_upload
     def fake_post(url, files=None, timeout=None):  # noqa: ANN001,ARG001
         if str(url).endswith("/video"):
             return _Response({})
-        if str(url).endswith("/story-photo"):
+        if str(url).endswith("/story-video"):
             return _Response({"response": {"upload_result": "story-upload-result"}})
         raise AssertionError(url)
 
@@ -627,7 +628,8 @@ async def test_vk_wall_story_links_previous_wall_post_without_video_story_upload
     assert report["ok"] is True
     assert report["targets"][1]["source_wall_post_url"] == "https://vk.com/wall-231828790_123"
     assert report["targets"][1]["story_id"] == 456
-    assert "stories.getVideoUploadServer" not in [method for method, _ in api_calls]
+    assert "stories.getVideoUploadServer" in [method for method, _ in api_calls]
+    assert "stories.getPhotoUploadServer" not in [method for method, _ in api_calls]
 
 
 @pytest.mark.asyncio

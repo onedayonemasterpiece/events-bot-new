@@ -12,13 +12,15 @@ Related docs: `docs/features/cherryflash/README.md`, `docs/features/promo-campai
 ## Summary
 
 VK stories for video announcements and `80 историй о главном` promo activity did
-not match the desired wall-first product contract. Video announcements were
-uploaded directly as separate VK story media, while promo poster stories rendered
-event text into a white caption card under the image.
+not match the desired wall-first product contract. Video announcements must
+create a VK wall post first, then publish the same mp4 as a VK video story with
+`link_url` pointing at that wall post. Promo poster stories must stay image-only
+and must not render VK's wall-link caption card under the image.
 
 ## User / Business Impact
 
-- VK audience saw direct video stories instead of wall-post-linked stories.
+- VK audience saw direct video stories without a wall-post link, then a
+  temporary photo-story repair that showed only a video stop frame.
 - Promo poster stories could include an unreadable/irrelevant white text block.
 - The `80 историй о главном` campaign expected clean daily story coverage.
 
@@ -46,7 +48,8 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 ## Root Cause
 
 1. The shared CherryFlash story helper treated VK story fanout as an independent
-   `stories.getVideoUploadServer` upload, not as a wall-post-linked story.
+   `stories.getVideoUploadServer` upload without linking it to the preceding
+   wall post.
 2. Promo `vk_story` generated a composite story image with event text in a lower
    white panel instead of using the source poster/image directly.
 
@@ -54,8 +57,9 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 
 - VK API does not expose a simple `stories.repost(wall...)` method in the public
   schema; wall-post linking must be modeled through story upload parameters.
-- The regression suite did not assert that these VK story paths avoid
-  `stories.getVideoUploadServer` and avoid rendering a text panel.
+- The regression suite did not assert that video-story upload carries
+  `link_url` to the preceding wall post, and did not assert that promo stories
+  avoid rendering a text panel.
 
 ## Automation Contract
 
@@ -73,15 +77,16 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 - `popular_review` VK target order for `kenigeventsofficial` and `klgdevents`;
 - КОНБ partner track VK targets for `konb39`;
 - Promo VK runner surface `vk_story`;
-- VK API calls: `video.save`, `wall.post`, `stories.getPhotoUploadServer`,
+- VK API calls: `video.save`, `wall.post`, `stories.getVideoUploadServer`,
   `stories.save`.
 
 ### Mandatory checks before closure or deploy
 
 - Unit tests must prove `popular_review` and КОНБ no longer configure direct
   `vk_story` targets for these video paths.
-- Unit tests must prove `vk_wall_story` uses `stories.getPhotoUploadServer` with
-  `link_url` to the wall post and does not call `stories.getVideoUploadServer`.
+- Unit tests must prove `vk_wall_story` uses `stories.getVideoUploadServer` with
+  `link_url` to the previous wall post and does not call
+  `stories.getPhotoUploadServer`.
 - Promo tests must prove the story image builder returns the source wall image /
   poster bytes without rendering a text panel, and that promo story uploads do
   not pass a VK wall `link_url`.
@@ -98,8 +103,9 @@ Reported by the operator on 2026-06-05 with a mobile screenshot and live check o
 ## Immediate Mitigation
 
 Deleted current incorrect direct video stories in `klgdevents` and
-`kenigeventsofficial`, then published fresh wall-linked photo stories in both
-communities.
+`kenigeventsofficial`. A temporary wall-linked photo-story repair was superseded
+by linked VK video stories after live API validation showed
+`stories.getVideoUploadServer` supports `link_url`.
 
 ## Corrective Actions
 
@@ -109,6 +115,9 @@ communities.
   `klgdevents` story link or local wall fallback.
 - Changed КОНБ prod VK target order to `vk_wall` then `vk_wall_story` for
   `konb39`.
+- Changed `vk_wall_story` to upload the mp4 as a VK video story with `link_url`
+  to the previous wall post, preserving wall-first ordering while keeping the
+  story itself as video.
 - Changed promo `vk_story` image generation to use the source wall image/poster
   directly instead of drawing title/date/venue into a white panel.
 - Changed promo `vk_story` upload to omit VK `link_url`, because VK renders wall
@@ -136,7 +145,7 @@ communities.
   - `pytest -q tests/test_promo.py::test_vk_story_image_uses_source_post_photo_without_text_panel
     tests/test_promo.py::test_promo_vk_runner_schedules_publications_and_repost
     tests/test_video_announce_story_publish.py
-    tests/test_kaggle_story_publish.py::test_vk_wall_story_links_previous_wall_post_without_video_story_upload
+    tests/test_kaggle_story_publish.py::test_vk_wall_story_uploads_video_with_previous_wall_post_link
     tests/test_partner_tracks.py::test_konb_track_defaults_to_prod_story_targets`
     passed: `15 passed`
   - `pytest -q tests/test_promo.py` passed: `22 passed`
@@ -158,6 +167,17 @@ communities.
     `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-cherryflash-992-and-clean-promo-2026-06-05.json`
     and
     `artifacts/codex/INC-2026-06-05-vk-story-forward-wall-first/manual-clean-promo-2214-kenig-retry-2026-06-05.json`
+- final video-story live validation:
+  - deleted the superseded photo-stopframe story repairs
+    `-231828790_456239042` and `-231920894_456239040`;
+  - published linked VK video stories for the same CherryFlash wall post:
+    `-231828790_456239044` and `-231920894_456239041`;
+  - VK API verified both final stories as `has_video=true` with
+    `link.url=https://vk.com/wall-231828790_992`;
+  - evidence:
+    `artifacts/codex/vk-story-video-forward-test-2026-06-05/kenigeventsofficial-video-link-url-test.json`
+    and
+    `artifacts/codex/vk-story-video-forward-test-2026-06-05/both-publics-video-link-story-and-stopframe-cleanup.json`
 
 ## Prevention
 
