@@ -171,6 +171,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `GUIDE_EXCURSIONS_LIGHT_TIMES_LOCAL` / `GUIDE_EXCURSIONS_FULL_TIME_LOCAL` / `GUIDE_EXCURSIONS_TZ` – guide monitoring light/full schedule in local time zone.
 - `GUIDE_MONITORING_MISFIRE_GRACE_SECONDS` – per-job APScheduler misfire window for the critical scheduled `full` guide slot (default: `1800`).
 - `GUIDE_MONITORING_CATCHUP_LOOKBACK_SECONDS` – startup/watchdog lookback for the last missed critical `full` guide slot (default: `86400`).
+- `/healthz` exposes `guide_excursions_light` and `guide_excursions_full`; missing guide job visibility is not acceptable evidence that the guide scheduler is healthy.
 - `GUIDE_MONITORING_RESULTS_STORE_ROOT` – persistent store for downloaded Guide monitoring Kaggle output bundles (default: `/data/guide_monitoring_results` on Fly).
 - `GUIDE_MONITORING_RESULTS_STORE_RETENTION_DAYS` / `GUIDE_MONITORING_RESULTS_STORE_MAX_RUNS` / `GUIDE_MONITORING_RESULTS_STORE_MAX_MB` / `GUIDE_MONITORING_RESULTS_STORE_MIN_FREE_MB` – retention guard for the persistent result store (defaults: `2` days, `6` runs including the current one, `256` MB total, and `256` MB free-space target). This guard runs before and after a new bundle is copied so old guide recovery artifacts cannot fill the SQLite volume.
 - `ENABLE_GUIDE_DIGEST_SCHEDULED` – after a successful scheduled `full` guide scan, automatically publish the `new_occurrences` digest in the same job instead of a separate cron slot.

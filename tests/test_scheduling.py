@@ -294,6 +294,43 @@ def _configure_guide_critical_env(monkeypatch) -> None:
     monkeypatch.setattr(scheduling, "datetime", _FixedCriticalSchedulerDatetime)
 
 
+def test_runtime_health_status_reports_guide_jobs(monkeypatch):
+    monkeypatch.setenv("ENABLE_GUIDE_EXCURSIONS_SCHEDULED", "1")
+    monkeypatch.delenv("ENABLE_V_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.delenv("ENABLE_V_TEST_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.setenv("DEV_MODE", "1")
+
+    class Job:
+        def __init__(self, job_id: str) -> None:
+            self.id = job_id
+            self.next_run_time = datetime(2026, 6, 6, 20, 10, tzinfo=timezone.utc)
+
+    class Scheduler:
+        running = True
+
+        def __init__(self) -> None:
+            self.jobs = {
+                "guide_excursions_light_0": Job("guide_excursions_light_0"),
+                "guide_excursions_full": Job("guide_excursions_full"),
+            }
+
+        def get_job(self, job_id: str):
+            return self.jobs.get(job_id)
+
+        def get_jobs(self):
+            return list(self.jobs.values())
+
+    monkeypatch.setattr(scheduling, "_scheduler", Scheduler())
+
+    payload = scheduling.runtime_health_status()
+
+    assert payload["scheduler"] == "ok"
+    assert payload["guide_excursions_light"] == "ok"
+    assert payload["guide_excursions_full"] == "ok"
+    assert "guide_excursions_light_next_run" in payload
+    assert "guide_excursions_full_next_run" in payload
+
+
 @pytest.mark.asyncio
 async def test_video_tomorrow_startup_catchup_retries_single_recoverable_failed_session(
     tmp_path, monkeypatch

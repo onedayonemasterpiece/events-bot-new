@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
+  VK event posts now prefer canonical `Festival.name` for festival hashtags and
+  can resolve narrow inflected event labels such as `Кантаты` back to
+  `Кантата`, preventing public search tags like `#Кантаты`. Guide scheduled
+  `light/full` jobs now appear in runtime health, use the critical-slot
+  misfire window, and the live watchdog catches up a missed scheduled `full`
+  guide run through the same scheduled path instead of leaving the daily slot
+  invisible. The already-published VK post `wall-231920894_2314` was repaired
+  to `#Кантата` while preserving attachments.
 - **VK Publishing**: event VK posts now add an extra festival hashtag when
   `event.festival` is set, using the festival name without spaces/separators
   (for example `#80историйоглавном`).

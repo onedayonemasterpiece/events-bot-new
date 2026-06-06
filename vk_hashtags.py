@@ -107,12 +107,18 @@ def build_vk_announce_hashtags(
     return dedupe_vk_hashtags(tags)
 
 
-def build_vk_event_hashtags(event: HashtagEvent) -> list[str]:
+def build_vk_event_hashtags(
+    event: HashtagEvent,
+    *,
+    festival_name: str | None = None,
+) -> list[str]:
     tags = build_vk_announce_hashtags(
         cities=[getattr(event, "city", None)],
         dates=[getattr(event, "date", None)],
     )
-    festival_tag = normalize_vk_festival_hashtag(getattr(event, "festival", None))
+    festival_tag = normalize_vk_festival_hashtag(
+        festival_name if festival_name is not None else getattr(event, "festival", None)
+    )
     if festival_tag:
         tags.append(festival_tag)
     return dedupe_vk_hashtags(tags)

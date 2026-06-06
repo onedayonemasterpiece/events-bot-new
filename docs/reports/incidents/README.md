@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-06-guide-monitoring-missed-vk-festival-hashtag.md`
+  - Scope: guide excursions scheduled `light/full` jobs, guide scheduled digest/VK fanout, runtime scheduler health, and VK event festival hashtags.
+  - Must not regress: a public event linked to canonical festival `Кантата` must publish/search as `#Кантата` even if `event.festival` carries an inflected label such as `Кантаты`; `/healthz` must expose `guide_excursions_light` and `guide_excursions_full`; a missed critical guide `full` daily slot must be caught up by the live watchdog and closure requires same-day catch-up/digest evidence.
 - `INC-2026-06-06-vk-past-klgdevents-posts.md`
   - Scope: VK outbound event publishing to `klgdevents`, `schedule_event_update_tasks` enqueue behavior for `JobTask.vk_sync`, and `job_sync_vk_source_post` before `wall.post`.
   - Must not regress: fully past events (`end_date` or, when empty, `date` strictly before today's local date) must not enqueue or execute a new managed `klgdevents` `vk_sync`; current/future events and ongoing long events (`end_date >= today`) must remain publish-eligible; already-managed `klgdevents` URLs must still suppress duplicate sync.

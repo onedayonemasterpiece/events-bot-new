@@ -266,6 +266,7 @@ from shortlinks import (
 from scheduling import (
     startup as scheduler_startup,
     cleanup as scheduler_cleanup,
+    maybe_dispatch_critical_scheduler_watchdog as scheduler_critical_watchdog_tick,
     maybe_dispatch_video_tomorrow_watchdog as scheduler_video_tomorrow_watchdog_tick,
     runtime_health_status as scheduler_runtime_health_status,
     video_tomorrow_watchdog_enabled as scheduler_video_tomorrow_watchdog_enabled,

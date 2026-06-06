@@ -3793,10 +3793,58 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     return lines
 
 
-def _vk_event_hashtag_line(event: Event) -> str:
+def _festival_lookup_variants(value: str | None) -> set[str]:
+    try:
+        base = normalize_alias(value)
+    except Exception:
+        base = re.sub(r"[^\w]+", "", str(value or "").casefold(), flags=re.UNICODE)
+    if not base:
+        return set()
+    variants = {base}
+    if base.endswith("а") and len(base) > 1:
+        variants.add(base[:-1] + "ы")
+        variants.add(base[:-1] + "и")
+    if base.endswith("я") and len(base) > 1:
+        variants.add(base[:-1] + "и")
+    if base.endswith("ь") and len(base) > 1:
+        variants.add(base[:-1] + "я")
+    return variants
+
+
+async def _resolve_event_festival(db: Database | None, event: Event) -> Festival | None:
+    raw_name = (getattr(event, "festival", None) or "").strip()
+    if not raw_name or db is None:
+        return None
+    async with db.get_session() as session:
+        res = await session.execute(select(Festival).where(Festival.name == raw_name))
+        exact = res.scalars().first()
+        if exact:
+            return exact
+        res_all = await session.execute(select(Festival))
+        festivals = list(res_all.scalars().all())
+    try:
+        event_key = normalize_alias(raw_name)
+    except Exception:
+        event_key = re.sub(r"[^\w]+", "", raw_name.casefold(), flags=re.UNICODE)
+    if not event_key:
+        return None
+    for fest in festivals:
+        candidates = [fest.name, fest.full_name, *list(fest.aliases or [])]
+        for candidate in candidates:
+            if event_key in _festival_lookup_variants(candidate):
+                return fest
+    return None
+
+
+def _vk_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
     from vk_hashtags import build_vk_event_hashtags, format_vk_hashtag_line
 
-    return format_vk_hashtag_line(build_vk_event_hashtags(event))
+    return format_vk_hashtag_line(
+        build_vk_event_hashtags(
+            event,
+            festival_name=getattr(festival, "name", None) if festival else None,
+        )
+    )
 
 
 def _strip_vk_source_tail_lines(lines: list[str]) -> list[str]:
@@ -3831,7 +3879,7 @@ def build_vk_source_message(
     lines.append(VK_BLANK_LINE)
     if calendar_url:
         lines.append(f"Добавить в календарь {calendar_url}")
-    hashtag_line = _vk_event_hashtag_line(event)
+    hashtag_line = _vk_event_hashtag_line(event, festival)
     if hashtag_line:
         if calendar_url:
             lines.append(VK_BLANK_LINE)
@@ -4009,13 +4057,7 @@ async def sync_vk_source_post(
     if not target_group_id:
         return None
     logging.info("sync_vk_source_post start for event %s", event.id)
-    festival = None
-    if event.festival and db:
-        async with db.get_session() as session:
-            res = await session.execute(
-                select(Festival).where(Festival.name == event.festival)
-            )
-            festival = res.scalars().first()
+    festival = await _resolve_event_festival(db, event)
 
     existing_vk_post_url = (event.source_vk_post_url or "").strip()
     if existing_vk_post_url:
@@ -4204,7 +4246,7 @@ async def sync_vk_source_post(
                 new_lines.append(CONTENT_SEPARATOR)
         if calendar_line_value:
             new_lines.append(f"Добавить в календарь {calendar_line_value}")
-        hashtag_line = _vk_event_hashtag_line(event)
+        hashtag_line = _vk_event_hashtag_line(event, festival)
         if hashtag_line:
             if calendar_line_value:
                 new_lines.append(VK_BLANK_LINE)
@@ -5662,6 +5704,9 @@ async def _video_tomorrow_watchdog_loop(db: Database, bot: Bot) -> None:
     while True:
         try:
             await scheduler_video_tomorrow_watchdog_tick(db, bot)
+            critical_tick = globals().get("scheduler_critical_watchdog_tick")
+            if callable(critical_tick):
+                await critical_tick(db, bot)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -5761,11 +5806,21 @@ async def _runtime_health_report(
     video_tomorrow_status = (
         str(scheduler_health.get("video_tomorrow") or "").strip() or "unknown"
     )
+    guide_light_status = (
+        str(scheduler_health.get("guide_excursions_light") or "").strip() or "unknown"
+    )
+    guide_full_status = (
+        str(scheduler_health.get("guide_excursions_full") or "").strip() or "unknown"
+    )
     if ready:
         if scheduler_status != "ok":
             issues.append(f"apscheduler:{scheduler_status}")
         if video_tomorrow_status not in {"ok", "disabled"}:
             issues.append(f"video_tomorrow_job:{video_tomorrow_status}")
+        if guide_light_status not in {"ok", "disabled"}:
+            issues.append(f"guide_excursions_light_job:{guide_light_status}")
+        if guide_full_status not in {"ok", "disabled"}:
+            issues.append(f"guide_excursions_full_job:{guide_full_status}")
 
     payload = {
         "ok": not issues,

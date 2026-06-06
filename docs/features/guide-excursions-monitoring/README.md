@@ -398,6 +398,7 @@ Guide digest не должен произвольно смешивать `про
 - scheduled `full` slot считается critical daily slot: если первичный APScheduler fire пропущен или записался как `ops_run(... status='skipped', skip_reason='heavy_busy')`, startup catch-up и live watchdog обязаны догонять тот же scheduled `full` path в пределах lookback окна, а catch-up-dispatch ждёт освобождения heavy gate вместо тихого пропуска дня;
 - same-day `light` runs не считаются подтверждением доставки daily `full` slot: recovery должен искать materialized `guide_monitoring` именно с `details.mode='full'`, иначе вечерняя автопубликация может быть ложно признана “уже выполненной”.
 - если catch-up `full` run снова завершается `status='skipped'` только из-за занятого shared remote Telegram/Kaggle session (`remote_telegram_session_busy`), watchdog не должен считать такой dispatch завершением суточного слота: тот же scheduled `full` path обязан пробоваться снова на следующем watchdog tick, пока не materialize-ится не-skipped `full` run или не истечёт lookback окно.
+- `/healthz` обязан раскрывать статусы `guide_excursions_light` и `guide_excursions_full` вместе с generic scheduler status; green health without guide job visibility is insufficient evidence for this feature. Production closure after a missed daily guide slot requires deploy evidence plus same-day catch-up/digest evidence, not just a code fix.
 
 ## Основные entrypoints
 

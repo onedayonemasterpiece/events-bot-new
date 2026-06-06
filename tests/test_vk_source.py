@@ -706,6 +706,49 @@ def test_build_vk_source_message_appends_announce_hashtags():
     assert msg.endswith(main.VK_SOURCE_FOOTER)
 
 
+def test_build_vk_source_message_uses_canonical_festival_hashtag():
+    event = main.Event(
+        title="T",
+        description="",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+        festival="Кантаты",
+    )
+    festival = main.Festival(name="Кантата")
+
+    msg = main.build_vk_source_message(event, "Описание", festival=festival)
+
+    assert "#Кантата" in msg
+    assert "#Кантаты" not in msg
+
+
+@pytest.mark.asyncio
+async def test_resolve_event_festival_matches_inflected_event_label(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(main.Festival(name="Кантата"))
+        await session.commit()
+
+    event = main.Event(
+        title="T",
+        description="",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+        festival="Кантаты",
+    )
+
+    festival = await main._resolve_event_festival(db, event)
+
+    assert festival is not None
+    assert festival.name == "Кантата"
+
+
 @pytest.mark.asyncio
 async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"

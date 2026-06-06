@@ -675,6 +675,35 @@ def _popular_review_watchdog_grace_seconds() -> int:
     return max(60, value)
 
 
+def _guide_monitoring_schedule_settings() -> tuple[bool, str, str]:
+    enabled = _env_enabled("ENABLE_GUIDE_EXCURSIONS_SCHEDULED", default=False)
+    tz_name = (os.getenv("GUIDE_EXCURSIONS_TZ") or "Europe/Kaliningrad").strip() or "Europe/Kaliningrad"
+    full_time_raw = (os.getenv("GUIDE_EXCURSIONS_FULL_TIME_LOCAL") or "20:10").strip() or "20:10"
+    return enabled, tz_name, full_time_raw
+
+
+def _guide_monitoring_misfire_grace_seconds() -> int:
+    raw = (os.getenv("GUIDE_MONITORING_MISFIRE_GRACE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 1800
+    except ValueError:
+        value = 1800
+    return max(30, value)
+
+
+def _critical_sched_watchdog_grace_seconds() -> int:
+    raw = (os.getenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 300
+    except ValueError:
+        value = 300
+    return max(60, value)
+
+
+_critical_catchup_inflight: set[str] = set()
+_critical_catchup_completed: set[str] = set()
+
+
 def video_tomorrow_watchdog_enabled() -> bool:
     enabled, _, _, _, _ = _video_tomorrow_schedule_settings()
     return enabled
@@ -762,6 +791,46 @@ async def _video_tomorrow_dispatch_exists_today(
         )
         row = await cur.fetchone()
     return bool(row)
+
+
+async def _guide_full_dispatch_exists_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> bool:
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json
+            FROM ops_run
+            WHERE kind = 'guide_monitoring'
+              AND trigger = 'scheduled'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    for status, details_raw in rows:
+        details: dict[str, Any] = {}
+        if isinstance(details_raw, str) and details_raw.strip():
+            try:
+                parsed = json.loads(details_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                details = parsed
+        elif isinstance(details_raw, dict):
+            details = details_raw
+        if str(details.get("mode") or "").strip() != "full":
+            continue
+        if str(status or "").strip() in {"running", "success", "partial"}:
+            return True
+    return False
 
 
 async def _video_tomorrow_session_exists_today(
@@ -1226,6 +1295,75 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
     return True
 
 
+async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
+    enabled, tz_name, full_time_raw = _guide_monitoring_schedule_settings()
+    if not enabled:
+        return 0
+    guide_tz = _safe_zoneinfo(tz_name, label="GUIDE_EXCURSIONS_TZ")
+    hour_local, minute_local = _parse_hhmm(
+        full_time_raw,
+        default_hour=20,
+        default_minute=10,
+        label="GUIDE_EXCURSIONS_FULL_TIME_LOCAL",
+    )
+    now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone(guide_tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local,
+        minute=minute_local,
+        second=0,
+        microsecond=0,
+    )
+    watchdog_delay_sec = max(
+        _critical_sched_watchdog_grace_seconds(),
+        _guide_monitoring_misfire_grace_seconds() + 120,
+    )
+    if now_local <= scheduled_local + timedelta(seconds=watchdog_delay_sec):
+        return 0
+
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    day_start_utc = day_start_local.astimezone(timezone.utc)
+    day_end_utc = day_end_local.astimezone(timezone.utc)
+    if await _guide_full_dispatch_exists_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+    ):
+        return 0
+
+    catchup_key = f"guide_excursions_full:{now_local.date().isoformat()}"
+    if catchup_key in _critical_catchup_completed:
+        return 0
+    if catchup_key in _critical_catchup_inflight:
+        return 0
+
+    _critical_catchup_inflight.add(catchup_key)
+    try:
+        logging.error(
+            "SCHED critical watchdog dispatching missing guide_excursions_full slot "
+            "scheduled_local=%s now_local=%s",
+            scheduled_local.isoformat(),
+            now_local.isoformat(),
+        )
+        async with heavy_operation(
+            kind="guide_monitoring",
+            trigger="scheduled",
+            mode="wait",
+            operator_id=0,
+        ):
+            await _run_scheduled_guide_excursions(db, bot, mode="full")
+        if await _guide_full_dispatch_exists_today(
+            db,
+            day_start_utc=day_start_utc,
+            day_end_utc=day_end_utc,
+        ):
+            _critical_catchup_completed.add(catchup_key)
+        return 1
+    finally:
+        _critical_catchup_inflight.discard(catchup_key)
+
+
 # Partner-track scheduling: defaults are intentionally hard-coded — the user
 # explicitly asked NOT to gate this behind feature flags so the schedule cannot
 # silently regress to "off". Per-track times can still be moved via env override
@@ -1396,15 +1534,21 @@ async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
 
 def runtime_health_status() -> dict[str, Any]:
     enabled, _, _, _, _ = _video_tomorrow_schedule_settings()
+    guide_enabled, _, _ = _guide_monitoring_schedule_settings()
     scheduler = _scheduler
     payload: dict[str, Any] = {
         "scheduler": "missing" if scheduler is None else "unknown",
         "video_tomorrow": "disabled",
+        "guide_excursions_light": "disabled",
+        "guide_excursions_full": "disabled",
         "kenigsberg_story_daily": "disabled" if os.getenv("DEV_MODE") == "1" else "unknown",
     }
     if scheduler is None:
         if enabled:
             payload["video_tomorrow"] = "missing_scheduler"
+        if guide_enabled:
+            payload["guide_excursions_light"] = "missing_scheduler"
+            payload["guide_excursions_full"] = "missing_scheduler"
         return payload
 
     try:
@@ -1412,6 +1556,48 @@ def runtime_health_status() -> dict[str, Any]:
     except Exception:
         running = False
     payload["scheduler"] = "ok" if running else "stopped"
+
+    if guide_enabled:
+        try:
+            full_job = scheduler.get_job("guide_excursions_full")
+        except Exception:
+            payload["guide_excursions_full"] = "lookup_error"
+        else:
+            next_run = _job_next_run(full_job) if full_job else None
+            payload["guide_excursions_full"] = "ok" if next_run is not None else "missing"
+            if next_run is not None:
+                payload["guide_excursions_full_next_run"] = (
+                    next_run.isoformat() if hasattr(next_run, "isoformat") else str(next_run)
+                )
+        try:
+            jobs = list(scheduler.get_jobs()) if hasattr(scheduler, "get_jobs") else []
+        except Exception:
+            jobs = []
+            payload["guide_excursions_light"] = "lookup_error"
+        if jobs or payload.get("guide_excursions_light") != "lookup_error":
+            light_jobs = [
+                job for job in jobs if str(getattr(job, "id", "")).startswith("guide_excursions_light_")
+            ]
+            if not light_jobs:
+                # Fallback for lightweight test scheduler doubles that do not expose get_jobs().
+                idx = 0
+                while True:
+                    try:
+                        job = scheduler.get_job(f"guide_excursions_light_{idx}")
+                    except Exception:
+                        job = None
+                    if job is None:
+                        break
+                    light_jobs.append(job)
+                    idx += 1
+            light_next = [_job_next_run(job) for job in light_jobs]
+            light_next = [value for value in light_next if value is not None]
+            payload["guide_excursions_light"] = "ok" if light_next else "missing"
+            if light_next:
+                first_next = min(light_next)
+                payload["guide_excursions_light_next_run"] = (
+                    first_next.isoformat() if hasattr(first_next, "isoformat") else str(first_next)
+                )
 
     if os.getenv("DEV_MODE") != "1":
         try:
@@ -2678,7 +2864,7 @@ def startup(
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=30,
+                misfire_grace_time=_guide_monitoring_misfire_grace_seconds(),
             )
 
         full_time_raw = os.getenv("GUIDE_EXCURSIONS_FULL_TIME_LOCAL", "20:10").strip()
@@ -2701,7 +2887,7 @@ def startup(
             replace_existing=True,
             max_instances=1,
             coalesce=True,
-            misfire_grace_time=30,
+            misfire_grace_time=_guide_monitoring_misfire_grace_seconds(),
         )
     else:
         logging.info("SCHED skipping guide_excursions (ENABLE_GUIDE_EXCURSIONS_SCHEDULED!=1)")
