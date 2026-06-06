@@ -5012,10 +5012,11 @@ async def prune_past_event_vk_posts(
       (kept until 7 days after they end by :func:`cleanup_old_events`). Daily
       announcements, polls and promo reposts are not stored in
       ``Event.source_vk_post_url`` and therefore are never matched/deleted.
-    - **No reposts / no story shares.** VK's wall API folds story shares into the
-      ``reposts`` object and exposes no separate story counter, so
-      ``reposts.count == 0`` is the combined "no reposts and no story" guard. If
-      the count is missing/unknown the post is kept.
+    - **No reposts, comments, or story shares.** VK's wall API folds story
+      shares into the ``reposts`` object and exposes no separate story counter,
+      so ``reposts.count == 0`` is the combined "no reposts and no story" guard.
+      ``comments.count == 0`` is required too. If either count is
+      missing/unknown the post is kept.
     - **Pinned posts are kept.**
     - On a successful real delete the stored ``source_vk_post_url`` (and a
       matching ``vk_repost_url``) is cleared. This lets a large backlog drain:
@@ -5029,6 +5030,7 @@ async def prune_past_event_vk_posts(
         "candidates": 0,
         "deleted": 0,
         "kept_reposts": 0,
+        "kept_comments": 0,
         "kept_pinned": 0,
         "missing": 0,
         "errors": 0,
@@ -5055,9 +5057,9 @@ async def prune_past_event_vk_posts(
         }
     if limit is None:
         try:
-            limit = int(os.getenv("VK_POST_PRUNE_LIMIT", "50"))
+            limit = int(os.getenv("VK_POST_PRUNE_LIMIT", "300"))
         except ValueError:
-            limit = 50
+            limit = 300
     stats["dry_run"] = 1 if dry_run else 0
 
     today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
@@ -5179,9 +5181,14 @@ async def prune_past_event_vk_posts(
             stats["kept_pinned"] += 1
             continue
         reposts = item.get("reposts") or {}
-        count = reposts.get("count")
-        if not isinstance(count, int) or count > 0:
+        repost_count = reposts.get("count")
+        if not isinstance(repost_count, int) or repost_count > 0:
             stats["kept_reposts"] += 1
+            continue
+        comments = item.get("comments") or {}
+        comment_count = comments.get("count")
+        if not isinstance(comment_count, int) or comment_count > 0:
+            stats["kept_comments"] += 1
             continue
         if dry_run:
             stats["deleted"] += 1
@@ -5222,18 +5229,19 @@ async def vk_post_prune_scheduler(
     """Scheduled twice-daily pruning of past-event klgdevents VK posts."""
     try:
         start = _time.perf_counter()
-        async with db.ensure_connection():
-            stats = await prune_past_event_vk_posts(db, bot)
+        stats = await prune_past_event_vk_posts(db, bot)
         took_ms = (_time.perf_counter() - start) * 1000
         is_dry = bool(stats.get("dry_run"))
         logging.info(
             "vk_post_prune_ok run_id=%s dry_run=%s candidates=%s deleted=%s "
-            "kept_reposts=%s kept_pinned=%s missing=%s errors=%s took_ms=%.0f",
+            "kept_reposts=%s kept_comments=%s kept_pinned=%s missing=%s "
+            "errors=%s took_ms=%.0f",
             run_id,
             int(is_dry),
             stats["candidates"],
             stats["deleted"],
             stats["kept_reposts"],
+            stats["kept_comments"],
             stats["kept_pinned"],
             stats["missing"],
             stats["errors"],
@@ -5248,6 +5256,7 @@ async def vk_post_prune_scheduler(
                     bot,
                     f"{prefix}: {verb}={stats['deleted']} of {stats['candidates']} "
                     f"candidates, kept_reposts={stats['kept_reposts']} "
+                    f"kept_comments={stats['kept_comments']} "
                     f"pinned={stats['kept_pinned']} missing={stats['missing']} "
                     f"errors={stats['errors']}",
                 )

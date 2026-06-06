@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: VK past-event prune scheduler + comment guard (INC-2026-06-06)**:
+  scheduled `vk_post_prune` no longer calls the non-existent
+  `Database.ensure_connection`, so the twice-daily cleanup can run normally in
+  production. Past-event VK posts are now deleted only when both
+  `reposts.count == 0` and `comments.count == 0`; commented posts are preserved.
+  The default `VK_POST_PRUNE_LIMIT` is raised from `50` to `300` candidates per
+  run so the backlog drains faster than the daily event-post inflow. Covered by
+  `tests/test_vk_post_prune.py`.
 - **Changed: Fly release auth discovery**: release instructions now require checking `~/.fly/config.yml` for an `access_token` and retrying `flyctl` with process-local `FLY_ACCESS_TOKEN` / `FLY_API_TOKEN` before claiming Fly auth is unavailable; absence of `FLY_API_TOKEN` in `.env` is no longer enough to block deploy work.
 - **Fixed: stop publishing fully past events to `klgdevents` (INC-2026-06-06)**: `schedule_event_update_tasks` no longer enqueues `vk_sync` for events whose `end_date` (or `date` when no `end_date` exists) is strictly before today's local date, and `job_sync_vk_source_post` repeats the guard before `wall.post` so already-pending jobs cannot create new stale managed VK posts after deploy. Ongoing long events with `end_date >= today` remain eligible. Covered by `tests/test_vk_source.py`.
 - **Added: VK guide digest published as a carousel (2026-06-05)**: `publish_latest_guide_digest_to_vk` now builds and posts a swipeable VK **carousel** (`post_to_vk(..., carousel=True)`, no `primary_attachments_mode=grid`) of vertical 4:5 slides instead of an afisha grid. Slide type is chosen **per image**: a media that is already an afisha (poster with its own text, detected by a GPT-4o vision classifier "АФИША/ФОТО") is shown full with a counter + "листай" badge (`render_afisha_slide`); a plain photo gets a marketing question hook in a bottom "ломаная" block + date·guide (`render_carousel_slide`); the strongest hooks for events with no usable photo become text-only hook cards (`render_hook_only_slide`); the last slide is a CTA with a down-arrow to the post text (`render_cta_slide`). One palette per publication (rotates by day), per-slide `i/N` counter, photo slides ordered by hook strength, ≤9 slides + CTA. New `guide_excursions/hook_carousel.py::build_carousel_slides`; everything is **best-effort** — any classify/generate/render/upload failure (or missing `FOUR_O_TOKEN`) falls back to the previous afisha-grid post; `repair_existing` edits keep the grid. Covered by `tests/test_guide_hook_cards.py`; doc: `docs/features/guide-excursions-monitoring/README.md` → "Карусель (продакшн-формат)".

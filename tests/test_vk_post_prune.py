@@ -75,7 +75,11 @@ async def test_prune_deletes_past_zero_repost(tmp_path, monkeypatch):
     event_id = await _add_event(db, source_vk_post_url=_wall_url(101))
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={101: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={101: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db)
 
@@ -105,13 +109,37 @@ async def test_prune_keeps_reposted_post(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_prune_keeps_commented_post(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _add_event(db, source_vk_post_url=_wall_url(112))
+
+    deletes: list = []
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={112: {"reposts": {"count": 0}, "comments": {"count": 2}}},
+        deletes=deletes,
+    )
+
+    stats = await main.prune_past_event_vk_posts(db)
+
+    assert stats["deleted"] == 0
+    assert stats["kept_comments"] == 1
+    assert deletes == []
+
+
+@pytest.mark.asyncio
 async def test_prune_keeps_future_event(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     await _add_event(db, date=FUTURE_DATE, source_vk_post_url=_wall_url(103))
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={103: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={103: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db)
 
@@ -130,7 +158,11 @@ async def test_prune_keeps_ongoing_event_via_end_date(tmp_path, monkeypatch):
     )
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={104: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={104: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db)
 
@@ -147,7 +179,11 @@ async def test_prune_skips_external_owner(tmp_path, monkeypatch):
     await _add_event(db, source_vk_post_url=external_url)
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={105: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={105: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db)
 
@@ -164,7 +200,7 @@ async def test_prune_keeps_pinned_post(tmp_path, monkeypatch):
     deletes: list = []
     _patch_vk(
         monkeypatch,
-        posts_by_id={106: {"reposts": {"count": 0}, "is_pinned": 1}},
+        posts_by_id={106: {"reposts": {"count": 0}, "comments": {"count": 0}, "is_pinned": 1}},
         deletes=deletes,
     )
 
@@ -200,7 +236,11 @@ async def test_prune_dry_run_does_not_delete(tmp_path, monkeypatch):
     await _add_event(db, source_vk_post_url=_wall_url(108))
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={108: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={108: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db, dry_run=True)
 
@@ -230,7 +270,7 @@ async def test_prune_limit_caps_candidates(tmp_path, monkeypatch):
         await _add_event(db, source_vk_post_url=_wall_url(pid))
 
     deletes: list = []
-    posts = {pid: {"reposts": {"count": 0}} for pid in (201, 202, 203)}
+    posts = {pid: {"reposts": {"count": 0}, "comments": {"count": 0}} for pid in (201, 202, 203)}
     _patch_vk(monkeypatch, posts_by_id=posts, deletes=deletes)
 
     stats = await main.prune_past_event_vk_posts(db, limit=2)
@@ -247,7 +287,11 @@ async def test_prune_dry_run_keeps_url(tmp_path, monkeypatch):
     event_id = await _add_event(db, source_vk_post_url=_wall_url(110))
 
     deletes: list = []
-    _patch_vk(monkeypatch, posts_by_id={110: {"reposts": {"count": 0}}}, deletes=deletes)
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={110: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
 
     stats = await main.prune_past_event_vk_posts(db, dry_run=True)
 
@@ -268,7 +312,7 @@ async def test_prune_backlog_drains_across_runs(tmp_path, monkeypatch):
         await _add_event(db, source_vk_post_url=_wall_url(pid))
 
     deletes: list = []
-    posts = {pid: {"reposts": {"count": 0}} for pid in (301, 302)}
+    posts = {pid: {"reposts": {"count": 0}, "comments": {"count": 0}} for pid in (301, 302)}
     _patch_vk(monkeypatch, posts_by_id=posts, deletes=deletes)
 
     # First run with limit=1 deletes exactly one and clears its URL.
@@ -287,3 +331,31 @@ async def test_prune_backlog_drains_across_runs(tmp_path, monkeypatch):
     assert stats2["deleted"] == 1
     assert len(deletes) == 2
     assert {d[1] for d in deletes} == {301, 302}
+
+
+@pytest.mark.asyncio
+async def test_prune_scheduler_uses_plain_database(tmp_path, monkeypatch):
+    """Production Database has no ensure_connection method; scheduler must not require it."""
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    called: list[tuple[Database, object | None]] = []
+
+    async def fake_prune(db_obj, bot_obj):
+        called.append((db_obj, bot_obj))
+        return {
+            "candidates": 0,
+            "deleted": 0,
+            "kept_reposts": 0,
+            "kept_comments": 0,
+            "kept_pinned": 0,
+            "missing": 0,
+            "errors": 0,
+            "dry_run": 0,
+        }
+
+    monkeypatch.setattr(main, "prune_past_event_vk_posts", fake_prune)
+
+    await main.vk_post_prune_scheduler(db, None, run_id="test")
+
+    assert called == [(db, None)]
