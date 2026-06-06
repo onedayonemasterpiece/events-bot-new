@@ -39,6 +39,12 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
   at the scheduler wrapper (`Database.ensure_connection` does not exist in
   production), the default cap of 50 candidates was too low for the backlog, and
   the safety contract needed the operator-requested `comments.count == 0` guard.
+- 2026-06-06 UTC — follow-up prune fix deployed to Fly and production
+  `VK_POST_PRUNE_DRY_RUN` secret removed so the scheduled job can delete again.
+- 2026-06-06 UTC — compensating catch-up drained the live deletable backlog:
+  manual real passes deleted `263` then `286` eligible stale posts; final dry-run
+  found `0` remaining deletable posts, `30` protected by reposts, and `234`
+  already missing wall URLs.
 
 ## Root Cause
 
@@ -127,7 +133,10 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
 - [x] events-bot / after deploy / run a production audit for pending `vk_sync` jobs whose event ended before today and record the result here.
 - [x] events-bot / after deploy / confirm manual remediation handled the first batch of already-created stale managed posts.
 - [x] events-bot / scheduled prune follow-up / confirm why the remaining stale managed-post backlog did not drain.
-- [ ] events-bot / after follow-up deploy / confirm scheduled prune continues to drain the backlog without VK API errors.
+- [x] events-bot / after follow-up deploy / run compensating catch-up for the
+  stale managed-post backlog.
+- [ ] events-bot / after follow-up deploy / confirm the next scheduled prune
+  tick continues to run without VK API errors.
 
 ## Release And Closure Evidence
 
@@ -161,8 +170,49 @@ Operator reported that fully past events are appearing in `https://vk.com/klgdev
   - Runtime log showed scheduled `vk_post_prune_0` at `2026-06-06 00:30 UTC`
     failed with `'Database' object has no attribute 'ensure_connection'`.
 - residual risk:
-  - The prevention fix is deployed; the remaining known risk is backlog drain for already-created stale managed posts. The scheduled prune job needs the follow-up scheduler/comment-guard deploy before closure.
+  - The prevention fix is deployed; the live deletable backlog was drained by
+    manual catch-up. The remaining known risk is observing the next natural
+    scheduled prune tick after the scheduler/comment-guard deploy.
   - Branch drift audit found unrelated remote branch `origin/hotfix/google-ai-reserve-overflow` still ahead of `origin/main` by one commit.
+
+### Follow-up Prune Deploy Evidence
+
+- deployed SHA:
+  - `d6882206dc397adb3194e0ce422ab45145c6261d`
+    (`fix(vk): protect commented stale posts during prune`).
+  - Commit was pushed to `origin/main` before deploy.
+- deploy path:
+  - Manual Fly deploy from clean worktree
+    `hotfix/vk-prune-comments-20260606` aligned with `origin/main`.
+  - Command: `flyctl deploy --config fly.toml --app events-bot-new-wngqia --remote-only`.
+  - Fly image:
+    `registry.fly.io/events-bot-new-wngqia:deployment-01KTE31RW3SR65XPH7QF1BEKXM`.
+  - Machine `48e42d5b714228`, Fly version `1204`, `1/1` checks passing.
+  - `VK_POST_PRUNE_DRY_RUN` Fly secret was unset after deploy; `fly secrets list`
+    showed only `VK_AFISHA_GROUP_ID` and `VK_EVENTS_GROUP_ID`.
+- regression checks:
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/dev/projects/events-bot-new/.venv/bin/pytest -q -p pytest_asyncio.plugin tests/test_vk_post_prune.py tests/test_vk_source.py`
+    -> `41 passed in 8.08s` (pytest printed the terminal result but did not
+    exit; the local hung process was killed after result collection).
+  - `/home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main_part2.py tests/test_vk_post_prune.py tests/test_vk_source.py`
+    -> passed.
+  - Promo VK story regression:
+    `tests/test_promo.py::test_initial_80_stories_campaign_priority_and_any_position_policy`
+    and `tests/test_promo.py::test_vk_story_image_uses_source_post_photo_without_text_panel`
+    -> `2 passed in 0.39s`.
+- production prune evidence:
+  - Pre-catch-up production dry-run with the deployed code:
+    `{"candidates": 813, "deleted": 549, "dry_run": 1, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - First real catch-up, `limit=300`:
+    `{"candidates": 813, "deleted": 263, "dry_run": 0, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 27, "missing": 10}`.
+  - Intermediate dry-run after first pass:
+    `{"candidates": 550, "deleted": 292, "dry_run": 1, "errors": 0, "kept_comments": 1, "kept_pinned": 0, "kept_reposts": 23, "missing": 234}`.
+  - Second real catch-up, `limit=0` drain:
+    `{"candidates": 550, "deleted": 286, "dry_run": 0, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - Final dry-run:
+    `{"candidates": 264, "deleted": 0, "dry_run": 1, "errors": 0, "kept_comments": 0, "kept_pinned": 0, "kept_reposts": 30, "missing": 234}`.
+  - Final `/healthz` returned `ok=true`, `ready=true`, `issues=[]`, scheduler
+    and worker tasks `ok`.
 
 ## Prevention
 
