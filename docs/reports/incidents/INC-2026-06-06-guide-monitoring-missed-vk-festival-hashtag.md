@@ -117,7 +117,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 
 ## Release And Closure Evidence
 
-- committed/pushed SHA: `2edb67ebacc5f8c6718aa5ce120535da6c012eb3`, reachable from `origin/main`; corrective code SHA `a6e0915d317f43d658193d25c98052b2ce9622ce` is an ancestor
+- corrective code SHA: `a6e0915d317f43d658193d25c98052b2ce9622ce`, reachable from `origin/main`; later doc-only incident evidence commits may advance the latest `origin/main` SHA without changing the fix
 - deploy path: GitHub Actions `Deploy to Fly via GHCR`, runs `27071080197` and `27071216727`
 - deploy status: blocked; build succeeded on rerun, but `flyctl deploy` failed because `FLY_API_TOKEN` in the workflow environment was empty and local Fly auth had no token
 - built image: `ghcr.io/onedayonemasterpiece/events-bot-new/events-bot:2edb67ebacc5f8c6718aa5ce120535da6c012eb3`
