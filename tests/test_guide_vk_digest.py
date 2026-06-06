@@ -167,10 +167,11 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
 
     posted: dict[str, object] = {}
 
-    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None, carousel=False):
         posted["group_id"] = group_id
         posted["message"] = message
         posted["attachments"] = attachments
+        posted["carousel"] = carousel
         return "https://vk.com/wall-123_99"
 
     result = await publish_latest_guide_digest_to_vk(
