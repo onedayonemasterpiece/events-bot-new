@@ -126,6 +126,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - `guide_monitoring` now keeps a persisted copy of the downloaded results bundle under `GUIDE_MONITORING_RESULTS_STORE_ROOT` (default `/data/guide_monitoring_results`), so a restart during server import or scheduled digest publish can resume from the saved `results_path` instead of depending on a second Kaggle download.
   - before and after copying a new guide output bundle, the server prunes old `guide-excursions-*` directories in that store by age/count/size/free-space guard. This is production-critical because the store shares Fly `/data` with SQLite; without retention, old recovery bundles can trigger `database or disk is full` and drop daily scheduler slots.
   - for scheduled `full` guide runs with `ENABLE_GUIDE_DIGEST_SCHEDULED=1`, recovery is responsible for finishing both the import and the same-job digest auto-publish if the process died in between.
+  - for `tg_monitoring`, Kaggle status lookup HTTP 5xx must not leave a permanent shared remote-session lock. Recovery first tries the normal status path; if status lookup fails but `telegram_results.json` is already downloadable from the kernel output, that output is terminal evidence and must be imported before clearing `kaggle_registry`.
 
 ## Health Checks
 

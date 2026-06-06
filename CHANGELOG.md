@@ -56,7 +56,10 @@
   zero-result `ops_run` rows every watchdog tick. A same-day successful/partial
   `recovery_import` for `mode=full` now also satisfies the critical daily slot,
   so importing a completed scheduled Kaggle output does not trigger a duplicate
-  full scan later in the evening.
+  full scan later in the evening. Telegram Monitoring recovery now follows the
+  same output-first recovery rule on Kaggle status HTTP 5xx: if
+  `telegram_results.json` is downloadable, it imports the output and clears the
+  shared remote-session registry lock instead of blocking later guide runs.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to

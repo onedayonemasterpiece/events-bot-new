@@ -3291,8 +3291,41 @@ async def resume_telegram_monitor_jobs(
             run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex
             try:
                 status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
-            except Exception:
+            except Exception as exc:
                 logger.exception("tg_monitor_recovery: status fetch failed kernel=%s", kernel_ref)
+                try:
+                    results_path = await _download_results(client, kernel_ref, run_id)
+                except Exception:
+                    logger.warning(
+                        "tg_monitor_recovery: output download after status failure failed kernel=%s run_id=%s",
+                        kernel_ref,
+                        run_id,
+                        exc_info=True,
+                    )
+                    continue
+                logger.info(
+                    "tg_monitor_recovery: status failed but output exists kernel=%s run_id=%s status_error=%s",
+                    kernel_ref,
+                    run_id,
+                    exc,
+                )
+                await run_telegram_import_from_results(
+                    db,
+                    results_path=results_path,
+                    bot=bot,
+                    chat_id=notify_chat_id,
+                    run_id=run_id,
+                    send_progress=bool(bot and notify_chat_id),
+                    trigger="recovery_import",
+                    operator_id=0,
+                )
+                await remove_job("tg_monitoring", kernel_ref)
+                recovered += 1
+                if bot and notify_chat_id:
+                    await bot.send_message(
+                        int(notify_chat_id),
+                        f"✅ tg_monitor recovery: kernel {kernel_ref} обработан по output после ошибки статуса",
+                    )
                 continue
 
             state = str(status.get("status") or "").lower()
