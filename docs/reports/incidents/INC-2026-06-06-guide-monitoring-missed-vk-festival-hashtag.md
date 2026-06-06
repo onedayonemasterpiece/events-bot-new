@@ -101,6 +101,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Guide critical watchdog tests in `tests/test_scheduling.py`:
   - `test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run_only`
   - `test_critical_scheduler_watchdog_skips_guide_when_full_run_exists`
+  - `test_critical_scheduler_watchdog_skips_guide_when_recovery_import_exists`
   - `test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip`
 - `python -m py_compile scheduling.py main.py main_part2.py vk_hashtags.py`
 - `/home/dev/projects/events-bot-new/.venv/bin/pytest -q tests/test_guide_vk_digest.py`
@@ -134,6 +135,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
 - Treat `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement.
 - When status lookup is `UNKNOWN`/HTTP 5xx but matching output is already downloadable, treat output as terminal evidence, import it, and clear the registry without starting another remote Telegram session.
+- Treat a same-day `recovery_import` `success`/`partial` full import as daily full-slot delivery, so output recovery does not lead to a duplicate scheduled full scan after cooldown.
 - Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
 - Materialize VK guide source `photo` attachments during the normal Kaggle scan (`media_refs/media_assets`) and keep server-side VK media recovery only as repair insurance for already-imported rows that predate the scanner fix.
 - Defer critical guide watchdog retries after `remote_telegram_session_busy` by `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` instead of retrying every minute while the same `UNKNOWN` Kaggle/session lock is still present.

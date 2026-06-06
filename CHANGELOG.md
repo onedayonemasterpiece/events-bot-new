@@ -39,7 +39,10 @@
   pending, but retries are deferred by
   `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`) so Kaggle
   `UNKNOWN` status / session locks do not flood the admin chat or create
-  zero-result `ops_run` rows every watchdog tick.
+  zero-result `ops_run` rows every watchdog tick. A same-day successful/partial
+  `recovery_import` for `mode=full` now also satisfies the critical daily slot,
+  so importing a completed scheduled Kaggle output does not trigger a duplicate
+  full scan later in the evening.
 - **Fixed: guide monitoring missed slot + VK festival hashtag (INC-2026-06-06)**:
   VK event posts now prefer canonical `Festival.name` for festival hashtags and
   can resolve narrow inflected event labels such as `Кантаты` back to

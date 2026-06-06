@@ -817,7 +817,7 @@ async def _guide_full_dispatch_exists_today(
             SELECT status, details_json
             FROM ops_run
             WHERE kind = 'guide_monitoring'
-              AND trigger = 'scheduled'
+              AND trigger IN ('scheduled', 'recovery_import')
               AND started_at >= ?
               AND started_at < ?
             ORDER BY id DESC
