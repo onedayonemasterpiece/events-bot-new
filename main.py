@@ -16543,7 +16543,10 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
         except Exception:  # pragma: no cover - log unexpected errors
             logging.exception("job_outbox_worker cycle failed")
         if _time.monotonic() - last_log >= 30.0:
-            await _log_job_outbox_stats(db)
+            try:
+                await _log_job_outbox_stats(db)
+            except Exception:
+                logging.exception("job_outbox_worker stats failed")
             last_log = _time.monotonic()
         await asyncio.sleep(interval)
 

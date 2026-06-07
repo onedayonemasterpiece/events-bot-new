@@ -28,6 +28,11 @@
   events that must be blocked without media. Covered by
   `tests/test_tg_event_publish.py`, `tests/test_genai_dump_and_poster_dedup.py`,
   and `tests/test_vk_source.py`.
+- **Fixed: job outbox worker health resilience**:
+  a stats/diagnostic failure in the background `job_outbox_worker` no longer
+  terminates the worker task and forces production `/healthz` to 503 while the
+  app, DB, bot session, and schedulers are otherwise alive. Covered by
+  `tests/test_job_worker.py`.
 - **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:
   the shared remote Telegram session guard now keeps fresh Kaggle `UNKNOWN` /
   status-lookup failures fail-closed, but stops treating old registry entries
