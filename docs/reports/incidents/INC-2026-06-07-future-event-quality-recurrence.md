@@ -1,6 +1,6 @@
 # INC-2026-06-07 Future Event Quality Recurrence
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / VK event publishing
 Opened: 2026-06-07
@@ -48,6 +48,8 @@ Artifacts:
 - 2026-06-07 09:30-09:40 UTC: public VK examples were mapped to DB rows and source posts.
 - 2026-06-07 09:40 UTC: runtime logs confirmed title inference and poster multiday expansion as direct causes.
 - 2026-06-07 09:45 UTC: Opus consultation requested for LLM-first/prompt-design review.
+- 2026-06-07 10:00 UTC: code prevention deployed to Fly image `deployment-01KTGRBMVAKWKCPS39JBA525C9`.
+- 2026-06-07 10:08-10:09 UTC: production data repair deleted the bad rows and public posts, tombstoned Telegraph pages, and returned source rows to scan state.
 
 ## Root Cause
 
@@ -101,13 +103,18 @@ Artifacts:
 
 ## Immediate Mitigation
 
-Planned mitigation for existing production data:
-
-- Delete reported bad `klgdevents` posts:
+- Reported bad `klgdevents` posts were deleted:
   `wall-231920894_2362`, `wall-231920894_2351`, `wall-231920894_2345`, `wall-231920894_2344`, `wall-231920894_2316`.
-- Delete or clear managed Telegraph pages for the bad event rows.
-- Delete the bad event rows and their queued jobs.
-- Reset affected Telegram/VK source scan state so the fixed importer can recreate valid rows.
+- Related managed posts were also deleted:
+  `wall-231920894_2128`, `wall-231920894_2311`, `wall-231920894_2322`, `wall-231920894_2323`,
+  `wall-231920894_2326`, `wall-231920894_2328`, `wall-231920894_2329`,
+  `wall-231920894_2339`, `wall-231920894_2340`.
+- Managed Telegraph pages for the deleted rows were edited to a tombstone page because Telegraph has no delete API.
+- Event rows were deleted: `4870`, `5743`, `5746`, `5747`, `5751`, `5753`, `5758`, `5767`, `5769`.
+- Telegram source messages were returned to force-scan state:
+  `dramteatr39/4361`, `dramteatr39/4375`, `grezahutor/2169`, `signalkld/10924`,
+  `prodetstvo_su/3075`, `yantarholl/4644`, `open_fest/48`, `open_fest/603`, `open_fest/606`.
+- VK inbox row `8278` (`wall-100137391_164880`) was reset to `pending` with `imported_event_id=NULL`.
 
 ## Corrective Actions
 
@@ -124,11 +131,20 @@ Planned mitigation for existing production data:
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
+- deployed SHA: `7da618bfdeb731587d8906c9a51eed6a1aa12dae`
+- deploy path: clean linked worktree `hotfix/2026-06-07-future-event-quality`, pushed to `origin/main`, deployed manually with `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - regression checks:
-  - `python -m pytest -q tests/test_tg_candidate_location_grounding.py tests/test_vk_daily.py` = pending final release run
-- post-deploy verification: —
+  - `python -m pytest -q tests/test_tg_candidate_location_grounding.py tests/test_vk_daily.py` -> `36 passed`
+  - `python -m py_compile source_parsing/telegram/handlers.py main_part2.py` -> passed
+- deploy evidence:
+  - Fly image: `events-bot-new-wngqia:deployment-01KTGRBMVAKWKCPS39JBA525C9`
+  - Fly machine: `48e42d5b714228`, version `1219`, checks `1 passing`
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, `issues=[]`
+- data repair evidence:
+  - Local pre-repair production backup: `artifacts/db/prod_before_INC_2026_06_07_future_event_quality_20260607T100329Z.sqlite.gz`
+  - Repair log: `artifacts/codex/prod-future-quality-audit-2026-06-07/prod_repair_apply_20260607T100843Z.log`
+  - Post-repair DB check: `remaining_events=0`, VK inbox `8278` is `pending`, all matching Telegram force-message rows exist.
+  - VK API verification for the five reported public posts returned `is_deleted=true`.
 
 ## Prevention
 
