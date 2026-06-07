@@ -80,7 +80,9 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "КАМЕРНЫЙ КОНЦЕРТ" not in text
     assert '<a href="https://example.com/tickets">Билеты</a>' in text
     assert "Калининград" in text
-    assert "#Калининград" not in text
+    assert "#Калининград" in text
+    assert "#афишакалининград" in text
+    assert "#концерт" in text
     assert "#20июня" in text
     assert "#Фестивальсвета" in text
     assert "#анонс" not in text
@@ -136,6 +138,8 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert "Подробнее" in message_text
     assert "Подписаться" in message_text
     assert "#20июня" in message_text
+    assert "#Калининград" in message_text
+    assert "#афишакалининград" in message_text
     assert "#анонс" not in message_text
     button = message_kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.text == "📅 20 июня 19:00 · Добавить в календарь"
@@ -187,10 +191,16 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
     tasks = []
 
     async def fake_enqueue_job(db_obj, eid, task, **kwargs):
-        tasks.append((task, kwargs.get("depends_on")))
+        tasks.append((task, kwargs.get("depends_on"), kwargs.get("next_run_at")))
         return f"{task.value}:job"
 
     monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    deferred_at = main.datetime(2026, 6, 20, 5, 0, tzinfo=main.timezone.utc)
+    monkeypatch.setattr(
+        main,
+        "next_tg_event_publish_run_at",
+        lambda db_obj: main.asyncio.sleep(0, result=deferred_at),
+    )
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
 
     event = _event(id=None)
@@ -204,7 +214,37 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
     assert (
         main.JobTask.tg_event_publish,
         ["telegraph_build:job", "tg_ics_post:job"],
+        deferred_at,
     ) in tasks
+
+
+@pytest.mark.asyncio
+async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_START_HOUR", "7")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_END_HOUR", "23")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+
+    night_utc = main.datetime(2026, 6, 7, 0, 30, tzinfo=main.timezone.utc)
+    first = await main.next_tg_event_publish_run_at(db, now=night_utc)
+    assert first.astimezone(main.LOCAL_TZ).hour == 7
+    assert first.astimezone(main.LOCAL_TZ).minute == 0
+
+    async with db.get_session() as session:
+        session.add(
+            main.JobOutbox(
+                event_id=42,
+                task=main.JobTask.tg_event_publish,
+                status=main.JobStatus.pending,
+                updated_at=night_utc,
+                next_run_at=first,
+            )
+        )
+        await session.commit()
+
+    second = await main.next_tg_event_publish_run_at(db, now=night_utc)
+    assert second == first + main.timedelta(minutes=10)
 
 
 @pytest.mark.asyncio

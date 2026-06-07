@@ -9,7 +9,7 @@ VK_ANNOUNCE_BASE_HASHTAGS: tuple[str, ...] = (
     "#анонс",
     "#анонс39",
     "#кудапойтиКалининград",
-    "#афишаКалининград",
+    "#афишакалининград",
 )
 
 _MONTHS_GENITIVE: tuple[str, ...] = (
@@ -33,6 +33,9 @@ class HashtagEvent(Protocol):
     date: str
     city: str | None
     festival: str | None
+    title: str | None
+    description: str | None
+    source_text: str | None
 
 
 def _parse_iso_date(value: str | None) -> date | None:
@@ -69,6 +72,16 @@ def normalize_vk_festival_hashtag(value: str | None) -> str | None:
     return f"#{raw}"
 
 
+def city_afisha_hashtag(city: str | None) -> str | None:
+    raw = str(city or "").strip()
+    if not raw:
+        return None
+    compact = re.sub(r"[^\w]+", "", raw, flags=re.UNICODE).casefold()
+    if not compact:
+        return None
+    return f"#афиша{compact}"
+
+
 def vk_date_hashtags(value: str | date | None) -> list[str]:
     if isinstance(value, date):
         parsed = value
@@ -95,6 +108,43 @@ def dedupe_vk_hashtags(tags: Iterable[str | None]) -> list[str]:
     return out
 
 
+_EVENT_TYPE_HASHTAG_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("#лекция", (r"\bлекци[яиюе]\b", r"\bлектори[йя]\b")),
+    ("#спектакль", (r"\bспектакл[ьяеюи]\b", r"\bпостановк[аиуеой]\b")),
+    ("#показ", (r"\bпоказ[а-я]*\b",)),
+    ("#концерт", (r"\bконцерт[а-я]*\b",)),
+    ("#выставка", (r"\bвыставк[аиуеой]\b", r"\bэкспозици[яиюе]\b")),
+    ("#мастеркласс", (r"\bмастер[\s-]?класс[а-я]*\b", r"\bворкшоп[а-я]*\b")),
+    ("#экскурсия", (r"\bэкскурси[яиюе]\b", r"\bпрогулк[аиуеой]\b")),
+    ("#фестиваль", (r"\bфестивал[ьяеюи]\b",)),
+    ("#ярмарка", (r"\bярмарк[аиуеой]\b", r"\bмаркет[а-я]*\b")),
+    ("#кино", (r"\bкино\b", r"\bкинопоказ[а-я]*\b", r"\bфильм[а-я]*\b")),
+    ("#встреча", (r"\bвстреч[аиуеой]\b",)),
+    ("#презентация", (r"\bпрезентаци[яиюе]\b",)),
+    ("#стендап", (r"\bстенда[пп][а-я]*\b", r"\bstand[\s-]?up\b")),
+    ("#опера", (r"\bопера\b", r"\bопер[а-я]*\b")),
+    ("#балет", (r"\bбалет[а-я]*\b",)),
+    ("#мюзикл", (r"\bмюзикл[а-я]*\b",)),
+    ("#квест", (r"\bквест[а-я]*\b",)),
+    ("#вечеринка", (r"\bвечеринк[аиуеой]\b",)),
+    ("#турнир", (r"\bтурнир[а-я]*\b", r"\bсоревновани[яейю]\b")),
+    ("#чтение", (r"\bчтени[еяйю]\b", r"\bчитк[аиуеой]\b")),
+)
+
+
+def event_type_hashtags(*texts: str | None, limit: int = 3) -> list[str]:
+    haystack = " ".join(str(t or "") for t in texts if str(t or "").strip()).casefold()
+    if not haystack:
+        return []
+    out: list[str] = []
+    for tag, patterns in _EVENT_TYPE_HASHTAG_PATTERNS:
+        if any(re.search(pattern, haystack, flags=re.IGNORECASE | re.UNICODE) for pattern in patterns):
+            out.append(tag)
+            if len(out) >= limit:
+                break
+    return out
+
+
 def build_vk_announce_hashtags(
     *,
     cities: Iterable[str | None] = (),
@@ -111,10 +161,19 @@ def build_vk_event_hashtags(
     event: HashtagEvent,
     *,
     festival_name: str | None = None,
+    text: str | None = None,
 ) -> list[str]:
     tags = build_vk_announce_hashtags(
-        cities=[getattr(event, "city", None)],
+        cities=[getattr(event, "city", None), city_afisha_hashtag(getattr(event, "city", None))],
         dates=[getattr(event, "date", None)],
+    )
+    tags.extend(
+        event_type_hashtags(
+            getattr(event, "title", None),
+            getattr(event, "description", None),
+            getattr(event, "source_text", None),
+            text,
+        )
     )
     festival_tag = normalize_vk_festival_hashtag(
         festival_name if festival_name is not None else getattr(event, "festival", None)

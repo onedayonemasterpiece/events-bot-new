@@ -3544,6 +3544,8 @@ async def post_to_vk(
     bot: Bot | None = None,
     attachments: list[str] | None = None,
     carousel: bool = False,
+    vk_coauthor_url: str | None = None,
+    vk_coauthor_screen_name: str | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -3561,6 +3563,36 @@ async def post_to_vk(
         "from_group": 1,
         "signed": 0,
     }
+    coauthor_url = str(vk_coauthor_url or "").strip()
+    coauthor_screen = str(vk_coauthor_screen_name or "").strip().lstrip("@")
+    if coauthor_url:
+        params_base["copyright"] = coauthor_url
+    if coauthor_screen:
+        try:
+            resolved = await _vk_api(
+                "groups.getById",
+                {"group_id": coauthor_screen},
+                db,
+                bot,
+            )
+            response = resolved.get("response") if isinstance(resolved, dict) else resolved
+            group_info = None
+            if isinstance(response, list) and response:
+                group_info = response[0]
+            elif isinstance(response, dict) and response.get("groups"):
+                group_info = response["groups"][0]
+            coauthor_id = int((group_info or {}).get("id") or 0)
+            if coauthor_id > 0:
+                # VK currently accepts these fields but does not document them
+                # consistently. Keep both variants behind a fallback below.
+                params_base["coauthors"] = f"-{coauthor_id}"
+                params_base["coauthor_ids"] = f"-{coauthor_id}"
+        except Exception:
+            logging.info(
+                "post_to_vk coauthor resolve failed screen=%s",
+                coauthor_screen,
+                exc_info=True,
+            )
     if attachments:
         params_base["attachments"] = ",".join(attachments)
         if len(attachments) > 1 and not carousel:
@@ -3588,15 +3620,42 @@ async def post_to_vk(
         try:
             if DEBUG:
                 mem_info("VK post before")
-            data = await _vk_api(
-                "wall.post",
-                params,
-                db,
-                bot,
-                token=token,
-                token_kind=actor.kind,
-                skip_captcha=(actor.kind == "group"),
-            )
+            try:
+                data = await _vk_api(
+                    "wall.post",
+                    params,
+                    db,
+                    bot,
+                    token=token,
+                    token_kind=actor.kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+            except VKAPIError as exc:
+                if (
+                    exc.code == 100
+                    and any(k in params for k in ("copyright", "coauthors", "coauthor_ids"))
+                ):
+                    logging.warning(
+                        "post_to_vk coauthor params rejected; retrying without coauthor screen=%s msg=%s",
+                        coauthor_screen,
+                        exc.message,
+                    )
+                    params = {
+                        k: v
+                        for k, v in params.items()
+                        if k not in {"copyright", "coauthors", "coauthor_ids"}
+                    }
+                    data = await _vk_api(
+                        "wall.post",
+                        params,
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                else:
+                    raise
             if DEBUG:
                 mem_info("VK post after")
             post_id = data.get("response", {}).get("post_id")
@@ -3717,7 +3776,7 @@ TG_EVENT_VK_URL = "https://vk.com/klgdevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v2"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v3"
 
 
 def _tg_event_publish_enabled() -> bool:
@@ -3807,7 +3866,9 @@ def _telegram_event_body_html(text: str | None) -> str:
 
 def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
     from vk_hashtags import (
+        city_afisha_hashtag,
         dedupe_vk_hashtags,
+        event_type_hashtags,
         format_vk_hashtag_line,
         normalize_vk_festival_hashtag,
         vk_date_hashtags,
@@ -3815,6 +3876,17 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
 
     tags: list[str | None] = []
     tags.extend(vk_date_hashtags(getattr(event, "date", None)))
+    city = getattr(event, "city", None)
+    if city:
+        tags.append(city)
+        tags.append(city_afisha_hashtag(city))
+    tags.extend(
+        event_type_hashtags(
+            getattr(event, "title", None),
+            getattr(event, "description", None),
+            getattr(event, "source_text", None),
+        )
+    )
     festival_tag = normalize_vk_festival_hashtag(
         getattr(festival, "name", None) if festival else getattr(event, "festival", None)
     )
@@ -4436,13 +4508,19 @@ async def _resolve_event_festival(db: Database | None, event: Event) -> Festival
     return None
 
 
-def _vk_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
+def _vk_event_hashtag_line(
+    event: Event,
+    festival: Festival | None = None,
+    *,
+    text: str | None = None,
+) -> str:
     from vk_hashtags import build_vk_event_hashtags, format_vk_hashtag_line
 
     return format_vk_hashtag_line(
         build_vk_event_hashtags(
             event,
             festival_name=getattr(festival, "name", None) if festival else None,
+            text=text,
         )
     )
 
@@ -4479,7 +4557,7 @@ def build_vk_source_message(
     lines.append(VK_BLANK_LINE)
     if calendar_url:
         lines.append(f"Добавить в календарь {calendar_url}")
-    hashtag_line = _vk_event_hashtag_line(event, festival)
+    hashtag_line = _vk_event_hashtag_line(event, festival, text=text)
     if hashtag_line:
         if calendar_url:
             lines.append(VK_BLANK_LINE)
@@ -4844,7 +4922,7 @@ async def sync_vk_source_post(
                 new_lines.append(CONTENT_SEPARATOR)
         if calendar_line_value:
             new_lines.append(f"Добавить в календарь {calendar_line_value}")
-        hashtag_line = _vk_event_hashtag_line(event, festival)
+        hashtag_line = _vk_event_hashtag_line(event, festival, text=text_clean)
         if hashtag_line:
             if calendar_line_value:
                 new_lines.append(VK_BLANK_LINE)
@@ -4878,12 +4956,21 @@ async def sync_vk_source_post(
                 getattr(event, "source_post_url", None),
             )
             raise RuntimeError("vk_sync_missing_media_for_telegram_event")
+        coauthor = None
+        try:
+            from vk_coauthors import select_vk_coauthor_candidate
+
+            coauthor = select_vk_coauthor_candidate(event)
+        except Exception:
+            coauthor = None
         url = await post_to_vk(
             target_group_id,
             message,
             db,
             bot,
             attachments,
+            vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
+            vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
         )
         if url:
             logging.info("sync_vk_source_post created %s", url)

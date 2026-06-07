@@ -1416,11 +1416,32 @@ async def format_parsing_report(
             return f"  ICS: [ics]({value})"
         return "  ICS: ⏳" if has_time else "  ICS: —"
 
-    def _vk_post_line_md(url: str | None) -> str | None:
-        value = (url or "").strip()
-        if not value:
+    event_posts_by_eid = getattr(ctx, "event_posts_by_event_id", None) or {}
+
+    def _posts_line_md(eid: int) -> str | None:
+        row = event_posts_by_eid.get(int(eid))
+        if not row:
             return None
-        return f"  VK: [пост]({value})"
+        parts: list[str] = []
+        vk_url = (getattr(row, "vk_post_url", None) or "").strip()
+        if vk_url:
+            vk_part = f"VK [пост]({vk_url})"
+        else:
+            vk_part = "VK ⏳"
+        coauthor = (getattr(row, "vk_coauthor_screen_name", None) or "").strip()
+        coauthor_url = (getattr(row, "vk_coauthor_url", None) or "").strip()
+        if coauthor:
+            label = f"@{escape_md(coauthor)}"
+            if coauthor_url:
+                label = f"[@{escape_md(coauthor)}]({coauthor_url})"
+            vk_part += f" · соавторство: {label} предложено"
+        parts.append(vk_part)
+        tg_url = (getattr(row, "tg_post_url", None) or "").strip()
+        if tg_url:
+            parts.append(f"TG [пост]({tg_url})")
+        else:
+            parts.append("TG ⏳")
+        return "  Посты: " + " · ".join(parts)
 
     def _sources_lines_md(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
@@ -1537,9 +1558,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
-                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
-                if vk_line:
-                    lines.append(vk_line)
+                posts_line = _posts_line_md(eid_i) if eid_i else None
+                if posts_line:
+                    lines.append(posts_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(added_items) > 12:
@@ -1576,9 +1597,9 @@ async def format_parsing_report(
                 if eid_i:
                     lines.extend(_sources_lines_md(eid_i))
                 lines.append(_ics_line_md(item.ics_url, has_time=bool((item.time or "").strip())))
-                vk_line = _vk_post_line_md(getattr(item, "vk_post_url", None))
-                if vk_line:
-                    lines.append(vk_line)
+                posts_line = _posts_line_md(eid_i) if eid_i else None
+                if posts_line:
+                    lines.append(posts_line)
                 lines.append(_format_facts_photos_videos_md(item))
                 lines.extend(_queue_lines_md(eid_i, getattr(item, "source_url", None)))
             if len(updated_items) > 12:

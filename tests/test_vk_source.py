@@ -191,7 +191,7 @@ async def test_sync_vk_source_post_includes_calendar_link(monkeypatch):
     captured_message = {}
 
     async def fake_post_to_vk(
-        group_id, message, db=None, bot=None, attachments=None
+        group_id, message, db=None, bot=None, attachments=None, **_kwargs
     ):
         captured_message["text"] = message
         return "https://vk.com/wall-1_2"
@@ -242,7 +242,7 @@ async def test_sync_vk_source_post_uses_original_calendar_link_on_short_fail(
 
     captured_message: dict[str, str] = {}
 
-    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         captured_message["text"] = message
         return "https://vk.com/wall-1_2"
 
@@ -284,7 +284,7 @@ async def test_sync_vk_source_post_refreshes_ics_short_link(monkeypatch):
 
     captured: dict[str, str] = {}
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         captured["text"] = message
         return "https://vk.com/wall-1_2"
 
@@ -340,7 +340,7 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
 
     posted: dict[str, list[str] | None] = {}
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         posted["vals"] = attachments
         return "https://vk.com/wall-1_2"
 
@@ -352,6 +352,83 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
     assert url == "https://vk.com/wall-1_2"
     assert uploaded == [("http://img1", None)]
     assert posted["vals"] == ["ph1"]
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_passes_vk_coauthor_candidate(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = False
+
+    event = main.Event(
+        title="Лекция Музея Советского детства БФУ",
+        description="",
+        date="2026-06-03",
+        time="18:00",
+        location_name="Музей Советского детства БФУ",
+        city="Калининград",
+        source_text="https://vk.com/prodetstvosu",
+    )
+
+    posted = {}
+
+    async def fake_post(
+        group_id,
+        message,
+        db=None,
+        bot=None,
+        attachments=None,
+        **kwargs,
+    ):
+        posted.update(kwargs)
+        return "https://vk.com/wall-1_2"
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    url = await main.sync_vk_source_post(event, "Text", None, None)
+
+    assert url == "https://vk.com/wall-1_2"
+    assert posted["vk_coauthor_url"] == "https://vk.com/prodetstvosu"
+    assert posted["vk_coauthor_screen_name"] == "prodetstvosu"
+
+
+@pytest.mark.asyncio
+async def test_post_to_vk_sends_coauthor_params_and_retries_without_rejected_params(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "group-token")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "")
+
+    async def fake_reserve(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+
+    calls = []
+
+    async def fake_vk_api(method, params=None, *_, **__):
+        calls.append((method, dict(params or {})))
+        if method == "groups.getById":
+            return {"response": [{"id": 30777579}]}
+        if len([m for m, _params in calls if m == "wall.post"]) == 1:
+            raise main.VKAPIError(100, "One of the parameters specified was missing or invalid")
+        return {"response": {"post_id": 2395}}
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk(
+        "1",
+        "Message",
+        vk_coauthor_url="https://vk.com/konb39",
+        vk_coauthor_screen_name="konb39",
+    )
+
+    wall_calls = [params for method, params in calls if method == "wall.post"]
+    assert url == "https://vk.com/wall-1_2395"
+    assert wall_calls[0]["copyright"] == "https://vk.com/konb39"
+    assert wall_calls[0]["coauthors"] == "-30777579"
+    assert wall_calls[0]["coauthor_ids"] == "-30777579"
+    assert "copyright" not in wall_calls[1]
+    assert "coauthors" not in wall_calls[1]
+    assert "coauthor_ids" not in wall_calls[1]
 
 
 @pytest.mark.asyncio
@@ -372,7 +449,7 @@ async def test_sync_vk_source_post_captcha_pauses_before_text_only_post(monkeypa
     async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
         raise main.VKAPIError(14, "Captcha needed", method="photos.getWallUploadServer")
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         raise AssertionError("wall.post must wait for captcha instead of publishing text-only")
 
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
@@ -403,7 +480,7 @@ async def test_sync_vk_source_post_blocks_text_only_telegram_event(monkeypatch):
         photo_urls=[],
     )
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         raise AssertionError("telegram-origin vk_sync must not publish without media")
 
     monkeypatch.setattr(main, "post_to_vk", fake_post)
@@ -433,7 +510,7 @@ async def test_sync_vk_source_post_allows_vk_origin_with_source_ids(monkeypatch)
         photo_urls=[],
     )
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         return "https://vk.com/wall-1_2"
 
     monkeypatch.setattr(main, "post_to_vk", fake_post)
@@ -474,7 +551,7 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
 
     posted: dict[str, list[str] | None] = {}
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         posted["vals"] = attachments
         return "https://vk.com/wall-1_2"
 
@@ -516,7 +593,7 @@ async def test_sync_vk_source_post_skips_group_only_photo_upload(monkeypatch, ca
     caplog.set_level(logging.INFO)
     calls: list[str] = []
 
-    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         posted["attachments"] = attachments
         return "https://vk.com/wall-1_2"
 
@@ -685,7 +762,7 @@ async def test_sync_vk_source_post_creates_when_existing_vk_url_is_external(
 
     posted = {}
 
-    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None):
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
         posted["group_id"] = group_id
         posted["message"] = message
         return "https://vk.com/wall-231920894_1"
@@ -729,10 +806,25 @@ def test_build_vk_source_message_appends_announce_hashtags():
     msg = main.build_vk_source_message(event, "Описание")
 
     assert (
-        "#анонс #анонс39 #кудапойтиКалининград #афишаКалининград "
-        "#Калининград #3июня #3_июня"
-    ) in msg
+            "#анонс #анонс39 #кудапойтиКалининград #афишакалининград "
+            "#Калининград #3июня #3_июня"
+        ) in msg
     assert msg.endswith(main.VK_SOURCE_FOOTER)
+
+
+def test_build_vk_source_message_appends_type_hashtag_from_text():
+    event = main.Event(
+        title="Открытая лекция",
+        description="",
+        date="2026-06-03",
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+    )
+
+    msg = main.build_vk_source_message(event, "Описание")
+
+    assert "#лекция" in msg
 
 
 def test_build_vk_source_message_uses_canonical_festival_hashtag():
@@ -852,7 +944,9 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     assert calls == [("New title", "Same body")]
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
-    assert updated.vk_source_hash == main.content_hash("New title\nSame body")
+    assert updated.vk_source_hash == main.content_hash(
+        f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nNew title\nSame body"
+    )
 
 
 @pytest.mark.asyncio
@@ -872,7 +966,9 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
         location_name="Place",
         city="Калининград",
         source_vk_post_url="https://vk.com/wall-231920894_2375",
-        vk_source_hash=main.content_hash("Concert\nSame body"),
+        vk_source_hash=main.content_hash(
+            f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nConcert\nSame body"
+        ),
     )
     async with db.get_session() as session:
         session.add(event)
@@ -900,7 +996,9 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
     assert updated.source_vk_post_url == "https://vk.com/wall-231920894_2389"
-    assert updated.vk_source_hash == main.content_hash("Concert\nSame body")
+    assert updated.vk_source_hash == main.content_hash(
+        f"{main.VK_SOURCE_POST_FORMAT_VERSION}\nConcert\nSame body"
+    )
 
 
 @pytest.mark.asyncio

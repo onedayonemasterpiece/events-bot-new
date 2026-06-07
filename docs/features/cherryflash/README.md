@@ -717,7 +717,7 @@ This section captures the latest intro-direction request as an explicit delta to
     community immediately, then after `600` seconds publish the same linked
     video story into `vk.com/klgdevents` or use a local `klgdevents` wall post
     fallback;
-  - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишаКалининград`;
+  - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишакалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.

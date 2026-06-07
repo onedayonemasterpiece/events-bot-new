@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- **Changed: Smart Update VK/TG post reporting and publishing polish**:
+  Smart Update reports now show a single `Посты: VK, TG` line with both
+  links/queued states and a VK coauthor proposal marker when a known source is
+  detected. Telegram event posts now use city, `#афиша<город>`, event-type,
+  date, and festival hashtags; `tg_event_publish` jobs are deferred out of the
+  night window and spaced by 10 minutes by default. VK event posts use the same
+  city/type hashtag enrichment, include a format-version hash so existing
+  managed posts can refresh after hashtag policy changes, and attempt VK
+  coauthor params for selected known communities with a safe retry without
+  coauthor fields if VK rejects them. Covered by `tests/test_tg_event_publish.py`,
+  `tests/test_vk_source.py`, `tests/test_vk_hashtags.py`, and
+  `tests/test_smart_update_report_posts.py`.
 - **Added: Telegram event publishing after Smart Update**:
   active future/current events now enqueue `tg_event_publish` after Telegraph
   build and publish a Telegram-native announcement to `@kldevents`: a short

@@ -14164,6 +14164,78 @@ def _event_has_ended_before_today(ev: Event, *, now: datetime | None = None) -> 
     return end_date < today
 
 
+VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v2"
+
+
+def _tg_event_publish_window_hours() -> tuple[int, int]:
+    def _hour(name: str, default: int) -> int:
+        try:
+            return min(23, max(0, int(str(os.getenv(name, str(default))).strip())))
+        except (TypeError, ValueError):
+            return default
+
+    return (
+        _hour("TG_EVENT_PUBLISH_START_HOUR", 7),
+        _hour("TG_EVENT_PUBLISH_END_HOUR", 23),
+    )
+
+
+def _tg_event_publish_interval() -> timedelta:
+    try:
+        minutes = int(str(os.getenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")).strip())
+    except (TypeError, ValueError):
+        minutes = 10
+    return timedelta(minutes=max(1, minutes))
+
+
+def _normalize_tg_event_publish_run_at(candidate: datetime) -> datetime:
+    start_hour, end_hour = _tg_event_publish_window_hours()
+    local = candidate.astimezone(LOCAL_TZ)
+    if local.hour < start_hour:
+        local = local.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    elif local.hour >= end_hour:
+        next_day = local.date() + timedelta(days=1)
+        local = datetime.combine(
+            next_day,
+            time(hour=start_hour),
+            tzinfo=LOCAL_TZ,
+        )
+    return local.astimezone(timezone.utc)
+
+
+async def next_tg_event_publish_run_at(
+    db: Database,
+    *,
+    now: datetime | None = None,
+) -> datetime:
+    now_utc = _ensure_utc(now or datetime.now(timezone.utc))
+    candidate = _normalize_tg_event_publish_run_at(now_utc)
+    interval = _tg_event_publish_interval()
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+                .where(JobOutbox.task == JobTask.tg_event_publish)
+                .order_by(JobOutbox.id.desc())
+                .limit(200)
+            )
+        ).all()
+    latest: datetime | None = None
+    for status, next_run_at, updated_at in rows:
+        anchor = None
+        if status in {JobStatus.pending, JobStatus.error, JobStatus.running}:
+            anchor = _ensure_utc(next_run_at)
+        elif status == JobStatus.done:
+            anchor = _ensure_utc(updated_at)
+        if not anchor:
+            continue
+        if latest is None or anchor > latest:
+            latest = anchor
+    if latest is not None and latest + interval > candidate:
+        candidate = latest + interval
+    return _normalize_tg_event_publish_run_at(candidate)
+
+
 def _is_sqlite_locked_error(exc: BaseException) -> bool:
     msg = str(exc).lower()
     return "database is locked" in msg or "database table is locked" in msg
@@ -14207,11 +14279,13 @@ async def schedule_event_update_tasks(
         tg_event_deps = [results[JobTask.telegraph_build]]
         if JobTask.tg_ics_post in results:
             tg_event_deps.append(results[JobTask.tg_ics_post])
+        tg_event_next_run_at = await next_tg_event_publish_run_at(db)
         results[JobTask.tg_event_publish] = await enqueue_job(
             db,
             eid,
             JobTask.tg_event_publish,
             depends_on=tg_event_deps,
+            next_run_at=tg_event_next_run_at,
         )
     page_deps = [results[JobTask.telegraph_build]]
     
@@ -19167,7 +19241,9 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     text_for_vk = description_for_vk or (ev.source_text or "")
     # VK wall text includes event metadata built from `ev` (title/date/place)
     # plus the body text, so title-only repairs must not be invisible here.
-    new_hash = content_hash(f"{getattr(ev, 'title', '') or ''}\n{text_for_vk}")
+    new_hash = content_hash(
+        f"{VK_SOURCE_POST_FORMAT_VERSION}\n{getattr(ev, 'title', '') or ''}\n{text_for_vk}"
+    )
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False
     if existing_vk_post_url:
