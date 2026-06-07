@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 import main
+from handlers.vk_cover_cmd import _cover_keyboard, _usage
 from models import Festival
 from vk_dynamic_cover import (
     CoverItem,
@@ -44,6 +45,21 @@ def test_render_cover_pack_creates_wide_and_mobile_images(tmp_path: Path):
     with Image.open(pack.mobile_paths[0]) as img:
         assert img.size == (1080, 1920)
         assert img.getbbox() is not None
+
+
+def test_cover_command_apply_is_proposal_only():
+    usage = _usage()
+    keyboard = _cover_keyboard()
+    button_texts = [
+        button.text
+        for row in keyboard.inline_keyboard
+        for button in row
+    ]
+
+    assert "/cover request" in usage
+    assert "alias: генерирует предложение без публикации" in usage
+    assert "✅ Apply" not in button_texts
+    assert "📨 На согласование" in button_texts
 
 
 @pytest.mark.asyncio

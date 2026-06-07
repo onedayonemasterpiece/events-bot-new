@@ -10,7 +10,6 @@ from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, Inli
 from runtime import require_main_attr
 from vk_dynamic_cover import (
     SETTINGS_ACTIVE_UNTIL,
-    apply_dynamic_cover,
     build_cover_pack,
     is_dynamic_cover_enabled,
     load_default_cover_state,
@@ -41,7 +40,7 @@ def _cover_keyboard(*, enabled: bool | None = None, has_default: bool | None = N
     rows = [
         [
             InlineKeyboardButton(text="👁 Preview", callback_data="cover:preview"),
-            InlineKeyboardButton(text="✅ Apply", callback_data="cover:apply"),
+            InlineKeyboardButton(text="📨 На согласование", callback_data="cover:request"),
         ],
         [
             InlineKeyboardButton(text="💾 Сохранить дефолт", callback_data="cover:save_default"),
@@ -86,7 +85,8 @@ def _usage() -> str:
     return (
         "/cover status\n"
         "/cover preview\n"
-        "/cover apply\n"
+        "/cover request\n"
+        "/cover apply  # alias: генерирует предложение без публикации\n"
         "/cover save_default\n"
         "/cover restore\n"
         "/cover history\n"
@@ -178,16 +178,20 @@ async def _cover_action(message: Message, action: str, *, db, bot, user_id: int)
         await _send_pack_preview(message, pack, caption_prefix="Preview VK dynamic cover")
         return
 
-    if action == "apply":
-        status = await message.answer("Генерирую и ставлю VK cover…")
-        pack = await apply_dynamic_cover(
-            db,
-            bot=bot,
-            operator_id=user_id,
-            reason="manual_command",
-            publish=True,
+    if action in {"request", "proposal", "propose", "apply"}:
+        if action == "apply":
+            status = await message.answer(
+                "Генерирую предложение VK cover без публикации. "
+                "Прямой apply отключён до отдельного approval-flow."
+            )
+        else:
+            status = await message.answer("Генерирую предложение VK cover на согласование…")
+        pack = await build_cover_pack(db)
+        await _send_pack_preview(
+            message,
+            pack,
+            caption_prefix="🖼 VK cover proposal · без публикации",
         )
-        await _send_pack_preview(message, pack, caption_prefix="✅ VK cover обновлена")
         try:
             await status.delete()
         except Exception:

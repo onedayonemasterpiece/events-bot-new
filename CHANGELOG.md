@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Changed: VK dynamic cover is proposal-only by default**:
+  `/cover request` now generates the wide/mobile VK cover pack and sends it to
+  Telegram admin for approval without changing the VK community cover; `/cover
+  apply` is intentionally a safe alias to the same proposal flow until a
+  dedicated approval button/state is implemented. The canonical docs now record
+  the 80 Stories/Kantata festival-data split (`event.festival`/promo/queue rows
+  exist, `Festival` rows do not), plus the required hard limits/audit before
+  reusing the stale Kaggle Universal Festival Parser for light monitoring.
 - **Added: VK dynamic community cover MVP**:
   added `/cover` for superadmins to preview/apply/save_default/restore/enable/
   disable/history generated VK community covers. The renderer creates a
