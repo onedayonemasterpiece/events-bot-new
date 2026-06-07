@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: future event title/time quality recurrence (INC-2026-06-07)**:
+  Telegram Monitoring candidate build no longer treats short contentful titles
+  such as `Идиот`, `Гараж`, or `№ 13` as bad titles that should be overwritten
+  by umbrella post headings. Poster OCR multiday expansion now ignores
+  ambiguous dotted date-like tokens such as `9.08` unless nearby text confirms
+  a time, preventing false public times like `09:08`. VK source headers no
+  longer render `time_is_default` as confirmed event time. Covered by
+  `tests/test_tg_candidate_location_grounding.py` and `tests/test_vk_daily.py`.
 - **Changed: CherryFlash story fanout**: added the Telegram channel story
   repost target `@i_love_kaliningrad` at the end of the base CherryFlash queue,
   with the standard `600` second delay after the previous story publication.

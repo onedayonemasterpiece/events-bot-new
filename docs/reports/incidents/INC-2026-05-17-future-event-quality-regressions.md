@@ -219,6 +219,16 @@ Still-open investigation areas:
   was moved to `2026-03-29 14:00`, `silent=true`, `lifecycle_status=cancelled`,
   and public `wall-231920894_2147` was deleted (`deleted=true` via VK API).
 
+### 2026-06-07 Recurrence
+
+- A new production recurrence is tracked as
+  `INC-2026-06-07-future-event-quality-recurrence.md`.
+- New confirmed classes: short valid theatre titles (`Идиот`, `№ 13`) were
+  overwritten by umbrella/service lines; Greza poster follow-up dates
+  (`9.08`) became `09:08`; `time_is_default` leaked into managed VK headers.
+- The 2026-06-07 record is the closure contract for deleting the reported bad
+  public posts/pages/events and returning Telegram/VK sources to re-scan state.
+
 ## Prevention
 
 The durable prevention should be a reusable future-event quality audit plus replay-backed LLM-first import hardening. Row-level cleanup alone is not sufficient because this batch repeats already-known May quality incident classes.

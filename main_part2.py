@@ -3733,7 +3733,10 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
     else:
         logging.error("Invalid event date: %s", event.date)
         day = event.date
-    lines.append(f"\U0001f4c5 {day} {event.time}")
+    time_part = str(event.time or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    lines.append(f"\U0001f4c5 {day}{(' ' + time_part) if time_part else ''}")
 
     loc = event.location_name
     addr = event.location_address

@@ -2068,6 +2068,34 @@ def _rollover_iso_date_to_anchor(value: Any, *, anchor: date) -> str | None:
     )
 
 
+def _poster_time_match_is_supported(tail: str, match: re.Match[str]) -> bool:
+    token = match.group(0)
+    if "." not in token:
+        return True
+    try:
+        minute = int(match.group(2))
+    except Exception:
+        minute = 0
+    if not (1 <= minute <= 12):
+        return True
+    before = tail[max(0, match.start() - 40) : match.start()]
+    after = tail[match.end() : match.end() + 24]
+    context = f"{before} {after}"
+    return bool(
+        re.search(
+            r"(?iu)\b(?:начало|старт|сеанс|сбор|в|к|час(?:ов|а)?|ч)\b",
+            context,
+        )
+    )
+
+
+def _first_supported_poster_time(tail: str, time_re: re.Pattern[str]) -> re.Match[str] | None:
+    for tm in time_re.finditer(tail):
+        if _poster_time_match_is_supported(tail, tm):
+            return tm
+    return None
+
+
 def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, str]]:
     """Extract (month, day, HH:MM) pairs from poster OCR text."""
     raw = str(text or "").replace("\xa0", " ").strip()
@@ -2094,7 +2122,7 @@ def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, st
         if not mm:
             continue
         tail = low[m.end() : m.end() + 160]
-        tm = time_re.search(tail)
+        tm = _first_supported_poster_time(tail, time_re)
         if not tm:
             continue
         token = f"{int(tm.group(1)):02d}:{tm.group(2)}"
@@ -2115,7 +2143,7 @@ def _extract_poster_date_time_pairs(text: str | None) -> list[tuple[int, int, st
         if not (1 <= mm <= 12 and 1 <= dd <= 31):
             continue
         tail = low[m.end() : m.end() + 160]
-        tm = time_re.search(tail)
+        tm = _first_supported_poster_time(tail, time_re)
         if not tm:
             continue
         token = f"{int(tm.group(1)):02d}:{tm.group(2)}"
@@ -2517,14 +2545,25 @@ def _looks_like_bad_title(title: str | None) -> bool:
     raw = str(title or "").strip()
     if not raw:
         return True
-    if len(raw) < 6:
-        return True
+    if "№" in raw and re.search(r"\d", raw):
+        return False
     if _BAD_TITLE_RE.match(raw):
         return True
-    letters = sum(1 for ch in raw if ch.isalpha())
-    if letters < 3:
+    if not re.search(r"[0-9A-Za-zА-Яа-яЁё№]", raw):
         return True
     return False
+
+
+_MESSAGE_TITLE_INFERENCE_SKIP_RE = re.compile(
+    r"(?iu)\b("
+    r"(?:сегодня|завтра)\s+в\s+театр(?:е)?|"
+    r"репертуар|"
+    r"афиша|"
+    r"анонс|"
+    r"в\s+продаже|"
+    r"появил[ао]сь\s+в\s+продаже"
+    r")\b"
+)
 
 
 def _infer_title_from_message_text(text: str | None) -> str | None:
@@ -2537,14 +2576,15 @@ def _infer_title_from_message_text(text: str | None) -> str | None:
             continue
         if s.lower().startswith(("билеты", "вход", "стоимость")):
             continue
+        if _MESSAGE_TITLE_INFERENCE_SKIP_RE.search(s):
+            continue
         s = _DATE_TITLE_PREFIX_RE.sub("", s).strip()
         s = re.sub(r"^[^\wА-Яа-яЁё]+", "", s).strip()
         if not s:
             continue
-        if len(s) < 6:
+        if len(s) < 2:
             continue
-        letters = sum(1 for ch in s if ch.isalpha())
-        if letters < 3:
+        if _looks_like_bad_title(s):
             continue
         return s[:140].strip()
     return None

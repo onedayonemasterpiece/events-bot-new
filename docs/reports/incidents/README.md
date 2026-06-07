@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-07-future-event-quality-recurrence.md`
+  - Scope: Telegram Monitoring candidate title fallback, poster OCR date/time expansion, Smart Update future public event quality, managed Telegraph pages, and `klgdevents` VK event posts.
+  - Must not regress: short valid titles such as `Идиот`, `Гараж`, and `№ 13` must not be overwritten by umbrella/service lines like `завтра в театре` or `в продаже репертуар`; dotted follow-up dates such as `9.08` must not become public times like `09:08`; `time_is_default` may remain a weak internal anchor but must not render as confirmed time in VK source headers; data repair must delete bad public posts/pages/events and return Telegram/VK sources to scan state before closure.
 - `INC-2026-06-06-guide-monitoring-missed-vk-festival-hashtag.md`
   - Scope: guide excursions scheduled `light/full` jobs, guide scheduled digest/VK fanout, runtime scheduler health, and VK event festival hashtags.
   - Must not regress: a public event linked to canonical festival `Кантата` must publish/search as `#Кантата` even if `event.festival` carries an inflected label such as `Кантаты`; `/healthz` must expose `guide_excursions_light` and `guide_excursions_full`; a missed critical guide `full` daily slot must be caught up by the live watchdog and closure requires same-day catch-up/digest evidence.

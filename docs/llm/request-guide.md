@@ -46,6 +46,12 @@ Documented exceptions (rare, guardrail-only):
   near-identical source text plus same date/time/place, may converge candidates
   before LLM to prevent duplicate public cards. Generic ticket landing pages and
   ambiguous title/location-only matches remain LLM-owned.
+- Event-quality safety rails from `INC-2026-06-07-future-event-quality-recurrence.md`:
+  deterministic code may preserve short LLM-produced titles that are already
+  contentful (`Идиот`, `Гараж`, `№ 13`) and may reject ambiguous dotted
+  OCR tokens such as `9.08` as times when there is no nearby time context. These
+  checks do not choose the event title or classify the post; they only stop a
+  fallback/parser ambiguity from overwriting LLM-owned meaning.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The

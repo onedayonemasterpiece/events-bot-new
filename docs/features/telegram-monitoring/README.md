@@ -68,6 +68,7 @@
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
   - если extractor разложил соседнюю прозу между `location_name` и `location_address`, сервер отбрасывает prose-like address-фрагмент и восстанавливает структурные `location_name/location_address/city` из единственной известной площадки в исходном тексте/алиасах.
 - если афиша явно содержит несколько дат/времён одного и того же события (например «12 июня 19:00» и «13 июня 15:00»), а extractor их схлопнул в одну дату, сервер (best-effort) расширяет карточку до нескольких событий по OCR афиши.
+  Dotted tokens that can also be dates (`9.08`, `26.07`) are not accepted as times unless nearby OCR context says it is a time (`начало`, `в`, `часов`, etc.); this is a guardrail for `INC-2026-06-07-future-event-quality-recurrence.md`.
   - сохраняет `source_title`/`sources_meta[].title` в `telegram_source.title` (человекочитаемое название канала/группы).
   - сохраняет метаданные источника из `sources_meta[]`: `about`, `about_links_json`, `meta_hash`, `meta_fetched_at`.
   - сохраняет подсказки серии/сайта (`suggested_*`) в `telegram_source` и показывает их в UI `/tg` отдельной кнопкой принятия (без автоперезаписи ручного `festival_series`).
@@ -77,7 +78,7 @@
     - контакт/ссылка для записи:
       - `@username` в контексте «запись/бронь/напиши» → `ticket_link=https://t.me/username`;
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
-    - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста.
+    - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста. Short contentful titles returned by the LLM (`Идиот`, `Гараж`, `№ 13`) are valid and must not be overwritten only because they are short; umbrella/service lines such as `завтра в театре`, `афиша`, `анонс`, `в продаже репертуар` are skipped by this fallback.
 - В Kaggle используются только модели Gemma (текст/vision); 4o там не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.

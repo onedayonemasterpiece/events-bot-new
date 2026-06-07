@@ -329,6 +329,123 @@ async def test_tg_build_candidate_marks_unsupported_time_as_default():
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_keeps_short_theatre_titles_from_llm():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Драматический театр, Мира 4, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "dramteatr39",
+        "message_id": 4375,
+        "source_link": "https://t.me/dramteatr39/4375",
+        "text": (
+            "завтра в театре\n"
+            "🖤07.06 | Идиот\n"
+            "🖤Пермский академический Театр-Театр (Пермь)"
+        ),
+    }
+    event_data = {
+        "title": "Идиот",
+        "date": "2026-06-07",
+        "time": "",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.title == "Идиот"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_keeps_numeric_theatre_title_from_repertoire_post():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Драматический театр, Мира 4, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "dramteatr39",
+        "message_id": 4361,
+        "source_link": "https://t.me/dramteatr39/4361",
+        "text": (
+            "Появился в продаже репертуар АВГУСТА!\n"
+            "30.08 | № 13\n"
+            "Будет много ваших любимых комедий."
+        ),
+    }
+    event_data = {
+        "title": "№ 13",
+        "date": "2026-08-30",
+        "time": "",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.title == "№ 13"
+
+
+def test_tg_poster_pairs_do_not_treat_followup_dates_as_times():
+    from source_parsing.telegram.handlers import _extract_poster_date_time_pairs
+
+    ocr_text = (
+        "7 июня 2026 г.\n"
+        "НАЧАЛО в 16.00\n"
+        "КИНОСЕАНС НЕМОГО КИНО\n"
+        "СЛЕДУЮЩИЕ СЕАНСЫ: 28.06, 26.07, 9.08, 30.08"
+    )
+
+    pairs = _extract_poster_date_time_pairs(ocr_text)
+
+    assert (6, 7, "16:00") in pairs
+    assert (6, 28, "09:08") not in pairs
+    assert (7, 26, "09:08") not in pairs
+
+
+def test_tg_poster_multiday_expand_ignores_date_list_without_times():
+    from source_parsing.telegram.handlers import _expand_events_from_poster_datetime_pairs
+
+    message = {
+        "source_username": "grezahutor",
+        "message_id": 2169,
+        "message_date": "2026-06-05T12:00:00+00:00",
+        "posters": [
+            {
+                "ocr_text": (
+                    "7 июня 2026 г.\n"
+                    "НАЧАЛО в 16.00\n"
+                    "КИНОСЕАНС НЕМОГО КИНО\n"
+                    "СЛЕДУЮЩИЕ СЕАНСЫ: 28.06, 26.07, 9.08, 30.08"
+                )
+            }
+        ],
+    }
+    events = [
+        {
+            "title": "Киносеанс немого кино",
+            "date": "2026-06-07",
+            "time": "16:00",
+        }
+    ]
+
+    expanded = _expand_events_from_poster_datetime_pairs(
+        message,
+        events,
+        username="grezahutor",
+        message_id=2169,
+    )
+
+    assert expanded == events
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_normalizes_camember_reference_location():
     from source_parsing.telegram.handlers import _build_candidate
 
