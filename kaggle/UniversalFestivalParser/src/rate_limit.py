@@ -19,6 +19,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+class FestivalParserRateLimitError(RuntimeError):
+    """Raised when the parser would exceed its configured LLM request budget."""
+
+
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiting.
@@ -125,12 +129,18 @@ class GemmaRateLimiter:
     async def wait_if_needed(self, estimated_tokens: int) -> float:
         """Wait if rate limited. Returns seconds waited."""
         total_waited = 0.0
+        estimated = max(1, int(estimated_tokens or 1))
         
         # Check daily limit
         self._check_daily_reset()
-        if self._daily_requests >= self.config.rpd:
-            logger.warning("Daily request limit reached (%d)", self.config.rpd)
-            # Wait until next day would be too long, just log warning
+        if self._daily_requests >= self.config.effective_rpd:
+            raise FestivalParserRateLimitError(
+                f"Daily request limit reached ({self._daily_requests}/{self.config.effective_rpd})"
+            )
+        if estimated > self.config.effective_tpm:
+            raise FestivalParserRateLimitError(
+                f"Estimated tokens exceed per-call budget ({estimated}>{self.config.effective_tpm})"
+            )
         
         # Wait for RPM bucket
         while True:
@@ -143,7 +153,7 @@ class GemmaRateLimiter:
         
         # Wait for TPM bucket
         while True:
-            tpm_wait = self._tpm_bucket.wait_time(estimated_tokens)
+            tpm_wait = self._tpm_bucket.wait_time(estimated)
             if tpm_wait <= 0:
                 break
             logger.debug("Rate limited (TPM), waiting %.2fs", tpm_wait)
@@ -152,7 +162,7 @@ class GemmaRateLimiter:
         
         # Consume tokens
         self._rpm_bucket.consume(1)
-        self._tpm_bucket.consume(estimated_tokens)
+        self._tpm_bucket.consume(estimated)
         
         return total_waited
     

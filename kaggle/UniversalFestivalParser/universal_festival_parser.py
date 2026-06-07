@@ -65,6 +65,10 @@ async def main():
         "run_id": config.run_id,
         "url": config.festival_url,
         "parser_version": config.parser_version,
+        "dry_run": bool(config.dry_run),
+        "no_llm": bool(config.no_llm),
+        "max_llm_calls": int(config.max_llm_calls),
+        "max_estimated_tokens_per_call": int(config.max_estimated_tokens_per_call),
         "started_at": datetime.now(timezone.utc).isoformat(),
         "phases": {},
     }
@@ -116,6 +120,28 @@ async def main():
         logger.error("Distill failed: %s", distill_result.get("error"))
         save_metrics(output_dir, metrics)
         return 1
+
+    if config.dry_run or config.no_llm or config.max_llm_calls <= 0:
+        logger.info(
+            "Stopping before LLM: dry_run=%s no_llm=%s max_llm_calls=%s",
+            config.dry_run,
+            config.no_llm,
+            config.max_llm_calls,
+        )
+        metrics["phases"]["reason"] = {
+            "skipped": True,
+            "reason": (
+                "dry_run"
+                if config.dry_run
+                else ("no_llm" if config.no_llm else "max_llm_calls=0")
+            ),
+        }
+        metrics["completed_at"] = datetime.now(timezone.utc).isoformat()
+        metrics["total_duration_ms"] = (time.perf_counter() - start_time) * 1000
+        metrics["success"] = True
+        save_metrics(output_dir, metrics)
+        rate_limiter.save_usage(output_dir / "rate_usage.json")
+        return 0
     
     # Phase 3: REASON
     logger.info("=== Phase 3: REASON ===")
@@ -132,9 +158,20 @@ async def main():
     # Prepare LLM context
     distilled = load_distilled(distill_result["distilled_path"])
     llm_context = prepare_llm_context(distilled)
+    estimated_reason_tokens = max(1, len(llm_context) // 4)
+    if estimated_reason_tokens > config.max_estimated_tokens_per_call:
+        error = (
+            "LLM context exceeds parser budget: "
+            f"{estimated_reason_tokens}>{config.max_estimated_tokens_per_call} estimated tokens"
+        )
+        logger.error(error)
+        metrics["phases"]["reason"] = {"error": error, "guardrail": "max_estimated_tokens_per_call"}
+        save_metrics(output_dir, metrics)
+        rate_limiter.save_usage(output_dir / "rate_usage.json")
+        return 1
     
     # Wait for rate limit
-    async with rate_limiter.acquire(estimated_tokens=len(llm_context) // 4):
+    async with rate_limiter.acquire(estimated_tokens=estimated_reason_tokens):
         extracted_data, error = await reason_with_gemma(
             distilled_content=llm_context,
             api_key=api_key,
@@ -152,13 +189,16 @@ async def main():
         return 1
     
     # Validate and enhance
-    async with rate_limiter.acquire(estimated_tokens=2000):
-        extracted_data = await validate_and_enhance(
-            extracted_data=extracted_data,
-            distilled=distilled,
-            api_key=api_key,
-            llm_logger=llm_logger,
-        )
+    if config.max_llm_calls >= 2:
+        async with rate_limiter.acquire(estimated_tokens=2000):
+            extracted_data = await validate_and_enhance(
+                extracted_data=extracted_data,
+                distilled=distilled,
+                api_key=api_key,
+                llm_logger=llm_logger,
+            )
+    else:
+        logger.info("Skipping validation LLM pass: max_llm_calls=%s", config.max_llm_calls)
     
     metrics["phases"]["reason"] = {
         "success": True,

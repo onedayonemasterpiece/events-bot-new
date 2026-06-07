@@ -29,7 +29,7 @@ from sqlalchemy import select, update, delete, text, func, or_, and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 from scheduling import MONTHS_GEN
 from event_utils import format_event_md, is_recent
-from festival_queue import festival_queue_info_text, process_festival_queue
+from festival_queue import festival_queue_effective_limit, festival_queue_info_text, process_festival_queue
 
 if "LOCAL_TZ" not in globals():
     LOCAL_TZ = timezone.utc
@@ -12513,7 +12513,13 @@ async def handle_fest_queue(message: types.Message, db: Database, bot: Bot) -> N
     if source_kind:
         start_lines.append(f"Фильтр источника: {source_kind}")
     if limit is not None and int(limit) > 0:
-        start_lines.append(f"Лимит: {int(limit)}")
+        effective_limit = festival_queue_effective_limit(limit)
+        if effective_limit < int(limit):
+            start_lines.append(f"Лимит: {effective_limit} (запрошено {int(limit)}, сработал safety cap)")
+        else:
+            start_lines.append(f"Лимит: {int(limit)}")
+    else:
+        start_lines.append(f"Лимит запуска: {festival_queue_effective_limit(None)} (safety cap)")
     if source_kind in {None, "tg"}:
         start_lines.append("Telegram источники обрабатываются через Kaggle")
     await bot.send_message(

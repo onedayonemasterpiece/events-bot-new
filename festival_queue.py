@@ -107,6 +107,27 @@ def festival_queue_schedule_text() -> str:
     return f"{times} {tz}"
 
 
+def festival_queue_max_items_per_run() -> int:
+    raw = (os.getenv("FESTIVAL_QUEUE_MAX_ITEMS_PER_RUN") or "10").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 10
+    return max(1, min(value, 50))
+
+
+def festival_queue_effective_limit(limit: int | None) -> int:
+    cap = festival_queue_max_items_per_run()
+    requested = 0
+    try:
+        requested = int(limit or 0)
+    except Exception:
+        requested = 0
+    if requested > 0:
+        return max(1, min(requested, cap))
+    return cap
+
+
 def _unique_preserve(values: Sequence[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -1190,6 +1211,8 @@ async def process_festival_queue(
     operator_id: int | None = None,
     run_id: str | None = None,
 ) -> FestivalQueueRunReport:
+    effective_limit = festival_queue_effective_limit(limit)
+
     async def _progress(text: str) -> None:
         if not bot or chat_id is None or not progress_message_id:
             return
@@ -1216,7 +1239,9 @@ async def process_festival_queue(
         details={
             "run_id": run_id,
             "source_kind": source_kind,
-            "limit": limit,
+            "requested_limit": limit,
+            "effective_limit": effective_limit,
+            "max_items_per_run": festival_queue_max_items_per_run(),
         },
     )
     status = "success"
@@ -1266,8 +1291,7 @@ async def process_festival_queue(
             if source_kind:
                 stmt = stmt.where(FestivalQueueItem.source_kind == source_kind.strip().lower())
             stmt = stmt.order_by(FestivalQueueItem.created_at)
-            if limit and int(limit) > 0:
-                stmt = stmt.limit(int(limit))
+            stmt = stmt.limit(effective_limit)
             items = list((await session.execute(stmt)).scalars().all())
 
         def _clean_fest_name(raw: str | None) -> str:
@@ -1321,7 +1345,8 @@ async def process_festival_queue(
         else:
             raw_total = len(items)
             await _progress(
-                f"🎪 Фестивальная очередь: найдено элементов: {raw_total}. Групп по фестивалям: {total}. Начинаю…"
+                f"🎪 Фестивальная очередь: найдено элементов: {raw_total}. "
+                f"Групп по фестивалям: {total}. Лимит запуска: {effective_limit}. Начинаю…"
             )
 
         import main as main_mod
@@ -1504,10 +1529,14 @@ async def process_festival_queue(
                 "failed": int(report.failed),
                 "skipped": int(report.skipped),
                 "limit": int(limit) if isinstance(limit, int) else (int(limit or 0) if str(limit or "").isdigit() else 0),
+                "effective_limit": int(effective_limit),
+                "max_items_per_run": int(festival_queue_max_items_per_run()),
             },
             details={
                 "run_id": run_id,
                 "source_kind": source_kind,
+                "requested_limit": limit,
+                "effective_limit": effective_limit,
                 "details": list(report.details or [])[:30],
             },
         )

@@ -10,6 +10,13 @@
   the 80 Stories/Kantata festival-data split (`event.festival`/promo/queue rows
   exist, `Festival` rows do not), plus the required hard limits/audit before
   reusing the stale Kaggle Universal Festival Parser for light monitoring.
+- **Changed: festival queue and UniversalFestivalParser guardrails**:
+  festival queue processing now has a default `FESTIVAL_QUEUE_MAX_ITEMS_PER_RUN`
+  cap even when `/fest_queue` is launched without `--limit`; requested limits
+  above the cap are reduced and recorded in `ops_run`. The legacy Kaggle
+  Universal Festival Parser now accepts dry-run/no-LLM/max-call/token/timeout
+  guardrails through run config, and its rate limiter fails fast on daily-budget
+  or oversized-request breaches instead of only warning or waiting indefinitely.
 - **Added: VK dynamic community cover MVP**:
   added `/cover` for superadmins to preview/apply/save_default/restore/enable/
   disable/history generated VK community covers. The renderer creates a

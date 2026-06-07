@@ -115,6 +115,22 @@ def generate_run_id(url: str) -> str:
     return f"{timestamp}_{url_hash}"
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name)
+    try:
+        value = int(str(raw).strip()) if raw is not None else int(default)
+    except Exception:
+        value = int(default)
+    return max(minimum, min(value, maximum))
+
+
 def is_valid_url(text: str) -> bool:
     """Check if text looks like a valid URL."""
     if not text:
@@ -181,6 +197,17 @@ async def run_festival_parser_kernel(
         "festival_url": url,
         "run_id": run_id,
         "parser_version": PARSER_VERSION,
+        "dry_run": _env_bool("FESTIVAL_PARSER_DRY_RUN", False),
+        "no_llm": _env_bool("FESTIVAL_PARSER_NO_LLM", False),
+        "max_llm_calls": _env_int("FESTIVAL_PARSER_MAX_LLM_CALLS", 2, minimum=0, maximum=2),
+        "max_estimated_tokens_per_call": _env_int(
+            "FESTIVAL_PARSER_MAX_ESTIMATED_TOKENS_PER_CALL",
+            8000,
+            minimum=1000,
+            maximum=8250,
+        ),
+        "timeout_ms": _env_int("FESTIVAL_PARSER_TIMEOUT_MS", 30000, minimum=5000, maximum=120000),
+        "llm_model": os.getenv("FESTIVAL_PARSER_LLM_MODEL", "gemma-3-27b"),
     }
     
     async def _notify(phase: str, status: dict | None = None) -> None:
@@ -520,10 +547,17 @@ async def process_festival_url(
             await status_callback(f"{phase}: {status}")
     
     # Run Kaggle kernel
+    timeout_minutes = _env_int(
+        "FESTIVAL_PARSER_TIMEOUT_MINUTES",
+        30,
+        minimum=5,
+        maximum=60,
+    )
     final_status, output_files, duration = await run_festival_parser_kernel(
         url=url,
         run_id=run_id,
         dataset_sources=dataset_sources,
+        timeout_minutes=timeout_minutes,
         status_callback=_status_update,
     )
     
@@ -600,4 +634,3 @@ def parse_llm_log_output(file_paths: list[str]) -> dict | None:
             except Exception as e:
                 logger.error("Failed to parse LLM log %s: %s", path, e)
     return None
-
