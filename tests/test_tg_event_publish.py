@@ -85,7 +85,7 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "#Фестивальсвета" in text
     assert "#анонс" not in text
     assert '<a href="https://telegra.ph/event">Подробнее</a>' in text
-    assert '<a href="https://t.me/kldevents">Подписаться</a>' in text
+    assert '<a href="https://t.me/+MrSeuZSHv3VjMThi">Подписаться</a>' in text
     assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in text
 
 

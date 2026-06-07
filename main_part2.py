@@ -3712,7 +3712,7 @@ def _vk_owner_and_post_id(url: str) -> tuple[str, str] | None:
 
 
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
-TG_EVENT_SUBSCRIBE_URL = "https://t.me/kldevents"
+TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.com/klgdevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10

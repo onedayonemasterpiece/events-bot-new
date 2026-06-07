@@ -19,7 +19,8 @@
   Telegram event announcements now publish as captioned media posts when images
   exist, use the existing Telegram calendar post URL (`ics_post_url`) for the
   calendar button, include Telegraph `Подробнее`, avoid placeholder price lines
-  when price/free status is unknown, and prune raw-CDN/managed-storage duplicate
+  when price/free status is unknown, use the production invite link for the
+  Telegram footer subscription URL, and prune raw-CDN/managed-storage duplicate
   event images by backfilling missing poster perceptual hashes. VK sync no
   longer treats a stale/deleted managed `klgdevents` URL as a successful
   publication when `wall.getById` returns no item. Covered by
