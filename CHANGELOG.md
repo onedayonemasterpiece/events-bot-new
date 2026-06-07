@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Added: VK dynamic community cover MVP**:
+  added `/cover` for superadmins to preview/apply/save_default/restore/enable/
+  disable/history generated VK community covers. The renderer creates a
+  `1920×768` wide cover and `1080×1920` mobile slide assets from active
+  festivals using a restrained editorial palette, the engagement-card direction,
+  and the community logo reference; wide cover
+  publishing uses VK owner-cover upload (`photos.getOwnerCoverPhotoUploadServer`
+  -> upload -> `photos.saveOwnerCoverPhoto`) with user-token auth. `/cover
+  save_default` stores the current VK cover on persistent server storage and
+  the scheduler/manual restore returns that saved default after the temporary
+  cover expires. Covered by `tests/test_vk_dynamic_cover.py`.
 - **Changed: Smart Update VK/TG post reporting and publishing polish**:
   Smart Update reports now show a single `Посты: VK, TG` line with both
   links/queued states and a VK coauthor proposal marker when a known source is

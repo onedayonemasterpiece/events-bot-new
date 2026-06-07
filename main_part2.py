@@ -18464,6 +18464,8 @@ def create_app() -> web.Application:
     dp.include_router(kenigsberg_stories_router)
     from handlers.telegraph_cache_cmd import telegraph_cache_router
     dp.include_router(telegraph_cache_router)
+    from handlers.vk_cover_cmd import vk_cover_router
+    dp.include_router(vk_cover_router)
     dp.include_router(tg_monitor_router)
     import video_announce.handlers as video_handlers
     import preview_3d.handlers as preview_3d_handlers

@@ -83,6 +83,7 @@ sections:
       afishathumb_requirements: docs/backlog/features/afishathumb/afishathumb-requirements.md
       afishathumb_reference: docs/backlog/features/afishathumb/afishathumb-ref.png
       afishathumb_background: docs/backlog/features/afishathumb/fon.png
+      vk_dynamic_cover_requirements: docs/backlog/features/vk-dynamic-cover/requirements.md
     linear:
       - docs/backlog/linear/EVE-11-llm-rate-limits.md
       - docs/backlog/linear/EVE-54-kaggle-secrets.md
@@ -289,6 +290,16 @@ features:
       - main_part2.py
       - video_announce/story_publish.py
       - kaggle/CrumpleVideo/story_publish.py
+  vk_dynamic_cover:
+    status: mvp
+    docs: docs/features/vk-dynamic-cover/README.md
+    design: docs/backlog/features/vk-dynamic-cover/requirements.md
+    entrypoints:
+      - vk_dynamic_cover.py
+      - handlers/vk_cover_cmd.py
+      - scheduling.py
+      - main.py
+      - main_part2.py
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md

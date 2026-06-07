@@ -2898,6 +2898,11 @@ HELP_COMMANDS = [
         "roles": {"superadmin"},
     },
     {
+        "usage": "/cover [status|preview|apply|save_default|restore|history|on|off]",
+        "desc": "Manage generated VK community cover, saved default cover, and temporary promo/festival rotation",
+        "roles": {"superadmin"},
+    },
+    {
         "usage": "/captcha <code>",
         "desc": "Submit VK captcha code",
         "roles": {"superadmin"},

@@ -2571,6 +2571,25 @@ def startup(
             coalesce=True,
             misfire_grace_time=30,
         )
+        if _env_enabled("ENABLE_VK_DYNAMIC_COVER_SCHEDULER", default=True):
+            from vk_dynamic_cover import dynamic_cover_expiry_scheduler
+
+            _register_job(
+                "vk_dynamic_cover_expiry",
+                _job_wrapper(
+                    "vk_dynamic_cover_expiry",
+                    dynamic_cover_expiry_scheduler,
+                    notify_skip=_notify_admin_skip,
+                ),
+                "cron",
+                id="vk_dynamic_cover_expiry",
+                minute="11",
+                args=[db, bot],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=30,
+            )
 
         times_raw = os.getenv(
             "VK_CRAWL_TIMES_LOCAL", "05:15,09:15,13:15,17:15,21:15,22:45"
