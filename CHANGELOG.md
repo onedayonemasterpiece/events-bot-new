@@ -10,6 +10,11 @@
   links, and all event photos sent as follow-up media groups. The text post is
   kept within 1000 visible characters. Covered by
   `tests/test_tg_event_publish.py`.
+- **Fixed: Telegram event hook refresh safety**:
+  production uses the built-in `@kldevents` target without requiring
+  `TG_EVENT_CHANNEL=@kldevents`, and Telegram hook prompt-rule changes are part
+  of the source hash so already published posts can refresh after editorial
+  prompt fixes. Covered by `tests/test_tg_event_publish.py`.
 - **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:
   the shared remote Telegram session guard now keeps fresh Kaggle `UNKNOWN` /
   status-lookup failures fail-closed, but stops treating old registry entries

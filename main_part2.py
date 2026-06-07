@@ -3717,6 +3717,7 @@ TG_EVENT_VK_URL = "https://vk.com/klgdevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v2"
 
 
 def _tg_event_publish_enabled() -> bool:
@@ -3965,6 +3966,8 @@ async def build_tg_event_hook_text(event: Event, text: str) -> str:
         "Первая фраза должна быть цепляющим hook-вопросом.\n"
         "Не повторяй дату, время, место, цену и билетную ссылку: они будут в инфоблоке отдельно.\n"
         "Не добавляй хештеги, эмодзи, ссылки, призыв купить билеты или служебные фразы.\n"
+        "Собственные имена и названия копируй буквально из названия или текста события; "
+        "если не уверен в форме слова, лучше опусти имя, чем меняй написание.\n"
         "Не выдумывай факты; используй только текст ниже.\n\n"
         f"Название: {getattr(event, 'title', '')}\n"
         f"Текст события:\n{source[:5000]}"
@@ -4049,6 +4052,7 @@ def build_tg_event_source_hash(event: Event, text: str) -> str:
     return content_hash(
         "\n".join(
             [
+                TG_EVENT_REWRITE_PROMPT_VERSION,
                 str(getattr(event, "title", "") or ""),
                 str(getattr(event, "date", "") or ""),
                 str(getattr(event, "time", "") or ""),

@@ -78,6 +78,15 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in text
 
 
+def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
+    event = _event()
+    base_hash = main.build_tg_event_source_hash(event, "source text")
+
+    monkeypatch.setattr(main, "TG_EVENT_REWRITE_PROMPT_VERSION", "tg-event-hook-test")
+
+    assert main.build_tg_event_source_hash(event, "source text") != base_hash
+
+
 @pytest.mark.asyncio
 async def test_tg_event_publish_sends_short_text_button_and_media(monkeypatch):
     event = _event(
