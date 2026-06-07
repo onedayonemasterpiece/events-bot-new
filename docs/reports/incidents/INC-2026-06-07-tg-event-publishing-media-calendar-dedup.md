@@ -1,6 +1,6 @@
 # INC-2026-06-07 TG Event Publishing Media, Calendar Link, And Poster Dedup
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Telegram event publishing / Smart Update media storage
 Opened: 2026-06-07
@@ -33,6 +33,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-07 20:45 UTC: immediate mitigation replaced the production post with one `photo_caption` message `id=6`, deleted old messages `3/4/5`, removed duplicate eventposter row `10460`, and reduced `event.photo_urls` to one URL.
 - 2026-06-07 20:50 UTC: production DB showed `source_vk_post_url=https://vk.com/wall-231920894_2375`, but VK API `wall.getById` returned `items=[]`. A manual publish created `wall-231920894_2389`; this is recorded as mitigation only, not acceptance evidence for the feature.
 - 2026-06-07 21:03 UTC: normal production VK crawl + auto-import created event `5779` from `https://vk.com/wall-30777579_15383`, enqueued both `tg_event_publish` and `vk_sync`, and published Telegram post `https://t.me/c/3954607218/7`; `vk_sync` then failed with `vk_sync_missing_media_for_telegram_event`, proving the two-surface contract was still broken before the follow-up fix.
+- 2026-06-07 21:15 UTC: after the `_event_has_telegram_origin` fix deployed, the production worker retried `vk_sync:5779` and created managed VK post `https://vk.com/wall-231920894_2391`; VK later exposed the scheduled item as public wall item `https://vk.com/wall-231920894_2392`, and production DB/job evidence was normalized to that public URL.
 
 ## Root Cause
 
@@ -102,10 +103,15 @@ The first production Telegram event announcement in `@kldevents` was published a
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `846103369b7c14f4b78b5ce015d28481fb6c4651` (`origin/main` contains it). The footer-link fix is `823a9b43ff4433f73844fc608d95fe6f43c2d600`; the original dual-surface hardening is `d8134cba62b9aaa7c3f342c5b3998e8fad943621`.
+- deploy path: clean linked worktree `codex/tg-publishing-smart-update`, pushed to `origin/main`, deployed to Fly app `events-bot-new-wngqia` as `deployment-01KTHYH91220D4EJAA2Y3XF6PP` after footer deploy `deployment-01KTHXG6D75N3T24GYJHXWQNA9`; `/healthz` returned `ok=true`, `ready=true`.
+- regression checks:
+  - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main_part2.py tests/test_vk_source.py`
+  - `PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp /home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tg_event_publish.py tests/test_genai_dump_and_poster_dedup.py tests/test_vk_source.py::test_sync_vk_source_post_blocks_text_only_telegram_event tests/test_vk_source.py::test_sync_vk_source_post_allows_vk_origin_with_source_ids tests/test_vk_source.py::test_job_sync_vk_source_post_republishes_missing_managed_post tests/test_vk_source.py::test_job_sync_vk_source_post_resyncs_title_only_change tests/test_vk_source.py::test_managed_klgdevents_event_skips_vk_sync` (`27 passed in 1.92s`).
+- post-deploy verification:
+  - event `5776` mitigation post: `https://t.me/c/3954607218/6`; one captioned photo, calendar button points to `https://t.me/c/2807919036/6502`, no `Стоимость не указана`, footer has Telegraph `Подробнее`, VK, and `Подписаться` -> `https://t.me/+MrSeuZSHv3VjMThi`.
+  - live acceptance event `5779`: source `https://vk.com/wall-30777579_15383`, Telegram post `https://t.me/c/3954607218/7`, managed VK post `https://vk.com/wall-231920894_2392`; Telegram UI inspection confirmed media, Telegraph details, invite footer, VK footer, no placeholder price, and calendar button `📅 8 июня 18:30 · Добавить в календарь` -> `https://t.me/c/2807919036/6503`. VK `wall.getById` returned one public item with the title, calendar text, free-price text, and one photo attachment.
+  - Existing `vk_sync_missing_media_for_telegram_event` rows after deploy were inspected as Telegram-origin/no-media guard cases, not the fixed VK-origin false-positive class.
 
 ## Prevention
 
