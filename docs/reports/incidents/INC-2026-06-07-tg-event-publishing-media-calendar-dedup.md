@@ -35,6 +35,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-07 21:03 UTC: normal production VK crawl + auto-import created event `5779` from `https://vk.com/wall-30777579_15383`, enqueued both `tg_event_publish` and `vk_sync`, and published Telegram post `https://t.me/c/3954607218/7`; `vk_sync` then failed with `vk_sync_missing_media_for_telegram_event`, proving the two-surface contract was still broken before the follow-up fix.
 - 2026-06-07 21:15 UTC: after the `_event_has_telegram_origin` fix deployed, the production worker retried `vk_sync:5779` and created managed VK post `https://vk.com/wall-231920894_2391`; VK later exposed the scheduled item as public wall item `https://vk.com/wall-231920894_2392`, and production DB/job evidence was normalized to that public URL.
 - 2026-06-07 21:22 UTC: post-deploy `/healthz` returned 503 because `job_outbox_worker` task had ended with `LookupError` while the app, DB, bot session, and schedulers were otherwise alive.
+- 2026-06-07 21:57 UTC: follow-up Smart Update publishing polish deployed: unified `Посты: VK, TG` report line, Telegram quiet-hour spacing, city/type hashtags, and VK coauthor proposal parameters with fallback.
 
 ## Root Cause
 
@@ -118,6 +119,11 @@ The first production Telegram event announcement in `@kldevents` was published a
   - live acceptance event `5779`: source `https://vk.com/wall-30777579_15383`, Telegram post `https://t.me/c/3954607218/7`, managed VK post `https://vk.com/wall-231920894_2392`; Telegram UI inspection confirmed media, Telegraph details, invite footer, VK footer, no placeholder price, and calendar button `📅 8 июня 18:30 · Добавить в календарь` -> `https://t.me/c/2807919036/6503`. VK `wall.getById` returned one public item with the title, calendar text, free-price text, and one photo attachment.
   - health: Fly machine `48e42d5b714228` version `1226` reported `1 passing` check; repeated `/healthz` calls through boot age `97.9s` returned HTTP 200 with `job_outbox_worker=ok`, `db=ok`, `bot_session_closed=false`, and `issues=[]`; runtime logs showed `WORKER_STATE` at `21:31:22`, `21:31:53`, and `21:32:23` UTC after deploy.
   - Existing `vk_sync_missing_media_for_telegram_event` rows after deploy were inspected as Telegram-origin/no-media guard cases, not the fixed VK-origin false-positive class.
+  - follow-up deploy: SHA `7fffb2281ed00ab149e0b6b28537a7632524fc00`, Fly image `deployment-01KTJ1D15P1W4FX9NB4CM2YHTV`, machine `48e42d5b714228` version `1227`; `/healthz` returned HTTP 200 with `ok=true`, `ready=true`, `db=ok`, `job_outbox_worker=ok`, and `issues=[]`.
+  - follow-up regression checks:
+    - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py main_part2.py vk_hashtags.py vk_coauthors.py source_parsing/handlers.py source_parsing/smart_update_report.py tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py`
+    - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m pytest tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py -q` (`48 passed in 6.52s`; pytest process was manually killed after emitting the success summary because the local shell session stayed open).
+    - Local VK API smoke used the production user token to create a postponed `wall.post` with `copyright=https://vk.com/konb39`, `coauthors=-30777579`, and `coauthor_ids=-30777579`; VK returned `post_id=2397`, and immediate `wall.delete` returned `1`.
 
 ## Prevention
 
