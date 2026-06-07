@@ -3870,10 +3870,29 @@ def _tg_event_ticket_line(event: Event) -> str:
     return ""
 
 
+def _tg_event_details_url(event: Event) -> str | None:
+    raw = (getattr(event, "telegraph_url", None) or "").strip()
+    if raw:
+        return normalize_telegraph_url(raw) or raw
+    path = (getattr(event, "telegraph_path", None) or "").strip()
+    if path:
+        return normalize_telegraph_url(f"https://telegra.ph/{path.lstrip('/')}")
+    return None
+
+
+def _tg_event_calendar_post_url(event: Event) -> str | None:
+    raw = (getattr(event, "ics_post_url", None) or "").strip()
+    if raw.startswith(("http://", "https://")):
+        return raw
+    return None
+
+
 def build_tg_event_announcement(
     event: Event,
     text: str,
     festival: Festival | None = None,
+    *,
+    include_calendar_link: bool = False,
 ) -> str:
     title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
     lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
@@ -3926,10 +3945,18 @@ def build_tg_event_announcement(
     lines.append(
         ""
     )
-    lines.append(
-        f'<a href="{TG_EVENT_SUBSCRIBE_URL}">Подписаться</a> · '
-        f'<a href="{TG_EVENT_VK_URL}">Вконтакте</a>'
-    )
+    footer_links: list[str] = []
+    details_url = _tg_event_details_url(event)
+    if details_url:
+        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">Подробнее</a>')
+    calendar_url = _tg_event_calendar_post_url(event)
+    if include_calendar_link and calendar_url:
+        footer_links.append(
+            f'<a href="{html.escape(calendar_url, quote=True)}">Добавить в календарь</a>'
+        )
+    footer_links.append(f'<a href="{TG_EVENT_SUBSCRIBE_URL}">Подписаться</a>')
+    footer_links.append(f'<a href="{TG_EVENT_VK_URL}">Вконтакте</a>')
+    lines.append(" · ".join(footer_links))
     return "\n".join(lines).strip()
 
 
@@ -4030,19 +4057,35 @@ async def build_tg_event_announcement_for_publish(
     festival: Festival | None = None,
     *,
     force_caption_limit: bool = False,
+    include_calendar_link: bool = False,
 ) -> tuple[str, bool]:
     hook_text = await build_tg_event_hook_text(event, text)
-    message_html = build_tg_event_announcement(event, hook_text, festival=festival)
+    message_html = build_tg_event_announcement(
+        event,
+        hook_text,
+        festival=festival,
+        include_calendar_link=include_calendar_link,
+    )
     if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
         return message_html, hook_text != text
 
     # Safety-net: keep the deterministic shell intact
     # and trim only the narrative body until the whole announcement fits.
-    base_without_body = build_tg_event_announcement(event, "", festival=festival)
+    base_without_body = build_tg_event_announcement(
+        event,
+        "",
+        festival=festival,
+        include_calendar_link=include_calendar_link,
+    )
     room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
     for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
         trimmed = _truncate_tg_plain_body(hook_text, min(max(0, room), max(0, body_limit)))
-        candidate = build_tg_event_announcement(event, trimmed, festival=festival)
+        candidate = build_tg_event_announcement(
+            event,
+            trimmed,
+            festival=festival,
+            include_calendar_link=include_calendar_link,
+        )
         if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
             return candidate, True
     return base_without_body, True
@@ -4068,6 +4111,9 @@ def build_tg_event_source_hash(event: Event, text: str) -> str:
                 str(getattr(event, "ticket_price_min", "") or ""),
                 str(getattr(event, "ticket_price_max", "") or ""),
                 str(getattr(event, "ics_url", "") or ""),
+                str(getattr(event, "ics_post_url", "") or ""),
+                str(getattr(event, "telegraph_url", "") or ""),
+                str(getattr(event, "telegraph_path", "") or ""),
                 text or "",
             ]
         )
@@ -4079,16 +4125,41 @@ def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> l
     return [clean[i : i + size] for i in range(0, len(clean), size)]
 
 
+def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
+    clean: list[str] = []
+    seen: set[str] = set()
+    for raw in urls or []:
+        url = str(raw or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        clean.append(url)
+    return clean
+
+
+def _tg_event_calendar_button_text(event: Event) -> str:
+    date_part = str(getattr(event, "date", "") or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else date_part
+    time_part = str(getattr(event, "time", "") or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    prefix = " ".join(part for part in [day, time_part] if part).strip()
+    if prefix:
+        return f"📅 {prefix} · Добавить в календарь"
+    return "📅 Добавить в календарь"
+
+
 def build_tg_event_reply_markup(event: Event) -> types.InlineKeyboardMarkup | None:
-    ics_url = str(getattr(event, "ics_url", None) or "").strip()
-    if not ics_url.startswith(("http://", "https://")):
+    calendar_url = _tg_event_calendar_post_url(event)
+    if not calendar_url:
         return None
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text="Добавить в календарь",
-                    url=ics_url,
+                    text=_tg_event_calendar_button_text(event),
+                    url=calendar_url,
                 )
             ]
         ]
@@ -4120,28 +4191,36 @@ async def publish_tg_event_announcement(
             source_hash,
         )
 
-    photo_urls = list(getattr(event, "photo_urls", None) or [])
+    photo_urls = _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])
     chunks = _chunked_tg_media(photo_urls)
+    if len(photo_urls) == 1:
+        desired_mode = "photo_caption"
+    elif len(photo_urls) > 1:
+        desired_mode = "album_caption"
+    else:
+        desired_mode = "text"
     message_html, _rewritten = await build_tg_event_announcement_for_publish(
         event,
         text,
         festival=festival,
         force_caption_limit=bool(chunks),
+        include_calendar_link=desired_mode == "album_caption",
     )
     reply_markup = build_tg_event_reply_markup(event)
 
     existing_id = getattr(event, "tg_event_post_id", None)
     existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
-    if existing_id and existing_mode in {"text", "album_caption"}:
+    if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
         try:
-            if existing_mode == "album_caption":
+            if existing_mode in {"album_caption", "photo_caption"} and desired_mode == existing_mode:
                 await bot.edit_message_caption(
                     chat_id=target,
                     message_id=existing_id,
                     caption=message_html,
                     parse_mode="HTML",
+                    reply_markup=reply_markup if existing_mode == "photo_caption" else None,
                 )
-            else:
+            elif existing_mode == "text" and desired_mode == "text":
                 await bot.edit_message_text(
                     chat_id=target,
                     message_id=existing_id,
@@ -4150,6 +4229,8 @@ async def publish_tg_event_announcement(
                     disable_web_page_preview=True,
                     reply_markup=reply_markup,
                 )
+            else:
+                raise RuntimeError(f"mode change requires new message: {existing_mode}->{desired_mode}")
             return (
                 (getattr(event, "tg_event_post_url", None) or "").strip() or None,
                 int(existing_id),
@@ -4166,23 +4247,48 @@ async def publish_tg_event_announcement(
 
     sent_url: str | None = None
     sent_id: int | None = None
-    sent_mode = "text"
+    sent_mode = desired_mode
     try:
-        msg = await bot.send_message(
-            target,
-            message_html,
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-            reply_markup=reply_markup,
-        )
-        sent_id = msg.message_id
-        sent_url = message_link(msg.chat.id, msg.message_id)
-        sent_mode = "text"
-        for chunk in chunks:
-            await bot.send_media_group(
+        if desired_mode == "photo_caption":
+            msg = await bot.send_photo(
                 chat_id=target,
-                media=[types.InputMediaPhoto(media=url) for url in chunk],
+                photo=photo_urls[0],
+                caption=message_html,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
             )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
+        elif desired_mode == "album_caption":
+            first = True
+            for chunk in chunks:
+                media = []
+                for url in chunk:
+                    if first:
+                        media.append(
+                            types.InputMediaPhoto(
+                                media=url,
+                                caption=message_html,
+                                parse_mode="HTML",
+                            )
+                        )
+                        first = False
+                    else:
+                        media.append(types.InputMediaPhoto(media=url))
+                msgs = await bot.send_media_group(chat_id=target, media=media)
+                if sent_id is None and msgs:
+                    sent_id = msgs[0].message_id
+                    sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
+        else:
+            msg = await bot.send_message(
+                target,
+                message_html,
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=reply_markup,
+            )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
     except TelegramBadRequest:
         logging.exception(
             "publish_tg_event_announcement failed event_id=%s",

@@ -14204,8 +14204,14 @@ async def schedule_event_update_tasks(
             db, eid, JobTask.tg_ics_post, depends_on=tg_ics_deps
         )
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
+        tg_event_deps = [results[JobTask.telegraph_build]]
+        if JobTask.tg_ics_post in results:
+            tg_event_deps.append(results[JobTask.tg_ics_post])
         results[JobTask.tg_event_publish] = await enqueue_job(
-            db, eid, JobTask.tg_event_publish, depends_on=[results[JobTask.telegraph_build]]
+            db,
+            eid,
+            JobTask.tg_event_publish,
+            depends_on=tg_event_deps,
         )
     page_deps = [results[JobTask.telegraph_build]]
     
@@ -19166,7 +19172,31 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        return
+        post_exists = True
+        try:
+            ids = _vk_owner_and_post_id(existing_vk_post_url)
+            if ids:
+                response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
+                items = response.get("response") if isinstance(response, dict) else response
+                if not isinstance(items, list):
+                    items = [items] if items else []
+                post_exists = bool(items)
+        except Exception:
+            logging.warning(
+                "job_sync_vk_source_post: managed VK post existence probe failed event_id=%s url=%s",
+                event_id,
+                existing_vk_post_url,
+                exc_info=True,
+            )
+        if post_exists:
+            return
+        logging.warning(
+            "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
+            event_id,
+            existing_vk_post_url,
+        )
+        ev.source_vk_post_url = None
+        ev.vk_source_hash = None
     vk_url = await sync_vk_source_post(ev, text_for_vk, db, bot, ics_url=ev.ics_url)
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,

@@ -15145,6 +15145,91 @@ def _dedup_near_duplicate_posters(
     return kept
 
 
+async def _backfill_missing_poster_candidate_phashes(
+    posters: Sequence[PosterCandidate],
+) -> None:
+    for poster in posters or []:
+        if (getattr(poster, "phash", None) or "").strip():
+            continue
+        url = (getattr(poster, "supabase_url", None) or getattr(poster, "catbox_url", None) or "").strip()
+        if not url:
+            continue
+        phash = await _photo_url_dhash(url)
+        if phash:
+            poster.phash = phash
+
+
+def _event_poster_display_url(row: EventPoster) -> str | None:
+    return (getattr(row, "supabase_url", None) or getattr(row, "catbox_url", None) or "").strip() or None
+
+
+def _event_poster_quality(row: EventPoster) -> int:
+    score = 0
+    if getattr(row, "ocr_title", None):
+        score += len(str(row.ocr_title))
+    if getattr(row, "ocr_text", None):
+        score += len(str(row.ocr_text))
+    if getattr(row, "supabase_url", None):
+        score += 2
+    return score
+
+
+async def _backfill_missing_eventposter_phashes(rows: Sequence[EventPoster]) -> None:
+    for row in rows or []:
+        if (getattr(row, "phash", None) or "").strip():
+            continue
+        url = _event_poster_display_url(row)
+        if not url:
+            continue
+        phash = await _photo_url_dhash(url)
+        if phash:
+            row.phash = phash
+
+
+async def _prune_near_duplicate_eventposters(session, rows: Sequence[EventPoster]) -> tuple[int, set[str]]:
+    threshold = SMART_UPDATE_POSTER_NEAR_DUP_HAMMING
+    if threshold <= 0 or len(rows or []) < 2:
+        return 0, set()
+    kept: list[EventPoster] = []
+    kept_phashes: list[str] = []
+    pruned_urls: set[str] = set()
+    pruned = 0
+    for row in rows:
+        ph = (getattr(row, "phash", None) or "").strip().lower()
+        if not ph:
+            kept.append(row)
+            kept_phashes.append("")
+            continue
+        dup_idx = None
+        for idx, existing in enumerate(kept_phashes):
+            if existing and hamming_distance_hex(ph, existing) <= threshold:
+                dup_idx = idx
+                break
+        if dup_idx is None:
+            kept.append(row)
+            kept_phashes.append(ph)
+            continue
+
+        survivor = kept[dup_idx]
+        if _event_poster_quality(row) > _event_poster_quality(survivor):
+            drop = survivor
+            kept[dup_idx] = row
+            kept_phashes[dup_idx] = ph
+        else:
+            drop = row
+        for url in (getattr(drop, "catbox_url", None), getattr(drop, "supabase_url", None)):
+            if url:
+                pruned_urls.add(str(url))
+        await session.delete(drop)
+        pruned += 1
+        logger.info(
+            "smart_update: pruned persisted near-duplicate eventposter id=%s hamming<=%d",
+            getattr(drop, "id", None),
+            threshold,
+        )
+    return pruned, pruned_urls
+
+
 def _extract_dhash_from_managed_photo_url(url: str | None) -> str | None:
     match = re.search(
         r"/dh\d+/[0-9a-f]{2}/([0-9a-f]{16,128})\.(?:webp|jpe?g|png)(?:[?#].*)?$",
@@ -15283,6 +15368,7 @@ async def _apply_posters(
 ) -> tuple[int, list[str], bool, int, bool]:
     if not event_id:
         return 0, [], False, 0, False
+    await _backfill_missing_poster_candidate_phashes(posters)
     posters = _dedup_near_duplicate_posters(posters)
     existing_rows = (
         await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
@@ -15392,6 +15478,19 @@ async def _apply_posters(
             )
             added += 1
             _remember_url(_pick_display_url(poster))
+
+    await session.flush()
+    persisted_rows = (
+        await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
+    ).scalars().all()
+    await _backfill_missing_eventposter_phashes(persisted_rows)
+    persisted_pruned, persisted_pruned_urls = await _prune_near_duplicate_eventposters(
+        session,
+        persisted_rows,
+    )
+    if persisted_pruned:
+        pruned += persisted_pruned
+        pruned_urls |= persisted_pruned_urls
 
     # Update event.photo_urls if possible
     result = await session.execute(select(Event).where(Event.id == event_id))

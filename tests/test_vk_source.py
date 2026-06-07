@@ -827,6 +827,54 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    future_date = (main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat()
+
+    event = main.Event(
+        title="Concert",
+        description="Same body",
+        source_text="Same body",
+        date=future_date,
+        time="18:30",
+        location_name="Place",
+        city="Калининград",
+        source_vk_post_url="https://vk.com/wall-231920894_2375",
+        vk_source_hash=main.content_hash("Concert\nSame body"),
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = event.id
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        assert kwargs["posts"] == "-231920894_2375"
+        return {"response": []}
+
+    calls = []
+
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+        calls.append((ev.source_vk_post_url, text_for_vk))
+        return "https://vk.com/wall-231920894_2389"
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
+
+    await main.job_sync_vk_source_post(event_id, db, None)
+
+    assert calls == [(None, "Same body")]
+    async with db.get_session() as session:
+        updated = await session.get(main.Event, event_id)
+    assert updated.source_vk_post_url == "https://vk.com/wall-231920894_2389"
+    assert updated.vk_source_hash == main.content_hash("Concert\nSame body")
+
+
+@pytest.mark.asyncio
 async def test_job_sync_vk_source_post_skips_past_event(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

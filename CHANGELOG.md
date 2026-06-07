@@ -15,6 +15,16 @@
   `TG_EVENT_CHANNEL=@kldevents`, and Telegram hook prompt-rule changes are part
   of the source hash so already published posts can refresh after editorial
   prompt fixes. Covered by `tests/test_tg_event_publish.py`.
+- **Fixed: Telegram event publishing media/calendar incident**:
+  Telegram event announcements now publish as captioned media posts when images
+  exist, use the existing Telegram calendar post URL (`ics_post_url`) for the
+  calendar button, include Telegraph `Подробнее`, avoid placeholder price lines
+  when price/free status is unknown, and prune raw-CDN/managed-storage duplicate
+  event images by backfilling missing poster perceptual hashes. VK sync no
+  longer treats a stale/deleted managed `klgdevents` URL as a successful
+  publication when `wall.getById` returns no item. Covered by
+  `tests/test_tg_event_publish.py`, `tests/test_genai_dump_and_poster_dedup.py`,
+  and `tests/test_vk_source.py`.
 - **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:
   the shared remote Telegram session guard now keeps fresh Kaggle `UNKNOWN` /
   status-lookup failures fail-closed, but stops treating old registry entries

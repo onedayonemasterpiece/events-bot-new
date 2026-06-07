@@ -3,12 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from sqlmodel import select
 
 import markup
 import media_dedup
 import smart_event_update as su
 from db import Database
-from models import Event
+from models import Event, EventPoster
 from smart_event_update import (
     PosterCandidate,
     _apply_posters,
@@ -154,6 +155,82 @@ async def test_apply_posters_dedupes_legacy_photo_urls_by_phash(tmp_path, monkey
     assert changed is True
     assert event.photo_urls == [managed_url]
     assert event.photo_count == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_rows(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    managed_url = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/ab/"
+        + ("ab" * 32)
+        + ".webp"
+    )
+    raw_url = "https://vk.example/raw.jpg"
+
+    async def fake_photo_hash(url):
+        if url == raw_url:
+            return "ab" * 32
+        return su._extract_dhash_from_managed_photo_url(url)
+
+    monkeypatch.setattr(su, "_photo_url_dhash", fake_photo_hash)
+
+    async with db.get_session() as session:
+        event = Event(
+            title="T",
+            description="D",
+            date="2026-06-01",
+            time="20:00",
+            location_name="Place",
+            source_text="T",
+            photo_urls=[managed_url, raw_url],
+            photo_count=2,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        session.add(
+            EventPoster(
+                event_id=event.id,
+                supabase_url=managed_url,
+                poster_hash="managed-sha",
+                phash="ab" * 32,
+            )
+        )
+        session.add(
+            EventPoster(
+                event_id=event.id,
+                catbox_url=raw_url,
+                poster_hash="raw-sha",
+                phash=None,
+            )
+        )
+        await session.commit()
+
+        _added, _added_urls, _preview, pruned, changed = await _apply_posters(
+            session,
+            event.id,
+            [],
+            event_title="T",
+        )
+        await session.commit()
+        await session.refresh(event)
+        rows = (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == event.id)
+            )
+        ).scalars().all()
+
+    assert pruned == 1
+    assert changed is True
+    assert event.photo_urls == [managed_url]
+    assert event.photo_count == 1
+    assert len(rows) == 1
+    assert rows[0].supabase_url == managed_url
 
 
 # --- Grounded title recovery (INC-2026-05-29 location-as-title) -----------------
