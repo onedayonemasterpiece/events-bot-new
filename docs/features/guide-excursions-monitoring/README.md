@@ -281,7 +281,6 @@ Target channels для manual/scheduled publish задаются через `GUI
 VK-render отличается от Telegram-render:
 
 - используется plain text, без HTML `<a>` и без Telegram media album/caption mechanics;
-- сразу после первой строки count/date VK-render добавляет видимую атрибуцию `Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents`; это текстовая атрибуция, а не VK API coauthor invite;
 - карточки остаются fact-first и берут те же поля, что Telegram digest: дата, локация, гид/организатор, маршрут, цена, места, запись;
 - исходная ссылка на анонс выводится отдельной короткой строкой в карточке, потому что заголовок в plain VK text не может быть кликабельным;
 - Telegram booking/source links (`t.me/...`, `https://t.me/...`) перед выводом в VK должны проходить через existing VK shortener (`utils.getShortLink` / `vk.cc`); если shortener недоступен, публикация не падает, но сохраняет исходную ссылку и пишет warning в operator/runtime evidence;
@@ -296,7 +295,6 @@ VK-render отличается от Telegram-render:
 2. Добавить VK-render поверх уже существующего `build_guide_digest_preview(..., family="new_occurrences")`, чтобы dedup, writer, repeat-policy и published marks не расходились между Telegram и VK.
 3. Сохранять VK publication evidence в `guide_digest_issue.published_targets_json` или совместимом per-target поле, чтобы повторный запуск видел, что выпуск уже ушёл в VK, и не дублировал тот же digest.
 4. После deploy взять последний успешный `new_occurrences` guide digest issue и поставить его в отложку `uhtykaliningrad` на ближайший допустимый слот через `post_to_vk` с photo attachments из `media_items_json`; verify через VK API должен подтвердить URL, `from_id=-<uhtykaliningrad_group_id>`, `publish_date >= now+600s`, `attachments[].type=photo`.
-5. Для связи с `klgdevents` использовать видимую строку в тексте, а не `copyright`/`coauthors`/`coauthor_ids`: smoke 2026-06-07 показал, что `wall.post`/`wall.edit` принимают эти поля, но UI «пригласить соавторов» остаётся пустым и уведомление не приходит.
 
 Runtime flags:
 

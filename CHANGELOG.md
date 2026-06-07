@@ -2,16 +2,6 @@
 
 ## [Unreleased]
 
-- **Changed: Guide VK digest now visibly attributes `klgdevents`**:
-  guide excursion VK digests for `uhtykaliningrad` now add the text line
-  `Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents`
-  immediately after the count/date lead. Follow-up VK UI smoke on
-  `wall.post` and `wall.edit` showed that `copyright`, `coauthors`, and
-  `coauthor_ids` are accepted but do not populate the editor's coauthor invite
-  field or send a notification, so `post_to_vk` no longer sends those no-op
-  params and Smart Update reports label known VK sources as `источник VK`
-  instead of proposed coauthorship. Covered by `tests/test_guide_vk_digest.py`,
-  `tests/test_vk_source.py`, and `tests/test_smart_update_report_posts.py`.
 - **Changed: VK dynamic cover is proposal-only by default**:
   `/cover request` now generates the wide/mobile VK cover pack and sends it to
   Telegram admin for approval without changing the VK community cover; `/cover
@@ -40,14 +30,16 @@
   cover expires. Covered by `tests/test_vk_dynamic_cover.py`.
 - **Changed: Smart Update VK/TG post reporting and publishing polish**:
   Smart Update reports now show a single `Посты: VK, TG` line with both
-  links/queued states and a VK source marker when a known source is
+  links/queued states and a VK coauthor proposal marker when a known source is
   detected. Telegram event posts now use city, `#афиша<город>`, event-type,
   date, and festival hashtags; `tg_event_publish` jobs are deferred out of the
   night window and spaced by 10 minutes by default. VK event posts use the same
   city/type hashtag enrichment, include a format-version hash so existing
-  managed posts can refresh after hashtag policy changes. Covered by
-  `tests/test_tg_event_publish.py`, `tests/test_vk_source.py`,
-  `tests/test_vk_hashtags.py`, and `tests/test_smart_update_report_posts.py`.
+  managed posts can refresh after hashtag policy changes, and attempt VK
+  coauthor params for selected known communities with a safe retry without
+  coauthor fields if VK rejects them. Covered by `tests/test_tg_event_publish.py`,
+  `tests/test_vk_source.py`, `tests/test_vk_hashtags.py`, and
+  `tests/test_smart_update_report_posts.py`.
 - **Added: Telegram event publishing after Smart Update**:
   active future/current events now enqueue `tg_event_publish` after Telegraph
   build and publish a Telegram-native announcement to `@kldevents`: a short

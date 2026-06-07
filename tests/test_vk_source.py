@@ -392,7 +392,7 @@ async def test_sync_vk_source_post_passes_vk_coauthor_candidate(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_post_to_vk_ignores_noop_coauthor_params(monkeypatch):
+async def test_post_to_vk_sends_coauthor_params_and_retries_without_rejected_params(monkeypatch):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "group-token")
     monkeypatch.setattr(main, "VK_USER_TOKEN", "")
@@ -406,6 +406,10 @@ async def test_post_to_vk_ignores_noop_coauthor_params(monkeypatch):
 
     async def fake_vk_api(method, params=None, *_, **__):
         calls.append((method, dict(params or {})))
+        if method == "groups.getById":
+            return {"response": [{"id": 30777579}]}
+        if len([m for m, _params in calls if m == "wall.post"]) == 1:
+            raise main.VKAPIError(100, "One of the parameters specified was missing or invalid")
         return {"response": {"post_id": 2395}}
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
@@ -419,10 +423,12 @@ async def test_post_to_vk_ignores_noop_coauthor_params(monkeypatch):
 
     wall_calls = [params for method, params in calls if method == "wall.post"]
     assert url == "https://vk.com/wall-1_2395"
-    assert [method for method, _params in calls] == ["wall.post"]
-    assert "copyright" not in wall_calls[0]
-    assert "coauthors" not in wall_calls[0]
-    assert "coauthor_ids" not in wall_calls[0]
+    assert wall_calls[0]["copyright"] == "https://vk.com/konb39"
+    assert wall_calls[0]["coauthors"] == "-30777579"
+    assert wall_calls[0]["coauthor_ids"] == "-30777579"
+    assert "copyright" not in wall_calls[1]
+    assert "coauthors" not in wall_calls[1]
+    assert "coauthor_ids" not in wall_calls[1]
 
 
 @pytest.mark.asyncio
