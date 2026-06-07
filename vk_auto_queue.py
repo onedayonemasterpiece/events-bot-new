@@ -2375,10 +2375,13 @@ async def _process_vk_inbox_row(
         t0 = time.monotonic()
         try:
             # Inline jobs exist only to make the operator report reflect the final
-            # Telegraph URL right away. ICS publishing can be slow / flaky (and in
+            # public URLs right away. ICS publishing can be slow / flaky (and in
             # local E2E it may be intentionally misconfigured), so we do NOT wait
             # for it by default.
-            allowed = {main_mod.JobTask.telegraph_build}
+            allowed = {
+                main_mod.JobTask.telegraph_build,
+                main_mod.JobTask.tg_event_publish,
+            }
 
             include_ics_inline = (os.getenv("VK_AUTO_IMPORT_INLINE_INCLUDE_ICS") or "").strip().lower() in {
                 "1",

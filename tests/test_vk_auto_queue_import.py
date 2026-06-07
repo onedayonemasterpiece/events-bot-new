@@ -851,7 +851,10 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
             smart_merged=False,
         )
 
+    captured_allowed: list[set[main.JobTask]] = []
+
     async def fake_run_jobs(*_args, **_kwargs):
+        captured_allowed.append(set(_kwargs.get("allowed_tasks") or ()))
         return None
 
     async def fake_report(*_args, **_kwargs):
@@ -867,6 +870,12 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     assert captured_waits == [expected_wait_for_telegraph]
+    if inline_jobs_env is None:
+        assert captured_allowed == [
+            {main.JobTask.telegraph_build, main.JobTask.tg_event_publish}
+        ]
+    else:
+        assert captured_allowed == []
 
 
 @pytest.mark.asyncio

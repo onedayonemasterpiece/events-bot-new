@@ -421,6 +421,10 @@ class Event(SQLModel, table=True):
     # Kept separate from `content_hash` (Telegraph HTML hash).
     vk_source_hash: Optional[str] = None
     vk_repost_url: Optional[str] = None
+    tg_event_post_url: Optional[str] = None
+    tg_event_post_id: Optional[int] = None
+    tg_event_post_mode: Optional[str] = None
+    tg_event_source_hash: Optional[str] = None
     ics_hash: Optional[str] = None
     ics_file_id: Optional[str] = None
     ics_updated_at: Optional[datetime] = None
@@ -1168,6 +1172,7 @@ class OpsRun(SQLModel, table=True):
 class JobTask(str, Enum):
     telegraph_build = "telegraph_build"
     vk_sync = "vk_sync"
+    tg_event_publish = "tg_event_publish"
     ics_publish = "ics_publish"
     tg_ics_post = "tg_ics_post"
     month_pages = "month_pages"

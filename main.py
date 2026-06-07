@@ -14203,6 +14203,10 @@ async def schedule_event_update_tasks(
         results[JobTask.tg_ics_post] = await enqueue_job(
             db, eid, JobTask.tg_ics_post, depends_on=tg_ics_deps
         )
+    if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
+        results[JobTask.tg_event_publish] = await enqueue_job(
+            db, eid, JobTask.tg_event_publish, depends_on=[results[JobTask.telegraph_build]]
+        )
     page_deps = [results[JobTask.telegraph_build]]
     
     if not DISABLE_PAGE_JOBS:
@@ -15893,6 +15897,7 @@ BACKOFF_SCHEDULE = [30, 120, 600, 3600]
 TASK_LABELS = {
     "telegraph_build": "Telegraph (событие)",
     "vk_sync": "VK (событие)",
+    "tg_event_publish": "Telegram (событие)",
     "ics_publish": "Календарь (ICS)",
     "tg_ics_post": "ICS (Telegram)",
     "month_pages": "Страница месяца",
@@ -15913,6 +15918,7 @@ TASK_LABELS = {
 # (vk_auto_import / nightly_page_sync) cannot starve them.
 JOB_TTL: dict[JobTask, int] = {
     JobTask.telegraph_build: 3600,
+    JobTask.tg_event_publish: 3600,
     JobTask.ics_publish: 3600,
     JobTask.tg_ics_post: 3600,
     JobTask.month_pages: 3600,
@@ -15922,6 +15928,7 @@ JOB_TTL: dict[JobTask, int] = {
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
     JobTask.telegraph_build: 180,
+    JobTask.tg_event_publish: 180,
     JobTask.ics_publish: 60,
     JobTask.tg_ics_post: 60,
     JobTask.month_pages: 180,
@@ -15947,6 +15954,8 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
             return ev.telegraph_url
         if task == JobTask.vk_sync:
             return ev.source_vk_post_url
+        if task == JobTask.tg_event_publish:
+            return ev.tg_event_post_url
         if task == JobTask.ics_publish:
             return ev.ics_url
         if task == JobTask.tg_ics_post:
@@ -16084,6 +16093,7 @@ async def _run_due_jobs_once_locked(
     priority = {
         JobTask.vk_sync: -1,
         JobTask.telegraph_build: 0,
+        JobTask.tg_event_publish: 0,
         JobTask.ics_publish: 0,
         JobTask.tg_ics_post: 0,
         JobTask.month_pages: 1,
@@ -19173,6 +19183,60 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             )
 
 
+async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None) -> bool:
+    if not bot:
+        return False
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+    if not ev:
+        return False
+    if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
+        logging.info("job_publish_tg_event_post: skip hidden event_id=%s", event_id)
+        return False
+    if _event_has_ended_before_today(ev):
+        logging.info(
+            "job_publish_tg_event_post: skip past event_id=%s date=%s end_date=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "end_date", None),
+        )
+        return False
+
+    description_for_tg = (getattr(ev, "description", None) or "").strip()
+    if description_for_tg and looks_like_genai_response_dump(description_for_tg):
+        logging.warning(
+            "job_publish_tg_event_post: description for event %s looks like a genai SDK dump; using source_text",
+            event_id,
+        )
+        description_for_tg = ""
+    text_for_tg = description_for_tg or (ev.source_text or "")
+    url, post_id, mode, source_hash = await publish_tg_event_announcement(
+        ev,
+        text_for_tg,
+        db,
+        bot,
+    )
+    if not url and not source_hash:
+        return False
+    async with db.get_session() as session:
+        obj = await session.get(Event, event_id)
+        if not obj:
+            return False
+        if url:
+            obj.tg_event_post_url = url
+        if post_id:
+            obj.tg_event_post_id = int(post_id)
+        if mode:
+            obj.tg_event_post_mode = mode
+        if source_hash:
+            obj.tg_event_source_hash = source_hash
+        session.add(obj)
+        await session.commit()
+    if url:
+        logline("TG", event_id, "event done", url=url)
+    return True
+
+
 async def _persist_vk_source_post_result(
     event_id: int,
     db: Database,
@@ -19437,6 +19501,7 @@ rebuild_festival_pages_nav = festivals_fix_nav
 JOB_HANDLERS = {
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
+    "tg_event_publish": job_publish_tg_event_post,
     "ics_publish": ics_publish,
     "tg_ics_post": tg_ics_post,
     "month_pages": job_month_pages_debounced,

@@ -203,7 +203,7 @@ Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие д
 - Crawl admission is intentionally LLM-first for event-like edge cases: if a VK post has date-like text plus strong invite/registration/offline-place signals but deterministic `event_ts_hint` is missing or uncertain, crawl should fail open into `vk_inbox`/normal LLM import instead of terminally rejecting it as `past_event`. Deterministic normalization may preserve syntax (for example `16 мая 2026 г. в 16:00` must not be masked as phone-like noise), but semantic event acceptance stays in the LLM/Smart Update path.
 Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update. По умолчанию очередь идёт строго row-by-row без N+1 reserve; если `VK_AUTO_IMPORT_PREFETCH=1`, включается лёгкий prefetch следующего post, а полный (media/OCR/LLM) префетч по-прежнему включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
 
-Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build`, поэтому двойное ожидание убрано без потери качества/полноты отчёта.
+Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build` и `tg_event_publish`, поэтому двойное ожидание убрано без потери качества/полноты отчёта. ICS остаётся opt-in через `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS`.
 
 ### Recovery after restart/OOM
 

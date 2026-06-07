@@ -170,6 +170,7 @@ Smart Update по умолчанию строит публичный текст 
 - VK auto-import очереди (`vk_inbox`) (`vk_auto_queue.run_vk_auto_import`).
 - Ручной импорт (`add_events_from_text`, `/addevent_raw`).
 - `/parse` (site parsers): источник сайта добавляется/мерджится через Smart Update, когда у события ещё нет этого `parser:<site>` источника.
+- Outgoing post jobs: `schedule_event_update_tasks()` ставит Telegraph rebuild, VK event post и Telegram event post ([Telegram Event Publishing](../tg-publishing/README.md)) для активных будущих/текущих событий.
 
 ## Фестивали и фестивальная очередь
 

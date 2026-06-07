@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Added: Telegram event publishing after Smart Update**:
+  active future/current events now enqueue `tg_event_publish` after Telegraph
+  build and publish a Telegram-native announcement to `@kldevents`: a short
+  Gemini Flash Lite hook text with the event infoblock, optional `Добавить в
+  календарь` button, restrained date/festival hashtags, Telegram/VK footer
+  links, and all event photos sent as follow-up media groups. The text post is
+  kept within 1000 visible characters. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:
   the shared remote Telegram session guard now keeps fresh Kaggle `UNKNOWN` /
   status-lookup failures fail-closed, but stops treating old registry entries

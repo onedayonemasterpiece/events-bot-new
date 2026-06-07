@@ -9,11 +9,13 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
 from urllib.parse import quote, urlsplit, urlunsplit
 from aiogram import Bot, types
+from aiogram.exceptions import TelegramBadRequest
 
 from aiohttp import web
 from telegraph import Telegraph
 from markup import (
     md_to_html,
+    simple_md_to_html,
     telegraph_br,
     linkify_for_telegraph,
     format_tel_link_for_display,
@@ -3707,6 +3709,491 @@ def _vk_owner_and_post_id(url: str) -> tuple[str, str] | None:
     if not m:
         return None
     return m.group(1), m.group(2)
+
+
+TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
+TG_EVENT_SUBSCRIBE_URL = "https://t.me/kldevents"
+TG_EVENT_VK_URL = "https://vk.com/klgdevents"
+TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
+TG_EVENT_ALBUM_SIZE = 10
+TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
+
+
+def _tg_event_publish_enabled() -> bool:
+    raw = os.getenv("ENABLE_TG_EVENT_PUBLISHING", "1")
+    return str(raw or "").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _tg_event_channel_target() -> int | str | None:
+    raw = (
+        os.getenv("TG_EVENT_CHANNEL")
+        or os.getenv("TG_EVENT_CHANNEL_ID")
+        or TG_EVENT_CHANNEL_DEFAULT
+    )
+    value = str(raw or "").strip()
+    if not value or value.lower() in {"0", "off", "none", "disabled"}:
+        return None
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value if value.startswith("@") else f"@{value}"
+
+
+def _tg_html_visible_len(html_text: str) -> int:
+    text = re.sub(
+        r"<a\s+[^>]*>(.*?)</a>",
+        r"\1",
+        html_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n+", "\n", text)
+    return len(text.strip())
+
+
+def _telegram_event_body_html(text: str | None) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    html_text = simple_md_to_html(raw)
+    try:
+        html_text = sanitize_telegram_html(html_text)
+    except Exception:
+        pass
+    html_text = re.sub(
+        r"<h[1-6][^>]*>(.*?)</h[1-6]>",
+        lambda m: "\n<b>" + m.group(1).strip() + "</b>\n",
+        html_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    html_text = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</p\s*>", "\n\n", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<p[^>]*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<li[^>]*>", "\n• ", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</li\s*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"</?(?:ul|ol)[^>]*>", "", html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r"<blockquote[^>]*>", "<blockquote>", html_text, flags=re.IGNORECASE)
+
+    allowed = {
+        "a",
+        "b",
+        "strong",
+        "i",
+        "em",
+        "u",
+        "s",
+        "strike",
+        "del",
+        "code",
+        "pre",
+        "blockquote",
+    }
+
+    def _keep_allowed_tag(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        name_match = re.match(r"</?\s*([a-z0-9-]+)", tag, flags=re.IGNORECASE)
+        if not name_match:
+            return ""
+        return tag if name_match.group(1).lower() in allowed else ""
+
+    html_text = re.sub(r"</?[^>]+>", _keep_allowed_tag, html_text)
+    html_text = re.sub(r"[ \t]+\n", "\n", html_text)
+    html_text = re.sub(r"\n{3,}", "\n\n", html_text)
+    return html_text.strip()
+
+
+def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
+    from vk_hashtags import (
+        dedupe_vk_hashtags,
+        format_vk_hashtag_line,
+        normalize_vk_festival_hashtag,
+        vk_date_hashtags,
+    )
+
+    tags: list[str | None] = []
+    tags.extend(vk_date_hashtags(getattr(event, "date", None)))
+    festival_tag = normalize_vk_festival_hashtag(
+        getattr(festival, "name", None) if festival else getattr(event, "festival", None)
+    )
+    if festival_tag:
+        tags.append(festival_tag)
+    return format_vk_hashtag_line(dedupe_vk_hashtags(tags))
+
+
+def _tg_event_ticket_line(event: Event) -> str:
+    ticket_link = (getattr(event, "ticket_link", None) or "").strip()
+    ticket_link_display = (
+        (getattr(event, "vk_ticket_short_url", None) or "").strip() or ticket_link
+    )
+    ticket_is_http = ticket_link_display.startswith(("http://", "https://"))
+    if ticket_link_display and not ticket_is_http:
+        phone_display = format_tel_link_for_display(ticket_link_display)
+        ticket_link_display = phone_display or ticket_link_display
+    ticket_label = "Билеты"
+    if getattr(event, "ticket_status", None) == "sold_out":
+        return "❌ Билеты все проданы"
+    if event.is_free:
+        if ticket_link_display and ticket_is_http:
+            return (
+                f'🟡 Бесплатно, <a href="{html.escape(ticket_link_display, quote=True)}">'
+                "по регистрации</a>"
+            )
+        if ticket_link_display:
+            return f"🟡 Бесплатно, запись: {html.escape(ticket_link_display)}"
+        return "🟡 Бесплатно"
+    price = ""
+    if event.ticket_price_min is not None and event.ticket_price_max is not None:
+        if event.ticket_price_min != event.ticket_price_max:
+            price = f"от {event.ticket_price_min} до {event.ticket_price_max} руб."
+        else:
+            price = f"{event.ticket_price_min} руб."
+    elif event.ticket_price_min is not None:
+        price = f"{event.ticket_price_min} руб."
+    elif event.ticket_price_max is not None:
+        price = f"{event.ticket_price_max} руб."
+    if ticket_link_display and ticket_is_http:
+        if not price:
+            ticket_label = "по регистрации"
+        return (
+            f'🎟 <a href="{html.escape(ticket_link_display, quote=True)}">'
+            f"{html.escape(ticket_label)}</a>"
+            + (f" {html.escape(price)}" if price else "")
+        )
+    if ticket_link_display:
+        label = "по регистрации" if not price else f"Билеты {price}"
+        return f"🎟 {html.escape(label)}: {html.escape(ticket_link_display)}"
+    if price:
+        return f"🎟 Билеты {html.escape(price)}"
+    return ""
+
+
+def build_tg_event_announcement(
+    event: Event,
+    text: str,
+    festival: Festival | None = None,
+) -> str:
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
+
+    if festival:
+        fest_link = festival.telegraph_url or festival.vk_url or festival.vk_post_url
+        fest_name = html.escape(festival.name)
+        if fest_link:
+            lines.append(f'<a href="{html.escape(fest_link, quote=True)}">✨ {fest_name}</a>')
+        else:
+            lines.append(f"✨ {fest_name}")
+
+    date_part = str(event.date or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else (event.date or "")
+    time_part = str(event.time or "").strip()
+    if getattr(event, "time_is_default", False):
+        time_part = ""
+    lines.append(html.escape(f"📅 {day}{(' ' + time_part) if time_part else ''}"))
+
+    loc_parts: list[str] = []
+    loc = (event.location_name or "").strip()
+    if loc:
+        loc_parts.append(loc)
+    addr = event.location_address
+    if addr and event.city:
+        addr = strip_city_from_address(addr, event.city)
+    if addr:
+        loc_parts.append(addr)
+    if event.city:
+        loc_parts.append(event.city)
+    if loc_parts:
+        lines.append("📍 " + html.escape(", ".join(loc_parts)))
+
+    if event.pushkin_card:
+        lines.append("✅ Пушкинская карта")
+
+    ticket_line = _tg_event_ticket_line(event)
+    if ticket_line:
+        lines.append(ticket_line)
+
+    body = _telegram_event_body_html(text)
+    if body:
+        lines.extend(["", body])
+
+    hashtag_line = _tg_event_hashtag_line(event, festival)
+    if hashtag_line:
+        lines.extend(["", html.escape(hashtag_line)])
+
+    lines.append(
+        ""
+    )
+    lines.append(
+        f'<a href="{TG_EVENT_SUBSCRIBE_URL}">Подписаться</a> · '
+        f'<a href="{TG_EVENT_VK_URL}">Вконтакте</a>'
+    )
+    return "\n".join(lines).strip()
+
+
+def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
+    for raw in (
+        getattr(event, "short_description", None),
+        getattr(event, "search_digest", None),
+        text,
+        getattr(event, "description", None),
+        getattr(event, "title", None),
+    ):
+        value = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if value:
+            sentence = re.split(r"(?<=[.!?])\s+", value, maxsplit=1)[0].strip()
+            sentence = re.sub(r",?\s*подробнее\s*\([^)]+\)\s*$", "", sentence, flags=re.I).strip()
+            if not sentence:
+                continue
+            base = sentence.rstrip(".!?").strip()
+            if "?" in sentence:
+                return sentence
+            if len(base) > 1:
+                return f"Что здесь стоит увидеть? {base}."
+            return base
+    return ""
+
+
+async def build_tg_event_hook_text(event: Event, text: str) -> str:
+    source = (text or "").strip()
+    if not source:
+        return _fallback_tg_event_hook_text(event, text)
+    prompt = (
+        "Сделай короткий Telegram-анонс события на русском языке.\n"
+        "Формат: 1-2 предложения, до 330 символов.\n"
+        "Первая фраза должна быть цепляющим hook-вопросом.\n"
+        "Не повторяй дату, время, место, цену и билетную ссылку: они будут в инфоблоке отдельно.\n"
+        "Не добавляй хештеги, эмодзи, ссылки, призыв купить билеты или служебные фразы.\n"
+        "Не выдумывай факты; используй только текст ниже.\n\n"
+        f"Название: {getattr(event, 'title', '')}\n"
+        f"Текст события:\n{source[:5000]}"
+    )
+    try:
+        from google_ai import GoogleAIClient, SecretsProvider
+
+        client = GoogleAIClient(
+            supabase_client=get_supabase_client(),
+            secrets_provider=SecretsProvider(),
+            consumer="tg_event_publish",
+            incident_notifier=notify_llm_incident,
+        )
+        raw, _usage = await client.generate_content_async(
+            model=TG_EVENT_REWRITE_MODEL,
+            prompt=prompt,
+            generation_config={"temperature": 0.4},
+            max_output_tokens=180,
+        )
+    except Exception:
+        logging.warning(
+            "tg_event: hook rewrite failed event_id=%s",
+            getattr(event, "id", None),
+            exc_info=True,
+        )
+        return _fallback_tg_event_hook_text(event, text)
+    cleaned = re.sub(r"\s+", " ", str(raw or "")).strip().strip("\"'“”«»")
+    cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
+    cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
+    if not cleaned:
+        return _fallback_tg_event_hook_text(event, text)
+    first = re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)[0].strip()
+    if "?" not in first:
+        base = first.rstrip(".!?").strip()
+        if base:
+            cleaned = f"Что здесь стоит увидеть? {base}."
+    if len(cleaned) > 360:
+        cleaned = _truncate_tg_plain_body(cleaned, 360)
+    return cleaned
+
+
+def _truncate_tg_plain_body(text: str, max_chars: int) -> str:
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    plain = html.unescape(plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    if max_chars <= 0:
+        return ""
+    if len(plain) <= max_chars:
+        return plain
+    cut = plain[: max(1, max_chars - 1)].rstrip()
+    last_space = cut.rfind(" ")
+    if last_space >= max_chars // 2:
+        cut = cut[:last_space].rstrip()
+    return (cut + "…").strip()
+
+
+async def build_tg_event_announcement_for_publish(
+    event: Event,
+    text: str,
+    festival: Festival | None = None,
+    *,
+    force_caption_limit: bool = False,
+) -> tuple[str, bool]:
+    hook_text = await build_tg_event_hook_text(event, text)
+    message_html = build_tg_event_announcement(event, hook_text, festival=festival)
+    if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
+        return message_html, hook_text != text
+
+    # Safety-net: keep the deterministic shell intact
+    # and trim only the narrative body until the whole announcement fits.
+    base_without_body = build_tg_event_announcement(event, "", festival=festival)
+    room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
+    for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
+        trimmed = _truncate_tg_plain_body(hook_text, min(max(0, room), max(0, body_limit)))
+        candidate = build_tg_event_announcement(event, trimmed, festival=festival)
+        if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
+            return candidate, True
+    return base_without_body, True
+
+
+def build_tg_event_source_hash(event: Event, text: str) -> str:
+    return content_hash(
+        "\n".join(
+            [
+                str(getattr(event, "title", "") or ""),
+                str(getattr(event, "date", "") or ""),
+                str(getattr(event, "time", "") or ""),
+                str(getattr(event, "location_name", "") or ""),
+                str(getattr(event, "location_address", "") or ""),
+                str(getattr(event, "city", "") or ""),
+                str(getattr(event, "festival", "") or ""),
+                str(getattr(event, "pushkin_card", "") or ""),
+                str(getattr(event, "is_free", "") or ""),
+                str(getattr(event, "ticket_status", "") or ""),
+                str(getattr(event, "ticket_link", "") or ""),
+                str(getattr(event, "vk_ticket_short_url", "") or ""),
+                str(getattr(event, "ticket_price_min", "") or ""),
+                str(getattr(event, "ticket_price_max", "") or ""),
+                str(getattr(event, "ics_url", "") or ""),
+                text or "",
+            ]
+        )
+    )
+
+
+def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> list[list[str]]:
+    clean = [str(u or "").strip() for u in urls if str(u or "").strip()]
+    return [clean[i : i + size] for i in range(0, len(clean), size)]
+
+
+def build_tg_event_reply_markup(event: Event) -> types.InlineKeyboardMarkup | None:
+    ics_url = str(getattr(event, "ics_url", None) or "").strip()
+    if not ics_url.startswith(("http://", "https://")):
+        return None
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text="Добавить в календарь",
+                    url=ics_url,
+                )
+            ]
+        ]
+    )
+
+
+async def publish_tg_event_announcement(
+    event: Event,
+    text: str,
+    db: Database | None,
+    bot: Bot | None,
+) -> tuple[str | None, int | None, str | None, str | None]:
+    if not bot or not _tg_event_publish_enabled():
+        return None, None, None, None
+    target = _tg_event_channel_target()
+    if target is None:
+        return None, None, None, None
+
+    festival = await _resolve_event_festival(db, event)
+    source_hash = build_tg_event_source_hash(event, text)
+    if (
+        (getattr(event, "tg_event_source_hash", None) or "") == source_hash
+        and (getattr(event, "tg_event_post_url", None) or "").strip()
+    ):
+        return (
+            event.tg_event_post_url,
+            event.tg_event_post_id,
+            event.tg_event_post_mode,
+            source_hash,
+        )
+
+    photo_urls = list(getattr(event, "photo_urls", None) or [])
+    chunks = _chunked_tg_media(photo_urls)
+    message_html, _rewritten = await build_tg_event_announcement_for_publish(
+        event,
+        text,
+        festival=festival,
+        force_caption_limit=bool(chunks),
+    )
+    reply_markup = build_tg_event_reply_markup(event)
+
+    existing_id = getattr(event, "tg_event_post_id", None)
+    existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
+    if existing_id and existing_mode in {"text", "album_caption"}:
+        try:
+            if existing_mode == "album_caption":
+                await bot.edit_message_caption(
+                    chat_id=target,
+                    message_id=existing_id,
+                    caption=message_html,
+                    parse_mode="HTML",
+                )
+            else:
+                await bot.edit_message_text(
+                    chat_id=target,
+                    message_id=existing_id,
+                    text=message_html,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup,
+                )
+            return (
+                (getattr(event, "tg_event_post_url", None) or "").strip() or None,
+                int(existing_id),
+                existing_mode,
+                source_hash,
+            )
+        except Exception as exc:
+            logging.warning(
+                "publish_tg_event_announcement edit failed event_id=%s mode=%s err=%s",
+                getattr(event, "id", None),
+                existing_mode,
+                exc,
+            )
+
+    sent_url: str | None = None
+    sent_id: int | None = None
+    sent_mode = "text"
+    try:
+        msg = await bot.send_message(
+            target,
+            message_html,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=reply_markup,
+        )
+        sent_id = msg.message_id
+        sent_url = message_link(msg.chat.id, msg.message_id)
+        sent_mode = "text"
+        for chunk in chunks:
+            await bot.send_media_group(
+                chat_id=target,
+                media=[types.InputMediaPhoto(media=url) for url in chunk],
+            )
+    except TelegramBadRequest:
+        logging.exception(
+            "publish_tg_event_announcement failed event_id=%s",
+            getattr(event, "id", None),
+        )
+        raise
+
+    logging.info(
+        "publish_tg_event_announcement done event_id=%s url=%s media=%d mode=%s",
+        getattr(event, "id", None),
+        sent_url,
+        len(photo_urls),
+        sent_mode,
+    )
+    return sent_url, sent_id, sent_mode, source_hash
 
 
 

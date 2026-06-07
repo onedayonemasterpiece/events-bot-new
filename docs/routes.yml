@@ -217,6 +217,14 @@ features:
       - telegram_business.py
       - main.py
       - main_part2.py
+  tg_publishing:
+    status: implemented
+    docs: docs/features/tg-publishing/README.md
+    design: docs/backlog/features/tg-publishing/requirements.md
+    entrypoints:
+      - main.py
+      - main_part2.py
+      - models.py
   kenigsberg_stories:
     status: mvp
     docs: docs/features/kenigsberg-stories/README.md

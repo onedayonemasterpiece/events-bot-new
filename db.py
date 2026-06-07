@@ -380,6 +380,10 @@ class Database:
                     source_post_url TEXT,
                     source_vk_post_url TEXT,
                     vk_repost_url TEXT,
+                    tg_event_post_url TEXT,
+                    tg_event_post_id INTEGER,
+                    tg_event_post_mode TEXT,
+                    tg_event_source_hash TEXT,
                     ics_hash TEXT,
                     ics_file_id TEXT,
                     ics_updated_at TIMESTAMP,
@@ -409,6 +413,10 @@ class Database:
             await _add_column(conn, "event", "ics_post_id INTEGER")
             await _add_column(conn, "event", "vk_repost_url TEXT")
             await _add_column(conn, "event", "vk_source_hash TEXT")
+            await _add_column(conn, "event", "tg_event_post_url TEXT")
+            await _add_column(conn, "event", "tg_event_post_id INTEGER")
+            await _add_column(conn, "event", "tg_event_post_mode TEXT")
+            await _add_column(conn, "event", "tg_event_source_hash TEXT")
             await _add_column(conn, "event", "vk_ticket_short_url TEXT")
             await _add_column(conn, "event", "vk_ticket_short_key TEXT")
             await _add_column(conn, "event", "vk_ics_short_url TEXT")
