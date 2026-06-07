@@ -108,7 +108,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - VK API verification for `wall-231920894_2314`: hashtag line must contain `#Кантата` and must not contain `#Кантаты`.
 - Post-deploy `/healthz` must expose `guide_excursions_light` and `guide_excursions_full` statuses, not only generic scheduler status.
 - Because the incident touched a daily scheduled production task, closure requires same-day guide `full` catch-up evidence: a successful/partial `ops_run(kind='guide_monitoring', details.mode='full')`, a published/empty-candidate scheduled digest evidence, or a clearly documented blocker.
-- Never remove a `guide_monitoring` `kaggle_registry` entry while Kaggle status is `UNKNOWN` or `GetKernelSessionStatus` returns HTTP 5xx/network errors. That state is a live-session lock, not stale evidence. Cleanup is allowed only after terminal Kaggle status, fresh output import, or explicit user approval to abandon the old auth bundle after replacement.
+- Never manually remove a fresh `guide_monitoring` `kaggle_registry` entry while Kaggle status is `UNKNOWN` or `GetKernelSessionStatus` returns HTTP 5xx/network errors. That state is a live-session lock, not stale evidence. Cleanup is allowed only after terminal Kaggle status, fresh output import, explicit user approval to abandon the old auth bundle after replacement, or the shared remote-session guard's bounded stale cutoff (`REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES`, default `390`) for transient status lookup failures.
 - If a matching Kaggle output bundle can be downloaded and its `guide_excursions_results.json` has the registry `run_id`, that output is terminal evidence: recovery must import it and clear the `guide_monitoring` registry entry instead of keeping a false `remote_telegram_session_busy` lock.
 
 ### Required evidence
@@ -133,7 +133,7 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Raise guide monitoring misfire grace to the documented critical-slot default.
 - Run guide critical watchdog from the independent watchdog loop and dispatch missed `full` runs through the same scheduled guide path with heavy gate `wait`.
 - Treat Kaggle status HTTP 5xx as transient while polling guide monitoring kernels.
-- Treat `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement.
+- Treat fresh `guide_monitoring` registry entries with `UNKNOWN` Kaggle status / Kaggle status API 5xx as active remote sessions; do not clear them or start a second guide Kaggle run without terminal evidence or explicit user-approved auth replacement. Stale transient status lookup failures are handled by the shared guard after `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES`, with meta evidence instead of manual deletion.
 - When status lookup is `UNKNOWN`/HTTP 5xx but matching output is already downloadable, treat output as terminal evidence, import it, and clear the registry without starting another remote Telegram session.
 - Treat a same-day `recovery_import` `success`/`partial` full import as daily full-slot delivery, so output recovery does not lead to a duplicate scheduled full scan after cooldown.
 - Build/upload guide VK carousel slides before requiring materialized afisha assets; if hook-only carousel upload succeeds, publish it as normal VK photo attachments, and fail closed only when neither carousel nor afisha-grid attachments can be uploaded.
@@ -175,4 +175,4 @@ Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/featu
 - Canonical festival hashtag tests cover raw inflected event labels and `Festival.name` preference.
 - Guide critical watchdog tests cover missed-full catch-up, full-run idempotence, and cooldown deferral after remote-session-busy skipped runs.
 - `/healthz` guide job visibility prevents a green health check from hiding missing guide scheduler slots.
-- Guide/Kaggle recovery instructions now make `UNKNOWN` status a session lock: agents must not manually delete the registry entry or trigger another guide run while status lookup is failing.
+- Guide/Kaggle recovery instructions now make fresh `UNKNOWN` status a session lock: agents must not manually delete the registry entry or trigger another guide run while status lookup is failing. The only automated exception is the bounded stale cutoff for transient lookup failures, which prevents yesterday's status-API 5xx from blocking the next daily slot indefinitely.

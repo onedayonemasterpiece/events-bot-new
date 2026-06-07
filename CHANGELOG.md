@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:
+  the shared remote Telegram session guard now keeps fresh Kaggle `UNKNOWN` /
+  status-lookup failures fail-closed, but stops treating old registry entries
+  as live session owners after `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES`
+  (default `390`) when the lookup failure is transient (`HTTP 5xx`, network,
+  SSL, timeout). Stale ignored entries are marked in job meta as
+  `stale_transient_status_lookup_failure`, preventing yesterday's
+  `GetKernelSessionStatus` 500 from blocking the next daily guide full slot.
+  Covered by `tests/test_remote_telegram_session.py`.
 - **Fixed: future event title/time quality recurrence (INC-2026-06-07)**:
   Telegram Monitoring candidate build no longer treats short contentful titles
   such as `Идиот`, `Гараж`, or `№ 13` as bad titles that should be overwritten

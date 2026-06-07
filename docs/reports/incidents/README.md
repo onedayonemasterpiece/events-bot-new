@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-07-guide-remote-session-stale-busy.md`
+  - Scope: shared remote Telegram session guard, stale Kaggle registry entries, guide scheduled full monitoring, and `GetKernelSessionStatus` transient failures.
+  - Must not regress: fresh `UNKNOWN`/status-lookup-failure Kaggle runs must still block a second `TELEGRAM_AUTH_BUNDLE_S22` session, but stale registry entries older than `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` with only transient status lookup failures (`HTTP 5xx`, network, SSL, timeout) must not indefinitely suppress the daily guide full slot; closure requires same-day guide full catch-up/import/digest evidence.
 - `INC-2026-06-07-future-event-quality-recurrence.md`
   - Scope: Telegram Monitoring candidate title fallback, poster OCR date/time expansion, Smart Update future public event quality, managed Telegraph pages, and `klgdevents` VK event posts.
   - Must not regress: short valid titles such as `Идиот`, `Гараж`, and `№ 13` must not be overwritten by umbrella/service lines like `завтра в театре` or `в продаже репертуар`; dotted follow-up dates such as `9.08` must not become public times like `09:08`; `time_is_default` may remain a weak internal anchor but must not render as confirmed time in VK source headers; data repair must delete bad public posts/pages/events and return Telegram/VK sources to scan state before closure.

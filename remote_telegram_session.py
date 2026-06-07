@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import ssl
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
-from kaggle_registry import list_jobs
+from kaggle_registry import list_jobs, update_job_meta
 from video_announce.kaggle_client import KaggleClient
+
+logger = logging.getLogger(__name__)
 
 
 REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
@@ -15,6 +21,8 @@ REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
         "telegraph_cache_probe",
     }
 )
+UNKNOWN_STATUS_STALE_MINUTES_ENV = "REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES"
+DEFAULT_UNKNOWN_STATUS_STALE_MINUTES = 390
 TERMINAL_KAGGLE_STATES = frozenset(
     {
         "CANCEL_ACKNOWLEDGED",
@@ -52,6 +60,64 @@ def _extract_failure_message(status: dict[str, Any] | None) -> str:
         if value:
             return str(value).strip()
     return ""
+
+
+def _unknown_status_stale_minutes() -> int:
+    raw = (os.getenv(UNKNOWN_STATUS_STALE_MINUTES_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_UNKNOWN_STATUS_STALE_MINUTES
+    try:
+        return max(60, int(raw))
+    except Exception:
+        logger.warning(
+            "remote_telegram_session.invalid_unknown_stale_minutes env=%s value=%r default=%s",
+            UNKNOWN_STATUS_STALE_MINUTES_ENV,
+            raw,
+            DEFAULT_UNKNOWN_STATUS_STALE_MINUTES,
+        )
+        return DEFAULT_UNKNOWN_STATUS_STALE_MINUTES
+
+
+def _parse_created_at(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _job_age_minutes(job: dict[str, Any]) -> float | None:
+    created_at = _parse_created_at(job.get("created_at"))
+    if created_at is None:
+        return None
+    return (datetime.now(timezone.utc) - created_at).total_seconds() / 60.0
+
+
+def _is_transient_kaggle_status_error(exc: Exception) -> bool:
+    if isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError"):
+        return True
+    if isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError"):
+        return True
+    if exc.__class__.__name__.endswith("Timeout"):
+        return True
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        status_int = int(status_code)
+    except Exception:
+        status_int = 0
+    return 500 <= status_int <= 599
+
+
+def _status_lookup_error_message(exc: Exception) -> str:
+    return f"Kaggle status lookup failed: {type(exc).__name__}: {exc}"
 
 
 def describe_remote_telegram_session_conflicts(
@@ -124,6 +190,42 @@ async def find_remote_telegram_session_conflicts(
         try:
             status_payload = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
         except Exception as exc:
+            failure_message = _status_lookup_error_message(exc)
+            age_minutes = _job_age_minutes(job)
+            stale_after = _unknown_status_stale_minutes()
+            if (
+                _is_transient_kaggle_status_error(exc)
+                and age_minutes is not None
+                and age_minutes >= stale_after
+            ):
+                logger.warning(
+                    "remote_telegram_session.ignore_stale_unknown job_type=%s kernel=%s run_id=%s age_minutes=%.1f stale_after=%s failure=%s",
+                    job_type,
+                    kernel_ref,
+                    str(meta.get("run_id") or "").strip() or None,
+                    age_minutes,
+                    stale_after,
+                    failure_message,
+                )
+                try:
+                    await update_job_meta(
+                        job_type,
+                        kernel_ref,
+                        meta_updates={
+                            "remote_session_guard_ignored_at": datetime.now(timezone.utc).isoformat(),
+                            "remote_session_guard_ignore_reason": "stale_transient_status_lookup_failure",
+                            "remote_session_guard_failure": failure_message,
+                            "remote_session_guard_age_minutes": round(age_minutes, 1),
+                        },
+                    )
+                except Exception:
+                    logger.warning(
+                        "remote_telegram_session.mark_stale_unknown_failed job_type=%s kernel=%s",
+                        job_type,
+                        kernel_ref,
+                        exc_info=True,
+                    )
+                continue
             conflicts.append(
                 RemoteTelegramSessionConflict(
                     job_type=job_type,
@@ -131,7 +233,7 @@ async def find_remote_telegram_session_conflicts(
                     run_id=str(meta.get("run_id") or "").strip() or None,
                     status="UNKNOWN",
                     created_at=str(job.get("created_at") or "").strip() or None,
-                    failure_message=f"Kaggle status lookup failed: {type(exc).__name__}: {exc}",
+                    failure_message=failure_message,
                     meta=dict(meta),
                 )
             )
