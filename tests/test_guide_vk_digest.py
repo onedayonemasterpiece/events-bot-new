@@ -43,6 +43,7 @@ async def test_build_guide_vk_digest_text_starts_with_count_and_months_and_short
     )
 
     assert text.splitlines()[0] == "Новые экскурсии: 2 выхода, 30 мая и 2 июня"
+    assert text.splitlines()[1] == "Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents"
     assert "Запись: записаться в Telegram · vk.cc/1" in text
     assert "Анонс: vk.cc/2" in text
     assert "Автор: Игорь Селин · https://vk.com/ivsguide" in text
@@ -186,6 +187,7 @@ async def test_publish_latest_guide_digest_to_vk_uses_issue_items_and_stores_vk_
     assert result["published"] is True
     assert posted["group_id"] == "123"
     assert posted["message"].splitlines()[0] == "Новые экскурсии: 1 выход, 30 мая"
+    assert posted["message"].splitlines()[1] == "Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents"
     assert uploaded == [("123", b"fake-jpeg", "guide.jpg")]
     assert posted["attachments"] == ["photo-123_1"]
     assert result["attachments_count"] == 1
@@ -339,6 +341,7 @@ async def test_publish_latest_guide_digest_to_vk_uses_hook_carousel_without_medi
 
     assert result["published"] is True
     assert posted["carousel"] is True
+    assert posted["message"].splitlines()[1] == "Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents"
     assert posted["attachments"] == ["photo-123_1", "photo-123_2"]
     assert result["attachments_count"] == 2
     assert uploaded == [

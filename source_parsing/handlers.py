@@ -1434,7 +1434,7 @@ async def format_parsing_report(
             label = f"@{escape_md(coauthor)}"
             if coauthor_url:
                 label = f"[@{escape_md(coauthor)}]({coauthor_url})"
-            vk_part += f" · соавторство: {label} предложено"
+            vk_part += f" · источник VK: {label}"
         parts.append(vk_part)
         tg_url = (getattr(row, "tg_post_url", None) or "").strip()
         if tg_url:

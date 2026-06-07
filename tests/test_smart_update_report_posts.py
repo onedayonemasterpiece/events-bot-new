@@ -5,7 +5,7 @@ from source_parsing.handlers import AddedEventInfo, SourceParsingResult, format_
 
 
 @pytest.mark.asyncio
-async def test_format_parsing_report_shows_vk_tg_posts_and_vk_coauthor(tmp_path, monkeypatch):
+async def test_format_parsing_report_shows_vk_tg_posts_and_vk_source_marker(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setenv("VK_EVENTS_GROUP_ID", "231920894")
@@ -51,4 +51,4 @@ async def test_format_parsing_report_shows_vk_tg_posts_and_vk_coauthor(tmp_path,
 
     assert "Посты: VK [пост](https://vk.com/wall-231920894_2395)" in report
     assert "TG [пост](https://t.me/kldevents/42)" in report
-    assert "соавторство: [@konb39](https://vk.com/konb39) предложено" in report
+    assert "источник VK: [@konb39](https://vk.com/konb39)" in report

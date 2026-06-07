@@ -3565,34 +3565,13 @@ async def post_to_vk(
     }
     coauthor_url = str(vk_coauthor_url or "").strip()
     coauthor_screen = str(vk_coauthor_screen_name or "").strip().lstrip("@")
-    if coauthor_url:
-        params_base["copyright"] = coauthor_url
-    if coauthor_screen:
-        try:
-            resolved = await _vk_api(
-                "groups.getById",
-                {"group_id": coauthor_screen},
-                db,
-                bot,
-            )
-            response = resolved.get("response") if isinstance(resolved, dict) else resolved
-            group_info = None
-            if isinstance(response, list) and response:
-                group_info = response[0]
-            elif isinstance(response, dict) and response.get("groups"):
-                group_info = response["groups"][0]
-            coauthor_id = int((group_info or {}).get("id") or 0)
-            if coauthor_id > 0:
-                # VK currently accepts these fields but does not document them
-                # consistently. Keep both variants behind a fallback below.
-                params_base["coauthors"] = f"-{coauthor_id}"
-                params_base["coauthor_ids"] = f"-{coauthor_id}"
-        except Exception:
-            logging.info(
-                "post_to_vk coauthor resolve failed screen=%s",
-                coauthor_screen,
-                exc_info=True,
-            )
+    if coauthor_url or coauthor_screen:
+        logging.info(
+            "post_to_vk coauthor params disabled after VK UI smoke showed no author invite "
+            "screen=%s url=%s",
+            coauthor_screen,
+            coauthor_url,
+        )
     if attachments:
         params_base["attachments"] = ",".join(attachments)
         if len(attachments) > 1 and not carousel:
@@ -3620,42 +3599,15 @@ async def post_to_vk(
         try:
             if DEBUG:
                 mem_info("VK post before")
-            try:
-                data = await _vk_api(
-                    "wall.post",
-                    params,
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-            except VKAPIError as exc:
-                if (
-                    exc.code == 100
-                    and any(k in params for k in ("copyright", "coauthors", "coauthor_ids"))
-                ):
-                    logging.warning(
-                        "post_to_vk coauthor params rejected; retrying without coauthor screen=%s msg=%s",
-                        coauthor_screen,
-                        exc.message,
-                    )
-                    params = {
-                        k: v
-                        for k, v in params.items()
-                        if k not in {"copyright", "coauthors", "coauthor_ids"}
-                    }
-                    data = await _vk_api(
-                        "wall.post",
-                        params,
-                        db,
-                        bot,
-                        token=token,
-                        token_kind=actor.kind,
-                        skip_captcha=(actor.kind == "group"),
-                    )
-                else:
-                    raise
+            data = await _vk_api(
+                "wall.post",
+                params,
+                db,
+                bot,
+                token=token,
+                token_kind=actor.kind,
+                skip_captcha=(actor.kind == "group"),
+            )
             if DEBUG:
                 mem_info("VK post after")
             post_id = data.get("response", {}).get("post_id")

@@ -127,6 +127,9 @@ GUIDE_DIGEST_VK_MAX_CHARS = max(
     1000,
     min(int((os.getenv("GUIDE_DIGEST_VK_MAX_CHARS") or "15000") or 15000), 16000),
 )
+GUIDE_DIGEST_VK_PARTNER_LINE = (
+    "Совместно с Полюбить Калининград Афиша: https://vk.com/klgdevents"
+)
 GUIDE_SCAN_LIMIT_FULL = max(10, min(int((os.getenv("GUIDE_SCAN_LIMIT_FULL") or "60") or 60), 200))
 GUIDE_SCAN_LIMIT_LIGHT = max(5, min(int((os.getenv("GUIDE_SCAN_LIMIT_LIGHT") or "25") or 25), 120))
 GUIDE_DAYS_BACK_FULL = max(3, min(int((os.getenv("GUIDE_DAYS_BACK_FULL") or "5") or 5), 90))
@@ -1097,6 +1100,7 @@ async def build_guide_vk_digest_text(
 
     lines: list[str] = [
         _guide_digest_vk_lead(items, family=family),
+        GUIDE_DIGEST_VK_PARTNER_LINE,
         "",
         "Собрали новые маршруты из мониторинга гидов и экскурсионных сообществ.",
         "",
