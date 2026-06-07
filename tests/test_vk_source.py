@@ -413,6 +413,35 @@ async def test_sync_vk_source_post_blocks_text_only_telegram_event(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_allows_vk_origin_with_source_ids(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.delenv("VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS", raising=False)
+
+    event = main.Event(
+        id=5779,
+        title="Title",
+        description="",
+        date="2026-06-08",
+        time="18:30",
+        location_name="Place",
+        source_text="Text",
+        source_post_url="https://vk.com/wall-30777579_15383",
+        source_chat_id=30777579,
+        source_message_id=15383,
+        photo_urls=[],
+    )
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None):
+        return "https://vk.com/wall-1_2"
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    assert await main.sync_vk_source_post(event, "Text", None, None) == "https://vk.com/wall-1_2"
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True

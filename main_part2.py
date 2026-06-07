@@ -4615,8 +4615,6 @@ def _url_looks_like_telegram_source(url: str | None) -> bool:
 async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:
     if _url_looks_like_telegram_source(getattr(event, "source_post_url", None)):
         return True
-    if getattr(event, "source_chat_id", None) or getattr(event, "source_message_id", None):
-        return True
     event_id = getattr(event, "id", None)
     if not db or not event_id:
         return False

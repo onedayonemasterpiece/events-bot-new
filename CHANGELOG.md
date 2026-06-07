@@ -23,7 +23,9 @@
   Telegram footer subscription URL, and prune raw-CDN/managed-storage duplicate
   event images by backfilling missing poster perceptual hashes. VK sync no
   longer treats a stale/deleted managed `klgdevents` URL as a successful
-  publication when `wall.getById` returns no item. Covered by
+  publication when `wall.getById` returns no item, and no longer misclassifies
+  VK imports with `source_chat_id` / `source_message_id` as Telegram-origin
+  events that must be blocked without media. Covered by
   `tests/test_tg_event_publish.py`, `tests/test_genai_dump_and_poster_dedup.py`,
   and `tests/test_vk_source.py`.
 - **Fixed: guide remote-session stale busy lock (INC-2026-06-07)**:

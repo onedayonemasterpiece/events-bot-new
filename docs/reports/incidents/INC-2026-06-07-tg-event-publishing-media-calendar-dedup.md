@@ -32,6 +32,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-07 20:40 UTC: production DB confirmed event `5776` had one managed storage poster with `phash` and one raw VK CDN poster without `phash`.
 - 2026-06-07 20:45 UTC: immediate mitigation replaced the production post with one `photo_caption` message `id=6`, deleted old messages `3/4/5`, removed duplicate eventposter row `10460`, and reduced `event.photo_urls` to one URL.
 - 2026-06-07 20:50 UTC: production DB showed `source_vk_post_url=https://vk.com/wall-231920894_2375`, but VK API `wall.getById` returned `items=[]`. A manual publish created `wall-231920894_2389`; this is recorded as mitigation only, not acceptance evidence for the feature.
+- 2026-06-07 21:03 UTC: normal production VK crawl + auto-import created event `5779` from `https://vk.com/wall-30777579_15383`, enqueued both `tg_event_publish` and `vk_sync`, and published Telegram post `https://t.me/c/3954607218/7`; `vk_sync` then failed with `vk_sync_missing_media_for_telegram_event`, proving the two-surface contract was still broken before the follow-up fix.
 
 ## Root Cause
 
@@ -39,6 +40,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 2. The calendar button used `event.ics_url` (raw Supabase `.ics`) instead of the existing project contract `event.ics_post_url` pointing to the Telegram calendar channel post.
 3. Smart Update near-duplicate poster pruning relied on `phash`. A raw VK CDN `EventPoster` row without `phash` survived next to the managed storage row for the same image, so `event.photo_urls` contained both URLs.
 4. `job_sync_vk_source_post` skipped publishing when `vk_source_hash` matched and `source_vk_post_url` looked like a managed `klgdevents` URL, without verifying that `wall.getById` still returned a real VK item.
+5. `_event_has_telegram_origin` treated non-null `source_chat_id` / `source_message_id` as Telegram-origin. VK auto-import stores VK group/post ids in the same columns, so a VK-origin event could be blocked by the Telegram text-only media guard before managed VK publication.
 
 ## Contributing Factors
 
@@ -92,6 +94,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - Add Telegraph `Подробнее` to the footer.
 - Backfill missing poster `phash` values and prune persisted near-duplicate `EventPoster` rows.
 - Verify managed VK URL existence before treating a matching `vk_source_hash` as terminal; if `wall.getById` returns no item, republish via the normal VK sync path.
+- Detect Telegram-origin events by `t.me` source URL or explicit `EventSource.source_type in ('telegram', 'tg')`, not by numeric source ids that VK imports also populate.
 
 ## Follow-up Actions
 
