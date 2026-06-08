@@ -14289,14 +14289,15 @@ async def schedule_event_update_tasks(
     telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
     vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
-    if (not disable_ics_jobs) and ev.time and "ics_publish" in JOB_HANDLERS:
+    has_calendar_time = bool((getattr(ev, "time", None) or "").strip())
+    if (not disable_ics_jobs) and has_calendar_time and "ics_publish" in JOB_HANDLERS:
         ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
         await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
     results[JobTask.telegraph_build] = await enqueue_job(
         db, eid, JobTask.telegraph_build, depends_on=None
     )
-    if (not disable_ics_jobs) and "tg_ics_post" in JOB_HANDLERS:
+    if (not disable_ics_jobs) and has_calendar_time and "tg_ics_post" in JOB_HANDLERS:
         tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)
@@ -16096,6 +16097,8 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
                 return page.vk_post_url if page else None
             return None
         if task == JobTask.festival_pages:
+            if "festival_vk_posts_enabled" in globals() and not festival_vk_posts_enabled():
+                return None
             if ev.festival:
                 fest = (
                     await session.execute(

@@ -18,6 +18,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -3850,10 +3851,33 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 return cands[0].get('url')
             return None
 
+        def _more_specific_ticket_link(current: str | None, candidate: str | None) -> bool:
+            cur = (current or '').strip()
+            cand = (candidate or '').strip()
+            if not cur or not cand or cur.rstrip('/') == cand.rstrip('/'):
+                return False
+            if not cand.startswith(('http://', 'https://')):
+                return False
+            try:
+                cur_p = urlparse(cur)
+                cand_p = urlparse(cand)
+            except Exception:
+                return False
+            if cur_p.netloc.casefold() != cand_p.netloc.casefold():
+                return False
+            cur_specificity = len((cur_p.path or '').strip('/')) + len(cur_p.query or '')
+            cand_specificity = len((cand_p.path or '').strip('/')) + len(cand_p.query or '')
+            return cand_specificity > cur_specificity
+
         if cleaned_events and link_spans:
-            # Only set when ticket_link is missing (monitor extraction is authoritative).
             if len(cleaned_events) == 1:
                 ev = cleaned_events[0]
+                current_ticket = (ev.get('ticket_link') or '').strip()
+                ticketish = [c for c in link_spans if _ticketish(c.get('text'), c.get('url'))]
+                if current_ticket and ticketish:
+                    picked_specific = _pick_link(ticketish)
+                    if _more_specific_ticket_link(current_ticket, picked_specific):
+                        ev['ticket_link'] = picked_specific
                 if not (ev.get('ticket_link') or '').strip():
                     picked = _pick_link([c for c in link_spans if (c.get('url') or '').startswith(('http://', 'https://'))])
                     if picked:
@@ -3870,9 +3894,14 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 for j, (p, idx_ev) in enumerate(starts):
                     end = starts[j+1][0] if j+1 < len(starts) else len(text_for_links)
                     ev = cleaned_events[idx_ev]
-                    if (ev.get('ticket_link') or '').strip():
-                        continue
                     seg_links = [c for c in link_spans if isinstance(c.get('offset'), int) and p <= int(c['offset']) < end]
+                    current_ticket = (ev.get('ticket_link') or '').strip()
+                    if current_ticket:
+                        ticketish = [c for c in seg_links if _ticketish(c.get('text'), c.get('url'))]
+                        picked_specific = _pick_link(ticketish)
+                        if _more_specific_ticket_link(current_ticket, picked_specific):
+                            ev['ticket_link'] = picked_specific
+                        continue
                     picked = _pick_link(seg_links)
                     if picked:
                         ev['ticket_link'] = picked

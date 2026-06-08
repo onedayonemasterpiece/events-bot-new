@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 from collections import defaultdict
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
@@ -581,14 +582,14 @@ def _coerce_url(value: str | None) -> str | None:
     return None
 
 
-def _extract_message_links(message: dict[str, Any]) -> list[str]:
-    """Extract best-effort http(s) links from the Kaggle payload.
+def _extract_message_link_items(message: dict[str, Any]) -> list[dict[str, str | None]]:
+    """Extract best-effort http(s) links with optional labels from the Kaggle payload.
 
     The payload may contain:
     - links: ["https://..."]
     - links: [{"url": "https://...", "text": "..."}]
     """
-    out: list[str] = []
+    out: list[dict[str, str | None]] = []
     seen: set[str] = set()
     payload = message.get("links")
     items: list[Any] = payload if isinstance(payload, list) else []
@@ -605,10 +606,14 @@ def _extract_message_links(message: dict[str, Any]) -> list[str]:
         return []
     for it in items:
         url = None
+        text = None
+        source = None
         if isinstance(it, str):
             url = it
         elif isinstance(it, dict):
             url = it.get("url") or it.get("link") or it.get("href")
+            text = str(it.get("text") or "").strip() or None
+            source = str(it.get("source") or "").strip() or None
         url = _coerce_url(str(url or "")) if url else None
         if not url:
             continue
@@ -616,27 +621,94 @@ def _extract_message_links(message: dict[str, Any]) -> list[str]:
         if key in seen:
             continue
         seen.add(key)
-        out.append(url)
+        out.append({"url": url, "text": text, "source": source})
     return out
 
 
-def _infer_ticket_link_from_message_links(message_links: list[str]) -> str | None:
+def _extract_message_links(message: dict[str, Any]) -> list[str]:
+    return [str(item["url"]) for item in _extract_message_link_items(message) if item.get("url")]
+
+
+def _link_is_ticketish(label: str | None, url: str | None) -> bool:
+    text = str(label or "").strip().casefold()
+    value = str(url or "").strip().casefold()
+    if any(
+        marker in text
+        for marker in (
+            "билет",
+            "регист",
+            "запис",
+            "купить",
+            "ticket",
+            "register",
+            "registration",
+        )
+    ):
+        return True
+    return any(
+        domain in value
+        for domain in (
+            "timepad.ru",
+            "kassir.ru",
+            "qtickets.ru",
+            "ticketland.ru",
+            "ticketscloud.com",
+            "intickets.ru",
+        )
+    )
+
+
+def _is_more_specific_same_host_url(current: str | None, candidate: str | None) -> bool:
+    cur = _coerce_url(current)
+    cand = _coerce_url(candidate)
+    if not cur or not cand or cur.rstrip("/") == cand.rstrip("/"):
+        return False
+    try:
+        cur_p = urlparse(cur)
+        cand_p = urlparse(cand)
+    except Exception:
+        return False
+    if cur_p.netloc.casefold() != cand_p.netloc.casefold():
+        return False
+    cur_specificity = len((cur_p.path or "").strip("/")) + len(cur_p.query or "")
+    cand_specificity = len((cand_p.path or "").strip("/")) + len(cand_p.query or "")
+    return cand_specificity > cur_specificity
+
+
+def _infer_ticket_link_from_message_links(
+    message_links: list[Any], *, current: str | None = None
+) -> str | None:
     """Pick a likely ticket/registration link from message-level links (best-effort)."""
     if not message_links:
         return None
-    external = [u for u in message_links if "t.me/" not in u.lower()]
+    normalized: list[dict[str, str | None]] = []
+    for item in message_links:
+        if isinstance(item, dict):
+            url = _coerce_url(item.get("url") or item.get("link") or item.get("href"))
+            label = str(item.get("text") or "").strip() or None
+        else:
+            url = _coerce_url(str(item or ""))
+            label = None
+        if url:
+            normalized.append({"url": url, "text": label})
+    external = [item for item in normalized if "t.me/" not in str(item.get("url") or "").lower()]
+    if current:
+        ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
+        if len(ticketish) == 1:
+            candidate = ticketish[0].get("url")
+            if _is_more_specific_same_host_url(current, candidate):
+                return candidate
+        return None
     if len(external) == 1:
-        return external[0]
+        return external[0].get("url")
+    ticketish = [item for item in external if _link_is_ticketish(item.get("text"), item.get("url"))]
+    if len(ticketish) == 1:
+        return ticketish[0].get("url")
+    external_urls = [str(item.get("url") or "") for item in external if item.get("url")]
+    if len(external_urls) == 1:
+        return external_urls[0]
     # If there are multiple links, only pick when there is a single strong ticket-domain match.
-    ticket_domains = (
-        "timepad.ru",
-        "kassir.ru",
-        "qtickets.ru",
-        "ticketland.ru",
-        "ticketscloud.com",
-        "intickets.ru",
-    )
-    strong = [u for u in external if any(d in u.lower() for d in ticket_domains)]
+    strong = [u for u in external_urls if _link_is_ticketish(None, u)]
     if len(strong) == 1:
         return strong[0]
     return None
@@ -3900,9 +3972,25 @@ def _build_candidate(
             location_name = None
             location_address = None
 
+    refined_ticket_link = _infer_ticket_link_from_message_links(
+        _extract_message_link_items(message),
+        current=ticket_link,
+    )
+    if refined_ticket_link and refined_ticket_link != ticket_link:
+        ticket_link = refined_ticket_link
+        logger.info(
+            "telegram: refined ticket link from message links source=%s message_id=%s title=%r ticket_link=%s",
+            username,
+            message_id,
+            title,
+            ticket_link,
+        )
+
     # Extract a booking contact from the message when ticket_link is missing.
     if not ticket_link:
-        inferred_from_links = _infer_ticket_link_from_message_links(_extract_message_links(message))
+        inferred_from_links = _infer_ticket_link_from_message_links(
+            _extract_message_link_items(message)
+        )
         if inferred_from_links:
             ticket_link = inferred_from_links
             logger.info(

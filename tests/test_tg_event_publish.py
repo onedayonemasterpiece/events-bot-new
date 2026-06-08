@@ -302,6 +302,46 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_schedule_event_update_tasks_skips_calendar_dependency_without_time(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append((task, kwargs.get("depends_on"), kwargs.get("next_run_at")))
+        return f"{task.value}:job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    deferred_at = main.datetime(2026, 6, 20, 5, 0, tzinfo=main.timezone.utc)
+    monkeypatch.setattr(
+        main,
+        "next_tg_event_publish_run_at",
+        lambda db_obj: main.asyncio.sleep(0, result=deferred_at),
+    )
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    event = _event(id=None, time="")
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert not any(task == main.JobTask.tg_ics_post for task, _, _ in tasks)
+    assert (
+        main.JobTask.tg_event_publish,
+        [
+            f"telegraph_build:{event.id}",
+            f"vk_sync:{event.id}",
+        ],
+        deferred_at,
+    ) in tasks
+
+
+@pytest.mark.asyncio
 async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -357,6 +357,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - URL, найденные в тексте;
   - URL из `MessageEntityTextUrl`/`MessageEntityUrl` (hidden links);
   - URL из кнопок (`reply_markup`) типа “More info”/“билеты”.
+  Если extractor вернул широкий landing URL, а hidden/entity link на том же
+  домене имеет ticket/registration label и более конкретный path/query, импорт
+  должен уточнить `ticket_link` до этой конкретной registration/ticket ссылки.
 - В UI (`/events` → Edit) OCR виден в блоке **Poster OCR**.
 - Проверка OCR в UI: см. `tests/e2e/features/telegram_monitoring.feature` (сценарий «Полный пользовательский поток мониторинга (UI)»).
 - Для каналов с заданным `default_location` это значение считается **сильным prior** (защита от контекстных городов вроде «(г. Москва)» в описании участников), но это не «жёсткий игнор»:

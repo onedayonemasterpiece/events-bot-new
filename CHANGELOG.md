@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: no-time Telegram event fanout**:
+  events without a concrete start time no longer enqueue `tg_ics_post` or make
+  `tg_event_publish` depend on it, so all-day/no-time imports can still reach
+  `@kldevents` after Telegraph and VK are ready. Disabled festival aggregate
+  VK posts also no longer surface stale `festival_pages` VK URLs as job results.
+  Telegram Monitoring also refines broad landing-page `ticket_link` values to
+  concrete hidden/entity registration links when the source label is ticketish.
+  Covered by `tests/test_tg_event_publish.py`, `tests/test_bot.py`, and
+  `tests/test_telegram_link_inference.py`.
 - **Fixed: Telegram Monitoring Kaggle status polling**:
   `GetKernelSessionStatus` HTTP `429`/`5xx` responses are now treated as
   transient polling failures with backoff instead of immediately failing an

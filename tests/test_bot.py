@@ -10379,6 +10379,34 @@ async def test_festival_vk_sync_disabled_by_default(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_festival_pages_result_omits_disabled_vk_url(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("ENABLE_FESTIVAL_VK_POSTS", raising=False)
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        fest = main.Festival(
+            name="Solo",
+            vk_post_url="https://vk.com/wall-231828790_1018",
+        )
+        session.add(fest)
+        ev = main.Event(
+            title="Future",
+            description="d",
+            source_text="s",
+            date=FUTURE_DATE,
+            time="18:00",
+            location_name="Hall",
+            festival="Solo",
+        )
+        session.add(ev)
+        await session.commit()
+        eid = ev.id
+
+    assert await main._job_result_link(JobTask.festival_pages, eid, db) is None
+
+
+@pytest.mark.asyncio
 async def test_festival_page_no_events_shows_info(tmp_path: Path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
