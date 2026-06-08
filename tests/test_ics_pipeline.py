@@ -281,6 +281,48 @@ async def test_telegram_error_does_not_block_supabase(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ics_jobs_skip_invalid_schedule_without_retry(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = DummyBot("123:abc")
+    async with db.get_session() as session:
+        session.add(Channel(channel_id=-100, title="Asset", is_admin=True, is_asset=True))
+        session.add(
+            Event(
+                id=1,
+                title="A",
+                description="d",
+                source_text="s",
+                date="2025-07-18",
+                time="по расписанию",
+                location_name="Hall",
+                city="Town",
+            )
+        )
+        await session.commit()
+
+    fake = FakeClient()
+    monkeypatch.setattr(main, "get_supabase_client", lambda: fake)
+
+    pr = Progress()
+    assert await main.ics_publish(1, db, bot, pr) is False
+    assert not fake.uploaded
+    assert len(pr.marks) == 1
+    assert pr.marks[0][0] == "ics_supabase"
+    assert pr.marks[0][1] == "skipped_invalid_schedule"
+    assert "bad time" in pr.marks[0][2]
+    assert "по расписанию" in pr.marks[0][2]
+
+    pr2 = Progress()
+    assert await main.tg_ics_post(1, db, bot, pr2) is False
+    assert not bot.docs
+    assert len(pr2.marks) == 1
+    assert pr2.marks[0][0] == "ics_telegram"
+    assert pr2.marks[0][1] == "skipped_invalid_schedule"
+    assert "bad time" in pr2.marks[0][2]
+
+
+@pytest.mark.asyncio
 async def test_ics_coalesced_jobs_and_semaphore(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

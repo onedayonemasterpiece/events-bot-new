@@ -8184,6 +8184,28 @@ async def build_ics_content(db: Database, event: Event) -> str:
     return "\r\n".join(folded) + "\r\n"
 
 
+def _ics_build_error_is_permanent(exc: Exception) -> bool:
+    return isinstance(exc, ValueError) and str(exc) in {"bad time", "bad date"}
+
+
+def _calendar_schedule_is_supported(ev: Event) -> bool:
+    return bool(parse_time_range(ev.time) and parse_iso_date(ev.date))
+
+
+def _mark_ics_skipped_invalid_schedule(progress, key: str, event: Event, exc: Exception) -> None:
+    detail = f"{str(exc) or exc.__class__.__name__}: date={event.date!r} time={event.time!r}"
+    if progress:
+        progress.mark(key, "skipped_invalid_schedule", detail)
+    logging.warning(
+        "%s skipped invalid schedule event_id=%s date=%r time=%r reason=%s",
+        key,
+        event.id,
+        event.date,
+        event.time,
+        str(exc) or exc.__class__.__name__,
+    )
+
+
 def _ics_filename(event: Event) -> str:
     d = parse_iso_date(event.date.split("..", 1)[0])
     if d:
@@ -8280,6 +8302,9 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
                 l for l in content.split("\r\n") if not l.startswith(("UID:", "DTSTAMP:"))
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
+            if _ics_build_error_is_permanent(e):
+                _mark_ics_skipped_invalid_schedule(progress, "ics_supabase", ev, e)
+                return False
             if progress:
                 progress.mark("ics_supabase", "error", str(e))
             raise
@@ -8375,6 +8400,9 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
                 l for l in content.split("\r\n") if not l.startswith(("UID:", "DTSTAMP:"))
             ).encode("utf-8")
         except Exception as e:  # pragma: no cover - build failure
+            if _ics_build_error_is_permanent(e):
+                _mark_ics_skipped_invalid_schedule(progress, "ics_telegram", ev, e)
+                return False
             if progress:
                 progress.mark("ics_telegram", "error", str(e))
             raise
@@ -14342,15 +14370,15 @@ async def schedule_event_update_tasks(
     telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
     vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
-    has_calendar_time = bool((getattr(ev, "time", None) or "").strip())
-    if (not disable_ics_jobs) and has_calendar_time and "ics_publish" in JOB_HANDLERS:
+    has_calendar_schedule = _calendar_schedule_is_supported(ev)
+    if (not disable_ics_jobs) and has_calendar_schedule and "ics_publish" in JOB_HANDLERS:
         ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
         await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
     results[JobTask.telegraph_build] = await enqueue_job(
         db, eid, JobTask.telegraph_build, depends_on=None
     )
-    if (not disable_ics_jobs) and has_calendar_time and "tg_ics_post" in JOB_HANDLERS:
+    if (not disable_ics_jobs) and has_calendar_schedule and "tg_ics_post" in JOB_HANDLERS:
         tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-08-tg-ics-bad-time-retry-storm.md`
+  - Scope: calendar/ICS publication jobs (`ics_publish`, `tg_ics_post`), `schedule_event_update_tasks`, and Telegram event publish dependencies that include calendar posts.
+  - Must not regress: events whose `date` or `time` cannot be parsed into a concrete calendar start must not enqueue `ics_publish`/`tg_ics_post` and `tg_event_publish` must not depend on `tg_ics_post`; already queued invalid-schedule calendar jobs must finish with `skipped_invalid_schedule` instead of raising `ValueError: bad time`/`bad date` into an infinite retry storm.
 - `INC-2026-06-08-festival-vk-aggregate-regression.md`
   - Scope: `/start` -> `Добавить событие`, Telegram Monitoring single-source containment for `@kraftmarket39`, Festival Queue/Universal Festival Parser, and `sync_festival_vk_post` VK aggregate publishing.
   - Must not regress: urgent `@kraftmarket39` monitoring must run through the same Smart Update import path with a one-source Kaggle config; festival VK aggregate posts must stay disabled unless `ENABLE_FESTIVAL_VK_POSTS=1`; ordinary event-level VK/TG fanout remains separate and must not publish whole-festival aggregates to obsolete communities.

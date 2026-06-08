@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: invalid-time ICS retry storm**:
+  `schedule_event_update_tasks` now enqueues `ics_publish`/`tg_ics_post` only
+  when both event date and time parse into a calendar schedule. Already queued
+  invalid schedule jobs finish as `skipped_invalid_schedule` instead of
+  retrying forever on `ValueError: bad time` / `bad date`, unblocking
+  downstream Telegram event publication that does not need a calendar post.
+  Added incident `INC-2026-06-08-tg-ics-bad-time-retry-storm`. Covered by
+  `tests/test_ics_pipeline.py` and `tests/test_tg_event_publish.py`.
 - **Added: CrumpleVideo VK official wall fanout**:
   `/v - Запуск завтра` story publish payload now also posts the rendered
   wall-video to `https://vk.com/kenigeventsofficial` with a
