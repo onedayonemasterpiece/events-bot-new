@@ -5659,16 +5659,6 @@ async def process_telegram_results(
                 # below still skip VK sync to avoid duplicate publication work.
                 result: SmartUpdateResult | None = None
                 nochange_tasks_rearmed = False
-                if forced and is_single_event_post:
-                    existing_source_event_id = await _single_event_id_for_source_url(db, candidate.source_url)
-                    if existing_source_event_id is not None:
-                        await _schedule_primary_import_event_tasks(db, int(existing_source_event_id))
-                        nochange_tasks_rearmed = True
-                        result = SmartUpdateResult(
-                            status="skipped_nochange",
-                            event_id=int(existing_source_event_id),
-                            reason="forced_existing_source_rearmed",
-                        )
                 if result is None:
                     result = await smart_event_update(
                         db,

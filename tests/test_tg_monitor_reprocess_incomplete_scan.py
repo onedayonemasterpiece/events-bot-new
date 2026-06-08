@@ -199,7 +199,9 @@ async def test_primary_telegram_import_does_not_run_global_vk_reconcile_by_defau
 
 
 @pytest.mark.asyncio
-async def test_forced_existing_single_source_rearms_tasks_without_llm_reimport(tmp_path, monkeypatch):
+async def test_forced_existing_single_source_still_runs_smart_update_and_rearms_tasks(
+    tmp_path, monkeypatch
+):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     source_id = await _seed_source(db)
@@ -212,23 +214,23 @@ async def test_forced_existing_single_source_rearms_tasks_without_llm_reimport(t
 
     scheduled = []
 
-    async def fake_existing_source_event_id(db_arg, source_url):
-        assert source_url == "https://t.me/kraftmarket39/193"
-        return 5656
-
     async def fake_schedule_tasks(db_arg, event_id):
         scheduled.append(event_id)
 
-    async def fake_smart_update(db_arg, candidate, **kwargs):
-        raise AssertionError("forced exact-source replay must not rerun Smart Update")
+    calls = []
 
-    monkeypatch.setattr(tg_handlers, "_single_event_id_for_source_url", fake_existing_source_event_id)
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(candidate)
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
     monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
     monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
 
     report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
 
     assert report.events_nochange == 1
+    assert len(calls) == 1
+    assert calls[0].source_url == "https://t.me/kraftmarket39/193"
     assert scheduled == [5656]
 
 

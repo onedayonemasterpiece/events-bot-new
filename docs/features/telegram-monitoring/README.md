@@ -35,8 +35,10 @@
     Это обязательный контракт для промо-событий, которые дальше должны попасть в VK-публикацию и VK/promo surfaces.
     При повторном импорте уже созданного события результат `skipped_nochange` также re-arm'ит стандартные задачи,
     чтобы catch-up мог чинить старое состояние "event есть, VK job отсутствует".
-    Forced single-event replay, где точный `event_source.source_url` уже однозначно указывает на одно событие,
-    использует тот же re-arm путь без повторного LLM merge.
+    Forced single-event replay всегда пропускает свежий payload через Smart Update, даже если точный
+    `event_source.source_url` уже есть в БД: это нужно, чтобы исправлять данные события (например конкретную
+    hidden/entity registration ссылку вместо широкого landing-page `ticket_link`) и уже затем re-arm'ить публикации
+    при `skipped_nochange`.
     Обычный `/tg` импорт re-arm'ит только события, затронутые текущим `telegram_results.json`; глобальный catch-up
     старых Telegram-origin событий отключён по умолчанию, чтобы single-source E2E не создавал неожиданные старые VK
     посты. Исторический широкий reconcile доступен только как явный операторский режим через

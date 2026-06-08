@@ -38,6 +38,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - 2026-06-08 UTC: cleanup before the next E2E removed the preserved bad postponed VK evidence posts from `kldevents`; `wall.getById` confirmed `wall-231920894_2432` and `_2433` no longer exist. This was external artifact cleanup, not DB/outbox repair.
 - 2026-06-08 UTC: root cause expanded again: repeat enqueue merged dependency sets, so a fixed no-time reimport could keep stale `tg_ics_post:<event_id>` dependency on `tg_event_publish`.
 - 2026-06-08 UTC: root cause expanded again: a targeted `@kraftmarket39` import could still trigger `_reconcile_primary_import_vk_sync_jobs()` after import, causing broad old Telegram-origin VK re-arms unrelated to the current E2E. Kaggle status API also kept returning HTTP 500 after the notebook had already written `telegram_results.json`, leaving the prod process waiting until restart/recovery.
+- 2026-06-08 UTC: root cause expanded again: forced replay for an already-known exact `event_source.source_url` skipped Smart Update and only re-armed publication tasks, so the corrected concrete registration link from `messages[].links` could not replace the broad `https://kgd80.ru` ticket link.
 
 ## Root Cause
 
@@ -46,6 +47,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 3. Festival monitoring lacked a single routed technical-debt document and acceptance gate for full queue/E2E validation.
 4. Telegram Monitoring imported the current results and then ran a global Telegram-origin VK reconcile by default. That made a single-source containment run behave like broad historical catch-up.
 5. Kaggle polling depended on `GetKernelSessionStatus` as the only live completion signal. When that API returned repeated HTTP 500 while the output was already present, the current process kept waiting and the result was only picked up after restart/recovery.
+6. Forced exact-source replay short-circuited existing events before Smart Update. That made it good at requeueing posts but unable to repair event fields from the fresh payload.
 
 ## Contributing Factors
 
@@ -105,6 +107,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - Replace stale `tg_event_publish`/`tg_ics_post` dependency sets on re-arm so repeat imports are not blocked by old queue topology.
 - Make global Telegram-origin VK reconcile explicit opt-in (`TG_MONITORING_GLOBAL_VK_RECONCILE=1`) so `/tg` single-source E2E only re-arms touched events.
 - During transient Kaggle status failures, probe Kaggle output and treat same-`run_id` `telegram_results.json` as completion so E2E does not require Fly machine restart to progress.
+- Route forced exact-source replay through Smart Update before publication re-arm, so data fixes and concrete registration links are part of the normal import process.
 
 ## Follow-up Actions
 

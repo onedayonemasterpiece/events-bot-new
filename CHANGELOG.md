@@ -41,6 +41,12 @@
   broad old-event catch-up is explicit opt-in via
   `TG_MONITORING_GLOBAL_VK_RECONCILE=1`. Covered by
   `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
+- **Fixed: Telegram Monitoring forced replay data path**:
+  forced single-post replays no longer short-circuit existing `event_source`
+  rows straight to publication re-arm. They still pass the fresh Kaggle payload
+  through Smart Update first, so concrete hidden/entity registration links can
+  replace broad landing-page ticket links before VK/TG posts are recreated.
+  Covered by `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`
   explicitly, use local `.env` only for the human Telethon session, verify
