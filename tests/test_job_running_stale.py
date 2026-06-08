@@ -38,3 +38,39 @@ async def test_running_stale_marked_and_replaced(tmp_path):
         assert JobStatus.pending in statuses
         pend = next(j for j in jobs if j.status == JobStatus.pending)
         assert pend.event_id == ev2.id
+
+
+@pytest.mark.asyncio
+async def test_running_telegraph_build_has_llm_runtime_budget(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = Event(
+            title="Telegraph render",
+            description="d",
+            date="2026-06-13",
+            time="",
+            location_name="x",
+            source_text="s",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.telegraph_build,
+                status=JobStatus.running,
+                updated_at=datetime.now(timezone.utc) - timedelta(minutes=4),
+                next_run_at=datetime.now(timezone.utc) - timedelta(minutes=4),
+            )
+        )
+        await session.commit()
+
+    await main._run_due_jobs_once(db, bot=None)
+
+    async with db.get_session() as session:
+        job = (await session.execute(select(JobOutbox))).scalar_one()
+
+    assert job.status == JobStatus.running
+    assert job.last_error is None

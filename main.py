@@ -16100,7 +16100,7 @@ JOB_TTL: dict[JobTask, int] = {
 }
 
 JOB_MAX_RUNTIME: dict[JobTask, int] = {
-    JobTask.telegraph_build: 180,
+    JobTask.telegraph_build: 900,
     JobTask.tg_event_publish: 180,
     JobTask.ics_publish: 60,
     JobTask.tg_ics_post: 60,

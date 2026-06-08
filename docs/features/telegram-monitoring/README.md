@@ -52,6 +52,9 @@
     anchor на следующий день; если pending job уже существует, его `next_run_at` должен заменяться на слот текущего
     цикла. Forced single-source E2E должен доводить затронутые события до видимого `@kldevents` поста в текущем цикле
     после Telegraph/VK prerequisites.
+    Telegraph prerequisite не должен сам превращаться в far-future `stale` blocker на нормальном LLM-first render пути:
+    runtime budget `telegraph_build` должен быть достаточно длинным для Gemma/Gemini fallback и повторный import обязан
+    re-arm'ить ошибочный Telegraph job через стандартный Smart Update path.
     Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
     и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
     Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media

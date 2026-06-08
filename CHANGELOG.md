@@ -61,9 +61,12 @@
   publish window is open, and re-arming an existing pending `tg_event_publish`
   now replaces its stale next-day `next_run_at` with the current cycle slot, so
   forced single-source reimports can reach `@kldevents` in the same E2E cycle
-  instead of being deferred to tomorrow.
-  Covered by `tests/test_smart_event_update_ticket_fields.py` and
-  `tests/test_tg_event_publish.py`.
+  instead of being deferred to tomorrow. `telegraph_build` jobs now have a
+  15-minute runtime budget, matching LLM-first Telegraph renders with fallback,
+  so a slow but healthy render does not become a permanent
+  `telegraph_build:...:stale` dependency blocker.
+  Covered by `tests/test_smart_event_update_ticket_fields.py`,
+  `tests/test_tg_event_publish.py`, and `tests/test_job_running_stale.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`
   explicitly, use local `.env` only for the human Telethon session, verify
