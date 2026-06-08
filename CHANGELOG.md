@@ -67,11 +67,13 @@
   `telegraph_build:...:stale` dependency blocker.
   Covered by `tests/test_smart_event_update_ticket_fields.py`,
   `tests/test_tg_event_publish.py`, and `tests/test_job_running_stale.py`.
-- **Fixed: Telegram event publisher media fallback**:
-  `tg_event_publish` now falls back to a text post with disabled link previews
-  when Telegram Bot API rejects event media during `sendPhoto`/`sendMediaGroup`
-  (`WEBPAGE_CURL_FAILED`, `WEBPAGE_MEDIA_EMPTY`, or similar), so one bad remote
-  media/preview URL no longer blocks `@kldevents` publication. Covered by
+- **Fixed: Telegram event publisher materialized media delivery**:
+  `tg_event_publish` now publishes event media by uploading files loaded from
+  Smart Update materialized `event.photo_urls` instead of passing remote URL
+  strings to Telegram Bot API. Media is visually deduped and capped at 9 images;
+  events with stored media fail closed instead of being marked successful as
+  text-only posts. Telegram event text also uses the original `ticket_link` and
+  never the VK-only `vk_ticket_short_url`. Covered by
   `tests/test_tg_event_publish.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`

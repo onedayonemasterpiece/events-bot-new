@@ -4,6 +4,7 @@ import html
 import re
 import asyncio
 import time as _time
+import httpx
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
@@ -3808,6 +3809,7 @@ TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.com/klgdevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
+TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v3"
@@ -3931,9 +3933,9 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
 
 def _tg_event_ticket_line(event: Event) -> str:
     ticket_link = (getattr(event, "ticket_link", None) or "").strip()
-    ticket_link_display = (
-        (getattr(event, "vk_ticket_short_url", None) or "").strip() or ticket_link
-    )
+    # Telegram posts must use the original event/registration link. vk.cc links are
+    # generated for VK analytics only and must not leak into Telegram publishing.
+    ticket_link_display = ticket_link
     ticket_is_http = ticket_link_display.startswith(("http://", "https://"))
     if ticket_link_display and not ticket_is_http:
         phone_display = format_tel_link_for_display(ticket_link_display)
@@ -4197,8 +4199,12 @@ async def build_tg_event_announcement_for_publish(
     return base_without_body, True
 
 
+def _tg_event_publish_media_urls(event: Event) -> list[str]:
+    return _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])[:TG_EVENT_MAX_MEDIA]
+
+
 def build_tg_event_source_hash(event: Event, text: str) -> str:
-    media_signature = "\n".join(_unique_tg_media_urls(getattr(event, "photo_urls", None) or []))
+    media_signature = "\n".join(_tg_event_publish_media_urls(event))
     return content_hash(
         "\n".join(
             [
@@ -4214,7 +4220,6 @@ def build_tg_event_source_hash(event: Event, text: str) -> str:
                 str(getattr(event, "is_free", "") or ""),
                 str(getattr(event, "ticket_status", "") or ""),
                 str(getattr(event, "ticket_link", "") or ""),
-                str(getattr(event, "vk_ticket_short_url", "") or ""),
                 str(getattr(event, "ticket_price_min", "") or ""),
                 str(getattr(event, "ticket_price_max", "") or ""),
                 str(getattr(event, "ics_url", "") or ""),
@@ -4301,6 +4306,30 @@ def build_tg_event_reply_markup(event: Event) -> types.InlineKeyboardMarkup | No
     )
 
 
+async def materialize_tg_event_media_for_upload(url: str, index: int) -> types.BufferedInputFile:
+    """Load a Smart Update materialized media URL for Telegram Bot API upload."""
+
+    clean_url = str(url or "").strip()
+    if not clean_url:
+        raise RuntimeError("empty tg event media url")
+    suffix = ".jpg"
+    path = urlsplit(clean_url).path.lower()
+    if path.endswith(".png"):
+        suffix = ".png"
+    elif path.endswith(".webp"):
+        suffix = ".webp"
+    elif path.endswith(".jpeg"):
+        suffix = ".jpeg"
+    timeout = httpx.Timeout(HTTP_TIMEOUT)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        resp = await client.get(clean_url)
+        resp.raise_for_status()
+        data = resp.content
+    if not data:
+        raise RuntimeError(f"empty tg event media download: {clean_url}")
+    return types.BufferedInputFile(data, filename=f"event-media-{index}{suffix}")
+
+
 async def publish_tg_event_announcement(
     event: Event,
     text: str,
@@ -4315,18 +4344,7 @@ async def publish_tg_event_announcement(
 
     festival = await _resolve_event_festival(db, event)
     source_hash = build_tg_event_source_hash(event, text)
-    if (
-        (getattr(event, "tg_event_source_hash", None) or "") == source_hash
-        and (getattr(event, "tg_event_post_url", None) or "").strip()
-    ):
-        return (
-            event.tg_event_post_url,
-            event.tg_event_post_id,
-            event.tg_event_post_mode,
-            source_hash,
-        )
-
-    photo_urls = _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])
+    photo_urls = _tg_event_publish_media_urls(event)
     chunks = _chunked_tg_media(photo_urls)
     if len(photo_urls) == 1:
         desired_mode = "photo_caption"
@@ -4334,6 +4352,19 @@ async def publish_tg_event_announcement(
         desired_mode = "album_caption"
     else:
         desired_mode = "text"
+    existing_id = getattr(event, "tg_event_post_id", None)
+    existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
+    if (
+        (getattr(event, "tg_event_source_hash", None) or "") == source_hash
+        and (getattr(event, "tg_event_post_url", None) or "").strip()
+        and (not photo_urls or existing_mode == desired_mode)
+    ):
+        return (
+            event.tg_event_post_url,
+            event.tg_event_post_id,
+            event.tg_event_post_mode,
+            source_hash,
+        )
     message_html, _rewritten = await build_tg_event_announcement_for_publish(
         event,
         text,
@@ -4343,8 +4374,6 @@ async def publish_tg_event_announcement(
     )
     reply_markup = build_tg_event_reply_markup(event)
 
-    existing_id = getattr(event, "tg_event_post_id", None)
-    existing_mode = (getattr(event, "tg_event_post_mode", None) or "").strip()
     if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
         try:
             if existing_mode in {"album_caption", "photo_caption"} and desired_mode == existing_mode:
@@ -4383,84 +4412,43 @@ async def publish_tg_event_announcement(
     sent_url: str | None = None
     sent_id: int | None = None
     sent_mode = desired_mode
-    fallback_text_html: str | None = None
 
-    async def send_text_fallback(reason: BaseException) -> tuple[str | None, int | None, str]:
-        nonlocal fallback_text_html
-        logging.warning(
-            "publish_tg_event_announcement media send failed; falling back to text event_id=%s mode=%s err=%s",
-            getattr(event, "id", None),
-            desired_mode,
-            reason,
-        )
-        if fallback_text_html is None:
-            fallback_text_html, _ = await build_tg_event_announcement_for_publish(
-                event,
-                text,
-                festival=festival,
-                force_caption_limit=False,
-                include_calendar_link=False,
-            )
-        if existing_id and existing_mode == "text":
-            await bot.edit_message_text(
-                chat_id=target,
-                message_id=int(existing_id),
-                text=fallback_text_html,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-                reply_markup=reply_markup,
-            )
-            return (
-                (getattr(event, "tg_event_post_url", None) or "").strip() or None,
-                int(existing_id),
-                "text",
-            )
-        msg = await bot.send_message(
-            target,
-            fallback_text_html,
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-            reply_markup=reply_markup,
-        )
-        return message_link(msg.chat.id, msg.message_id), msg.message_id, "text"
+    async def uploaded_media_group() -> list[types.InputMediaPhoto]:
+        uploaded = []
+        for idx, url in enumerate(photo_urls):
+            media_file = await materialize_tg_event_media_for_upload(url, idx)
+            if idx == 0:
+                uploaded.append(
+                    types.InputMediaPhoto(
+                        media=media_file,
+                        caption=message_html,
+                        parse_mode="HTML",
+                    )
+                )
+            else:
+                uploaded.append(types.InputMediaPhoto(media=media_file))
+        return uploaded
 
     try:
         if desired_mode == "photo_caption":
-            try:
-                msg = await bot.send_photo(
-                    chat_id=target,
-                    photo=photo_urls[0],
-                    caption=message_html,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup,
-                )
-                sent_id = msg.message_id
-                sent_url = message_link(msg.chat.id, msg.message_id)
-            except TelegramBadRequest as exc:
-                sent_url, sent_id, sent_mode = await send_text_fallback(exc)
+            upload = await materialize_tg_event_media_for_upload(photo_urls[0], 0)
+            msg = await bot.send_photo(
+                chat_id=target,
+                photo=upload,
+                caption=message_html,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+            sent_id = msg.message_id
+            sent_url = message_link(msg.chat.id, msg.message_id)
         elif desired_mode == "album_caption":
-            first = True
-            try:
-                for chunk in chunks:
-                    media = []
-                    for url in chunk:
-                        if first:
-                            media.append(
-                                types.InputMediaPhoto(
-                                    media=url,
-                                    caption=message_html,
-                                    parse_mode="HTML",
-                                )
-                            )
-                            first = False
-                        else:
-                            media.append(types.InputMediaPhoto(media=url))
-                    msgs = await bot.send_media_group(chat_id=target, media=media)
-                    if sent_id is None and msgs:
-                        sent_id = msgs[0].message_id
-                        sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
-            except TelegramBadRequest as exc:
-                sent_url, sent_id, sent_mode = await send_text_fallback(exc)
+            media_items = await uploaded_media_group()
+            for start in range(0, len(media_items), TG_EVENT_ALBUM_SIZE):
+                chunk = media_items[start : start + TG_EVENT_ALBUM_SIZE]
+                msgs = await bot.send_media_group(chat_id=target, media=chunk)
+                if sent_id is None and msgs:
+                    sent_id = msgs[0].message_id
+                    sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
         else:
             msg = await bot.send_message(
                 target,
@@ -4471,10 +4459,12 @@ async def publish_tg_event_announcement(
             )
             sent_id = msg.message_id
             sent_url = message_link(msg.chat.id, msg.message_id)
-    except TelegramBadRequest:
+    except Exception:
         logging.exception(
-            "publish_tg_event_announcement failed event_id=%s",
+            "publish_tg_event_announcement failed event_id=%s desired_mode=%s media=%d",
             getattr(event, "id", None),
+            desired_mode,
+            len(photo_urls),
         )
         raise
 
@@ -4504,8 +4494,6 @@ async def publish_tg_event_announcement(
         sent_mode,
     )
     return sent_url, sent_id, sent_mode, source_hash
-
-
 
 
 def build_vk_source_header(event: Event, festival: Festival | None = None) -> list[str]:

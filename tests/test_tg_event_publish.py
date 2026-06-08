@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-from aiogram.exceptions import TelegramBadRequest
 
 import main
 
@@ -53,10 +52,18 @@ class DummyTgBot:
         self.deleted.append(kwargs)
 
 
-class MediaFailTgBot(DummyTgBot):
-    async def send_media_group(self, chat_id, media):
-        self.media_groups.append((chat_id, media))
-        raise TelegramBadRequest(method=SimpleNamespace(), message="WEBPAGE_MEDIA_EMPTY")
+def _patch_media_materializer(monkeypatch):
+    calls = []
+
+    async def fake_materialize(url, index):
+        calls.append((url, index))
+        return main.types.BufferedInputFile(
+            f"image-bytes-{index}".encode(),
+            filename=f"{index}.jpg",
+        )
+
+    monkeypatch.setattr(main, "materialize_tg_event_media_for_upload", fake_materialize)
+    return calls
 
 
 def _event(**kwargs) -> main.Event:
@@ -100,6 +107,20 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert '<a href="https://telegra.ph/event">Подробнее</a>' in text
     assert '<a href="https://t.me/+MrSeuZSHv3VjMThi">Подписаться</a>' in text
     assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in text
+
+
+
+
+def test_build_tg_event_announcement_uses_original_ticket_link_not_vk_short():
+    event = _event(
+        ticket_link="https://example.com/register",
+        vk_ticket_short_url="https://vk.cc/cYdmeE",
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert 'href="https://example.com/register"' in text
+    assert "vk.cc" not in text
 
 
 def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
@@ -168,6 +189,7 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
         return "Что делает этот вечер особенным? Музыка прозвучит в камерном формате."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
     bot = DummyTgBot()
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
@@ -181,9 +203,10 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert post_id == 101
     assert mode == "photo_caption"
     assert source_hash
+    assert materialize_calls == [("https://img.example/0.jpg", 0)]
     assert not bot.messages
     assert len(bot.photos) == 1
-    assert bot.photos[0][1] == "https://img.example/0.jpg"
+    assert not isinstance(bot.photos[0][1], str)
     message_text = bot.photos[0][2]["caption"]
     message_kwargs = bot.photos[0][2]
     assert "Что делает этот вечер особенным?" in message_text
@@ -215,6 +238,7 @@ async def test_tg_event_publish_replaces_old_text_when_media_appears(monkeypatch
         return "Что делает этот вечер особенным? Камерный формат."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
     bot = DummyTgBot()
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
@@ -228,6 +252,7 @@ async def test_tg_event_publish_replaces_old_text_when_media_appears(monkeypatch
     assert post_id == 101
     assert mode == "photo_caption"
     assert source_hash and source_hash != "old"
+    assert materialize_calls == [("https://img.example/0.jpg", 0)]
     assert len(bot.photos) == 1
     assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
 
@@ -246,6 +271,7 @@ async def test_tg_event_publish_sends_album_caption_for_multiple_media(monkeypat
         return "Что делает этот вечер особенным? Музыка прозвучит в камерном формате."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
     bot = DummyTgBot()
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
@@ -261,16 +287,16 @@ async def test_tg_event_publish_sends_album_caption_for_multiple_media(monkeypat
     assert source_hash
     assert not bot.messages
     assert not bot.photos
-    assert len(bot.media_groups) == 2
-    assert len(bot.media_groups[0][1]) == 10
-    assert len(bot.media_groups[1][1]) == 2
-    assert [item.media for item in bot.media_groups[0][1]][0] == "https://img.example/0.jpg"
+    assert len(bot.media_groups) == 1
+    assert len(bot.media_groups[0][1]) == 9
+    assert materialize_calls == [(f"https://img.example/{idx}.jpg", idx) for idx in range(9)]
+    assert not isinstance(bot.media_groups[0][1][0].media, str)
     assert "Что делает этот вечер особенным?" in bot.media_groups[0][1][0].caption
     assert "Добавить в календарь" in bot.media_groups[0][1][0].caption
 
 
 @pytest.mark.asyncio
-async def test_tg_event_publish_falls_back_to_text_when_album_media_fails(monkeypatch):
+async def test_tg_event_publish_fails_closed_when_materialized_media_unavailable(monkeypatch):
     event = _event(
         photo_urls=[f"https://img.example/{idx}.jpg" for idx in range(2)],
         ics_post_url="https://t.me/c/asset/42",
@@ -282,8 +308,38 @@ async def test_tg_event_publish_falls_back_to_text_when_album_media_fails(monkey
         assert source_text == long_text
         return "Что делает этот вечер особенным? Водная программа и активности."
 
+    async def fail_materialize(url, index):
+        raise RuntimeError("materialized media unavailable")
+
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
-    bot = MediaFailTgBot()
+    monkeypatch.setattr(main, "materialize_tg_event_media_for_upload", fail_materialize)
+    bot = DummyTgBot()
+
+    with pytest.raises(RuntimeError, match="materialized media unavailable"):
+        await main.publish_tg_event_announcement(event, long_text, None, bot)
+
+    assert not bot.messages
+    assert not bot.photos
+    assert not bot.media_groups
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_does_not_keep_text_mode_when_media_exists(monkeypatch):
+    long_text = " ".join(["Описание события."] * 20)
+    event = _event(
+        photo_urls=["https://img.example/0.jpg"],
+        tg_event_post_id=77,
+        tg_event_post_mode="text",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+    )
+    event.tg_event_source_hash = main.build_tg_event_source_hash(event, long_text)
+
+    async def fake_hook_text(event_arg, source_text):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
+    bot = DummyTgBot()
 
     url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
         event,
@@ -294,14 +350,11 @@ async def test_tg_event_publish_falls_back_to_text_when_album_media_fails(monkey
 
     assert url == "https://t.me/c/1234567890/101"
     assert post_id == 101
-    assert mode == "text"
-    assert source_hash
-    assert len(bot.media_groups) == 1
-    assert len(bot.messages) == 1
-    message_kwargs = bot.messages[0][2]
-    assert message_kwargs["disable_web_page_preview"] is True
-    assert message_kwargs["reply_markup"] is not None
-    assert "Подробнее" in bot.messages[0][1]
+    assert mode == "photo_caption"
+    assert source_hash == event.tg_event_source_hash
+    assert materialize_calls == [("https://img.example/0.jpg", 0)]
+    assert len(bot.photos) == 1
+    assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
 
 
 @pytest.mark.asyncio
