@@ -4383,37 +4383,84 @@ async def publish_tg_event_announcement(
     sent_url: str | None = None
     sent_id: int | None = None
     sent_mode = desired_mode
-    try:
-        if desired_mode == "photo_caption":
-            msg = await bot.send_photo(
+    fallback_text_html: str | None = None
+
+    async def send_text_fallback(reason: BaseException) -> tuple[str | None, int | None, str]:
+        nonlocal fallback_text_html
+        logging.warning(
+            "publish_tg_event_announcement media send failed; falling back to text event_id=%s mode=%s err=%s",
+            getattr(event, "id", None),
+            desired_mode,
+            reason,
+        )
+        if fallback_text_html is None:
+            fallback_text_html, _ = await build_tg_event_announcement_for_publish(
+                event,
+                text,
+                festival=festival,
+                force_caption_limit=False,
+                include_calendar_link=False,
+            )
+        if existing_id and existing_mode == "text":
+            await bot.edit_message_text(
                 chat_id=target,
-                photo=photo_urls[0],
-                caption=message_html,
+                message_id=int(existing_id),
+                text=fallback_text_html,
                 parse_mode="HTML",
+                disable_web_page_preview=True,
                 reply_markup=reply_markup,
             )
-            sent_id = msg.message_id
-            sent_url = message_link(msg.chat.id, msg.message_id)
+            return (
+                (getattr(event, "tg_event_post_url", None) or "").strip() or None,
+                int(existing_id),
+                "text",
+            )
+        msg = await bot.send_message(
+            target,
+            fallback_text_html,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=reply_markup,
+        )
+        return message_link(msg.chat.id, msg.message_id), msg.message_id, "text"
+
+    try:
+        if desired_mode == "photo_caption":
+            try:
+                msg = await bot.send_photo(
+                    chat_id=target,
+                    photo=photo_urls[0],
+                    caption=message_html,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                )
+                sent_id = msg.message_id
+                sent_url = message_link(msg.chat.id, msg.message_id)
+            except TelegramBadRequest as exc:
+                sent_url, sent_id, sent_mode = await send_text_fallback(exc)
         elif desired_mode == "album_caption":
             first = True
-            for chunk in chunks:
-                media = []
-                for url in chunk:
-                    if first:
-                        media.append(
-                            types.InputMediaPhoto(
-                                media=url,
-                                caption=message_html,
-                                parse_mode="HTML",
+            try:
+                for chunk in chunks:
+                    media = []
+                    for url in chunk:
+                        if first:
+                            media.append(
+                                types.InputMediaPhoto(
+                                    media=url,
+                                    caption=message_html,
+                                    parse_mode="HTML",
+                                )
                             )
-                        )
-                        first = False
-                    else:
-                        media.append(types.InputMediaPhoto(media=url))
-                msgs = await bot.send_media_group(chat_id=target, media=media)
-                if sent_id is None and msgs:
-                    sent_id = msgs[0].message_id
-                    sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
+                            first = False
+                        else:
+                            media.append(types.InputMediaPhoto(media=url))
+                    msgs = await bot.send_media_group(chat_id=target, media=media)
+                    if sent_id is None and msgs:
+                        sent_id = msgs[0].message_id
+                        sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
+            except TelegramBadRequest as exc:
+                sent_url, sent_id, sent_mode = await send_text_fallback(exc)
         else:
             msg = await bot.send_message(
                 target,

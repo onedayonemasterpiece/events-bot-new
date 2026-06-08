@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from aiogram.exceptions import TelegramBadRequest
 
 import main
 
@@ -50,6 +51,12 @@ class DummyTgBot:
 
     async def delete_message(self, **kwargs):
         self.deleted.append(kwargs)
+
+
+class MediaFailTgBot(DummyTgBot):
+    async def send_media_group(self, chat_id, media):
+        self.media_groups.append((chat_id, media))
+        raise TelegramBadRequest(method=SimpleNamespace(), message="WEBPAGE_MEDIA_EMPTY")
 
 
 def _event(**kwargs) -> main.Event:
@@ -260,6 +267,41 @@ async def test_tg_event_publish_sends_album_caption_for_multiple_media(monkeypat
     assert [item.media for item in bot.media_groups[0][1]][0] == "https://img.example/0.jpg"
     assert "Что делает этот вечер особенным?" in bot.media_groups[0][1][0].caption
     assert "Добавить в календарь" in bot.media_groups[0][1][0].caption
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_falls_back_to_text_when_album_media_fails(monkeypatch):
+    event = _event(
+        photo_urls=[f"https://img.example/{idx}.jpg" for idx in range(2)],
+        ics_post_url="https://t.me/c/asset/42",
+    )
+    long_text = " ".join(["Описание события."] * 40)
+
+    async def fake_hook_text(event_arg, source_text):
+        assert event_arg is event
+        assert source_text == long_text
+        return "Что делает этот вечер особенным? Водная программа и активности."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    bot = MediaFailTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        long_text,
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "text"
+    assert source_hash
+    assert len(bot.media_groups) == 1
+    assert len(bot.messages) == 1
+    message_kwargs = bot.messages[0][2]
+    assert message_kwargs["disable_web_page_preview"] is True
+    assert message_kwargs["reply_markup"] is not None
+    assert "Подробнее" in bot.messages[0][1]
 
 
 @pytest.mark.asyncio

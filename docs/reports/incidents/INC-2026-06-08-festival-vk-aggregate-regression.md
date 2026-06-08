@@ -42,6 +42,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - 2026-06-08 16:54-17:02 UTC: production UI E2E on `@events_love39_bot` launched `run_id=58b6d60816004b0ea57b390a03f0a784`; Kaggle processed exactly `@kraftmarket39/275` and `/276`, server import finished `success`, force rows were cleared, and new VK posts were created (`wall-231920894_2484`, `_2485`). Acceptance still failed: Smart Update logged the concrete `...?register=1` link but did not persist it, and `tg_event_publish` stayed pending for 2026-06-09 instead of producing visible `@kldevents` posts in the E2E cycle.
 - 2026-06-08 17:09-17:17 UTC: production UI E2E on `@events_love39_bot` launched `run_id=32122bc8b0a54c99b1046f12a8a5c17e`; Kaggle output probing completed the monitor without machine restart, both forced messages were imported, concrete `/276` registration URL persisted, and VK posts were created (`wall-231920894_2486`, `_2487`). Acceptance still failed for Telegram because `enqueue_job()` preserved an existing pending next-day `tg_event_publish.next_run_at` even after `next_tg_event_publish_run_at()` calculated a current-cycle slot.
 - 2026-06-08 17:24-17:35 UTC: production UI E2E on `@events_love39_bot` launched `run_id=17146249263c42b8b05616d38bb669d7`; Kaggle completed normally despite transient status HTTP 500, both forced messages imported, force rows were cleared, and lecture VK republished as `wall-231920894_2489`. Festival Telegram still failed acceptance because `telegraph_build:5787` was marked `error/stale` after 180 seconds while the LLM-first Telegraph render path was still legitimate work, leaving `tg_event_publish` blocked by `telegraph_build:5787:error`.
+- 2026-06-08 17:40-17:52 UTC: production UI E2E on `@events_love39_bot` launched `run_id=f68d043ed3174c0a83d77428a6667805`; run `2088` imported exactly `@kraftmarket39/275` and `/276`, force rows cleared, lecture VK was recreated after operator deletion as `wall-231920894_2490`, but festival `tg_event_publish` failed on Telegram Bot API media errors (`WEBPAGE_CURL_FAILED`, then `WEBPAGE_MEDIA_EMPTY`) before any `@kldevents` TG post was recorded.
 
 ## Root Cause
 
@@ -55,6 +56,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 8. `tg_event_publish` spacing treated stale next-day pending anchors as real future spacing even while the current publish window was open, so forced same-source reimports could recreate VK but defer Telegram event announcements to the next day.
 9. `enqueue_job()` preserved future `next_run_at` for all pending jobs. That is correct for deferred page rebuild coalescing, but wrong for `tg_event_publish` re-arm: a fresh Smart Update cycle must replace a stale next-day announcement slot with the current-cycle slot.
 10. `JOB_MAX_RUNTIME[telegraph_build]` was only 180 seconds. In production, LLM-first Telegraph rendering with Gemma empty-response fallback and Gemini recovery can exceed that, so the worker marked a still-healthy render as `stale` and pushed its dependency to 2036.
+11. Telegram event publishing treated remote media send errors as fatal. A festival event with media URLs that Telegram's Bot API could not preview/consume (`WEBPAGE_CURL_FAILED` / `WEBPAGE_MEDIA_EMPTY`) stayed in `tg_event_publish` retry instead of falling back to a text announcement.
 
 ## Contributing Factors
 
@@ -119,6 +121,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - Ignore stale next-day pending `tg_event_publish` anchors while the current-day publish window is open, so E2E reimports can publish visible Telegram event posts after dependencies complete.
 - Replace stale next-day `tg_event_publish.next_run_at` when re-arming an existing pending announcement; keep deferred page rebuild preservation separate from Telegram event announcement scheduling.
 - Increase `telegraph_build` runtime budget so LLM-first Telegraph rendering with fallback is not converted into a permanent `stale` dependency blocker.
+- Fall back from media publication to text publication when Telegram Bot API rejects event media URLs, so media preview problems do not block the required TG surface.
 
 ## Follow-up Actions
 
