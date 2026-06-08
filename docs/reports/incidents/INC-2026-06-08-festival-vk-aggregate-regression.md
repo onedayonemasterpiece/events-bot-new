@@ -1,6 +1,6 @@
 # INC-2026-06-08 Festival VK Aggregate Regression
 
-Status: investigating
+Status: mitigated
 Severity: sev2
 Service: `/start` add-event, festival queue, VK festival aggregate publishing, Telegram Monitoring containment
 Opened: 2026-06-08
@@ -45,6 +45,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - 2026-06-08 17:40-17:52 UTC: production UI E2E on `@events_love39_bot` launched `run_id=f68d043ed3174c0a83d77428a6667805`; run `2088` imported exactly `@kraftmarket39/275` and `/276`, force rows cleared, lecture VK was recreated after operator deletion as `wall-231920894_2490`, but festival `tg_event_publish` failed on Telegram Bot API media errors (`WEBPAGE_CURL_FAILED`, then `WEBPAGE_MEDIA_EMPTY`) before any `@kldevents` TG post was recorded.
 - 2026-06-08 18:03 UTC: temporary media fallback release produced `https://t.me/kldevents/68` as text-only. Acceptance failed because the source event had materialized media; text-only success for media events is now explicitly invalid.
 - 2026-06-08 19:12-19:22 UTC: production UI E2E on `@events_love39_bot` launched `run_id=2aee9428429648cea1cf11f7796b6cc3`; run `2092` imported exactly `@kraftmarket39/275` and `/276` with `events_imported=2`, cleared force rows, and republished lecture VK as `wall-231920894_2492`. Acceptance still failed because `telegraph_build:5787` materialized `Event.telegraph_url` but its outbox row remained `running`, so `tg_event_publish:5787` kept skipping on the dependency before media upload could start.
+- 2026-06-08 19:29 UTC: deployed `a6f3a66c`; the worker reconciled `telegraph_build:5787` from `running` to `done` using the already materialized Telegraph URL, downloaded the materialized WebP media from Yandex, and published `@kldevents/69` as `photo_caption`. External verification confirmed `@kldevents/67` and `/69` both have media and original non-`vk.cc` registration links; VK `kldevents` posts exist with photo attachments and correct shortlink targets; `kenigeventsofficial` has no new postponed posts.
 
 ## Root Cause
 
@@ -139,14 +140,17 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - deployed SHAs:
   - `db47175cc3993abf754c5e2518cfe899c7122975` (`fix(tg): add kraftmarket single-source monitor`)
   - `9e04bc70d7e9b1564704da11209eef1f1095b09a` (`fix(tg): tolerate kaggle status 5xx during monitor`)
+  - `a6f3a66c` (`fix(outbox): reconcile completed telegraph builds`)
 - deploy path:
   - branch `hotfix/kraftmarket-single-source-20260608`
   - both commits pushed to the branch and fast-forwarded to `origin/main`
   - manual `flyctl deploy --remote-only --app events-bot-new-wngqia`
-  - deployed image `registry.fly.io/events-bot-new-wngqia:deployment-01KTKV04P00A0SNQGM45D51Q1H`
-  - Fly machine `48e42d5b714228`, version `1240`, region `iad`
+  - latest deployed image `registry.fly.io/events-bot-new-wngqia:deployment-01KTMBA6TE9FV5BDF4S4ERN30X`
+  - Fly machine `48e42d5b714228`, version `1253`, region `iad`
 - regression checks:
   - `.venv/bin/python -m pytest tests/test_telegram_monitor_service.py tests/test_bot.py::test_festival_vk_sync_disabled_by_default -q` -> `6 passed`
+  - `.venv/bin/python -m pytest tests/test_job_running_stale.py tests/test_tg_event_publish.py -q` -> `23 passed`
+  - `.venv/bin/python -m py_compile main.py main_part2.py tests/test_job_running_stale.py tests/test_tg_event_publish.py`
   - `.venv/bin/python -m compileall source_parsing/telegram/service.py tests/test_telegram_monitor_service.py`
   - production UI E2E: `@events_love39_bot` `/tg` showed `Только @kraftmarket39`; click launched run `06addc951b7f4673a967855ccbb3bda7`
   - production log evidence: `tg_monitor.config ... sources=1`, `tg_monitor.sources sample=['kraftmarket39']`
@@ -156,8 +160,13 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
   - `ENABLE_FESTIVAL_VK_POSTS` unset in production, so whole-festival aggregate VK publishing remains disabled by default
   - `/data/kaggle_jobs.json` contains no active jobs after recovery
   - temporary E2E production `superadmin` grant for `user_id=8336351413` remains permitted for the active E2E debugging session and must not be revoked until external acceptance passes.
+  - accepted production run: `ops_run 2092`, `run_id=2aee9428429648cea1cf11f7796b6cc3`, `sources_scanned=1`, `messages_processed=2`, `messages_forced=2`, `events_imported=2`, `errors_count=0`, force rows cleared.
+  - `@kldevents/67`: photo present; links include concrete `https://kgd80.ru/.../?register=1`; no `vk.cc`.
+  - `@kldevents/69`: photo present; links include `https://t.me/langeanna`; no `vk.cc`.
+  - VK `kldevents`: `wall-231920894_2492` and `wall-231920894_2486` exist with photo attachments; `vk.cc/cYBg3z` redirects to the concrete `kgd80.ru/.../?register=1`, and `vk.cc/cYdmeE` redirects to `https://t.me/langeanna`.
+  - VK `kenigeventsofficial`: `wall.get(filter=postponed)` returned `0` items after the accepted run.
 
-Closure remains blocked until a fresh `@kraftmarket39` production E2E import creates externally verified VK/TG posts through the normal process.
+Containment acceptance passed for the `@kraftmarket39` single-source import. The broader `/start` add-event and festival monitoring unification work remains tracked as follow-up technical debt.
 
 ## Prevention
 
