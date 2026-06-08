@@ -2512,6 +2512,15 @@ async def build_festival_vk_message(db: Database, fest: Festival) -> str:
     return "\n".join(lines)
 
 
+def festival_vk_posts_enabled() -> bool:
+    return (os.getenv("ENABLE_FESTIVAL_VK_POSTS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 async def sync_festival_vk_post(
     db: Database,
     name: str,
@@ -2521,6 +2530,18 @@ async def sync_festival_vk_post(
     nav_lines: list[str] | None = None,
     strict: bool = False,
 ) -> bool | None:
+    if not festival_vk_posts_enabled():
+        logging.info(
+            "festival VK posts disabled; skipping sync for %s",
+            name,
+            extra={
+                "action": "skipped_disabled",
+                "target": "vk",
+                "fest": name,
+                "nav_only": nav_only,
+            },
+        )
+        return False
     group_id = await get_vk_group_id(db)
     if not group_id:
         return

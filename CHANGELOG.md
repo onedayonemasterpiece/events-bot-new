@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: festival monitoring containment and VK aggregate guard**:
+  `/tg` now has a `Только @kraftmarket39` button that launches the existing
+  Telegram Monitoring + Smart Update pipeline with a one-source Kaggle config;
+  `scripts/run_tg_monitor.py` uses the same scoped path for its `--channel`.
+  Aggregated VK festival posts are disabled by default behind
+  `ENABLE_FESTIVAL_VK_POSTS=1`, while ordinary event-level VK/TG fanout remains
+  unchanged. Added incident `INC-2026-06-08-festival-vk-aggregate-regression`
+  and routed the festival monitoring technical debt in docs/agent instructions.
 - **Fixed: Telegram/VK event fanout ordering**:
   `tg_event_publish` now depends on the managed `vk_sync` job for publish-eligible
   events, and the job runner treats pending/running/error dependencies as

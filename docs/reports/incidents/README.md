@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-08-festival-vk-aggregate-regression.md`
+  - Scope: `/start` -> `Добавить событие`, Telegram Monitoring single-source containment for `@kraftmarket39`, Festival Queue/Universal Festival Parser, and `sync_festival_vk_post` VK aggregate publishing.
+  - Must not regress: urgent `@kraftmarket39` monitoring must run through the same Smart Update import path with a one-source Kaggle config; festival VK aggregate posts must stay disabled unless `ENABLE_FESTIVAL_VK_POSTS=1`; ordinary event-level VK/TG fanout remains separate and must not publish whole-festival aggregates to obsolete communities.
 - `INC-2026-06-07-tg-event-publishing-media-calendar-dedup.md`
   - Scope: Telegram event publishing after Smart Update, `tg_event_publish`/`tg_ics_post` dependency order, calendar button target, Telegraph details link, Smart Update persisted poster dedup, and `vk_sync` managed-post idempotency.
   - Must not regress: a one-image event must publish as a single captioned media post with calendar button pointing to `event.ics_post_url`, not raw `ics_url`; multi-image posts must carry caption on media, not a separate text post unless explicitly redesigned; captions must include `Подробнее` when Telegraph exists and must not invent placeholder price/free information; managed-storage and raw-CDN copies of the same poster must collapse to one `event.photo_urls` entry and one persisted `EventPoster` after missing `phash` backfill; Smart Update acceptance requires both a real `@kldevents` post and a real `klgdevents` wall item (`wall.getById` non-empty), not merely a stale DB URL.

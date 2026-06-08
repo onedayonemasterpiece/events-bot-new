@@ -8,6 +8,7 @@
 2. Для “быстрого роутинга” используй `docs/routes.yml` (машиночитаемая карта).
 3. Для задач по E2E всегда сверяйся с `docs/operations/e2e-scenarios.md` и поддерживай этот индекс актуальным при изменении сценариев.
 4. Для задач по инцидентам или при упоминании `INC-*` сразу открывай `docs/operations/incident-management.md` и `docs/reports/incidents/README.md`.
+5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
 
 ## Incident Mode (critical)
 
@@ -53,6 +54,7 @@
 - **LLM/промпты** → `docs/llm/`.
 - **Справочники** (локации/праздники/шаблоны) → `docs/reference/`.
 - **Бэклог/задачи** (ещё не реализовано) → `docs/backlog/`.
+- **Техдолг фестивального мониторинга** → `docs/backlog/features/festival-monitoring-debt/README.md`.
 - **Отчёты/планы/ретроспективы** → `docs/reports/`.
 - **Тулзы/шпаргалки** → `docs/tools/`.
 

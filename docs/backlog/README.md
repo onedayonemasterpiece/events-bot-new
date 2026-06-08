@@ -13,6 +13,7 @@
   - strict shot reference for `Мобильная лента`: `docs/reference/09bc959616262101b9cd310629f08b84.jpg`
 - Guide excursions monitoring (экскурсии гидов): `docs/backlog/features/guide-excursions-monitoring/README.md`
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
+- Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
 
 ## Implemented (для ориентира)
 

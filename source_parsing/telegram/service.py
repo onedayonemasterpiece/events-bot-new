@@ -422,11 +422,18 @@ async def _build_config_payload(
     db: Database,
     *,
     run_id: str | None = None,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
+    requested_usernames = [
+        username
+        for username in (normalize_tg_username(raw) for raw in (source_usernames or []))
+        if username
+    ]
     async with db.get_session() as session:
-        res = await session.execute(
-            select(TelegramSource).where(TelegramSource.enabled.is_(True))
-        )
+        stmt = select(TelegramSource).where(TelegramSource.enabled.is_(True))
+        if requested_usernames:
+            stmt = stmt.where(TelegramSource.username.in_(sorted(set(requested_usernames))))
+        res = await session.execute(stmt)
         sources = res.scalars().all()
         force_map: dict[int, list[int]] = {}
         source_ids = [src.id for src in sources if src.id is not None]
@@ -457,6 +464,8 @@ async def _build_config_payload(
     }
     if run_id:
         payload["run_id"] = run_id
+    if requested_usernames:
+        payload["requested_source_usernames"] = sorted(set(requested_usernames))
     return payload
 
 
@@ -2925,6 +2934,7 @@ async def run_telegram_monitor(
     trigger: str = "manual",
     operator_id: int | None = None,
     ops_run_id: int | None = None,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> TelegramMonitorReport:
     started_ts = time.monotonic()
     run_id = run_id or uuid.uuid4().hex
@@ -2938,6 +2948,11 @@ async def run_telegram_monitor(
             operator_id=operator_id,
             details={"run_id": run_id},
         )
+    requested_usernames = [
+        username
+        for username in (normalize_tg_username(raw) for raw in (source_usernames or []))
+        if username
+    ]
     status = "error"
     report_loaded = False
     report = TelegramMonitorReport(run_id=run_id)
@@ -2972,6 +2987,7 @@ async def run_telegram_monitor(
                         chat_id=chat_id,
                         run_id=run_id,
                         send_progress=send_progress,
+                        source_usernames=requested_usernames or None,
                     )
                     report_loaded = True
                     status = _resolve_tg_monitor_ops_status(report, report_loaded=report_loaded)
@@ -3013,6 +3029,7 @@ async def run_telegram_monitor(
             },
             details={
                 "run_id": run_id,
+                "source_usernames": sorted(set(requested_usernames)),
                 "errors": list(report.errors or [])[:40],
             },
         )
@@ -3025,11 +3042,16 @@ async def _run_telegram_monitor_locked(
     chat_id: int | None = None,
     run_id: str,
     send_progress: bool = False,
+    source_usernames: list[str] | tuple[str, ...] | None = None,
 ) -> TelegramMonitorReport:
     logger.info("tg_monitor.lock_acquired run_id=%s", run_id)
     kaggle_status_message_id: int | None = None
     kaggle_kernel_ref = KERNEL_REF
-    config_payload = await _build_config_payload(db, run_id=run_id)
+    config_payload = await _build_config_payload(
+        db,
+        run_id=run_id,
+        source_usernames=source_usernames,
+    )
     sources = config_payload.get("sources") or []
     logger.info(
         "tg_monitor.config run_id=%s sources=%d telegraph_urls=%d",
@@ -3057,6 +3079,9 @@ async def _run_telegram_monitor_locked(
             "tg_monitor.sources sample=%s",
             [src.get("username") for src in sources[:5]],
         )
+    elif source_usernames:
+        requested = ", ".join(f"@{username}" for username in source_usernames)
+        raise RuntimeError(f"Telegram source scope has no enabled sources: {requested}")
     secrets_payload = _build_secrets_payload()
     try:
         payload_keys = sorted((json.loads(secrets_payload) or {}).keys())
@@ -3161,6 +3186,7 @@ async def _run_telegram_monitor_locked(
                     "chat_id": chat_id,
                     "pid": os.getpid(),
                     "dataset_slugs": [dataset_cipher, dataset_key],
+                    "source_usernames": sorted(set(source_usernames or [])),
                 },
             )
             registered_recovery = True

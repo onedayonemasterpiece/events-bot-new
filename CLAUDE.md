@@ -18,6 +18,7 @@
 - Start with the canonical project docs: `AGENTS.md`, `docs/README.md`, and `docs/routes.yml`.
 - For behavior changes, keep canonical docs in `docs/` updated and add a concise entry to `CHANGELOG.md` under `[Unreleased]`.
 - Treat `AGENTS.md` as the repository-wide routing and workflow contract.
+- For festival monitoring, Festival Queue, `/start` add-event publication drift, or VK festival aggregate posts, also open `docs/backlog/features/festival-monitoring-debt/README.md` and `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md` before proposing changes.
 - Respect Telegram session boundaries exactly as written in `AGENTS.md`: `TELEGRAM_AUTH_BUNDLE_S22` is for Kaggle/remote monitoring only, while `TELEGRAM_AUTH_BUNDLE_E2E` (or `TELEGRAM_SESSION`) is for local live E2E only.
 - Do not substitute one auth bundle for another without explicit user permission, even as a temporary debugging shortcut.
 

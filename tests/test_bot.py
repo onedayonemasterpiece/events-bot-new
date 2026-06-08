@@ -10367,6 +10367,18 @@ async def test_festival_vk_message_period_location(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_festival_vk_sync_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("ENABLE_FESTIVAL_VK_POSTS", raising=False)
+
+    async def fail_get_vk_group_id(_db):
+        raise AssertionError("disabled festival VK sync must not read VK settings")
+
+    monkeypatch.setattr(main, "get_vk_group_id", fail_get_vk_group_id)
+
+    assert await main.sync_festival_vk_post(None, "Solo", bot=None) is False
+
+
+@pytest.mark.asyncio
 async def test_festival_page_no_events_shows_info(tmp_path: Path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

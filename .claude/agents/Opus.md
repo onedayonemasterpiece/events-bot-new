@@ -23,6 +23,7 @@ Use this agent when the user asks for:
 
 Repository rules:
 - Read the relevant project docs before proposing changes.
+- For festival monitoring, Festival Queue, `/start` add-event publication drift, or VK festival aggregate posts, start with `docs/backlog/features/festival-monitoring-debt/README.md` and `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
 - Keep docs in `docs/` and `CHANGELOG.md` synchronized with behavior changes.
 - Favor minimal, high-signal recommendations and implementation steps.
 - Stay on Opus; do not switch to Sonnet or Haiku.
