@@ -3775,6 +3775,7 @@ TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.com/klgdevents"
 TG_EVENT_CAPTION_VISIBLE_LIMIT = 1000
 TG_EVENT_ALBUM_SIZE = 10
+TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v3"
 
@@ -4164,6 +4165,7 @@ async def build_tg_event_announcement_for_publish(
 
 
 def build_tg_event_source_hash(event: Event, text: str) -> str:
+    media_signature = "\n".join(_unique_tg_media_urls(getattr(event, "photo_urls", None) or []))
     return content_hash(
         "\n".join(
             [
@@ -4186,6 +4188,7 @@ def build_tg_event_source_hash(event: Event, text: str) -> str:
                 str(getattr(event, "ics_post_url", "") or ""),
                 str(getattr(event, "telegraph_url", "") or ""),
                 str(getattr(event, "telegraph_path", "") or ""),
+                media_signature,
                 text or "",
             ]
         )
@@ -4222,7 +4225,10 @@ def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
             duplicate = False
             for seen_dhash in seen_dhashes:
                 distance = _tg_media_dhash_distance(dhash, seen_dhash)
-                if distance is not None and distance <= 8:
+                if (
+                    distance is not None
+                    and distance <= TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE
+                ):
                     duplicate = True
                     break
             if duplicate:
@@ -4391,6 +4397,24 @@ async def publish_tg_event_announcement(
             getattr(event, "id", None),
         )
         raise
+
+    if (
+        existing_id
+        and int(existing_id) != int(sent_id or 0)
+        and existing_mode in {"text", "photo_caption"}
+        and sent_mode != existing_mode
+    ):
+        try:
+            await bot.delete_message(chat_id=target, message_id=int(existing_id))
+        except Exception:
+            logging.warning(
+                "publish_tg_event_announcement old message delete failed event_id=%s old_id=%s old_mode=%s new_mode=%s",
+                getattr(event, "id", None),
+                existing_id,
+                existing_mode,
+                sent_mode,
+                exc_info=True,
+            )
 
     logging.info(
         "publish_tg_event_announcement done event_id=%s url=%s media=%d mode=%s",

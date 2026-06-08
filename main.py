@@ -16833,7 +16833,7 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
             .limit(max_sources)
         )
     ).all()
-    if len(source_rows) <= 1:
+    if not source_rows:
         return 0
 
     poster_rows = (

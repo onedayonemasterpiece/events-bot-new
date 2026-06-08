@@ -10,6 +10,7 @@ class DummyTgBot:
         self.messages = []
         self.photos = []
         self.media_groups = []
+        self.deleted = []
         self._next_id = 100
 
     async def send_message(self, chat_id, text, **kwargs):
@@ -46,6 +47,9 @@ class DummyTgBot:
 
     async def edit_message_caption(self, **_kwargs):
         raise AssertionError("edit should not be called in first publish")
+
+    async def delete_message(self, **kwargs):
+        self.deleted.append(kwargs)
 
 
 def _event(**kwargs) -> main.Event:
@@ -100,6 +104,15 @@ def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
     assert main.build_tg_event_source_hash(event, "source text") != base_hash
 
 
+def test_tg_event_source_hash_includes_media_signature():
+    event = _event()
+    base_hash = main.build_tg_event_source_hash(event, "source text")
+
+    event.photo_urls = ["https://img.example/poster.webp"]
+
+    assert main.build_tg_event_source_hash(event, "source text") != base_hash
+
+
 def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
@@ -118,6 +131,19 @@ def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
         base,
         distinct,
     ]
+
+
+def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
+    base = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/8c/"
+        "8c22d06b5b245a25046594720972196274e373193230d963c70b520848490504.webp"
+    )
+    near_duplicate = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/89/"
+        "8922d26b59245825046514720972196274e373193230d963c70b180048490504.webp"
+    )
+
+    assert main._unique_tg_media_urls([base, near_duplicate]) == [base]
 
 
 @pytest.mark.asyncio
@@ -165,6 +191,38 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert button.text == "📅 20 июня 19:00 · Добавить в календарь"
     assert button.url == "https://t.me/c/asset/42"
     assert not bot.media_groups
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_replaces_old_text_when_media_appears(monkeypatch):
+    event = _event(
+        photo_urls=["https://img.example/0.jpg"],
+        tg_event_post_id=77,
+        tg_event_post_mode="text",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+    long_text = " ".join(["Описание события."] * 20)
+
+    async def fake_hook_text(event_arg, source_text):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        long_text,
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "photo_caption"
+    assert source_hash and source_hash != "old"
+    assert len(bot.photos) == 1
+    assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
 
 
 @pytest.mark.asyncio

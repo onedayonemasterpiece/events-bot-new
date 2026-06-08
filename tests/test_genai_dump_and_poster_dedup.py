@@ -6,10 +6,11 @@ import pytest
 from sqlmodel import select
 
 import markup
+import main
 import media_dedup
 import smart_event_update as su
 from db import Database
-from models import Event, EventPoster
+from models import Event, EventPoster, EventSource
 from smart_event_update import (
     PosterCandidate,
     _apply_posters,
@@ -97,6 +98,69 @@ def test_posters_without_phash_are_kept():
     p2 = _poster(phash=None, sha256="s2", catbox_url="c2")
     out = _dedup_near_duplicate_posters([p1, p2])
     assert len(out) == 2
+
+
+@pytest.mark.asyncio
+async def test_telegraph_rehydrate_fetches_single_source_when_event_has_no_media(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async def fake_fetch(source_type, source_url, *, limit):
+        assert source_type == "telegram"
+        assert source_url == "https://t.me/source/1"
+        return [
+            PosterCandidate(
+                supabase_url="https://storage.example/p.webp",
+                sha256="sha-one",
+                phash="ab" * 32,
+            )
+        ]
+
+    monkeypatch.setattr(main, "_fetch_event_source_poster_candidates", fake_fetch)
+
+    async with db.get_session() as session:
+        event = Event(
+            title="T",
+            description="D",
+            date="2026-06-01",
+            time="20:00",
+            location_name="Place",
+            source_text="T",
+            photo_urls=[],
+            photo_count=0,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        session.add(
+            EventSource(
+                event_id=event.id,
+                source_type="telegram",
+                source_url="https://t.me/source/1",
+            )
+        )
+        await session.commit()
+
+        added = await main._rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            event,
+            event_id=event.id,
+        )
+        await session.commit()
+        await session.refresh(event)
+        rows = (
+            await session.execute(
+                select(EventPoster).where(EventPoster.event_id == event.id)
+            )
+        ).scalars().all()
+
+    assert added == 1
+    assert event.photo_urls == ["https://storage.example/p.webp"]
+    assert event.photo_count == 1
+    assert len(rows) == 1
 
 
 @pytest.mark.asyncio
