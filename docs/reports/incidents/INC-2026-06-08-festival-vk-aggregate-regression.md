@@ -159,7 +159,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
   - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `job_outbox_worker=ok`, `issues=[]`
   - `ENABLE_FESTIVAL_VK_POSTS` unset in production, so whole-festival aggregate VK publishing remains disabled by default
   - `/data/kaggle_jobs.json` contains no active jobs after recovery
-  - temporary E2E production `superadmin` grant for `user_id=8336351413` remains permitted for the active E2E debugging session and must not be revoked until external acceptance passes.
+  - temporary E2E production `superadmin` grant for `user_id=8336351413` was revoked after external acceptance: `is_superadmin` changed from `1` to `0`, row preserved, `blocked=0`.
   - accepted production run: `ops_run 2092`, `run_id=2aee9428429648cea1cf11f7796b6cc3`, `sources_scanned=1`, `messages_processed=2`, `messages_forced=2`, `events_imported=2`, `errors_count=0`, force rows cleared.
   - `@kldevents/67`: photo present; links include concrete `https://kgd80.ru/.../?register=1`; no `vk.cc`.
   - `@kldevents/69`: photo present; links include `https://t.me/langeanna`; no `vk.cc`.
