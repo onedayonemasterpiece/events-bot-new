@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Added: CrumpleVideo VK official wall fanout**:
+  `/v - Запуск завтра` story publish payload now also posts the rendered
+  wall-video to `https://vk.com/kenigeventsofficial` with a
+  `События на завтра` caption for tomorrow-only selections, or a generated
+  period caption when CrumpleVideo expands beyond tomorrow. Covered by
+  `tests/test_video_announce_story_publish.py` and `tests/test_vk_hashtags.py`.
 - **Fixed: ANNA LANGE author promo visibility**:
   `/promo report` now counts `tg_chat_author` campaign targets such as
   `kraftmarket39:langeanna` by their Telegram source chat + stored

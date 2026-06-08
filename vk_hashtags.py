@@ -93,6 +93,13 @@ def vk_date_hashtags(value: str | date | None) -> list[str]:
     return [f"#{parsed.day}{month}", f"#{parsed.day}_{month}"]
 
 
+def vk_date_hashtags_underscore_first(value: str | date | None) -> list[str]:
+    tags = vk_date_hashtags(value)
+    if len(tags) != 2:
+        return tags
+    return [tags[1], tags[0]]
+
+
 def dedupe_vk_hashtags(tags: Iterable[str | None]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -200,6 +207,53 @@ def build_vk_video_announce_caption(
     if not hashtags:
         return title_text
     return f"{title_text}\n\n{hashtags}"
+
+
+def _format_russian_date(value: date) -> str:
+    return f"{value.day} {_MONTHS_GENITIVE[value.month]}"
+
+
+def _format_russian_date_range(start: date, end: date) -> str:
+    if start == end:
+        return _format_russian_date(start)
+    if start.month == end.month:
+        return f"{start.day}-{end.day} {_MONTHS_GENITIVE[end.month]}"
+    return f"{_format_russian_date(start)} - {_format_russian_date(end)}"
+
+
+def build_vk_crumple_official_caption(
+    *,
+    cities: Iterable[str | None] = (),
+    dates: Iterable[str | date | None] = (),
+    tomorrow: date | None = None,
+) -> str:
+    parsed_dates: list[date] = []
+    seen_dates: set[str] = set()
+    for raw in dates:
+        parsed = raw if isinstance(raw, date) else _parse_iso_date(str(raw or ""))
+        if parsed is None:
+            continue
+        key = parsed.isoformat()
+        if key in seen_dates:
+            continue
+        seen_dates.add(key)
+        parsed_dates.append(parsed)
+    parsed_dates.sort()
+
+    if parsed_dates and tomorrow is not None and parsed_dates == [tomorrow]:
+        title = "События на завтра"
+    elif parsed_dates:
+        title = f"События на {_format_russian_date_range(parsed_dates[0], parsed_dates[-1])}"
+    else:
+        title = "События"
+
+    tags: list[str | None] = list(cities)
+    for value in parsed_dates:
+        tags.extend(vk_date_hashtags_underscore_first(value))
+    hashtags = format_vk_hashtag_line(tags)
+    if not hashtags:
+        return title
+    return f"{title} {hashtags}"
 
 
 def is_vk_announce_hashtag_line(value: str | None) -> bool:

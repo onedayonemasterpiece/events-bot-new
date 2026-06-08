@@ -62,6 +62,13 @@
 
 ## Feature-Owned Digests
 
+- `CrumpleVideo` owns an additional VK wall-video fanout to
+  `https://vk.com/kenigeventsofficial`. It is configured in
+  `video_announce.scenario` as `vk:kenigeventsofficial:wall` and uses the
+  `crumple_official` caption variant: `События на завтра` when selected dates
+  are exactly tomorrow in `Europe/Kaliningrad`, otherwise
+  `События на <дата или диапазон>`, followed by selected city hashtags and
+  date hashtags in the requested underscore-first order.
 - Guide excursions VK digest принадлежит фиче [Guide Excursions Monitoring](../guide-excursions-monitoring/README.md), но обязан использовать общий VK wall contract из этого документа.
 - Для `https://vk.com/uhtykaliningrad` нужен отдельный target group id/env, независимый от `VK_EVENTS_GROUP_ID` (`klgdevents`) и `/vkgroup` daily-настройки.
 - Такие дайджесты публикуются через `post_to_vk`, поэтому по умолчанию попадают в отложку: минимум через 10 минут от текущего времени, с теми же `VK_POSTPONED_*` правилами и community-author contract.

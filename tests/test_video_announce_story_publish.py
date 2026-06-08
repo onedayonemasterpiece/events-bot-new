@@ -68,6 +68,16 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "mode": "upload",
             "transport": "vk_wall_story",
         },
+        {
+            "peer": "kenigeventsofficial",
+            "label": "vk:kenigeventsofficial:wall",
+            "delay_seconds": 300,
+            "mode": "upload",
+            "transport": "vk_wall",
+            "caption_variant": "crumple_official",
+            "blocking": False,
+            "required": False,
+        },
         {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
         {"peer": "@i_love_kaliningrad", "delay_seconds": 600, "mode": "repost_previous"},
     ]
@@ -96,6 +106,11 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     assert "#Светлогорск" in vk_wall_target["caption"]
     assert "#17мая" in vk_wall_target["caption"]
     assert "#17_мая" in vk_wall_target["caption"]
+    official_wall_target = config["targets"][6]
+    assert official_wall_target["peer"] == "kenigeventsofficial"
+    assert official_wall_target["caption"] == (
+        "События на 17 мая #Калининград #Светлогорск #17_мая #17мая"
+    )
     assert [
         (target["peer"], target.get("transport", "telethon"))
         for target in config["targets"]
@@ -106,6 +121,7 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         ("club231828790", "vk_wall_story"),
         ("@loving_guide39", "telethon"),
         ("klgdevents", "vk_wall_story"),
+        ("kenigeventsofficial", "vk_wall"),
         ("@catwithbag", "telethon"),
         ("@i_love_kaliningrad", "telethon"),
     ]

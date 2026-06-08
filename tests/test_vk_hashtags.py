@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from vk_hashtags import (
     build_vk_announce_hashtags,
+    build_vk_crumple_official_caption,
     build_vk_event_hashtags,
     build_vk_video_announce_caption,
     normalize_vk_hashtag,
@@ -73,3 +74,27 @@ def test_build_vk_video_announce_caption():
     assert "#Калининград" in caption
     assert "#24мая" in caption
     assert "#24_мая" in caption
+
+
+def test_build_vk_crumple_official_caption_uses_tomorrow_copy_and_requested_date_order():
+    caption = build_vk_crumple_official_caption(
+        cities=["Калининград", "Светлогорск"],
+        dates=["2026-06-09"],
+        tomorrow=date(2026, 6, 9),
+    )
+
+    assert caption == (
+        "События на завтра #Калининград #Светлогорск #9_июня #9июня"
+    )
+
+
+def test_build_vk_crumple_official_caption_uses_generated_period_when_not_tomorrow():
+    caption = build_vk_crumple_official_caption(
+        cities=["Калининград"],
+        dates=["2026-06-10", "2026-06-12"],
+        tomorrow=date(2026, 6, 9),
+    )
+
+    assert caption == (
+        "События на 10-12 июня #Калининград #10_июня #10июня #12_июня #12июня"
+    )

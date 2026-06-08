@@ -8,14 +8,18 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from models import Channel, Setting
 from source_parsing.telegram.split_secrets import encrypt_secret
 from telegram_business import load_business_story_targets
-from vk_hashtags import build_vk_video_announce_caption
+from vk_hashtags import (
+    build_vk_crumple_official_caption,
+    build_vk_video_announce_caption,
+)
 from .kaggle_client import KaggleClient
 
 logger = logging.getLogger(__name__)
@@ -28,6 +32,7 @@ DEFAULT_CIPHER_DATASET_SLUG = "crumple-video-story-secrets-cipher"
 DEFAULT_KEY_DATASET_SLUG = "crumple-video-story-secrets-key"
 DEFAULT_SINGLE_DAY_STORY_PERIOD_SECONDS = 12 * 60 * 60
 DEFAULT_MULTI_DAY_STORY_PERIOD_SECONDS = 24 * 60 * 60
+LOCAL_STORY_TZ = ZoneInfo("Europe/Kaliningrad")
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +48,7 @@ class StoryTarget:
     user_hash: str = ""
     fallback_peer: str = ""
     caption: str = ""
+    caption_variant: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -65,6 +71,8 @@ class StoryTarget:
             payload["fallback_peer"] = self.fallback_peer
         if self.caption:
             payload["caption"] = self.caption
+        if self.caption_variant:
+            payload["caption_variant"] = self.caption_variant
         return payload
 
 
@@ -387,6 +395,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             mode = "upload"
             transport = "telethon"
             caption = ""
+            caption_variant = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"extra-{idx + 1}")
@@ -401,6 +410,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
             transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
+            caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -434,6 +444,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
                 required=required,
                 transport=transport,
                 caption=caption,
+                caption_variant=caption_variant,
                 fallback_peer=fallback_peer,
             )
         )
@@ -468,6 +479,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             mode = "upload"
             transport = "telethon"
             caption = ""
+            caption_variant = ""
         elif isinstance(item, dict):
             peer = _normalize_peer(str(item.get("peer") or item.get("target") or ""))
             label = str(item.get("label") or peer or f"override-{idx + 1}")
@@ -482,6 +494,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
             transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
+            caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")
             if isinstance(raw_blocking, bool):
                 blocking = raw_blocking
@@ -515,6 +528,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
                 required=required,
                 transport=transport,
                 caption=caption,
+                caption_variant=caption_variant,
                 fallback_peer=fallback_peer,
             )
         )
@@ -699,13 +713,22 @@ async def build_story_publish_config(
     caption_text = str(caption).strip() if isinstance(caption, str) else ""
 
     target_payloads = [target.as_dict() for target in targets]
+    normalized_dates = _normalize_story_event_dates(selected_event_dates)
     vk_wall_caption = build_vk_video_announce_caption(
         cities=selected_event_cities or [],
-        dates=selected_event_dates or [],
+        dates=normalized_dates,
         title=caption_text or "Видеоанонс",
+    )
+    vk_crumple_official_caption = build_vk_crumple_official_caption(
+        cities=selected_event_cities or [],
+        dates=normalized_dates,
+        tomorrow=datetime.now(LOCAL_STORY_TZ).date() + timedelta(days=1),
     )
     for target_payload in target_payloads:
         if target_payload.get("transport") != "vk_wall":
+            continue
+        if str(target_payload.get("caption_variant") or "").strip() == "crumple_official":
+            target_payload["caption"] = vk_crumple_official_caption
             continue
         current_caption = str(target_payload.get("caption") or "").strip()
         if not current_caption or current_caption == "Видеоанонс":
@@ -729,7 +752,7 @@ async def build_story_publish_config(
         config["upload_profile"] or "-",
         config["period_seconds"],
         config["pinned"],
-        _normalize_story_event_dates(selected_event_dates),
+        normalized_dates,
         [target.peer for target in targets],
     )
     return config

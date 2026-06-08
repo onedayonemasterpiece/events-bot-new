@@ -2007,6 +2007,16 @@ class VideoAnnounceScenario:
                     "transport": "vk_wall_story",
                 },
                 {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "delay_seconds": 300,
+                    "mode": "upload",
+                    "transport": "vk_wall",
+                    "caption_variant": "crumple_official",
+                    "blocking": False,
+                    "required": False,
+                },
+                {
                     "peer": "@catwithbag",
                     "delay_seconds": 300,
                     "mode": "repost_previous",
