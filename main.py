@@ -14262,20 +14262,36 @@ async def next_tg_event_publish_run_at(
     async with db.get_session() as session:
         rows = (
             await session.execute(
-                select(JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+                select(JobOutbox.event_id, JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
                 .where(JobOutbox.task == JobTask.tg_event_publish)
                 .order_by(JobOutbox.id.desc())
                 .limit(200)
             )
         ).all()
     latest: datetime | None = None
-    for status, next_run_at, updated_at in rows:
+    now_local_date = now_utc.astimezone(LOCAL_TZ).date()
+    for _event_id, status, next_run_at, updated_at in rows:
         anchor = None
         if status in {JobStatus.pending, JobStatus.running}:
             anchor = _ensure_utc(next_run_at)
         elif status == JobStatus.done:
             anchor = _ensure_utc(updated_at)
         if not anchor:
+            continue
+        # A stale next-day pending announcement should not push a fresh manual
+        # import/re-arm out of the current publish window. Same-day pending
+        # anchors still space posts normally.
+        if (
+            status in {JobStatus.pending, JobStatus.running}
+            and anchor.astimezone(LOCAL_TZ).date() > now_local_date
+            and candidate.astimezone(LOCAL_TZ).date() == now_local_date
+        ):
+            logging.info(
+                "TG_EVENT spacing ignoring next-day pending anchor status=%s anchor=%s now=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                now_utc.isoformat(),
+            )
             continue
         if anchor > max_spacing_anchor:
             logging.warning(

@@ -39,6 +39,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - 2026-06-08 UTC: root cause expanded again: repeat enqueue merged dependency sets, so a fixed no-time reimport could keep stale `tg_ics_post:<event_id>` dependency on `tg_event_publish`.
 - 2026-06-08 UTC: root cause expanded again: a targeted `@kraftmarket39` import could still trigger `_reconcile_primary_import_vk_sync_jobs()` after import, causing broad old Telegram-origin VK re-arms unrelated to the current E2E. Kaggle status API also kept returning HTTP 500 after the notebook had already written `telegram_results.json`, leaving the prod process waiting until restart/recovery.
 - 2026-06-08 UTC: root cause expanded again: forced replay for an already-known exact `event_source.source_url` skipped Smart Update and only re-armed publication tasks, so the corrected concrete registration link from `messages[].links` could not replace the broad `https://kgd80.ru` ticket link.
+- 2026-06-08 16:54-17:02 UTC: production UI E2E on `@events_love39_bot` launched `run_id=58b6d60816004b0ea57b390a03f0a784`; Kaggle processed exactly `@kraftmarket39/275` and `/276`, server import finished `success`, force rows were cleared, and new VK posts were created (`wall-231920894_2484`, `_2485`). Acceptance still failed: Smart Update logged the concrete `...?register=1` link but did not persist it, and `tg_event_publish` stayed pending for 2026-06-09 instead of producing visible `@kldevents` posts in the E2E cycle.
 
 ## Root Cause
 
@@ -48,6 +49,8 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 4. Telegram Monitoring imported the current results and then ran a global Telegram-origin VK reconcile by default. That made a single-source containment run behave like broad historical catch-up.
 5. Kaggle polling depended on `GetKernelSessionStatus` as the only live completion signal. When that API returned repeated HTTP 500 while the output was already present, the current process kept waiting and the result was only picked up after restart/recovery.
 6. Forced exact-source replay short-circuited existing events before Smart Update. That made it good at requeueing posts but unable to repair event fields from the fresh payload.
+7. LLM merge could omit `ticket_link`; in that branch Smart Update applied only `merge_data["ticket_link"]` and lost the already-refined candidate URL. The existing broad `https://kgd80.ru` and its VK shortlink survived.
+8. `tg_event_publish` spacing treated stale next-day pending anchors as real future spacing even while the current publish window was open, so forced same-source reimports could recreate VK but defer Telegram event announcements to the next day.
 
 ## Contributing Factors
 
@@ -108,6 +111,8 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - Make global Telegram-origin VK reconcile explicit opt-in (`TG_MONITORING_GLOBAL_VK_RECONCILE=1`) so `/tg` single-source E2E only re-arms touched events.
 - During transient Kaggle status failures, probe Kaggle output and treat same-`run_id` `telegram_results.json` as completion so E2E does not require Fly machine restart to progress.
 - Route forced exact-source replay through Smart Update before publication re-arm, so data fixes and concrete registration links are part of the normal import process.
+- Preserve more-specific same-host candidate registration links through LLM merge and clear stale VK shortlinks when the event ticket link changes.
+- Ignore stale next-day pending `tg_event_publish` anchors while the current-day publish window is open, so E2E reimports can publish visible Telegram event posts after dependencies complete.
 
 ## Follow-up Actions
 

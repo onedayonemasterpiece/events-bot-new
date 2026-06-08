@@ -47,6 +47,15 @@
   through Smart Update first, so concrete hidden/entity registration links can
   replace broad landing-page ticket links before VK/TG posts are recreated.
   Covered by `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
+- **Fixed: Telegram Monitoring ticket/TG publish re-arm**:
+  Smart Update now preserves a more specific same-host registration URL from a
+  Telegram candidate even when the LLM merge response omits `ticket_link`, and
+  clears stale VK shortlinks when that URL changes. Telegram event publish
+  spacing also ignores stale next-day pending anchors while the current-day
+  publish window is open, so forced single-source reimports can reach
+  `@kldevents` in the same E2E cycle instead of being deferred to tomorrow.
+  Covered by `tests/test_smart_event_update_ticket_fields.py` and
+  `tests/test_tg_event_publish.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`
   explicitly, use local `.env` only for the human Telethon session, verify

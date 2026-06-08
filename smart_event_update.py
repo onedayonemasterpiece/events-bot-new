@@ -9202,14 +9202,45 @@ def _apply_ticket_fields(
     cand_priority = _trust_priority(candidate_trust)
     existing_priority = _trust_priority(getattr(event, "ticket_trust_level", None))
 
+    def _more_specific_ticket_link(candidate_url: str | None, existing_url: str | None) -> bool:
+        candidate_raw = str(candidate_url or "").strip()
+        existing_raw = str(existing_url or "").strip()
+        if not candidate_raw or not existing_raw or candidate_raw == existing_raw:
+            return False
+        try:
+            cand = urlsplit(candidate_raw)
+            existing = urlsplit(existing_raw)
+        except Exception:
+            return False
+        cand_host = (cand.netloc or "").lower().removeprefix("www.")
+        existing_host = (existing.netloc or "").lower().removeprefix("www.")
+        if cand.scheme not in {"http", "https"} or existing.scheme not in {"http", "https"}:
+            return False
+        if cand_host != existing_host:
+            return False
+        cand_path = (cand.path or "/").rstrip("/") or "/"
+        existing_path = (existing.path or "/").rstrip("/") or "/"
+        if existing_path != "/" and not (cand_path == existing_path or cand_path.startswith(existing_path + "/")):
+            return False
+        cand_query = dict(parse_qsl(cand.query, keep_blank_values=True))
+        existing_query = dict(parse_qsl(existing.query, keep_blank_values=True))
+        return len(cand_path) > len(existing_path) or (
+            bool(cand_query) and cand_query != existing_query
+        )
+
     def _can_override(existing: Any) -> bool:
         if existing in (None, ""):
             return True
         return cand_priority > existing_priority
 
-    if ticket_link and _can_override(event.ticket_link):
+    if ticket_link and (
+        _can_override(event.ticket_link)
+        or _more_specific_ticket_link(ticket_link, getattr(event, "ticket_link", None))
+    ):
         event.ticket_link = ticket_link
         event.ticket_trust_level = candidate_trust
+        event.vk_ticket_short_url = None
+        event.vk_ticket_short_key = None
         added.append("ticket_link")
     if ticket_price_min is not None and _can_override(event.ticket_price_min):
         event.ticket_price_min = ticket_price_min

@@ -39,12 +39,18 @@
     `event_source.source_url` уже есть в БД: это нужно, чтобы исправлять данные события (например конкретную
     hidden/entity registration ссылку вместо широкого landing-page `ticket_link`) и уже затем re-arm'ить публикации
     при `skipped_nochange`.
+    Smart Update сохраняет более конкретную same-host registration ссылку из Telegram candidate даже если LLM merge
+    не вернул `ticket_link`; при смене ссылки старый `vk_ticket_short_url` сбрасывается, чтобы VK-пост не переиспользовал
+    короткую ссылку на broad landing page.
     Обычный `/tg` импорт re-arm'ит только события, затронутые текущим `telegram_results.json`; глобальный catch-up
     старых Telegram-origin событий отключён по умолчанию, чтобы single-source E2E не создавал неожиданные старые VK
     посты. Исторический широкий reconcile доступен только как явный операторский режим через
     `TG_MONITORING_GLOBAL_VK_RECONCILE=1`.
     `vk_sync` в outbox имеет высокий глобальный priority, но всё ещё ждёт свои per-event prerequisites; готовые
     Telegram imports не должны стоять за чужим Telegraph/page backlog.
+    Re-arm `tg_event_publish` при открытом дневном publish window не должен сдвигаться на завтра из-за старого pending
+    anchor на следующий день: forced single-source E2E должен доводить затронутые события до видимого `@kldevents`
+    поста в текущем цикле после Telegraph/VK prerequisites.
     Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
     и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
     Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media
