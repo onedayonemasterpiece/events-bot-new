@@ -14280,10 +14280,21 @@ async def schedule_event_update_tasks(
         results[JobTask.tg_ics_post] = await enqueue_job(
             db, eid, JobTask.tg_ics_post, depends_on=tg_ics_deps
         )
+    vk_dep: str | None = None
+    if not skip_vk_sync:
+        # Schedule vk_sync before Telegram event publishing so the two public
+        # surfaces keep the same Smart Update contract. Imported VK events keep
+        # `source_vk_post_url` pointing at the external source wall post; those
+        # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
+        if not _event_has_managed_vk_post(ev):
+            vk_dep = await enqueue_job(db, eid, JobTask.vk_sync)
+            results[JobTask.vk_sync] = vk_dep
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
         tg_event_deps = [results[JobTask.telegraph_build]]
         if JobTask.tg_ics_post in results:
             tg_event_deps.append(results[JobTask.tg_ics_post])
+        if vk_dep:
+            tg_event_deps.append(vk_dep)
         tg_event_next_run_at = await next_tg_event_publish_run_at(db)
         results[JobTask.tg_event_publish] = await enqueue_job(
             db,
@@ -14389,12 +14400,6 @@ async def schedule_event_update_tasks(
             )
     else:
         logging.info("page jobs disabled via DISABLE_PAGE_JOBS")
-    if not skip_vk_sync:
-        # Schedule vk_sync unless we already have a managed klgdevents post for this event.
-        # Imported VK events keep `source_vk_post_url` pointing at the external source wall
-        # post; those must still get a redactional post in `VK_EVENTS_GROUP_ID`.
-        if not _event_has_managed_vk_post(ev):
-            results[JobTask.vk_sync] = await enqueue_job(db, eid, JobTask.vk_sync)
     logging.info("scheduled event tasks for %s", eid)
     if drain_nav:
         await _drain_nav_tasks(db, eid)
@@ -16299,6 +16304,58 @@ async def _run_due_jobs_once_locked(
                     blocking_task=etask.value if isinstance(etask, JobTask) else etask,
                     blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
                     blocking_run_at=enext.isoformat() if enext else None,
+                )
+                continue
+            dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]] = []
+            deps = [d for d in (obj.depends_on or "").split(",") if d]
+            for dep in deps:
+                dep_job: JobOutbox | None = None
+                task_part, sep, event_part = dep.partition(":")
+                if sep and event_part.isdigit() and task_part in {t.value for t in JobTask}:
+                    dep_res = await session.execute(
+                        select(JobOutbox)
+                        .where(
+                            JobOutbox.event_id == int(event_part),
+                            JobOutbox.task == JobTask(task_part),
+                        )
+                        .order_by(JobOutbox.id.desc())
+                        .limit(1)
+                    )
+                    dep_job = _normalize_job(dep_res.scalar_one_or_none())
+                else:
+                    dep_res = await session.execute(
+                        select(JobOutbox)
+                        .where(JobOutbox.coalesce_key == dep)
+                        .order_by(JobOutbox.id.desc())
+                        .limit(1)
+                    )
+                    dep_job = _normalize_job(dep_res.scalar_one_or_none())
+                if dep_job and dep_job.status != JobStatus.done:
+                    dep_blockers.append((dep, dep_job.status, dep_job.next_run_at))
+            if dep_blockers:
+                logging.info(
+                    "RUN skip eid=%s task=%s blocked_by_deps=%s",
+                    obj.event_id,
+                    obj.task.value,
+                    ",".join(
+                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                        for key, status, _ in dep_blockers
+                    ),
+                )
+                logline(
+                    "RUN",
+                    obj.event_id,
+                    "skip",
+                    job_id=obj.id,
+                    task=obj.task.value,
+                    blocking_deps=[
+                        {
+                            "key": key,
+                            "status": status.value if isinstance(status, JobStatus) else status,
+                            "next_run_at": run_at.isoformat() if run_at else None,
+                        }
+                        for key, status, run_at in dep_blockers
+                    ],
                 )
                 continue
             obj.status = JobStatus.running

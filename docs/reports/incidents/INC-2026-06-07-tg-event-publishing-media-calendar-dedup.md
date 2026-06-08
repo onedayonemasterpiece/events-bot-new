@@ -48,6 +48,8 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-08 09:45 UTC: root cause found in `_rehydrate_missing_event_source_posters_for_telegraph`: it returned early when `len(source_rows) <= 1`, so single-source Telegram events with zero stored media never rehydrated source photos before Telegraph/TG/VK fanout. `build_tg_event_source_hash` also ignored media URLs, so a later media repair would not invalidate the old text-only Telegram post.
 - 2026-06-08 09:45 UTC: single-source media rehydrate and media-aware TG idempotency deployed as Fly release `v1235` / image `deployment-01KTK9NSN3FDT6NW8CNEV0ZVTY`; `/healthz` returned ready.
 - 2026-06-08 09:45 UTC: compensating catch-up for event `5755` rehydrated three source photos, rebuilt `https://telegra.ph/Zojkina-kvartira-06-07`, created VK postponed post `https://vk.com/wall-231920894_2412`, republished Telegram as album `https://t.me/c/3954607218/44`, and deleted old text-only `/42`. At the scheduled public slot VK exposed the post as `https://vk.com/wall-231920894_2413`, and production DB/job evidence was normalized to the public URL.
+- 2026-06-08 10:18 UTC: operator requested a title-order diff between `@kldevents` and VK `klgdevents`. Telethon/VK API comparison showed Telegram top sequence `Заключительный гала-концерт` -> `Английский разговорный клуб` -> `Зойкина квартира` -> `Мастер и Маргарита` while public VK top was `Зойкина квартира` -> older VK queue items. Production DB confirmed some fresh Telegram posts pointed at much older managed VK posts, and several text-only Telegram posts had `vk_sync_missing_media_for_telegram_event`.
+- 2026-06-08 10:24 UTC: scheduling root cause found: `tg_event_publish` was enqueued before `vk_sync` and depended only on `telegraph_build`/`tg_ics_post`; the job runner also ignored `depends_on` during execution and only blocked on lower-id pending/running jobs, so an `error`/backoff `vk_sync` did not prevent Telegram publication.
 
 ## Root Cause
 
@@ -60,6 +62,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 7. The follow-up TG publisher still deduped media URLs only by exact string. Telegraph rendering could select/prune near-duplicate poster assets, while `publish_tg_event_announcement` still chose `album_caption` from multiple Supabase `p/dh16/...` URLs whose perceptual hashes differed by only a few bits.
 8. The Telegraph source-media rehydrate helper only repaired multi-source events. A single Telegram source row with zero persisted posters was treated as "nothing to aggregate", so a valid source photo could be left out of Telegraph, Telegram event publishing, and VK sync.
 9. Telegram event post idempotency hashed text fields but not media state. After a source-media repair, an already-published text-only post could still be treated as current unless the media signature participates in `tg_event_source_hash`.
+10. The two-surface fanout contract was not encoded in the outbox graph. `tg_event_publish` could run without a successful managed `vk_sync`, and the runner did not treat failed dependencies as blockers, so Telegram and VK could diverge in both set and order.
 
 ## Contributing Factors
 
@@ -115,6 +118,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - Add a TG-side safety-net that collapses near-duplicate Supabase `p/dh16/...` media URLs before choosing single-photo vs album publishing mode.
 - Rehydrate source media for single-source Telegram/VK events when the event has no stored media before Telegraph/TG/VK fanout.
 - Include the deduped media signature in Telegram event idempotency, and republish/delete stale text-only messages when repaired media changes the Telegram post mode.
+- Make `tg_event_publish` depend on managed `vk_sync` for publish-eligible events, and make the runner block pending/running/error dependency rows until they reach `done`.
 - Verify managed VK URL existence before treating a matching `vk_source_hash` as terminal; if `wall.getById` returns no item, republish via the normal VK sync path.
 - Detect Telegram-origin events by `t.me` source URL or explicit `EventSource.source_type in ('telegram', 'tg')`, not by numeric source ids that VK imports also populate.
 - Keep `job_outbox_worker` alive when stats/diagnostic logging fails, logging the stats failure without terminating the task.
@@ -153,6 +157,10 @@ The first production Telegram event announcement in `@kldevents` was published a
   - Telethon verification for `@kldevents` confirmed old text-only `/42` is absent and new `/44` is visible as an album caption with photo media; latest album continuation messages are `/45` and `/46`.
   - VK verification confirmed public `wall.getById` sees `https://vk.com/wall-231920894_2413` with photo attachments. Production DB/job evidence was normalized from postponed `2412` to public `2413`; `vk_sync` and `tg_event_publish` job rows for event `5755` are `done`.
   - Post-catch-up `/healthz` returned HTTP 200 with `ok=true`, `ready=true`, `job_outbox_worker=ok`, `add_event_worker=ok`, and `issues=[]`.
+  - Channel title-order diff before the ordering fix showed `@kldevents` contained Telegram-only/far-old-VK events (`Мастер и Маргарита`, `Женитьба`, `Собачье сердце`, `№ 13`) while public VK did not; this is the regression that the `tg_event_publish -> vk_sync` dependency now guards.
+  - Ordering regression checks after the code change:
+    - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py tests/test_tg_event_publish.py tests/test_job_outbox_depends.py`
+    - `PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp /home/dev/projects/events-bot-new/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tg_event_publish.py tests/test_job_outbox_depends.py tests/test_job_due_filter.py` (`15 passed in 2.22s`)
   - follow-up regression checks:
     - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py main_part2.py vk_hashtags.py vk_coauthors.py source_parsing/handlers.py source_parsing/smart_update_report.py tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py`
     - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m pytest tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py -q` (`48 passed in 6.52s`; pytest process was manually killed after emitting the success summary because the local shell session stayed open).
@@ -162,3 +170,4 @@ The first production Telegram event announcement in `@kldevents` was published a
 
 - Regression tests now cover captioned media publishing, calendar post button URL, scheduling dependency on `tg_ics_post`, persisted poster dedup with missing `phash`, stale managed VK URLs whose `wall.getById` item is missing, and `job_outbox_worker` resilience when stats logging fails.
 - Regression tests now also cover single-source source-media rehydrate, media URL participation in Telegram event idempotency, borderline near-dHash duplicate collapse, and stale text-post replacement when media appears later.
+- Regression tests now also cover the fanout order contract: Telegram event publishing depends on managed VK sync, and dependency errors/backoff block downstream publication instead of letting Telegram run ahead.
