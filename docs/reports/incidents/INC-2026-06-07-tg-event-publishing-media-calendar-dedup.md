@@ -36,6 +36,10 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-07 21:15 UTC: after the `_event_has_telegram_origin` fix deployed, the production worker retried `vk_sync:5779` and created managed VK post `https://vk.com/wall-231920894_2391`; VK later exposed the scheduled item as public wall item `https://vk.com/wall-231920894_2392`, and production DB/job evidence was normalized to that public URL.
 - 2026-06-07 21:22 UTC: post-deploy `/healthz` returned 503 because `job_outbox_worker` task had ended with `LookupError` while the app, DB, bot session, and schedulers were otherwise alive.
 - 2026-06-07 21:57 UTC: follow-up Smart Update publishing polish deployed: unified `Посты: VK, TG` report line, Telegram quiet-hour spacing, city/type hashtags, and VK coauthor proposal parameters with fallback.
+- 2026-06-08 09:10 UTC: operator reported follow-up `@kldevents` issues: album posts still showed visually duplicate pictures, album posts had a text `Добавить в календарь` link instead of an inline button, and `https://t.me/kldevents/40` was text-only.
+- 2026-06-08 10:02 UTC: Telethon E2E inspection confirmed the calendar behavior is split by Telegram format: single-photo posts `34/35` have inline buttons to `ics_post_url`; album post `29` has the expected caption text link because Bot API media groups cannot carry inline keyboards; date-only posts such as `32/36/38/40` have no calendar action.
+- 2026-06-08 10:06 UTC: Telethon media download/dHash check confirmed active near-duplicate albums in `@kldevents`: `29/30` hamming `4`, `32/33` hamming `2`, `38/39` hamming `6`; `36/37` hamming `10` remains a less certain two-image case. Direct Telegraph checks for the same pages showed one rendered image for `Vystavka-Biletyory-20`, `Karta-treh-muzeev`, and `Tvorcheskij-chellendzh`, so the TG publisher was still seeing a richer/less-pruned `event.photo_urls` list than the Telegraph renderer.
+- 2026-06-08 10:09 UTC: `@kldevents/40` Telethon inspection confirmed `media=None`, no buttons, Telegraph `https://telegra.ph/Sobache-serdce-06-07-2` has `0` figures/images. This specific post is evidence of an event/media-intake gap or image-less source, not proof that TG publishing dropped an already attached image.
 
 ## Root Cause
 
@@ -45,6 +49,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 4. `job_sync_vk_source_post` skipped publishing when `vk_source_hash` matched and `source_vk_post_url` looked like a managed `klgdevents` URL, without verifying that `wall.getById` still returned a real VK item.
 5. `_event_has_telegram_origin` treated non-null `source_chat_id` / `source_message_id` as Telegram-origin. VK auto-import stores VK group/post ids in the same columns, so a VK-origin event could be blocked by the Telegram text-only media guard before managed VK publication.
 6. The background `job_outbox_worker` protected job execution errors, but its periodic stats heartbeat ran outside that protection; a diagnostic `LookupError` could terminate the worker task and make health fail even though the main app remained alive.
+7. The follow-up TG publisher still deduped media URLs only by exact string. Telegraph rendering could select/prune near-duplicate poster assets, while `publish_tg_event_announcement` still chose `album_caption` from multiple Supabase `p/dh16/...` URLs whose perceptual hashes differed by only a few bits.
 
 ## Contributing Factors
 
@@ -97,6 +102,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - Use `ics_post_url` for calendar actions; make `tg_event_publish` depend on `tg_ics_post` when available.
 - Add Telegraph `Подробнее` to the footer.
 - Backfill missing poster `phash` values and prune persisted near-duplicate `EventPoster` rows.
+- Add a TG-side safety-net that collapses near-duplicate Supabase `p/dh16/...` media URLs before choosing single-photo vs album publishing mode.
 - Verify managed VK URL existence before treating a matching `vk_source_hash` as terminal; if `wall.getById` returns no item, republish via the normal VK sync path.
 - Detect Telegram-origin events by `t.me` source URL or explicit `EventSource.source_type in ('telegram', 'tg')`, not by numeric source ids that VK imports also populate.
 - Keep `job_outbox_worker` alive when stats/diagnostic logging fails, logging the stats failure without terminating the task.
@@ -104,6 +110,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 ## Follow-up Actions
 
 - [ ] Add a replay fixture for `vk_inbox.id=8307` if live E2E exposes another gap outside unit coverage.
+- [ ] After the 2026-06-08 media safety-net deploy, run a production Smart Update/import event with near-duplicate Supabase poster URLs and confirm `@kldevents` gets one `photo_caption` post instead of a duplicate album.
 
 ## Release And Closure Evidence
 

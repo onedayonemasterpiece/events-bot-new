@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram event publisher media near-dedup**:
+  `@kldevents` posts now collapse near-duplicate Supabase `p/dh16/...`
+  event media URLs before choosing `sendPhoto` vs `sendMediaGroup`, preventing
+  visually identical poster variants from becoming multi-photo Telegram albums
+  when the Telegraph page already renders a single deduped image. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: Telegram Monitoring Smart Update post links report**:
   per-post `Smart Update (детали событий)` blocks in `/tg` now use the same
   unified `Посты: VK ... · TG ...` line as the generic Smart Update report,

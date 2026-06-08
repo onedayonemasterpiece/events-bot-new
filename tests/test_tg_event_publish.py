@@ -100,6 +100,26 @@ def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
     assert main.build_tg_event_source_hash(event, "source text") != base_hash
 
 
+def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
+    base = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
+        "0c9a2cd38cb24672c27010e8004d884b84434062a0d264522cc29896985624c0.webp"
+    )
+    near_duplicate = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
+        "0c9a2cd38cb24672c27010f8004d884b84234062a0d264522cc298b6985624c0.webp"
+    )
+    distinct = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/89/"
+        "892b6145103c3c3e2c0aae2a2b0b608921893489108c18281d241c380c5000d0.webp"
+    )
+
+    assert main._unique_tg_media_urls([base, near_duplicate, distinct, base]) == [
+        base,
+        distinct,
+    ]
+
+
 @pytest.mark.asyncio
 async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(monkeypatch):
     event = _event(

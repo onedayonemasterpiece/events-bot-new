@@ -4197,13 +4197,37 @@ def _chunked_tg_media(urls: Sequence[str], size: int = TG_EVENT_ALBUM_SIZE) -> l
     return [clean[i : i + size] for i in range(0, len(clean), size)]
 
 
+def _tg_media_dhash_from_url(url: str) -> str | None:
+    match = re.search(r"/p/dh16/[0-9a-f]{2}/([0-9a-f]{64})\.webp(?:[?#].*)?$", url, re.I)
+    return match.group(1).lower() if match else None
+
+
+def _tg_media_dhash_distance(left: str, right: str) -> int | None:
+    try:
+        return (int(left, 16) ^ int(right, 16)).bit_count()
+    except Exception:
+        return None
+
+
 def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
     clean: list[str] = []
     seen: set[str] = set()
+    seen_dhashes: list[str] = []
     for raw in urls or []:
         url = str(raw or "").strip()
         if not url or url in seen:
             continue
+        dhash = _tg_media_dhash_from_url(url)
+        if dhash:
+            duplicate = False
+            for seen_dhash in seen_dhashes:
+                distance = _tg_media_dhash_distance(dhash, seen_dhash)
+                if distance is not None and distance <= 8:
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            seen_dhashes.append(dhash)
         seen.add(url)
         clean.append(url)
     return clean

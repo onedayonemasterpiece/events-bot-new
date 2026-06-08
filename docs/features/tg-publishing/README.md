@@ -28,7 +28,7 @@
 - Если у события одно уникальное изображение, канонический пост — `sendPhoto` с caption, кнопкой календаря и всеми ссылками в одном сообщении.
 - Если уникальных изображений несколько, канонический пост — `sendMediaGroup`: caption ставится на первое изображение, а календарь добавляется как текстовая ссылка в caption, потому что Telegram Bot API не поддерживает inline-кнопки у media group.
 - Caption всегда удерживается в `1000` видимых символов: если LLM hook или инфоблок всё ещё длинные, deterministic safety-net режет только narrative body; заголовок, инфоблок, хештеги и footer links сохраняются.
-- Перед публикацией `event.photo_urls` должны быть дедуплицированы на уровне Smart Update/event storage: managed storage URL и raw CDN URL одного изображения не должны одновременно попадать в Telegram.
+- Перед публикацией `event.photo_urls` должны быть дедуплицированы на уровне Smart Update/event storage: managed storage URL и raw CDN URL одного изображения не должны одновременно попадать в Telegram. Сам TG publisher дополнительно схлопывает near-duplicate Supabase `p/dh16/...` media URLs по близкому perceptual hash, чтобы уже отрендеренная Telegraph-страница с одним постером не превращалась в альбом из визуальных дублей.
 
 ## Проверки
 
