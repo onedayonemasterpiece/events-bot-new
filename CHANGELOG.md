@@ -75,6 +75,11 @@
   text-only posts. Telegram event text also uses the original `ticket_link` and
   never the VK-only `vk_ticket_short_url`. Covered by
   `tests/test_tg_event_publish.py`.
+- **Fixed: Telegraph outbox result reconciliation**:
+  a `telegraph_build` job that is still marked `running` but has already
+  materialized `Event.telegraph_url` is reconciled to `done`, so downstream
+  `tg_event_publish` jobs are not blocked until the runtime timeout. Covered by
+  `tests/test_job_running_stale.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`
   explicitly, use local `.env` only for the human Telethon session, verify

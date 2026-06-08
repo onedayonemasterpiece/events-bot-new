@@ -16236,6 +16236,22 @@ async def _run_due_jobs_once_locked(
         running_jobs = [_normalize_job(job) for job in running_rows.scalars().all()]
         stale: list[str] = []
         for rjob in running_jobs:
+            if rjob.task == JobTask.telegraph_build and rjob.event_id is not None:
+                ev = await session.get(Event, int(rjob.event_id))
+                link = (getattr(ev, "telegraph_url", None) or "").strip() if ev else ""
+                if link:
+                    rjob.status = JobStatus.done
+                    rjob.last_error = None
+                    rjob.last_result = link
+                    rjob.updated_at = now
+                    rjob.next_run_at = now
+                    session.add(rjob)
+                    logging.info(
+                        "OUTBOX_RUNNING_RESULT key=%s result=%s",
+                        rjob.coalesce_key or f"{rjob.task.value}:{rjob.event_id}",
+                        link,
+                    )
+                    continue
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
