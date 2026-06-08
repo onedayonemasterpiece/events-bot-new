@@ -19345,9 +19345,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             ids = _vk_owner_and_post_id(existing_vk_post_url)
             if ids:
                 response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
-                items = response.get("response") if isinstance(response, dict) else response
-                if not isinstance(items, list):
-                    items = [items] if items else []
+                items = _vk_wall_get_by_id_items(response)
                 post_exists = bool(items)
         except Exception:
             logging.warning(

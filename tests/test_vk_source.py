@@ -698,6 +698,43 @@ async def test_sync_vk_source_post_resolves_stale_postponed_id(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_recreates_deleted_managed_post(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = False
+
+    event = main.Event(
+        title="T",
+        description="",
+        date="2024-01-01",
+        time="00:00",
+        location_name="Place",
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_10"
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        assert kwargs["posts"] == "-1_10"
+        return {"response": {"items": []}}
+
+    async def fake_resolve(**kwargs):
+        return None
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **kwargs):
+        return "https://vk.com/wall-1_12"
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id", fake_resolve)
+    monkeypatch.setattr(main, "choose_vk_actor", lambda owner_id, intent: [main.VkActor("user", "u", "user")])
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    url = await main.sync_vk_source_post(event, "new", None, None)
+
+    assert url == "https://vk.com/wall-1_12"
+    assert event.source_vk_post_url == ""
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_preserves_attachments_on_partial_reupload(
     monkeypatch,
 ):
@@ -979,7 +1016,7 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     async def fake_vk_api(method, **kwargs):
         assert method == "wall.getById"
         assert kwargs["posts"] == "-231920894_2375"
-        return {"response": []}
+        return {"response": {"items": []}}
 
     calls = []
 

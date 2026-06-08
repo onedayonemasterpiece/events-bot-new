@@ -9,8 +9,11 @@
   VK posts also no longer surface stale `festival_pages` VK URLs as job results.
   Telegram Monitoring also refines broad landing-page `ticket_link` values to
   concrete hidden/entity registration links when the source label is ticketish.
-  Covered by `tests/test_tg_event_publish.py`, `tests/test_bot.py`, and
-  `tests/test_telegram_link_inference.py`.
+  `vk_sync` now understands the current VK `wall.getById` `response.items`
+  shape, so deleted postponed managed posts are republished instead of being
+  treated as existing URLs.
+  Covered by `tests/test_tg_event_publish.py`, `tests/test_bot.py`,
+  `tests/test_vk_source.py`, and `tests/test_telegram_link_inference.py`.
 - **Fixed: Telegram Monitoring Kaggle status polling**:
   `GetKernelSessionStatus` HTTP `429`/`5xx` responses are now treated as
   transient polling failures with backoff instead of immediately failing an

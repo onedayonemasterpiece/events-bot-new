@@ -2625,14 +2625,7 @@ async def sync_festival_vk_post(
                 response = await vk_api(
                     "wall.getById", posts=f"{owner_id}_{post_id}"
                 )
-                if isinstance(response, dict):
-                    items = response.get("response") or (
-                        response["response"] if "response" in response else response
-                    )
-                else:
-                    items = response or []
-                if not isinstance(items, list):
-                    items = [items] if items else []
+                items = _vk_wall_get_by_id_items(response)
                 text = items[0].get("text", "") if items else ""
             except Exception as e:
                 logging.error(
@@ -3525,13 +3518,13 @@ async def _resolve_existing_vk_post_url(
     if not ids:
         return post_url
     owner_id, post_id = ids
+    missing_confirmed = False
     try:
         response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
-        items = response.get("response") if isinstance(response, dict) else response
-        if not isinstance(items, list):
-            items = [items] if items else []
+        items = _vk_wall_get_by_id_items(response)
         if items:
             return post_url
+        missing_confirmed = True
     except Exception:
         logging.debug("resolve existing VK post getById failed: %s", post_url, exc_info=True)
 
@@ -3555,7 +3548,26 @@ async def _resolve_existing_vk_post_url(
             resolved,
         )
         return resolved
+    if missing_confirmed:
+        logging.info("sync_vk_source_post existing VK post is missing: %s", post_url)
+        return ""
     return post_url
+
+
+def _vk_wall_get_by_id_items(response: object) -> list[dict]:
+    if isinstance(response, dict):
+        payload = response.get("response", response)
+        if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            items = payload.get("items") or []
+        else:
+            items = payload
+    else:
+        items = response or []
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    if isinstance(items, dict) and ("id" in items or "text" in items or "attachments" in items):
+        return [items]
+    return []
 
 
 async def post_to_vk(
@@ -4842,13 +4854,7 @@ async def sync_vk_source_post(
                             "wall.getById",
                             posts=f"{ids_check[0]}_{ids_check[1]}",
                         )
-                        items_check = (
-                            response_check.get("response")
-                            if isinstance(response_check, dict)
-                            else response_check
-                        ) or []
-                        if not isinstance(items_check, list):
-                            items_check = [items_check] if items_check else []
+                        items_check = _vk_wall_get_by_id_items(response_check)
                         if items_check:
                             existing_has_photos = any(
                                 (att or {}).get("type") == "photo"
@@ -4938,14 +4944,7 @@ async def sync_vk_source_post(
                 response = await vk_api(
                     "wall.getById", posts=f"{ids[0]}_{ids[1]}"
                 )
-                if isinstance(response, dict):
-                    items = response.get("response") or (
-                        response["response"] if "response" in response else response
-                    )
-                else:
-                    items = response or []
-                if not isinstance(items, list):
-                    items = [items] if items else []
+                items = _vk_wall_get_by_id_items(response)
                 if items:
                     existing = items[0].get("text", "")
         except Exception as e:
@@ -5131,14 +5130,7 @@ async def edit_vk_post(
             )
         else:
             response = await vk_api("wall.getById", posts=f"{owner_id}_{post_id}")
-        if isinstance(response, dict):
-            items = response.get("response") or (
-                response["response"] if "response" in response else response
-            )
-        else:
-            items = response or []
-        if not isinstance(items, list):
-            items = [items] if items else []
+        items = _vk_wall_get_by_id_items(response)
         if items:
             post = items[0]
             post_text = post.get("text") or ""
