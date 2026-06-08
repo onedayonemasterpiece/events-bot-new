@@ -342,6 +342,45 @@ async def test_schedule_event_update_tasks_skips_calendar_dependency_without_tim
 
 
 @pytest.mark.asyncio
+async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        assert kwargs["posts"] == "-231920894_2432"
+        return {"response": {"items": []}}
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append((task, kwargs.get("depends_on"), kwargs.get("next_run_at")))
+        return f"{task.value}:job"
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    event = _event(
+        id=None,
+        source_vk_post_url="https://vk.com/wall-231920894_2432",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert any(task == main.JobTask.vk_sync for task, _, _ in tasks)
+    tg_publish = [item for item in tasks if item[0] == main.JobTask.tg_event_publish][0]
+    assert f"vk_sync:{event.id}" in tg_publish[1]
+
+
+@pytest.mark.asyncio
 async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -13943,7 +13943,7 @@ async def enqueue_job(
         dep_str = ",".join(depends_on) if depends_on else None
         if job:
             if job.status == JobStatus.done and task == JobTask.vk_sync:
-                if ev is None or _event_has_managed_vk_post(ev):
+                if ev is None or await _event_has_existing_managed_vk_post(ev):
                     logline("ENQ", event_id, "skipped", job_key=job_key)
                     return "skipped"
                 logging.warning(
@@ -14140,6 +14140,26 @@ def _event_has_managed_vk_post(ev: Event) -> bool:
     return str(abs(int(owner_ids[0]))) == target_group_id
 
 
+async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
+    if not _event_has_managed_vk_post(ev):
+        return False
+    existing_vk_url = (getattr(ev, "source_vk_post_url", None) or "").strip()
+    ids = _vk_owner_and_post_id(existing_vk_url)
+    if not ids:
+        return False
+    try:
+        response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
+        return bool(_vk_wall_get_by_id_items(response))
+    except Exception:
+        logging.warning(
+            "managed VK post existence probe failed event_id=%s url=%s",
+            getattr(ev, "id", None),
+            existing_vk_url,
+            exc_info=True,
+        )
+        return True
+
+
 def _event_vk_publish_end_date(ev: Event) -> date | None:
     end_raw = (getattr(ev, "end_date", None) or "").strip()
     if end_raw:
@@ -14310,7 +14330,7 @@ async def schedule_event_update_tasks(
         # surfaces keep the same Smart Update contract. Imported VK events keep
         # `source_vk_post_url` pointing at the external source wall post; those
         # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
-        if not _event_has_managed_vk_post(ev):
+        if not await _event_has_existing_managed_vk_post(ev):
             vk_dep = vk_dep_key
             results[JobTask.vk_sync] = vk_dep
             await enqueue_job(db, eid, JobTask.vk_sync)
