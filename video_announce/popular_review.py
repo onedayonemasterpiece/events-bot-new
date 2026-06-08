@@ -36,9 +36,6 @@ KONB_LIBRARY_LOCAL_TZ = ZoneInfo("Europe/Kaliningrad")
 # but does not exclude repeats — the operator explicitly allowed re-airing
 # events as long as they're not in the same video and not back-to-back.
 KONB_REPEAT_SCORE_PENALTY = 220.0
-PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES = 3
-PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION = 1
-PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND = "guaranteed_any_position"
 PARTNER_ECO_RECALL_LOOKAHEAD_DAYS = 14
 PARTNER_ECO_RECALL_LIMIT = 32
 POPULAR_REVIEW_WINDOW_CHAIN: tuple[tuple[int, int, str], ...] = (
@@ -1216,16 +1213,13 @@ async def build_popular_review_selection(
             reverse=True,
         )
 
-    allow_partner_off_filter_promo = partner_track_id == ECO_NATURE_PARTNER_TRACK_ID
     promo_picks: list[PopularReviewPick] = []
-    off_filter_partner_promo: list[PopularReviewPick] = []
-    partner_filter_matched_count = len(fresh) if event_filter is not None else 0
     try:
         promo_candidates = await resolve_video_promo_candidates(
             db,
             profile_key=profile_key,
             now_utc=now_utc,
-            include_global_profile=(partner_track_id is None or allow_partner_off_filter_promo),
+            include_global_profile=True,
         )
     except Exception:
         logger.exception("video_announce.popular_review: failed to resolve promo candidates")
@@ -1256,26 +1250,6 @@ async def build_popular_review_selection(
                 "reason": decision.reason,
                 "extra": decision.extra,
             }
-            if (
-                allow_partner_off_filter_promo
-                and not decision.matched
-                and not decision.needs_manual_review
-            ):
-                off_filter_partner_promo.append(
-                    PopularReviewPick(
-                        event=event,
-                        score=999.0,
-                        source_window="promo",
-                        source_post_url=getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None) or "",
-                        source_label="promo",
-                        anti_repeat_status="promo",
-                        description=preferred_scene_description(event),
-                        promo_campaign_id=candidate.campaign_id,
-                        promo_activity_id=candidate.activity_id,
-                        promo_placement_kind=PARTNER_PROMO_OFF_FILTER_PLACEMENT_KIND,
-                    )
-                )
-                continue
             if not decision.matched and not (admit_manual_review and decision.needs_manual_review):
                 logger.info(
                     "video_announce.popular_review: skipped promo event by partner filter "
@@ -1293,7 +1267,6 @@ async def build_popular_review_selection(
                     event_id,
                     decision.reason,
                 )
-            partner_filter_matched_count += 1
         promo_picks.append(
             PopularReviewPick(
                 event=event,
@@ -1308,45 +1281,6 @@ async def build_popular_review_selection(
                 promo_placement_kind=candidate.placement_kind,
             )
         )
-
-    if event_filter is not None and off_filter_partner_promo:
-        if (
-            partner_filter_matched_count >= PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES
-            and max_events > PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES
-        ):
-            allowed = off_filter_partner_promo[:PARTNER_PROMO_OFF_FILTER_MAX_PER_SELECTION]
-            promo_picks.extend(allowed)
-            for pick in allowed:
-                event_id = int(pick.event.id) if pick.event.id is not None else None
-                if event_id is not None:
-                    filter_trace.setdefault(event_id, {})
-                    filter_trace[event_id].update(
-                        {
-                            "matched": False,
-                            "needs_manual_review": False,
-                            "partner_promo_off_filter_admitted": True,
-                            "reason": (
-                                "promo admitted after "
-                                f"{partner_filter_matched_count} partner-filter matches"
-                            ),
-                        }
-                    )
-                    logger.info(
-                        "video_announce.popular_review: admitted one off-filter partner promo "
-                        "partner_track_id=%s event_id=%s matched_count=%s",
-                        partner_track_id,
-                        event_id,
-                        partner_filter_matched_count,
-                    )
-        else:
-            logger.info(
-                "video_announce.popular_review: skipped off-filter partner promo candidates "
-                "partner_track_id=%s matched_count=%s required=%s skipped=%s",
-                partner_track_id,
-                partner_filter_matched_count,
-                PARTNER_PROMO_OFF_FILTER_MIN_PROFILE_MATCHES,
-                len(off_filter_partner_promo),
-            )
 
     selected = _merge_promo_and_fresh_picks(
         promo_picks,

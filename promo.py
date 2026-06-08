@@ -1330,14 +1330,11 @@ async def resolve_video_promo_candidates(
         )
         rows = list(res.all())
 
-    result: list[PromoCandidate] = []
-    used_event_ids: set[int] = set()
+    buckets: list[list[PromoCandidate]] = []
     global_budget = VIDEO_PROMO_GLOBAL_MAX_PER_PUBLISH
     for campaign, activity, target in rows:
         if campaign.id is None or activity.id is None:
             continue
-        if len(result) >= global_budget:
-            break
         campaign_id = int(campaign.id)
         activity_id = int(activity.id)
         if campaign.total_exposure_goal is not None:
@@ -1372,7 +1369,6 @@ async def resolve_video_promo_candidates(
             if activity_daily >= max(0, int(activity.daily_cap)):
                 continue
         max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
-        max_per_publish = min(max_per_publish, global_budget - len(result))
         events = await _events_for_target(
             db,
             target=target,
@@ -1383,7 +1379,6 @@ async def resolve_video_promo_candidates(
             ev
             for ev in events
             if ev.id is not None
-            and int(ev.id) not in used_event_ids
             and _event_has_stored_poster(ev)
         ]
         if not events:
@@ -1410,11 +1405,11 @@ async def resolve_video_promo_candidates(
             placement_kind = PROMO_POLICY_GUARANTEED_ANY_POSITION
         else:
             placement_kind = "general_boost"
+        bucket: list[PromoCandidate] = []
         for ev in picked:
             if ev.id is None:
                 continue
-            used_event_ids.add(int(ev.id))
-            result.append(
+            bucket.append(
                 PromoCandidate(
                     event=ev,
                     campaign_id=campaign_id,
@@ -1427,6 +1422,24 @@ async def resolve_video_promo_candidates(
                     priority=normalize_promo_priority(getattr(campaign, "priority", None)),
                 )
             )
+        if bucket:
+            buckets.append(bucket)
+
+    result: list[PromoCandidate] = []
+    used_event_ids: set[int] = set()
+    max_rounds = max((len(bucket) for bucket in buckets), default=0)
+    for round_idx in range(max_rounds):
+        for bucket in buckets:
+            if len(result) >= global_budget:
+                return result
+            if round_idx >= len(bucket):
+                continue
+            candidate = bucket[round_idx]
+            event_id = int(candidate.event.id) if candidate.event.id is not None else None
+            if event_id is None or event_id in used_event_ids:
+                continue
+            used_event_ids.add(event_id)
+            result.append(candidate)
     return result
 
 

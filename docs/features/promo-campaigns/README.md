@@ -89,8 +89,11 @@ popular-post candidates. General promo:
 - honors activity-level `target_exposure_goal`, `daily_cap`, and `slot=1` /
   `selection_policy=first_slot` for one guaranteed first-slot exposure;
 - resolves campaigns by priority first (`0` highest, `3` lowest), then creation
-  order, so when many campaigns are active the two available video promo seats
-  go to the highest-priority eligible campaigns;
+  order;
+- distributes the global video promo budget fairly across eligible
+  campaigns/activities before giving any single campaign a second item. A
+  campaign with `max_per_publish=2` must not consume both seats while another
+  eligible active campaign has a renderable candidate;
 - is interleaved with organic popularity picks;
 - starts a promo item in position 1 only when the activity explicitly requests
   `slot=1` or `selection_policy=first_slot`; otherwise guaranteed-any-position
@@ -114,12 +117,13 @@ future event that is renderable.
 - it does not force slot 1 or 2;
 - it is guaranteed into CherryFlash at any available/lower position, replacing
   tail organic items if the normal organic list is already full;
-- it may contribute up to two future events when the promo budget has room.
-- for `partner_eco_nature_001`, a non-eco `80 историй` promo item may appear
-  only under the eco partner exception: at least three profile-matched
-  eco/nature/local-history events are already selected, and only one off-filter
-  promo candidate is admitted at any-position placement, never as first-slot
-  pressure.
+- it may contribute up to two future events when the promo budget has room, but
+  the fair-budget rule above lets another eligible campaign take one seat first.
+
+Partner CherryFlash tracks may consider global promo campaigns, but their
+topic/profile filters are hard gates: a promo item that fails the partner
+filter is skipped, not admitted as an off-filter exception. Promo must never be
+used as aggressive pressure that violates the partner track's subject contract.
 
 `Спектакль 8 ЖЕНЩИН` (event `4617`, show date 2026-05-22) is a live one-off
 campaign created on production on 2026-05-17:
@@ -263,6 +267,11 @@ selects active future events that have an `event_source` row with
   pipeline (`resolve_video_promo_candidates` + `video_announce/popular_review.py`),
   which filters every promo candidate by the announce's own content filter
   (КОНБ/eco). An event that fails a filter does not appear in that announce.
+- **Surface boundary**: this trigger is a CherryFlash-family promo. It can enter
+  public CherryFlash even when the event is outside the organic popularity/date
+  window, subject to future-date and renderable-poster checks. CrumpleVideo
+  `/v tomorrow` must not expand its period for this seed; it can include the
+  event only if the normal CrumpleVideo selection window already contains it.
 - **Concrete campaign**: `ensure_kraftmarket_langeanna_campaign` idempotently
   seeds `kraftmarket39 · @LANGEANNA → видеоанонс` — target
   `tg_chat_author`/`kraftmarket39:langeanna`, one `video_general` activity with

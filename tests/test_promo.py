@@ -603,25 +603,27 @@ async def test_video_promo_resolver_uses_priority_and_global_budget(tmp_path) ->
             ends_at=datetime(2026, 7, 1, 23, 59, tzinfo=timezone.utc),
         )
         high_event = _event("High Event", "2026-06-01")
+        high_event_2 = _event("High Event 2", "2026-06-02")
         low_event = _event("Low Event", "2026-06-01")
-        session.add_all([high, low, high_event, low_event])
+        session.add_all([high, low, high_event, high_event_2, low_event])
         await session.commit()
         await session.refresh(high)
         await session.refresh(low)
         await session.refresh(high_event)
+        await session.refresh(high_event_2)
         await session.refresh(low_event)
         session.add_all(
             [
                 PromoTarget(
                     campaign_id=int(high.id),
-                    target_type="event",
-                    event_id=int(high_event.id),
+                    target_type="festival",
+                    festival_name="high-festival",
                 ),
                 PromoActivity(
                     campaign_id=int(high.id),
                     surface="video_general",
                     profile_key="popular_review",
-                    max_per_publish=1,
+                    max_per_publish=2,
                     enabled=True,
                 ),
                 PromoTarget(
@@ -638,6 +640,8 @@ async def test_video_promo_resolver_uses_priority_and_global_budget(tmp_path) ->
                 ),
             ]
         )
+        high_event.festival = "high-festival"
+        high_event_2.festival = "high-festival"
         await session.commit()
 
     picks = await resolve_video_promo_candidates(

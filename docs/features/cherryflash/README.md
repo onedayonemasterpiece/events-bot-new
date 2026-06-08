@@ -765,6 +765,18 @@ This section captures the latest intro-direction request as an explicit delta to
 - [ ] One successful run publishes no more than `6` and no fewer than `2` events.
 - [ ] A run with only `0` or `1` eligible event does not publish a video.
 - [ ] Every selected event belongs to the same candidate universe that `/popular_posts` would surface at build time.
+- [ ] Active `video_general` promo campaigns may add renderable future events
+  outside the organic popularity/date window to the CherryFlash-family
+  selection, including `tg_chat_author` campaigns such as
+  `kraftmarket39:@LANGEANNA`.
+- [ ] The CherryFlash promo resolver distributes the two-item global promo
+  budget fairly across eligible campaigns/activities before giving any one
+  campaign a second item.
+- [ ] Partner CherryFlash tracks keep their topic/profile filters as hard gates:
+  promo candidates that do not match the partner filter are skipped rather than
+  admitted as off-filter exceptions.
+- [ ] CrumpleVideo remains period-bound for promo: author/festival promo must
+  not expand `/v tomorrow` beyond its normal selection window.
 - [ ] No event repeats inside one release.
 - [ ] No event repeats if its previous publication in this mode is less than `7` days old.
 - [ ] The same event can return after the cooldown expires.

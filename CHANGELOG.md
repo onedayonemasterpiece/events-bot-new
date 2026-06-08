@@ -14,8 +14,13 @@
   `Event.tg_source_author`, so the `kraftmarket39 · @LANGEANNA → видеоанонс`
   campaign no longer reports zero future events when matching imports exist.
   Telegram Monitoring ingest also falls back to a Telethon-style user `sender`
-  payload when `post_author` is absent for a supergroup message. Covered by
-  `tests/test_promo.py`.
+  payload when `post_author` is absent for a supergroup message. CherryFlash
+  promo selection now distributes its two-item promo budget fairly across
+  eligible campaigns/activities, so `80 историй` cannot consume both slots
+  before the ANNA LANGE campaign is considered; partner CherryFlash tracks now
+  keep topic/profile filters as hard gates instead of admitting off-filter promo
+  exceptions. Covered by `tests/test_promo.py` and
+  `tests/test_video_announce_popular_review.py`.
 - **Fixed: no-time Telegram event fanout**:
   events without a concrete start time no longer enqueue `tg_ics_post` or make
   `tg_event_publish` depend on it, so all-day/no-time imports can still reach
