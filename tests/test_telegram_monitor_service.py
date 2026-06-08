@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -99,6 +100,65 @@ async def test_poll_kaggle_kernel_retries_status_http_500(monkeypatch):
     assert status_data == {"status": "COMPLETE"}
     assert client.calls == 2
     assert any(phase == "poll_error" for phase, _kernel, _status in statuses)
+
+
+@pytest.mark.asyncio
+async def test_poll_kaggle_kernel_completes_from_output_when_status_api_keeps_500(
+    tmp_path, monkeypatch
+):
+    import source_parsing.telegram.service as tg_service
+
+    class Response:
+        status_code = 500
+
+    class StatusError(RuntimeError):
+        response = Response()
+
+    class FakeClient:
+        def __init__(self):
+            self.status_calls = 0
+            self.download_calls = 0
+
+        def get_kernel_status(self, _kernel_ref):
+            self.status_calls += 1
+            raise StatusError(
+                "500 Server Error: Internal Server Error for url: "
+                "https://api.kaggle.com/v1/kernels.KernelsApiService/GetKernelSessionStatus"
+            )
+
+        def download_kernel_output(self, _kernel_ref, *, path, force):
+            self.download_calls += 1
+            result_path = Path(path) / "telegram_results.json"
+            result_path.write_text(
+                json.dumps({"run_id": "run-output-ready"}),
+                encoding="utf-8",
+            )
+            return ["telegram_results.json"]
+
+    statuses = []
+
+    async def status_callback(phase, kernel_ref, status):
+        statuses.append((phase, kernel_ref, status))
+
+    monkeypatch.setattr(tg_service, "POLL_INTERVAL_SECONDS", 0)
+    monkeypatch.setattr(tg_service.tempfile, "gettempdir", lambda: str(tmp_path))
+    client = FakeClient()
+
+    status, status_data, _duration = await _poll_kaggle_kernel(
+        client,
+        "zigomaro/telegram-monitor-bot",
+        run_id="run-output-ready",
+        timeout_minutes=1,
+        status_callback=status_callback,
+    )
+
+    assert status == "complete"
+    assert status_data["status"] == "COMPLETE"
+    assert status_data["_completion_source"] == "kaggle_output_after_status_error"
+    assert client.status_calls == 1
+    assert client.download_calls == 1
+    assert any(phase == "poll_error" for phase, _kernel, _status in statuses)
+    assert any(phase == "complete" for phase, _kernel, _status in statuses)
 
 
 def test_format_event_block_shows_vk_and_tg_posts_line():

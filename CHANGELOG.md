@@ -30,7 +30,17 @@
   `GetKernelSessionStatus` HTTP `429`/`5xx` responses are now treated as
   transient polling failures with backoff instead of immediately failing an
   already-launched Telegram Monitoring kernel and deleting its temporary
-  datasets. Covered by `tests/test_telegram_monitor_service.py`.
+  datasets. During repeated status failures the server now also probes Kaggle
+  output and treats a matching-run `telegram_results.json` as completion, so a
+  finished monitor does not require a Fly machine restart to release the import
+  path. Covered by `tests/test_telegram_monitor_service.py`.
+- **Fixed: Telegram Monitoring single-source import scope**:
+  normal `/tg` imports no longer run the historical global Telegram-origin VK
+  reconcile after every results import. The import boundary still re-arms the
+  standard publication jobs for events touched by the current post/run, while
+  broad old-event catch-up is explicit opt-in via
+  `TG_MONITORING_GLOBAL_VK_RECONCILE=1`. Covered by
+  `tests/test_tg_monitor_reprocess_incomplete_scan.py`.
 - **Changed: production Telegram UI E2E runbook**:
   documented that live production E2E must target `@events_love39_bot`
   explicitly, use local `.env` only for the human Telethon session, verify

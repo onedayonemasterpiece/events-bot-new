@@ -172,6 +172,33 @@ async def test_primary_telegram_import_rearms_tasks_for_nochange_event(tmp_path,
 
 
 @pytest.mark.asyncio
+async def test_primary_telegram_import_does_not_run_global_vk_reconcile_by_default(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_source(db)
+    monkeypatch.delenv("TG_MONITORING_GLOBAL_VK_RECONCILE", raising=False)
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        return SmartUpdateResult(status="skipped_nochange", event_id=5656)
+
+    async def fake_schedule_tasks(db_arg, event_id):
+        return None
+
+    async def fail_global_reconcile(db_arg):
+        raise AssertionError("global VK reconcile must be opt-in")
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+    monkeypatch.setattr(tg_handlers, "_schedule_primary_import_event_tasks", fake_schedule_tasks)
+    monkeypatch.setattr(tg_handlers, "_reconcile_primary_import_vk_sync_jobs", fail_global_reconcile)
+
+    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+
+    assert report.events_nochange == 1
+
+
+@pytest.mark.asyncio
 async def test_forced_existing_single_source_rearms_tasks_without_llm_reimport(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

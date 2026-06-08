@@ -4525,6 +4525,15 @@ async def _reconcile_primary_import_vk_sync_jobs(db: Database) -> int:
     return repaired
 
 
+def _global_vk_reconcile_enabled() -> bool:
+    return (os.getenv("TG_MONITORING_GLOBAL_VK_RECONCILE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 async def _single_event_id_for_source_url(db: Database, source_url: str | None) -> int | None:
     source = _clean_url(source_url)
     if not source:
@@ -6051,9 +6060,10 @@ async def process_telegram_results(
         except Exception:
             pass
 
-    try:
-        await _reconcile_primary_import_vk_sync_jobs(db)
-    except Exception:
-        logger.warning("tg_monitor: failed to reconcile primary import vk_sync jobs", exc_info=True)
+    if _global_vk_reconcile_enabled():
+        try:
+            await _reconcile_primary_import_vk_sync_jobs(db)
+        except Exception:
+            logger.warning("tg_monitor: failed to reconcile primary import vk_sync jobs", exc_info=True)
 
     return report

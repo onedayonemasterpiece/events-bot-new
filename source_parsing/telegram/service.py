@@ -943,6 +943,57 @@ async def _poll_kaggle_kernel(
         except Exception:
             logger.exception("tg_monitor: status callback failed phase=%s", phase)
 
+    async def _output_is_ready_after_status_error() -> dict | None:
+        if not run_id:
+            return None
+        output_dir = Path(tempfile.gettempdir()) / f"tg-monitor-poll-probe-{run_id}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            files = await asyncio.to_thread(
+                client.download_kernel_output,
+                kernel_ref,
+                path=str(output_dir),
+                force=True,
+            )
+        except Exception as exc:
+            logger.info(
+                "tg_monitor.kernel_poll_output_probe_failed run_id=%s kernel_ref=%s err=%s",
+                run_id,
+                kernel_ref,
+                str(exc)[:240],
+            )
+            return None
+        for name in files or []:
+            candidate = output_dir / name
+            if candidate.name != "telegram_results.json" or not candidate.exists():
+                continue
+            try:
+                payload = json.loads(candidate.read_text(encoding="utf-8"))
+            except Exception:
+                logger.info(
+                    "tg_monitor.kernel_poll_output_probe_bad_json run_id=%s kernel_ref=%s path=%s",
+                    run_id,
+                    kernel_ref,
+                    candidate,
+                    exc_info=True,
+                )
+                continue
+            output_run_id = str(payload.get("run_id") or "").strip()
+            if output_run_id != str(run_id):
+                logger.info(
+                    "tg_monitor.kernel_poll_output_probe_stale run_id=%s kernel_ref=%s output_run_id=%s",
+                    run_id,
+                    kernel_ref,
+                    output_run_id or "<empty>",
+                )
+                continue
+            return {
+                "status": "COMPLETE",
+                "_completion_source": "kaggle_output_after_status_error",
+                "_output_path": str(candidate),
+            }
+        return None
+
     await _notify("poll", {"_poll_timeout_minutes": timeout_minutes, "_elapsed_seconds": 0.0})
     while time.monotonic() < deadline:
         attempt += 1
@@ -977,6 +1028,20 @@ async def _poll_kaggle_kernel(
                     "_elapsed_seconds": time.monotonic() - started,
                 },
             )
+            ready_status = await _output_is_ready_after_status_error()
+            if ready_status:
+                ready_status["_poll_timeout_minutes"] = timeout_minutes
+                ready_status["_elapsed_seconds"] = time.monotonic() - started
+                last_status = dict(ready_status)
+                logger.info(
+                    "tg_monitor.kernel_poll_complete_from_output run_id=%s kernel_ref=%s attempt=%s elapsed=%.1fs",
+                    run_id,
+                    kernel_ref,
+                    attempt,
+                    time.monotonic() - started,
+                )
+                await _notify("complete", last_status)
+                return "complete", last_status, time.monotonic() - started
             await asyncio.sleep(min(60, 2 ** min(consecutive_poll_errors, 5)))
             continue
 

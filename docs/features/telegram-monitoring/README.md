@@ -37,9 +37,10 @@
     чтобы catch-up мог чинить старое состояние "event есть, VK job отсутствует".
     Forced single-event replay, где точный `event_source.source_url` уже однозначно указывает на одно событие,
     использует тот же re-arm путь без повторного LLM merge.
-    После завершения импорта сервер дополнительно reconciles активные несайлент Telegram-origin события на сегодня
-    и будущее: если у них нет pending/running `vk_sync` и нет managed `source_vk_post_url`, `/tg` ставит недостающую
-    публикационную задачу. Это делает `/tg` полноценным catch-up для старых импортов, а не только для текущего поста.
+    Обычный `/tg` импорт re-arm'ит только события, затронутые текущим `telegram_results.json`; глобальный catch-up
+    старых Telegram-origin событий отключён по умолчанию, чтобы single-source E2E не создавал неожиданные старые VK
+    посты. Исторический широкий reconcile доступен только как явный операторский режим через
+    `TG_MONITORING_GLOBAL_VK_RECONCILE=1`.
     `vk_sync` в outbox имеет высокий глобальный priority, но всё ещё ждёт свои per-event prerequisites; готовые
     Telegram imports не должны стоять за чужим Telegraph/page backlog.
     Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
@@ -218,6 +219,9 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 
 - Статус Kaggle kernel опрашивается с интервалом `TG_MONITORING_POLL_INTERVAL` (по умолчанию 30s) до динамического лимита ожидания (или фиксированного, если включён `fixed` mode).
 - Транзиентные ошибки сети/SSL при опросе Kaggle API (например `UNEXPECTED_EOF_WHILE_READING`) **не валят прогон**: мониторинг продолжает опрос до получения `COMPLETE/FAILED` или таймаута, а в UI этап показывается как «временная ошибка сети».
+- Если status API продолжает отдавать транзиентные `HTTP 429/5xx`, сервер параллельно пробует скачать Kaggle output.
+  `telegram_results.json` принимается как завершение только если его `run_id` совпадает с текущим запуском; после этого
+  обычный server-import продолжается без рестарта Fly machine.
 - Перед `push` сервер теперь дополнительно проверяет общий `kaggle_registry`: если другой remote Telegram Kaggle job (`guide_monitoring`, `tg_monitoring`, `telegraph_cache_probe`) ещё жив или его status lookup закончился неопределённо, `tg_monitoring` обязан завершиться `skipped` с `remote_telegram_session_busy`, а не запускать вторую удалённую Telethon session поверх той же auth key.
 - Для fresh `UNKNOWN` status lookup guard остаётся fail-closed. Если же registry-запись старше `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` (default `390`) и lookup падает только транзиентно (`HTTP 5xx`, сеть, SSL, timeout), guard помечает её как `stale_transient_status_lookup_failure` и больше не считает владельцем remote Telegram session. Это предотвращает вечный `remote_telegram_session_busy` от старых Kaggle refs, но не разрешает запускать вторую сессию поверх свежего неизвестного run.
 - Отменённые Kaggle runs со статусом `CANCEL_ACKNOWLEDGED` считаются terminal для shared remote Telegram session guard: такой job не должен блокировать следующий компенсирующий `/tg` catch-up после ручной отмены.
