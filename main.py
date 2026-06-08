@@ -14193,6 +14193,14 @@ def _tg_event_publish_interval() -> timedelta:
     return timedelta(minutes=max(1, minutes))
 
 
+def _tg_event_publish_spacing_horizon() -> timedelta:
+    try:
+        hours = int(str(os.getenv("TG_EVENT_PUBLISH_SPACING_HORIZON_HOURS", "24")).strip())
+    except (TypeError, ValueError):
+        hours = 24
+    return timedelta(hours=max(1, hours))
+
+
 def _normalize_tg_event_publish_run_at(candidate: datetime) -> datetime:
     start_hour, end_hour = _tg_event_publish_window_hours()
     local = candidate.astimezone(LOCAL_TZ)
@@ -14216,6 +14224,8 @@ async def next_tg_event_publish_run_at(
     now_utc = _ensure_utc(now or datetime.now(timezone.utc))
     candidate = _normalize_tg_event_publish_run_at(now_utc)
     interval = _tg_event_publish_interval()
+    spacing_horizon = _tg_event_publish_spacing_horizon()
+    max_spacing_anchor = now_utc + spacing_horizon
     async with db.get_session() as session:
         rows = (
             await session.execute(
@@ -14228,11 +14238,20 @@ async def next_tg_event_publish_run_at(
     latest: datetime | None = None
     for status, next_run_at, updated_at in rows:
         anchor = None
-        if status in {JobStatus.pending, JobStatus.error, JobStatus.running}:
+        if status in {JobStatus.pending, JobStatus.running}:
             anchor = _ensure_utc(next_run_at)
         elif status == JobStatus.done:
             anchor = _ensure_utc(updated_at)
         if not anchor:
+            continue
+        if anchor > max_spacing_anchor:
+            logging.warning(
+                "TG_EVENT spacing ignoring far-future anchor status=%s anchor=%s now=%s horizon=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                now_utc.isoformat(),
+                spacing_horizon,
+            )
             continue
         if latest is None or anchor > latest:
             latest = anchor

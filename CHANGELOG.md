@@ -8,9 +8,14 @@
   blockers until the dependency is actually `done`. Scheduler dependencies now
   use real outbox keys such as `vk_sync:<event_id>` instead of enqueue action
   strings like `new`/`requeued`. This prevents `@kldevents` from publishing
-  events that VK has not yet published or is retrying after a failure. Covered by
+  events that VK has not yet published or is retrying after a failure. Far-future
+  cancelled/backlog `tg_event_publish` jobs are no longer used as spacing anchors,
+  so a cleanup marker cannot defer fresh Telegram event posts to 2036. Covered by
   `tests/test_tg_event_publish.py`,
   `tests/test_job_outbox_depends.py`, and `tests/test_job_due_filter.py`.
+- **Fixed: VK queue command access**:
+  `/vk_auto_import` and `/vk_queue` now enforce the documented superadmin-only
+  access check instead of accepting any approved bot user.
 - **Fixed: Telegram-source event media rehydrate for publishing**:
   Telegraph rebuild now also rehydrates posters for single-source Telegram
   events that were imported without stored media, so downstream `tg_event_publish`

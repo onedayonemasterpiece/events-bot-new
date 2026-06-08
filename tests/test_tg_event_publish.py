@@ -331,6 +331,45 @@ async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_next_tg_event_publish_run_at_ignores_far_future_cancelled_backlog(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_START_HOUR", "7")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_END_HOUR", "23")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_SPACING_HORIZON_HOURS", "24")
+
+    now = main.datetime(2026, 6, 8, 10, 45, tzinfo=main.timezone.utc)
+    far_future = now + main.timedelta(days=3650)
+    async with db.get_session() as session:
+        session.add(
+            main.JobOutbox(
+                event_id=42,
+                task=main.JobTask.tg_event_publish,
+                status=main.JobStatus.error,
+                last_error="cancelled_bad_dependency_key_after_fanout_fix",
+                updated_at=now,
+                next_run_at=far_future,
+            )
+        )
+        session.add(
+            main.JobOutbox(
+                event_id=43,
+                task=main.JobTask.tg_event_publish,
+                status=main.JobStatus.pending,
+                updated_at=now,
+                next_run_at=far_future,
+            )
+        )
+        await session.commit()
+
+    scheduled = await main.next_tg_event_publish_run_at(db, now=now)
+    assert scheduled == main._normalize_tg_event_publish_run_at(now)
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_skips_tg_publish_for_past(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -12281,7 +12281,7 @@ async def handle_vk_crawl_now(message: types.Message, db: Database, bot: Bot) ->
 async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> None:
     async with db.get_session() as session:
         user = await session.get(User, message.from_user.id)
-    if not user:
+    if not has_admin_access(user):
         await bot.send_message(message.chat.id, "Not authorized")
         return
     await vk_review.release_stale_locks(db)
@@ -12323,7 +12323,7 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
 
     async with db.get_session() as session:
         user = await session.get(User, message.from_user.id)
-    if not user:
+    if not has_admin_access(user):
         await bot.send_message(message.chat.id, "Not authorized")
         return
 
