@@ -8,13 +8,15 @@ from aiogram import Bot, types
 from sqlalchemy import func, select, text
 
 from db import Database
-from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
+from models import Event, EventSource, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
 from promo import (
     INITIAL_80_STORIES_FESTIVAL,
     INITIAL_80_STORIES_PRIORITY,
+    PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
+    _parse_chat_author_query,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     default_campaign_end,
@@ -408,6 +410,24 @@ async def _future_count_for_campaign(db: Database, campaign: PromoCampaign) -> i
                     select(func.count())
                     .select_from(Event)
                     .where(Event.festival == target.festival_name)
+                    .where(Event.date >= today_iso)
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                )
+                if campaign.ends_at is not None:
+                    query = query.where(Event.date <= campaign.ends_at.date().isoformat())
+                res = await session.execute(query)
+                total += int(res.scalar() or 0)
+            elif target.target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR:
+                chat, author = _parse_chat_author_query(target.query_text)
+                if not chat or not author:
+                    continue
+                query = (
+                    select(func.count(func.distinct(Event.id)))
+                    .select_from(Event)
+                    .join(EventSource, EventSource.event_id == Event.id)
+                    .where(func.lower(EventSource.source_chat_username) == chat)
+                    .where(func.lower(Event.tg_source_author) == author)
                     .where(Event.date >= today_iso)
                     .where(Event.lifecycle_status == "active")
                     .where(Event.silent.is_(False))
