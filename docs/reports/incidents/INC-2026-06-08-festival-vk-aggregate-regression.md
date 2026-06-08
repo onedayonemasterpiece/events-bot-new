@@ -35,6 +35,8 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - 2026-06-08 14:44-14:48 UTC: recovered/imported the `@kraftmarket39` output for run `06addc951b7f4673a967855ccbb3bda7`; `ops_run` recorded success with `messages_processed=2`, `messages_with_events=2`, `events_merged=1`, `errors_count=0`.
 - 2026-06-08 15:03 UTC: initial acceptance failed: VK `wall-231920894_2432` was an old/problem evidence post and not a valid current-import result; VK had only one current imported postponed post, Telegram had only one visible `@kldevents` post, and the no-time event was blocked by `tg_ics_post: bad time`.
 - 2026-06-08 UTC: root cause expanded: Telegram Monitoring preserved hidden/entity links in `messages[].links`, but broad LLM `ticket_link=https://kgd80.ru` was not refined to the concrete registration entity URL; no-time events incorrectly depended on `tg_ics_post`.
+- 2026-06-08 UTC: cleanup before the next E2E removed the preserved bad postponed VK evidence posts from `kldevents`; `wall.getById` confirmed `wall-231920894_2432` and `_2433` no longer exist. This was external artifact cleanup, not DB/outbox repair.
+- 2026-06-08 UTC: root cause expanded again: repeat enqueue merged dependency sets, so a fixed no-time reimport could keep stale `tg_ics_post:<event_id>` dependency on `tg_event_publish`.
 
 ## Root Cause
 
@@ -97,6 +99,7 @@ Operator-added event flow produced unexpected postponed VK output: an obsolete `
 - Add tests for single-source Telegram Monitoring scope and disabled festival VK aggregate publishing.
 - Refine Telegram hidden/entity registration links over broad landing-page `ticket_link` values.
 - Do not enqueue `tg_ics_post` or depend on it for events without a concrete start time.
+- Replace stale `tg_event_publish`/`tg_ics_post` dependency sets on re-arm so repeat imports are not blocked by old queue topology.
 
 ## Follow-up Actions
 

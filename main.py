@@ -13881,6 +13881,7 @@ async def enqueue_job(
     *,
     coalesce_key: str | None = None,
     depends_on: list[str] | None = None,
+    replace_depends_on: bool = False,
     next_run_at: datetime | None = None,
 ) -> str:
     async with db.get_session() as session:
@@ -13970,9 +13971,12 @@ async def enqueue_job(
                 if payload is not None:
                     job.payload = payload
                 if depends_on:
-                    cur = set(filter(None, (job.depends_on or "").split(",")))
-                    cur.update(depends_on)
-                    job.depends_on = ",".join(sorted(cur))
+                    if replace_depends_on:
+                        job.depends_on = ",".join(depends_on)
+                    else:
+                        cur = set(filter(None, (job.depends_on or "").split(",")))
+                        cur.update(depends_on)
+                        job.depends_on = ",".join(sorted(cur))
                 now = datetime.now(timezone.utc)
                 # Fix #1: Preserve deferred next_run_at if still in future
                 job_next_run = _ensure_utc(job.next_run_at)
@@ -14003,12 +14007,18 @@ async def enqueue_job(
                     job.payload = payload
                     updated = True
                 if depends_on:
-                    cur = set(filter(None, (job.depends_on or "").split(",")))
-                    before = cur.copy()
-                    cur.update(depends_on)
-                    if cur != before:
-                        job.depends_on = ",".join(sorted(cur))
-                        updated = True
+                    if replace_depends_on:
+                        new_depends_on = ",".join(depends_on)
+                        if (job.depends_on or "") != new_depends_on:
+                            job.depends_on = new_depends_on
+                            updated = True
+                    else:
+                        cur = set(filter(None, (job.depends_on or "").split(",")))
+                        before = cur.copy()
+                        cur.update(depends_on)
+                        if cur != before:
+                            job.depends_on = ",".join(sorted(cur))
+                            updated = True
                 if updated:
                     session.add(job)
                     await session.commit()
@@ -14097,9 +14107,12 @@ async def enqueue_job(
             else:
                 job.next_run_at = now
             if depends_on:
-                cur = set(filter(None, (job.depends_on or "").split(",")))
-                cur.update(depends_on)
-                job.depends_on = ",".join(sorted(cur))
+                if replace_depends_on:
+                    job.depends_on = ",".join(depends_on)
+                else:
+                    cur = set(filter(None, (job.depends_on or "").split(",")))
+                    cur.update(depends_on)
+                    job.depends_on = ",".join(sorted(cur))
             session.add(job)
             await session.commit()
             logline(
@@ -14322,7 +14335,11 @@ async def schedule_event_update_tasks(
         if ics_dep:
             tg_ics_deps.append(ics_dep)
         results[JobTask.tg_ics_post] = await enqueue_job(
-            db, eid, JobTask.tg_ics_post, depends_on=tg_ics_deps
+            db,
+            eid,
+            JobTask.tg_ics_post,
+            depends_on=tg_ics_deps,
+            replace_depends_on=True,
         )
     vk_dep: str | None = None
     if not skip_vk_sync:
@@ -14346,6 +14363,7 @@ async def schedule_event_update_tasks(
             eid,
             JobTask.tg_event_publish,
             depends_on=tg_event_deps,
+            replace_depends_on=True,
             next_run_at=tg_event_next_run_at,
         )
     page_deps = [telegraph_dep_key]

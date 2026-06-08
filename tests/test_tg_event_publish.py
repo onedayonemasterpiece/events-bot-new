@@ -342,6 +342,52 @@ async def test_schedule_event_update_tasks_skips_calendar_dependency_without_tim
 
 
 @pytest.mark.asyncio
+async def test_enqueue_tg_publish_replaces_stale_calendar_dependency(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    event = _event(id=None, time="")
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+        session.add(
+            main.JobOutbox(
+                event_id=event_id,
+                task=main.JobTask.tg_event_publish,
+                status=main.JobStatus.pending,
+                depends_on=f"telegraph_build:{event_id},tg_ics_post:{event_id},vk_sync:{event_id}",
+                next_run_at=main.datetime(2026, 6, 20, 5, 0, tzinfo=main.timezone.utc),
+                updated_at=main.datetime(2026, 6, 19, 5, 0, tzinfo=main.timezone.utc),
+            )
+        )
+        await session.commit()
+
+    result = await main.enqueue_job(
+        db,
+        event_id,
+        main.JobTask.tg_event_publish,
+        depends_on=[f"telegraph_build:{event_id}", f"vk_sync:{event_id}"],
+        replace_depends_on=True,
+        next_run_at=main.datetime(2026, 6, 20, 5, 10, tzinfo=main.timezone.utc),
+    )
+
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                main.select(main.JobOutbox).where(
+                    main.JobOutbox.event_id == event_id,
+                    main.JobOutbox.task == main.JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
+
+    assert result == "merged-rearmed"
+    assert job.depends_on == f"telegraph_build:{event_id},vk_sync:{event_id}"
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_requeues_deleted_managed_vk_post(
     tmp_path, monkeypatch
 ):

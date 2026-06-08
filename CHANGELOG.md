@@ -12,7 +12,10 @@
   `vk_sync` now understands the current VK `wall.getById` `response.items`
   shape, so deleted postponed managed posts are republished instead of being
   treated as existing URLs; Smart Update re-arm now also verifies that a stored
-  managed VK URL still exists before skipping `vk_sync`.
+  managed VK URL still exists before skipping `vk_sync`. Re-arming
+  `tg_event_publish`/`tg_ics_post` now replaces stale dependency sets instead of
+  unioning them, so a previous no-time `tg_ics_post` failure cannot keep a fresh
+  reimport blocked.
   Covered by `tests/test_tg_event_publish.py`, `tests/test_bot.py`,
   `tests/test_vk_source.py`, and `tests/test_telegram_link_inference.py`.
 - **Fixed: Telegram Monitoring Kaggle status polling**:
