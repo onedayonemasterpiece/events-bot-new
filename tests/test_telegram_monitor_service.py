@@ -12,6 +12,7 @@ from source_parsing.telegram.service import (
     _build_config_payload,
     _build_secrets_payload,
     _format_event_block,
+    _poll_kaggle_kernel,
 )
 
 
@@ -53,6 +54,51 @@ def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     assert payload["YC_SA_BOT_STORAGE_KEY"] == "secret"
     assert payload["YC_STORAGE_BUCKET"] == "kenigevents"
     assert payload["YC_STORAGE_ENDPOINT"] == "https://storage.yandexcloud.net"
+
+
+@pytest.mark.asyncio
+async def test_poll_kaggle_kernel_retries_status_http_500(monkeypatch):
+    import source_parsing.telegram.service as tg_service
+
+    class Response:
+        status_code = 500
+
+    class StatusError(RuntimeError):
+        response = Response()
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = 0
+
+        def get_kernel_status(self, _kernel_ref):
+            self.calls += 1
+            if self.calls == 1:
+                raise StatusError(
+                    "500 Server Error: Internal Server Error for url: "
+                    "https://api.kaggle.com/v1/kernels.KernelsApiService/GetKernelSessionStatus"
+                )
+            return {"status": "COMPLETE"}
+
+    statuses = []
+
+    async def status_callback(phase, kernel_ref, status):
+        statuses.append((phase, kernel_ref, status))
+
+    monkeypatch.setattr(tg_service, "POLL_INTERVAL_SECONDS", 0)
+    client = FakeClient()
+
+    status, status_data, _duration = await _poll_kaggle_kernel(
+        client,
+        "zigomaro/telegram-monitor-bot",
+        run_id="run-http-500",
+        timeout_minutes=1,
+        status_callback=status_callback,
+    )
+
+    assert status == "complete"
+    assert status_data == {"status": "COMPLETE"}
+    assert client.calls == 2
+    assert any(phase == "poll_error" for phase, _kernel, _status in statuses)
 
 
 def test_format_event_block_shows_vk_and_tg_posts_line():

@@ -273,6 +273,61 @@ session = bundle["session"]
 
 Важно: **не запускайте одну и ту же session строку параллельно** в двух процессах (иначе можно словить `AuthKeyDuplicatedError`). Разные session строки для одного аккаунта допустимы.
 
+### Production Telegram UI E2E
+
+Production UI E2E через Telegram делается только в реальный production bot:
+`@events_love39_bot`.
+
+Критичные правила:
+
+- Локальный `.env` нужен только для human Telethon session:
+  `TELEGRAM_AUTH_BUNDLE_E2E` / `TELEGRAM_SESSION` и `TG_API_ID` /
+  `TG_API_HASH`.
+- Нельзя определять production bot через `TELEGRAM_BOT_TOKEN` из локального
+  `.env`: там может быть тестовый bot token (`@eventsbotTestBot`), и прогон
+  уйдёт не в production.
+- Для production target используй явный username `@events_love39_bot`; если
+  нужна runtime-проверка token identity, бери её только из Fly production env и
+  не печатай token.
+- До запуска админ-команд проверь identity Telethon-пользователя через
+  `get_me()` и проверь production DB:
+  `/data/db.sqlite`, таблица `user`, колонка `user_id`.
+- Если пользователь не найден или `is_superadmin != 1`, не меняй production DB
+  молча. Остановись и попроси явное подтверждение на grant. Факт “сегодня уже
+  давали права” проверяется только по production DB.
+- Временный production grant для E2E обязан быть обратимым: перед включением
+  зафиксируй прежнее состояние строки `user`, после отладки восстанови его или
+  удали E2E-only строку. Быстрые команды enable/disable лежат в project skill
+  `.codex/skills/prod-telegram-e2e/SKILL.md`.
+- Молчание `/tg`, `/vk`, `/fest_queue` не считать сетевой ошибкой без логов:
+  webhook `200` может означать, что handler штатно вернулся из-за access check.
+- При любом молчании сразу смотри production file mirror:
+  `/data/runtime_logs/events-bot.log` и rotated файлы; ищи по UTC-времени,
+  `user_id`, bot id, message id/update id, команде, `Access denied`, handler
+  namespace (`tg_monitor`, `vk_auto_import`, `fest_queue`).
+- `fly logs` использовать как fallback/быстрый tail, но для расследования
+  production UI E2E сначала проверяй file mirror и его env:
+  `ENABLE_RUNTIME_FILE_LOGGING`, `RUNTIME_LOG_DIR`.
+
+Минимальный порядок:
+
+1. Подгрузить Fly release env только для `flyctl`:
+   `set -a; . /home/dev/.config/fly/release.env; set +a`.
+2. Проверить `/healthz`, `flyctl status`, активный runtime log и production DB
+   path `/data/db.sqlite`.
+3. Локально подгрузить `.env` для Telethon session, но задать target bot
+   вручную: `events_love39_bot`.
+4. Получить Telethon `get_me()` и сверить этого пользователя в production
+   `user`.
+   Если нужен временный доступ, включить его только после явного разрешения
+   пользователя и записать прежнее состояние строки.
+5. Отправить команду в Telegram UI, дождаться сообщения/кнопок/финального
+   отчёта.
+6. Параллельно сверять logs по тому же временному окну; при ошибке фиксировать
+   UI-ответ и log evidence вместе.
+7. После E2E выключить временный доступ и проверить, что строка восстановлена
+   или удалена.
+
 ### Написание теста
 - [ ] Создать `.feature` файл с Gherkin сценариями
 - [ ] Использовать русский синтаксис (`# language: ru`)

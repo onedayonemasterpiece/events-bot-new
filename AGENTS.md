@@ -9,6 +9,7 @@
 3. Для задач по E2E всегда сверяйся с `docs/operations/e2e-scenarios.md` и поддерживай этот индекс актуальным при изменении сценариев.
 4. Для задач по инцидентам или при упоминании `INC-*` сразу открывай `docs/operations/incident-management.md` и `docs/reports/incidents/README.md`.
 5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
+6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
 
 ## Incident Mode (critical)
 
@@ -34,6 +35,9 @@
   - обязательны `TELEGRAM_BOT_TOKEN` и (`TELEGRAM_API_ID`/`TELEGRAM_API_HASH` **или** `TG_API_ID`/`TG_API_HASH`) и одна из: `TELEGRAM_AUTH_BUNDLE_E2E` или `TELEGRAM_SESSION`.
   - `behave`/`pytest` E2E подхватывают `.env` автоматически (best-effort) и **не** перетирают уже заданные переменные окружения.
   - если запускаешь бота руками из терминала, `.env` не подгружается автоматически: используй `set -a; source .env; set +a` перед `python main.py`.
+- Production Telegram UI E2E запускается только в `@events_love39_bot`; локальный `.env` используется только для human Telethon session/API id/hash. Не определяй production bot через локальный `TELEGRAM_BOT_TOKEN`, потому что он может указывать на тестовый `@eventsbotTestBot`.
+- Перед production admin UI E2E сверяй Telethon `get_me()` с production DB `/data/db.sqlite`, таблица `user`, `is_superadmin=1`; если grant отсутствует, запроси явное разрешение перед изменением prod DB.
+- Если production bot молчит на команду, сразу смотри `/data/runtime_logs/events-bot.log` и rotated logs по времени/user_id/update id/команде; webhook `200` без ответа часто означает штатный access-check return, а не сетевую поломку.
 
 ## Session Boundaries (critical)
 

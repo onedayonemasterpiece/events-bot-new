@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram Monitoring Kaggle status polling**:
+  `GetKernelSessionStatus` HTTP `429`/`5xx` responses are now treated as
+  transient polling failures with backoff instead of immediately failing an
+  already-launched Telegram Monitoring kernel and deleting its temporary
+  datasets. Covered by `tests/test_telegram_monitor_service.py`.
+- **Changed: production Telegram UI E2E runbook**:
+  documented that live production E2E must target `@events_love39_bot`
+  explicitly, use local `.env` only for the human Telethon session, verify
+  `superadmin` access in production `/data/db.sqlite` table `user`, and inspect
+  `/data/runtime_logs/events-bot.log` immediately when a command is silent.
+  Added project skill `prod-telegram-e2e` with reversible temporary
+  superadmin enable/disable commands, and routed the procedure through
+  `AGENTS.md`, `CLAUDE.md`, and the Opus alias.
 - **Fixed: festival monitoring containment and VK aggregate guard**:
   `/tg` now has a `Только @kraftmarket39` button that launches the existing
   Telegram Monitoring + Smart Update pipeline with a one-source Kaggle config;

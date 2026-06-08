@@ -896,6 +896,30 @@ def _compute_kaggle_poll_timeout_minutes(*, sources_count: int) -> int:
     return min(max_minutes, max(1, timeout))
 
 
+def _is_transient_kaggle_status_error(exc: Exception) -> bool:
+    """Return True for status-poll errors where the Kaggle kernel may still run."""
+    if isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError"):
+        return True
+    if isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError"):
+        return True
+    if exc.__class__.__name__.endswith("Timeout"):
+        return True
+
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    try:
+        status_code_int = int(status_code)
+    except Exception:
+        status_code_int = 0
+    if status_code_int in {429, 500, 502, 503, 504}:
+        return True
+
+    message = str(exc or "")
+    if "GetKernelSessionStatus" in message and re.search(r"\b(429|5\d\d)\b", message):
+        return True
+    return False
+
+
 async def _poll_kaggle_kernel(
     client: KaggleClient,
     kernel_ref: str,
@@ -928,11 +952,7 @@ async def _poll_kaggle_kernel(
             consecutive_poll_errors = 0
         except Exception as exc:
             consecutive_poll_errors += 1
-            is_ssl = isinstance(exc, ssl.SSLError) or exc.__class__.__name__.endswith("SSLError")
-            is_conn = isinstance(exc, ConnectionError) or exc.__class__.__name__.endswith("ConnectionError")
-            is_timeout = exc.__class__.__name__.endswith("Timeout")
-            is_transient = is_ssl or is_conn or is_timeout
-            if not is_transient:
+            if not _is_transient_kaggle_status_error(exc):
                 raise
             msg = str(exc) or repr(exc)
             if len(msg) > 280:
