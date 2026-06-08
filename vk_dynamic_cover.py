@@ -818,7 +818,13 @@ async def restore_default_cover_if_expired(db: Database, *, bot: Any = None, for
     )
 
 
-async def dynamic_cover_expiry_scheduler(db: Database, bot: Any = None) -> None:
+async def dynamic_cover_expiry_scheduler(
+    db: Database,
+    bot: Any = None,
+    *,
+    run_id: str | None = None,
+) -> None:
+    del run_id
     try:
         changed = await restore_default_cover_if_expired(db, bot=bot, force=False)
         if changed:

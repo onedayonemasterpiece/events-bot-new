@@ -660,6 +660,41 @@ async def test_next_tg_event_publish_run_at_ignores_next_day_pending_anchor_when
 
 
 @pytest.mark.asyncio
+async def test_next_tg_event_publish_run_at_ignores_late_next_day_backlog_after_window(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    original_tz = main.LOCAL_TZ
+    main.LOCAL_TZ = main.timezone(main.timedelta(hours=2))
+    monkeypatch.setenv("TG_EVENT_PUBLISH_START_HOUR", "7")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_END_HOUR", "23")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    try:
+        now = main.datetime(2026, 6, 8, 21, 17, tzinfo=main.timezone.utc)
+        morning = main._normalize_tg_event_publish_run_at(now)
+        evening_backlog = main.datetime(2026, 6, 9, 16, 0, tzinfo=main.timezone.utc)
+        async with db.get_session() as session:
+            session.add(
+                main.JobOutbox(
+                    event_id=5787,
+                    task=main.JobTask.tg_event_publish,
+                    status=main.JobStatus.pending,
+                    updated_at=now,
+                    next_run_at=evening_backlog,
+                )
+            )
+            await session.commit()
+
+        scheduled = await main.next_tg_event_publish_run_at(db, now=now)
+
+        assert scheduled == morning
+        assert scheduled.astimezone(main.LOCAL_TZ).hour == 7
+    finally:
+        main.LOCAL_TZ = original_tz
+
+
+@pytest.mark.asyncio
 async def test_enqueue_tg_publish_rearm_replaces_stale_next_day_slot(tmp_path):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

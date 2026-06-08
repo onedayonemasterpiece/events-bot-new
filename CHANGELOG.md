@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram event publish morning rhythm**:
+  `tg_event_publish` spacing now ignores stale next-day backlog anchors that are
+  many intervals after the next morning start, so imports made after the local
+  publish window closes schedule from the next `07:00` slot instead of being
+  pushed to an old evening cluster. The VK dynamic cover expiry cron now also
+  accepts scheduler `run_id`, removing a production runtime error. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: invalid-time ICS retry storm**:
   `schedule_event_update_tasks` now enqueues `ics_publish`/`tg_ics_post` only
   when both event date and time parse into a calendar schedule. Already queued

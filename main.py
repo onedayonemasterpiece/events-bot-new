@@ -14281,6 +14281,10 @@ def _normalize_tg_event_publish_run_at(candidate: datetime) -> datetime:
     return local.astimezone(timezone.utc)
 
 
+def _tg_event_publish_backlog_gap_threshold(interval: timedelta) -> timedelta:
+    return max(interval * 6, timedelta(hours=1))
+
+
 async def next_tg_event_publish_run_at(
     db: Database,
     *,
@@ -14302,6 +14306,8 @@ async def next_tg_event_publish_run_at(
         ).all()
     latest: datetime | None = None
     now_local_date = now_utc.astimezone(LOCAL_TZ).date()
+    candidate_local = candidate.astimezone(LOCAL_TZ)
+    backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
     for _event_id, status, next_run_at, updated_at in rows:
         anchor = None
         if status in {JobStatus.pending, JobStatus.running}:
@@ -14316,13 +14322,31 @@ async def next_tg_event_publish_run_at(
         if (
             status in {JobStatus.pending, JobStatus.running}
             and anchor.astimezone(LOCAL_TZ).date() > now_local_date
-            and candidate.astimezone(LOCAL_TZ).date() == now_local_date
+            and candidate_local.date() == now_local_date
         ):
             logging.info(
                 "TG_EVENT spacing ignoring next-day pending anchor status=%s anchor=%s now=%s",
                 getattr(status, "value", status),
                 anchor.isoformat(),
                 now_utc.isoformat(),
+            )
+            continue
+        # After the local publish window closes, the next candidate is tomorrow
+        # morning. Stale backlog rows from earlier incidents may sit on the same
+        # next day but many hours later; they must not make fresh imports skip
+        # the whole morning. Legitimate morning anchors still space normally.
+        if (
+            status in {JobStatus.pending, JobStatus.running}
+            and candidate_local.date() > now_local_date
+            and anchor.astimezone(LOCAL_TZ).date() == candidate_local.date()
+            and anchor - candidate > backlog_gap_threshold
+        ):
+            logging.info(
+                "TG_EVENT spacing ignoring next-day backlog anchor status=%s anchor=%s candidate=%s gap_threshold=%s",
+                getattr(status, "value", status),
+                anchor.isoformat(),
+                candidate.isoformat(),
+                backlog_gap_threshold,
             )
             continue
         if anchor > max_spacing_anchor:
