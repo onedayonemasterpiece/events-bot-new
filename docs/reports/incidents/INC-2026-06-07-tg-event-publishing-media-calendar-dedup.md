@@ -42,6 +42,12 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-08 10:09 UTC: `@kldevents/40` Telethon inspection confirmed `media=None`, no buttons, Telegraph `https://telegra.ph/Sobache-serdce-06-07-2` has `0` figures/images. This specific post is evidence of an event/media-intake gap or image-less source, not proof that TG publishing dropped an already attached image.
 - 2026-06-08 09:28 UTC: near-duplicate TG media safety-net deployed as Fly release `v1234` / image `deployment-01KTK8Z0JY5GBNT0RPSWPN2JER`.
 - 2026-06-08 09:34 UTC: compensating cleanup deleted obvious duplicate-only media messages `22`, `25`, `27`, `30`, `33`, and `39` from `@kldevents` via the production bot token. Telethon verification confirmed those message IDs are no longer visible; caption messages and distinct album images remain.
+- 2026-06-08 09:39 UTC: operator reported additional duplicate albums `https://t.me/kldevents/8`, `/11`, `/18`, and `/36`, plus event `Зойкина квартира` at `/42` visible in Telegram without a picture and not visible in VK.
+- 2026-06-08 09:43 UTC: Telethon/dHash inspection confirmed duplicate media groups `8/9/10` (hamming `2/2/4`), `11/12` (hamming `4`), `18/19` (hamming `3`), and `36/37` (hamming `10`). Production cleanup deleted duplicate-only message IDs `9`, `10`, `12`, `19`, and `37`.
+- 2026-06-08 09:44 UTC: production DB/log investigation mapped `Зойкина квартира` to event `5755`: source `https://t.me/dramteatr39/4361` had Telegram photo media, but `event.photo_urls=[]`; `tg_event_publish` had already published text-only `/42`, and `vk_sync` had failed with `vk_sync_missing_media_for_telegram_event`.
+- 2026-06-08 09:45 UTC: root cause found in `_rehydrate_missing_event_source_posters_for_telegraph`: it returned early when `len(source_rows) <= 1`, so single-source Telegram events with zero stored media never rehydrated source photos before Telegraph/TG/VK fanout. `build_tg_event_source_hash` also ignored media URLs, so a later media repair would not invalidate the old text-only Telegram post.
+- 2026-06-08 09:45 UTC: single-source media rehydrate and media-aware TG idempotency deployed as Fly release `v1235` / image `deployment-01KTK9NSN3FDT6NW8CNEV0ZVTY`; `/healthz` returned ready.
+- 2026-06-08 09:45 UTC: compensating catch-up for event `5755` rehydrated three source photos, rebuilt `https://telegra.ph/Zojkina-kvartira-06-07`, created VK postponed post `https://vk.com/wall-231920894_2412`, republished Telegram as album `https://t.me/c/3954607218/44`, and deleted old text-only `/42`. At the scheduled public slot VK exposed the post as `https://vk.com/wall-231920894_2413`, and production DB/job evidence was normalized to the public URL.
 
 ## Root Cause
 
@@ -52,6 +58,8 @@ The first production Telegram event announcement in `@kldevents` was published a
 5. `_event_has_telegram_origin` treated non-null `source_chat_id` / `source_message_id` as Telegram-origin. VK auto-import stores VK group/post ids in the same columns, so a VK-origin event could be blocked by the Telegram text-only media guard before managed VK publication.
 6. The background `job_outbox_worker` protected job execution errors, but its periodic stats heartbeat ran outside that protection; a diagnostic `LookupError` could terminate the worker task and make health fail even though the main app remained alive.
 7. The follow-up TG publisher still deduped media URLs only by exact string. Telegraph rendering could select/prune near-duplicate poster assets, while `publish_tg_event_announcement` still chose `album_caption` from multiple Supabase `p/dh16/...` URLs whose perceptual hashes differed by only a few bits.
+8. The Telegraph source-media rehydrate helper only repaired multi-source events. A single Telegram source row with zero persisted posters was treated as "nothing to aggregate", so a valid source photo could be left out of Telegraph, Telegram event publishing, and VK sync.
+9. Telegram event post idempotency hashed text fields but not media state. After a source-media repair, an already-published text-only post could still be treated as current unless the media signature participates in `tg_event_source_hash`.
 
 ## Contributing Factors
 
@@ -105,6 +113,8 @@ The first production Telegram event announcement in `@kldevents` was published a
 - Add Telegraph `Подробнее` to the footer.
 - Backfill missing poster `phash` values and prune persisted near-duplicate `EventPoster` rows.
 - Add a TG-side safety-net that collapses near-duplicate Supabase `p/dh16/...` media URLs before choosing single-photo vs album publishing mode.
+- Rehydrate source media for single-source Telegram/VK events when the event has no stored media before Telegraph/TG/VK fanout.
+- Include the deduped media signature in Telegram event idempotency, and republish/delete stale text-only messages when repaired media changes the Telegram post mode.
 - Verify managed VK URL existence before treating a matching `vk_source_hash` as terminal; if `wall.getById` returns no item, republish via the normal VK sync path.
 - Detect Telegram-origin events by `t.me` source URL or explicit `EventSource.source_type in ('telegram', 'tg')`, not by numeric source ids that VK imports also populate.
 - Keep `job_outbox_worker` alive when stats/diagnostic logging fails, logging the stats failure without terminating the task.
@@ -112,7 +122,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 ## Follow-up Actions
 
 - [ ] Add a replay fixture for `vk_inbox.id=8307` if live E2E exposes another gap outside unit coverage.
-- [ ] After the 2026-06-08 media safety-net deploy, run a production Smart Update/import event with near-duplicate Supabase poster URLs and confirm `@kldevents` gets one `photo_caption` post instead of a duplicate album.
+- [x] After the 2026-06-08 media safety-net deploy, run/repair production Telegram-source events with near-duplicate Supabase poster URLs and confirm duplicate-only messages are absent from `@kldevents`.
 
 ## Release And Closure Evidence
 
@@ -138,6 +148,11 @@ The first production Telegram event announcement in `@kldevents` was published a
   - Telethon dHash before cleanup: `21/22` hamming `2`, `24/25` hamming `2`, `26/27` hamming `4`, `29/30` hamming `4`, `32/33` hamming `2`, `38/39` hamming `6`; `36/37` hamming `10` was left untouched as not an obvious duplicate under the deployed threshold.
   - Production bot token cleanup deleted messages `22`, `25`, `27`, `30`, `33`, `39`; local `.env` bot token returned `403`, so the action was retried from the Fly runtime env without exposing the secret.
   - Telethon verification after cleanup showed visible post IDs `21`, `23`, `24`, `26`, `28`, `29`, `31`, `32`, `34`, `35`, `36`, `37`, `38`, `40`, `41`; deleted duplicate-only IDs are absent. Existing message `24` remains a former media-group message, so Telegram did not expose an inline button even after duplicate cleanup; it still has the caption text calendar link. Future one-image posts follow the fixed `photo_caption` path and get inline buttons.
+  - Additional operator-reported duplicates were cleaned after threshold widening: Telethon verification showed `/8`, `/11`, `/18`, `/36` visible while duplicate-only IDs `/9`, `/10`, `/12`, `/19`, and `/37` were absent.
+  - Event `5755` (`Зойкина квартира`) catch-up after release `v1235`: production DB final state had `photo_count=3`, `telegraph_url=https://telegra.ph/Zojkina-kvartira-06-07`, `source_vk_post_url=https://vk.com/wall-231920894_2413`, `tg_event_post_url=https://t.me/c/3954607218/44`, `tg_event_post_mode=album_caption`, and media-aware `tg_event_source_hash=3583f214f4876fd32c51e601bf4c3acf362fb184358452df381931fd8ace5bc8`.
+  - Telethon verification for `@kldevents` confirmed old text-only `/42` is absent and new `/44` is visible as an album caption with photo media; latest album continuation messages are `/45` and `/46`.
+  - VK verification confirmed public `wall.getById` sees `https://vk.com/wall-231920894_2413` with photo attachments. Production DB/job evidence was normalized from postponed `2412` to public `2413`; `vk_sync` and `tg_event_publish` job rows for event `5755` are `done`.
+  - Post-catch-up `/healthz` returned HTTP 200 with `ok=true`, `ready=true`, `job_outbox_worker=ok`, `add_event_worker=ok`, and `issues=[]`.
   - follow-up regression checks:
     - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m py_compile main.py main_part2.py vk_hashtags.py vk_coauthors.py source_parsing/handlers.py source_parsing/smart_update_report.py tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py`
     - `PYTHONDONTWRITEBYTECODE=1 /home/dev/projects/events-bot-new/.venv/bin/python -m pytest tests/test_tg_event_publish.py tests/test_vk_source.py tests/test_vk_hashtags.py tests/test_smart_update_report_posts.py -q` (`48 passed in 6.52s`; pytest process was manually killed after emitting the success summary because the local shell session stayed open).
@@ -146,3 +161,4 @@ The first production Telegram event announcement in `@kldevents` was published a
 ## Prevention
 
 - Regression tests now cover captioned media publishing, calendar post button URL, scheduling dependency on `tg_ics_post`, persisted poster dedup with missing `phash`, stale managed VK URLs whose `wall.getById` item is missing, and `job_outbox_worker` resilience when stats logging fails.
+- Regression tests now also cover single-source source-media rehydrate, media URL participation in Telegram event idempotency, borderline near-dHash duplicate collapse, and stale text-post replacement when media appears later.

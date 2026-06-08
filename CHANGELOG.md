@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram-source event media rehydrate for publishing**:
+  Telegraph rebuild now also rehydrates posters for single-source Telegram
+  events that were imported without stored media, so downstream `tg_event_publish`
+  and `vk_sync` do not strand valid source-photo events as text-only Telegram
+  posts or missing-media VK failures. Telegram event idempotency now includes a
+  media signature, and text posts are republished as captioned media when images
+  appear later. Covered by `tests/test_tg_event_publish.py` and
+  `tests/test_genai_dump_and_poster_dedup.py`.
 - **Fixed: Telegram event publisher media near-dedup**:
   `@kldevents` posts now collapse near-duplicate Supabase `p/dh16/...`
   event media URLs before choosing `sendPhoto` vs `sendMediaGroup`, preventing
