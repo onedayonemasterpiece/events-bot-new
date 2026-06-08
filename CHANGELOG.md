@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram Monitoring Smart Update post links report**:
+  per-post `Smart Update (детали событий)` blocks in `/tg` now use the same
+  unified `Посты: VK ... · TG ...` line as the generic Smart Update report,
+  including a `TG ⏳` marker when the Telegram event announcement is queued for
+  the morning publishing window instead of being posted immediately.
 - **Changed: VK dynamic cover is proposal-only by default**:
   `/cover request` now generates the wide/mobile VK cover pack and sends it to
   Telegram admin for approval without changing the VK community cover; `/cover

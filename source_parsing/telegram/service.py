@@ -1557,6 +1557,7 @@ def _format_event_block(
     video_counts = getattr(ctx, "video_count_by_event_id", None) or {}
     ticket_queue_by_eid = getattr(ctx, "ticket_queue_by_event_id", None) or {}
     fest_queue_by_src = getattr(ctx, "festival_queue_by_source_url", None) or {}
+    event_posts_by_eid = getattr(ctx, "event_posts_by_event_id", None) or {}
 
     def _ics_line(url: str | None, *, has_time: bool) -> str:
         value = (url or "").strip()
@@ -1565,12 +1566,24 @@ def _format_event_block(
             return f'ICS: <a href="{safe}">ics</a>'
         return "ICS: ⏳" if has_time else "ICS: —"
 
-    def _vk_post_line(url: str | None) -> str | None:
-        value = (url or "").strip()
-        if not value:
+    def _posts_line(eid: int, fallback_vk_url: str | None) -> str | None:
+        row = event_posts_by_eid.get(int(eid)) if eid else None
+        vk_url = (getattr(row, "vk_post_url", None) or "").strip() if row else ""
+        tg_url = (getattr(row, "tg_post_url", None) or "").strip() if row else ""
+        if not vk_url:
+            vk_url = (fallback_vk_url or "").strip()
+        if not (row or vk_url or tg_url):
             return None
-        safe = html.escape(value, quote=True)
-        return f'VK: <a href="{safe}">пост</a>'
+        parts: list[str] = []
+        if vk_url:
+            parts.append(f'VK <a href="{html.escape(vk_url, quote=True)}">пост</a>')
+        else:
+            parts.append("VK ⏳")
+        if tg_url:
+            parts.append(f'TG <a href="{html.escape(tg_url, quote=True)}">пост</a>')
+        else:
+            parts.append("TG ⏳")
+        return "Посты: " + " · ".join(parts)
 
     def _sources_lines(eid: int) -> list[str]:
         rows = list(sources_by_eid.get(int(eid)) or [])
@@ -1669,9 +1682,9 @@ def _format_event_block(
             else:
                 lines.append(f"Лог: {html.escape(item.log_cmd)}")
         lines.append(_ics_line(item.ics_url, has_time=bool((item.time or "").strip())))
-        vk_line = _vk_post_line(getattr(item, "vk_post_url", None))
-        if vk_line:
-            lines.append(vk_line)
+        posts_line = _posts_line(eid_i, getattr(item, "vk_post_url", None))
+        if posts_line:
+            lines.append(posts_line)
         stats = item.fact_stats or {}
         try:
             photos = int(getattr(item, "photo_count", None) or 0)

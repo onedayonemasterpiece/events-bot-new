@@ -11,6 +11,7 @@
 - Cancelled/postponed, silent и полностью прошедшие события не публикуются.
 - Идемпотентность хранится на `event`: `tg_event_post_url`, `tg_event_post_id`, `tg_event_post_mode`, `tg_event_source_hash`. Если исходный event payload не изменился, повторный job ничего не публикует и не тратит новый LLM-запрос; если текст изменился, бот пытается отредактировать прежнее текстовое сообщение.
 - Чтобы не слать ночной поток уведомлений, `tg_event_publish` ставится в отложенный `JobOutbox` слот: по умолчанию не раньше `07:00` и не позже `23:00` локального `Europe/Kaliningrad`, с интервалом минимум `10` минут после последней queued/done Telegram event публикации. Runtime knobs: `TG_EVENT_PUBLISH_START_HOUR`, `TG_EVENT_PUBLISH_END_HOUR`, `TG_EVENT_PUBLISH_INTERVAL_MINUTES`.
+- Пока Telegram-пост ждёт утренний слот, Smart Update-отчёты должны показывать строку `Посты: VK ... · TG ⏳`; после публикации `TG ⏳` заменяется ссылкой на пост в канале.
 
 ## Формат
 
