@@ -13978,9 +13978,13 @@ async def enqueue_job(
                         cur.update(depends_on)
                         job.depends_on = ",".join(sorted(cur))
                 now = datetime.now(timezone.utc)
-                # Fix #1: Preserve deferred next_run_at if still in future
+                # Preserve deferred page rebuilds, but event announcements are
+                # re-armed from the current Smart Update cycle and must not keep
+                # stale tomorrow slots.
                 job_next_run = _ensure_utc(job.next_run_at)
-                if next_run_at and next_run_at > job_next_run:
+                if next_run_at and task == JobTask.tg_event_publish:
+                    job.next_run_at = next_run_at
+                elif next_run_at and next_run_at > job_next_run:
                     job.next_run_at = next_run_at
                 elif job_next_run < now:
                     # Only reset if already past due

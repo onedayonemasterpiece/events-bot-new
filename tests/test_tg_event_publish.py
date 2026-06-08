@@ -524,6 +524,53 @@ async def test_next_tg_event_publish_run_at_ignores_next_day_pending_anchor_when
 
 
 @pytest.mark.asyncio
+async def test_enqueue_tg_publish_rearm_replaces_stale_next_day_slot(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    event = _event(id=None)
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+        session.add(
+            main.JobOutbox(
+                event_id=event_id,
+                task=main.JobTask.tg_event_publish,
+                status=main.JobStatus.pending,
+                depends_on=f"telegraph_build:{event_id},vk_sync:{event_id}",
+                next_run_at=main.datetime(2026, 6, 9, 16, 40, tzinfo=main.timezone.utc),
+                updated_at=main.datetime(2026, 6, 8, 17, 0, tzinfo=main.timezone.utc),
+            )
+        )
+        await session.commit()
+
+    current_cycle_slot = main.datetime(2026, 6, 8, 17, 20, tzinfo=main.timezone.utc)
+    result = await main.enqueue_job(
+        db,
+        event_id,
+        main.JobTask.tg_event_publish,
+        depends_on=[f"telegraph_build:{event_id}", f"vk_sync:{event_id}"],
+        replace_depends_on=True,
+        next_run_at=current_cycle_slot,
+    )
+
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                main.select(main.JobOutbox).where(
+                    main.JobOutbox.event_id == event_id,
+                    main.JobOutbox.task == main.JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
+
+    assert result == "merged-rearmed"
+    assert main._ensure_utc(job.next_run_at) == current_cycle_slot
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_skips_tg_publish_for_past(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

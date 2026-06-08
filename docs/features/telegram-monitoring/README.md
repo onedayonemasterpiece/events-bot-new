@@ -49,8 +49,9 @@
     `vk_sync` в outbox имеет высокий глобальный priority, но всё ещё ждёт свои per-event prerequisites; готовые
     Telegram imports не должны стоять за чужим Telegraph/page backlog.
     Re-arm `tg_event_publish` при открытом дневном publish window не должен сдвигаться на завтра из-за старого pending
-    anchor на следующий день: forced single-source E2E должен доводить затронутые события до видимого `@kldevents`
-    поста в текущем цикле после Telegraph/VK prerequisites.
+    anchor на следующий день; если pending job уже существует, его `next_run_at` должен заменяться на слот текущего
+    цикла. Forced single-source E2E должен доводить затронутые события до видимого `@kldevents` поста в текущем цикле
+    после Telegraph/VK prerequisites.
     Если Telegram-origin событие доходит до `vk_sync` без renderable афиши/фото (`event.photo_urls`/`eventposter` пусты
     и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
     Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media

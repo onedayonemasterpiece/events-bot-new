@@ -58,8 +58,10 @@
   Telegram candidate even when the LLM merge response omits `ticket_link`, and
   clears stale VK shortlinks when that URL changes. Telegram event publish
   spacing also ignores stale next-day pending anchors while the current-day
-  publish window is open, so forced single-source reimports can reach
-  `@kldevents` in the same E2E cycle instead of being deferred to tomorrow.
+  publish window is open, and re-arming an existing pending `tg_event_publish`
+  now replaces its stale next-day `next_run_at` with the current cycle slot, so
+  forced single-source reimports can reach `@kldevents` in the same E2E cycle
+  instead of being deferred to tomorrow.
   Covered by `tests/test_smart_event_update_ticket_fields.py` and
   `tests/test_tg_event_publish.py`.
 - **Changed: production Telegram UI E2E runbook**:
