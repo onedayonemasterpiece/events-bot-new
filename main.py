@@ -14267,14 +14267,18 @@ async def schedule_event_update_tasks(
         # Fully past events may still need page rebuild cleanup, but they must not create
         # a new managed klgdevents wall post.
         skip_vk_sync = True
+    telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
+    tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
+    vk_dep_key = f"{JobTask.vk_sync.value}:{eid}"
     if (not disable_ics_jobs) and ev.time and "ics_publish" in JOB_HANDLERS:
-        ics_dep = await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
+        ics_dep = f"{JobTask.ics_publish.value}:{eid}"
         results[JobTask.ics_publish] = ics_dep
+        await enqueue_job(db, eid, JobTask.ics_publish, depends_on=None)
     results[JobTask.telegraph_build] = await enqueue_job(
         db, eid, JobTask.telegraph_build, depends_on=None
     )
     if (not disable_ics_jobs) and "tg_ics_post" in JOB_HANDLERS:
-        tg_ics_deps = [results[JobTask.telegraph_build]]
+        tg_ics_deps = [telegraph_dep_key]
         if ics_dep:
             tg_ics_deps.append(ics_dep)
         results[JobTask.tg_ics_post] = await enqueue_job(
@@ -14287,12 +14291,13 @@ async def schedule_event_update_tasks(
         # `source_vk_post_url` pointing at the external source wall post; those
         # must still get a redactional post in `VK_EVENTS_GROUP_ID`.
         if not _event_has_managed_vk_post(ev):
-            vk_dep = await enqueue_job(db, eid, JobTask.vk_sync)
+            vk_dep = vk_dep_key
             results[JobTask.vk_sync] = vk_dep
+            await enqueue_job(db, eid, JobTask.vk_sync)
     if (not skip_vk_sync) and "tg_event_publish" in JOB_HANDLERS:
-        tg_event_deps = [results[JobTask.telegraph_build]]
+        tg_event_deps = [telegraph_dep_key]
         if JobTask.tg_ics_post in results:
-            tg_event_deps.append(results[JobTask.tg_ics_post])
+            tg_event_deps.append(tg_ics_dep_key)
         if vk_dep:
             tg_event_deps.append(vk_dep)
         tg_event_next_run_at = await next_tg_event_publish_run_at(db)
@@ -14303,7 +14308,7 @@ async def schedule_event_update_tasks(
             depends_on=tg_event_deps,
             next_run_at=tg_event_next_run_at,
         )
-    page_deps = [results[JobTask.telegraph_build]]
+    page_deps = [telegraph_dep_key]
     
     if not DISABLE_PAGE_JOBS:
         # Deferred page rebuilds: откладываем month_pages и weekend_pages на 15 минут

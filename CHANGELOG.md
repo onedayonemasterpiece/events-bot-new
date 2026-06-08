@@ -5,9 +5,11 @@
 - **Fixed: Telegram/VK event fanout ordering**:
   `tg_event_publish` now depends on the managed `vk_sync` job for publish-eligible
   events, and the job runner treats pending/running/error dependencies as
-  blockers until the dependency is actually `done`. This prevents `@kldevents`
-  from publishing events that VK has not yet published or is retrying after a
-  failure. Covered by `tests/test_tg_event_publish.py`,
+  blockers until the dependency is actually `done`. Scheduler dependencies now
+  use real outbox keys such as `vk_sync:<event_id>` instead of enqueue action
+  strings like `new`/`requeued`. This prevents `@kldevents` from publishing
+  events that VK has not yet published or is retrying after a failure. Covered by
+  `tests/test_tg_event_publish.py`,
   `tests/test_job_outbox_depends.py`, and `tests/test_job_due_filter.py`.
 - **Fixed: Telegram-source event media rehydrate for publishing**:
   Telegraph rebuild now also rehydrates posters for single-source Telegram

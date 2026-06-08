@@ -49,7 +49,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 - 2026-06-08 09:45 UTC: single-source media rehydrate and media-aware TG idempotency deployed as Fly release `v1235` / image `deployment-01KTK9NSN3FDT6NW8CNEV0ZVTY`; `/healthz` returned ready.
 - 2026-06-08 09:45 UTC: compensating catch-up for event `5755` rehydrated three source photos, rebuilt `https://telegra.ph/Zojkina-kvartira-06-07`, created VK postponed post `https://vk.com/wall-231920894_2412`, republished Telegram as album `https://t.me/c/3954607218/44`, and deleted old text-only `/42`. At the scheduled public slot VK exposed the post as `https://vk.com/wall-231920894_2413`, and production DB/job evidence was normalized to the public URL.
 - 2026-06-08 10:18 UTC: operator requested a title-order diff between `@kldevents` and VK `klgdevents`. Telethon/VK API comparison showed Telegram top sequence `Заключительный гала-концерт` -> `Английский разговорный клуб` -> `Зойкина квартира` -> `Мастер и Маргарита` while public VK top was `Зойкина квартира` -> older VK queue items. Production DB confirmed some fresh Telegram posts pointed at much older managed VK posts, and several text-only Telegram posts had `vk_sync_missing_media_for_telegram_event`.
-- 2026-06-08 10:24 UTC: scheduling root cause found: `tg_event_publish` was enqueued before `vk_sync` and depended only on `telegraph_build`/`tg_ics_post`; the job runner also ignored `depends_on` during execution and only blocked on lower-id pending/running jobs, so an `error`/backoff `vk_sync` did not prevent Telegram publication.
+- 2026-06-08 10:24 UTC: scheduling root cause found: `tg_event_publish` was enqueued before `vk_sync` and depended only on `telegraph_build`/`tg_ics_post`; scheduler code also used enqueue action strings (`new`/`requeued`/`skipped`) as dependency values instead of real outbox keys, and the job runner ignored `depends_on` during execution. As a result, an `error`/backoff `vk_sync` did not prevent Telegram publication.
 
 ## Root Cause
 
@@ -62,7 +62,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 7. The follow-up TG publisher still deduped media URLs only by exact string. Telegraph rendering could select/prune near-duplicate poster assets, while `publish_tg_event_announcement` still chose `album_caption` from multiple Supabase `p/dh16/...` URLs whose perceptual hashes differed by only a few bits.
 8. The Telegraph source-media rehydrate helper only repaired multi-source events. A single Telegram source row with zero persisted posters was treated as "nothing to aggregate", so a valid source photo could be left out of Telegraph, Telegram event publishing, and VK sync.
 9. Telegram event post idempotency hashed text fields but not media state. After a source-media repair, an already-published text-only post could still be treated as current unless the media signature participates in `tg_event_source_hash`.
-10. The two-surface fanout contract was not encoded in the outbox graph. `tg_event_publish` could run without a successful managed `vk_sync`, and the runner did not treat failed dependencies as blockers, so Telegram and VK could diverge in both set and order.
+10. The two-surface fanout contract was not encoded in the outbox graph. `tg_event_publish` could run without a successful managed `vk_sync`; dependency fields contained enqueue actions instead of real job keys; and the runner did not treat failed dependencies as blockers, so Telegram and VK could diverge in both set and order.
 
 ## Contributing Factors
 

@@ -291,7 +291,11 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
 
     assert (
         main.JobTask.tg_event_publish,
-        ["telegraph_build:job", "tg_ics_post:job", "vk_sync:job"],
+        [
+            f"telegraph_build:{event.id}",
+            f"tg_ics_post:{event.id}",
+            f"vk_sync:{event.id}",
+        ],
         deferred_at,
     ) in tasks
     assert (main.JobTask.vk_sync, None, None) in tasks
