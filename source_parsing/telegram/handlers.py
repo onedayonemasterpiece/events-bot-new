@@ -2883,6 +2883,17 @@ def _infer_ticket_link_from_group_post_author(
     return _build_tg_user_link(author.get("username"), author.get("user_id"))
 
 
+def _message_user_author_meta(message: dict[str, Any]) -> dict[str, Any] | None:
+    author = message.get("post_author")
+    if isinstance(author, dict) and author.get("is_user"):
+        return author
+    for key in ("sender", "sender_user", "from_user"):
+        candidate = message.get(key)
+        if isinstance(candidate, dict) and candidate.get("username"):
+            return {**candidate, "is_user": True}
+    return None
+
+
 def _chat_post_author_username(message: dict[str, Any]) -> str | None:
     """Lowercased post-author username for group/supergroup messages.
 
@@ -2893,8 +2904,8 @@ def _chat_post_author_username(message: dict[str, Any]) -> str | None:
     source_type = str(message.get("source_type") or "").strip().lower()
     if source_type not in {"group", "supergroup"}:
         return None
-    author = message.get("post_author")
-    if not isinstance(author, dict) or not author.get("is_user"):
+    author = _message_user_author_meta(message)
+    if not author:
         return None
     username = str(author.get("username") or "").strip().lstrip("@").lower()
     return username or None

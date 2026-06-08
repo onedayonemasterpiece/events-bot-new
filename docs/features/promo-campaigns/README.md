@@ -248,11 +248,17 @@ selects active future events that have an `event_source` row with
 - **Author capture**: `Event.tg_source_author` is set at ingest
   (`source_parsing/telegram/handlers.py` → `EventCandidate` →
   `smart_event_update` create path) from the Telegram message `post_author`
-  **only for `group`/`supergroup` sources** with a resolved user author;
-  channels post as the channel itself, so they get `None` and never trigger.
-  Future-only — there is no backfill for events imported before this shipped.
-  The Kaggle `TelegramMonitor` already includes `post_author` in its payload,
-  so no monitor change is needed.
+  **only for `group`/`supergroup` sources** with a resolved user author. If a
+  Telethon-style payload lacks `post_author` but carries a user `sender` object,
+  ingest falls back to that sender username (the live `kraftmarket39` supergroup
+  exposes `@LANGEANNA` this way). Channels post as the channel itself, so they
+  get `None` and never trigger. Future-only — there is no backfill for events
+  imported before this shipped. The Kaggle `TelegramMonitor` already includes
+  `post_author` in its payload, so no monitor change is needed.
+- **Reporting**: `/promo report` counts future active `tg_chat_author` targets
+  by the same `event_source.source_chat_username` + `event.tg_source_author`
+  pair used by the video promo resolver, so an author campaign no longer looks
+  empty just because it is not an event/festival target.
 - **Filters still apply**: matched events go through the normal video promo
   pipeline (`resolve_video_promo_candidates` + `video_announce/popular_review.py`),
   which filters every promo candidate by the announce's own content filter

@@ -10,6 +10,7 @@ from db import Database
 from handlers.promo_cmd import _campaign_lines, _parse_until_date
 from models import (
     Event,
+    EventSource,
     Festival,
     PromoActivity,
     PromoCampaign,
@@ -1001,6 +1002,12 @@ def test_chat_post_author_username_chat_only() -> None:
 
     chat_msg = {"source_type": "supergroup", "post_author": {"is_user": True, "username": "LangeAnna"}}
     assert _chat_post_author_username(chat_msg) == "langeanna"
+    telethon_like_msg = {
+        "source_type": "supergroup",
+        "post_author": None,
+        "sender": {"type": "User", "username": "LANGEANNA"},
+    }
+    assert _chat_post_author_username(telethon_like_msg) == "langeanna"
     # Channels: author is the channel, not a user -> no trigger.
     channel_msg = {"source_type": "channel", "post_author": {"is_channel": True, "username": "kraftmarket39"}}
     assert _chat_post_author_username(channel_msg) is None
@@ -1078,3 +1085,48 @@ async def test_tg_chat_author_target_matches_only_that_author(tmp_path) -> None:
     matched_ids = {int(e.id) for e in matched}
     assert int(ev_match.id) in matched_ids
     assert int(ev_other.id) not in matched_ids
+
+
+@pytest.mark.asyncio
+async def test_promo_report_counts_tg_chat_author_future_events(tmp_path) -> None:
+    from promo import ensure_kraftmarket_langeanna_campaign
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    campaign = await ensure_kraftmarket_langeanna_campaign(
+        db,
+        now_utc=datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc),
+    )
+    async with db.get_session() as session:
+        ev_match = _event("ANNA LANGE future event", "2099-06-20")
+        ev_match.tg_source_author = "langeanna"
+        ev_other = _event("Other author future event", "2099-06-21")
+        ev_other.tg_source_author = "confidentmax"
+        session.add_all([ev_match, ev_other])
+        await session.commit()
+        await session.refresh(ev_match)
+        await session.refresh(ev_other)
+        session.add_all(
+            [
+                EventSource(
+                    event_id=int(ev_match.id),
+                    source_type="telegram",
+                    source_url="https://t.me/kraftmarket39/275",
+                    source_chat_username="kraftmarket39",
+                    source_message_id=275,
+                ),
+                EventSource(
+                    event_id=int(ev_other.id),
+                    source_type="telegram",
+                    source_url="https://t.me/kraftmarket39/276",
+                    source_chat_username="kraftmarket39",
+                    source_message_id=276,
+                ),
+            ]
+        )
+        await session.commit()
+
+    lines = await _campaign_lines(db, include_archived=True, include_details=True)
+    campaign_block = next(line for line in lines if f"#{campaign.id} " in line)
+    assert "Будущих событий сейчас: 1" in campaign_block
