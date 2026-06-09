@@ -17498,6 +17498,21 @@ async def update_telegraph_event_page(
             if url and url not in photos:
                 photos.append(url)
                 merged_photo_urls = True
+        try:
+            dedupe_event_photos = globals().get("_dedupe_event_photo_urls_for_publish")
+            if callable(dedupe_event_photos):
+                photos_before_dedupe = list(photos or [])
+                posters_before_dedupe = list(poster_render_urls or [])
+                photos = await dedupe_event_photos(photos_before_dedupe)
+                poster_render_urls = await dedupe_event_photos(posters_before_dedupe)
+                if photos != photos_before_dedupe or poster_render_urls != posters_before_dedupe:
+                    merged_photo_urls = True
+        except Exception:
+            logging.warning(
+                "telegraph: failed to dedupe render photos for event %s",
+                event_id,
+                exc_info=True,
+            )
         if merged_photo_urls or exclude_urls:
             ev.photo_urls = list(photos)
             ev.photo_count = len(ev.photo_urls)

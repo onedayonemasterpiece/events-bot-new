@@ -175,6 +175,45 @@ def test_unique_tg_media_urls_dedupes_borderline_supabase_dhash_duplicates():
 
 
 @pytest.mark.asyncio
+async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
+    managed = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/80/"
+        "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800.webp"
+    )
+    vk_cdn = "https://sun9-78.userapi.com/s/v1/ig2/source-copy.jpg?cs=1080x0"
+    event = _event(photo_urls=[managed, vk_cdn])
+
+    async def fake_compute_dhash(url):
+        if url == vk_cdn:
+            return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
+        return main._extract_dhash_from_managed_photo_url(url)
+
+    async def fake_hook_text(event_arg, source_text):
+        assert event_arg is event
+        return "Короткий анонс события."
+
+    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_compute_dhash)
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    materialize_calls = _patch_media_materializer(monkeypatch)
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "source",
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "photo_caption"
+    assert source_hash
+    assert materialize_calls == [(managed, 0)]
+    assert len(bot.photos) == 1
+    assert not bot.media_groups
+
+
+@pytest.mark.asyncio
 async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(monkeypatch):
     event = _event(
         photo_urls=["https://img.example/0.jpg"],

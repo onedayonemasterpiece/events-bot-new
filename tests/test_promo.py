@@ -357,6 +357,60 @@ async def test_promo_vk_publication_recovers_telegraph_media_before_posting(tmp_
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_path, monkeypatch) -> None:
+    import main
+    from promo import _build_promo_vk_source_post
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    managed = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/80/"
+        "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800.webp"
+    )
+    vk_cdn = "https://sun9-78.userapi.com/s/v1/ig2/source-copy.jpg?cs=1080x0"
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+
+    async def fake_compute_dhash(url):
+        if url == vk_cdn:
+            return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
+        return main._extract_dhash_from_managed_photo_url(url)
+
+    upload_calls: list[str] = []
+
+    async def fake_upload(group_id, photo_url, db_arg=None, bot_arg=None):
+        upload_calls.append(photo_url)
+        return None
+
+    async def fake_post_to_vk(*args, **kwargs):
+        raise AssertionError("promo VK publication must fail closed when media upload is empty")
+
+    monkeypatch.setattr(main, "_compute_vk_photo_url_dhash", fake_compute_dhash)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+
+    ev = _event("Благотворительный концерт", "2026-06-11")
+    ev.id = 5282
+    ev.source_post_url = "https://vk.com/wall-214027639_11341"
+    ev.photo_urls = [managed, vk_cdn]
+    ev.photo_count = 2
+
+    with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await _build_promo_vk_source_post(
+            db,
+            None,
+            ev,
+            campaign_id=1,
+            activity_id=8,
+            target_group_id=231920894,
+        )
+
+    assert upload_calls == [managed]
+    await db.close()
+
+
 def test_promo_vk_publication_candidate_requires_media_only_for_telegram(monkeypatch) -> None:
     from promo import _promo_vk_publication_missing_required_media
 

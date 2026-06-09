@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Fixed: outbound event media duplicates and empty VK posts**:
+  Smart Update now canonicalizes `event.photo_urls` from persisted `EventPoster`
+  rows, preferring managed-storage URLs over direct source-CDN mirrors for the
+  same image. Event publishing keeps an additional visual-dedup guard before
+  Telegraph rendering, `@kldevents` Telegram posts, and managed VK/promo VK photo
+  upload. New managed VK source posts now fail closed when event media was
+  available but VK photo upload produced zero attachments, preventing postponed
+  text-only posts such as `wall-231920894_2631`. Covered by
+  `tests/test_genai_dump_and_poster_dedup.py`, `tests/test_tg_event_publish.py`,
+  `tests/test_promo.py`, and `tests/test_vk_source.py`.
 - **Fixed: 2026-06-09 social video and Telegram event publishing incident**:
   CherryFlash no longer inherits the CrumpleVideo `vk:kenigeventsofficial:wall`
   target, so it produces one VK wall video announcement instead of two posts

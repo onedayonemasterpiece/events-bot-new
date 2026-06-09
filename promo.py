@@ -1760,6 +1760,7 @@ async def _build_promo_vk_source_post(
     from main import (
         VK_MAX_ATTACHMENTS,
         VK_PHOTOS_ENABLED,
+        _dedupe_event_photo_urls_for_publish,
         build_vk_source_message,
         post_to_vk,
         upload_vk_photo,
@@ -1773,7 +1774,11 @@ async def _build_promo_vk_source_post(
     text_for_vk = (getattr(ev, "description", None) or "").strip() or (ev.source_text or "")
     message = build_vk_source_message(ev, text_for_vk, festival=festival)
     attachments: list[str] = []
-    photo_urls = (await _ensure_promo_vk_photo_urls(db, ev))[:VK_MAX_ATTACHMENTS]
+    photo_urls = (
+        await _dedupe_event_photo_urls_for_publish(
+            await _ensure_promo_vk_photo_urls(db, ev)
+        )
+    )[:VK_MAX_ATTACHMENTS]
     if VK_PHOTOS_ENABLED:
         for photo_url in photo_urls:
             photo_id = await upload_vk_photo(str(target_group_id), photo_url, db, bot)
@@ -1795,7 +1800,9 @@ async def _build_promo_vk_source_post(
         len(attachments),
         require_media,
     )
-    if source_kind == "telegram" and require_media and not attachments:
+    missing_required_telegram_media = source_kind == "telegram" and require_media and not attachments
+    lost_available_media = bool(VK_PHOTOS_ENABLED and photo_urls and not attachments)
+    if missing_required_telegram_media or lost_available_media:
         logger.error(
             "promo.vk publication missing media campaign_id=%s activity_id=%s event_id=%s target_group_id=%s "
             "source_post_url=%s photo_urls_count=%s attachments_count=%s reason=%s",

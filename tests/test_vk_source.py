@@ -519,6 +519,40 @@ async def test_sync_vk_source_post_allows_vk_origin_with_source_ids(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_blocks_vk_origin_when_available_media_uploads_empty(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+
+    event = main.Event(
+        id=5282,
+        title="Благотворительный концерт",
+        description="",
+        date="2026-06-11",
+        time="20:00",
+        location_name="Стендап клуб Локация",
+        source_text="Text",
+        source_post_url="https://vk.com/wall-214027639_11341",
+        photo_urls=["https://storage.example/poster.webp"],
+        photo_count=1,
+    )
+
+    async def fake_upload(group_id, photo_url, db=None, bot=None):
+        return None
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
+        raise AssertionError("vk_sync must not publish text-only when event media was available")
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True

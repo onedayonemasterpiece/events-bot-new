@@ -297,6 +297,57 @@ async def test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_ro
     assert rows[0].supabase_url == managed_url
 
 
+@pytest.mark.asyncio
+async def test_apply_posters_prefers_persisted_managed_url_over_source_mirror(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    managed_url = (
+        "https://storage.yandexcloud.net/kenigevents/p/dh16/80/"
+        "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800.webp"
+    )
+    source_mirror_url = "https://sun9-78.userapi.com/s/v1/ig2/source-copy.jpg?cs=1080x0"
+
+    async with db.get_session() as session:
+        event = Event(
+            title="Благотворительный концерт",
+            description="D",
+            date="2026-06-11",
+            time="20:00",
+            location_name="Стендап клуб Локация",
+            source_text="T",
+            photo_urls=[source_mirror_url],
+            photo_count=1,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        session.add(
+            EventPoster(
+                event_id=event.id,
+                catbox_url=source_mirror_url,
+                supabase_url=managed_url,
+                poster_hash="poster-sha",
+                phash="8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800",
+            )
+        )
+        await session.commit()
+
+        _added, _added_urls, _preview, pruned, changed = await _apply_posters(
+            session,
+            event.id,
+            [],
+            event_title="Благотворительный концерт",
+        )
+        await session.commit()
+        await session.refresh(event)
+
+    assert pruned == 0
+    assert changed is True
+    assert event.photo_urls == [managed_url]
+    assert event.photo_count == 1
+
+
 # --- Grounded title recovery (INC-2026-05-29 location-as-title) -----------------
 
 def test_generic_title_detector():

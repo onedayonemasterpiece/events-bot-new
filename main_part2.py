@@ -4277,6 +4277,11 @@ def _unique_tg_media_urls(urls: Sequence[str]) -> list[str]:
     return clean
 
 
+async def _dedupe_event_photo_urls_for_publish(photo_urls: Sequence[str] | None) -> list[str]:
+    """Drop visually duplicate event photos across managed mirrors and source URLs."""
+    return await _dedupe_vk_photo_urls_for_publish(photo_urls)
+
+
 def _tg_event_calendar_button_text(event: Event) -> str:
     date_part = str(getattr(event, "date", "") or "").split("..", 1)[0]
     d = parse_iso_date(date_part)
@@ -4344,7 +4349,11 @@ async def publish_tg_event_announcement(
 
     festival = await _resolve_event_festival(db, event)
     source_hash = build_tg_event_source_hash(event, text)
-    photo_urls = _tg_event_publish_media_urls(event)
+    photo_urls = (
+        await _dedupe_event_photo_urls_for_publish(
+            _tg_event_publish_media_urls(event)
+        )
+    )[:TG_EVENT_MAX_MEDIA]
     chunks = _chunked_tg_media(photo_urls)
     if len(photo_urls) == 1:
         desired_mode = "photo_caption"
@@ -4922,11 +4931,14 @@ async def sync_vk_source_post(
                         event.id,
                         len(telegraph_images),
                     )
+    photo_upload_expected = False
+    photo_upload_skipped_missing_user_token = False
     if VK_PHOTOS_ENABLED and photo_urls_source:
         ids: list[str] = []
-        photo_urls = (await _dedupe_vk_photo_urls_for_publish(photo_urls_source))[
+        photo_urls = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
             :VK_MAX_ATTACHMENTS
         ]
+        photo_upload_expected = bool(photo_urls)
         for url in photo_urls:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:
@@ -4936,6 +4948,7 @@ async def sync_vk_source_post(
                     "VK photo upload skipped: user token required",
                     extra={"eid": event.id},
                 )
+                photo_upload_skipped_missing_user_token = True
                 break
         if ids:
             if existing_vk_post_url and len(ids) < len(photo_urls):
@@ -5049,14 +5062,20 @@ async def sync_vk_source_post(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
         if (
-            _vk_require_media_for_telegram_source_posts()
-            and not attachments
-            and await _event_has_telegram_origin(event, db)
+            not attachments
+            and (
+                (
+                    _vk_require_media_for_telegram_source_posts()
+                    and await _event_has_telegram_origin(event, db)
+                )
+                or (photo_upload_expected and not photo_upload_skipped_missing_user_token)
+            )
         ):
             logging.error(
-                "sync_vk_source_post blocked text-only telegram source post event_id=%s source_url=%s",
+                "sync_vk_source_post blocked text-only source post event_id=%s source_url=%s photo_upload_expected=%s",
                 event.id,
                 getattr(event, "source_post_url", None),
+                photo_upload_expected,
             )
             raise RuntimeError("vk_sync_missing_media_for_telegram_event")
         coauthor = None

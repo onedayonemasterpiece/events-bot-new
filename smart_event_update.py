@@ -15522,6 +15522,10 @@ async def _apply_posters(
     if persisted_pruned:
         pruned += persisted_pruned
         pruned_urls |= persisted_pruned_urls
+        await session.flush()
+        persisted_rows = (
+            await session.execute(select(EventPoster).where(EventPoster.event_id == event_id))
+        ).scalars().all()
 
     # Update event.photo_urls if possible
     result = await session.execute(select(Event).where(Event.id == event_id))
@@ -15532,6 +15536,21 @@ async def _apply_posters(
         current = list(event.photo_urls or [])
         if pruned_urls:
             current = [u for u in current if u not in pruned_urls]
+        persisted_known_urls: set[str] = set()
+        persisted_display_urls: list[str] = []
+        for row in persisted_rows:
+            display_url = _event_poster_display_url(row)
+            for raw_url in (getattr(row, "catbox_url", None), getattr(row, "supabase_url", None)):
+                clean_url = str(raw_url or "").strip()
+                if clean_url:
+                    persisted_known_urls.add(clean_url)
+            if display_url and display_url not in persisted_display_urls:
+                persisted_display_urls.append(display_url)
+        if persisted_display_urls:
+            current = [u for u in current if u not in persisted_known_urls]
+            current = persisted_display_urls + [
+                u for u in current if u not in persisted_display_urls
+            ]
         for poster in posters:
             url = _pick_display_url(poster)
             if url and url not in current:
