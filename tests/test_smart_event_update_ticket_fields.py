@@ -60,3 +60,61 @@ def test_apply_ticket_fields_keeps_unrelated_existing_link_at_same_trust() -> No
 
     assert updated == []
     assert event.ticket_link == "https://tickets.example/a"
+
+
+def test_apply_ticket_fields_does_not_replace_real_link_with_vk_shorter() -> None:
+    event = Event(
+        id=5333,
+        title="Концерт классической музыки «Зимний путь»",
+        description="",
+        date="2026-06-13",
+        time="21:00",
+        location_name="Филиал Третьяковской галереи",
+        city="Калининград",
+        source_text="source",
+        ticket_link="https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/46430/2026-06-13/21:00:00",
+        ticket_trust_level="medium",
+    )
+
+    updated = _apply_ticket_fields(
+        event,
+        ticket_link="https://vk.cc/cYaxjc",
+        ticket_price_min=None,
+        ticket_price_max=None,
+        ticket_status=None,
+        candidate_trust="high",
+    )
+
+    assert updated == []
+    assert "tretyakovgallery.ru/tickets/" in event.ticket_link
+
+
+def test_apply_ticket_fields_replaces_vk_shorter_with_real_link() -> None:
+    event = Event(
+        id=5333,
+        title="Концерт классической музыки «Зимний путь»",
+        description="",
+        date="2026-06-13",
+        time="21:00",
+        location_name="Филиал Третьяковской галереи",
+        city="Калининград",
+        source_text="source",
+        ticket_link="https://vk.cc/cYaxjc",
+        ticket_trust_level="high",
+        vk_ticket_short_url="https://vk.cc/cYaxjc",
+        vk_ticket_short_key="cYaxjc",
+    )
+
+    updated = _apply_ticket_fields(
+        event,
+        ticket_link="https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/46430/2026-06-13/21:00:00",
+        ticket_price_min=None,
+        ticket_price_max=None,
+        ticket_status=None,
+        candidate_trust="high",
+    )
+
+    assert updated == ["ticket_link"]
+    assert "tretyakovgallery.ru/tickets/" in event.ticket_link
+    assert event.vk_ticket_short_url is None
+    assert event.vk_ticket_short_key is None

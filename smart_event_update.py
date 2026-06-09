@@ -9202,11 +9202,27 @@ def _apply_ticket_fields(
     cand_priority = _trust_priority(candidate_trust)
     existing_priority = _trust_priority(getattr(event, "ticket_trust_level", None))
 
+    def _is_vk_short_ticket_link(url: str | None) -> bool:
+        raw = str(url or "").strip()
+        if not raw:
+            return False
+        try:
+            host = urlsplit(raw).netloc.lower().removeprefix("www.")
+        except Exception:
+            return False
+        return host in {"vk.cc", "vk.link", "go.vk.com", "l.vk.com"}
+
     def _more_specific_ticket_link(candidate_url: str | None, existing_url: str | None) -> bool:
         candidate_raw = str(candidate_url or "").strip()
         existing_raw = str(existing_url or "").strip()
         if not candidate_raw or not existing_raw or candidate_raw == existing_raw:
             return False
+        candidate_is_vk_short = _is_vk_short_ticket_link(candidate_raw)
+        existing_is_vk_short = _is_vk_short_ticket_link(existing_raw)
+        if candidate_is_vk_short and not existing_is_vk_short:
+            return False
+        if existing_is_vk_short and not candidate_is_vk_short:
+            return True
         try:
             cand = urlsplit(candidate_raw)
             existing = urlsplit(existing_raw)
@@ -9233,10 +9249,21 @@ def _apply_ticket_fields(
             return True
         return cand_priority > existing_priority
 
-    if ticket_link and (
-        _can_override(event.ticket_link)
-        or _more_specific_ticket_link(ticket_link, getattr(event, "ticket_link", None))
+    current_ticket_link = getattr(event, "ticket_link", None)
+    candidate_is_vk_short = _is_vk_short_ticket_link(ticket_link)
+    existing_is_vk_short = _is_vk_short_ticket_link(current_ticket_link)
+    can_replace_ticket = (
+        _can_override(current_ticket_link)
+        or _more_specific_ticket_link(ticket_link, current_ticket_link)
+    )
+    if (
+        ticket_link
+        and candidate_is_vk_short
+        and current_ticket_link
+        and not existing_is_vk_short
     ):
+        can_replace_ticket = False
+    if ticket_link and can_replace_ticket:
         event.ticket_link = ticket_link
         event.ticket_trust_level = candidate_trust
         event.vk_ticket_short_url = None

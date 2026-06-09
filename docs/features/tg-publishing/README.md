@@ -28,6 +28,7 @@
 - Если у события есть `ics_post_url`, пост получает inline-кнопку вида `📅 <дата> <время> · Добавить в календарь`, ведущую на Telegram-пост календаря (`https://t.me/kenigeventscalendar` / private `t.me/c/...` link), а не на сырой `.ics` файл.
 - Если структурной цены, билетной ссылки, sold-out статуса и явного признака бесплатности нет, билетная строка не выводится.
 - Telegram использует исходный `event.ticket_link`. `event.vk_ticket_short_url` — VK-only analytics ссылка и не должна попадать ни в текст, ни в entities/buttons Telegram-поста.
+- Smart Update не должен заменять уже известный canonical `event.ticket_link` на VK shortener URL (`vk.cc`, `vk.link`, `go.vk.com`, `l.vk.com`). Short URL допустим в `event.ticket_link` только если источник не дал более прямой ticket/registration URL; последующий parser/site URL обязан заменить short URL.
 
 ## Медиа
 

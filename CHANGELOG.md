@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram event ticket shortlink leak**:
+  Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
+  `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical
+  non-short ticket/registration URL. A later canonical parser/site URL can still
+  replace a stored short URL and clears stale VK shortlink fields, keeping
+  `@kldevents` ticket links off VK analytics shorteners unless the source itself
+  only provides a short URL. Covered by
+  `tests/test_smart_event_update_ticket_fields.py` and
+  `tests/test_tg_event_publish.py`.
 - **Fixed: outbound event media duplicates and empty VK posts**:
   Smart Update now canonicalizes `event.photo_urls` from persisted `EventPoster`
   rows, preferring managed-storage URLs over direct source-CDN mirrors for the
