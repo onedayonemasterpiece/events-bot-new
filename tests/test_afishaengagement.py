@@ -1,0 +1,385 @@
+from __future__ import annotations
+
+import io
+from datetime import datetime, timezone
+
+import pytest
+from PIL import Image
+from sqlalchemy import select
+
+import afishaengagement as aeg
+import main
+from db import Database
+from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
+
+
+def _poster_bytes() -> bytes:
+    image = Image.new("RGB", (420, 620))
+    pixels = []
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels.append(((x * 13 + y * 7) % 255, (x * 3 + y * 17) % 255, (x * 19 + y * 5) % 255))
+    image.putdata(pixels)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=92)
+    return out.getvalue()
+
+
+def test_apply_rate_is_stable_and_uses_bounds():
+    first = aeg.should_apply_rate(
+        event_id=10,
+        campaign_id=20,
+        activity_id=30,
+        apply_rate=0.5,
+        salt="same",
+        media_digest="abc",
+    )
+    second = aeg.should_apply_rate(
+        event_id=10,
+        campaign_id=20,
+        activity_id=30,
+        apply_rate=0.5,
+        salt="same",
+        media_digest="abc",
+    )
+
+    assert first == second
+    assert 0 <= first.value < 1
+    assert aeg.should_apply_rate(event_id=1, campaign_id=1, activity_id=1, apply_rate=0).applies is False
+    assert aeg.should_apply_rate(event_id=1, campaign_id=1, activity_id=1, apply_rate=1).applies is True
+
+
+def test_target_all_matches_any_event():
+    event = Event(
+        title="Любое событие",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+    )
+    target = PromoTarget(campaign_id=1, target_type="all")
+
+    assert aeg._target_matches(event, target) is True
+
+
+def test_event_type_config_filters_lecture_only():
+    lecture = Event(
+        title="Лекция о городе",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+    )
+    concert = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+    )
+
+    assert aeg._config_matches_event(lecture, {"event_type_keys": ["lecture"]}) is True
+    assert aeg._config_matches_event(concert, {"event_type_keys": ["lecture"]}) is False
+
+
+def test_text_fit_keeps_word_boundaries():
+    fit = aeg.fit_text(
+        "Лайк, если хочешь чаще таких мастер-классов.",
+        box_width=520,
+        box_height=360,
+        preferred_px=72,
+        min_px=52,
+    )
+
+    assert fit is not None
+    assert fit.font_px >= 52
+    assert " ".join(fit.lines) == "Лайк, если хочешь чаще таких мастер-классов."
+    assert all("- " not in line for line in fit.lines)
+
+
+def test_render_right_extension_outputs_png_with_fit_text():
+    event = Event(
+        title="Лекция с Иваном Петровым",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="render-test",
+        config={"palette_ids": ["deep_wine_ivory"], "mechanic_weights": {"likes": 100}},
+    )
+
+    rendered = aeg.render_right_extension(_poster_bytes(), plan)
+
+    assert rendered.template_id == "right_extension"
+    assert rendered.palette_id == "deep_wine_ivory"
+    assert rendered.dimensions == (1440, 1080)
+    assert rendered.cta_text_font_px >= 52
+    assert rendered.data.startswith(b"\x89PNG")
+    assert len(rendered.data) > 50_000
+
+
+@pytest.mark.asyncio
+async def test_llm_plan_bad_json_falls_back(monkeypatch):
+    event = Event(
+        title="Концерт Анны Смирновой",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    async def fake_ask_4o(*args, **kwargs):
+        return "не json"
+
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    plan, _elapsed_ms, provider = await aeg.build_llm_engagement_plan(
+        event,
+        seed="bad-json",
+        config={"palette_ids": ["black_lime"]},
+        vision=aeg.PosterVisionSummary(provider="test", confidence=0.5),
+    )
+
+    assert provider == "fallback_bad_json"
+    assert plan.palette_id == "black_lime"
+    assert plan.cta_text
+
+
+@pytest.mark.asyncio
+async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Лекция с Иваном Петровым",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="лекция",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "debug_shadow": True,
+                "apply_rate": 1,
+                "debug_marker": "#aeg_test_shadow",
+                "debug_cleanup_before": True,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+        await session.refresh(activity)
+
+    vk_calls = []
+    posted = {}
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        vk_calls.append((method, params))
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        return {"response": 1}
+
+    async def fake_upload_images(images, *args, **kwargs):
+        assert len(images) == 1
+        assert images[0][0].startswith(b"\x89PNG")
+        assert kwargs["force"] is True
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        assert group_id == "231920894"
+        assert url == "https://storage.test/generated.png"
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        posted["group_id"] = group_id
+        posted["message"] = message
+        posted["attachments"] = attachments
+        posted["kwargs"] = kwargs
+        return "https://vk.com/wall-231920894_999"
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_999"
+    assert posted["attachments"] == ["photo-231920894_777"]
+    assert posted["kwargs"]["carousel"] is True
+    assert posted["kwargs"]["publish_date"] >= int(now.timestamp()) + 3 * 24 * 3600
+    assert "#aeg_test_shadow #aeg_b20260609" in posted["message"]
+    assert vk_calls[0][0] == "wall.get"
+
+    async with db.get_session() as session:
+        rows = list((await session.execute(select(PromoExposure))).scalars().all())
+    assert len(rows) == 1
+    assert rows[0].surface == aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT
+    assert rows[0].publish_status == "VK_SCHEDULED_DEBUG"
+    assert rows[0].details_json["shadow_marker"] == "#aeg_test_shadow"
+
+
+@pytest.mark.asyncio
+async def test_shadow_debug_copy_skips_posts_without_images(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = Event(
+        title="Без картинки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+    )
+
+    called = False
+
+    async def fake_post_to_vk(*args, **kwargs):
+        nonlocal called
+        called = True
+        return None
+
+    result = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="1",
+        message="",
+        photo_urls=[],
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_post_to_vk,
+        upload_images_fn=fake_post_to_vk,
+        vk_api_fn=fake_post_to_vk,
+    )
+
+    assert result is None
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_shadow_debug_copy_dedupes_existing_build_tag(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Лекция",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={"debug_shadow": True, "apply_rate": 1, "debug_marker": "#aeg_test_shadow"},
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+        await session.refresh(activity)
+        session.add(
+            PromoExposure(
+                campaign_id=int(campaign.id),
+                activity_id=int(activity.id),
+                event_id=int(event.id),
+                surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+                placement_kind="vk_shadow_debug",
+                publish_status="VK_SCHEDULED_DEBUG",
+                details_json={"shadow_marker": "#aeg_test_shadow", "build_tag": "#aeg_b20260609"},
+            )
+        )
+        await session.commit()
+
+    called = False
+
+    async def fake_call(*args, **kwargs):
+        nonlocal called
+        called = True
+        return None
+
+    result = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_call,
+        upload_vk_photo_fn=fake_call,
+        upload_images_fn=fake_call,
+        vk_api_fn=fake_call,
+        now_utc=now,
+    )
+
+    assert result is None
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_cleanup_debug_posts_deletes_only_marker_matches():
+    calls = []
+
+    async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
+        calls.append((method, params))
+        if method == "wall.get":
+            return {
+                "response": {
+                    "items": [
+                        {"id": 10, "text": "regular"},
+                        {"id": 11, "text": "debug #afishaengagement_shadow"},
+                    ]
+                }
+            }
+        return {"response": 1}
+
+    result = await aeg.cleanup_debug_posts(
+        group_id="231920894",
+        marker="#afishaengagement_shadow",
+        vk_api_fn=fake_vk_api,
+    )
+
+    assert result == {"matched": 1, "deleted": 1, "errors": 0}
+    assert calls[-1] == ("wall.delete", {"owner_id": -231920894, "post_id": 11})

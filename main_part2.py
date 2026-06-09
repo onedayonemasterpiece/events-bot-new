@@ -3580,6 +3580,7 @@ async def post_to_vk(
     carousel: bool = False,
     vk_coauthor_url: str | None = None,
     vk_coauthor_screen_name: str | None = None,
+    publish_date: int | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -3638,7 +3639,8 @@ async def post_to_vk(
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
-    publish_date = await _reserve_vk_postponed_publish_date(owner_id, actors, db, bot)
+    if publish_date is None:
+        publish_date = await _reserve_vk_postponed_publish_date(owner_id, actors, db, bot)
     if publish_date:
         params_base["publish_date"] = publish_date
     for idx, actor in enumerate(actors, start=1):
@@ -5096,6 +5098,26 @@ async def sync_vk_source_post(
         )
         if url:
             logging.info("sync_vk_source_post created %s", url)
+            try:
+                from afishaengagement import maybe_publish_shadow_debug_copy
+
+                await maybe_publish_shadow_debug_copy(
+                    event=event,
+                    db=db,
+                    bot=bot,
+                    target_group_id=str(target_group_id),
+                    message=message,
+                    photo_urls=photo_urls_source[:VK_MAX_ATTACHMENTS],
+                    post_to_vk_fn=post_to_vk,
+                    upload_vk_photo_fn=upload_vk_photo,
+                    upload_images_fn=upload_images,
+                    vk_api_fn=_vk_api,
+                )
+            except Exception:
+                logging.exception(
+                    "sync_vk_source_post: afishaengagement shadow failed event_id=%s",
+                    event.id,
+                )
     return url
 
 

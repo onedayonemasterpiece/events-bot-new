@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Afisha Engagement / VK debug shadow CTA motivators**: added the
+  `afishaengagement` promo activity for Smart Update VK event posts. In debug
+  shadow mode the normal event post remains unchanged, while a marked postponed
+  debug copy is scheduled with generated CTA media, stable `apply_rate`
+  selection, poster Vision/OCR summary, optional LLM plan selection,
+  deterministic Cygre/PIL right-extension rendering, structured JSON logs,
+  promo exposure audit rows, and a cleanup script for VK postponed debug posts.
 - **Fixed: Telegram event ticket shortlink leak**:
   Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
   `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical
