@@ -1,6 +1,6 @@
 # INC-2026-06-09-social-video-tg-publishing
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: `events-bot-new` social publishing
 Opened: 2026-06-09
@@ -106,10 +106,11 @@ No repair or catch-up publication was executed, per owner instruction.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `bd776448a080b5a153c0d4a26b984a876a06a100`
+- deploy path: manual Fly deploy from clean worktree, app `events-bot-new-wngqia`, image `events-bot-new-wngqia:deployment-01KTPG7R974GEG35VWQH47E4AH`, machine version `1257`
+- regression checks: `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_video_announce_story_publish.py tests/test_promo.py tests/test_tg_event_publish.py` -> `59 passed`; `git diff --check` clean before commit
+- post-deploy verification: `flyctl status -a events-bot-new-wngqia` showed machine `48e42d5b714228` started with `1 total, 1 passing`; logs showed `BOOT_OK`, scheduler startup, and `/healthz` `200`; runtime `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` contains `vk:kenigeventsofficial:wall` with `transport=vk_wall` and `caption_variant=crumple_official`
+- repair/catch-up: not executed per owner instruction; existing `pending tg_event_publish` rows were not mutated by this incident fix
 
 ## Prevention
 
