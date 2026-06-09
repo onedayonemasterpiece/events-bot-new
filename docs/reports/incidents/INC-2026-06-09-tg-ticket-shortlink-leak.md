@@ -38,6 +38,17 @@ This made the VK shortener become the canonical `event.ticket_link`, so Telegram
 ## Verification
 
 - `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_smart_event_update_ticket_fields.py tests/test_tg_event_publish.py::test_build_tg_event_announcement_uses_original_ticket_link_not_vk_short -q` -> `5 passed`
+- `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_smart_event_update_ticket_fields.py tests/test_tg_event_publish.py -q` -> `28 passed`
+- `tests/test_shortlinks_logging.py` was inspected but not used as release gate because it currently asserts legacy log substrings (`vk_shortlink_saved`, `empty_ticket_link`) while runtime logs use the newer structured names (`vk_shortlink_ticket_saved`, `ticket_empty_link`); that mismatch is unrelated to ticket merge behavior.
+
+## Release Evidence
+
+- committed SHA: `49a580f7 Prevent VK shortlinks from replacing ticket URLs`
+- pushed to `origin/main`: `6bc526b6..49a580f7`
+- deployed app: `events-bot-new-wngqia`
+- deployed image: `events-bot-new-wngqia:deployment-01KTPWXH1GG0GVQDS2AA6DR5Z4`
+- Fly machine: `48e42d5b714228`, version `1259`, `1 total, 1 passing`
+- post-deploy logs: `BOOT_OK`, aiohttp listening on `0.0.0.0:8080`, `/healthz` returned `200`
 
 ## Prevention
 
