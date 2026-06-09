@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-09-social-video-tg-publishing.md`
+  - Scope: CherryFlash/CrumpleVideo story and VK/TG fanout ownership, `guaranteed_any_position` video promo placement, and `@kldevents` Telegram event publish slot spacing.
+  - Must not regress: CherryFlash must not include the CrumpleVideo `vk:kenigeventsofficial:wall` / `crumple_official` target; CrumpleVideo must publish its official VK wall video through the shared production story target list; CherryFlash must post the rendered video into `@kenigevents` channel body after story upload; `guaranteed_any_position` promo must be mixed into stable lower positions instead of always appended; `tg_event_publish` must choose the nearest free daytime slot and must not leave a day-gap solely because late pending backlog exists.
 - `INC-2026-06-08-tg-ics-bad-time-retry-storm.md`
   - Scope: calendar/ICS publication jobs (`ics_publish`, `tg_ics_post`), `schedule_event_update_tasks`, and Telegram event publish dependencies that include calendar posts.
   - Must not regress: events whose `date` or `time` cannot be parsed into a concrete calendar start must not enqueue `ics_publish`/`tg_ics_post` and `tg_event_publish` must not depend on `tg_ics_post`; already queued invalid-schedule calendar jobs must finish with `skipped_invalid_schedule` instead of raising `ValueError: bad time`/`bad date` into an infinite retry storm.

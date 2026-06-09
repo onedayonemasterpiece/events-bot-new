@@ -712,11 +712,16 @@ This section captures the latest intro-direction request as an explicit delta to
     `link_url` pointing at the previous wall post.
     If VK rejects cross-community linking, the helper creates a wall post in
     the target community and links that local post instead;
-  - for `popular_review`, VK fanout is wall-first: publish the clip to
-    `vk.com/kenigeventsofficial`, publish a linked video story in the same
-    community immediately, then after `600` seconds publish the same linked
-    video story into `vk.com/klgdevents` or use a local `klgdevents` wall post
-    fallback;
+  - for `popular_review`, Telegram fanout starts with a story upload to
+    `@kenigevents`, then almost immediately posts the same final mp4 to the
+    `@kenigevents` channel body through the shared `telegram_chat` target;
+  - for `popular_review`, VK fanout has exactly one wall post target:
+    `vk:club231828790:wall` with the generated `Видеоанонс` caption, then a
+    linked video story in the same community immediately, then after `600`
+    seconds the same linked video story into `vk.com/klgdevents` or a local
+    `klgdevents` wall-post fallback. The CrumpleVideo
+    `vk:kenigeventsofficial:wall` / `crumple_official` target must not be part
+    of the CherryFlash override;
   - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишакалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.

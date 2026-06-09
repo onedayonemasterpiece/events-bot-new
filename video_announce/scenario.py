@@ -1975,6 +1975,15 @@ class VideoAnnounceScenario:
                     "blocking": False,
                 },
                 {
+                    "peer": "@kenigevents",
+                    "label": "tg:@kenigevents:post",
+                    "delay_seconds": 30,
+                    "mode": "upload",
+                    "transport": "telegram_chat",
+                    "caption": "Видеоанонс",
+                    "blocking": False,
+                },
+                {
                     "peer": "club231828790",
                     "label": "vk:club231828790:wall",
                     "delay_seconds": 300,
@@ -2005,16 +2014,6 @@ class VideoAnnounceScenario:
                     "delay_seconds": 600,
                     "mode": "upload",
                     "transport": "vk_wall_story",
-                },
-                {
-                    "peer": "kenigeventsofficial",
-                    "label": "vk:kenigeventsofficial:wall",
-                    "delay_seconds": 300,
-                    "mode": "upload",
-                    "transport": "vk_wall",
-                    "caption_variant": "crumple_official",
-                    "blocking": False,
-                    "required": False,
                 },
                 {
                     "peer": "@catwithbag",

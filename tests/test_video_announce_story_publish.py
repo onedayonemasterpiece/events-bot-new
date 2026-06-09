@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from video_announce.scenario import VideoAnnounceScenario
@@ -45,6 +47,15 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "blocking": False,
         },
         {
+            "peer": "@kenigevents",
+            "label": "tg:@kenigevents:post",
+            "delay_seconds": 30,
+            "mode": "upload",
+            "transport": "telegram_chat",
+            "caption": "Видеоанонс",
+            "blocking": False,
+        },
+        {
             "peer": "club231828790",
             "label": "vk:club231828790:wall",
             "delay_seconds": 300,
@@ -68,16 +79,6 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "mode": "upload",
             "transport": "vk_wall_story",
         },
-        {
-            "peer": "kenigeventsofficial",
-            "label": "vk:kenigeventsofficial:wall",
-            "delay_seconds": 300,
-            "mode": "upload",
-            "transport": "vk_wall",
-            "caption_variant": "crumple_official",
-            "blocking": False,
-            "required": False,
-        },
         {"peer": "@catwithbag", "delay_seconds": 300, "mode": "repost_previous"},
         {"peer": "@i_love_kaliningrad", "delay_seconds": 600, "mode": "repost_previous"},
     ]
@@ -100,31 +101,79 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
 
     assert config is not None
     assert config["targets"][0]["blocking"] is False
-    vk_wall_target = config["targets"][1]
+    assert config["targets"][1]["transport"] == "telegram_chat"
+    assert config["targets"][1]["caption"] == "Видеоанонс"
+    vk_wall_target = config["targets"][2]
     assert vk_wall_target["caption"].startswith("Видеоанонс\n\n")
     assert "#Калининград" in vk_wall_target["caption"]
     assert "#Светлогорск" in vk_wall_target["caption"]
     assert "#17мая" in vk_wall_target["caption"]
     assert "#17_мая" in vk_wall_target["caption"]
-    official_wall_target = config["targets"][6]
-    assert official_wall_target["peer"] == "kenigeventsofficial"
-    assert official_wall_target["caption"] == (
-        "События на 17 мая #Калининград #Светлогорск #17_мая #17мая"
-    )
     assert [
         (target["peer"], target.get("transport", "telethon"))
         for target in config["targets"]
     ] == [
         ("@kenigevents", "telethon"),
+        ("@kenigevents", "telegram_chat"),
         ("club231828790", "vk_wall"),
         ("@lovekenig", "telethon"),
         ("club231828790", "vk_wall_story"),
         ("@loving_guide39", "telethon"),
         ("klgdevents", "vk_wall_story"),
-        ("kenigeventsofficial", "vk_wall"),
         ("@catwithbag", "telethon"),
         ("@i_love_kaliningrad", "telethon"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_default_story_targets_add_crumple_vk_official_wall(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
+        json.dumps(
+            [
+                {"peer": "me", "delay_seconds": 0, "mode": "upload"},
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "delay_seconds": 300,
+                    "mode": "upload",
+                    "transport": "vk_wall",
+                    "caption_variant": "crumple_official",
+                    "blocking": False,
+                    "required": False,
+                },
+                {
+                    "peer": "@kenigevents",
+                    "delay_seconds": 0,
+                    "mode": "repost_previous",
+                    "required": True,
+                },
+            ],
+            ensure_ascii=False,
+        ),
+    )
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+        },
+        selected_event_dates=["2026-06-10"],
+        selected_event_cities=["Калининград"],
+    )
+
+    assert config is not None
+    official_wall_target = config["targets"][1]
+    assert official_wall_target["peer"] == "kenigeventsofficial"
+    assert official_wall_target["transport"] == "vk_wall"
+    assert official_wall_target["blocking"] is False
+    assert "required" not in official_wall_target
+    assert official_wall_target["caption"] == (
+        "События на завтра #Калининград #10_июня #10июня"
+    )
 
 
 @pytest.mark.asyncio

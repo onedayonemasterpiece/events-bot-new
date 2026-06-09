@@ -115,8 +115,10 @@ future event that is renderable.
 - campaign priority is `1`;
 - the video activity uses `selection_policy=guaranteed_any_position`;
 - it does not force slot 1 or 2;
-- it is guaranteed into CherryFlash at any available/lower position, replacing
-  tail organic items if the normal organic list is already full;
+- it is guaranteed into CherryFlash at a stable daily pseudo-random lower
+  position, replacing tail organic items if the normal organic list is already
+  full. The resolver must not always append this placement at the end of the
+  video;
 - it may contribute up to two future events when the promo budget has room, but
   the fair-budget rule above lets another eligible campaign take one seat first.
 

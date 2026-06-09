@@ -14304,7 +14304,7 @@ async def next_tg_event_publish_run_at(
                 .limit(200)
             )
         ).all()
-    latest: datetime | None = None
+    anchors: list[datetime] = []
     now_local_date = now_utc.astimezone(LOCAL_TZ).date()
     candidate_local = candidate.astimezone(LOCAL_TZ)
     backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
@@ -14358,10 +14358,25 @@ async def next_tg_event_publish_run_at(
                 spacing_horizon,
             )
             continue
-        if latest is None or anchor > latest:
-            latest = anchor
-    if latest is not None and latest + interval > candidate:
-        candidate = latest + interval
+        anchors.append(anchor)
+    anchors.sort()
+    max_iterations = max(1, int(spacing_horizon / interval) + 10)
+    for _ in range(max_iterations):
+        candidate = _normalize_tg_event_publish_run_at(candidate)
+        conflict: datetime | None = None
+        for anchor in anchors:
+            if abs(anchor - candidate) < interval:
+                conflict = anchor
+                break
+        if conflict is None:
+            return candidate
+        candidate = conflict + interval
+    logging.warning(
+        "TG_EVENT spacing fallback after exhausted search now=%s candidate=%s anchors=%s",
+        now_utc.isoformat(),
+        candidate.isoformat(),
+        len(anchors),
+    )
     return _normalize_tg_event_publish_run_at(candidate)
 
 

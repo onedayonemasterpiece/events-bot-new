@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- **Fixed: 2026-06-09 social video and Telegram event publishing incident**:
+  CherryFlash no longer inherits the CrumpleVideo `vk:kenigeventsofficial:wall`
+  target, so it produces one VK wall video announcement instead of two posts
+  with different captions. CrumpleVideo's official VK wall fanout now lives in
+  the shared production `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, and CherryFlash now
+  adds a normal `@kenigevents` channel-body video post shortly after the story
+  upload. `guaranteed_any_position` video promo is mixed into a stable daily
+  lower position instead of always being appended at the end. `tg_event_publish`
+  now finds the nearest free publish-window slot instead of scheduling after the
+  latest pending anchor, preventing old repair/backlog rows from stopping
+  daytime `@kldevents` posts after a morning batch. Added incident
+  `INC-2026-06-09-social-video-tg-publishing`. Covered by
+  `tests/test_video_announce_story_publish.py`, `tests/test_promo.py`, and
+  `tests/test_tg_event_publish.py`.
 - **Fixed: Telegram event publish morning rhythm**:
   `tg_event_publish` spacing now ignores stale next-day backlog anchors that are
   many intervals after the next morning start, so imports made after the local

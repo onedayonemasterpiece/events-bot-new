@@ -404,7 +404,7 @@ color: #100E0E;
 - Если `VIDEO_ANNOUNCE_STORY_ENABLED=1`, story publish выполняется внутри `Kaggle` notebook, а не после локального скачивания:
   - notebook читает `story_publish.json` из session-dataset;
   - auth для Telethon передаётся в Kaggle через encrypted split-datasets (`story_publish.enc` + `story_publish.key`);
-  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
+  - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем non-blocking `vk:kenigeventsofficial:wall` with `caption_variant=crumple_official`, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - target objects may carry `required=true`: such targets do not block the expensive render preflight, but the final publish report becomes failed if they do not receive the story;
   - `main`-канал профиля + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` остаются только как legacy fallback, если explicit ordered list не задан;

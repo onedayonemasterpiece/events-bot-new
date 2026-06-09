@@ -104,6 +104,31 @@ def _promo_starts_first(promo_picks: list[PopularReviewPick], *, now_utc: dateti
     return int(digest[:2], 16) % 2 == 0
 
 
+def _stable_daily_insert_index(
+    pick: PopularReviewPick,
+    selected: list[PopularReviewPick],
+    *,
+    now_utc: datetime,
+    max_events: int,
+) -> int:
+    if not selected:
+        return 0
+    selected_ids = ",".join(
+        str(int(item.event.id))
+        for item in selected
+        if item.event.id is not None
+    )
+    seed = (
+        f"{now_utc.date().isoformat()}|{int(pick.event.id)}|"
+        f"{selected_ids}|{max_events}"
+    )
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    min_idx = 1
+    max_idx = len(selected)
+    span = max_idx - min_idx + 1
+    return min_idx + (int(digest[:8], 16) % span)
+
+
 def _merge_promo_and_fresh_picks(
     promo_picks: list[PopularReviewPick],
     fresh: list[PopularReviewPick],
@@ -151,7 +176,14 @@ def _merge_promo_and_fresh_picks(
             )
             removed = selected.pop(removable_idx)
             selected_event_ids.discard(int(removed.event.id))
-        add_pick(pick)
+        insert_idx = _stable_daily_insert_index(
+            pick,
+            selected,
+            now_utc=now_utc,
+            max_events=max_events,
+        )
+        selected.insert(min(insert_idx, len(selected)), pick)
+        selected_event_ids.add(event_id)
 
     if first_slot_promo:
         promo_idx = 0

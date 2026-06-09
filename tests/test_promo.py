@@ -33,6 +33,7 @@ from promo import (
     run_promo_vk_activities,
     resolve_video_promo_candidates,
 )
+from video_announce.popular_review import PopularReviewPick, _merge_promo_and_fresh_picks
 
 
 def _event(title: str, day: str, *, festival: str | None = None) -> Event:
@@ -52,6 +53,27 @@ def _event(title: str, day: str, *, festival: str | None = None) -> Event:
     )
 
 
+def _popular_review_pick(
+    event_id: int,
+    *,
+    placement: str | None = None,
+) -> PopularReviewPick:
+    event = _event(f"Event {event_id}", "2026-06-20")
+    event.id = event_id
+    return PopularReviewPick(
+        event=event,
+        score=100.0 - event_id,
+        source_window="24h",
+        source_post_url=f"https://example.com/{event_id}",
+        source_label="test",
+        anti_repeat_status="fresh",
+        description="test",
+        promo_campaign_id=1 if placement else None,
+        promo_activity_id=1 if placement else None,
+        promo_placement_kind=placement,
+    )
+
+
 def test_parse_until_date_accepts_russian_month() -> None:
     query, end = _parse_until_date(
         '"80 историй о главном" до 18 июля',
@@ -60,6 +82,29 @@ def test_parse_until_date_accepts_russian_month() -> None:
 
     assert query == '"80 историй о главном"'
     assert end == date(2026, 7, 18)
+
+
+def test_popular_review_guaranteed_any_position_is_mixed_stably() -> None:
+    positions: list[int] = []
+    for day in range(9, 22):
+        promo = _popular_review_pick(80, placement=PROMO_POLICY_GUARANTEED_ANY_POSITION)
+        fresh = [_popular_review_pick(event_id) for event_id in range(1, 7)]
+
+        selected = _merge_promo_and_fresh_picks(
+            [promo],
+            fresh,
+            max_events=6,
+            now_utc=datetime(2026, 6, day, 8, 0, tzinfo=timezone.utc),
+        )
+
+        ids = [int(pick.event.id) for pick in selected]
+        assert len(ids) == 6
+        assert 80 in ids
+        positions.append(ids.index(80) + 1)
+
+    assert min(positions) >= 2
+    assert any(position < 6 for position in positions)
+    assert len(set(positions)) > 1
 
 
 @pytest.mark.asyncio

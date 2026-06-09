@@ -64,9 +64,10 @@
 
 - `CrumpleVideo` owns an additional VK wall-video fanout to
   `https://vk.com/kenigeventsofficial`. It is configured in
-  `video_announce.scenario` as `vk:kenigeventsofficial:wall` and uses the
-  `crumple_official` caption variant: `События на завтра` when selected dates
-  are exactly tomorrow in `Europe/Kaliningrad`, otherwise
+  the shared `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` production fanout as
+  `vk:kenigeventsofficial:wall` and uses the `crumple_official` caption
+  variant: `События на завтра` when selected dates are exactly tomorrow in
+  `Europe/Kaliningrad`, otherwise
   `События на <дата или диапазон>`, followed by selected city hashtags and
   date hashtags in the requested underscore-first order.
 - Guide excursions VK digest принадлежит фиче [Guide Excursions Monitoring](../guide-excursions-monitoring/README.md), но обязан использовать общий VK wall contract из этого документа.
