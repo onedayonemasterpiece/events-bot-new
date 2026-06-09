@@ -38,6 +38,16 @@ For ordinary managed VK source posts, `sync_vk_source_post` only blocked text-on
 
 - `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_tg_event_publish.py tests/test_promo.py tests/test_vk_source.py -q` -> `85 passed`
 - `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_genai_dump_and_poster_dedup.py::test_apply_posters_dedupes_legacy_photo_urls_by_phash tests/test_genai_dump_and_poster_dedup.py::test_apply_posters_backfills_eventposter_phash_and_prunes_duplicate_rows tests/test_genai_dump_and_poster_dedup.py::test_apply_posters_prefers_persisted_managed_url_over_source_mirror tests/test_tg_event_publish.py::test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror tests/test_promo.py::test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload tests/test_vk_source.py::test_sync_vk_source_post_blocks_vk_origin_when_available_media_uploads_empty tests/test_vk_source.py::test_sync_vk_source_post_skips_group_only_photo_upload -q` -> `7 passed`
+- `/tmp/events-bot-test-venv/bin/python -m pytest tests/test_genai_dump_and_poster_dedup.py tests/test_tg_event_publish.py tests/test_promo.py tests/test_vk_source.py -q` -> `103 passed`
+
+## Release Evidence
+
+- committed SHA: `2aedeb34 Fix outbound event media dedup`
+- pushed to `origin/main`: `ca5d7194..2aedeb34`
+- deployed app: `events-bot-new-wngqia`
+- deployed image: `events-bot-new-wngqia:deployment-01KTPP2XMPMPW0323W44NT121C`
+- Fly machine: `48e42d5b714228`, version `1258`, `1 total, 1 passing`
+- post-deploy logs: `/healthz` returned `200`
 
 ## Prevention
 
