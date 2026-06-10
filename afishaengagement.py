@@ -842,7 +842,7 @@ def _templates_for(
         ],
         "reposts": [
             "Поделись с теми, кому близки такие события.",
-            "Перешли тому, с кем пошёл бы вместе.",
+            "Поделись с тем, кому это может быть интересно.",
             f"Поделись с другом, который любит такие {topic_acc}.",
         ],
     }
@@ -856,7 +856,7 @@ def _templates_for(
         )
         templates["likes"].append("Лайк, если нравится, как {N} ведёт лекции.")
         templates["likes"].append("Поставь лайк, если уже слушал {N}.")
-        templates["reposts"].append("Перешли другу, кто точно хочет на {N}.")
+        templates["reposts"].append("Поделись с другом, который точно хочет на {N}.")
     elif event_type == "concert" and persona:
         templates["comments"].extend(
             [
@@ -865,7 +865,7 @@ def _templates_for(
             ]
         )
         templates["likes"].append("Лайк, если нравится творчество {N}.")
-        templates["reposts"].append("Перешли другу, кто слушает {N}.")
+        templates["reposts"].append("Поделись с другом, который слушает {N}.")
     elif event_type == "workshop":
         templates["comments"].extend(
             [
@@ -894,7 +894,7 @@ def _templates_for(
                 "Поставь лайк, если ходишь в киноклубы.",
             ]
         )
-        templates["reposts"].append("Перешли тому, с кем смотришь фильмы.")
+        templates["reposts"].append("Поделись с тем, с кем смотришь фильмы.")
     elif event_type == "family":
         templates["comments"].extend(
             [
@@ -916,7 +916,7 @@ def _templates_for(
         )
         if theme and ("сказоч" in theme or "геро" in theme):
             templates["comments"].append("Кого из сказочных героев дети ждут больше всего?")
-            templates["reposts"].append("Перешли другу, у кого дети любят сказочных героев.")
+            templates["reposts"].append("Поделись с другом, чьи дети любят сказочных героев.")
     if theme:
         templates["likes"].extend(
             [
@@ -939,7 +939,7 @@ def _templates_for(
                 f"Поставь лайк, если уже был на {festival_on}.",
             ]
         )
-        templates["reposts"].append(f"Поделись с друзьями, если ждёшь {festival_from}.")
+        templates["reposts"].append(f"Поделись с теми, кто ждёт {festival_from}.")
     return templates
 
 
@@ -1004,19 +1004,41 @@ def _festival_is_annual(event: Event) -> bool:
     return bool(re.search(r"\b(?:[ivxlcdm]{2,}|[2-9]\d*)\s+(?:международн\w+\s+)?фестив", text))
 
 
-def _festival_from_phrase(event: Event, festival: str | None) -> str | None:
+def _festival_display_name(festival: str | None) -> str | None:
     if not festival:
         return None
-    phrase = f"фестиваля {festival}"
+    value = re.sub(r"\s+", " ", str(festival).strip())
+    if not value:
+        return None
+    if "фестив" not in value.casefold():
+        return value
+    quoted = re.search(r"[«\"]([^»\"]{2,80})[»\"]", value)
+    if quoted:
+        return f"«{quoted.group(1).strip()}»"
+    stripped = re.sub(
+        r"^\s*(?:\d+\s+|[ivxlcdm]+\s+)?(?:(?:международн|областн|городск|региональн|ежегодн)\w+\s+)*фестивал[ья]?\s+",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
+    return stripped or value
+
+
+def _festival_from_phrase(event: Event, festival: str | None) -> str | None:
+    display = _festival_display_name(festival)
+    if not display:
+        return None
+    phrase = f"фестиваля {display}"
     if _festival_is_annual(event):
         phrase += " в этом году"
     return phrase
 
 
 def _festival_on_phrase(festival: str | None) -> str | None:
-    if not festival:
+    display = _festival_display_name(festival)
+    if not display:
         return None
-    return f"фестивале {festival}"
+    return f"фестивале {display}"
 
 
 def _resolve_template(
@@ -1856,6 +1878,7 @@ def fit_text(
     min_px: int = 52,
     max_lines: int = 5,
     font_name: str = "Cygre-Bold.ttf",
+    avoid_orphan_lines: bool = False,
 ) -> TextFit | None:
     from PIL import Image, ImageDraw
 
@@ -1869,6 +1892,8 @@ def fit_text(
             lines.extend(wrapped or [""])
         if len(lines) > max_lines:
             continue
+        if avoid_orphan_lines and _has_orphan_cta_line(lines):
+            continue
         if any(_text_bbox(draw, (0, 0), line, font)[2] > box_width for line in lines):
             continue
         line_heights = []
@@ -1881,6 +1906,35 @@ def fit_text(
         if total_h <= box_height:
             return TextFit(font_px=size, lines=lines, width=max_w, height=total_h)
     return None
+
+
+_CTA_ORPHAN_WORDS = {
+    "а",
+    "в",
+    "и",
+    "к",
+    "о",
+    "с",
+    "у",
+    "бы",
+    "до",
+    "за",
+    "из",
+    "ли",
+    "на",
+    "не",
+    "об",
+    "от",
+    "по",
+}
+
+
+def _has_orphan_cta_line(lines: Sequence[str]) -> bool:
+    for line in lines:
+        normalized = re.sub(r"[^0-9A-Za-zА-Яа-яЁё]+", "", line).casefold()
+        if normalized in _CTA_ORPHAN_WORDS:
+            return True
+    return False
 
 
 def _layout_scale(reference_px: int, base_px: int = 1080) -> float:
@@ -2031,6 +2085,7 @@ def _compose_cta_edge(
     accent: tuple[int, int, int],
     rim: tuple[int, int, int],
     scale: float,
+    include_accent_stripe: bool = True,
 ) -> Any:
     nx, ny = cta_normal
     dark = _mix_rgb(ink, surface, 0.25)
@@ -2052,12 +2107,14 @@ def _compose_cta_edge(
         dx=max(8, int(12 * scale)) * nx,
         dy=max(8, int(12 * scale)) * ny,
     )
-    for start, end, color, width in (
+    edge_layers = [
         (dark_start, dark_end, dark, max(1, int(2 * scale))),
         (seam_inner_start, seam_inner_end, seam_color, max(4, int(8 * scale))),
-        (accent_start, accent_end, accent_color, max(2, int(4 * scale))),
         (light_start, light_end, light, max(1, int(2 * scale))),
-    ):
+    ]
+    if include_accent_stripe:
+        edge_layers.insert(2, (accent_start, accent_end, accent_color, max(2, int(4 * scale))))
+    for start, end, color, width in edge_layers:
         image = _composite_aa_line(image, [start, end], fill=color, width=width, aa_scale=8)
     return image
 
@@ -2329,34 +2386,80 @@ def render_right_extension(
     safe_x = 0
     safe_y = int(108 * scale)
     safe_w = 0
-    rail_w = max(4, int(6 * scale))
-    rail_gap = int(24 * scale)
     text_box_y = 0
     text_box_h = 0
     badge_h = int(58 * scale)
     badge_gap = max(int(54 * scale), int(height * 0.055))
     bottom_pad = max(int(36 * scale), int(height * 0.045))
     badge_y = height - bottom_pad - badge_h
-    start_w = max(int(460 * scale), int(height * 0.43))
-    end_w = max(start_w + int(80 * scale), int(860 * scale))
-    step_w = max(18, int(40 * scale))
-    for cta_w in range(start_w, end_w + 1, step_w):
+    max_cta_w = max(1, int(poster_w * 0.5))
+    start_w = min(max_cta_w, max(140, int(220 * scale), int(poster_w * 0.30)))
+    end_w = max_cta_w
+    step_w = 4 if end_w - start_w <= 260 else max(6, int(8 * scale))
+    candidates = list(range(start_w, end_w + 1, step_w))
+    if not candidates or candidates[-1] != end_w:
+        candidates.append(end_w)
+    best_fit: tuple[int, int, int, int, int, TextFit] | None = None
+    relaxed_fit: tuple[int, int, int, int, int, TextFit] | None = None
+    for cta_w in candidates:
         width = poster_w + cta_w
-        safe_x = poster_w + int(52 * scale)
-        safe_w = width - safe_x - int(60 * scale) - rail_w - rail_gap
+        left_pad = max(12, min(int(34 * scale), int(cta_w * 0.07)))
+        right_pad = max(14, min(int(42 * scale), int(cta_w * 0.07)))
+        candidate_safe_x = poster_w + left_pad
+        candidate_safe_w = width - candidate_safe_x - right_pad
+        if candidate_safe_w <= int(130 * scale):
+            continue
         text_box_y = safe_y
         text_box_h = badge_y - badge_gap - text_box_y
-        fit = fit_text(
+        candidate_fit = fit_text(
             plan.cta_text,
-            box_width=safe_w,
+            box_width=candidate_safe_w,
             box_height=text_box_h,
-            preferred_px=max(30, int(78 * scale)),
-            min_px=max(24, int(46 * scale)),
+            preferred_px=max(34, int(84 * scale)),
+            min_px=max(18, int(32 * scale)),
+            max_lines=10,
+            avoid_orphan_lines=True,
         )
-        if fit is not None:
-            break
-    if fit is None:
+        if candidate_fit is None:
+            fallback_candidate = fit_text(
+                plan.cta_text,
+                box_width=candidate_safe_w,
+                box_height=text_box_h,
+                preferred_px=max(34, int(84 * scale)),
+                min_px=max(18, int(32 * scale)),
+                max_lines=10,
+            )
+            if fallback_candidate is not None:
+                fallback_score = (
+                    fallback_candidate.font_px,
+                    -cta_w,
+                    width,
+                    candidate_safe_x,
+                    candidate_safe_w,
+                    fallback_candidate,
+                )
+                if relaxed_fit is None or fallback_score[:2] > relaxed_fit[:2]:
+                    relaxed_fit = fallback_score
+            continue
+        score = (
+            candidate_fit.font_px,
+            -cta_w,
+            width,
+            candidate_safe_x,
+            candidate_safe_w,
+            candidate_fit,
+        )
+        if _has_orphan_cta_line(candidate_fit.lines):
+            if relaxed_fit is None or score[:2] > relaxed_fit[:2]:
+                relaxed_fit = score
+            continue
+        if best_fit is None or score[:2] > best_fit[:2]:
+            best_fit = score
+    if best_fit is None and relaxed_fit is not None:
+        best_fit = relaxed_fit
+    if best_fit is None:
         raise ValueError("text_overflow")
+    _font_px, _neg_cta_w, width, safe_x, safe_w, fit = best_fit
     badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
 
     canvas = Image.new("RGB", (width, height), bg)
@@ -2401,6 +2504,7 @@ def render_right_extension(
         accent=accent,
         rim=rim,
         scale=scale,
+        include_accent_stripe=False,
     )
     canvas, _badge_w, badge_h = _draw_badge_on_image(
         canvas,
@@ -2420,18 +2524,8 @@ def render_right_extension(
     line_gap = int(fit.font_px * 0.18)
     total_h = fit.height
     slack = text_box_h - total_h
-    y = text_box_y if slack > int(fit.font_px * 1.5) else text_box_y + max(0, int(slack / 2))
-    rail_h = max(int(78 * scale), min(int(text_box_h * 0.68), fit.height + int(26 * scale)))
-    rail_y = y + max(0, int((fit.height - rail_h) / 2))
-    canvas = _composite_aa_rounded_rect(
-        canvas,
-        (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
-        radius=max(3, int(5 * scale)),
-        fill=accent,
-        aa_scale=4,
-    )
-    draw = ImageDraw.Draw(canvas)
-    text_x = safe_x + rail_w + rail_gap
+    y = text_box_y + max(0, int(slack / 2))
+    text_x = safe_x
     for line in fit.lines:
         _draw_text_line(draw, (text_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
         bbox = _text_bbox(draw, (text_x, y), line, main_font)
@@ -2472,7 +2566,7 @@ def _render_bottom_extension(
 
     width, poster_h = poster.size
     scale = _layout_scale(width)
-    overlap = max(int(56 * scale), min(int(96 * scale), int(poster_h * 0.14)))
+    overlap = max(int(28 * scale), min(int(54 * scale), int(poster_h * 0.07)))
     block_top = poster_h - overlap
     diagonal = max(int(22 * scale), min(int(46 * scale), int(width * 0.035)))
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")

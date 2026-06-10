@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement side CTA regression**: constrained
+  `right_extension` to keep the original poster at least two thirds of the
+  final width, removed the competing inner accent rail/stripe, centered CTA
+  text in the available side text box, and made text fitting prefer a slightly
+  smaller font over orphan service-word lines such as `с` or `бы`. Repost CTA
+  copy now avoids stilted `Перешли...` templates in favor of natural
+  `Поделись...` wording, and horizontal `bottom_extension` uses a shallower
+  poster overlap so lower poster data is less likely to be covered. Covered by
+  `tests/test_afishaengagement.py` and local real-poster previews in
+  `artifacts/codex/afishaengagement-right-fix-20260610/`.
 - **Fixed: Afisha Engagement CTA text quality**: added selective
   `llm_text_mode=auto` for risky CTA copy while keeping deterministic visual
   rendering. Theme-heavy comment text and guardrail hits such as

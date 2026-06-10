@@ -158,11 +158,31 @@ def test_render_right_extension_outputs_png_with_fit_text():
     assert rendered.palette_id in aeg.PALETTES
     assert rendered.dimensions[0] > 420
     assert rendered.dimensions[1] == 620
+    assert rendered.dimensions[0] - 420 <= 420 // 2
     assert rendered.cta_text_font_px >= 24
     assert rendered.data.startswith(b"\x89PNG")
     assert len(rendered.data) > 50_000
     with Image.open(io.BytesIO(rendered.data)) as image:
         assert image.size == rendered.dimensions
+
+
+def test_render_right_extension_avoids_orphan_service_word_lines():
+    plan = aeg.EngagementPlan(
+        mechanic="reposts",
+        template_id="right_extension",
+        palette_id="deep_wine_ivory",
+        cta_text="Поделись с друзьями, если ждёшь фестиваля «Кантата» в этом году.",
+        hook_text=None,
+        event_type="festival",
+        has_persona=False,
+        has_festival=True,
+        seed="right-extension-orphan-lines",
+    )
+
+    rendered = aeg.render_right_extension(_poster_bytes(), plan)
+
+    assert rendered.dimensions[0] - 420 <= 420 // 2
+    assert not aeg._has_orphan_cta_line(rendered.cta_text_lines)
 
 
 def test_right_extension_keeps_at_least_95_percent_of_small_poster_width():
@@ -574,6 +594,55 @@ def test_festival_comment_template_names_festival_and_annual_context():
 
     assert "Что ждёте от фестиваля Кантата в этом году? Напишите в комментариях." in seen
     assert all("от Кантата" not in text for text in seen)
+
+
+def test_festival_cta_uses_short_display_name_without_duplicate_festival_word():
+    event = Event(
+        title="Творческая встреча",
+        description="Образовательная программа фестиваля.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="Фестиваль «Кантата» проходит каждый год.",
+        event_type="встреча",
+        festival="Фестиваль классической музыки «Кантата»",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"festival-short-name-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 0, "reposts": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert "Поделись с теми, кто ждёт фестиваля «Кантата» в этом году." in seen
+    assert all("фестиваля Фестиваль" not in text for text in seen)
+
+
+def test_repost_templates_avoid_stilted_pereshli_copy():
+    event = Event(
+        title="Городская лекция",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"repost-copy-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 0, "reposts": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert all("Перешли" not in text for text in seen)
+    assert any(text.startswith("Поделись") for text in seen)
 
 
 def test_comments_badge_is_action_phrase():
