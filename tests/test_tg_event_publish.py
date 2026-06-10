@@ -397,6 +397,70 @@ async def test_tg_event_publish_does_not_keep_text_mode_when_media_exists(monkey
 
 
 @pytest.mark.asyncio
+async def test_tg_event_publish_deletes_old_album_when_mode_changes(monkeypatch):
+    long_text = " ".join(["Описание события."] * 20)
+    event = _event(
+        photo_urls=["https://img.example/0.jpg"],
+        tg_event_post_id=77,
+        tg_event_post_mode="album_caption",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+
+    async def fake_hook_text(event_arg, source_text):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    _patch_media_materializer(monkeypatch)
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        long_text,
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "photo_caption"
+    assert source_hash and source_hash != "old"
+    assert len(bot.photos) == 1
+    assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_deletes_old_post_when_edit_falls_back_to_send(monkeypatch):
+    event = _event(
+        photo_urls=[],
+        tg_event_post_id=77,
+        tg_event_post_mode="text",
+        tg_event_post_url="https://t.me/c/1234567890/77",
+        tg_event_source_hash="old",
+    )
+
+    async def fake_hook_text(event_arg, source_text):
+        return "Что делает этот вечер особенным? Камерный формат."
+
+    monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
+    bot = DummyTgBot()
+
+    url, post_id, mode, source_hash = await main.publish_tg_event_announcement(
+        event,
+        "Описание события.",
+        None,
+        bot,
+    )
+
+    assert url == "https://t.me/c/1234567890/101"
+    assert post_id == 101
+    assert mode == "text"
+    assert source_hash and source_hash != "old"
+    assert len(bot.messages) == 1
+    assert bot.deleted == [{"chat_id": "@kldevents", "message_id": 77}]
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()

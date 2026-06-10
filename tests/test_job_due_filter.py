@@ -147,3 +147,91 @@ async def test_vk_sync_is_not_starved_by_unrelated_telegraph_backlog(tmp_path, m
             )
         ).scalar_one()
     assert vk_job.status == JobStatus.done
+
+
+@pytest.mark.asyncio
+async def test_due_tg_event_publish_backlog_is_spaced_at_execution(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    async with db.get_session() as session:
+        first = Event(
+            title="First",
+            description="d",
+            date="2026-06-10",
+            time="12:00",
+            location_name="loc",
+            source_text="src",
+        )
+        second = Event(
+            title="Second",
+            description="d",
+            date="2026-06-10",
+            time="13:00",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(first)
+        session.add(second)
+        await session.commit()
+        await session.refresh(first)
+        await session.refresh(second)
+        session.add(
+            JobOutbox(
+                event_id=first.id,
+                task=JobTask.tg_event_publish,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=second.id,
+                task=JobTask.tg_event_publish,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+        first_id = int(first.id)
+        second_id = int(second.id)
+
+    calls: list[int] = []
+
+    async def fake_tg_publish(eid, db_obj, bot_obj):
+        calls.append(eid)
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {"tg_event_publish": fake_tg_publish})
+
+    processed = await main._run_due_jobs_once(db, None)
+
+    assert processed == 1
+    assert calls == [first_id]
+    async with db.get_session() as session:
+        first_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == first_id,
+                    JobOutbox.task == JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
+        second_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == second_id,
+                    JobOutbox.task == JobTask.tg_event_publish,
+                )
+            )
+        ).scalar_one()
+
+    assert first_job.status == JobStatus.done
+    assert second_job.status == JobStatus.pending
+    assert main._ensure_utc(second_job.next_run_at) >= (
+        main._ensure_utc(first_job.updated_at) + timedelta(minutes=10)
+    )

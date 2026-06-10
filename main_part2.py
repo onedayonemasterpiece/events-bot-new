@@ -4480,8 +4480,7 @@ async def publish_tg_event_announcement(
     if (
         existing_id
         and int(existing_id) != int(sent_id or 0)
-        and existing_mode in {"text", "photo_caption"}
-        and sent_mode != existing_mode
+        and existing_mode in {"text", "photo_caption", "album_caption"}
     ):
         try:
             await bot.delete_message(chat_id=target, message_id=int(existing_id))

@@ -14285,6 +14285,69 @@ def _tg_event_publish_backlog_gap_threshold(interval: timedelta) -> timedelta:
     return max(interval * 6, timedelta(hours=1))
 
 
+async def _defer_tg_event_publish_if_spacing_blocked(
+    session,
+    job: JobOutbox,
+    *,
+    now: datetime | None = None,
+) -> datetime | None:
+    """Keep Telegram event posts spaced even when old jobs become due together."""
+
+    job_id = getattr(job, "id", None)
+    if not job_id:
+        return None
+    now_utc = _ensure_utc(now or datetime.now(timezone.utc))
+    interval = _tg_event_publish_interval()
+    candidate = _normalize_tg_event_publish_run_at(now_utc)
+    if candidate <= now_utc:
+        candidate = now_utc
+
+    rows = (
+        await session.execute(
+            select(JobOutbox.id, JobOutbox.status, JobOutbox.next_run_at, JobOutbox.updated_at)
+            .where(
+                JobOutbox.task == JobTask.tg_event_publish,
+                JobOutbox.id != int(job_id),
+                JobOutbox.status.in_([JobStatus.done, JobStatus.running]),
+            )
+            .order_by(JobOutbox.updated_at.desc())
+            .limit(25)
+        )
+    ).all()
+    anchors: list[datetime] = []
+    for _id, status, next_run_at, updated_at in rows:
+        anchor = _ensure_utc(updated_at if status == JobStatus.done else (updated_at or next_run_at))
+        if anchor:
+            anchors.append(anchor)
+
+    if not anchors:
+        if candidate > now_utc:
+            job.next_run_at = candidate
+            job.updated_at = now_utc
+            session.add(job)
+            await session.commit()
+            return candidate
+        return None
+
+    latest_anchor = max(anchors)
+    next_allowed = _normalize_tg_event_publish_run_at(latest_anchor + interval)
+    deferred_until = max(candidate, next_allowed)
+    if deferred_until > now_utc:
+        job.next_run_at = deferred_until
+        job.updated_at = now_utc
+        session.add(job)
+        await session.commit()
+        logging.info(
+            "TG_EVENT spacing defer job_id=%s event_id=%s next_run_at=%s latest_anchor=%s",
+            job_id,
+            getattr(job, "event_id", None),
+            deferred_until.isoformat(),
+            latest_anchor.isoformat(),
+        )
+        return deferred_until
+    return None
+
+
 async def next_tg_event_publish_run_at(
     db: Database,
     *,
@@ -16526,6 +16589,23 @@ async def _run_due_jobs_once_locked(
                     ],
                 )
                 continue
+            if obj.task == JobTask.tg_event_publish:
+                deferred_to = await _defer_tg_event_publish_if_spacing_blocked(
+                    session,
+                    obj,
+                    now=datetime.now(timezone.utc),
+                )
+                if deferred_to:
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="tg_spacing",
+                        next_run_at=deferred_to.isoformat(),
+                    )
+                    continue
             obj.status = JobStatus.running
             obj.updated_at = datetime.now(timezone.utc)
             session.add(obj)
