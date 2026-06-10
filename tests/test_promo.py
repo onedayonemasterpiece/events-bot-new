@@ -288,6 +288,77 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
 
 
 @pytest.mark.asyncio
+async def test_initial_80_stories_campaign_updates_existing_afishaengagement_activity(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="80 историй о главном"))
+        session.add(_event("Future Labeled Festival Event", "2026-06-20", festival="80 историй о главном"))
+        campaign = PromoCampaign(
+            title="80 историй о главном / summer visibility",
+            status="active",
+            starts_at=now_utc,
+            ends_at=datetime(2026, 6, 13, 23, 59, 59, tzinfo=timezone.utc),
+            priority=3,
+        )
+        session.add(campaign)
+        await session.commit()
+        await session.refresh(campaign)
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_AFISHA_ENGAGEMENT,
+                profile_key="klgdevents:motivation:80stories",
+                max_per_publish=1,
+                daily_cap=5,
+                selection_policy="diverse_shuffle",
+                enabled=True,
+                config_json={
+                    "target_group": "231920894",
+                    "apply_rate": 0.7,
+                    "cta_templates": {
+                        "by_event_type": {
+                            "*": {
+                                "likes": [
+                                    "Поставь лайк ❤️,\nесли уже зарегистри-\nровался на {THIS_EVENT}."
+                                ]
+                            }
+                        }
+                    },
+                },
+            )
+        )
+        await session.commit()
+
+    updated = await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
+
+    assert updated is not None
+    async with db.get_session() as session:
+        stored = await session.get(PromoCampaign, int(updated.id))
+        activity = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == updated.id,
+                    PromoActivity.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT,
+                    PromoActivity.enabled.is_(True),
+                )
+            )
+        ).scalars().one()
+    assert stored is not None
+    assert stored.priority == 1
+    assert stored.ends_at.replace(tzinfo=timezone.utc) == datetime(2026, 7, 18, 23, 59, 59, tzinfo=timezone.utc)
+    assert activity.profile_key == "klgdevents:afishaengagement"
+    assert activity.daily_cap is None
+    assert activity.config_json["target_group"] == "klgdevents"
+    assert activity.config_json["cta_templates"]["by_event_type"]["*"]["likes"] == [
+        "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+    ]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_publication_blocks_text_only_telegram_event(tmp_path, monkeypatch, caplog) -> None:
     import main
     from promo import _build_promo_vk_source_post

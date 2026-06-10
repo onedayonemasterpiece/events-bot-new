@@ -27,9 +27,10 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   `"<chat>:<author>"`). See "Author-in-chat trigger" below.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
-  `vk_publication`, `vk_repost`. VK activity parameters live in
-  `promo_activity.config_json` (`target_group`, `source_group`,
-  `window_hours`, `active_start_hour`, `active_end_hour`, dedup policy).
+  `vk_publication`, `vk_repost`, `vk_story`, and `afishaengagement`. VK
+  activity parameters live in `promo_activity.config_json` (`target_group`,
+  `source_group`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
+  policy).
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
@@ -235,7 +236,10 @@ The initial `80 историй о главном` campaign now includes:
 - `afishaengagement` for `https://vk.com/klgdevents`, debug shadow enabled,
   `apply_rate=0.70`, likes-only registration CTA
   `Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}.`, and all
-  visual formats enabled for the first VK visual-debug pass.
+  visual formats enabled for the first VK visual-debug pass. Existing legacy
+  `klgdevents:motivation:80stories` activities are synchronized into the
+  canonical `klgdevents:afishaengagement` profile instead of creating a second
+  active `afishaengagement` activity.
 
 ### Card UI and per-activity statistics
 

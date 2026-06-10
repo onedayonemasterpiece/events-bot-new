@@ -56,6 +56,9 @@ PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
+PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES = {
+    "klgdevents:motivation:80stories",
+}
 VK_SYNC_MISSING_TG_MEDIA_ERROR = "vk_sync_missing_media_for_telegram_event"
 PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
     {"VK_SCHEDULED", "PUBLISHED", "PUBLISHED_MAIN", "PUBLISHED_TEST"}
@@ -965,6 +968,27 @@ def _initial_80_afishaengagement_activity(campaign_id: int) -> PromoActivity:
     )
 
 
+def _sync_initial_80_afishaengagement_activity(
+    current: PromoActivity,
+    required: PromoActivity,
+) -> bool:
+    changed = False
+    for attr in (
+        "profile_key",
+        "max_per_publish",
+        "daily_cap",
+        "selection_policy",
+        "enabled",
+    ):
+        if getattr(current, attr) != getattr(required, attr):
+            setattr(current, attr, getattr(required, attr))
+            changed = True
+    if (current.config_json or {}) != (required.config_json or {}):
+        current.config_json = dict(required.config_json or {})
+        changed = True
+    return changed
+
+
 async def ensure_initial_80_stories_campaign(
     db: Database,
     *,
@@ -985,6 +1009,10 @@ async def ensure_initial_80_stories_campaign(
             if normalize_promo_priority(getattr(existing, "priority", None)) != INITIAL_80_STORIES_PRIORITY:
                 existing.priority = INITIAL_80_STORIES_PRIORITY
                 changed = True
+            expected_end = _campaign_end_dt(INITIAL_80_STORIES_END_DATE)
+            if existing.ends_at != expected_end:
+                existing.ends_at = expected_end
+                changed = True
             activity_res = await session.execute(
                 select(PromoActivity).where(
                     PromoActivity.campaign_id == existing.id,
@@ -1004,6 +1032,16 @@ async def ensure_initial_80_stories_campaign(
                 (str(activity.surface or ""), str(activity.profile_key or ""))
                 for activity in activities
             }
+            existing_by_key = {
+                (str(activity.surface or ""), str(activity.profile_key or "")): activity
+                for activity in activities
+            }
+            legacy_afisha_activities = [
+                activity
+                for activity in activities
+                if str(activity.surface or "") == PROMO_SURFACE_AFISHA_ENGAGEMENT
+                and str(activity.profile_key or "") in PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES
+            ]
             for required in (
                 _initial_80_vk_publication_activity(int(existing.id)),
                 _initial_80_vk_repost_activity(int(existing.id)),
@@ -1022,9 +1060,23 @@ async def ensure_initial_80_stories_campaign(
                 _initial_80_afishaengagement_activity(int(existing.id)),
             ):
                 key = (str(required.surface or ""), str(required.profile_key or ""))
-                if key not in existing_keys:
+                current = existing_by_key.get(key)
+                if current is None and required.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT:
+                    current = legacy_afisha_activities[0] if legacy_afisha_activities else None
+                if current is None:
                     session.add(required)
                     changed = True
+                elif required.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT:
+                    if _sync_initial_80_afishaengagement_activity(current, required):
+                        changed = True
+                    session.add(current)
+                    for legacy_duplicate in legacy_afisha_activities:
+                        if legacy_duplicate is current:
+                            continue
+                        if legacy_duplicate.enabled:
+                            legacy_duplicate.enabled = False
+                            changed = True
+                        session.add(legacy_duplicate)
             if changed:
                 existing.updated_at = now_utc
                 session.add(existing)

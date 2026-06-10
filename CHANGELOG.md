@@ -33,6 +33,12 @@
   rendered over a stale/neighbor poster URL. The decision log now records the
   bound event title, source URLs, first photo URL and media hash for debugging
   suspected poster/text mismatches. Covered by `tests/test_vk_source.py`.
+- **Fixed: 80 Stories Afisha Engagement seed sync**: existing production
+  `80 историй о главном` campaigns now extend back to the canonical
+  2026-07-18 end date and synchronize any legacy
+  `klgdevents:motivation:80stories` activity into the canonical
+  `klgdevents:afishaengagement` profile instead of creating a second active CTA
+  activity.
 - **Changed: Afisha Engagement color system**: replaced harmony-first palette
   scoring with a seam-side CTA separation scorer designed with Opus. The
   renderer now uses curated editorial/noir/ivory/graphite palette families,
