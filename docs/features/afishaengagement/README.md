@@ -171,6 +171,16 @@ The renderer uses engagementcard principles from guide excursion monitoring:
 - deterministic drawing of the red heart in configured CTA copy instead of
   relying on a system emoji font;
 - anti-aliased diagonal seams and dividers rendered via deterministic masks;
+- CTA-card separation as a distinct action surface: multi-layer edge treatment
+  with poster-side hairline, seam, inner accent rim, light hairline, stronger
+  poster-side shadow, and deterministic low-amplitude grain only inside the CTA
+  surface. Palette compatibility must not make the CTA read as part of the
+  original poster.
+- bottom CTA layouts keep mechanic badges as lower action anchors with explicit
+  clearance from the diagonal seam; when the safe spacing cannot be met, the
+  renderer fails over instead of publishing a cramped bottom block.
+- mechanic badges are rendered as outline pills on the CTA surface, using the
+  same signal color as the rim/rail, to avoid a cheap sticker look.
 - contrast-first palettes based on
   `docs/backlog/features/guide-excursions-monitoring/vk_hook_card_palettes.json`;
 - poster-aware CTA color separation: the scorer evaluates the local seam-side

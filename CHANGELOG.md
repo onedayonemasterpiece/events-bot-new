@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Changed: Afisha Engagement CTA surface separation**: applied the Opus visual
+  consultation to make CTA blocks read as separate action cards instead of a
+  continuation of the poster. The PIL renderer now uses a multi-layer
+  poster/CTA edge, stronger poster-side shadow, deterministic CTA-only grain,
+  outline mechanic pills, lower badge anchoring with diagonal-seam clearance,
+  and a rebuilt guide-engagementcard-style `листай` hook card with a clear
+  right arrow. Covered by `tests/test_afishaengagement.py` and local visual
+  previews in `artifacts/codex/afishaengagement-opus-edge-20260610/`.
 - **Fixed: Afisha Engagement event-type ownership**: CTA generation now treats
   the stored `event.event_type` as the primary event-type signal before title
   heuristics. Generic `встреча` no longer becomes `lecture` unless there are

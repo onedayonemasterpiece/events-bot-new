@@ -27,7 +27,7 @@ DEFAULT_DEBUG_MARKER = "#afishaengagement_shadow"
 DEFAULT_BUILD_TAG_PREFIX = "#aeg_b"
 DEFAULT_TARGET_GROUP_SHORT = "klgdevents"
 MAX_VK_FEED_PHOTO_ASPECT = 1.45
-CTA_LAYER_SHADOW_ALPHA = 118
+CTA_LAYER_SHADOW_ALPHA = 170
 
 _CLEANUP_DONE: set[tuple[str, str]] = set()
 
@@ -1266,6 +1266,10 @@ def _hex_to_rgb(value: str) -> tuple[int, int, int]:
     return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
 
 
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    return "#{:02X}{:02X}{:02X}".format(*rgb)
+
+
 def _mix_rgb(a: tuple[int, int, int], b: tuple[int, int, int], weight_b: float) -> tuple[int, int, int]:
     weight_b = max(0.0, min(1.0, float(weight_b)))
     weight_a = 1.0 - weight_b
@@ -1312,8 +1316,11 @@ def _palette_roles(palette: dict[str, str]) -> dict[str, str]:
     ink = palette.get("ink") or palette.get("text") or "#F2EFE8"
     signal = palette.get("signal") or palette.get("accent") or "#E14B3A"
     signal_ink = palette.get("signal_ink") or palette.get("accent_text") or ink
+    surface_rgb = _hex_to_rgb(surface)
     return {
         "surface": surface,
+        "surface_hi": palette.get("surface_hi") or _rgb_to_hex(_mix_rgb(surface_rgb, (255, 255, 255), 0.30)),
+        "surface_lo": palette.get("surface_lo") or _rgb_to_hex(_mix_rgb(surface_rgb, (0, 0, 0), 0.35)),
         "ink": ink,
         "signal": signal,
         "signal_ink": signal_ink,
@@ -1783,6 +1790,8 @@ def _composite_aa_rounded_rect(
     *,
     radius: int,
     fill: tuple[int, int, int],
+    outline: tuple[int, int, int] | None = None,
+    outline_width: int = 0,
     aa_scale: int = 4,
 ) -> Any:
     from PIL import Image, ImageDraw
@@ -1797,10 +1806,103 @@ def _composite_aa_rounded_rect(
         (0, 0, width * aa_scale, height * aa_scale),
         radius=max(1, int(radius * aa_scale)),
         fill=(*fill, 255),
+        outline=(*outline, 255) if outline else None,
+        width=max(1, int(outline_width * aa_scale)) if outline and outline_width > 0 else 1,
     )
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     overlay.paste(hi.resize((width, height), Image.Resampling.LANCZOS), (x0, y0))
     return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+
+def _apply_cta_grain(
+    image: Any,
+    *,
+    polygon: list[tuple[int, int]],
+    seed: str,
+    amount: int = 4,
+    step: int = 3,
+) -> Any:
+    from PIL import Image, ImageDraw
+
+    if not polygon:
+        return image
+    width, height = image.size
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).polygon(polygon, fill=255)
+    px = image.load()
+    mask_px = mask.load()
+    rng = random.Random(seed)
+    min_x = max(0, min(x for x, _ in polygon))
+    max_x = min(width - 1, max(x for x, _ in polygon))
+    min_y = max(0, min(y for _, y in polygon))
+    max_y = min(height - 1, max(y for _, y in polygon))
+    amount = max(1, min(6, int(amount)))
+    step = max(2, int(step))
+    for y in range(min_y, max_y + 1, step):
+        for x in range(min_x, max_x + 1, step):
+            if not mask_px[x, y]:
+                continue
+            delta = rng.randint(-amount, amount)
+            r, g, b = px[x, y]
+            px[x, y] = (
+                max(0, min(255, r + delta)),
+                max(0, min(255, g + delta)),
+                max(0, min(255, b + delta)),
+            )
+    return image
+
+
+def _offset_segment(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    *,
+    dx: float,
+    dy: float,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    return (start[0] + dx, start[1] + dy), (end[0] + dx, end[1] + dy)
+
+
+def _compose_cta_edge(
+    image: Any,
+    *,
+    seam_start: tuple[float, float],
+    seam_end: tuple[float, float],
+    cta_normal: tuple[float, float],
+    surface: tuple[int, int, int],
+    ink: tuple[int, int, int],
+    seam: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    rim: tuple[int, int, int],
+    scale: float,
+) -> Any:
+    nx, ny = cta_normal
+    dark = _mix_rgb(ink, surface, 0.25)
+    seam_color = _mix_rgb(seam, accent, 0.25)
+    light = _mix_rgb(surface, (255, 255, 255), 0.34)
+    accent_color = _mix_rgb(accent, rim, 0.08)
+
+    dark_start, dark_end = _offset_segment(seam_start, seam_end, dx=-2 * nx, dy=-2 * ny)
+    seam_inner_start, seam_inner_end = _offset_segment(seam_start, seam_end, dx=0, dy=0)
+    accent_start, accent_end = _offset_segment(
+        seam_start,
+        seam_end,
+        dx=max(16, int(22 * scale)) * nx,
+        dy=max(16, int(22 * scale)) * ny,
+    )
+    light_start, light_end = _offset_segment(
+        seam_start,
+        seam_end,
+        dx=max(8, int(12 * scale)) * nx,
+        dy=max(8, int(12 * scale)) * ny,
+    )
+    for start, end, color, width in (
+        (dark_start, dark_end, dark, max(1, int(2 * scale))),
+        (seam_inner_start, seam_inner_end, seam_color, max(4, int(8 * scale))),
+        (accent_start, accent_end, accent_color, max(2, int(4 * scale))),
+        (light_start, light_end, light, max(1, int(2 * scale))),
+    ):
+        image = _composite_aa_line(image, [start, end], fill=color, width=width, aa_scale=8)
+    return image
 
 
 def _drop_shadow_overlay(
@@ -1964,13 +2066,15 @@ def _draw_badge_on_image(
         (x, y, x + badge_w, y + badge_h),
         radius=badge_h // 2,
         fill=bg,
+        outline=accent,
+        outline_width=max(2, int(3 * scale)),
         aa_scale=4,
     )
     image = _composite_inset_rule(
         image,
         start=(x + int(9 * scale), y + badge_h - int(2 * scale)),
         end=(x + badge_w - int(9 * scale), y + badge_h - int(2 * scale)),
-        color=_mix_rgb(bg, accent, 0.55),
+        color=_mix_rgb(bg, accent, 0.70),
         width=max(1, int(2 * scale)),
         aa_scale=4,
     )
@@ -2055,7 +2159,6 @@ def render_right_extension(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
-    accent_text = _hex_to_rgb(roles["signal_ink"])
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
@@ -2067,12 +2170,16 @@ def render_right_extension(
     fit: TextFit | None = None
     width = 0
     safe_x = 0
-    safe_y = int(84 * scale)
+    safe_y = int(108 * scale)
     safe_w = 0
-    rail_w = max(5, int(10 * scale))
+    rail_w = max(4, int(6 * scale))
     rail_gap = int(24 * scale)
     text_box_y = 0
     text_box_h = 0
+    badge_h = int(58 * scale)
+    badge_gap = max(int(54 * scale), int(height * 0.055))
+    bottom_pad = max(int(36 * scale), int(height * 0.045))
+    badge_y = height - bottom_pad - badge_h
     start_w = max(int(460 * scale), int(height * 0.43))
     end_w = max(start_w + int(80 * scale), int(860 * scale))
     step_w = max(18, int(40 * scale))
@@ -2080,8 +2187,8 @@ def render_right_extension(
         width = poster_w + cta_w
         safe_x = poster_w + int(52 * scale)
         safe_w = width - safe_x - int(60 * scale) - rail_w - rail_gap
-        text_box_y = safe_y + int(48 * scale) + int(72 * scale)
-        text_box_h = height - text_box_y - int(150 * scale)
+        text_box_y = safe_y
+        text_box_h = badge_y - badge_gap - text_box_y
         fit = fit_text(
             plan.cta_text,
             box_width=safe_w,
@@ -2106,7 +2213,7 @@ def render_right_extension(
         polygon=cta_polygon,
         offset=(-int(18 * scale), 0),
         alpha=CTA_LAYER_SHADOW_ALPHA,
-        blur=max(6, int(14 * scale)),
+        blur=max(10, int(26 * scale)),
         aa_scale=4,
     )
     preserve_x = int(poster_w * 0.95)
@@ -2119,27 +2226,34 @@ def render_right_extension(
         size=(width, height),
         polygon=cta_polygon,
         fill=(*bg, 255),
-        line=[(cut_top, 0), (cut_bottom, height)],
-        line_fill=(*seam, 255),
-        line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_inset_rule(
+    canvas = _apply_cta_grain(
         canvas,
-        start=(cut_top + int(10 * scale), 0),
-        end=(cut_bottom + int(10 * scale), height),
-        color=_mix_rgb(bg, rim, 0.55),
-        width=max(2, int(4 * scale)),
+        polygon=cta_polygon,
+        seed=f"{plan.seed}:right_extension:grain",
+    )
+    canvas = _compose_cta_edge(
+        canvas,
+        seam_start=(cut_top, 0),
+        seam_end=(cut_bottom, height),
+        cta_normal=(1.0, 0.0),
+        surface=bg,
+        ink=text_color,
+        seam=seam,
+        accent=accent,
+        rim=rim,
+        scale=scale,
     )
     canvas, _badge_w, badge_h = _draw_badge_on_image(
         canvas,
         x=safe_x,
-        y=safe_y,
+        y=badge_y,
         label=badge,
         font=badge_font,
-        bg=accent,
-        fg=accent_text,
-        accent=text_color,
+        bg=bg,
+        fg=accent,
+        accent=accent,
         scale=scale,
         max_width=safe_w,
     )
@@ -2148,7 +2262,8 @@ def render_right_extension(
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
     total_h = fit.height
-    y = text_box_y + max(0, int((text_box_h - total_h) / 2))
+    slack = text_box_h - total_h
+    y = text_box_y if slack > int(fit.font_px * 1.5) else text_box_y + max(0, int(slack / 2))
     rail_h = max(int(78 * scale), min(int(text_box_h * 0.68), fit.height + int(26 * scale)))
     rail_y = y + max(0, int((fit.height - rail_h) / 2))
     canvas = _composite_aa_rounded_rect(
@@ -2195,13 +2310,13 @@ def _render_bottom_extension(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
-    accent_text = _hex_to_rgb(roles["signal_ink"])
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
     width, poster_h = poster.size
     scale = _layout_scale(width)
     overlap = max(int(56 * scale), min(int(96 * scale), int(poster_h * 0.14)))
+    block_top = poster_h - overlap
     diagonal = max(int(22 * scale), min(int(46 * scale), int(width * 0.035)))
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
 
@@ -2211,11 +2326,12 @@ def _render_bottom_extension(
     safe_w = width - safe_x * 2
     badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
     badge_h = int(58 * scale)
-    rail_w = max(5, int(10 * scale))
+    rail_w = max(4, int(6 * scale))
     rail_gap = int(24 * scale)
     content_top_pad = diagonal + max(int(54 * scale), int(width * 0.055))
     badge_gap = max(int(22 * scale), int(width * 0.024))
-    bottom_pad = max(int(44 * scale), int(width * 0.044))
+    bottom_pad = max(int(28 * scale), int(width * 0.032))
+    badge_clear_from_seam = max(int(260 * scale), int(width * 0.22))
     max_height = int(width * MAX_VK_FEED_PHOTO_ASPECT)
     max_block_h = max_height - poster_h + overlap
     min_block_h = max(int(300 * scale), int(width * 0.26), int(poster_h * 0.20))
@@ -2225,7 +2341,12 @@ def _render_bottom_extension(
     end_h = min(max_block_h, max(start_h + int(180 * scale), int(540 * scale)))
     step_h = max(18, int(36 * scale))
     for candidate_h in range(start_h, end_h + 1, step_h):
-        text_box_h = candidate_h - content_top_pad - badge_h - badge_gap - bottom_pad
+        candidate_height = poster_h + candidate_h - overlap
+        candidate_badge_y = candidate_height - bottom_pad - badge_h
+        if candidate_badge_y < block_top + diagonal + badge_clear_from_seam:
+            continue
+        text_box_y_candidate = block_top + content_top_pad
+        text_box_h = candidate_badge_y - badge_gap - text_box_y_candidate
         fit = fit_text(
             plan.cta_text,
             box_width=safe_w - rail_w - rail_gap,
@@ -2241,7 +2362,6 @@ def _render_bottom_extension(
         raise ValueError("text_overflow")
 
     height = poster_h + block_h - overlap
-    block_top = poster_h - overlap
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
 
@@ -2251,7 +2371,7 @@ def _render_bottom_extension(
         polygon=cta_polygon,
         offset=(0, -int(12 * scale)),
         alpha=CTA_LAYER_SHADOW_ALPHA,
-        blur=max(8, int(18 * scale)),
+        blur=max(12, int(28 * scale)),
         aa_scale=4,
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
@@ -2259,28 +2379,37 @@ def _render_bottom_extension(
         size=(width, height),
         polygon=cta_polygon,
         fill=(*bg, 255),
-        line=[(0, block_top + diagonal), (width, block_top)],
-        line_fill=(*seam, 255),
-        line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_inset_rule(
+    canvas = _apply_cta_grain(
         canvas,
-        start=(0, block_top + diagonal + int(11 * scale)),
-        end=(width, block_top + int(11 * scale)),
-        color=_mix_rgb(bg, rim, 0.55),
-        width=max(2, int(4 * scale)),
+        polygon=cta_polygon,
+        seed=f"{plan.seed}:bottom_extension:grain",
+    )
+    canvas = _compose_cta_edge(
+        canvas,
+        seam_start=(0, block_top + diagonal),
+        seam_end=(width, block_top),
+        cta_normal=(0.0, 1.0),
+        surface=bg,
+        ink=text_color,
+        seam=seam,
+        accent=accent,
+        rim=rim,
+        scale=scale,
     )
     badge_y = height - bottom_pad - badge_h
+    if badge_y < block_top + diagonal + badge_clear_from_seam:
+        raise ValueError("badge_clearance_overflow")
     canvas, _, _ = _draw_badge_on_image(
         canvas,
         x=safe_x,
         y=badge_y,
         label=badge,
         font=badge_font,
-        bg=accent,
-        fg=accent_text,
-        accent=text_color,
+        bg=bg,
+        fg=accent,
+        accent=accent,
         scale=scale,
         max_width=safe_w,
     )
@@ -2290,7 +2419,8 @@ def _render_bottom_extension(
     text_box_h = max(1, badge_y - badge_gap - text_box_y)
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
-    y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
+    slack = text_box_h - fit.height
+    y = text_box_y if slack > int(fit.font_px * 1.5) else text_box_y + max(0, int(slack / 2))
     rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
     rail_y = y + max(0, int((fit.height - rail_h) / 2))
     canvas = _composite_aa_rounded_rect(
@@ -2346,7 +2476,6 @@ def _render_bottom_overlay(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
-    accent_text = _hex_to_rgb(roles["signal_ink"])
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
@@ -2355,12 +2484,15 @@ def _render_bottom_overlay(
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
     badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
     badge_h = int(58 * scale)
-    rail_w = max(5, int(10 * scale))
+    rail_w = max(4, int(6 * scale))
     rail_gap = int(24 * scale)
     content_top_pad = diagonal + max(int(54 * scale), int(width * 0.060))
     badge_gap = max(int(22 * scale), int(width * 0.024))
-    bottom_pad = max(int(44 * scale), int(width * 0.048))
+    bottom_pad = max(int(28 * scale), int(width * 0.034))
+    badge_clear_from_seam = max(int(250 * scale), int(width * 0.22))
     badge_y = height - bottom_pad - badge_h
+    if badge_y < block_top + diagonal + badge_clear_from_seam:
+        raise ValueError("badge_clearance_overflow")
     text_box_y = block_top + content_top_pad
     text_box_h = max(1, badge_y - badge_gap - text_box_y)
 
@@ -2382,7 +2514,7 @@ def _render_bottom_overlay(
         polygon=cta_polygon,
         offset=(0, -int(12 * scale)),
         alpha=CTA_LAYER_SHADOW_ALPHA,
-        blur=max(8, int(18 * scale)),
+        blur=max(12, int(28 * scale)),
         aa_scale=4,
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
@@ -2390,17 +2522,24 @@ def _render_bottom_overlay(
         size=(width, height),
         polygon=cta_polygon,
         fill=(*bg, 255),
-        line=[(0, block_top + diagonal), (width, block_top)],
-        line_fill=(*seam, 255),
-        line_width=max(4, int(12 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_inset_rule(
+    canvas = _apply_cta_grain(
         canvas,
-        start=(0, block_top + diagonal + int(12 * scale)),
-        end=(width, block_top + int(12 * scale)),
-        color=_mix_rgb(bg, rim, 0.55),
-        width=max(2, int(4 * scale)),
+        polygon=cta_polygon,
+        seed=f"{plan.seed}:bottom_overlay:grain",
+    )
+    canvas = _compose_cta_edge(
+        canvas,
+        seam_start=(0, block_top + diagonal),
+        seam_end=(width, block_top),
+        cta_normal=(0.0, 1.0),
+        surface=bg,
+        ink=text_color,
+        seam=seam,
+        accent=accent,
+        rim=rim,
+        scale=scale,
     )
     canvas, _, _ = _draw_badge_on_image(
         canvas,
@@ -2408,9 +2547,9 @@ def _render_bottom_overlay(
         y=badge_y,
         label=badge,
         font=badge_font,
-        bg=accent,
-        fg=accent_text,
-        accent=text_color,
+        bg=bg,
+        fg=accent,
+        accent=accent,
         scale=scale,
         max_width=safe_w,
     )
@@ -2418,7 +2557,8 @@ def _render_bottom_overlay(
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
-    y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
+    slack = text_box_h - fit.height
+    y = text_box_y if slack > int(fit.font_px * 1.5) else text_box_y + max(0, int(slack / 2))
     rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
     rail_y = y + max(0, int((fit.height - rail_h) / 2))
     canvas = _composite_aa_rounded_rect(
@@ -2469,7 +2609,6 @@ def _render_hook_swipe_cta(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
-    accent_text = _hex_to_rgb(roles["signal_ink"])
     card_w, card_h = 1080, 1350
     scale = card_w / 1080
 
@@ -2493,19 +2632,36 @@ def _render_hook_swipe_cta(
     draw = ImageDraw.Draw(hook)
     safe_x = int(86 * scale)
     safe_w = card_w - safe_x * 2
-    band_h = int(860 * scale)
+    band_h = int(card_h * 0.58)
     poster_band = ImageOps.fit(poster, (card_w, band_h), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
     hook.paste(poster_band, (0, 0))
 
-    block_top = int(790 * scale)
-    diagonal = int(70 * scale)
-    edge = [(0, block_top + diagonal), (card_w, block_top), (card_w, card_h), (0, card_h)]
-    accent_edge = [(0, block_top + diagonal - int(16 * scale)), (card_w, block_top - int(16 * scale)), (card_w, card_h), (0, card_h)]
-    accent_overlay = _aa_overlay(size=(card_w, card_h), polygon=accent_edge, fill=(*accent, 255))
-    hook = Image.alpha_composite(hook.convert("RGBA"), accent_overlay).convert("RGB")
-    bg_overlay = _aa_overlay(size=(card_w, card_h), polygon=edge, fill=(*bg, 255))
-    hook = Image.alpha_composite(hook.convert("RGBA"), bg_overlay).convert("RGB")
-    draw = ImageDraw.Draw(hook)
+    block_top = band_h
+    block_polygon = [(0, block_top), (card_w, block_top), (card_w, card_h), (0, card_h)]
+    shadow = _drop_shadow_overlay(
+        size=(card_w, card_h),
+        polygon=block_polygon,
+        offset=(0, -int(10 * scale)),
+        alpha=CTA_LAYER_SHADOW_ALPHA,
+        blur=max(12, int(24 * scale)),
+        aa_scale=4,
+    )
+    hook = Image.alpha_composite(hook.convert("RGBA"), shadow).convert("RGB")
+    block_overlay = _aa_overlay(size=(card_w, card_h), polygon=block_polygon, fill=(*bg, 255))
+    hook = Image.alpha_composite(hook.convert("RGBA"), block_overlay).convert("RGB")
+    hook = _apply_cta_grain(hook, polygon=block_polygon, seed=f"{plan.seed}:hook_swipe:grain")
+    hook = _compose_cta_edge(
+        hook,
+        seam_start=(0, block_top),
+        seam_end=(card_w, block_top),
+        cta_normal=(0.0, 1.0),
+        surface=bg,
+        ink=text_color,
+        seam=accent,
+        accent=accent,
+        rim=text_color,
+        scale=scale,
+    )
 
     swipe_font = _load_font("Cygre-Medium.ttf", int(38 * scale))
     swipe_label = "листай"
@@ -2513,38 +2669,41 @@ def _render_hook_swipe_cta(
     swipe_w = swipe_bbox[2] - swipe_bbox[0]
     swipe_h = swipe_bbox[3] - swipe_bbox[1]
     swipe_right = card_w - safe_x
-    swipe_y = block_top + diagonal + int(56 * scale)
+    safe_bottom = int(92 * scale)
     arrow_w = int(66 * scale)
     pill_pad_x = int(26 * scale)
     pill_pad_y = int(18 * scale)
     pill_w = int(swipe_w) + int(20 * scale) + arrow_w + pill_pad_x * 2
     pill_h = swipe_h + pill_pad_y * 2
     pill_x = swipe_right - pill_w
-    pill_y = swipe_y - pill_pad_y
+    pill_y = card_h - safe_bottom - pill_h
+    swipe_y = pill_y + pill_pad_y
     hook = _composite_aa_rounded_rect(
         hook,
         (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
         radius=pill_h // 2,
-        fill=accent,
+        fill=bg,
+        outline=accent,
+        outline_width=max(2, int(3 * scale)),
         aa_scale=4,
     )
     draw = ImageDraw.Draw(hook)
     swipe_x = pill_x + pill_pad_x
-    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent_text)
+    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent)
     _draw_right_arrow(
         draw,
         swipe_x + swipe_w + int(18 * scale),
         pill_x + pill_w - pill_pad_x,
         swipe_y + swipe_h / 2,
-        accent_text,
-        width=max(7, int(10 * scale)),
-        head=max(14, int(18 * scale)),
+        accent,
+        width=max(8, int(12 * scale)),
+        head=max(16, int(22 * scale)),
     )
 
     hook_fit = fit_text(
         hook_text,
         box_width=safe_w - int(38 * scale),
-        box_height=int(300 * scale),
+        box_height=max(1, pill_y - block_top - int(150 * scale)),
         preferred_px=86,
         min_px=52,
         max_lines=3,
@@ -2552,12 +2711,12 @@ def _render_hook_swipe_cta(
     if hook_fit is None:
         raise ValueError("hook_text_overflow")
     hook_font = _load_font("Cygre-Bold.ttf", hook_fit.font_px)
-    hook_x = safe_x + int(38 * scale)
-    hook_y = pill_y + pill_h + int(36 * scale)
+    hook_x = safe_x
+    hook_y = block_top + int(102 * scale)
     hook = _composite_aa_rounded_rect(
         hook,
-        (safe_x, hook_y + int(6 * scale), safe_x + int(12 * scale), hook_y + max(int(80 * scale), hook_fit.height) - int(6 * scale)),
-        radius=int(6 * scale),
+        (safe_x, hook_y - int(34 * scale), safe_x + int(56 * scale), hook_y - int(28 * scale)),
+        radius=int(3 * scale),
         fill=accent,
         aa_scale=4,
     )
@@ -2567,7 +2726,7 @@ def _render_hook_swipe_cta(
         _draw_text_line(draw, (hook_x, y), line, font=hook_font, fill=text_color, font_px=hook_fit.font_px)
         bbox = _text_bbox(draw, (hook_x, y), line, hook_font)
         y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.18)
-    draw.line((safe_x, card_h - 92, card_w - safe_x, card_h - 92), fill=accent, width=6)
+    draw.line((safe_x, card_h - 92, card_w - safe_x, card_h - 92), fill=_mix_rgb(bg, accent, 0.70), width=5)
 
     cta = Image.new("RGB", (card_w, card_h), bg)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
@@ -2578,9 +2737,9 @@ def _render_hook_swipe_cta(
         y=96,
         label=badge,
         font=badge_font,
-        bg=accent,
-        fg=accent_text,
-        accent=text_color,
+        bg=bg,
+        fg=accent,
+        accent=accent,
         scale=1.0,
         max_width=card_w - 172,
     )
