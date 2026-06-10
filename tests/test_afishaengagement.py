@@ -153,6 +153,31 @@ def test_render_right_extension_outputs_png_with_fit_text():
         assert image.size == rendered.dimensions
 
 
+def test_right_extension_keeps_at_least_95_percent_of_small_poster_width():
+    source = _poster_bytes()
+    event = Event(
+        title="Мария Макарова акустика",
+        description="Акустический концерт",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="small-poster-preserve-right-edge",
+        config={"palette_ids": ["deep_wine_ivory"], "mechanic_weights": {"likes": 100}},
+    )
+
+    rendered = aeg.render_right_extension(source, plan)
+
+    with Image.open(io.BytesIO(source)) as original, Image.open(io.BytesIO(rendered.data)) as image:
+        x = int(original.width * 0.95) - 1
+        y = original.height - 2
+        assert image.getpixel((x, y)) == original.convert("RGB").getpixel((x, y))
+
+
 def test_render_horizontal_poster_uses_bottom_extension_without_resizing_width():
     event = Event(
         title="Концерт камерной музыки",

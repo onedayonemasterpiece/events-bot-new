@@ -1808,7 +1808,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     scale = _layout_scale(height)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
     badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
-    diagonal = max(int(24 * scale), min(int(86 * scale), int(poster_w * 0.085)))
+    diagonal = max(int(10 * scale), min(int(42 * scale), int(poster_w * 0.035)))
 
     fit: TextFit | None = None
     width = 0
