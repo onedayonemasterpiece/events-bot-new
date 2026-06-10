@@ -3359,6 +3359,11 @@ def _vk_postponed_items(response: dict) -> list[dict]:
     return [item for item in items if isinstance(item, dict)]
 
 
+def _is_afishaengagement_debug_post(item: dict) -> bool:
+    text = str(item.get("text") or "")
+    return "[AFISHAENGAGEMENT DEBUG COPY" in text or "#afishaengagement" in text
+
+
 async def _fetch_vk_latest_postponed_ts(
     owner_id: int,
     actors: list[VkActor],
@@ -3397,6 +3402,8 @@ async def _fetch_vk_latest_postponed_ts(
             continue
         dates: list[int] = []
         for item in _vk_postponed_items(response):
+            if _is_afishaengagement_debug_post(item):
+                continue
             value = item.get("date") or item.get("publish_date")
             if isinstance(value, int) and value > now_ts:
                 dates.append(value)

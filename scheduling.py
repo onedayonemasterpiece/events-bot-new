@@ -964,6 +964,49 @@ async def _video_tomorrow_session_exists_today(
     return False
 
 
+async def _video_tomorrow_failed_session_count_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    profile_key: str,
+    target_date: str,
+) -> int:
+    if db is None or not hasattr(db, "raw_conn"):
+        return 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, profile_key, selection_params
+            FROM videoannounce_session
+            WHERE created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    count = 0
+    for status, row_profile_key, selection_params_raw in rows:
+        if str(row_profile_key or "").strip() != profile_key:
+            continue
+        if str(status or "").strip() != "FAILED":
+            continue
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("target_date") or "").strip() == target_date:
+            count += 1
+    return count
+
+
 async def _popular_review_session_exists_today(
     db: Any,
     *,
@@ -1193,18 +1236,31 @@ async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     day_end_local = day_start_local + timedelta(days=1)
     day_start_utc = day_start_local.astimezone(timezone.utc)
     day_end_utc = day_end_local.astimezone(timezone.utc)
+    target_date = (now_local + timedelta(days=1)).date().isoformat()
+    normalized_profile_key = (profile_key or "default").strip() or "default"
+    failed_session_count = await _video_tomorrow_failed_session_count_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+        profile_key=normalized_profile_key,
+        target_date=target_date,
+    )
+    if failed_session_count >= 2:
+        logging.info(
+            "SCHED startup catchup skip video_tomorrow: failed session retry cap reached count=%s",
+            failed_session_count,
+        )
+        return False
     if await _video_tomorrow_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
         day_end_utc=day_end_utc,
-    ):
+    ) and failed_session_count == 0:
         logging.info(
             "SCHED startup catchup skip video_tomorrow: scheduled dispatch already recorded today"
         )
         return False
 
-    target_date = (now_local + timedelta(days=1)).date().isoformat()
-    normalized_profile_key = (profile_key or "default").strip() or "default"
     if await _video_tomorrow_session_exists_today(
         db,
         day_start_utc=day_start_utc,
@@ -1351,15 +1407,24 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
     day_end_local = day_start_local + timedelta(days=1)
     day_start_utc = day_start_local.astimezone(timezone.utc)
     day_end_utc = day_end_local.astimezone(timezone.utc)
+    target_date = (now_local + timedelta(days=1)).date().isoformat()
+    normalized_profile_key = (profile_key or "default").strip() or "default"
+    failed_session_count = await _video_tomorrow_failed_session_count_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+        profile_key=normalized_profile_key,
+        target_date=target_date,
+    )
+    if failed_session_count >= 2:
+        return False
     if await _video_tomorrow_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
         day_end_utc=day_end_utc,
-    ):
+    ) and failed_session_count == 0:
         return False
 
-    target_date = (now_local + timedelta(days=1)).date().isoformat()
-    normalized_profile_key = (profile_key or "default").strip() or "default"
     if await _video_tomorrow_session_exists_today(
         db,
         day_start_utc=day_start_utc,

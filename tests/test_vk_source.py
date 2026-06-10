@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 import logging
 import sqlite3
+from datetime import datetime, timezone
 import main
 
 
@@ -738,6 +739,44 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
     assert captured["target_group_id"] == "1"
     assert captured["photo_urls"] == ["http://img1"]
     assert "new text" in str(captured["message"])
+
+
+@pytest.mark.asyncio
+async def test_fetch_vk_latest_postponed_ignores_afishaengagement_debug(monkeypatch):
+    now_ts = 1_781_100_000
+    regular_ts = now_ts + 600
+    debug_ts = now_ts + 3 * 24 * 3600
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+            if tz is not None:
+                return value.astimezone(tz)
+            return value.replace(tzinfo=None)
+
+    async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
+        assert method == "wall.get"
+        return {
+            "response": {
+                "items": [
+                    {
+                        "id": 2,
+                        "date": debug_ts,
+                        "text": "event\n\n[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n#afishaengagement_shadow",
+                    },
+                    {"id": 1, "date": regular_ts, "text": "regular postponed"},
+                ]
+            }
+        }
+
+    actor = main.VkActor(kind="user", token=None, label="user")
+    monkeypatch.setattr(main, "datetime", FixedDateTime)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    latest = await main._fetch_vk_latest_postponed_ts(-231920894, [actor], None, None)
+
+    assert latest == regular_ts
 
 
 @pytest.mark.asyncio

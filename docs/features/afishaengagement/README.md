@@ -125,6 +125,9 @@ Before scheduling a debug copy, the feature reads current VK postponed posts and
 recent `VK_SCHEDULED_DEBUG` exposure rows, then selects the first free
 5-minute slot. The selected slot, base slot, counts of occupied sources, and
 publish attempts are included in the structured `afishaengagement.decision` log.
+Marked debug-shadow copies must not participate in the ordinary VK postponed
+slot calculation for real event posts; normal source posts choose their next
+slot as if `[AFISHAENGAGEMENT DEBUG COPY ...]` posts were not present.
 
 ## Rendering
 

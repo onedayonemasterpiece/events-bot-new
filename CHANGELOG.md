@@ -71,6 +71,11 @@
   window behavior. This prevents yesterday evening's `80 историй о главном`
   exposure from suppressing today's 15:00 local repost/story slot. Covered by
   `tests/test_promo.py`.
+- **Fixed: VK postponed scheduling with Afisha Engagement debug shadows**:
+  normal VK event posts now ignore marked `afishaengagement` debug-shadow copies
+  when choosing the next ordinary postponed slot, so visual-debug posts scheduled
+  several days ahead no longer push real event publications to the same future
+  debug window.
 - **Fixed: Telegram event ticket shortlink leak**:
   Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
   `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical
