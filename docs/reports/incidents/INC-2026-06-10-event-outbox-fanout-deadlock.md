@@ -1,6 +1,6 @@
 # INC-2026-06-10 Event Outbox Fanout Deadlock
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Smart Update event publishing / JobOutbox / VK and Telegram fanout
 Opened: 2026-06-10
@@ -135,8 +135,8 @@ JobOutbox scheduling deadlock between calendar jobs and event fanout jobs.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: manual Fly deploy pending
+- deployed SHA: `27b0b5ec28a67a24ff76ef1f353392abb0477b92`
+- deploy path: manual Fly deploy to `events-bot-new-wngqia`, Fly release `v1287`
 - regression checks:
   - `tests/test_job_due_filter.py tests/test_job_outbox_depends.py tests/test_tg_event_publish.py tests/test_vk_source.py::test_vk_wall_source_still_gets_event_vk_sync tests/test_vk_source.py::test_ongoing_vk_wall_source_still_gets_event_vk_sync` -> `32 passed`
   - wider ICS-adjacent check
@@ -145,7 +145,26 @@ JobOutbox scheduling deadlock between calendar jobs and event fanout jobs.
     `ics_file_id`/coalesced-order family tracked by
     `INC-2026-06-08-tg-ics-bad-time-retry-storm`, not caused by this outbox
     dependency change.
-- post-deploy verification: pending
+- post-deploy verification:
+  - `/healthz` after deploy: `ready=true`, `scheduler=ok`,
+    `job_outbox_worker=ok`, no issues.
+  - Production runtime env check: `VK_AUTH_TOKEN` absent, but
+    `VK_USER_TOKEN`, `VK_ACCESS_TOKEN4`, and `VK_TOKEN` present; VK publishing
+    continued through the existing user-token path.
+  - Catch-up requeued future events `5834`, `5867`, `5868`, `5869`, `5870`,
+    and `5871` through `schedule_event_update_tasks`.
+  - Post-catch-up DB check: all six have `vk_sync=done`, `telegraph_build=done`,
+    `ics_publish=done` when applicable, and `tg_ics_post=done` when applicable.
+  - Confirmed public catch-up posts:
+    - `5834`: VK `https://vk.com/wall-231920894_2812`, Telegram `https://t.me/c/3954607218/271`.
+    - `5867`: VK `https://vk.com/wall-231920894_2805`, Telegram `https://t.me/c/3954607218/273`.
+    - `5868`: VK `https://vk.com/wall-231920894_2807`, Telegram pending for `2026-06-10 18:43:28 UTC`.
+    - `5869`: VK `https://vk.com/wall-231920894_2815`, Telegram pending for `2026-06-10 18:53:28 UTC`.
+    - `5870`: VK `https://vk.com/wall-231920894_2809`, Telegram pending for `2026-06-10 19:03:28 UTC`.
+    - `5871`: VK `https://vk.com/wall-231920894_2811`, Telegram pending for `2026-06-10 19:13:28 UTC`.
+  - Event `5872` was left unrequeued: it was a same-day event already past its
+    local start time during verification and had an old `vk_sync:error:stale`
+    row from before this fix.
 
 ## Prevention
 
