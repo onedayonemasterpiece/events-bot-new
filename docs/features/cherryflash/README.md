@@ -76,8 +76,9 @@
 - scheduled CherryFlash launch contract:
   - manual/operator launch may still use a background render task so the Telegram UI stays responsive;
   - scheduled `popular_review` must wait through the pre-Kaggle phase until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug such as `zigomaro/cherryflash`;
-  - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`);
-  - same-day startup/watchdog catch-up must retry a missed CherryFlash slot when today's matching session failed before handoff, but must skip duplicate reruns when a remote dataset/kernel handoff already exists for today's slot, even if the local session status later became misleading.
+  - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`), and a successful `ops_run` handoff is not delivery evidence by itself;
+  - same-day startup/watchdog catch-up must retry a missed CherryFlash slot when today's matching session is terminal `FAILED`, including failures that happened after Kaggle dataset/kernel handoff; it must skip duplicate reruns only for active/in-flight remote handoffs and delivered terminal statuses (`DONE`, `PUBLISHED_TEST`, `PUBLISHED_MAIN`).
+  - CherryFlash story fanout is target-independent: an unavailable or unauthorized Telethon session may fail Telegram story/channel targets, but it must not abort configured VK wall or VK story targets that can publish with VK credentials.
   - if CherryFlash fails or leaves no local-day `ops_run` because SQLite reports `database or disk is full`, treat it as `INC-2026-05-05-cherryflash-disk-full`: collect Fly `/data` evidence, restore free space and SQLite write health first, verify `/healthz`, then perform the same-day compensating CherryFlash run and collect dataset/kernel/story evidence.
 - Product runtime split:
   - candidate selection comes from the `/popular_posts`-style popularity pool with weekly anti-repeat;

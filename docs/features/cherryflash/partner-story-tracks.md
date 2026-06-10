@@ -115,6 +115,13 @@ fail-closed.
 Other partner tracks resolve promo only for their exact partner `profile_key`
 unless they get their own documented exception.
 
+Partner story fanout is best-effort per configured target. A Telegram Business
+or Telethon authorization failure may fail that Telegram-family target, but it
+must not abort unrelated VK wall/story targets in the same CherryFlash render
+when VK credentials are present. If the run reaches Kaggle handoff and then
+ends as terminal `FAILED`, the same-day watchdog still treats it as retryable;
+handoff alone is not delivery evidence for a partner track.
+
 For `partner_region_east_001`, a missing Telegram Business target is treated as
 a same-day defer signal after the scheduled attempt plus one watchdog retry.
 When the cached Business connection still cannot be resolved on the retry, the

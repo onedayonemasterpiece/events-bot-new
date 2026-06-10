@@ -164,7 +164,9 @@ For each active campaign/activity the scheduler:
   `window_hours` (default 24) via `event.source_vk_post_url` + VK `wall.getById`;
   if the stored URL is a stale VK postponed id, it is resolved to the live wall
   id and saved back to the event before the count is evaluated;
-- counts already recorded promo VK exposures in the same window;
+- counts already recorded promo VK exposures for due-slot fulfilment in the
+  activity's current local calendar day, not in a rolling 24-hour window, so an
+  evening exposure from yesterday cannot suppress today's 15:00 local slot;
 - if the count is below the number of slots due by the current local time,
   publishes one missing post as a postponed community wall post through the
   standard VK wall contract (`post_to_vk`, community author, postponed queue),
@@ -190,12 +192,14 @@ For each active campaign/activity the scheduler:
 
 `vk_repost` watches a source community and reposts a recent campaign event post
 to a target community. It considers both organic `event.source_vk_post_url` rows
-and `vk_publication` exposure URLs from the last `window_hours`, but only after
-VK `wall.getById` shows that the source post's publish date is not in the
-future. If VK reassigned the wall id when a postponed post became public, the
-runner resolves `postponed_id -> live id` before source selection; organic event
-URLs are persisted back to `event.source_vk_post_url`, and promo exposure URLs
-are reconciled in `promo_exposure`. The repost caption uses the short VK rewrite helper's text-only summary
+and `vk_publication` exposure URLs from the last `window_hours` for source
+selection and dedup, but counts already delivered repost exposure against the
+current local calendar day. It only selects a source after VK `wall.getById`
+shows that the source post's publish date is not in the future. If VK
+reassigned the wall id when a postponed post became public, the runner resolves
+`postponed_id -> live id` before source selection; organic event URLs are
+persisted back to `event.source_vk_post_url`, and promo exposure URLs are
+reconciled in `promo_exposure`. The repost caption uses the short VK rewrite helper's text-only summary
 (`build_short_vk_text`): no title infoblock, no logistics block, no hashtags.
 The repost result is recorded in `promo_exposure` with
 `surface='vk_repost'`, `details_json.source_url` and
@@ -209,7 +213,8 @@ do not pass the source wall URL as VK `link_url`: VK renders wall links as a
 large white post/caption card under the image, which breaks the poster-only
 story contract.
 Like reposts, story source selection waits until the source wall post is public
-and reconciles stale postponed ids before publishing. Story delivery is complete
+and reconciles stale postponed ids before publishing, while daily story fulfilment
+is counted against the current local calendar day. Story delivery is complete
 only after `stories.save`; the exposure row uses `surface='vk_story'`,
 `public_targets_json.type='vk_story'`, and stores `details_json.source_url`,
 `details_json.target_url`, `owner_id`, `story_id`, and `expires_at`.

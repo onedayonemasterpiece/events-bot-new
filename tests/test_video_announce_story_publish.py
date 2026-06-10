@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 
@@ -128,6 +129,23 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
 @pytest.mark.asyncio
 async def test_default_story_targets_add_crumple_vk_official_wall(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setattr(
+        story_publish,
+        "datetime",
+        type(
+            "_FixedStoryDatetime",
+            (datetime,),
+            {
+                "now": classmethod(
+                    lambda cls, tz=None: (
+                        datetime(2026, 6, 9, 12, 0).replace(tzinfo=tz)
+                        if tz is not None
+                        else datetime(2026, 6, 9, 12, 0)
+                    )
+                )
+            },
+        ),
+    )
     monkeypatch.setenv(
         "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
         json.dumps(

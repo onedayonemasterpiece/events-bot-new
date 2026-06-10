@@ -477,6 +477,13 @@ async def _create_client(auth: dict[str, Any]) -> TelegramClient:
     return client
 
 
+async def _try_create_client(auth: dict[str, Any]) -> tuple[TelegramClient | None, str | None]:
+    try:
+        return await _create_client(auth), None
+    except Exception as exc:
+        return None, str(exc) or type(exc).__name__
+
+
 def _account_info(me: Any) -> dict[str, Any]:
     return {
         "id": getattr(me, "id", None),
@@ -987,7 +994,7 @@ def _publish_vk_wall_story_forward(
 
 
 async def _story_targets_report(
-    client: TelegramClient,
+    client: TelegramClient | None,
     *,
     auth: dict[str, Any],
     config: dict[str, Any],
@@ -995,12 +1002,17 @@ async def _story_targets_report(
     phase: str,
     media_path: Path | None = None,
     honor_delays: bool,
+    telegram_auth_error: str | None = None,
 ) -> dict[str, Any]:
-    me = await client.get_me()
-    account = _account_info(me)
-    log(
-        f"Story {phase} account: {_account_label(account)} premium={account.get('premium')}"
-    )
+    if client is not None:
+        me = await client.get_me()
+        account = _account_info(me)
+        log(
+            f"Story {phase} account: {_account_label(account)} premium={account.get('premium')}"
+        )
+    else:
+        account = {"telegram_auth_error": telegram_auth_error or "Telethon client unavailable"}
+        log(f"Story {phase} Telegram auth unavailable: {account['telegram_auth_error']}")
     report = _build_story_report(
         config,
         phase=phase,
@@ -1155,6 +1167,8 @@ async def _story_targets_report(
                 report["targets"].append(target_report)
                 continue
             if transport == "telegram_chat":
+                if client is None:
+                    raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
                 peer = await client.get_input_entity(peer_ref)
                 target_report["effective_peer"] = peer_ref
                 if media_path is not None:
@@ -1191,6 +1205,8 @@ async def _story_targets_report(
             else:
                 attempt_order = [peer_ref]
 
+            if client is None:
+                raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
             chosen: dict[str, Any] | None = None
             primary_error: Exception | None = None
             for attempt_idx, attempt_peer_ref in enumerate(attempt_order):
@@ -1362,7 +1378,7 @@ async def preflight_story_publish_from_kaggle(
 
     config = runtime["config"]
     auth = runtime["auth"]
-    client = await _create_client(auth)
+    client, telegram_auth_error = await _try_create_client(auth)
     try:
         report = await _story_targets_report(
             client,
@@ -1372,15 +1388,17 @@ async def preflight_story_publish_from_kaggle(
             phase="preflight",
             media_path=None,
             honor_delays=False,
+            telegram_auth_error=telegram_auth_error,
         )
         if not report.get("fanout_ok", report.get("ok")):
             write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
-        try:
-            await client.disconnect()
-        except Exception:
-            logger.warning("story_publish: failed to disconnect client", exc_info=True)
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.warning("story_publish: failed to disconnect client", exc_info=True)
 
 
 async def publish_story_from_kaggle(
@@ -1414,7 +1432,7 @@ async def publish_story_from_kaggle(
                 output_dir=output_dir,
                 log=log,
             )
-    client = await _create_client(auth)
+    client, telegram_auth_error = await _try_create_client(auth)
     try:
         report = await _story_targets_report(
             client,
@@ -1424,11 +1442,13 @@ async def publish_story_from_kaggle(
             phase="publish",
             media_path=media_path,
             honor_delays=True,
+            telegram_auth_error=telegram_auth_error,
         )
         write_story_publish_report(report, output_dir=output_dir)
         return report
     finally:
-        try:
-            await client.disconnect()
-        except Exception:
-            logger.warning("story_publish: failed to disconnect client", exc_info=True)
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.warning("story_publish: failed to disconnect client", exc_info=True)

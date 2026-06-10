@@ -65,6 +65,13 @@ stories from recent source-community event posts.
   `https://vk.com/wall-231828790_989` was briefly created before the live DB
   evidence was available. After discovering it duplicated `wall-231828790_984`,
   the manual duplicate was deleted; VK API reports `is_deleted=true` for `989`.
+- 2026-06-10: recurrence observed for the `80 историй о главном` promo VK
+  campaign. The scheduler ticks ran without hard errors, but no same-day local
+  `promo_exposure` rows were created for `vk_publication`, `vk_repost`, or
+  `vk_story` by the expected 15:00 Europe/Kaliningrad repost/story slot.
+  Investigation found previous-evening exposure rows still inside the rolling
+  24-hour window, so the runner considered today's local due slot already
+  fulfilled.
 
 ## Root Cause
 
@@ -83,6 +90,9 @@ stories from recent source-community event posts.
 
 - `promo_vk` is an interval runner without a dedicated `ops_run` row per tick,
   so scheduler evidence depends on runtime logs and `promo_exposure`.
+- Before the 2026-06-10 follow-up, the same `window_hours` value was used both
+  for source discovery/dedup and for daily fulfilment counts. That made
+  yesterday evening's valid exposure suppress today's local-day slot.
 - The current local workspace initially contained dirty parallel work and
   `flyctl` did not auto-read the saved token; passing the saved token through
   `FLY_API_TOKEN` was required before live logs/DB evidence could be collected.
@@ -161,6 +171,10 @@ stories from recent source-community event posts.
 - Added retries for transient SQLite locks while recording VK promo exposure, so
   a successful external wall/story side effect is not immediately repeated only
   because audit persistence was briefly locked.
+- Follow-up fix: daily `vk_publication`, `vk_repost`, and `vk_story` fulfilment
+  now counts already recorded promo exposures within the activity's current
+  local calendar day, while source discovery and source dedup keep the rolling
+  window behavior.
 - Updated `/promo` and `/promo report` to show story activity/report rows.
 - Added focused tests in `tests/test_promo.py`.
 

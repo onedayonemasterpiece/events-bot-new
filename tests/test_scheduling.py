@@ -259,6 +259,40 @@ async def _insert_popular_review_session(
         return int(cur.lastrowid)
 
 
+async def _insert_video_session(
+    db: Database,
+    *,
+    status: str,
+    profile_key: str,
+    target_date: str,
+    created_at: str,
+    kaggle_dataset: str | None = None,
+    kaggle_kernel_ref: str | None = None,
+    error: str | None = None,
+) -> int:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            INSERT INTO videoannounce_session(
+                status, profile_key, selection_params, created_at,
+                kaggle_dataset, kaggle_kernel_ref, error
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                status,
+                profile_key,
+                json.dumps({"target_date": target_date, "mode": "popular_review"}),
+                created_at,
+                kaggle_dataset,
+                kaggle_kernel_ref,
+                error,
+            ),
+        )
+        await conn.commit()
+        return int(cur.lastrowid)
+
+
 def _configure_video_tomorrow_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_V_TOMORROW_SCHEDULED", "1")
     monkeypatch.setenv("V_TOMORROW_TZ", "Europe/Kaliningrad")
@@ -330,6 +364,47 @@ def test_runtime_health_status_reports_guide_jobs(monkeypatch):
     assert payload["guide_excursions_full"] == "ok"
     assert "guide_excursions_light_next_run" in payload
     assert "guide_excursions_full_next_run" in payload
+
+
+def test_runtime_health_status_reports_cherryflash_and_promo_jobs(monkeypatch):
+    monkeypatch.setenv("ENABLE_V_POPULAR_REVIEW_SCHEDULED", "1")
+    monkeypatch.setenv("ENABLE_PROMO_VK_SCHEDULER", "1")
+    monkeypatch.delenv("ENABLE_V_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.delenv("ENABLE_V_TEST_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.setenv("DEV_MODE", "1")
+
+    class Job:
+        def __init__(self, job_id: str) -> None:
+            self.id = job_id
+            self.next_run_time = datetime(2026, 6, 10, 12, 0, tzinfo=timezone.utc)
+
+    class Scheduler:
+        running = True
+
+        def __init__(self) -> None:
+            self.jobs = {
+                "video_popular_review": Job("video_popular_review"),
+                "video_popular_review_watchdog": Job("video_popular_review_watchdog"),
+                "promo_vk": Job("promo_vk"),
+            }
+
+        def get_job(self, job_id: str):
+            return self.jobs.get(job_id)
+
+        def get_jobs(self):
+            return list(self.jobs.values())
+
+    monkeypatch.setattr(scheduling, "_scheduler", Scheduler())
+
+    payload = scheduling.runtime_health_status()
+
+    assert payload["scheduler"] == "ok"
+    assert payload["video_popular_review"] == "ok"
+    assert payload["video_popular_review_watchdog"] == "ok"
+    assert payload["promo_vk"] == "ok"
+    assert "video_popular_review_next_run" in payload
+    assert "video_popular_review_watchdog_next_run" in payload
+    assert "promo_vk_next_run" in payload
 
 
 @pytest.mark.asyncio
@@ -614,7 +689,7 @@ async def test_popular_review_startup_catchup_retries_failed_local_handoff(
 
 
 @pytest.mark.asyncio
-async def test_popular_review_watchdog_skips_existing_remote_handoff(
+async def test_popular_review_watchdog_retries_failed_remote_handoff(
     tmp_path, monkeypatch
 ):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -641,8 +716,90 @@ async def test_popular_review_watchdog_skips_existing_remote_handoff(
         db, bot=object()
     )
 
+    assert dispatched is True
+    assert calls == [{"startup_catchup": False}]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_rendering_remote_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="RENDERING",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-181",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
     assert dispatched is False
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_partner_track_watchdog_retries_failed_remote_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(
+        scheduling,
+        "datetime",
+        type(
+            "_FixedPartnerTrackDatetime",
+            (datetime,),
+            {
+                "now": classmethod(
+                    lambda cls, tz=None: (
+                        datetime(2026, 4, 12, 11, 0, tzinfo=timezone.utc).astimezone(tz)
+                        if tz is not None
+                        else datetime(2026, 4, 12, 11, 0)
+                    )
+                )
+            },
+        ),
+    )
+    await _insert_video_session(
+        db,
+        status="FAILED",
+        profile_key="popular_review_konb",
+        target_date="2026-04-12",
+        created_at="2026-04-12 10:47:22",
+        kaggle_dataset="zigomaro/cherryflash-session-635",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        error="{'status': 'ERROR'}",
+    )
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_run(_db, _bot, partner_track_id, **kwargs):
+        calls.append((partner_track_id, kwargs))
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_partner_track", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_partner_track_watchdog(
+        db, bot=object(), partner_track_id="partner_konb_library_001"
+    )
+
+    assert dispatched is True
+    assert calls == [
+        ("partner_konb_library_001", {"startup_catchup": False})
+    ]
 
 
 @pytest.mark.asyncio
