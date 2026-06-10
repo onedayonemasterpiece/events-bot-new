@@ -13,10 +13,10 @@
 - **Docs / Afisha Engagement render quality**: recorded anti-aliased diagonal
   seams as an explicit quality requirement; visible stair-stepping on CTA
   diagonals is a defect.
-- **Docs / Afisha Engagement CTA variants**: added brand-recommendation CTA as
-  a separate activity style, including `Полюбить Калининград рекомендует` and
-  optional smaller secondary engagement text such as `Поставь лайк, если
-  согласен`.
+- **Docs / Promo activity requirements**: clarified that `Полюбить Калининград
+  рекомендует` is a separate configurable promo activity, not a CTA mechanic
+  inside Afisha Engagement; it may have its own visual format and optional
+  smaller secondary engagement text such as `Поставь лайк, если согласен`.
 - **Fixed: Afisha Engagement renderer geometry**: right-extension rendering now
   preserves the source poster resolution, grows only the canvas, cuts the poster
   edge directly with a right-leaning diagonal, and uses a bottom extension for
