@@ -807,8 +807,8 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
 
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    cut_top = poster_w - diagonal
-    cut_bottom = poster_w - int(diagonal * 0.35)
+    cut_top = poster_w - int(diagonal * 0.35)
+    cut_bottom = poster_w - diagonal
     od.polygon(
         [(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
         fill=(*bg, 255),
