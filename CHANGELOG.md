@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement theme extraction**: concert CTA themes now avoid
+  substring false positives such as reading `органную музыку` from
+  `Организаторы`, while still detecting real organ concerts. Added safer
+  concert themes for kazach choir / folk / patriotic music so CTA copy stays
+  aligned with the imported poster and event text. Covered by
+  `tests/test_afishaengagement.py`.
 - **Changed: Afisha Engagement CTA surface separation**: applied the Opus visual
   consultation to make CTA blocks read as separate action cards instead of a
   continuation of the poster. The PIL renderer now uses a multi-layer

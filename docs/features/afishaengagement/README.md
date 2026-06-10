@@ -76,6 +76,11 @@ truth. Title/description heuristics are only a fallback or a narrow refinement:
 a generic `встреча` must not become `lecture` unless lecture/speaker/discussion
 signals are present, and child/family wording such as fairy-character events is
 classified as `family` for CTA text.
+Theme extraction inside an already selected event type must use safe word/stem
+matching: narrow cues such as `орган` may match real organ music forms, but must
+not match unrelated words such as `организаторы`. If a theme is uncertain, the
+copy falls back to the event type instead of inventing a specific music/cinema
+topic.
 
 `apply_rate` accepts `0..1` or percent-like values above `1` (`50` means 50%).
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,

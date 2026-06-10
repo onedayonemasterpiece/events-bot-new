@@ -331,6 +331,46 @@ def test_concert_like_copy_can_use_extracted_theme():
     assert "Поддержи лайком, если любишь симфоническую музыку." in seen
 
 
+def test_concert_theme_does_not_read_organ_from_organizers():
+    event = Event(
+        title="Праздничный концерт Балтийского казачьего хора ко Дню России",
+        description="Организаторы приглашают на выступление казачьего хора.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="Организаторы концерта подготовили народные песни.",
+        event_type="концерт",
+    )
+
+    assert aeg._extract_theme(event, "concert") == "казачьи песни"
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"kazach-organizers-theme-{idx}",
+            config={"mechanic_weights": {"comments": 50, "likes": 50}},
+        ).cta_text
+        for idx in range(200)
+    }
+
+    assert all("органн" not in text.casefold() for text in seen)
+    assert any("казачьи песни" in text.casefold() for text in seen)
+
+
+def test_concert_theme_still_detects_real_organ_music():
+    event = Event(
+        title="Русская музыка на органе",
+        description="Органный концерт в кафедральном соборе.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Кафедральный собор",
+        source_text="В программе орган и камерный оркестр.",
+        event_type="концерт",
+    )
+
+    assert aeg._extract_theme(event, "concert") == "органную музыку"
+
+
 def test_configured_registration_cta_uses_event_type_phrase():
     event = Event(
         title="Лекция проекта 80 историй",

@@ -747,6 +747,10 @@ def _this_event_accusative(event_type: str) -> str:
 
 THEME_KEYWORDS: dict[str, dict[str, str]] = {
     "concert": {
+        "казач": "казачьи песни",
+        "народн": "народную музыку",
+        "хор": "хоровую музыку",
+        "патриотическ": "патриотические песни",
         "симфоническ": "симфоническую музыку",
         "акустическ": "акустические концерты",
         "акустика": "акустические концерты",
@@ -785,6 +789,19 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
 }
 
 
+def _theme_key_matches(raw: str, key: str) -> bool:
+    if key == "орган":
+        return bool(
+            re.search(
+                r"(?<![а-яё])орган(?:н[а-яё]*|а|е|у|ом|ов|ы)?(?![а-яё])",
+                raw,
+            )
+        )
+    if key == "хор":
+        return bool(re.search(r"(?<![а-яё])хор(?:а|е|ом|ов|ы)?(?![а-яё])", raw))
+    return key in raw
+
+
 def _extract_theme(event: Event, event_type: str) -> str | None:
     raw = " ".join(
         [
@@ -795,7 +812,7 @@ def _extract_theme(event: Event, event_type: str) -> str | None:
         ]
     ).casefold()
     for key, label in THEME_KEYWORDS.get(event_type, {}).items():
-        if key in raw:
+        if _theme_key_matches(raw, key):
             return label
     return None
 
