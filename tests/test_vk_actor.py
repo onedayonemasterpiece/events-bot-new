@@ -356,7 +356,7 @@ async def test_fetch_vk_latest_postponed_prefers_user_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "u")
     monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
     tz = ZoneInfo("Europe/Kaliningrad")
-    postponed_ts = int((datetime.now(tz) + timedelta(days=1)).timestamp())
+    postponed_ts = int((datetime.now(tz) + timedelta(minutes=30)).timestamp())
     calls = []
 
     async def fake_vk_api(

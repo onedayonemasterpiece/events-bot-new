@@ -3304,6 +3304,12 @@ try:
     VK_POSTPONED_START_HOUR = int(os.getenv("VK_POSTPONED_START_HOUR", "6"))
 except ValueError:
     VK_POSTPONED_START_HOUR = 6
+try:
+    VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS = int(
+        os.getenv("VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS", str(18 * 3600))
+    )
+except ValueError:
+    VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS = 18 * 3600
 
 _vk_postponed_schedule_lock = asyncio.Lock()
 _vk_postponed_reserved_until_by_owner: dict[int, int] = {}
@@ -3401,11 +3407,23 @@ async def _fetch_vk_latest_postponed_ts(
             )
             continue
         dates: list[int] = []
+        max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
+        max_anchor_ts = now_ts + max_anchor_ahead if max_anchor_ahead else None
         for item in _vk_postponed_items(response):
             if _is_afishaengagement_debug_post(item):
                 continue
             value = item.get("date") or item.get("publish_date")
             if isinstance(value, int) and value > now_ts:
+                if max_anchor_ts is not None and value > max_anchor_ts:
+                    logging.warning(
+                        "vk.postponed ignoring far-future anchor owner_id=%s actor=%s post_id=%s date=%s max_ahead_sec=%s",
+                        owner_id,
+                        actor.label,
+                        item.get("id") or item.get("postponed_id"),
+                        value,
+                        max_anchor_ahead,
+                    )
+                    continue
                 dates.append(value)
         return max(dates) if dates else None
     return None

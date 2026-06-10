@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Fixed: VK postponed rhythm after stale future drafts**: normal Smart Update
+  VK scheduling now ignores ordinary postponed anchors beyond
+  `VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS` (default 18 hours), in addition to
+  marked Afisha Engagement debug shadows, so a stale far-future draft cannot
+  push fresh real event posts several days ahead.
 - **Fixed: Afisha Engagement visual debug iteration**: CTA blocks now read as
   distinct opaque engagement surfaces with stronger accent separation, lower
   safe-zone badge placement for bottom layouts, engagementcard-style

@@ -780,6 +780,41 @@ async def test_fetch_vk_latest_postponed_ignores_afishaengagement_debug(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_fetch_vk_latest_postponed_ignores_far_future_regular_anchor(monkeypatch):
+    now_ts = 1_781_100_000
+    near_ts = now_ts + 600
+    far_ts = now_ts + 3 * 24 * 3600
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+            if tz is not None:
+                return value.astimezone(tz)
+            return value.replace(tzinfo=None)
+
+    async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
+        assert method == "wall.get"
+        return {
+            "response": {
+                "items": [
+                    {"id": 2, "date": far_ts, "text": "regular but stale future anchor"},
+                    {"id": 1, "date": near_ts, "text": "regular postponed"},
+                ]
+            }
+        }
+
+    actor = main.VkActor(kind="user", token=None, label="user")
+    monkeypatch.setattr(main, "datetime", FixedDateTime)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS", 18 * 3600)
+
+    latest = await main._fetch_vk_latest_postponed_ts(-231920894, [actor], None, None)
+
+    assert latest == near_ts
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_resolves_stale_postponed_id(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"
