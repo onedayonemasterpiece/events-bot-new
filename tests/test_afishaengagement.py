@@ -211,6 +211,16 @@ def test_cta_text_sanitizer_removes_parenthetical_gender_and_punctuation_spaces(
     )
 
 
+def test_cta_text_sanitizer_preserves_intentional_line_breaks():
+    text = aeg._sanitize_cta_text("Поставь лайк ❤️, если уже зарегистри-\nровался на эту лекцию.")
+
+    assert "зарегистри-\nровался" in text
+    fit = aeg.fit_text(text, box_width=420, box_height=260, preferred_px=56, min_px=32)
+    assert fit is not None
+    assert "зарегистри-" in fit.lines
+    assert any(line.startswith("ровался") for line in fit.lines)
+
+
 def test_repost_template_uses_event_type_noun():
     event = Event(
         title="Концерт камерной музыки",

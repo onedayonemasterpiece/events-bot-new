@@ -875,7 +875,9 @@ def _configured_templates_for(config: dict[str, Any], event_type: str) -> dict[s
 
 
 def _sanitize_cta_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = "\n".join(re.sub(r"[ \t\f\v]+", " ", part).strip() for part in text.split("\n"))
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
     replacements = {
         "сохранил(а)": "добавил",
         "был(а)": "был",
@@ -1592,7 +1594,10 @@ def fit_text(
     draw = ImageDraw.Draw(probe)
     for size in range(preferred_px, min_px - 1, -4):
         font = _load_font(font_name, size)
-        lines = _wrap_words(draw, text, font, box_width)
+        lines: list[str] = []
+        for paragraph in str(text or "").splitlines() or [""]:
+            wrapped = _wrap_words(draw, paragraph, font, box_width)
+            lines.extend(wrapped or [""])
         if len(lines) > max_lines:
             continue
         if any(_text_bbox(draw, (0, 0), line, font)[2] > box_width for line in lines):
@@ -1645,17 +1650,51 @@ def _composite_aa_line(
     *,
     fill: tuple[int, int, int],
     width: int,
-    aa_scale: int = 4,
+    aa_scale: int = 8,
 ) -> Any:
     from PIL import Image, ImageDraw
 
     aa_scale = max(2, int(aa_scale))
     image_width, image_height = image.size
-    hi = Image.new("RGBA", (image_width * aa_scale, image_height * aa_scale), (0, 0, 0, 0))
+    pad = max(4, int(width * 3))
+    min_x = max(0, int(min(x for x, _ in points)) - pad)
+    min_y = max(0, int(min(y for _, y in points)) - pad)
+    max_x = min(image_width, int(max(x for x, _ in points)) + pad)
+    max_y = min(image_height, int(max(y for _, y in points)) + pad)
+    crop_w = max(1, max_x - min_x)
+    crop_h = max(1, max_y - min_y)
+    hi = Image.new("RGBA", (crop_w * aa_scale, crop_h * aa_scale), (0, 0, 0, 0))
     draw = ImageDraw.Draw(hi)
-    scaled = [(int(x * aa_scale), int(y * aa_scale)) for x, y in points]
+    scaled = [(int((x - min_x) * aa_scale), int((y - min_y) * aa_scale)) for x, y in points]
     draw.line(scaled, fill=(*fill, 255), width=max(1, int(width * aa_scale)))
-    overlay = hi.resize((image_width, image_height), Image.Resampling.LANCZOS)
+    overlay = Image.new("RGBA", (image_width, image_height), (0, 0, 0, 0))
+    overlay.paste(hi.resize((crop_w, crop_h), Image.Resampling.LANCZOS), (min_x, min_y))
+    return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+
+def _composite_aa_rounded_rect(
+    image: Any,
+    box: tuple[int, int, int, int],
+    *,
+    radius: int,
+    fill: tuple[int, int, int],
+    aa_scale: int = 4,
+) -> Any:
+    from PIL import Image, ImageDraw
+
+    aa_scale = max(2, int(aa_scale))
+    x0, y0, x1, y1 = box
+    width = max(1, x1 - x0)
+    height = max(1, y1 - y0)
+    hi = Image.new("RGBA", (width * aa_scale, height * aa_scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(hi)
+    draw.rounded_rectangle(
+        (0, 0, width * aa_scale, height * aa_scale),
+        radius=max(1, int(radius * aa_scale)),
+        fill=(*fill, 255),
+    )
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    overlay.paste(hi.resize((width, height), Image.Resampling.LANCZOS), (x0, y0))
     return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
 
@@ -1728,6 +1767,52 @@ def _draw_badge(
     )
     draw.text((x + pad_x + marker_w + marker_gap, y + int(11 * scale)), label, font=font, fill=fg)
     return badge_w, badge_h
+
+
+def _draw_badge_on_image(
+    image: Any,
+    *,
+    x: int,
+    y: int,
+    label: str,
+    font: Any,
+    bg: tuple[int, int, int],
+    fg: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    scale: float,
+    max_width: int | None = None,
+) -> tuple[Any, int, int]:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(image)
+    bbox = _text_bbox(draw, (0, 0), label, font)
+    label_w = bbox[2] - bbox[0]
+    pad_x = int(22 * scale)
+    badge_h = int(58 * scale)
+    marker_w = max(4, int(8 * scale))
+    marker_gap = int(12 * scale)
+    badge_w = label_w + pad_x * 2 + marker_w + marker_gap
+    if max_width:
+        badge_w = min(max_width, badge_w)
+    image = _composite_aa_rounded_rect(
+        image,
+        (x, y, x + badge_w, y + badge_h),
+        radius=int(18 * scale),
+        fill=bg,
+        aa_scale=4,
+    )
+    marker_x = x + int(12 * scale)
+    marker_y = y + int(12 * scale)
+    image = _composite_aa_rounded_rect(
+        image,
+        (marker_x, marker_y, marker_x + marker_w, y + badge_h - int(12 * scale)),
+        radius=int(4 * scale),
+        fill=accent,
+        aa_scale=4,
+    )
+    draw = ImageDraw.Draw(image)
+    draw.text((x + pad_x + marker_w + marker_gap, y + int(11 * scale)), label, font=font, fill=fg)
+    return image, badge_w, badge_h
 
 
 def _draw_heart_icon(draw: Any, x: float, y: float, font_px: int) -> int:
@@ -1858,10 +1943,8 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         fill=rim,
         width=max(1, int(2 * scale)),
     )
-    draw = ImageDraw.Draw(canvas)
-
-    _badge_w, badge_h = _draw_badge(
-        draw,
+    canvas, _badge_w, badge_h = _draw_badge_on_image(
+        canvas,
         x=safe_x,
         y=safe_y,
         label=badge,
@@ -1872,6 +1955,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         scale=scale,
         max_width=safe_w,
     )
+    draw = ImageDraw.Draw(canvas)
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
@@ -1978,11 +2062,9 @@ def _render_bottom_extension(
         fill=rim,
         width=max(1, int(2 * scale)),
     )
-    draw = ImageDraw.Draw(canvas)
-
     safe_y = block_top + safe_y_offset
-    _draw_badge(
-        draw,
+    canvas, _, _ = _draw_badge_on_image(
+        canvas,
         x=safe_x,
         y=safe_y,
         label=badge,
@@ -1993,6 +2075,7 @@ def _render_bottom_extension(
         scale=scale,
         max_width=safe_w,
     )
+    draw = ImageDraw.Draw(canvas)
 
     text_box_y = safe_y + badge_h + int(32 * scale)
     text_box_h = height - text_box_y - int(72 * scale)
@@ -2096,10 +2179,8 @@ def _render_bottom_overlay(
         fill=rim,
         width=max(1, int(2 * scale)),
     )
-    draw = ImageDraw.Draw(canvas)
-
-    _draw_badge(
-        draw,
+    canvas, _, _ = _draw_badge_on_image(
+        canvas,
         x=safe_x,
         y=safe_y,
         label=badge,
@@ -2110,6 +2191,7 @@ def _render_bottom_overlay(
         scale=scale,
         max_width=safe_w,
     )
+    draw = ImageDraw.Draw(canvas)
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
@@ -2155,9 +2237,6 @@ def _render_hook_swipe_cta(
     card_w, card_h = 1080, 1350
     scale = card_w / 1080
 
-    def cover_image() -> Image.Image:
-        return ImageOps.fit(poster, (card_w, card_h), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
-
     def save_card(image: Image.Image, filename: str, template_id: str, lines: list[str], font_px: int) -> RenderedImage:
         out = io.BytesIO()
         image.save(out, format="PNG", optimize=True)
@@ -2179,8 +2258,8 @@ def _render_hook_swipe_cta(
     safe_x = int(86 * scale)
     safe_w = card_w - safe_x * 2
     band_h = int(860 * scale)
-    poster_band = ImageOps.contain(poster, (card_w, band_h), method=Image.Resampling.LANCZOS)
-    hook.paste(poster_band, ((card_w - poster_band.width) // 2, (band_h - poster_band.height) // 2))
+    poster_band = ImageOps.fit(poster, (card_w, band_h), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+    hook.paste(poster_band, (0, 0))
 
     block_top = int(790 * scale)
     diagonal = int(70 * scale)
@@ -2225,11 +2304,14 @@ def _render_hook_swipe_cta(
     hook_font = _load_font("Cygre-Bold.ttf", hook_fit.font_px)
     hook_x = safe_x + int(38 * scale)
     hook_y = swipe_y + swipe_h + int(34 * scale)
-    draw.rounded_rectangle(
+    hook = _composite_aa_rounded_rect(
+        hook,
         (safe_x, hook_y + int(6 * scale), safe_x + int(12 * scale), hook_y + max(int(80 * scale), hook_fit.height) - int(6 * scale)),
         radius=int(6 * scale),
         fill=accent,
+        aa_scale=4,
     )
+    draw = ImageDraw.Draw(hook)
     y = hook_y
     for line in hook_fit.lines:
         _draw_text_line(draw, (hook_x, y), line, font=hook_font, fill=text_color, font_px=hook_fit.font_px)
@@ -2238,11 +2320,10 @@ def _render_hook_swipe_cta(
     draw.line((safe_x, card_h - 92, card_w - safe_x, card_h - 92), fill=accent, width=6)
 
     cta = Image.new("RGB", (card_w, card_h), bg)
-    draw = ImageDraw.Draw(cta)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
     badge_font = _load_font("Cygre-Bold.ttf", 42)
-    _draw_badge(
-        draw,
+    cta, _, _ = _draw_badge_on_image(
+        cta,
         x=86,
         y=96,
         label=badge,
@@ -2253,6 +2334,7 @@ def _render_hook_swipe_cta(
         scale=1.0,
         max_width=card_w - 172,
     )
+    draw = ImageDraw.Draw(cta)
 
     cta_fit = fit_text(
         plan.cta_text,
