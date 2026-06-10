@@ -19,6 +19,9 @@
   extended `surface/ink/signal/seam/rim` roles, local poster-edge luma and
   contrast thresholds, and deterministic fail-safe palettes so CTA blocks remain
   compatible with the poster while reading as a distinct action surface.
+  The curated bank now combines proven engagementcard colors with current
+  editorial/trend pairings such as ivory/plum/wasabi, clay/cobalt, botanical
+  green/citron, plum noir/cloud, and smoky jade/terracotta.
 - **Docs / Afisha Engagement requirements**: recorded the horizontal-poster
   requirement for a bottom engagementcard-style CTA extension and tightened CTA
   copy diversity so like mechanics are not limited to repeated `Лайк, если ...`

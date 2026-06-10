@@ -165,6 +165,11 @@ The renderer uses engagementcard principles from guide excursion monitoring:
   families by readability, luma separation, poster contrast, hue distance, and
   event tone. Compatibility is a tie-breaker; a harmonious palette loses if the
   CTA block would read as part of the poster.
+- curated/trend palette bank: proven `engagementcard` colors are extended with
+  designer-adjacent pairs such as ivory/plum/wasabi, clay/cobalt, botanical
+  green/citron, plum noir/cloud, and smoky jade/terracotta. The renderer chooses
+  among these designed pairs; it does not synthesize arbitrary mathematical
+  colors.
 - extended color roles: `surface`, `ink`, `signal`, `signal_ink`, `seam`, and
   `rim` are mapped back to legacy `background/text/accent` fields for
   compatibility.
