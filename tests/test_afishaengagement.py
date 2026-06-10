@@ -432,6 +432,28 @@ def test_renderer_can_select_poster_compatible_palette():
     assert aeg._contrast_ratio(aeg._hex_to_rgb(palette["background"]), aeg._hex_to_rgb(palette["text"])) >= 4.5
 
 
+def test_palette_selection_prioritizes_cta_separation_from_poster_edge():
+    poster = Image.new("RGB", (900, 1200), (10, 30, 52))
+    draw = Image.new("RGB", (90, 1200), (12, 32, 55))
+    poster.paste(draw, (810, 0))
+
+    palette_id = aeg._choose_compatible_palette_id(
+        poster,
+        preferred_id="prussian_cream",
+        seed="separation-priority",
+        template_id="right_extension",
+        event_type="concert",
+    )
+    roles = aeg._palette_roles(aeg.PALETTES[palette_id])
+    surface = aeg._hex_to_rgb(roles["surface"])
+    profile = aeg._poster_color_profile(poster, region_box=aeg._seam_region_box("right_extension", 900, 1200))
+    edge_rgb = profile["edge_rgb"]
+
+    assert aeg._contrast_ratio(surface, edge_rgb) >= 1.6
+    assert abs(aeg._relative_luminance(surface) - profile["edge_luma"]) >= 0.22
+    assert palette_id != "prussian_cream"
+
+
 def test_render_bottom_overlay_preserves_source_dimensions():
     event = Event(
         title="Лекция о городе",

@@ -160,8 +160,14 @@ The renderer uses engagementcard principles from guide excursion monitoring:
 - anti-aliased diagonal seams and dividers rendered via deterministic masks;
 - contrast-first palettes based on
   `docs/backlog/features/guide-excursions-monitoring/vk_hook_card_palettes.json`;
-- poster-aware palette selection: CTA colors must be compatible with dominant
-  poster colors and satisfy contrast/readability constraints;
+- poster-aware CTA color separation: the scorer evaluates the local seam-side
+  poster region, then picks curated editorial/noir/ivory/graphite palette
+  families by readability, luma separation, poster contrast, hue distance, and
+  event tone. Compatibility is a tie-breaker; a harmonious palette loses if the
+  CTA block would read as part of the poster.
+- extended color roles: `surface`, `ink`, `signal`, `signal_ink`, `seam`, and
+  `rim` are mapped back to legacy `background/text/accent` fields for
+  compatibility.
 - fail-closed when Cygre is missing or text cannot fit.
 
 Small/narrow posters fail safe to `right_extension` for bottom templates. If a

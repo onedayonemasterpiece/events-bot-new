@@ -13,6 +13,12 @@
   activity. Matching activities now fall through on dice miss/duplicate/cap so
   a festival-specific CTA can coexist with the all-post visual-debug shadow
   activity.
+- **Changed: Afisha Engagement color system**: replaced harmony-first palette
+  scoring with a seam-side CTA separation scorer designed with Opus. The
+  renderer now uses curated editorial/noir/ivory/graphite palette families,
+  extended `surface/ink/signal/seam/rim` roles, local poster-edge luma and
+  contrast thresholds, and deterministic fail-safe palettes so CTA blocks remain
+  compatible with the poster while reading as a distinct action surface.
 - **Docs / Afisha Engagement requirements**: recorded the horizontal-poster
   requirement for a bottom engagementcard-style CTA extension and tightened CTA
   copy diversity so like mechanics are not limited to repeated `Лайк, если ...`

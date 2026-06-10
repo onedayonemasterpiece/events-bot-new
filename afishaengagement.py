@@ -88,6 +88,20 @@ class RenderedImage:
     render_ms: int
 
 
+@dataclass(frozen=True)
+class PaletteScore:
+    palette_id: str
+    score: float
+    text_contrast: float
+    signal_contrast: float
+    poster_contrast: float
+    luma_sep: float
+    hue_sep: float
+    family_fit: float
+    tone_fit: float
+    failsafe_level: str = "none"
+
+
 @dataclass
 class StageLog:
     stage: str
@@ -194,6 +208,128 @@ PALETTES: dict[str, dict[str, str]] = {
         "accent_text": "#000000",
     },
 }
+
+CTA_EDITORIAL_PALETTES: dict[str, dict[str, str]] = {
+    "ivory_charcoal_oxblood": {
+        "surface": "#F4ECDB",
+        "ink": "#1A1A1A",
+        "signal": "#8B1A1A",
+        "signal_ink": "#F4ECDB",
+        "seam": "#8B1A1A",
+        "rim": "#1A1A1A",
+        "family": "ivory",
+        "tone": "editorial",
+    },
+    "ivory_navy_ochre": {
+        "surface": "#F2EAD3",
+        "ink": "#0F1E3D",
+        "signal": "#C77D2A",
+        "signal_ink": "#0F1E3D",
+        "seam": "#0F1E3D",
+        "rim": "#C77D2A",
+        "family": "ivory",
+        "tone": "lecture",
+    },
+    "ivory_forest_brass": {
+        "surface": "#EFE7D2",
+        "ink": "#1B3A2C",
+        "signal": "#C9A24A",
+        "signal_ink": "#1B3A2C",
+        "seam": "#1B3A2C",
+        "rim": "#C9A24A",
+        "family": "ivory",
+        "tone": "editorial",
+    },
+    "ink_amber": {
+        "surface": "#0F0F12",
+        "ink": "#F4ECDB",
+        "signal": "#FFB000",
+        "signal_ink": "#0F0F12",
+        "seam": "#FFB000",
+        "rim": "#F4ECDB",
+        "family": "warm_dark",
+        "tone": "noir",
+    },
+    "oxblood_cream": {
+        "surface": "#3B0A14",
+        "ink": "#FFF1D8",
+        "signal": "#E8B864",
+        "signal_ink": "#3B0A14",
+        "seam": "#E8B864",
+        "rim": "#FFF1D8",
+        "family": "warm_dark",
+        "tone": "editorial",
+    },
+    "prussian_lime": {
+        "surface": "#0B1E33",
+        "ink": "#F0F5DC",
+        "signal": "#C8FF3B",
+        "signal_ink": "#0B1E33",
+        "seam": "#C8FF3B",
+        "rim": "#F0F5DC",
+        "family": "cool_dark",
+        "tone": "festival",
+    },
+    "petrol_pearl": {
+        "surface": "#06303A",
+        "ink": "#E7F4F2",
+        "signal": "#3DD6D0",
+        "signal_ink": "#06303A",
+        "seam": "#3DD6D0",
+        "rim": "#E7F4F2",
+        "family": "cool_dark",
+        "tone": "concert",
+    },
+    "violet_lemon": {
+        "surface": "#3A1E5C",
+        "ink": "#FFF7C2",
+        "signal": "#F6D743",
+        "signal_ink": "#3A1E5C",
+        "seam": "#F6D743",
+        "rim": "#FFF7C2",
+        "family": "saturated_pop",
+        "tone": "festival",
+    },
+    "magenta_mint": {
+        "surface": "#4A0F3F",
+        "ink": "#E8FFF1",
+        "signal": "#6CE3B2",
+        "signal_ink": "#4A0F3F",
+        "seam": "#6CE3B2",
+        "rim": "#E8FFF1",
+        "family": "saturated_pop",
+        "tone": "festival",
+    },
+    "graphite_signal_red": {
+        "surface": "#1A1C20",
+        "ink": "#F2EFE8",
+        "signal": "#E14B3A",
+        "signal_ink": "#F2EFE8",
+        "seam": "#E14B3A",
+        "rim": "#F2EFE8",
+        "family": "graphite",
+        "tone": "editorial",
+    },
+    "graphite_signal_chartreuse": {
+        "surface": "#1A1C20",
+        "ink": "#F2EFE8",
+        "signal": "#C8FF3B",
+        "signal_ink": "#1A1C20",
+        "seam": "#C8FF3B",
+        "rim": "#F2EFE8",
+        "family": "graphite",
+        "tone": "concert",
+    },
+}
+
+for _palette_id, _palette in CTA_EDITORIAL_PALETTES.items():
+    PALETTES[_palette_id] = {
+        **_palette,
+        "background": _palette["surface"],
+        "text": _palette["ink"],
+        "accent": _palette["signal"],
+        "accent_text": _palette["signal_ink"],
+    }
 
 MECHANIC_WEIGHTS = {"comments": 40, "likes": 40, "reposts": 20}
 MECHANIC_BADGES = {
@@ -1020,6 +1156,72 @@ def _hue_distance(a: float, b: float) -> float:
     return min(diff, 360.0 - diff)
 
 
+def _clip(value: float, low: float = 0.0, high: float = 1.0) -> float:
+    return max(low, min(high, value))
+
+
+def _palette_roles(palette: dict[str, str]) -> dict[str, str]:
+    surface = palette.get("surface") or palette.get("background") or "#1A1C20"
+    ink = palette.get("ink") or palette.get("text") or "#F2EFE8"
+    signal = palette.get("signal") or palette.get("accent") or "#E14B3A"
+    signal_ink = palette.get("signal_ink") or palette.get("accent_text") or ink
+    return {
+        "surface": surface,
+        "ink": ink,
+        "signal": signal,
+        "signal_ink": signal_ink,
+        "seam": palette.get("seam") or signal,
+        "rim": palette.get("rim") or ink,
+        "family": palette.get("family") or "legacy",
+        "tone": palette.get("tone") or "editorial",
+        "background": surface,
+        "text": ink,
+        "accent": signal,
+        "accent_text": signal_ink,
+    }
+
+
+def _rgb_chroma(rgb: tuple[int, int, int]) -> float:
+    return (max(rgb) - min(rgb)) / 255.0
+
+
+def _rgb_temperature(rgb: tuple[int, int, int]) -> str:
+    hue, _lightness, saturation = _rgb_hls(rgb)
+    if saturation < 0.14:
+        return "neutral"
+    if hue <= 75 or hue >= 315:
+        return "warm"
+    if 160 <= hue <= 280:
+        return "cool"
+    return "neutral"
+
+
+def _hue_band_score(surface_hue: float | None, poster_hue: float | None, luma_sep: float) -> float:
+    if surface_hue is None or poster_hue is None:
+        return 0.72
+    dist = _hue_distance(surface_hue, poster_hue)
+    if dist <= 25:
+        return 0.48 if luma_sep >= 0.45 else 0.08
+    if dist <= 55:
+        return 0.12
+    if dist <= 105:
+        return 0.95
+    if dist <= 165:
+        return 0.86
+    if dist <= 195:
+        return 0.70
+    if dist <= 255:
+        return 0.90
+    return 0.45 if luma_sep >= 0.45 else 0.12
+
+
+def _seam_region_box(template_id: str, width: int, height: int) -> tuple[int, int, int, int]:
+    strip = max(1, int(min(width, height) * 0.08))
+    if template_id == "right_extension":
+        return (width - strip, 0, width, height)
+    return (0, height - strip, width, height)
+
+
 def _harmony_score(bg_hue: float, bg_sat: float, dominant_hues: Sequence[float]) -> float:
     if bg_sat < 0.18 or not dominant_hues:
         return 1.0
@@ -1040,27 +1242,78 @@ def _harmony_score(bg_hue: float, bg_sat: float, dominant_hues: Sequence[float])
     return best
 
 
-def _poster_color_profile(poster: Any) -> dict[str, Any]:
+def _poster_color_profile(poster: Any, region_box: tuple[int, int, int, int] | None = None) -> dict[str, Any]:
     from PIL import Image
 
-    sample = poster.convert("RGB")
+    source = poster.convert("RGB")
+    if region_box is not None:
+        width, height = source.size
+        left, top, right, bottom = region_box
+        left = max(0, min(width - 1, left))
+        top = max(0, min(height - 1, top))
+        right = max(left + 1, min(width, right))
+        bottom = max(top + 1, min(height, bottom))
+        source = source.crop((left, top, right, bottom))
+
+    sample = source.copy()
     sample.thumbnail((96, 96), Image.Resampling.LANCZOS)
     quantized = sample.quantize(colors=8, method=Image.Quantize.MEDIANCUT).convert("RGB")
     colors = quantized.getcolors(maxcolors=96 * 96) or []
     colors.sort(reverse=True, key=lambda item: item[0])
-    dominant: list[tuple[int, int, int]] = [rgb for _count, rgb in colors[:5]]
+    top_colors = colors[:5]
+    total = max(1, sum(count for count, _rgb in top_colors))
+    dominant: list[tuple[int, int, int]] = [rgb for _count, rgb in top_colors]
+    weights = [count / total for count, _rgb in top_colors]
     saturated_hues = []
-    for rgb in dominant:
+    avg_luma = 0.0
+    avg_chroma = 0.0
+    temp_weights = {"warm": 0.0, "cool": 0.0, "neutral": 0.0}
+    for rgb, weight in zip(dominant, weights):
         hue, _lightness, saturation = _rgb_hls(rgb)
         if saturation >= 0.2:
             saturated_hues.append(hue)
-    edge_w = max(1, int(poster.width * 0.08))
-    edge = poster.crop((poster.width - edge_w, 0, poster.width, poster.height)).resize((1, 1), Image.Resampling.BOX)
+        avg_luma += _relative_luminance(rgb) * weight
+        avg_chroma += _rgb_chroma(rgb) * weight
+        temp_weights[_rgb_temperature(rgb)] += weight
+    edge = source.resize((1, 1), Image.Resampling.BOX)
     edge_rgb = edge.getpixel((0, 0))
+    edge_hue, _edge_lightness, edge_saturation = _rgb_hls(edge_rgb)
+    if avg_luma < 0.18:
+        bucket_luma = "deep"
+    elif avg_luma < 0.35:
+        bucket_luma = "dark"
+    elif avg_luma > 0.85:
+        bucket_luma = "blown"
+    elif avg_luma > 0.65:
+        bucket_luma = "light"
+    else:
+        bucket_luma = "mid"
+    if avg_chroma < 0.18:
+        bucket_chroma = "muted"
+    elif avg_chroma > 0.70:
+        bucket_chroma = "neon"
+    elif avg_chroma > 0.45:
+        bucket_chroma = "saturated"
+    else:
+        bucket_chroma = "balanced"
+    temperature = max(temp_weights.items(), key=lambda item: item[1])[0]
+    is_monochrome = avg_chroma < 0.10
+    if len(saturated_hues) >= 2:
+        first = saturated_hues[0]
+        is_monochrome = is_monochrome or all(_hue_distance(first, hue) <= 25 for hue in saturated_hues[1:])
     return {
         "dominant": dominant,
+        "weights": weights,
         "dominant_hues": saturated_hues,
         "edge_rgb": edge_rgb,
+        "edge_luma": _relative_luminance(edge_rgb),
+        "edge_hue": edge_hue if edge_saturation >= 0.14 else None,
+        "avg_luma": avg_luma,
+        "avg_chroma": avg_chroma,
+        "bucket_luma": bucket_luma,
+        "bucket_chroma": bucket_chroma,
+        "temperature": temperature,
+        "is_monochrome": is_monochrome,
     }
 
 
@@ -1113,40 +1366,140 @@ def _cta_surface_palette_for_region(
     return inverted, True
 
 
-def _choose_compatible_palette_id(poster: Any, preferred_id: str, seed: str) -> str:
-    profile = _poster_color_profile(poster)
-    dominant_hues = list(profile.get("dominant_hues") or [])
+def _family_score(family: str, profile: dict[str, Any]) -> float:
+    luma = str(profile.get("bucket_luma") or "mid")
+    chroma = str(profile.get("bucket_chroma") or "balanced")
+    if family == "legacy":
+        family = "graphite"
+    table = {
+        "deep": {"ivory": 1.0, "warm_dark": 0.3, "cool_dark": 0.3, "saturated_pop": 0.3, "graphite": 0.6},
+        "dark": {"ivory": 1.0 if chroma in {"saturated", "neon"} else 0.9, "warm_dark": 0.5, "cool_dark": 0.6, "saturated_pop": 0.1 if chroma in {"saturated", "neon"} else 0.3, "graphite": 0.7},
+        "mid": {"ivory": 0.8 if chroma in {"saturated", "neon"} else 0.7, "warm_dark": 0.7, "cool_dark": 0.7, "saturated_pop": 0.2 if chroma in {"saturated", "neon"} else 0.5, "graphite": 0.8},
+        "light": {"ivory": 0.2, "warm_dark": 1.0 if chroma in {"saturated", "neon"} else 0.9, "cool_dark": 1.0 if chroma in {"saturated", "neon"} else 0.9, "saturated_pop": 0.4 if chroma in {"saturated", "neon"} else 0.6, "graphite": 0.85},
+        "blown": {"ivory": 0.0, "warm_dark": 1.0, "cool_dark": 0.9, "saturated_pop": 0.5, "graphite": 0.85},
+    }
+    return table.get(luma, table["mid"]).get(family, 0.55)
+
+
+def _tone_score(tone: str, event_type: str | None) -> float:
+    event_type = event_type or "other"
+    if tone == "festival" and event_type in {"festival", "market"}:
+        return 1.0
+    if tone == "concert" and event_type in {"concert", "cinema"}:
+        return 1.0
+    if tone == "lecture" and event_type == "lecture":
+        return 1.0
+    if tone in {"editorial", "noir"}:
+        return 0.82
+    return 0.62
+
+
+def _score_palette(
+    *,
+    palette_id: str,
+    palette: dict[str, str],
+    profile: dict[str, Any],
+    event_type: str | None,
+    seed: str,
+    preferred_id: str,
+) -> PaletteScore | None:
+    roles = _palette_roles(palette)
+    surface = _hex_to_rgb(roles["surface"])
+    ink = _hex_to_rgb(roles["ink"])
+    signal = _hex_to_rgb(roles["signal"])
     edge_rgb = profile.get("edge_rgb") or (128, 128, 128)
-    scored: list[tuple[float, str]] = []
+    text_contrast = _contrast_ratio(surface, ink)
+    signal_contrast = _contrast_ratio(surface, signal)
+    poster_contrast = _contrast_ratio(surface, edge_rgb)
+    surface_luma = _relative_luminance(surface)
+    edge_luma = float(profile.get("edge_luma") or _relative_luminance(edge_rgb))
+    luma_sep = abs(surface_luma - edge_luma)
+    surface_hue, _surface_lightness, surface_sat = _rgb_hls(surface)
+    surface_hue_value = surface_hue if surface_sat >= 0.14 else None
+    hue_sep = _hue_band_score(surface_hue_value, profile.get("edge_hue"), luma_sep)
+    readability = min(text_contrast / 7.0, 1.0)
+    signal_pop = min(signal_contrast / 3.0, 1.0)
+    separation = _clip((poster_contrast - 1.6) / 3.0)
+    luma_score = _clip(luma_sep / 0.55)
+    family_fit = _family_score(roles["family"], profile)
+    tone_fit = _tone_score(roles["tone"], event_type)
+    chroma_sep = abs(_rgb_chroma(surface) - float(profile.get("avg_chroma") or 0.0))
+    chroma_logic = _clip(chroma_sep / 0.55)
+    surface_temp = _rgb_temperature(surface)
+    poster_temp = str(profile.get("temperature") or "neutral")
+    temperature_bonus = 0.20 if surface_temp != "neutral" and poster_temp != "neutral" and surface_temp != poster_temp else 0.0
+    premium_penalty = 0.0
+    if roles["family"] == "saturated_pop" and profile.get("bucket_chroma") in {"saturated", "neon"}:
+        premium_penalty += 0.75
+    if surface_temp == poster_temp and luma_sep < 0.45 and surface_temp != "neutral":
+        premium_penalty += 0.45
+    if signal_contrast < 2.4:
+        premium_penalty += 0.35
+    if text_contrast < 4.5 or poster_contrast < 1.6 or luma_sep < 0.22:
+        return None
+    preferred_bonus = 0.12 if palette_id == preferred_id else 0.0
+    jitter = stable_unit_interval(f"{seed}:palette_separation:{palette_id}") * 0.08
+    score = (
+        1.80 * separation
+        + 1.40 * luma_score
+        + 1.10 * readability
+        + 0.85 * hue_sep
+        + 0.70 * family_fit
+        + 0.55 * tone_fit
+        + 0.45 * signal_pop
+        + 0.35 * chroma_logic
+        + temperature_bonus
+        + preferred_bonus
+        + jitter
+        - 1.20 * min(premium_penalty, 1.0)
+    )
+    return PaletteScore(
+        palette_id=palette_id,
+        score=score,
+        text_contrast=text_contrast,
+        signal_contrast=signal_contrast,
+        poster_contrast=poster_contrast,
+        luma_sep=luma_sep,
+        hue_sep=hue_sep,
+        family_fit=family_fit,
+        tone_fit=tone_fit,
+    )
+
+
+def _choose_compatible_palette_id(
+    poster: Any,
+    preferred_id: str,
+    seed: str,
+    *,
+    template_id: str = "right_extension",
+    event_type: str | None = None,
+) -> str:
+    region_box = _seam_region_box(template_id, poster.width, poster.height)
+    profile = _poster_color_profile(poster, region_box=region_box)
+    scored: list[PaletteScore] = []
     for palette_id, palette in PALETTES.items():
-        bg = _hex_to_rgb(palette["background"])
-        text = _hex_to_rgb(palette["text"])
-        accent = _hex_to_rgb(palette["accent"])
-        text_contrast = _contrast_ratio(bg, text)
-        accent_contrast = _contrast_ratio(bg, accent)
-        if text_contrast < 4.5:
-            continue
-        bg_hue, _bg_lightness, bg_sat = _rgb_hls(bg)
-        harmony = _harmony_score(bg_hue, bg_sat, dominant_hues)
-        edge_contrast = _contrast_ratio(bg, edge_rgb)
-        edge_score = 1.0 - min(abs(edge_contrast - 2.8), 2.8) / 2.8
-        jitter = stable_unit_interval(f"{seed}:palette_compat:{palette_id}") * 0.08
-        preferred_bonus = 0.12 if palette_id == preferred_id else 0.0
-        score = (
-            min(text_contrast, 10.0) * 0.32
-            + min(accent_contrast, 8.0) * 0.12
-            + harmony * 1.7
-            + edge_score * 0.75
-            + preferred_bonus
-            + jitter
+        score = _score_palette(
+            palette_id=palette_id,
+            palette=palette,
+            profile=profile,
+            event_type=event_type,
+            seed=seed,
+            preferred_id=preferred_id,
         )
-        scored.append((score, palette_id))
+        if score is not None:
+            scored.append(score)
     if not scored:
-        return preferred_id if preferred_id in PALETTES else "slate_warm_white"
-    scored.sort(reverse=True)
-    top = scored[: min(4, len(scored))]
-    index = int(stable_unit_interval(f"{seed}:palette_compat_pick") * len(top)) % len(top)
-    return top[index][1]
+        edge_luma = float(profile.get("edge_luma") or 0.5)
+        poster_temp = str(profile.get("temperature") or "neutral")
+        if edge_luma < 0.18:
+            return "ivory_charcoal_oxblood"
+        if poster_temp == "warm":
+            return "graphite_signal_chartreuse"
+        return "graphite_signal_red"
+    scored.sort(key=lambda item: item.score, reverse=True)
+    top = scored[: min(3, len(scored))]
+    index = int(stable_unit_interval(f"{seed}:palette_separation_pick:{template_id}") * len(top)) % len(top)
+    return top[index].palette_id
 
 
 def _text_bbox(draw: Any, xy: tuple[int, int], text: str, font: Any) -> tuple[int, int, int, int]:
@@ -1351,15 +1704,32 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         raise ValueError("source poster is empty")
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
-    palette_id = _choose_compatible_palette_id(poster, plan.palette_id, plan.seed)
-    palette = PALETTES.get(palette_id) or PALETTES["slate_warm_white"]
-    bg = _hex_to_rgb(palette["background"])
-    text_color = _hex_to_rgb(palette["text"])
-    accent = _hex_to_rgb(palette["accent"])
-    accent_text = _hex_to_rgb(palette["accent_text"])
-
     if poster.width >= 720 and poster.width > poster.height * 1.12:
+        palette_id = _choose_compatible_palette_id(
+            poster,
+            plan.palette_id,
+            plan.seed,
+            template_id="bottom_extension",
+            event_type=plan.event_type,
+        )
+        palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
         return _render_bottom_extension(poster, plan, palette_id, palette, started)
+
+    palette_id = _choose_compatible_palette_id(
+        poster,
+        plan.palette_id,
+        plan.seed,
+        template_id="right_extension",
+        event_type=plan.event_type,
+    )
+    palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
+    roles = _palette_roles(palette)
+    bg = _hex_to_rgb(roles["surface"])
+    text_color = _hex_to_rgb(roles["ink"])
+    accent = _hex_to_rgb(roles["signal"])
+    accent_text = _hex_to_rgb(roles["signal_ink"])
+    seam = _hex_to_rgb(roles["seam"])
+    rim = _hex_to_rgb(roles["rim"])
 
     poster_w, height = poster.size
     scale = _layout_scale(height)
@@ -1405,11 +1775,12 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         polygon=[(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
         fill=(*bg, 255),
         line=[(cut_top, 0), (cut_bottom, height)],
-        line_fill=(*accent, 255),
+        line_fill=(*seam, 255),
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
+    draw.line((cut_top - int(5 * scale), 0, cut_bottom - int(5 * scale), height), fill=rim, width=max(1, int(2 * scale)))
 
     _badge_w, badge_h = _draw_badge(
         draw,
@@ -1464,10 +1835,13 @@ def _render_bottom_extension(
 ) -> RenderedImage:
     from PIL import Image, ImageDraw
 
-    bg = _hex_to_rgb(palette["background"])
-    text_color = _hex_to_rgb(palette["text"])
-    accent = _hex_to_rgb(palette["accent"])
-    accent_text = _hex_to_rgb(palette["accent_text"])
+    roles = _palette_roles(palette)
+    bg = _hex_to_rgb(roles["surface"])
+    text_color = _hex_to_rgb(roles["ink"])
+    accent = _hex_to_rgb(roles["signal"])
+    accent_text = _hex_to_rgb(roles["signal_ink"])
+    seam = _hex_to_rgb(roles["seam"])
+    rim = _hex_to_rgb(roles["rim"])
 
     width, poster_h = poster.size
     scale = _layout_scale(width)
@@ -1511,11 +1885,16 @@ def _render_bottom_extension(
         polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
         fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
-        line_fill=(*accent, 255),
+        line_fill=(*seam, 255),
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
+    draw.line(
+        (0, block_top + diagonal - int(6 * scale), width, block_top - int(6 * scale)),
+        fill=rim,
+        width=max(1, int(2 * scale)),
+    )
 
     safe_y = block_top + safe_y_offset
     _draw_badge(
@@ -1579,16 +1958,13 @@ def _render_bottom_overlay(
     block_h = max(int(320 * scale), min(int(height * 0.42), int(480 * scale)))
     block_top = height - block_h
     diagonal = max(int(24 * scale), min(int(54 * scale), int(width * 0.05)))
-    palette, surface_inverted = _cta_surface_palette_for_region(
-        poster,
-        palette,
-        seed=plan.seed,
-        region_box=(0, max(0, block_top - int(48 * scale)), width, height),
-    )
-    bg = _hex_to_rgb(palette["background"])
-    text_color = _hex_to_rgb(palette["text"])
-    accent = _hex_to_rgb(palette["accent"])
-    accent_text = _hex_to_rgb(palette["accent_text"])
+    roles = _palette_roles(palette)
+    bg = _hex_to_rgb(roles["surface"])
+    text_color = _hex_to_rgb(roles["ink"])
+    accent = _hex_to_rgb(roles["signal"])
+    accent_text = _hex_to_rgb(roles["signal_ink"])
+    seam = _hex_to_rgb(roles["seam"])
+    rim = _hex_to_rgb(roles["rim"])
 
     safe_x = int(64 * scale)
     safe_w = width - safe_x * 2
@@ -1619,17 +1995,23 @@ def _render_bottom_overlay(
         alpha = int(70 * (offset + 1) / shadow_h)
         y = shadow_top + offset
         shadow_draw.line((0, y, width, y), fill=(0, 0, 0, alpha))
+        shadow_draw.line((0, y, width, y), fill=(*seam, max(0, int(alpha * 0.16))))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     overlay = _aa_overlay(
         size=(width, height),
         polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
         fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
-        line_fill=(*accent, 255),
+        line_fill=(*seam, 255),
         line_width=max(4, int(12 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
+    draw.line(
+        (0, block_top + diagonal - int(7 * scale), width, block_top - int(7 * scale)),
+        fill=rim,
+        width=max(1, int(2 * scale)),
+    )
 
     _draw_badge(
         draw,
@@ -1680,10 +2062,11 @@ def _render_hook_swipe_cta(
 ) -> list[RenderedImage]:
     from PIL import Image, ImageDraw, ImageOps
 
-    bg = _hex_to_rgb(palette["background"])
-    text_color = _hex_to_rgb(palette["text"])
-    accent = _hex_to_rgb(palette["accent"])
-    accent_text = _hex_to_rgb(palette["accent_text"])
+    roles = _palette_roles(palette)
+    bg = _hex_to_rgb(roles["surface"])
+    text_color = _hex_to_rgb(roles["ink"])
+    accent = _hex_to_rgb(roles["signal"])
+    accent_text = _hex_to_rgb(roles["signal_ink"])
     card_w, card_h = 1080, 1350
     scale = card_w / 1080
 
@@ -1821,8 +2204,14 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
 
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
-    palette_id = _choose_compatible_palette_id(poster, plan.palette_id, plan.seed)
-    palette = PALETTES.get(palette_id) or PALETTES["slate_warm_white"]
+    palette_id = _choose_compatible_palette_id(
+        poster,
+        plan.palette_id,
+        plan.seed,
+        template_id=plan.template_id,
+        event_type=plan.event_type,
+    )
+    palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
     if plan.template_id in {"bottom_overlay", "bottom_extension"} and poster.width < 720:
         forced = replace(plan, template_id="right_extension")
         logger.info(
