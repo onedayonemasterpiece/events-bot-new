@@ -205,6 +205,14 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  afishaengagement:
+    status: debug_shadow
+    docs: docs/features/afishaengagement/README.md
+    requirements: docs/features/afishaengagement/requirements.md
+    entrypoints:
+      - afishaengagement.py
+      - main_part2.py
+      - scripts/cleanup_afishaengagement_debug_vk.py
   telegram_monitoring:
     status: implemented
     docs: docs/features/telegram-monitoring/README.md

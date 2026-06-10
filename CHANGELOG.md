@@ -9,6 +9,8 @@
   selection, poster Vision/OCR summary, optional LLM plan selection,
   deterministic Cygre/PIL right-extension rendering, structured JSON logs,
   promo exposure audit rows, and a cleanup script for VK postponed debug posts.
+  Existing managed Smart Update VK posts now also run the shadow hook after a
+  successful edit, so debug sampling is not limited to brand-new VK posts.
 - **Fixed: Telegram event ticket shortlink leak**:
   Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
   `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical

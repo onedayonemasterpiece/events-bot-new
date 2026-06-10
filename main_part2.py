@@ -5056,6 +5056,26 @@ async def sync_vk_source_post(
         )
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
+        try:
+            from afishaengagement import maybe_publish_shadow_debug_copy
+
+            await maybe_publish_shadow_debug_copy(
+                event=event,
+                db=db,
+                bot=bot,
+                target_group_id=str(target_group_id),
+                message=new_message,
+                photo_urls=photo_urls_source[:VK_MAX_ATTACHMENTS],
+                post_to_vk_fn=post_to_vk,
+                upload_vk_photo_fn=upload_vk_photo,
+                upload_images_fn=upload_images,
+                vk_api_fn=_vk_api,
+            )
+        except Exception:
+            logging.exception(
+                "sync_vk_source_post: afishaengagement shadow failed event_id=%s",
+                event.id,
+            )
     else:
         _short_link_result = await ensure_vk_short_ticket_link(
             event, db, vk_api_fn=_vk_api, bot=bot

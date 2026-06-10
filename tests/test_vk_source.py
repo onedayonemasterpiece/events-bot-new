@@ -687,6 +687,60 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_TOKEN_AFISHA = "ga"
+
+    event = main.Event(
+        id=42,
+        title="Lecture",
+        description="",
+        date="2026-06-20",
+        time="18:00",
+        location_name="Place",
+        photo_urls=["http://img1"],
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_1"
+
+    async def fake_vk_api(method, params=None, db=None, bot=None, token=None, **kwargs):
+        if method == "wall.getById":
+            msg = main.build_vk_source_message(event, "old")
+            return {"response": [{"text": msg}]}
+        return {"response": {}}
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        return "ph1"
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+        return None
+
+    captured: dict[str, object] = {}
+
+    async def fake_shadow(**kwargs):
+        captured.update(kwargs)
+        return "https://vk.com/wall-1_999"
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+    monkeypatch.setattr(
+        "afishaengagement.maybe_publish_shadow_debug_copy",
+        fake_shadow,
+    )
+
+    url = await main.sync_vk_source_post(event, "new text", None, None)
+
+    assert url == "https://vk.com/wall-1_1"
+    assert captured["event"] is event
+    assert captured["target_group_id"] == "1"
+    assert captured["photo_urls"] == ["http://img1"]
+    assert "new text" in str(captured["message"])
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_resolves_stale_postponed_id(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"
