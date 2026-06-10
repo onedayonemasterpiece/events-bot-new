@@ -887,6 +887,55 @@ def _poster_color_profile(poster: Any) -> dict[str, Any]:
     }
 
 
+def _average_region_rgb(poster: Any, box: tuple[int, int, int, int]) -> tuple[int, int, int]:
+    from PIL import Image
+
+    width, height = poster.size
+    left, top, right, bottom = box
+    left = max(0, min(width - 1, left))
+    top = max(0, min(height - 1, top))
+    right = max(left + 1, min(width, right))
+    bottom = max(top + 1, min(height, bottom))
+    sample = poster.convert("RGB").crop((left, top, right, bottom)).resize((1, 1), Image.Resampling.BOX)
+    return sample.getpixel((0, 0))
+
+
+def _inverted_surface_palette(palette: dict[str, str]) -> dict[str, str]:
+    return {
+        "background": palette["text"],
+        "text": palette["background"],
+        "accent": palette["background"],
+        "accent_text": palette["text"],
+    }
+
+
+def _cta_surface_palette_for_region(
+    poster: Any,
+    palette: dict[str, str],
+    *,
+    seed: str,
+    region_box: tuple[int, int, int, int],
+) -> tuple[dict[str, str], bool]:
+    bg = _hex_to_rgb(palette["background"])
+    avg = _average_region_rgb(poster, region_box)
+    bg_luma = _relative_luminance(bg)
+    avg_luma = _relative_luminance(avg)
+    contrast = _contrast_ratio(bg, avg)
+    should_invert = (bg_luma < 0.24 and avg_luma < 0.48) or contrast < 1.8
+    # Keep some deterministic variety for borderline cases so the CTA surface
+    # does not always repeat the same visual temperature across similar posters.
+    if not should_invert and contrast < 2.5:
+        should_invert = stable_unit_interval(f"{seed}:surface_invert") < 0.35
+    if not should_invert:
+        return palette, False
+    inverted = _inverted_surface_palette(palette)
+    inv_bg = _hex_to_rgb(inverted["background"])
+    inv_text = _hex_to_rgb(inverted["text"])
+    if _contrast_ratio(inv_bg, inv_text) < 4.5:
+        return palette, False
+    return inverted, True
+
+
 def _choose_compatible_palette_id(poster: Any, preferred_id: str, seed: str) -> str:
     profile = _poster_color_profile(poster)
     dominant_hues = list(profile.get("dominant_hues") or [])
@@ -1228,22 +1277,31 @@ def _render_bottom_overlay(
 ) -> RenderedImage:
     from PIL import Image, ImageDraw
 
-    bg = _hex_to_rgb(palette["background"])
-    text_color = _hex_to_rgb(palette["text"])
-    accent = _hex_to_rgb(palette["accent"])
-    accent_text = _hex_to_rgb(palette["accent_text"])
-
     width, height = poster.size
     scale = _layout_scale(width)
     block_h = max(int(260 * scale), min(int(height * 0.38), int(420 * scale)))
     block_top = height - block_h
     diagonal = max(int(24 * scale), min(int(54 * scale), int(width * 0.05)))
+    palette, surface_inverted = _cta_surface_palette_for_region(
+        poster,
+        palette,
+        seed=plan.seed,
+        region_box=(0, max(0, block_top - int(48 * scale)), width, height),
+    )
+    bg = _hex_to_rgb(palette["background"])
+    text_color = _hex_to_rgb(palette["text"])
+    accent = _hex_to_rgb(palette["accent"])
+    accent_text = _hex_to_rgb(palette["accent_text"])
+
     safe_x = int(64 * scale)
     safe_w = width - safe_x * 2
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
     badge_font = _load_font("Cygre-Medium.ttf", max(18, int(28 * scale)))
+    badge_h = int(46 * scale)
+    safe_y = block_top + diagonal + int(34 * scale)
+    text_box_y = safe_y + badge_h + int(30 * scale)
+    text_box_h = height - text_box_y - int(40 * scale)
 
-    text_box_h = block_h - int(138 * scale)
     fit = fit_text(
         plan.cta_text,
         box_width=safe_w,
@@ -1259,7 +1317,7 @@ def _render_bottom_overlay(
     overlay = _aa_overlay(
         size=(width, height),
         polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
-        fill=(*bg, 238),
+        fill=(*bg, 248 if surface_inverted else 238),
         line=[(0, block_top + diagonal), (width, block_top)],
         line_fill=(*accent, 255),
         line_width=max(2, int(4 * scale)),
@@ -1267,10 +1325,8 @@ def _render_bottom_overlay(
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    safe_y = block_top + int(44 * scale)
     badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
     badge_w = min(safe_w, badge_bbox[2] - badge_bbox[0] + int(32 * scale))
-    badge_h = int(46 * scale)
     draw.rounded_rectangle(
         (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
         radius=int(17 * scale),
@@ -1280,8 +1336,7 @@ def _render_bottom_overlay(
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.08)
-    text_box_y = safe_y + badge_h + int(26 * scale)
-    y = text_box_y + max(0, int((height - text_box_y - int(34 * scale) - fit.height) / 2))
+    y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
     for line in fit.lines:
         draw.text((safe_x, y), line, font=main_font, fill=text_color)
         bbox = _text_bbox(draw, (safe_x, y), line, main_font)

@@ -317,6 +317,22 @@ def test_render_bottom_overlay_preserves_source_dimensions():
     assert rendered.data.startswith(b"\x89PNG")
 
 
+def test_bottom_overlay_can_invert_surface_on_dark_poster_region():
+    poster = Image.new("RGB", (800, 800), (12, 12, 12))
+    palette = aeg.PALETTES["black_lime"]
+
+    surface, inverted = aeg._cta_surface_palette_for_region(
+        poster,
+        palette,
+        seed="dark-overlay",
+        region_box=(0, 520, 800, 800),
+    )
+
+    assert inverted is True
+    assert surface["background"] == palette["text"]
+    assert surface["text"] == palette["background"]
+
+
 def test_render_explicit_bottom_extension_preserves_source_width():
     event = Event(
         title="Концерт камерной музыки",
