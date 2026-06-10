@@ -410,8 +410,23 @@ def _topic_label(event: Event, event_type: str) -> str:
     return "событий"
 
 
+def _topic_accusative_plural(event_type: str) -> str:
+    if event_type == "lecture":
+        return "лекции"
+    if event_type == "concert":
+        return "концерты"
+    if event_type == "workshop":
+        return "мастер-классы"
+    if event_type == "theatre":
+        return "спектакли"
+    if event_type == "festival":
+        return "фестивали"
+    return "события"
+
+
 def _templates_for(event_type: str, persona: str | None, festival: str | None) -> dict[str, list[str]]:
     topic = "{T}"
+    topic_acc = "{TA}"
     templates: dict[str, list[str]] = {
         "comments": [
             f"Расскажите в комментариях, что для вас главное в таких {topic}.",
@@ -428,7 +443,7 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         "reposts": [
             "Поделись с теми, кому близки такие события.",
             "Перешли тому, с кем пошёл бы вместе.",
-            "Поделись с другом, который любит такие события.",
+            f"Поделись с другом, который любит такие {topic_acc}.",
         ],
     }
     if event_type == "lecture" and persona:
@@ -492,8 +507,15 @@ def _sanitize_cta_text(text: str) -> str:
     return text
 
 
-def _resolve_template(template: str, *, persona: str | None, festival: str | None, topic: str) -> str | None:
-    slots = {"N": persona, "F": festival, "T": topic}
+def _resolve_template(
+    template: str,
+    *,
+    persona: str | None,
+    festival: str | None,
+    topic: str,
+    topic_accusative_plural: str,
+) -> str | None:
+    slots = {"N": persona, "F": festival, "T": topic, "TA": topic_accusative_plural}
     for key, value in slots.items():
         if "{" + key + "}" in template and not value:
             return None
@@ -516,6 +538,7 @@ def build_engagement_plan(
     persona = _extract_persona(event)
     festival = (event.festival or "").strip() or None
     topic = _topic_label(event, event_type)
+    topic_accusative_plural = _topic_accusative_plural(event_type)
 
     weights = dict(MECHANIC_WEIGHTS)
     weights.update(config.get("mechanic_weights") or {})
@@ -537,7 +560,13 @@ def build_engagement_plan(
         options = list(templates.get(candidate_mechanic) or [])
         rnd.shuffle(options)
         for template in options:
-            resolved = _resolve_template(template, persona=persona, festival=festival, topic=topic)
+            resolved = _resolve_template(
+                template,
+                persona=persona,
+                festival=festival,
+                topic=topic,
+                topic_accusative_plural=topic_accusative_plural,
+            )
             if resolved and len(resolved) <= 95:
                 cta_text = resolved
                 mechanic = candidate_mechanic

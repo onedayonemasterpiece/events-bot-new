@@ -174,6 +174,30 @@ def test_cta_text_sanitizer_removes_parenthetical_gender_and_punctuation_spaces(
     )
 
 
+def test_repost_template_uses_event_type_noun():
+    event = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"repost-template-{idx}",
+            config={"mechanic_weights": {"reposts": 100}},
+        ).cta_text
+        for idx in range(40)
+    }
+
+    assert "Поделись с другом, который любит такие концерты." in seen
+    assert all("такие афиши" not in text for text in seen)
+
+
 def test_renderer_can_select_poster_compatible_palette():
     source = _poster_bytes()
     event = Event(
