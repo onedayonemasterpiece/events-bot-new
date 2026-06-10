@@ -1416,8 +1416,36 @@ def _render_hook_swipe_cta(
         bbox = _text_bbox(draw, (x, y), line, hook_font)
         y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.1)
     swipe_font = _load_font("Cygre-Medium.ttf", 46)
-    draw.rounded_rectangle((x, card_h - 188, x + 220, card_h - 124), radius=26, fill=accent)
-    draw.text((x + 34, card_h - 176), "ЛИСТАЙ", font=swipe_font, fill=accent_text)
+    swipe_label = "ЛИСТАЙ"
+    swipe_bbox = _text_bbox(draw, (0, 0), swipe_label, swipe_font)
+    swipe_text_w = swipe_bbox[2] - swipe_bbox[0]
+    swipe_text_h = swipe_bbox[3] - swipe_bbox[1]
+    swipe_badge_h = 64
+    swipe_badge_w = swipe_text_w + 120
+    swipe_badge_y0 = card_h - 188
+    swipe_badge_y1 = swipe_badge_y0 + swipe_badge_h
+    swipe_badge_x0 = x
+    swipe_badge_x1 = swipe_badge_x0 + swipe_badge_w
+    draw.rounded_rectangle(
+        (swipe_badge_x0, swipe_badge_y0, swipe_badge_x1, swipe_badge_y1),
+        radius=26,
+        fill=accent,
+    )
+    swipe_text_x = swipe_badge_x0 + 34
+    swipe_text_y = swipe_badge_y0 + int((swipe_badge_h - swipe_text_h) / 2) - 4
+    draw.text((swipe_text_x, swipe_text_y), swipe_label, font=swipe_font, fill=accent_text)
+    arrow_y = swipe_badge_y0 + swipe_badge_h // 2
+    arrow_x0 = swipe_text_x + swipe_text_w + 26
+    arrow_x1 = swipe_badge_x1 - 34
+    draw.line((arrow_x0, arrow_y, arrow_x1, arrow_y), fill=accent_text, width=5)
+    draw.polygon(
+        [
+            (arrow_x1, arrow_y),
+            (arrow_x1 - 16, arrow_y - 12),
+            (arrow_x1 - 16, arrow_y + 12),
+        ],
+        fill=accent_text,
+    )
     draw.line((x, card_h - 92, card_w - x, card_h - 92), fill=accent, width=5)
 
     cta = Image.new("RGB", (card_w, card_h), bg)
