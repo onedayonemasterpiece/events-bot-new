@@ -198,6 +198,51 @@ def test_repost_template_uses_event_type_noun():
     assert all("такие афиши" not in text for text in seen)
 
 
+def test_festival_comment_template_names_festival_and_annual_context():
+    event = Event(
+        title="Кантата",
+        description="VI Международный фестиваль классической музыки",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="фестиваль",
+        festival="Кантата",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"festival-comment-{idx}",
+            config={"mechanic_weights": {"comments": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert "Что ждёте от фестиваля Кантата в этом году? Напишите в комментариях." in seen
+    assert all("от Кантата" not in text for text in seen)
+
+
+def test_comments_badge_is_action_phrase():
+    assert aeg.MECHANIC_BADGES["comments"] == "НАПИШИ КОММЕНТАРИЙ"
+
+
+def test_hook_text_uses_prepositional_plural():
+    event = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    plan = aeg.build_engagement_plan(event, seed="hook-case", config={"formats": ["hook_swipe_cta"]})
+
+    assert plan.hook_text == "Есть вопрос к тем, кто уже был на таких концертах"
+
+
 def test_renderer_can_select_poster_compatible_palette():
     source = _poster_bytes()
     event = Event(
@@ -220,6 +265,88 @@ def test_renderer_can_select_poster_compatible_palette():
 
     assert rendered.palette_id in aeg.PALETTES
     assert aeg._contrast_ratio(aeg._hex_to_rgb(palette["background"]), aeg._hex_to_rgb(palette["text"])) >= 4.5
+
+
+def test_render_bottom_overlay_preserves_source_dimensions():
+    event = Event(
+        title="Лекция о городе",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="bottom-overlay-render-test",
+        config={
+            "formats": ["bottom_overlay"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"comments": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "bottom_overlay"
+    assert rendered.dimensions == (420, 620)
+    assert rendered.cta_text_font_px >= 22
+    assert rendered.data.startswith(b"\x89PNG")
+
+
+def test_render_explicit_bottom_extension_preserves_source_width():
+    event = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="explicit-bottom-extension-render-test",
+        config={
+            "formats": ["bottom_extension"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"likes": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "bottom_extension"
+    assert rendered.dimensions[0] == 420
+    assert rendered.dimensions[1] > 620
+
+
+def test_render_hook_swipe_cta_returns_two_cards():
+    event = Event(
+        title="Фестиваль Кантата",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="фестиваль",
+        festival="Кантата",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="hook-swipe-render-test",
+        config={
+            "formats": ["hook_swipe_cta"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"comments": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_poster_bytes(), plan)
+
+    assert [image.template_id for image in rendered] == ["hook_swipe", "hook_swipe_cta"]
+    assert all(image.dimensions == (1080, 1350) for image in rendered)
 
 
 @pytest.mark.asyncio

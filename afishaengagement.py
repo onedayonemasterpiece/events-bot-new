@@ -197,10 +197,11 @@ PALETTES: dict[str, dict[str, str]] = {
 
 MECHANIC_WEIGHTS = {"comments": 40, "likes": 40, "reposts": 20}
 MECHANIC_BADGES = {
-    "comments": "КОММЕНТАРИИ",
+    "comments": "НАПИШИ КОММЕНТАРИЙ",
     "likes": "ЛАЙК",
     "reposts": "РЕПОСТ",
 }
+SUPPORTED_TEMPLATE_IDS = {"right_extension", "bottom_overlay", "bottom_extension", "hook_swipe_cta"}
 
 
 def _json_log(stage_log: StageLog) -> None:
@@ -424,9 +425,25 @@ def _topic_accusative_plural(event_type: str) -> str:
     return "события"
 
 
+def _topic_prepositional_plural(event_type: str) -> str:
+    if event_type == "lecture":
+        return "лекциях"
+    if event_type == "concert":
+        return "концертах"
+    if event_type == "workshop":
+        return "мастер-классах"
+    if event_type == "theatre":
+        return "спектаклях"
+    if event_type == "festival":
+        return "фестивалях"
+    return "событиях"
+
+
 def _templates_for(event_type: str, persona: str | None, festival: str | None) -> dict[str, list[str]]:
     topic = "{T}"
     topic_acc = "{TA}"
+    festival_from = "{FFROM}"
+    festival_on = "{FON}"
     templates: dict[str, list[str]] = {
         "comments": [
             f"Расскажите в комментариях, что для вас главное в таких {topic}.",
@@ -483,12 +500,17 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
     if festival:
         templates["comments"].extend(
             [
-                "Были на {F} раньше? Расскажите, как впечатления.",
-                "Что ждёте от {F}? Напишите в комментариях.",
+                f"Были на {festival_on} раньше? Расскажите, как впечатления.",
+                f"Что ждёте от {festival_from}? Напишите в комментариях.",
             ]
         )
-        templates["likes"].extend(["Лайк, если ждёшь {F}.", "Поставь лайк, если уже был на {F}."])
-        templates["reposts"].append("Поделись с друзьями, если ждёшь {F}.")
+        templates["likes"].extend(
+            [
+                f"Лайк, если ждёшь {festival_from}.",
+                f"Поставь лайк, если уже был на {festival_on}.",
+            ]
+        )
+        templates["reposts"].append(f"Поделись с друзьями, если ждёшь {festival_from}.")
     return templates
 
 
@@ -507,6 +529,35 @@ def _sanitize_cta_text(text: str) -> str:
     return text
 
 
+def _festival_is_annual(event: Event) -> bool:
+    text = "\n".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+    if any(word in text for word in ("ежегод", "каждый год", "в этом году")):
+        return True
+    return bool(re.search(r"\b(?:[ivxlcdm]{2,}|[2-9]\d*)\s+(?:международн\w+\s+)?фестив", text))
+
+
+def _festival_from_phrase(event: Event, festival: str | None) -> str | None:
+    if not festival:
+        return None
+    phrase = f"фестиваля {festival}"
+    if _festival_is_annual(event):
+        phrase += " в этом году"
+    return phrase
+
+
+def _festival_on_phrase(festival: str | None) -> str | None:
+    if not festival:
+        return None
+    return f"фестивале {festival}"
+
+
 def _resolve_template(
     template: str,
     *,
@@ -514,8 +565,17 @@ def _resolve_template(
     festival: str | None,
     topic: str,
     topic_accusative_plural: str,
+    festival_from: str | None = None,
+    festival_on: str | None = None,
 ) -> str | None:
-    slots = {"N": persona, "F": festival, "T": topic, "TA": topic_accusative_plural}
+    slots = {
+        "N": persona,
+        "F": festival,
+        "FFROM": festival_from,
+        "FON": festival_on,
+        "T": topic,
+        "TA": topic_accusative_plural,
+    }
     for key, value in slots.items():
         if "{" + key + "}" in template and not value:
             return None
@@ -523,6 +583,18 @@ def _resolve_template(
     if re.search(r"\{[^}]+\}", template):
         return None
     return _sanitize_cta_text(template)
+
+
+def _configured_formats(config: dict[str, Any]) -> list[str]:
+    raw = config.get("formats") or config.get("template_ids") or []
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",")]
+    formats = [str(item).strip() for item in raw if str(item or "").strip()]
+    formats = [item for item in formats if item in SUPPORTED_TEMPLATE_IDS]
+    if not formats:
+        template_id = str(config.get("template_id") or "right_extension").strip()
+        formats = [template_id if template_id in SUPPORTED_TEMPLATE_IDS else "right_extension"]
+    return formats
 
 
 def build_engagement_plan(
@@ -537,8 +609,11 @@ def build_engagement_plan(
     event_type = _event_type_key(event)
     persona = _extract_persona(event)
     festival = (event.festival or "").strip() or None
+    festival_from = _festival_from_phrase(event, festival)
+    festival_on = _festival_on_phrase(festival)
     topic = _topic_label(event, event_type)
     topic_accusative_plural = _topic_accusative_plural(event_type)
+    topic_prepositional_plural = _topic_prepositional_plural(event_type)
 
     weights = dict(MECHANIC_WEIGHTS)
     weights.update(config.get("mechanic_weights") or {})
@@ -564,6 +639,8 @@ def build_engagement_plan(
                 template,
                 persona=persona,
                 festival=festival,
+                festival_from=festival_from,
+                festival_on=festival_on,
                 topic=topic,
                 topic_accusative_plural=topic_accusative_plural,
             )
@@ -580,12 +657,16 @@ def build_engagement_plan(
     palette_ids = list(config.get("palette_ids") or PALETTES.keys())
     palette_ids = [pid for pid in palette_ids if pid in PALETTES] or ["slate_warm_white"]
     palette_id = palette_ids[int(stable_unit_interval(seed + ":palette") * len(palette_ids)) % len(palette_ids)]
-    template_id = str(config.get("template_id") or "right_extension")
+    formats = _configured_formats(config)
+    template_id = formats[int(stable_unit_interval(seed + ":format") * len(formats)) % len(formats)]
     if vision and vision.confidence < float(config.get("right_extension_confidence_min", 0.55)):
-        template_id = "right_extension"
-    hook_text = f"Есть вопрос к тем, кто уже был на таких {topic}"
+        if "right_extension" in formats:
+            template_id = "right_extension"
+        elif "hook_swipe_cta" in formats:
+            template_id = "hook_swipe_cta"
+    hook_text = f"Есть вопрос к тем, кто уже был на таких {topic_prepositional_plural}"
     if festival:
-        hook_text = f"Кто уже был на {festival}?"
+        hook_text = f"Кто уже был на {festival_on}?"
     elif persona:
         hook_text = f"Кто уже слушал {persona}?"
     return EngagementPlan(
@@ -634,7 +715,7 @@ def _sanitize_llm_plan(
     if mechanic not in MECHANIC_BADGES:
         mechanic = fallback.mechanic
     template_id = str(payload.get("template_id") or fallback.template_id).strip()
-    if template_id not in {"right_extension", "hook_swipe_cta"}:
+    if template_id not in SUPPORTED_TEMPLATE_IDS:
         template_id = fallback.template_id
     palette_id = str(payload.get("palette_id") or fallback.palette_id).strip()
     if palette_id not in PALETTES:
@@ -676,11 +757,11 @@ async def build_llm_engagement_plan(
         prompt = (
             "Ты выбираешь план CTA-мотиватора для VK-афиши события. "
             "Верни только JSON без markdown: "
-            "{\"mechanic\":\"comments|likes|reposts\",\"template_id\":\"right_extension|hook_swipe_cta\","
+            "{\"mechanic\":\"comments|likes|reposts\",\"template_id\":\"right_extension|bottom_overlay|bottom_extension|hook_swipe_cta\","
             "\"palette_id\":\"...\",\"cta_text\":\"...\",\"hook_text\":\"...\",\"reason\":\"...\"}.\n"
             "Правила: русский текст, обращение на ты допустимо для лайков/репостов; "
             "cta_text максимум 95 символов; без плейсхолдеров, без ФИО если ФИО нет в данных; "
-            "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension; "
+            "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension или hook_swipe_cta; "
             "финальный layout рисует код, не описывай графику.\n"
             f"Доступные palette_id: {', '.join(palette_ids[:16])}.\n"
             f"Seed: {seed}\n"
@@ -1123,6 +1204,218 @@ def _render_bottom_extension(
         dimensions=(width, height),
         render_ms=int((time.monotonic() - started) * 1000),
     )
+
+
+def _render_bottom_overlay(
+    poster: Any,
+    plan: EngagementPlan,
+    palette_id: str,
+    palette: dict[str, str],
+    started: float,
+) -> RenderedImage:
+    from PIL import Image, ImageDraw
+
+    bg = _hex_to_rgb(palette["background"])
+    text_color = _hex_to_rgb(palette["text"])
+    accent = _hex_to_rgb(palette["accent"])
+    accent_text = _hex_to_rgb(palette["accent_text"])
+
+    width, height = poster.size
+    scale = _layout_scale(width)
+    block_h = max(int(260 * scale), min(int(height * 0.38), int(420 * scale)))
+    block_top = height - block_h
+    diagonal = max(int(24 * scale), min(int(54 * scale), int(width * 0.05)))
+    safe_x = int(64 * scale)
+    safe_w = width - safe_x * 2
+    badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
+    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(28 * scale)))
+
+    text_box_h = block_h - int(138 * scale)
+    fit = fit_text(
+        plan.cta_text,
+        box_width=safe_w,
+        box_height=text_box_h,
+        preferred_px=max(30, int(62 * scale)),
+        min_px=max(22, int(38 * scale)),
+        max_lines=4,
+    )
+    if fit is None:
+        raise ValueError("text_overflow")
+
+    canvas = poster.copy()
+    overlay = _aa_overlay(
+        size=(width, height),
+        polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
+        fill=(*bg, 238),
+        line=[(0, block_top + diagonal), (width, block_top)],
+        line_fill=(*accent, 255),
+        line_width=max(2, int(4 * scale)),
+    )
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(canvas)
+
+    safe_y = block_top + int(44 * scale)
+    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
+    badge_w = min(safe_w, badge_bbox[2] - badge_bbox[0] + int(32 * scale))
+    badge_h = int(46 * scale)
+    draw.rounded_rectangle(
+        (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
+        radius=int(17 * scale),
+        fill=accent,
+    )
+    draw.text((safe_x + int(16 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
+
+    main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
+    line_gap = int(fit.font_px * 0.08)
+    text_box_y = safe_y + badge_h + int(26 * scale)
+    y = text_box_y + max(0, int((height - text_box_y - int(34 * scale) - fit.height) / 2))
+    for line in fit.lines:
+        draw.text((safe_x, y), line, font=main_font, fill=text_color)
+        bbox = _text_bbox(draw, (safe_x, y), line, main_font)
+        y += (bbox[3] - bbox[1]) + line_gap
+
+    out = io.BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    data = out.getvalue()
+    if len(data) < 1_000:
+        raise ValueError("rendered_png_too_small")
+    return RenderedImage(
+        data=data,
+        filename="afishaengagement-bottom-overlay.png",
+        template_id="bottom_overlay",
+        palette_id=palette_id,
+        cta_text_lines=fit.lines,
+        cta_text_font_px=fit.font_px,
+        dimensions=(width, height),
+        render_ms=int((time.monotonic() - started) * 1000),
+    )
+
+
+def _render_hook_swipe_cta(
+    poster: Any,
+    plan: EngagementPlan,
+    palette_id: str,
+    palette: dict[str, str],
+    started: float,
+) -> list[RenderedImage]:
+    from PIL import Image, ImageDraw, ImageOps
+
+    bg = _hex_to_rgb(palette["background"])
+    text_color = _hex_to_rgb(palette["text"])
+    accent = _hex_to_rgb(palette["accent"])
+    accent_text = _hex_to_rgb(palette["accent_text"])
+    card_w, card_h = 1080, 1350
+    scale = card_w / 1080
+
+    def cover_image() -> Image.Image:
+        return ImageOps.fit(poster, (card_w, card_h), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+
+    def save_card(image: Image.Image, filename: str, template_id: str, lines: list[str], font_px: int) -> RenderedImage:
+        out = io.BytesIO()
+        image.save(out, format="PNG", optimize=True)
+        data = out.getvalue()
+        return RenderedImage(
+            data=data,
+            filename=filename,
+            template_id=template_id,
+            palette_id=palette_id,
+            cta_text_lines=lines,
+            cta_text_font_px=font_px,
+            dimensions=(card_w, card_h),
+            render_ms=int((time.monotonic() - started) * 1000),
+        )
+
+    hook_text = _sanitize_cta_text(plan.hook_text or "Есть вопрос к тем, кто уже был?")
+    hook = cover_image().convert("RGBA")
+    scrim = Image.new("RGBA", (card_w, card_h), (*bg, 188))
+    hook = Image.alpha_composite(hook, scrim).convert("RGB")
+    draw = ImageDraw.Draw(hook)
+    hook_fit = fit_text(
+        hook_text,
+        box_width=int(card_w * 0.78),
+        box_height=int(card_h * 0.42),
+        preferred_px=92,
+        min_px=54,
+        max_lines=4,
+    )
+    if hook_fit is None:
+        raise ValueError("hook_text_overflow")
+    hook_font = _load_font("Cygre-Bold.ttf", hook_fit.font_px)
+    x = int(86 * scale)
+    y = int(410 * scale)
+    for line in hook_fit.lines:
+        draw.text((x, y), line, font=hook_font, fill=text_color)
+        bbox = _text_bbox(draw, (x, y), line, hook_font)
+        y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.1)
+    swipe_font = _load_font("Cygre-Medium.ttf", 46)
+    draw.rounded_rectangle((x, card_h - 188, x + 220, card_h - 124), radius=26, fill=accent)
+    draw.text((x + 34, card_h - 176), "ЛИСТАЙ", font=swipe_font, fill=accent_text)
+    draw.line((x, card_h - 92, card_w - x, card_h - 92), fill=accent, width=5)
+
+    cta = Image.new("RGB", (card_w, card_h), bg)
+    draw = ImageDraw.Draw(cta)
+    badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
+    badge_font = _load_font("Cygre-Medium.ttf", 42)
+    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
+    badge_w = badge_bbox[2] - badge_bbox[0] + 52
+    draw.rounded_rectangle((86, 96, 86 + badge_w, 162), radius=28, fill=accent)
+    draw.text((112, 111), badge, font=badge_font, fill=accent_text)
+
+    cta_fit = fit_text(
+        plan.cta_text,
+        box_width=int(card_w * 0.78),
+        box_height=int(card_h * 0.48),
+        preferred_px=94,
+        min_px=54,
+        max_lines=5,
+    )
+    if cta_fit is None:
+        raise ValueError("cta_text_overflow")
+    cta_font = _load_font("Cygre-Bold.ttf", cta_fit.font_px)
+    y = int(390 * scale)
+    for line in cta_fit.lines:
+        draw.text((86, y), line, font=cta_font, fill=text_color)
+        bbox = _text_bbox(draw, (86, y), line, cta_font)
+        y += (bbox[3] - bbox[1]) + int(cta_fit.font_px * 0.08)
+    arrow_x = card_w // 2
+    arrow_top = card_h - 330
+    draw.line((arrow_x, arrow_top, arrow_x, arrow_top + 170), fill=accent, width=10)
+    draw.polygon(
+        [
+            (arrow_x - 48, arrow_top + 132),
+            (arrow_x + 48, arrow_top + 132),
+            (arrow_x, arrow_top + 204),
+        ],
+        fill=accent,
+    )
+    draw.line((86, card_h - 92, card_w - 86, card_h - 92), fill=accent, width=5)
+
+    return [
+        save_card(hook, "afishaengagement-hook-swipe.png", "hook_swipe", hook_fit.lines, hook_fit.font_px),
+        save_card(cta, "afishaengagement-cta-card.png", "hook_swipe_cta", cta_fit.lines, cta_fit.font_px),
+    ]
+
+
+def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[RenderedImage]:
+    from PIL import Image, ImageOps
+
+    started = time.monotonic()
+    if not source_image:
+        raise ValueError("source poster is empty")
+    if plan.template_id == "right_extension":
+        return [render_right_extension(source_image, plan)]
+
+    with Image.open(io.BytesIO(source_image)) as opened:
+        poster = ImageOps.exif_transpose(opened).convert("RGB")
+    palette_id = _choose_compatible_palette_id(poster, plan.palette_id, plan.seed)
+    palette = PALETTES.get(palette_id) or PALETTES["slate_warm_white"]
+    if plan.template_id == "bottom_overlay":
+        return [_render_bottom_overlay(poster, plan, palette_id, palette, started)]
+    if plan.template_id == "bottom_extension":
+        return [_render_bottom_extension(poster, plan, palette_id, palette, started)]
+    if plan.template_id == "hook_swipe_cta":
+        return _render_hook_swipe_cta(poster, plan, palette_id, palette, started)
+    return [render_right_extension(source_image, plan)]
 
 
 async def _default_fetch_image(url: str) -> bytes:
@@ -1753,7 +2046,8 @@ async def maybe_publish_shadow_debug_copy(
         )
         return None
     try:
-        rendered = await asyncio.to_thread(render_right_extension, source_image, plan)
+        rendered_images = await asyncio.to_thread(render_plan_images, source_image, plan)
+        rendered = rendered_images[-1]
     except FileNotFoundError as exc:
         _json_log(
             StageLog(
@@ -1787,16 +2081,19 @@ async def maybe_publish_shadow_debug_copy(
     try:
         schedule_meta: dict[str, Any] = {}
         generated_urls, _ = await upload_images_fn(
-            [(rendered.data, rendered.filename)],
-            limit=1,
+            [(image.data, image.filename) for image in rendered_images],
+            limit=len(rendered_images),
             force=True,
             event_hint=f"afishaengagement:{event_id or 'unknown'}",
         )
         if not generated_urls:
             raise RuntimeError("upload_images_returned_empty")
-        generated_attachment = await upload_vk_photo_fn(target_group_id, generated_urls[0], db, bot)
-        if not generated_attachment:
-            raise RuntimeError("upload_vk_photo_returned_empty")
+        generated_attachments = []
+        for generated_url in generated_urls:
+            attachment = await upload_vk_photo_fn(target_group_id, generated_url, db, bot)
+            if not attachment:
+                raise RuntimeError("upload_vk_photo_returned_empty")
+            generated_attachments.append(attachment)
         debug_message = (
             f"{message.rstrip()}\n\n"
             f"[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n"
@@ -1823,7 +2120,7 @@ async def maybe_publish_shadow_debug_copy(
                     debug_message,
                     db,
                     bot,
-                    [generated_attachment],
+                    generated_attachments,
                     carousel=True,
                     publish_date=scheduled_ts,
                 )
@@ -1899,6 +2196,9 @@ async def maybe_publish_shadow_debug_copy(
                     "media_hash": digest,
                     "build_tag": build_tag,
                     "uploaded_url_count": len(generated_urls),
+                    "generated_attachment_count": len(generated_attachments),
+                    "rendered_template_ids": [image.template_id for image in rendered_images],
+                    "rendered_dimensions": [list(image.dimensions) for image in rendered_images],
                     "vision_provider": vision.provider,
                     "vision_reason": vision.reason,
                     "plan_provider": plan_provider,
