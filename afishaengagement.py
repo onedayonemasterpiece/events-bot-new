@@ -362,7 +362,9 @@ async def resolve_candidate(
 
 def _event_type_key(event: Event) -> str:
     explicit_type = str(event.event_type or "").casefold()
-    if any(word in explicit_type for word in ("фестив", "маркет", "ярмарк")):
+    if any(word in explicit_type for word in ("маркет", "ярмарк")):
+        return "market"
+    if "фестив" in explicit_type:
         return "festival"
     raw = " ".join(
         [
@@ -373,7 +375,7 @@ def _event_type_key(event: Event) -> str:
         ]
     ).casefold()
     if any(word in raw for word in ("маркет", "ярмарк")):
-        return "festival"
+        return "market"
     if any(word in raw for word in ("лекц", "спикер", "дискусс", "встреч")):
         return "lecture"
     if any(word in raw for word in ("концерт", "музык", "оркестр", "джаз", "трек")):
@@ -413,6 +415,8 @@ def _topic_label(event: Event, event_type: str) -> str:
         return "спектаклей"
     if event_type == "festival":
         return "фестивалей"
+    if event_type == "market":
+        return "ярмарок"
     return "событий"
 
 
@@ -427,6 +431,8 @@ def _topic_accusative_plural(event_type: str) -> str:
         return "спектакли"
     if event_type == "festival":
         return "фестивали"
+    if event_type == "market":
+        return "ярмарки"
     return "события"
 
 
@@ -441,6 +447,8 @@ def _topic_prepositional_plural(event_type: str) -> str:
         return "спектаклях"
     if event_type == "festival":
         return "фестивалях"
+    if event_type == "market":
+        return "ярмарках"
     return "событиях"
 
 

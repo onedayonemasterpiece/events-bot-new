@@ -260,8 +260,9 @@ def test_market_event_type_is_not_overridden_by_meeting_words():
         config={"mechanic_weights": {"likes": 100}},
     )
 
-    assert plan.event_type == "festival"
+    assert plan.event_type == "market"
     assert "лекц" not in plan.cta_text.casefold()
+    assert "фестивал" not in plan.cta_text.casefold()
 
 
 def test_renderer_can_select_poster_compatible_palette():
