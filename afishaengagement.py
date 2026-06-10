@@ -1954,6 +1954,7 @@ async def maybe_publish_shadow_debug_copy(
     upload_vk_photo_fn: Callable[..., Awaitable[str | None]],
     upload_images_fn: Callable[..., Awaitable[tuple[list[str], str]]],
     vk_api_fn: Callable[..., Awaitable[dict[str, Any]]],
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     fetch_image_fn: Callable[[str], Awaitable[bytes]] | None = None,
     now_utc: datetime | None = None,
 ) -> str | None:
@@ -2185,8 +2186,19 @@ async def maybe_publish_shadow_debug_copy(
         if not generated_urls:
             raise RuntimeError("upload_images_returned_empty")
         generated_attachments = []
-        for generated_url in generated_urls:
-            attachment = await upload_vk_photo_fn(target_group_id, generated_url, db, bot)
+        for idx, image in enumerate(rendered_images):
+            generated_url = generated_urls[idx] if idx < len(generated_urls) else None
+            attachment = None
+            if generated_url:
+                attachment = await upload_vk_photo_fn(target_group_id, generated_url, db, bot)
+            if not attachment and upload_vk_photo_bytes_fn is not None:
+                attachment = await upload_vk_photo_bytes_fn(
+                    target_group_id,
+                    image.data,
+                    db,
+                    bot,
+                    filename=image.filename,
+                )
             if not attachment:
                 raise RuntimeError("upload_vk_photo_returned_empty")
             generated_attachments.append(attachment)

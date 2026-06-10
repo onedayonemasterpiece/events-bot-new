@@ -5070,6 +5070,7 @@ async def sync_vk_source_post(
                 upload_vk_photo_fn=upload_vk_photo,
                 upload_images_fn=upload_images,
                 vk_api_fn=_vk_api,
+                upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
             )
         except Exception:
             logging.exception(
@@ -5132,6 +5133,7 @@ async def sync_vk_source_post(
                     upload_vk_photo_fn=upload_vk_photo,
                     upload_images_fn=upload_images,
                     vk_api_fn=_vk_api,
+                    upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
                 )
             except Exception:
                 logging.exception(
