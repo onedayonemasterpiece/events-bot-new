@@ -24,6 +24,7 @@ from models import (
 from promo import (
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_POLICY_FIRST_SLOT,
+    PROMO_SURFACE_AFISHA_ENGAGEMENT,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
@@ -265,6 +266,24 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
         "klgdevents:story",
         "klgdevents->kenigeventsofficial:story",
     }
+    async with db.get_session() as session:
+        afisha_activity = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign.id,
+                    PromoActivity.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT,
+                )
+            )
+        ).scalars().one()
+    assert afisha_activity.profile_key == "klgdevents:afishaengagement"
+    assert afisha_activity.enabled is True
+    assert afisha_activity.config_json["target_group"] == "klgdevents"
+    assert afisha_activity.config_json["debug_shadow"] is True
+    assert afisha_activity.config_json["apply_rate"] == 0.70
+    assert afisha_activity.config_json["mechanic_weights"] == {"comments": 0, "likes": 100, "reposts": 0}
+    assert afisha_activity.config_json["cta_templates"]["by_event_type"]["*"]["likes"] == [
+        "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+    ]
     await db.close()
 
 

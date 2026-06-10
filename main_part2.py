@@ -4905,6 +4905,7 @@ async def sync_vk_source_post(
 
     attachments: list[str] | None = None
     photo_urls_source: list[str] = list(event.photo_urls or [])
+    photo_urls_for_publish: list[str] = []
     if VK_PHOTOS_ENABLED and not photo_urls_source:
         # Fallback: when the event has no cached photo_urls but a Telegraph
         # source page exists, use the images from that page so the VK post
@@ -4961,11 +4962,11 @@ async def sync_vk_source_post(
     photo_upload_skipped_missing_user_token = False
     if VK_PHOTOS_ENABLED and photo_urls_source:
         ids: list[str] = []
-        photo_urls = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
+        photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
             :VK_MAX_ATTACHMENTS
         ]
-        photo_upload_expected = bool(photo_urls)
-        for url in photo_urls:
+        photo_upload_expected = bool(photo_urls_for_publish)
+        for url in photo_urls_for_publish:
             photo_id = await upload_vk_photo(target_group_id, url, db, bot)
             if photo_id:
                 ids.append(photo_id)
@@ -4977,15 +4978,17 @@ async def sync_vk_source_post(
                 photo_upload_skipped_missing_user_token = True
                 break
         if ids:
-            if existing_vk_post_url and len(ids) < len(photo_urls):
+            if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
                 logging.warning(
                     "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
                     event.id,
                     len(ids),
-                    len(photo_urls),
+                    len(photo_urls_for_publish),
                 )
             else:
                 attachments = ids
+    elif photo_urls_source:
+        photo_urls_for_publish = photo_urls_source[:VK_MAX_ATTACHMENTS]
 
     calendar_line_value: str | None = None
     previous_ics_url = event.ics_url
@@ -5089,7 +5092,7 @@ async def sync_vk_source_post(
                 bot=bot,
                 target_group_id=str(target_group_id),
                 message=new_message,
-                photo_urls=photo_urls_source[:VK_MAX_ATTACHMENTS],
+                photo_urls=photo_urls_for_publish,
                 post_to_vk_fn=post_to_vk,
                 upload_vk_photo_fn=upload_vk_photo,
                 upload_images_fn=upload_images,
@@ -5152,7 +5155,7 @@ async def sync_vk_source_post(
                     bot=bot,
                     target_group_id=str(target_group_id),
                     message=message,
-                    photo_urls=photo_urls_source[:VK_MAX_ATTACHMENTS],
+                    photo_urls=photo_urls_for_publish,
                     post_to_vk_fn=post_to_vk,
                     upload_vk_photo_fn=upload_vk_photo,
                     upload_images_fn=upload_images,

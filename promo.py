@@ -46,6 +46,7 @@ PROMO_SURFACE_VIDEO_GENERAL = "video_general"
 PROMO_SURFACE_VK_PUBLICATION = "vk_publication"
 PROMO_SURFACE_VK_REPOST = "vk_repost"
 PROMO_SURFACE_VK_STORY = "vk_story"
+PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
 PROMO_VK_DEFAULT_WINDOW_HOURS = 24
 PROMO_VK_REPOST_DEDUP_HOURS = 72
 PROMO_VK_ACTIVE_START_HOUR = 9
@@ -54,6 +55,7 @@ PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
+PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
 VK_SYNC_MISSING_TG_MEDIA_ERROR = "vk_sync_missing_media_for_telegram_event"
 PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
     {"VK_SCHEDULED", "PUBLISHED", "PUBLISHED_MAIN", "PUBLISHED_TEST"}
@@ -923,6 +925,46 @@ def _initial_80_vk_story_activity(
     )
 
 
+def _initial_80_afishaengagement_activity(campaign_id: int) -> PromoActivity:
+    return PromoActivity(
+        campaign_id=campaign_id,
+        surface=PROMO_SURFACE_AFISHA_ENGAGEMENT,
+        profile_key=PROMO_VK_80_AFISHAENGAGEMENT_PROFILE,
+        max_per_publish=1,
+        daily_cap=None,
+        selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+        enabled=True,
+        config_json={
+            "target_group": "klgdevents",
+            "debug_shadow": True,
+            "apply_rate": 0.70,
+            "debug_marker": "#afishaengagement_shadow",
+            "debug_cleanup_before": False,
+            "debug_cap": 500,
+            "debug_publish_delay_days": 3,
+            "debug_slot_spacing_minutes": 5,
+            "formats": [
+                "right_extension",
+                "bottom_overlay",
+                "bottom_extension",
+                "hook_swipe_cta",
+            ],
+            "mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0},
+            "cta_templates": {
+                "by_event_type": {
+                    "*": {
+                        "likes": [
+                            "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+                        ]
+                    }
+                }
+            },
+            "prefer_configured_cta_templates": True,
+            "apply_salt": "80-registration-like-v1",
+        },
+    )
+
+
 async def ensure_initial_80_stories_campaign(
     db: Database,
     *,
@@ -977,6 +1019,7 @@ async def ensure_initial_80_stories_campaign(
                     source_group="klgdevents",
                     target_group="kenigeventsofficial",
                 ),
+                _initial_80_afishaengagement_activity(int(existing.id)),
             ):
                 key = (str(required.surface or ""), str(required.profile_key or ""))
                 if key not in existing_keys:
@@ -1078,6 +1121,7 @@ async def ensure_initial_80_stories_campaign(
                     source_group="klgdevents",
                     target_group="kenigeventsofficial",
                 ),
+                _initial_80_afishaengagement_activity(int(campaign.id)),
             ]
         )
         await session.commit()

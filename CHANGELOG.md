@@ -27,6 +27,12 @@
   activity. Matching activities now fall through on dice miss/duplicate/cap so
   a festival-specific CTA can coexist with the all-post visual-debug shadow
   activity.
+- **Fixed: Afisha Engagement source-media binding**: Smart Update now passes
+  the same deduped VK media list to the debug shadow renderer that it uses for
+  the normal VK post attachments, preventing CTA text for one event from being
+  rendered over a stale/neighbor poster URL. The decision log now records the
+  bound event title, source URLs, first photo URL and media hash for debugging
+  suspected poster/text mismatches. Covered by `tests/test_vk_source.py`.
 - **Changed: Afisha Engagement color system**: replaced harmony-first palette
   scoring with a seam-side CTA separation scorer designed with Opus. The
   renderer now uses curated editorial/noir/ivory/graphite palette families,

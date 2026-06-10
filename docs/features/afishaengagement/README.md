@@ -26,6 +26,9 @@ publications do not bypass the `Мотивация` activity.
   shadow copies during the visual debug phase, so `/vk_auto_import` and promo
   deficit publications can produce the normal post plus a marked postponed CTA
   copy for every applicable post.
+- Smart Update passes the exact deduped media URL list used for the normal VK
+  photo attachments into the shadow renderer. This keeps the CTA text, event
+  metadata, and generated poster media bound to the same event/photo set.
 - Dedupe is stored through `promo_exposure` rows with
   `surface='afishaengagement'` and `publish_status='VK_SCHEDULED_DEBUG'`.
 
@@ -214,9 +217,10 @@ Stages include:
 - `error`.
 
 Logs include campaign/activity/event ids, target VK owner, apply-rate seed and
-dice value, media hash, Vision confidence/provider/reason, selected mechanic,
-template, palette, CTA text length, text-fit font/line count, render time, LLM
-time, debug marker, scheduled publish date, and VK debug post URL/id.
+dice value, media hash, event title, source URLs, first media URL, Vision
+confidence/provider/reason, selected mechanic, template, palette, CTA text
+length, text-fit font/line count, render time, LLM time, debug marker, scheduled
+publish date, and VK debug post URL/id.
 
 ## Cleanup
 

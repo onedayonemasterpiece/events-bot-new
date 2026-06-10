@@ -742,6 +742,67 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_passes_same_deduped_photo_list_to_afishaengagement(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_TOKEN_AFISHA = "ga"
+    main.VK_MAX_ATTACHMENTS = 10
+
+    event = main.Event(
+        id=43,
+        title="Women Power",
+        description="",
+        date="2026-06-20",
+        time="18:00",
+        location_name="Place",
+        photo_urls=["http://stale-or-duplicate", "http://actual-poster"],
+    )
+    event.source_vk_post_url = "https://vk.com/wall-1_1"
+
+    async def fake_vk_api(method, params=None, db=None, bot=None, token=None, **kwargs):
+        if method == "wall.getById":
+            msg = main.build_vk_source_message(event, "old")
+            return {"response": [{"text": msg}]}
+        return {"response": {}}
+
+    async def fake_dedupe(photo_urls):
+        assert list(photo_urls) == ["http://stale-or-duplicate", "http://actual-poster"]
+        return ["http://actual-poster"]
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        assert url == "http://actual-poster"
+        return "photo-1_actual"
+
+    edited: dict[str, object] = {}
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None):
+        edited["attachments"] = attachments
+
+    captured: dict[str, object] = {}
+
+    async def fake_shadow(**kwargs):
+        captured.update(kwargs)
+        return "https://vk.com/wall-1_999"
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_dedupe_event_photo_urls_for_publish", fake_dedupe)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+    monkeypatch.setattr(
+        "afishaengagement.maybe_publish_shadow_debug_copy",
+        fake_shadow,
+    )
+
+    url = await main.sync_vk_source_post(event, "new text", None, None)
+
+    assert url == "https://vk.com/wall-1_1"
+    assert edited["attachments"] == ["photo-1_actual"]
+    assert captured["photo_urls"] == ["http://actual-poster"]
+
+
+@pytest.mark.asyncio
 async def test_fetch_vk_latest_postponed_ignores_afishaengagement_debug(monkeypatch):
     now_ts = 1_781_100_000
     regular_ts = now_ts + 600

@@ -49,6 +49,18 @@ def _large_poster_bytes() -> bytes:
     return out.getvalue()
 
 
+def _square_poster_bytes() -> bytes:
+    image = Image.new("RGB", (900, 900))
+    pixels = []
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels.append(((x * 9 + y * 4) % 255, (x * 5 + y * 8) % 255, (x * 2 + y * 17) % 255))
+    image.putdata(pixels)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=92)
+    return out.getvalue()
+
+
 def test_apply_rate_is_stable_and_uses_bounds():
     first = aeg.should_apply_rate(
         event_id=10,
@@ -511,10 +523,10 @@ def test_render_bottom_overlay_preserves_source_dimensions():
         },
     )
 
-    rendered = aeg.render_plan_images(_large_poster_bytes(), plan)[0]
+    rendered = aeg.render_plan_images(_square_poster_bytes(), plan)[0]
 
     assert rendered.template_id == "bottom_overlay"
-    assert rendered.dimensions == (900, 1260)
+    assert rendered.dimensions == (900, 900)
     assert rendered.cta_text_font_px >= 22
     assert rendered.data.startswith(b"\x89PNG")
 
@@ -561,6 +573,38 @@ def test_render_explicit_bottom_extension_preserves_source_width():
     assert rendered.dimensions[0] == 800
     assert rendered.dimensions[1] > 450
     assert rendered.dimensions[1] <= int(rendered.dimensions[0] * aeg.MAX_VK_FEED_PHOTO_ASPECT)
+
+
+def test_horizontal_bottom_extension_overflow_falls_back_to_real_right_extension(monkeypatch):
+    event = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="horizontal-bottom-overflow-fallback-render-test",
+        config={
+            "formats": ["bottom_extension"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"likes": 100},
+        },
+    )
+
+    def fake_bottom_extension(*args, **kwargs):
+        raise ValueError("text_overflow")
+
+    monkeypatch.setattr(aeg, "_render_bottom_extension", fake_bottom_extension)
+
+    rendered = aeg.render_plan_images(_horizontal_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "right_extension"
+    assert rendered.dimensions[0] > 800
+    assert rendered.dimensions[1] == 450
 
 
 def test_vertical_poster_bottom_extension_falls_back_to_right_extension():

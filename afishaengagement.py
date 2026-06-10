@@ -27,6 +27,7 @@ DEFAULT_DEBUG_MARKER = "#afishaengagement_shadow"
 DEFAULT_BUILD_TAG_PREFIX = "#aeg_b"
 DEFAULT_TARGET_GROUP_SHORT = "klgdevents"
 MAX_VK_FEED_PHOTO_ASPECT = 1.45
+CTA_LAYER_SHADOW_ALPHA = 118
 
 _CLEANUP_DONE: set[tuple[str, str]] = set()
 
@@ -1184,6 +1185,16 @@ def _hex_to_rgb(value: str) -> tuple[int, int, int]:
     return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
 
 
+def _mix_rgb(a: tuple[int, int, int], b: tuple[int, int, int], weight_b: float) -> tuple[int, int, int]:
+    weight_b = max(0.0, min(1.0, float(weight_b)))
+    weight_a = 1.0 - weight_b
+    return (
+        int(a[0] * weight_a + b[0] * weight_b),
+        int(a[1] * weight_a + b[1] * weight_b),
+        int(a[2] * weight_a + b[2] * weight_b),
+    )
+
+
 def _relative_luminance(rgb: tuple[int, int, int]) -> float:
     values = []
     for channel in rgb:
@@ -1490,7 +1501,7 @@ def _score_palette(
         premium_penalty += 0.45
     if signal_contrast < 2.4:
         premium_penalty += 0.35
-    if text_contrast < 4.5 or poster_contrast < 1.6 or luma_sep < 0.22:
+    if text_contrast < 5.0 or poster_contrast < 1.95 or luma_sep < 0.28:
         return None
     preferred_bonus = 0.12 if palette_id == preferred_id else 0.0
     jitter = stable_unit_interval(f"{seed}:palette_separation:{palette_id}") * 0.08
@@ -1555,6 +1566,19 @@ def _choose_compatible_palette_id(
     top = scored[: min(3, len(scored))]
     index = int(stable_unit_interval(f"{seed}:palette_separation_pick:{template_id}") * len(top)) % len(top)
     return top[index].palette_id
+
+
+def _force_right_extension_for_bottom_template(poster: Any, template_id: str) -> bool:
+    if template_id not in {"bottom_overlay", "bottom_extension"}:
+        return False
+    if poster.width < 720:
+        return True
+    aspect = poster.height / max(1, poster.width)
+    if template_id == "bottom_overlay" and aspect > 1.18:
+        return True
+    if template_id == "bottom_extension" and aspect > 1.02:
+        return True
+    return False
 
 
 def _text_bbox(draw: Any, xy: tuple[int, int], text: str, font: Any) -> tuple[int, int, int, int]:
@@ -1698,6 +1722,50 @@ def _composite_aa_rounded_rect(
     return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
 
+def _drop_shadow_overlay(
+    *,
+    size: tuple[int, int],
+    polygon: list[tuple[int, int]],
+    offset: tuple[int, int],
+    alpha: int,
+    blur: int,
+    aa_scale: int = 4,
+) -> Any:
+    from PIL import Image, ImageDraw, ImageFilter
+
+    width, height = size
+    aa_scale = max(2, int(aa_scale))
+    hi = Image.new("RGBA", (width * aa_scale, height * aa_scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(hi)
+    dx, dy = offset
+    points = [
+        (int((x + dx) * aa_scale), int((y + dy) * aa_scale))
+        for x, y in polygon
+    ]
+    draw.polygon(points, fill=(0, 0, 0, max(0, min(255, int(alpha)))))
+    if blur > 0:
+        hi = hi.filter(ImageFilter.GaussianBlur(radius=max(1, int(blur * aa_scale))))
+    return hi.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def _composite_inset_rule(
+    image: Any,
+    *,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    color: tuple[int, int, int],
+    width: int,
+    aa_scale: int = 8,
+) -> Any:
+    return _composite_aa_line(
+        image,
+        [start, end],
+        fill=color,
+        width=max(1, int(width)),
+        aa_scale=aa_scale,
+    )
+
+
 def _round_line(draw: Any, pts: list[tuple[float, float]], color: tuple[int, int, int], width: int) -> None:
     draw.line(pts, fill=color, width=width, joint="curve")
     radius = width / 2
@@ -1750,23 +1818,39 @@ def _draw_badge(
 ) -> tuple[int, int]:
     bbox = _text_bbox(draw, (0, 0), label, font)
     label_w = bbox[2] - bbox[0]
-    pad_x = int(22 * scale)
+    pad_x = int(28 * scale)
     badge_h = int(58 * scale)
-    marker_w = max(4, int(8 * scale))
-    marker_gap = int(12 * scale)
-    badge_w = label_w + pad_x * 2 + marker_w + marker_gap
+    badge_w = label_w + pad_x * 2
     if max_width:
         badge_w = min(max_width, badge_w)
-    draw.rounded_rectangle((x, y, x + badge_w, y + badge_h), radius=int(18 * scale), fill=bg)
-    marker_x = x + int(12 * scale)
-    marker_y = y + int(12 * scale)
+    radius = badge_h // 2
+    outline = _mix_rgb(bg, accent, 0.55)
     draw.rounded_rectangle(
-        (marker_x, marker_y, marker_x + marker_w, y + badge_h - int(12 * scale)),
-        radius=int(4 * scale),
-        fill=accent,
+        (x, y, x + badge_w, y + badge_h),
+        radius=radius,
+        fill=bg,
+        outline=outline,
+        width=max(1, int(2 * scale)),
     )
-    draw.text((x + pad_x + marker_w + marker_gap, y + int(11 * scale)), label, font=font, fill=fg)
+    text_x = x + max(0, int((badge_w - label_w) / 2))
+    draw.text((text_x, y + int(11 * scale)), label, font=font, fill=fg)
     return badge_w, badge_h
+
+
+def _fit_badge_font(label: str, *, scale: float, max_width: int, preferred_px: int | None = None) -> Any:
+    from PIL import Image, ImageDraw
+
+    preferred = preferred_px or max(20, int(34 * scale))
+    minimum = max(14, int(20 * scale))
+    pad_x = int(28 * scale)
+    probe = Image.new("RGB", (10, 10))
+    draw = ImageDraw.Draw(probe)
+    for size in range(preferred, minimum - 1, -2):
+        font = _load_font("Cygre-Bold.ttf", size)
+        bbox = _text_bbox(draw, (0, 0), label, font)
+        if (bbox[2] - bbox[0]) + pad_x * 2 <= max_width:
+            return font
+    return _load_font("Cygre-Bold.ttf", minimum)
 
 
 def _draw_badge_on_image(
@@ -1787,36 +1871,36 @@ def _draw_badge_on_image(
     draw = ImageDraw.Draw(image)
     bbox = _text_bbox(draw, (0, 0), label, font)
     label_w = bbox[2] - bbox[0]
-    pad_x = int(22 * scale)
+    pad_x = int(28 * scale)
     badge_h = int(58 * scale)
-    marker_w = max(4, int(8 * scale))
-    marker_gap = int(12 * scale)
-    badge_w = label_w + pad_x * 2 + marker_w + marker_gap
+    badge_w = label_w + pad_x * 2
     if max_width:
         badge_w = min(max_width, badge_w)
+        if label_w + pad_x * 2 > badge_w:
+            label_w = max(1, badge_w - pad_x * 2)
     image = _composite_aa_rounded_rect(
         image,
         (x, y, x + badge_w, y + badge_h),
-        radius=int(18 * scale),
+        radius=badge_h // 2,
         fill=bg,
         aa_scale=4,
     )
-    marker_x = x + int(12 * scale)
-    marker_y = y + int(12 * scale)
-    image = _composite_aa_rounded_rect(
+    image = _composite_inset_rule(
         image,
-        (marker_x, marker_y, marker_x + marker_w, y + badge_h - int(12 * scale)),
-        radius=int(4 * scale),
-        fill=accent,
+        start=(x + int(9 * scale), y + badge_h - int(2 * scale)),
+        end=(x + badge_w - int(9 * scale), y + badge_h - int(2 * scale)),
+        color=_mix_rgb(bg, accent, 0.55),
+        width=max(1, int(2 * scale)),
         aa_scale=4,
     )
     draw = ImageDraw.Draw(image)
-    draw.text((x + pad_x + marker_w + marker_gap, y + int(11 * scale)), label, font=font, fill=fg)
+    text_x = x + max(0, int((badge_w - label_w) / 2))
+    draw.text((text_x, y + int(11 * scale)), label, font=font, fill=fg)
     return image, badge_w, badge_h
 
 
 def _draw_heart_icon(draw: Any, x: float, y: float, font_px: int) -> int:
-    size = max(16, int(font_px * 0.62))
+    size = max(16, min(int(font_px * 0.62), int(font_px * 0.54 + 8)))
     top = y + int(font_px * 0.18)
     left = x + int(font_px * 0.03)
     red = (226, 24, 54)
@@ -1854,7 +1938,12 @@ def _draw_text_line(
             x += _draw_heart_icon(draw, x, y, font_px)
 
 
-def render_right_extension(source_image: bytes, plan: EngagementPlan) -> RenderedImage:
+def render_right_extension(
+    source_image: bytes,
+    plan: EngagementPlan,
+    *,
+    prefer_bottom_for_horizontal: bool = True,
+) -> RenderedImage:
     from PIL import Image, ImageDraw, ImageOps
 
     started = time.monotonic()
@@ -1862,7 +1951,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         raise ValueError("source poster is empty")
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
-    if poster.width >= 720 and poster.width > poster.height * 1.12:
+    if prefer_bottom_for_horizontal and poster.width >= 720 and poster.width > poster.height * 1.12:
         palette_id = _choose_compatible_palette_id(
             poster,
             plan.palette_id,
@@ -1892,7 +1981,6 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     poster_w, height = poster.size
     scale = _layout_scale(height)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
     diagonal = max(int(10 * scale), min(int(42 * scale), int(poster_w * 0.035)))
 
     fit: TextFit | None = None
@@ -1900,6 +1988,8 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     safe_x = 0
     safe_y = int(84 * scale)
     safe_w = 0
+    rail_w = max(5, int(10 * scale))
+    rail_gap = int(24 * scale)
     text_box_y = 0
     text_box_h = 0
     start_w = max(int(460 * scale), int(height * 0.43))
@@ -1908,7 +1998,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     for cta_w in range(start_w, end_w + 1, step_w):
         width = poster_w + cta_w
         safe_x = poster_w + int(52 * scale)
-        safe_w = width - safe_x - int(60 * scale)
+        safe_w = width - safe_x - int(60 * scale) - rail_w - rail_gap
         text_box_y = safe_y + int(48 * scale) + int(72 * scale)
         text_box_h = height - text_box_y - int(150 * scale)
         fit = fit_text(
@@ -1922,26 +2012,43 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
             break
     if fit is None:
         raise ValueError("text_overflow")
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
 
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
 
     cut_top = poster_w - int(diagonal * 0.35)
     cut_bottom = poster_w - diagonal
+    cta_polygon = [(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)]
+    shadow = _drop_shadow_overlay(
+        size=(width, height),
+        polygon=cta_polygon,
+        offset=(-int(18 * scale), 0),
+        alpha=CTA_LAYER_SHADOW_ALPHA,
+        blur=max(6, int(14 * scale)),
+        aa_scale=4,
+    )
+    preserve_x = int(poster_w * 0.95)
+    if preserve_x > 0:
+        shadow_alpha = shadow.getchannel("A")
+        ImageDraw.Draw(shadow_alpha).rectangle((0, 0, preserve_x - 1, height), fill=0)
+        shadow.putalpha(shadow_alpha)
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     overlay = _aa_overlay(
         size=(width, height),
-        polygon=[(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
+        polygon=cta_polygon,
         fill=(*bg, 255),
         line=[(cut_top, 0), (cut_bottom, height)],
         line_fill=(*seam, 255),
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_aa_line(
+    canvas = _composite_inset_rule(
         canvas,
-        [(cut_top - int(5 * scale), 0), (cut_bottom - int(5 * scale), height)],
-        fill=rim,
-        width=max(1, int(2 * scale)),
+        start=(cut_top + int(10 * scale), 0),
+        end=(cut_bottom + int(10 * scale), height),
+        color=_mix_rgb(bg, rim, 0.55),
+        width=max(2, int(4 * scale)),
     )
     canvas, _badge_w, badge_h = _draw_badge_on_image(
         canvas,
@@ -1961,15 +2068,21 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     line_gap = int(fit.font_px * 0.18)
     total_h = fit.height
     y = text_box_y + max(0, int((text_box_h - total_h) / 2))
-    for line in fit.lines:
-        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
-        bbox = _text_bbox(draw, (safe_x, y), line, main_font)
-        y += (bbox[3] - bbox[1]) + line_gap
-    draw.line(
-        (safe_x, height - int(80 * scale), width - int(64 * scale), height - int(80 * scale)),
+    rail_h = max(int(78 * scale), min(int(text_box_h * 0.68), fit.height + int(26 * scale)))
+    rail_y = y + max(0, int((fit.height - rail_h) / 2))
+    canvas = _composite_aa_rounded_rect(
+        canvas,
+        (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
+        radius=max(3, int(5 * scale)),
         fill=accent,
-        width=max(4, int(8 * scale)),
+        aa_scale=4,
     )
+    draw = ImageDraw.Draw(canvas)
+    text_x = safe_x + rail_w + rail_gap
+    for line in fit.lines:
+        _draw_text_line(draw, (text_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
+        bbox = _text_bbox(draw, (text_x, y), line, main_font)
+        y += (bbox[3] - bbox[1]) + line_gap
 
     out = io.BytesIO()
     canvas.save(out, format="PNG", optimize=True)
@@ -2010,31 +2123,35 @@ def _render_bottom_extension(
     overlap = max(int(56 * scale), min(int(96 * scale), int(poster_h * 0.14)))
     diagonal = max(int(22 * scale), min(int(46 * scale), int(width * 0.035)))
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
 
     fit: TextFit | None = None
     block_h = 0
-    safe_x = int(72 * scale)
+    safe_x = max(56, int(72 * scale))
     safe_w = width - safe_x * 2
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
     badge_h = int(58 * scale)
-    safe_y_offset = diagonal + int(64 * scale)
+    rail_w = max(5, int(10 * scale))
+    rail_gap = int(24 * scale)
+    content_top_pad = diagonal + max(int(54 * scale), int(width * 0.055))
+    badge_gap = max(int(22 * scale), int(width * 0.024))
+    bottom_pad = max(int(44 * scale), int(width * 0.044))
     max_height = int(width * MAX_VK_FEED_PHOTO_ASPECT)
     max_block_h = max_height - poster_h + overlap
-    min_block_h = max(int(260 * scale), int(poster_h * 0.18))
+    min_block_h = max(int(300 * scale), int(width * 0.26), int(poster_h * 0.20))
     if max_block_h < min_block_h:
         raise ValueError("bottom_extension_aspect_unsafe")
     start_h = max(min_block_h, min(int(360 * scale), max_block_h))
     end_h = min(max_block_h, max(start_h + int(180 * scale), int(540 * scale)))
     step_h = max(18, int(36 * scale))
     for candidate_h in range(start_h, end_h + 1, step_h):
-        text_box_h = candidate_h - safe_y_offset - badge_h - int(112 * scale)
+        text_box_h = candidate_h - content_top_pad - badge_h - badge_gap - bottom_pad
         fit = fit_text(
             plan.cta_text,
-            box_width=safe_w,
+            box_width=safe_w - rail_w - rail_gap,
             box_height=text_box_h,
             preferred_px=max(30, int(66 * scale)),
-            min_px=max(24, int(44 * scale)),
-            max_lines=4,
+            min_px=max(26, int(42 * scale), int(width * 0.038)),
+            max_lines=5,
         )
         if fit is not None:
             block_h = candidate_h
@@ -2047,26 +2164,37 @@ def _render_bottom_extension(
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
 
+    cta_polygon = [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)]
+    shadow = _drop_shadow_overlay(
+        size=(width, height),
+        polygon=cta_polygon,
+        offset=(0, -int(12 * scale)),
+        alpha=CTA_LAYER_SHADOW_ALPHA,
+        blur=max(8, int(18 * scale)),
+        aa_scale=4,
+    )
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     overlay = _aa_overlay(
         size=(width, height),
-        polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
+        polygon=cta_polygon,
         fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
         line_fill=(*seam, 255),
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_aa_line(
+    canvas = _composite_inset_rule(
         canvas,
-        [(0, block_top + diagonal - int(6 * scale)), (width, block_top - int(6 * scale))],
-        fill=rim,
-        width=max(1, int(2 * scale)),
+        start=(0, block_top + diagonal + int(11 * scale)),
+        end=(width, block_top + int(11 * scale)),
+        color=_mix_rgb(bg, rim, 0.55),
+        width=max(2, int(4 * scale)),
     )
-    safe_y = block_top + safe_y_offset
+    badge_y = height - bottom_pad - badge_h
     canvas, _, _ = _draw_badge_on_image(
         canvas,
         x=safe_x,
-        y=safe_y,
+        y=badge_y,
         label=badge,
         font=badge_font,
         bg=accent,
@@ -2077,22 +2205,30 @@ def _render_bottom_extension(
     )
     draw = ImageDraw.Draw(canvas)
 
-    text_box_y = safe_y + badge_h + int(32 * scale)
-    text_box_h = height - text_box_y - int(72 * scale)
+    text_box_y = block_top + content_top_pad
+    text_box_h = max(1, badge_y - badge_gap - text_box_y)
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
     y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
-    for line in fit.lines:
-        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
-        bbox = _text_bbox(draw, (safe_x, y), line, main_font)
-        y += (bbox[3] - bbox[1]) + line_gap
-    if y + int(44 * scale) > height:
-        raise ValueError("text_overflow")
-    draw.line(
-        (safe_x, height - int(42 * scale), width - safe_x, height - int(42 * scale)),
+    rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
+    rail_y = y + max(0, int((fit.height - rail_h) / 2))
+    canvas = _composite_aa_rounded_rect(
+        canvas,
+        (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
+        radius=max(3, int(5 * scale)),
         fill=accent,
-        width=max(4, int(8 * scale)),
+        aa_scale=4,
     )
+    draw = ImageDraw.Draw(canvas)
+    text_x = safe_x + rail_w + rail_gap
+    text_bottom = y
+    for line in fit.lines:
+        _draw_text_line(draw, (text_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
+        bbox = _text_bbox(draw, (text_x, y), line, main_font)
+        text_bottom = max(text_bottom, bbox[3])
+        y += (bbox[3] - bbox[1]) + line_gap
+    if text_bottom + badge_gap > badge_y:
+        raise ValueError("text_overflow")
 
     out = io.BytesIO()
     canvas.save(out, format="PNG", optimize=True)
@@ -2133,56 +2269,62 @@ def _render_bottom_overlay(
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
-    safe_x = int(64 * scale)
+    safe_x = max(56, int(72 * scale))
     safe_w = width - safe_x * 2
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
     badge_h = int(58 * scale)
-    safe_y = block_top + diagonal + int(56 * scale)
-    text_box_y = safe_y + badge_h + int(30 * scale)
-    text_box_h = height - text_box_y - int(72 * scale)
+    rail_w = max(5, int(10 * scale))
+    rail_gap = int(24 * scale)
+    content_top_pad = diagonal + max(int(54 * scale), int(width * 0.060))
+    badge_gap = max(int(22 * scale), int(width * 0.024))
+    bottom_pad = max(int(44 * scale), int(width * 0.048))
+    badge_y = height - bottom_pad - badge_h
+    text_box_y = block_top + content_top_pad
+    text_box_h = max(1, badge_y - badge_gap - text_box_y)
 
     fit = fit_text(
         plan.cta_text,
-        box_width=safe_w,
+        box_width=safe_w - rail_w - rail_gap,
         box_height=text_box_h,
         preferred_px=max(30, int(62 * scale)),
-        min_px=max(22, int(38 * scale)),
-        max_lines=4,
+        min_px=max(24, int(38 * scale), int(width * 0.038)),
+        max_lines=5,
     )
     if fit is None:
         raise ValueError("text_overflow")
 
     canvas = poster.copy()
-    shadow_h = max(14, int(28 * scale))
-    shadow_top = max(0, block_top + diagonal - shadow_h)
-    shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    for offset in range(shadow_h):
-        alpha = int(70 * (offset + 1) / shadow_h)
-        y = shadow_top + offset
-        shadow_draw.line((0, y, width, y), fill=(0, 0, 0, alpha))
-        shadow_draw.line((0, y, width, y), fill=(*seam, max(0, int(alpha * 0.16))))
+    cta_polygon = [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)]
+    shadow = _drop_shadow_overlay(
+        size=(width, height),
+        polygon=cta_polygon,
+        offset=(0, -int(12 * scale)),
+        alpha=CTA_LAYER_SHADOW_ALPHA,
+        blur=max(8, int(18 * scale)),
+        aa_scale=4,
+    )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     overlay = _aa_overlay(
         size=(width, height),
-        polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
+        polygon=cta_polygon,
         fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
         line_fill=(*seam, 255),
         line_width=max(4, int(12 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    canvas = _composite_aa_line(
+    canvas = _composite_inset_rule(
         canvas,
-        [(0, block_top + diagonal - int(7 * scale)), (width, block_top - int(7 * scale))],
-        fill=rim,
-        width=max(1, int(2 * scale)),
+        start=(0, block_top + diagonal + int(12 * scale)),
+        end=(width, block_top + int(12 * scale)),
+        color=_mix_rgb(bg, rim, 0.55),
+        width=max(2, int(4 * scale)),
     )
     canvas, _, _ = _draw_badge_on_image(
         canvas,
         x=safe_x,
-        y=safe_y,
+        y=badge_y,
         label=badge,
         font=badge_font,
         bg=accent,
@@ -2196,11 +2338,24 @@ def _render_bottom_overlay(
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
     y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
+    rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
+    rail_y = y + max(0, int((fit.height - rail_h) / 2))
+    canvas = _composite_aa_rounded_rect(
+        canvas,
+        (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
+        radius=max(3, int(5 * scale)),
+        fill=accent,
+        aa_scale=4,
+    )
+    draw = ImageDraw.Draw(canvas)
+    text_x = safe_x + rail_w + rail_gap
+    text_bottom = y
     for line in fit.lines:
-        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
-        bbox = _text_bbox(draw, (safe_x, y), line, main_font)
+        _draw_text_line(draw, (text_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
+        bbox = _text_bbox(draw, (text_x, y), line, main_font)
+        text_bottom = max(text_bottom, bbox[3])
         y += (bbox[3] - bbox[1]) + line_gap
-    if y + int(44 * scale) > height:
+    if text_bottom + badge_gap > badge_y:
         raise ValueError("text_overflow")
 
     out = io.BytesIO()
@@ -2271,22 +2426,36 @@ def _render_hook_swipe_cta(
     hook = Image.alpha_composite(hook.convert("RGBA"), bg_overlay).convert("RGB")
     draw = ImageDraw.Draw(hook)
 
-    swipe_font = _load_font("Cygre-Medium.ttf", int(36 * scale))
+    swipe_font = _load_font("Cygre-Medium.ttf", int(38 * scale))
     swipe_label = "листай"
     swipe_bbox = _text_bbox(draw, (0, 0), swipe_label, swipe_font)
     swipe_w = swipe_bbox[2] - swipe_bbox[0]
     swipe_h = swipe_bbox[3] - swipe_bbox[1]
     swipe_right = card_w - safe_x
-    swipe_y = block_top + diagonal + int(60 * scale)
+    swipe_y = block_top + diagonal + int(56 * scale)
     arrow_w = int(66 * scale)
-    swipe_x = swipe_right - swipe_w - int(18 * scale) - arrow_w
-    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent)
+    pill_pad_x = int(26 * scale)
+    pill_pad_y = int(18 * scale)
+    pill_w = int(swipe_w) + int(20 * scale) + arrow_w + pill_pad_x * 2
+    pill_h = swipe_h + pill_pad_y * 2
+    pill_x = swipe_right - pill_w
+    pill_y = swipe_y - pill_pad_y
+    hook = _composite_aa_rounded_rect(
+        hook,
+        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+        radius=pill_h // 2,
+        fill=accent,
+        aa_scale=4,
+    )
+    draw = ImageDraw.Draw(hook)
+    swipe_x = pill_x + pill_pad_x
+    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent_text)
     _draw_right_arrow(
         draw,
         swipe_x + swipe_w + int(18 * scale),
-        swipe_right,
+        pill_x + pill_w - pill_pad_x,
         swipe_y + swipe_h / 2,
-        accent,
+        accent_text,
         width=max(7, int(10 * scale)),
         head=max(14, int(18 * scale)),
     )
@@ -2303,7 +2472,7 @@ def _render_hook_swipe_cta(
         raise ValueError("hook_text_overflow")
     hook_font = _load_font("Cygre-Bold.ttf", hook_fit.font_px)
     hook_x = safe_x + int(38 * scale)
-    hook_y = swipe_y + swipe_h + int(34 * scale)
+    hook_y = pill_y + pill_h + int(36 * scale)
     hook = _composite_aa_rounded_rect(
         hook,
         (safe_x, hook_y + int(6 * scale), safe_x + int(12 * scale), hook_y + max(int(80 * scale), hook_fit.height) - int(6 * scale)),
@@ -2321,7 +2490,7 @@ def _render_hook_swipe_cta(
 
     cta = Image.new("RGB", (card_w, card_h), bg)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Bold.ttf", 42)
+    badge_font = _fit_badge_font(badge, scale=1.0, max_width=card_w - 172, preferred_px=42)
     cta, _, _ = _draw_badge_on_image(
         cta,
         x=86,
@@ -2382,10 +2551,11 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
         event_type=plan.event_type,
     )
     palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
-    if plan.template_id in {"bottom_overlay", "bottom_extension"} and poster.width < 720:
+    if _force_right_extension_for_bottom_template(poster, plan.template_id):
         forced = replace(plan, template_id="right_extension")
         logger.info(
-            "afishaengagement render fallback: forced_right_extension_small_poster width=%s height=%s",
+            "afishaengagement render fallback: forced_right_extension_unsafe_bottom_template template=%s width=%s height=%s",
+            plan.template_id,
             poster.width,
             poster.height,
         )
@@ -2407,7 +2577,7 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
                 poster.height,
                 exc,
             )
-            return [render_right_extension(source_image, fallback)]
+            return [render_right_extension(source_image, fallback, prefer_bottom_for_horizontal=False)]
         raise
     return [render_right_extension(source_image, plan)]
 
@@ -2861,6 +3031,7 @@ async def maybe_publish_shadow_debug_copy(
     event_id = int(event.id) if event.id is not None else None
     owner_id = -int(str(target_group_id).lstrip("-"))
     group_short = os.getenv("AFISHAENGAGEMENT_TARGET_GROUP_SHORT", DEFAULT_TARGET_GROUP_SHORT)
+    photo_urls = [str(url or "").strip() for url in (photo_urls or []) if str(url or "").strip()]
     if not photo_urls:
         _json_log(
             StageLog(
@@ -2874,6 +3045,25 @@ async def maybe_publish_shadow_debug_copy(
         )
         return None
     candidates = await resolve_candidates(db, event, target_group_id=target_group_id, now_utc=now_utc)
+    digest = media_hash(photo_urls)
+    _json_log(
+        StageLog(
+            stage="eligibility",
+            decision="inspect",
+            reason="source_media_bound",
+            event_id=event_id,
+            vk_owner_id=owner_id,
+            vk_group_short=group_short,
+            extra={
+                "event_title": str(getattr(event, "title", "") or "")[:160],
+                "source_post_url": str(getattr(event, "source_post_url", "") or "")[:240],
+                "event_source_vk_post_url": str(getattr(event, "source_vk_post_url", "") or "")[:240],
+                "photo_urls_count": len(photo_urls),
+                "first_photo_url": photo_urls[0],
+                "media_hash": digest,
+            },
+        )
+    )
     if not candidates:
         _json_log(
             StageLog(
@@ -2886,7 +3076,6 @@ async def maybe_publish_shadow_debug_copy(
             )
         )
         return None
-    digest = media_hash(photo_urls)
     candidate: EngagementCandidate | None = None
     config: dict[str, Any] = {}
     marker = ""
