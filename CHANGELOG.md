@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Smart Update VK/Telegram fanout rhythm**: fixed a JobOutbox
+  deadlock where independent same-event jobs could block each other by row
+  order, causing `vk_sync` to wait behind calendar jobs and then expire before
+  Telegram could publish. Event pipeline jobs now rely on explicit
+  `depends_on`, and jobs waiting for dependencies in bounded retry/backoff no
+  longer age out to `expired`. Added incident
+  `INC-2026-06-10-event-outbox-fanout-deadlock`. Covered by
+  `tests/test_job_due_filter.py`, `tests/test_job_outbox_depends.py`,
+  `tests/test_tg_event_publish.py`, and targeted `tests/test_vk_source.py`.
 - **Fixed: VK postponed rhythm after stale future drafts**: normal Smart Update
   VK scheduling now ignores ordinary postponed anchors beyond
   `VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS` (default 18 hours), in addition to

@@ -147,3 +147,129 @@ async def test_vk_sync_is_not_starved_by_unrelated_telegraph_backlog(tmp_path, m
             )
         ).scalar_one()
     assert vk_job.status == JobStatus.done
+
+
+@pytest.mark.asyncio
+async def test_vk_sync_is_not_blocked_by_same_event_calendar_backlog(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        ev = Event(
+            title="Ready for managed VK",
+            description="d",
+            date="2026-06-12",
+            time="20:30",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.tg_ics_post,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.vk_sync,
+                status=JobStatus.pending,
+                next_run_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+        event_id = int(ev.id)
+
+    calls: list[tuple[str, int]] = []
+
+    async def fake_vk(eid, db_obj, bot_obj):
+        calls.append(("vk_sync", eid))
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {"vk_sync": fake_vk})
+
+    await main._run_due_jobs_once(db, None)
+
+    assert calls and calls[0] == ("vk_sync", event_id)
+    async with db.get_session() as session:
+        vk_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.vk_sync,
+                )
+            )
+        ).scalar_one()
+    assert vk_job.status == JobStatus.done
+
+
+@pytest.mark.asyncio
+async def test_dependency_wait_does_not_expire_while_dependency_is_retrying(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(hours=2)
+    dep_retry_at = now + timedelta(minutes=10)
+
+    async with db.get_session() as session:
+        ev = Event(
+            title="Calendar retry",
+            description="d",
+            date="2026-06-12",
+            time="20:30",
+            location_name="loc",
+            source_text="src",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.ics_publish,
+                status=JobStatus.error,
+                last_error="Server disconnected without sending a response.",
+                next_run_at=dep_retry_at,
+                updated_at=now,
+            )
+        )
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.tg_ics_post,
+                status=JobStatus.pending,
+                depends_on=f"ics_publish:{ev.id}",
+                next_run_at=old,
+                updated_at=old,
+            )
+        )
+        await session.commit()
+        event_id = int(ev.id)
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {})
+
+    processed = await main._run_due_jobs_once(db, None)
+
+    assert processed == 0
+    async with db.get_session() as session:
+        tg_ics_job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.tg_ics_post,
+                )
+            )
+        ).scalar_one()
+    assert tg_ics_job.status == JobStatus.pending
+    assert tg_ics_job.last_error is None
+    assert main._ensure_utc(tg_ics_job.next_run_at) > now

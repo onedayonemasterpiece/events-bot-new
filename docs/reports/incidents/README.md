@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-10-event-outbox-fanout-deadlock.md`
+  - Scope: Smart Update event fanout through `JobOutbox`, `vk_sync`, `tg_event_publish`, `ics_publish`, and `tg_ics_post`.
+  - Must not regress: independent event pipeline jobs must not block each other via a broad same-event prior-job rule; `vk_sync` must not wait behind calendar jobs unless explicitly configured; dependent jobs must not expire while their dependency is actively retrying with bounded backoff; ordinary VK auto-import should restore the expected Telegraph + VK + Telegram rhythm.
 - `INC-2026-06-09-social-video-tg-publishing.md`
   - Scope: CherryFlash/CrumpleVideo story and VK/TG fanout ownership, `guaranteed_any_position` video promo placement, and `@kldevents` Telegram event publish slot spacing.
   - Must not regress: CherryFlash must not include the CrumpleVideo `vk:kenigeventsofficial:wall` / `crumple_official` target; CrumpleVideo must publish its official VK wall video through the shared production story target list; CherryFlash must post the rendered video into `@kenigevents` channel body after story upload; `guaranteed_any_position` promo must be mixed into stable lower positions instead of always appended; `tg_event_publish` must choose the nearest free daytime slot and must not leave a day-gap solely because late pending backlog exists.

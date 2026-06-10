@@ -16178,6 +16178,14 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
 
 DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
+EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
+    JobTask.telegraph_build,
+    JobTask.vk_sync,
+    JobTask.tg_event_publish,
+    JobTask.ics_publish,
+    JobTask.tg_ics_post,
+}
+DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
 # runtime storage for progress callbacks keyed by event id
 _EVENT_PROGRESS: dict[int, SimpleNamespace] = {}
@@ -16233,6 +16241,74 @@ async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | 
                 return fest.vk_post_url if fest else None
             return None
     return None
+
+
+async def _dependency_blockers_for_job(
+    session: Any,
+    obj: JobOutbox,
+) -> list[tuple[str, JobStatus | str | None, datetime | None]]:
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]] = []
+    deps = [d for d in (obj.depends_on or "").split(",") if d]
+    if not deps:
+        return dep_blockers
+    task_values = {t.value for t in JobTask}
+    for dep in deps:
+        dep_job: JobOutbox | None = None
+        task_part, sep, event_part = dep.partition(":")
+        if sep and event_part.isdigit() and task_part in task_values:
+            dep_res = await session.execute(
+                select(JobOutbox)
+                .where(
+                    JobOutbox.event_id == int(event_part),
+                    JobOutbox.task == JobTask(task_part),
+                )
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+            dep_job = _normalize_job(dep_res.scalar_one_or_none())
+        else:
+            dep_res = await session.execute(
+                select(JobOutbox)
+                .where(JobOutbox.coalesce_key == dep)
+                .order_by(JobOutbox.id.desc())
+                .limit(1)
+            )
+            dep_job = _normalize_job(dep_res.scalar_one_or_none())
+        if dep_job and dep_job.status != JobStatus.done:
+            dep_blockers.append((dep, dep_job.status, dep_job.next_run_at))
+    return dep_blockers
+
+
+def _dependency_retry_at(
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]],
+    now: datetime,
+) -> datetime | None:
+    retry_times: list[datetime] = []
+    for _key, status, run_at in dep_blockers:
+        dep_run_at = _ensure_utc(run_at) if run_at else None
+        if dep_run_at and now < dep_run_at <= now + DEPENDENCY_RETRY_HORIZON:
+            retry_times.append(dep_run_at)
+        elif status in {JobStatus.pending, JobStatus.running}:
+            retry_times.append(now + timedelta(seconds=5))
+    if not retry_times:
+        return None
+    return min(retry_times)
+
+
+async def _defer_job_until_dependency_retry(
+    session: Any,
+    obj: JobOutbox,
+    dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]],
+    now: datetime,
+) -> bool:
+    retry_at = _dependency_retry_at(dep_blockers, now)
+    if not retry_at:
+        return False
+    obj.next_run_at = max(retry_at + timedelta(seconds=1), now + timedelta(seconds=2))
+    obj.updated_at = now
+    session.add(obj)
+    await session.commit()
+    return True
 
 
 async def reconcile_job_outbox(db: Database) -> None:
@@ -16378,6 +16454,37 @@ async def _run_due_jobs_once_locked(
                 # Regular task: age from updated_at
                 age = (now - obj.updated_at).total_seconds()
             if age > ttl:
+                dep_blockers = await _dependency_blockers_for_job(session, obj)
+                if dep_blockers and await _defer_job_until_dependency_retry(
+                    session, obj, dep_blockers, now
+                ):
+                    logging.info(
+                        "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
+                        obj.event_id,
+                        obj.task.value,
+                        ",".join(
+                            f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                            for key, status, _ in dep_blockers
+                        ),
+                        obj.next_run_at.isoformat() if obj.next_run_at else None,
+                    )
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        waiting_for_deps=[
+                            {
+                                "key": key,
+                                "status": status.value if isinstance(status, JobStatus) else status,
+                                "next_run_at": run_at.isoformat() if run_at else None,
+                            }
+                            for key, status, run_at in dep_blockers
+                        ],
+                        deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
+                    )
+                    continue
                 obj.status = JobStatus.error
                 obj.last_error = "expired"
                 obj.updated_at = now
@@ -16426,41 +16533,66 @@ async def _run_due_jobs_once_locked(
                         reason="superseded",
                     )
                     continue
-            exists_stmt = (
-                select(
-                    JobOutbox.id,
-                    JobOutbox.task,
-                    JobOutbox.status,
-                    JobOutbox.next_run_at,
+            if obj.task not in EVENT_PIPELINE_INDEPENDENT_TASKS:
+                exists_stmt = (
+                    select(
+                        JobOutbox.id,
+                        JobOutbox.task,
+                        JobOutbox.status,
+                        JobOutbox.next_run_at,
+                    )
+                    .where(
+                        JobOutbox.event_id == obj.event_id,
+                        JobOutbox.id < obj.id,
+                        JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
+                        JobOutbox.next_run_at <= now,
+                    )
+                    .limit(1)
                 )
-                .where(
-                    JobOutbox.event_id == obj.event_id,
-                    JobOutbox.id < obj.id,
-                    JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
-                    JobOutbox.next_run_at <= now,
-                )
-                .limit(1)
-            )
-            if obj.task == JobTask.ics_publish:
-                exists_stmt = exists_stmt.where(JobOutbox.task == JobTask.ics_publish)
-            # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
-            # easily trigger "database is locked" on a SELECT that doesn't actually
-            # require flushing anything.
-            with session.no_autoflush:
-                early = (await session.execute(exists_stmt)).first()
-            if early:
-                ejob = early[0]
-                etask = early[1]
-                estat = early[2]
-                enext = early[3]
+                # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
+                # easily trigger "database is locked" on a SELECT that doesn't actually
+                # require flushing anything.
+                with session.no_autoflush:
+                    early = (await session.execute(exists_stmt)).first()
+                if early:
+                    ejob = early[0]
+                    etask = early[1]
+                    estat = early[2]
+                    enext = early[3]
+                    logging.info(
+                        "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                        obj.event_id,
+                        obj.task.value,
+                        ejob,
+                        etask.value if isinstance(etask, JobTask) else etask,
+                        estat.value if isinstance(estat, JobStatus) else estat,
+                        enext.isoformat() if enext else None,
+                    )
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        blocking_id=ejob,
+                        blocking_task=etask.value if isinstance(etask, JobTask) else etask,
+                        blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
+                        blocking_run_at=enext.isoformat() if enext else None,
+                    )
+                    continue
+            dep_blockers = await _dependency_blockers_for_job(session, obj)
+            if dep_blockers and await _defer_job_until_dependency_retry(
+                session, obj, dep_blockers, now
+            ):
                 logging.info(
-                    "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                    "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
                     obj.event_id,
                     obj.task.value,
-                    ejob,
-                    etask.value if isinstance(etask, JobTask) else etask,
-                    estat.value if isinstance(estat, JobStatus) else estat,
-                    enext.isoformat() if enext else None,
+                    ",".join(
+                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                        for key, status, _ in dep_blockers
+                    ),
+                    obj.next_run_at.isoformat() if obj.next_run_at else None,
                 )
                 logline(
                     "RUN",
@@ -16468,38 +16600,17 @@ async def _run_due_jobs_once_locked(
                     "skip",
                     job_id=obj.id,
                     task=obj.task.value,
-                    blocking_id=ejob,
-                    blocking_task=etask.value if isinstance(etask, JobTask) else etask,
-                    blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
-                    blocking_run_at=enext.isoformat() if enext else None,
+                    waiting_for_deps=[
+                        {
+                            "key": key,
+                            "status": status.value if isinstance(status, JobStatus) else status,
+                            "next_run_at": run_at.isoformat() if run_at else None,
+                        }
+                        for key, status, run_at in dep_blockers
+                    ],
+                    deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
                 )
                 continue
-            dep_blockers: list[tuple[str, JobStatus | str | None, datetime | None]] = []
-            deps = [d for d in (obj.depends_on or "").split(",") if d]
-            for dep in deps:
-                dep_job: JobOutbox | None = None
-                task_part, sep, event_part = dep.partition(":")
-                if sep and event_part.isdigit() and task_part in {t.value for t in JobTask}:
-                    dep_res = await session.execute(
-                        select(JobOutbox)
-                        .where(
-                            JobOutbox.event_id == int(event_part),
-                            JobOutbox.task == JobTask(task_part),
-                        )
-                        .order_by(JobOutbox.id.desc())
-                        .limit(1)
-                    )
-                    dep_job = _normalize_job(dep_res.scalar_one_or_none())
-                else:
-                    dep_res = await session.execute(
-                        select(JobOutbox)
-                        .where(JobOutbox.coalesce_key == dep)
-                        .order_by(JobOutbox.id.desc())
-                        .limit(1)
-                    )
-                    dep_job = _normalize_job(dep_res.scalar_one_or_none())
-                if dep_job and dep_job.status != JobStatus.done:
-                    dep_blockers.append((dep, dep_job.status, dep_job.next_run_at))
             if dep_blockers:
                 logging.info(
                     "RUN skip eid=%s task=%s blocked_by_deps=%s",
