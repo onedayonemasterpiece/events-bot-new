@@ -1,6 +1,6 @@
 # INC-2026-06-10 Guide Watchdog Kaggle Failure Retry Loop
 
-Status: monitoring
+Status: blocked-on-fresh-telegram-session
 Severity: sev2
 Service: Guide Excursions Monitoring / critical scheduler watchdog / Kaggle
 Opened: 2026-06-10
@@ -61,11 +61,8 @@ startup:
 On 2026-06-10 production `TELEGRAM_AUTH_BUNDLE_S22` was first rotated to the
 available `events-bot-new/.env` `TELEGRAM_AUTH_BUNDLE_S22_2`, then rotated to
 the separate `/home/dev/projects/kdg80/.env` `TELEGRAM_AUTH_BUNDLE_S22`.
-The second smoke still failed with the same `AuthKeyDuplicatedError`, but that
-result was not sufficient evidence that the new session was bad: the Kaggle
-notebook loaded encrypted per-run secrets with `os.environ.setdefault(...)`, so
-a stale Kaggle Secret/environment value for `TELEGRAM_AUTH_BUNDLE_S22` could
-win over the fresh Fly payload.
+Both smoke runs still failed with the same `AuthKeyDuplicatedError`, so the
+available S22 bundles are not sufficient to restore guide monitoring.
 
 ## Corrective Action
 
@@ -114,12 +111,8 @@ When changing guide scheduling, `maybe_dispatch_critical_scheduler_watchdog`,
   - Runtime log confirmed:
     `SCHED critical watchdog deferring guide_excursions_full retry after failed catch-up ... retry_seconds=3600 failed_at=2026-06-10T19:32:33+00:00`.
 
-## Follow-up Auth Propagation Fix
+## Remaining Blocker
 
-The guide notebook must treat the per-run encrypted Fly payload as authoritative
-for rotated secrets and override same-name stale Kaggle environment values. The
-notebook may log only the selected auth source and a short session hash for
-diagnostics; it must not print secret values.
-
-Do not switch guide monitoring to `TELEGRAM_SESSION` or
-`TELEGRAM_AUTH_BUNDLE_E2E`; those are separate roles.
+Guide monitoring requires a fresh, exclusive `TELEGRAM_AUTH_BUNDLE_S22` for the
+remote Kaggle monitoring role. Do not switch guide monitoring to
+`TELEGRAM_SESSION` or `TELEGRAM_AUTH_BUNDLE_E2E`; those are separate roles.
