@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement CTA text quality**: added selective
+  `llm_text_mode=auto` for risky CTA copy while keeping deterministic visual
+  rendering. Theme-heavy comment text and guardrail hits such as
+  `из темы «органную музыку»`, cinema/theatre wording mixups, `Были на похожем
+  событии`, and `поддержка формата` now go through a compact LLM CTA-writer;
+  invalid LLM output falls back to a generic safe CTA instead of publishing bad
+  Russian. Render overflow now retries once with a short safe CTA on
+  `right_extension` so debug shadows are not silently lost when one format is
+  too tight. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement theme extraction**: concert CTA themes now avoid
   substring false positives such as reading `органную музыку` from
   `Организаторы`, while still detecting real organ concerts. Added safer

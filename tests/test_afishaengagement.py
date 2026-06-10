@@ -331,6 +331,127 @@ def test_concert_like_copy_can_use_extracted_theme():
     assert "Поддержи лайком, если любишь симфоническую музыку." in seen
 
 
+def test_deterministic_theme_copy_uses_safe_ready_templates():
+    event = Event(
+        title="Русская музыка на органе",
+        description="Органный концерт в кафедральном соборе.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Кафедральный собор",
+        source_text="В программе орган и камерный оркестр.",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"theme-comment-copy-{idx}",
+            config={"mechanic_weights": {"comments": 100}},
+        ).cta_text
+        for idx in range(300)
+    }
+
+    assert all("из темы" not in text.casefold() for text in seen)
+    assert all("«органную музыку»" not in text.casefold() for text in seen)
+    assert any("за что любите органную музыку" in text.casefold() for text in seen)
+
+
+def test_theme_like_copy_does_not_use_bad_neuter_template():
+    event = Event(
+        title="Вечер симфонической музыки",
+        description="Концерт камерного оркестра",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"theme-like-grammar-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(300)
+    }
+
+    assert all("симфоническую музыку — твоё" not in text.casefold() for text in seen)
+    assert any("Отметь лайком, если выбираешь симфоническую музыку." == text for text in seen)
+
+
+@pytest.mark.asyncio
+async def test_llm_cta_text_rewrites_risky_theme_comment(monkeypatch):
+    event = Event(
+        id=501,
+        title="Русская музыка на органе",
+        description="Органный концерт в кафедральном соборе.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Кафедральный собор",
+        source_text="В программе орган и камерный оркестр.",
+        event_type="концерт",
+    )
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="hook_swipe_cta",
+        palette_id="black_lime",
+        cta_text="Расскажите, что из темы «органную музыку» вам ближе всего.",
+        hook_text="Кто уже был на таких концертах?",
+        event_type="concert",
+        has_persona=False,
+        has_festival=False,
+        seed="llm-text-rewrite",
+    )
+
+    async def fake_ask_4o(*args, **kwargs):
+        return '{"cta_text":"Что вам ближе в органной музыке? Напишите в комментариях.","hook_text":"Кто уже слушал орган?"}'
+
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    rewritten, _elapsed, provider = await aeg.build_llm_cta_text(
+        event,
+        plan=plan,
+        config={},
+        vision=aeg.PosterVisionSummary(provider="test", confidence=0.7, text="органный концерт"),
+    )
+
+    assert provider == "llm_text"
+    assert rewritten.cta_text == "Что вам ближе в органной музыке? Напишите в комментариях."
+    assert "из темы" not in rewritten.cta_text.casefold()
+
+
+@pytest.mark.asyncio
+async def test_llm_cta_text_rejects_forbidden_copy(monkeypatch):
+    event = Event(title="Кинопоказ", event_type="кинопоказ")
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="right_extension",
+        palette_id="black_lime",
+        cta_text="Напишите в комментариях, что ждёте от кинопоказа.",
+        hook_text=None,
+        event_type="cinema",
+        has_persona=False,
+        has_festival=False,
+        seed="llm-text-reject",
+    )
+
+    async def fake_ask_4o(*args, **kwargs):
+        return '{"cta_text":"Какой спектакль ждёте больше всего?","hook_text":""}'
+
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    rewritten, _elapsed, provider = await aeg.build_llm_cta_text(
+        event,
+        plan=plan,
+        config={"llm_text_mode": "always"},
+        vision=None,
+    )
+
+    assert provider == "fallback_text_invalid"
+    assert rewritten.cta_text == plan.cta_text
+
+
 def test_concert_theme_does_not_read_organ_from_organizers():
     event = Event(
         title="Праздничный концерт Балтийского казачьего хора ко Дню России",
@@ -473,6 +594,49 @@ def test_hook_text_uses_prepositional_plural():
     plan = aeg.build_engagement_plan(event, seed="hook-case", config={"formats": ["hook_swipe_cta"]})
 
     assert plan.hook_text == "Есть вопрос к тем, кто уже был на таких концертах"
+
+
+def test_render_for_publish_retries_with_safe_right_extension(monkeypatch):
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="bottom_extension",
+        palette_id="black_lime",
+        cta_text="Очень длинный текст, который не влезает в выбранный шаблон",
+        hook_text=None,
+        event_type="other",
+        has_persona=False,
+        has_festival=False,
+        seed="render-safe-fallback",
+    )
+    calls = []
+
+    def fake_render(_source_image, current_plan):
+        calls.append(current_plan)
+        if len(calls) == 1:
+            raise ValueError("text_overflow")
+        assert current_plan.template_id == "right_extension"
+        assert current_plan.cta_text == "Напишите в комментариях, что ждёте от события."
+        return [
+            aeg.RenderedImage(
+                data=b"image",
+                filename="fallback.png",
+                template_id="right_extension",
+                palette_id="black_lime",
+                cta_text_lines=[current_plan.cta_text],
+                cta_text_font_px=42,
+                dimensions=(1200, 900),
+                render_ms=1,
+            )
+        ]
+
+    monkeypatch.setattr(aeg, "render_plan_images", fake_render)
+
+    rendered, final_plan, reason = aeg.render_plan_images_for_publish(b"poster", plan)
+
+    assert len(rendered) == 1
+    assert final_plan.template_id == "right_extension"
+    assert final_plan.cta_text == "Напишите в комментариях, что ждёте от события."
+    assert reason and "text_overflow" in reason
 
 
 def test_market_event_type_is_not_overridden_by_meeting_words():

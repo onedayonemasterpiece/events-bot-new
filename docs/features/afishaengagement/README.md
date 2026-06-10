@@ -81,6 +81,16 @@ matching: narrow cues such as `орган` may match real organ music forms, but
 not match unrelated words such as `организаторы`. If a theme is uncertain, the
 copy falls back to the event type instead of inventing a specific music/cinema
 topic.
+CTA text generation is hybrid. The renderer and visual plan stay deterministic,
+but `llm_text_mode=auto` runs a compact LLM CTA-writer only for risky copy:
+theme-heavy comment text, forbidden phrases, or event-type conflicts such as a
+cinema post getting theatre wording. Simple safe ready-made CTAs can stay
+deterministic. If the LLM is unavailable or returns invalid copy, guardrails
+fall back to a generic safe CTA instead of publishing an awkward template.
+If a selected visual format still overflows at render time, debug shadow
+generation retries once with a short safe CTA in `right_extension`; a failed
+bottom/card variant must not make the whole shadow post disappear during visual
+debug.
 
 Every scheduled debug shadow exposure stores the durable debugging context
 needed to audit poster/text binding after the post appears in VK postponed

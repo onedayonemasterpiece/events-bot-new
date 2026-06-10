@@ -835,7 +835,7 @@ def _templates_for(
         "likes": [
             f"Лайк, если хочешь чаще таких {topic}.",
             f"Поставь лайк, если хочешь чаще таких {topic}.",
-            "Лайк, если такие события — твоё.",
+            "Поставь лайк, если хочешь чаще такие события.",
             f"Поставь лайк, если любишь такие {topic_acc}.",
             f"Отметь лайком, если любишь такие {topic_acc}.",
             "Поставь лайк, если добавил событие в планы.",
@@ -922,10 +922,10 @@ def _templates_for(
             [
                 "Поставь лайк, если любишь {THEME}.",
                 "Поддержи лайком, если любишь {THEME}.",
-                "Лайк, если {THEME} — твоё.",
+                "Отметь лайком, если выбираешь {THEME}.",
             ]
         )
-        templates["comments"].append("Расскажите, что из темы «{THEME}» вам ближе всего.")
+        templates["comments"].append("Расскажите, за что любите {THEME}.")
     if festival:
         templates["comments"].extend(
             [
@@ -1132,7 +1132,7 @@ def build_engagement_plan(
             break
     if not cta_text:
         mechanic = "likes"
-        cta_text = "Лайк, если такие события — твоё."
+        cta_text = "Поставь лайк, если хочешь чаще такие события."
 
     palette_ids = list(config.get("palette_ids") or PALETTES.keys())
     palette_ids = [pid for pid in palette_ids if pid in PALETTES] or ["slate_warm_white"]
@@ -1201,7 +1201,12 @@ def _sanitize_llm_plan(
     if palette_id not in PALETTES:
         palette_id = fallback.palette_id
     cta_text = _sanitize_cta_text(str(payload.get("cta_text") or ""))
-    if not cta_text or len(cta_text) > 95 or re.search(r"\{[^}]+\}", cta_text):
+    if (
+        not cta_text
+        or len(cta_text) > 95
+        or re.search(r"\{[^}]+\}", cta_text)
+        or _cta_text_has_forbidden_copy(cta_text, fallback.event_type)
+    ):
         return None
     hook_text = _sanitize_cta_text(str(payload.get("hook_text") or "")) or fallback.hook_text
     return EngagementPlan(
@@ -1215,6 +1220,137 @@ def _sanitize_llm_plan(
         has_festival=fallback.has_festival,
         seed=seed,
     )
+
+
+def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bool:
+    lower = str(text or "").casefold()
+    if not lower:
+        return True
+    forbidden_fragments = (
+        "были на похожем событии",
+        "похожем событии",
+        "поддержи лайком формат",
+        "поддержка формата",
+        "поддержать формат",
+        "из темы",
+    )
+    if any(fragment in lower for fragment in forbidden_fragments):
+        return True
+    if event_type == "cinema" and "спектак" in lower:
+        return True
+    if event_type == "theatre" and "кинопоказ" in lower:
+        return True
+    return False
+
+
+def _safe_generic_cta(event_type: str, mechanic: str) -> str:
+    if mechanic == "reposts":
+        return "Поделись с другом, которому это может понравиться."
+    if mechanic == "comments":
+        if event_type == "cinema":
+            return "Напишите в комментариях, что ждёте от кинопоказа."
+        if event_type == "theatre":
+            return "Напишите в комментариях, что ждёте от спектакля."
+        if event_type == "concert":
+            return "Напишите в комментариях, что ждёте от концерта."
+        if event_type == "lecture":
+            return "Напишите в комментариях, что ждёте от лекции."
+        return "Напишите в комментариях, что ждёте от события."
+    if event_type == "cinema":
+        return "Поставь лайк, если любишь кинопоказы."
+    if event_type == "theatre":
+        return "Поставь лайк, если любишь спектакли."
+    if event_type == "concert":
+        return "Поставь лайк, если любишь концерты."
+    if event_type == "lecture":
+        return "Поставь лайк, если любишь лекции."
+    return "Поставь лайк, если хочешь чаще такие события."
+
+
+def _llm_text_mode(config: dict[str, Any]) -> str:
+    raw = str(config.get("llm_text_mode") or os.getenv("AFISHAENGAGEMENT_LLM_TEXT_MODE", "auto"))
+    raw = raw.strip().casefold()
+    if raw in {"0", "false", "off", "disabled", "none"}:
+        return "off"
+    if raw in {"1", "true", "on", "always"}:
+        return "always"
+    return "auto"
+
+
+def _should_run_llm_text(event: Event, plan: EngagementPlan, config: dict[str, Any]) -> bool:
+    mode = _llm_text_mode(config)
+    if mode == "off":
+        return False
+    if mode == "always":
+        return True
+    if config.get("cta_templates") and not _parse_bool(config.get("llm_text_rewrite_configured"), False):
+        return _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type)
+    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type):
+        return True
+    theme = _extract_theme(event, plan.event_type)
+    if theme and plan.mechanic == "comments" and theme.casefold() in plan.cta_text.casefold():
+        return True
+    return False
+
+
+async def build_llm_cta_text(
+    event: Event,
+    *,
+    plan: EngagementPlan,
+    config: dict[str, Any],
+    vision: PosterVisionSummary | None,
+) -> tuple[EngagementPlan, int, str]:
+    started = time.monotonic()
+    try:
+        import main as main_mod
+
+        ask_4o = getattr(main_mod, "ask_4o", None)
+        if ask_4o is None:
+            return plan, 0, "fallback_no_ask_4o"
+        theme = _extract_theme(event, plan.event_type)
+        prompt = (
+            "Ты пишешь финальный CTA-текст для карточки афиши VK. "
+            "Layout уже выбран кодом; не описывай дизайн и не меняй механику. "
+            "Верни только JSON без markdown: {\"cta_text\":\"...\",\"hook_text\":\"...\"}.\n"
+            "Правила: cta_text максимум 95 символов; живой естественный русский; "
+            "не используй канцелярит, не склоняй машинно готовые куски; обращение на ты допустимо. "
+            "Запрещены фразы: «Были на похожем событии», «поддержи формат», «поддержка формата», "
+            "«из темы ...». Для кинопоказа не пиши про спектакль; для спектакля не пиши про кинопоказ. "
+            "Если используешь тему, впиши её грамотно: например «Поддержи лайком, если любишь симфоническую музыку» "
+            "или «Что вам ближе в органной музыке?», но не «из темы органную музыку».\n"
+            f"Seed: {plan.seed}\n"
+            f"Механика: {plan.mechanic}; текущий черновик: {plan.cta_text!r}; hook: {plan.hook_text!r}.\n"
+            f"Событие: title={event.title!r}; normalized_type={plan.event_type!r}; stored_type={event.event_type!r}; "
+            f"festival={event.festival!r}; theme={theme!r}; date={event.date!r}; place={event.location_name!r}; "
+            f"description={(event.description or '')[:700]!r}; search_digest={(event.search_digest or '')[:400]!r}; "
+            f"poster_text={(vision.text if vision else '')[:500]!r}."
+        )
+        raw = await ask_4o(
+            prompt,
+            max_tokens=140,
+            temperature=0.2,
+            meta={"feature": "afishaengagement", "stage": "cta_text", "event_id": getattr(event, "id", None)},
+        )
+        payload = _extract_json_object(str(raw or ""))
+        if not payload:
+            return plan, int((time.monotonic() - started) * 1000), "fallback_text_bad_json"
+        cta_text = _sanitize_cta_text(str(payload.get("cta_text") or ""))
+        if (
+            not cta_text
+            or len(cta_text) > 95
+            or re.search(r"\{[^}]+\}", cta_text)
+            or _cta_text_has_forbidden_copy(cta_text, plan.event_type)
+        ):
+            return plan, int((time.monotonic() - started) * 1000), "fallback_text_invalid"
+        hook_text = _sanitize_cta_text(str(payload.get("hook_text") or ""))
+        return (
+            replace(plan, cta_text=cta_text, hook_text=(hook_text[:95] if hook_text else plan.hook_text)),
+            int((time.monotonic() - started) * 1000),
+            "llm_text",
+        )
+    except Exception as exc:
+        logger.warning("afishaengagement llm text failed: %s", exc)
+        return plan, int((time.monotonic() - started) * 1000), "fallback_text_error"
 
 
 async def build_llm_engagement_plan(
@@ -2839,6 +2975,31 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
     return [render_right_extension(source_image, plan)]
 
 
+def render_plan_images_for_publish(
+    source_image: bytes,
+    plan: EngagementPlan,
+) -> tuple[list[RenderedImage], EngagementPlan, str | None]:
+    try:
+        rendered = render_plan_images(source_image, plan)
+        actual = rendered[-1] if rendered else None
+        if actual and (actual.template_id != plan.template_id or actual.palette_id != plan.palette_id):
+            plan = replace(plan, template_id=actual.template_id, palette_id=actual.palette_id)
+        return rendered, plan, None
+    except Exception as exc:
+        if "overflow" not in str(exc) and "aspect_unsafe" not in str(exc):
+            raise
+        fallback = replace(
+            plan,
+            template_id="right_extension",
+            cta_text=_safe_generic_cta(plan.event_type, plan.mechanic),
+        )
+        rendered = render_plan_images(source_image, fallback)
+        actual = rendered[-1] if rendered else None
+        if actual and (actual.template_id != fallback.template_id or actual.palette_id != fallback.palette_id):
+            fallback = replace(fallback, template_id=actual.template_id, palette_id=actual.palette_id)
+        return rendered, fallback, f"safe_right_extension_after_{type(exc).__name__}:{exc}"
+
+
 async def _default_fetch_image(url: str) -> bytes:
     import main as main_mod
 
@@ -3495,6 +3656,21 @@ async def maybe_publish_shadow_debug_copy(
         plan = build_engagement_plan(event, seed=dice.seed, config=config, vision=vision)
         llm_ms = 0
         plan_provider = "deterministic_fallback"
+    if _should_run_llm_text(event, plan, config):
+        plan, text_ms, text_provider = await build_llm_cta_text(
+            event,
+            plan=plan,
+            config=config,
+            vision=vision,
+        )
+        llm_ms += text_ms
+        if text_provider == "llm_text":
+            plan_provider = f"{plan_provider}+llm_text"
+        else:
+            plan_provider = f"{plan_provider}+{text_provider}"
+    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type):
+        plan = replace(plan, cta_text=_safe_generic_cta(plan.event_type, plan.mechanic))
+        plan_provider = f"{plan_provider}+safe_text_fallback"
     if "{" in plan.cta_text or len(plan.cta_text) > 95:
         _json_log(
             StageLog(
@@ -3525,7 +3701,13 @@ async def maybe_publish_shadow_debug_copy(
         )
         return None
     try:
-        rendered_images = await asyncio.to_thread(render_plan_images, source_image, plan)
+        rendered_images, plan, render_fallback_reason = await asyncio.to_thread(
+            render_plan_images_for_publish,
+            source_image,
+            plan,
+        )
+        if render_fallback_reason:
+            plan_provider = f"{plan_provider}+render_safe_fallback"
         rendered = rendered_images[-1]
     except FileNotFoundError as exc:
         _json_log(
@@ -3690,6 +3872,7 @@ async def maybe_publish_shadow_debug_copy(
                     "generated_attachment_count": len(generated_attachments),
                     "rendered_template_ids": [image.template_id for image in rendered_images],
                     "rendered_dimensions": [list(image.dimensions) for image in rendered_images],
+                    "render_fallback_reason": render_fallback_reason,
                     "vision_provider": vision.provider,
                     "vision_reason": vision.reason,
                     "plan_provider": plan_provider,
