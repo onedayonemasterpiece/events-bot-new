@@ -11,6 +11,10 @@
   promo exposure audit rows, and a cleanup script for VK postponed debug posts.
   Existing managed Smart Update VK posts now also run the shadow hook after a
   successful edit, so debug sampling is not limited to brand-new VK posts.
+  Debug copies now scan existing VK postponed posts plus recent
+  `VK_SCHEDULED_DEBUG` exposure rows and choose the next free 5-minute slot,
+  avoiding VK `code=214` collisions when several shadow copies are generated in
+  one batch.
 - **Fixed: Telegram event ticket shortlink leak**:
   Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
   `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical

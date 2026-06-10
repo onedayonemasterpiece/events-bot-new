@@ -254,6 +254,88 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
 
 
 @pytest.mark.asyncio
+async def test_shadow_debug_copy_uses_next_free_vk_postponed_slot(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    base_ts = aeg._scheduled_shadow_ts({"debug_publish_delay_days": 3}, now)
+    async with db.get_session() as session:
+        event = Event(
+            title="Мастер-класс по акварели",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="мастер-класс",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "debug_shadow": True,
+                "debug_cleanup_before": False,
+                "debug_publish_delay_days": 3,
+                "debug_slot_spacing_minutes": 5,
+                "apply_rate": 1,
+                "debug_marker": "#aeg_test_shadow",
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+
+    posted = {}
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "wall.get":
+            return {"response": {"items": [{"id": 10, "date": base_ts, "text": "regular postponed"}]}}
+        return {"response": 1}
+
+    async def fake_upload_images(images, *args, **kwargs):
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        posted["publish_date"] = kwargs["publish_date"]
+        return "https://vk.com/wall-231920894_1000"
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1000"
+    assert posted["publish_date"] == base_ts + 300
+    async with db.get_session() as session:
+        row = (await session.execute(select(PromoExposure))).scalar_one()
+    assert row.details_json["scheduled_ts"] == base_ts + 300
+
+
+@pytest.mark.asyncio
 async def test_shadow_debug_copy_skips_posts_without_images(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

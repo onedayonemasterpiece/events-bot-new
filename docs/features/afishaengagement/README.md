@@ -82,10 +82,19 @@ so retries do not randomly flip the same event in and out.
   last 24 hours.
 - `AFISHAENGAGEMENT_DEBUG_PUBLISH_DELAY_DAYS=3` schedules debug copies several
   days ahead, rounded to the next 5-minute boundary.
+- `AFISHAENGAGEMENT_DEBUG_SLOT_SPACING_MINUTES=5` controls the spacing between
+  shadow debug copies when the base postponed timestamp is already occupied.
+- `AFISHAENGAGEMENT_DEBUG_SLOT_SEARCH_LIMIT=96` caps the number of spacing slots
+  scanned before falling back to the next slot after the window.
 - `AFISHAENGAGEMENT_VISION_ENABLED=1` enables poster OCR/Vision summary.
 - `AFISHAENGAGEMENT_LLM_PLAN_ENABLED=1` lets LLM choose mechanic/text/template/
   palette. If disabled or if the LLM output is invalid, deterministic fallback
   chooses a safe plan.
+
+Before scheduling a debug copy, the feature reads current VK postponed posts and
+recent `VK_SCHEDULED_DEBUG` exposure rows, then selects the first free
+5-minute slot. The selected slot, base slot, counts of occupied sources, and
+publish attempts are included in the structured `afishaengagement.decision` log.
 
 ## Rendering
 

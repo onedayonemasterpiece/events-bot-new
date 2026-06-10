@@ -886,6 +886,158 @@ def _scheduled_shadow_ts(config: dict[str, Any], now_utc: datetime) -> int:
     return int(scheduled.timestamp())
 
 
+def _debug_slot_spacing_seconds(config: dict[str, Any]) -> int:
+    raw = config.get("debug_slot_spacing_minutes", os.getenv("AFISHAENGAGEMENT_DEBUG_SLOT_SPACING_MINUTES", "5"))
+    try:
+        minutes = int(raw)
+    except Exception:
+        minutes = 5
+    return max(1, minutes) * 60
+
+
+def _debug_slot_search_limit(config: dict[str, Any]) -> int:
+    raw = config.get("debug_slot_search_limit", os.getenv("AFISHAENGAGEMENT_DEBUG_SLOT_SEARCH_LIMIT", "96"))
+    try:
+        limit = int(raw)
+    except Exception:
+        limit = 96
+    return max(1, min(limit, 288))
+
+
+def _timestamp_from_any(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp())
+    try:
+        return int(float(value))
+    except Exception:
+        pass
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return int(parsed.timestamp())
+        except Exception:
+            return None
+    return None
+
+
+async def _vk_postponed_dates(
+    *,
+    owner_id: int,
+    vk_api_fn: Callable[..., Awaitable[dict[str, Any]]],
+    db: Database | None,
+    bot: Any,
+) -> set[int]:
+    response = await vk_api_fn(
+        "wall.get",
+        {"owner_id": owner_id, "filter": "postponed", "count": 100},
+        db,
+        bot,
+    )
+    data = response.get("response", response) if isinstance(response, dict) else {}
+    items = data.get("items", []) if isinstance(data, dict) else []
+    dates: set[int] = set()
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        ts = _timestamp_from_any(item.get("date"))
+        if ts is not None:
+            dates.add(ts)
+    return dates
+
+
+async def _db_shadow_scheduled_dates(
+    db: Database | None,
+    *,
+    since_ts: int,
+) -> set[int]:
+    if db is None:
+        return set()
+    since = datetime.fromtimestamp(max(0, since_ts - 3600), tz=timezone.utc)
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(PromoExposure)
+                    .where(PromoExposure.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT)
+                    .where(PromoExposure.publish_status == "VK_SCHEDULED_DEBUG")
+                    .where(PromoExposure.created_at >= since - timedelta(days=7))
+                )
+            )
+            .scalars()
+            .all()
+        )
+    dates: set[int] = set()
+    for row in rows:
+        details = dict(row.details_json or {})
+        ts = _timestamp_from_any(details.get("scheduled_ts"))
+        if ts is None:
+            ts = _timestamp_from_any(row.published_at)
+        if ts is not None and ts >= since_ts:
+            dates.add(ts)
+    return dates
+
+
+async def _next_shadow_schedule(
+    *,
+    config: dict[str, Any],
+    now_utc: datetime,
+    owner_id: int,
+    vk_api_fn: Callable[..., Awaitable[dict[str, Any]]],
+    db: Database | None,
+    bot: Any,
+) -> tuple[int, dict[str, Any]]:
+    base_ts = _scheduled_shadow_ts(config, now_utc)
+    spacing = _debug_slot_spacing_seconds(config)
+    search_limit = _debug_slot_search_limit(config)
+    occupied: set[int] = set()
+    meta: dict[str, Any] = {
+        "base_ts": base_ts,
+        "slot_spacing_seconds": spacing,
+        "slot_search_limit": search_limit,
+        "vk_postponed_count": 0,
+        "db_shadow_scheduled_count": 0,
+    }
+    try:
+        vk_dates = await _vk_postponed_dates(owner_id=owner_id, vk_api_fn=vk_api_fn, db=db, bot=bot)
+        occupied.update(vk_dates)
+        meta["vk_postponed_count"] = len(vk_dates)
+    except Exception as exc:
+        logger.warning("afishaengagement: postponed slot lookup failed: %s", exc)
+        meta["vk_postponed_lookup_error"] = str(exc)
+    try:
+        db_dates = await _db_shadow_scheduled_dates(db, since_ts=base_ts)
+        occupied.update(db_dates)
+        meta["db_shadow_scheduled_count"] = len(db_dates)
+    except Exception as exc:
+        logger.warning("afishaengagement: shadow exposure slot lookup failed: %s", exc)
+        meta["db_shadow_lookup_error"] = str(exc)
+
+    for slot in range(search_limit):
+        candidate = base_ts + (slot * spacing)
+        if candidate not in occupied:
+            meta["selected_slot_index"] = slot
+            meta["selected_ts"] = candidate
+            return candidate, meta
+
+    candidate = base_ts + (search_limit * spacing)
+    meta["selected_slot_index"] = search_limit
+    meta["selected_ts"] = candidate
+    meta["slot_search_exhausted"] = True
+    return candidate, meta
+
+
+def _looks_like_vk_schedule_collision(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "scheduled for this time" in text or "уже заплан" in text or "на это время" in text
+
+
 def _vk_post_id_from_url(url: str | None) -> str | None:
     if not url:
         return None
@@ -1322,6 +1474,7 @@ async def maybe_publish_shadow_debug_copy(
         )
         return None
     try:
+        schedule_meta: dict[str, Any] = {}
         generated_urls, _ = await upload_images_fn(
             [(rendered.data, rendered.filename)],
             limit=1,
@@ -1338,16 +1491,49 @@ async def maybe_publish_shadow_debug_copy(
             f"[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n"
             f"{marker} {build_tag}"
         )
-        scheduled_ts = _scheduled_shadow_ts(config, now_utc)
-        vk_url = await post_to_vk_fn(
-            target_group_id,
-            debug_message,
-            db,
-            bot,
-            [generated_attachment],
-            carousel=True,
-            publish_date=scheduled_ts,
+        scheduled_ts, schedule_meta = await _next_shadow_schedule(
+            config=config,
+            now_utc=now_utc,
+            owner_id=owner_id,
+            vk_api_fn=vk_api_fn,
+            db=db,
+            bot=bot,
         )
+        vk_url = None
+        publish_attempts: list[int] = []
+        spacing = int(schedule_meta.get("slot_spacing_seconds") or _debug_slot_spacing_seconds(config))
+        max_publish_attempts = min(6, 1 + _debug_slot_search_limit(config))
+        last_publish_exc: Exception | None = None
+        for attempt in range(max_publish_attempts):
+            publish_attempts.append(scheduled_ts)
+            try:
+                vk_url = await post_to_vk_fn(
+                    target_group_id,
+                    debug_message,
+                    db,
+                    bot,
+                    [generated_attachment],
+                    carousel=True,
+                    publish_date=scheduled_ts,
+                )
+                last_publish_exc = None
+                break
+            except Exception as exc:
+                last_publish_exc = exc
+                if not _looks_like_vk_schedule_collision(exc):
+                    raise
+                if attempt >= max_publish_attempts - 1:
+                    break
+                scheduled_ts += spacing
+                logger.info(
+                    "afishaengagement: debug shadow slot collision; retrying event_id=%s next_ts=%s",
+                    event_id,
+                    scheduled_ts,
+                )
+        schedule_meta["publish_attempts"] = publish_attempts
+        schedule_meta["publish_attempt_count"] = len(publish_attempts)
+        if last_publish_exc is not None:
+            raise last_publish_exc
         if not vk_url:
             raise RuntimeError("post_to_vk_returned_empty")
         await record_shadow_exposure(
@@ -1405,6 +1591,7 @@ async def maybe_publish_shadow_debug_copy(
                     "vision_provider": vision.provider,
                     "vision_reason": vision.reason,
                     "plan_provider": plan_provider,
+                    "schedule": schedule_meta,
                 },
             )
         )
@@ -1431,7 +1618,12 @@ async def maybe_publish_shadow_debug_copy(
                 shadow_mode=True,
                 shadow_marker=marker,
                 total_ms=int((time.monotonic() - started) * 1000),
-                extra={"error": str(exc), "media_hash": digest, "plan_provider": plan_provider},
+                extra={
+                    "error": str(exc),
+                    "media_hash": digest,
+                    "plan_provider": plan_provider,
+                    "schedule": schedule_meta if "schedule_meta" in locals() else {},
+                },
             )
         )
         return None
