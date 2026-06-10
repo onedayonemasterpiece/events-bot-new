@@ -243,6 +243,27 @@ def test_hook_text_uses_prepositional_plural():
     assert plan.hook_text == "Есть вопрос к тем, кто уже был на таких концертах"
 
 
+def test_market_event_type_is_not_overridden_by_meeting_words():
+    event = Event(
+        title="PUNK Market",
+        description="Маркет, встречи и музыка",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="ярмарка",
+    )
+
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="market-type",
+        config={"mechanic_weights": {"likes": 100}},
+    )
+
+    assert plan.event_type == "festival"
+    assert "лекц" not in plan.cta_text.casefold()
+
+
 def test_renderer_can_select_poster_compatible_palette():
     source = _poster_bytes()
     event = Event(

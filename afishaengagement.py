@@ -361,14 +361,19 @@ async def resolve_candidate(
 
 
 def _event_type_key(event: Event) -> str:
+    explicit_type = str(event.event_type or "").casefold()
+    if any(word in explicit_type for word in ("фестив", "маркет", "ярмарк")):
+        return "festival"
     raw = " ".join(
         [
-            str(event.event_type or ""),
+            explicit_type,
             str(event.title or ""),
             str(event.description or ""),
             str(event.search_digest or ""),
         ]
     ).casefold()
+    if any(word in raw for word in ("маркет", "ярмарк")):
+        return "festival"
     if any(word in raw for word in ("лекц", "спикер", "дискусс", "встреч")):
         return "lecture"
     if any(word in raw for word in ("концерт", "музык", "оркестр", "джаз", "трек")):
