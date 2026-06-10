@@ -10,7 +10,7 @@ import os
 import random
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Sequence
@@ -364,6 +364,8 @@ def _event_type_key(event: Event) -> str:
     explicit_type = str(event.event_type or "").casefold()
     if any(word in explicit_type for word in ("маркет", "ярмарк")):
         return "market"
+    if any(word in explicit_type for word in ("кинопоказ", "киносеанс", "кинолекторий", "кино")):
+        return "cinema"
     if "фестив" in explicit_type:
         return "festival"
     raw = " ".join(
@@ -376,13 +378,19 @@ def _event_type_key(event: Event) -> str:
     ).casefold()
     if any(word in raw for word in ("маркет", "ярмарк")):
         return "market"
+    if any(word in raw for word in ("кинопоказ", "киносеанс", "кинолекторий", "кинопросмотр")):
+        return "cinema"
+    if any(word in raw for word in ("фильм", "cinema", "movie", "film")) and "сценар" not in raw:
+        return "cinema"
+    if re.search(r"(^|\s)кино(\s|$|-)", raw) and "сценар" not in raw:
+        return "cinema"
     if any(word in raw for word in ("лекц", "спикер", "дискусс", "встреч")):
         return "lecture"
     if any(word in raw for word in ("концерт", "музык", "оркестр", "джаз", "трек")):
         return "concert"
     if any(word in raw for word in ("мастер-класс", "мастер класс", "воркшоп", "практик")):
         return "workshop"
-    if any(word in raw for word in ("спектак", "театр", "сцен")):
+    if any(word in raw for word in ("спектак", "театр", "постановк", "пьес")):
         return "theatre"
     if event.festival or any(word in raw for word in ("фестив", "маркет", "ярмарк")):
         return "festival"
@@ -413,6 +421,8 @@ def _topic_label(event: Event, event_type: str) -> str:
         return "мастер-классов"
     if event_type == "theatre":
         return "спектаклей"
+    if event_type == "cinema":
+        return "кинопоказов"
     if event_type == "festival":
         return "фестивалей"
     if event_type == "market":
@@ -429,6 +439,8 @@ def _topic_accusative_plural(event_type: str) -> str:
         return "мастер-классы"
     if event_type == "theatre":
         return "спектакли"
+    if event_type == "cinema":
+        return "кинопоказы"
     if event_type == "festival":
         return "фестивали"
     if event_type == "market":
@@ -445,6 +457,8 @@ def _topic_prepositional_plural(event_type: str) -> str:
         return "мастер-классах"
     if event_type == "theatre":
         return "спектаклях"
+    if event_type == "cinema":
+        return "кинопоказах"
     if event_type == "festival":
         return "фестивалях"
     if event_type == "market":
@@ -452,7 +466,77 @@ def _topic_prepositional_plural(event_type: str) -> str:
     return "событиях"
 
 
-def _templates_for(event_type: str, persona: str | None, festival: str | None) -> dict[str, list[str]]:
+def _this_event_accusative(event_type: str) -> str:
+    if event_type == "lecture":
+        return "эту лекцию"
+    if event_type == "concert":
+        return "этот концерт"
+    if event_type == "workshop":
+        return "этот мастер-класс"
+    if event_type == "theatre":
+        return "этот спектакль"
+    if event_type == "cinema":
+        return "этот кинопоказ"
+    if event_type == "festival":
+        return "это событие фестиваля"
+    if event_type == "market":
+        return "эту ярмарку"
+    return "это событие"
+
+
+THEME_KEYWORDS: dict[str, dict[str, str]] = {
+    "concert": {
+        "симфоническ": "симфоническую музыку",
+        "акустическ": "акустические концерты",
+        "акустика": "акустические концерты",
+        "джаз": "джаз",
+        "рок ": "рок-музыку",
+        "инди": "инди-музыку",
+        "фолк": "фолк",
+        "электрон": "электронную музыку",
+        "классическ": "классическую музыку",
+        "орган": "органную музыку",
+        "фортепиан": "фортепианную музыку",
+        "оркестр": "оркестровую музыку",
+    },
+    "cinema": {
+        "документал": "документальное кино",
+        "авторск": "авторское кино",
+        "короткометр": "короткометражки",
+        "анимац": "анимацию",
+        "артхаус": "артхаус",
+    },
+    "lecture": {
+        "истори": "лекции по истории",
+        "архитектур": "лекции про архитектуру",
+        "искусств": "лекции про искусство",
+        "наук": "научные лекции",
+        "город": "лекции про город",
+    },
+}
+
+
+def _extract_theme(event: Event, event_type: str) -> str | None:
+    raw = " ".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+    for key, label in THEME_KEYWORDS.get(event_type, {}).items():
+        if key in raw:
+            return label
+    return None
+
+
+def _templates_for(
+    event_type: str,
+    persona: str | None,
+    festival: str | None,
+    theme: str | None = None,
+) -> dict[str, list[str]]:
     topic = "{T}"
     topic_acc = "{TA}"
     festival_from = "{FFROM}"
@@ -460,14 +544,14 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
     templates: dict[str, list[str]] = {
         "comments": [
             f"Расскажите в комментариях, что для вас главное в таких {topic}.",
-            "Были на похожем событии? Поделитесь впечатлениями.",
             "Что ждёте от этого события? Напишите в комментариях.",
         ],
         "likes": [
             f"Лайк, если хочешь чаще таких {topic}.",
             f"Поставь лайк, если хочешь чаще таких {topic}.",
-            f"Поддержи лайком формат таких {topic}.",
             "Лайк, если такие события — твоё.",
+            f"Поставь лайк, если любишь такие {topic_acc}.",
+            f"Отметь лайком, если любишь такие {topic_acc}.",
             "Поставь лайк, если добавил событие в планы.",
         ],
         "reposts": [
@@ -487,6 +571,7 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         templates["likes"].append("Лайк, если нравится, как {N} ведёт лекции.")
         templates["likes"].append("Поставь лайк, если уже слушал {N}.")
         templates["reposts"].append("Перешли другу, кто точно хочет на {N}.")
+        templates["comments"].append("Бывали на похожих лекциях? Расскажите.")
     elif event_type == "concert" and persona:
         templates["comments"].extend(
             [
@@ -496,11 +581,15 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         )
         templates["likes"].append("Лайк, если нравится творчество {N}.")
         templates["reposts"].append("Перешли другу, кто слушает {N}.")
+        templates["comments"].append("Были на похожем концерте? Поделитесь впечатлениями.")
+    elif event_type == "concert":
+        templates["comments"].append("Были на похожем концерте? Поделитесь впечатлениями.")
     elif event_type == "workshop":
         templates["comments"].extend(
             [
                 "Что хотели бы освоить на мастер-классе? Напишите в комментариях.",
                 "Какой формат интереснее: теория или практика? Делитесь.",
+                "Уже бывали на мастер-классах в этой технике? Поделитесь.",
             ]
         )
     elif event_type == "theatre":
@@ -510,6 +599,34 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
                 "Что важнее: режиссура или актёрская игра?",
             ]
         )
+        templates["comments"].append("Видели похожие постановки? Поделитесь.")
+    elif event_type == "cinema":
+        templates["comments"].extend(
+            [
+                "Какой кинопоказ запомнился больше всего? Делитесь.",
+                "Какой фильм пересмотрели бы на большом экране? Напишите.",
+            ]
+        )
+        templates["likes"].extend(
+            [
+                "Лайк, если любишь кинопоказы.",
+                "Поставь лайк, если ходишь в киноклубы.",
+            ]
+        )
+        templates["reposts"].append("Перешли тому, с кем смотришь фильмы.")
+    elif event_type == "market":
+        templates["comments"].append("Бывали на похожих маркетах? Расскажите про находки.")
+    elif event_type == "festival":
+        templates["comments"].append("Были на похожих фестивалях? Делитесь впечатлениями.")
+    if theme:
+        templates["likes"].extend(
+            [
+                "Поставь лайк, если любишь {THEME}.",
+                "Поддержи лайком, если любишь {THEME}.",
+                "Лайк, если {THEME} — твоё.",
+            ]
+        )
+        templates["comments"].append("Расскажите, что из темы «{THEME}» вам ближе всего.")
     if festival:
         templates["comments"].extend(
             [
@@ -525,6 +642,36 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         )
         templates["reposts"].append(f"Поделись с друзьями, если ждёшь {festival_from}.")
     return templates
+
+
+def _configured_templates_for(config: dict[str, Any], event_type: str) -> dict[str, list[str]]:
+    raw = config.get("cta_templates") or config.get("cta_templates_by_mechanic") or {}
+    if not isinstance(raw, dict):
+        return {}
+
+    merged: dict[str, list[str]] = {}
+
+    def add_templates(source: Any) -> None:
+        if not isinstance(source, dict):
+            return
+        for mechanic, values in source.items():
+            mechanic_key = str(mechanic).strip().lower()
+            if mechanic_key not in MECHANIC_BADGES:
+                continue
+            if isinstance(values, str):
+                values = [values]
+            if not isinstance(values, list):
+                continue
+            clean = [str(value).strip() for value in values if str(value or "").strip()]
+            if clean:
+                merged.setdefault(mechanic_key, []).extend(clean)
+
+    add_templates(raw)
+    by_type = raw.get("by_event_type") or raw.get("event_types") or {}
+    if isinstance(by_type, dict):
+        add_templates(by_type.get(event_type))
+        add_templates(by_type.get("*"))
+    return merged
 
 
 def _sanitize_cta_text(text: str) -> str:
@@ -574,8 +721,10 @@ def _festival_on_phrase(festival: str | None) -> str | None:
 def _resolve_template(
     template: str,
     *,
+    event_type: str,
     persona: str | None,
     festival: str | None,
+    theme: str | None = None,
     topic: str,
     topic_accusative_plural: str,
     festival_from: str | None = None,
@@ -586,8 +735,10 @@ def _resolve_template(
         "F": festival,
         "FFROM": festival_from,
         "FON": festival_on,
+        "THEME": theme,
         "T": topic,
         "TA": topic_accusative_plural,
+        "THIS_EVENT": _this_event_accusative(event_type),
     }
     for key, value in slots.items():
         if "{" + key + "}" in template and not value:
@@ -622,6 +773,7 @@ def build_engagement_plan(
     event_type = _event_type_key(event)
     persona = _extract_persona(event)
     festival = (event.festival or "").strip() or None
+    theme = _extract_theme(event, event_type)
     festival_from = _festival_from_phrase(event, festival)
     festival_on = _festival_on_phrase(festival)
     topic = _topic_label(event, event_type)
@@ -641,17 +793,30 @@ def build_engagement_plan(
         bag = ["comments", "likes", "reposts"]
     rnd.shuffle(bag)
 
-    templates = _templates_for(event_type, persona, festival)
+    templates = _templates_for(event_type, persona, festival, theme)
+    configured_templates = _configured_templates_for(config, event_type)
+    for configured_mechanic, configured_values in configured_templates.items():
+        templates.setdefault(configured_mechanic, [])
+        templates[configured_mechanic] = configured_values + templates[configured_mechanic]
     cta_text = ""
     mechanic = "comments"
     for candidate_mechanic in bag[:20]:
         options = list(templates.get(candidate_mechanic) or [])
-        rnd.shuffle(options)
+        configured_options = list(configured_templates.get(candidate_mechanic) or [])
+        if configured_options and _parse_bool(config.get("prefer_configured_cta_templates"), default=True):
+            rnd.shuffle(configured_options)
+            generic_options = [option for option in options if option not in configured_options]
+            rnd.shuffle(generic_options)
+            options = configured_options + generic_options
+        else:
+            rnd.shuffle(options)
         for template in options:
             resolved = _resolve_template(
                 template,
+                event_type=event_type,
                 persona=persona,
                 festival=festival,
+                theme=theme,
                 festival_from=festival_from,
                 festival_on=festival_on,
                 topic=topic,
@@ -1020,7 +1185,7 @@ def fit_text(
             bbox = _text_bbox(draw, (0, 0), line, font)
             max_w = max(max_w, bbox[2] - bbox[0])
             line_heights.append(bbox[3] - bbox[1])
-        total_h = int(sum(line_heights) + max(0, len(lines) - 1) * size * 0.08)
+        total_h = int(sum(line_heights) + max(0, len(lines) - 1) * size * 0.18)
         if total_h <= box_height:
             return TextFit(font_px=size, lines=lines, width=max_w, height=total_h)
     return None
@@ -1056,6 +1221,116 @@ def _aa_overlay(
     return hi.resize((width, height), Image.Resampling.LANCZOS)
 
 
+def _round_line(draw: Any, pts: list[tuple[float, float]], color: tuple[int, int, int], width: int) -> None:
+    draw.line(pts, fill=color, width=width, joint="curve")
+    radius = width / 2
+    for px, py in (pts[0], pts[-1]):
+        draw.ellipse((px - radius, py - radius, px + radius, py + radius), fill=color)
+
+
+def _draw_right_arrow(
+    draw: Any,
+    x0: float,
+    x1: float,
+    y: float,
+    color: tuple[int, int, int],
+    *,
+    width: int = 11,
+    head: int = 22,
+) -> None:
+    _round_line(draw, [(x0, y), (x1, y)], color, width)
+    _round_line(draw, [(x1 - head, y - head), (x1, y)], color, width)
+    _round_line(draw, [(x1 - head, y + head), (x1, y)], color, width)
+
+
+def _draw_down_arrow(
+    draw: Any,
+    cx: float,
+    y0: float,
+    y1: float,
+    color: tuple[int, int, int],
+    *,
+    width: int = 14,
+    head: int = 44,
+) -> None:
+    _round_line(draw, [(cx, y0), (cx, y1)], color, width)
+    _round_line(draw, [(cx - head, y1 - head), (cx, y1)], color, width)
+    _round_line(draw, [(cx + head, y1 - head), (cx, y1)], color, width)
+
+
+def _draw_badge(
+    draw: Any,
+    *,
+    x: int,
+    y: int,
+    label: str,
+    font: Any,
+    bg: tuple[int, int, int],
+    fg: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    scale: float,
+    max_width: int | None = None,
+) -> tuple[int, int]:
+    bbox = _text_bbox(draw, (0, 0), label, font)
+    label_w = bbox[2] - bbox[0]
+    pad_x = int(22 * scale)
+    badge_h = int(58 * scale)
+    marker_w = max(4, int(8 * scale))
+    marker_gap = int(12 * scale)
+    badge_w = label_w + pad_x * 2 + marker_w + marker_gap
+    if max_width:
+        badge_w = min(max_width, badge_w)
+    draw.rounded_rectangle((x, y, x + badge_w, y + badge_h), radius=int(18 * scale), fill=bg)
+    marker_x = x + int(12 * scale)
+    marker_y = y + int(12 * scale)
+    draw.rounded_rectangle(
+        (marker_x, marker_y, marker_x + marker_w, y + badge_h - int(12 * scale)),
+        radius=int(4 * scale),
+        fill=accent,
+    )
+    draw.text((x + pad_x + marker_w + marker_gap, y + int(11 * scale)), label, font=font, fill=fg)
+    return badge_w, badge_h
+
+
+def _draw_heart_icon(draw: Any, x: float, y: float, font_px: int) -> int:
+    size = max(16, int(font_px * 0.62))
+    top = y + int(font_px * 0.18)
+    left = x + int(font_px * 0.03)
+    red = (226, 24, 54)
+    r = size * 0.28
+    draw.ellipse((left + size * 0.04, top, left + size * 0.04 + r * 2, top + r * 2), fill=red)
+    draw.ellipse((left + size * 0.40, top, left + size * 0.40 + r * 2, top + r * 2), fill=red)
+    draw.polygon(
+        [
+            (left + size * 0.02, top + size * 0.35),
+            (left + size * 0.98, top + size * 0.35),
+            (left + size * 0.50, top + size * 1.05),
+        ],
+        fill=red,
+    )
+    return size + int(font_px * 0.14)
+
+
+def _draw_text_line(
+    draw: Any,
+    xy: tuple[int, int],
+    text: str,
+    *,
+    font: Any,
+    fill: tuple[int, int, int],
+    font_px: int,
+) -> None:
+    x, y = xy
+    parts = re.split(r"(?:❤️|❤)", text)
+    hearts = len(re.findall(r"(?:❤️|❤)", text))
+    for index, part in enumerate(parts):
+        if part:
+            draw.text((x, y), part, font=font, fill=fill)
+            x += int(draw.textlength(part, font=font))
+        if index < hearts:
+            x += _draw_heart_icon(draw, x, y, font_px)
+
+
 def render_right_extension(source_image: bytes, plan: EngagementPlan) -> RenderedImage:
     from PIL import Image, ImageDraw, ImageOps
 
@@ -1071,13 +1346,13 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     accent = _hex_to_rgb(palette["accent"])
     accent_text = _hex_to_rgb(palette["accent_text"])
 
-    if poster.width > poster.height * 1.12:
+    if poster.width >= 720 and poster.width > poster.height * 1.12:
         return _render_bottom_extension(poster, plan, palette_id, palette, started)
 
     poster_w, height = poster.size
     scale = _layout_scale(height)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(30 * scale)))
+    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
     diagonal = max(int(24 * scale), min(int(86 * scale), int(poster_w * 0.085)))
 
     fit: TextFit | None = None
@@ -1119,33 +1394,36 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         fill=(*bg, 255),
         line=[(cut_top, 0), (cut_bottom, height)],
         line_fill=(*accent, 255),
-        line_width=max(2, int(4 * scale)),
+        line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = badge_bbox[2] - badge_bbox[0] + int(34 * scale)
-    badge_h = int(48 * scale)
-    draw.rounded_rectangle(
-        (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
-        radius=int(18 * scale),
-        fill=accent,
+    _badge_w, badge_h = _draw_badge(
+        draw,
+        x=safe_x,
+        y=safe_y,
+        label=badge,
+        font=badge_font,
+        bg=accent,
+        fg=accent_text,
+        accent=text_color,
+        scale=scale,
+        max_width=safe_w,
     )
-    draw.text((safe_x + int(17 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
-    line_gap = int(fit.font_px * 0.08)
+    line_gap = int(fit.font_px * 0.18)
     total_h = fit.height
     y = text_box_y + max(0, int((text_box_h - total_h) / 2))
     for line in fit.lines:
-        draw.text((safe_x, y), line, font=main_font, fill=text_color)
+        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
         bbox = _text_bbox(draw, (safe_x, y), line, main_font)
         y += (bbox[3] - bbox[1]) + line_gap
     draw.line(
         (safe_x, height - int(80 * scale), width - int(64 * scale), height - int(80 * scale)),
         fill=accent,
-        width=max(2, int(4 * scale)),
+        width=max(4, int(8 * scale)),
     )
 
     out = io.BytesIO()
@@ -1181,20 +1459,22 @@ def _render_bottom_extension(
 
     width, poster_h = poster.size
     scale = _layout_scale(width)
-    overlap = max(int(42 * scale), min(int(82 * scale), int(poster_h * 0.12)))
+    overlap = max(int(56 * scale), min(int(96 * scale), int(poster_h * 0.14)))
     diagonal = max(int(22 * scale), min(int(46 * scale), int(width * 0.035)))
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(28 * scale)))
+    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
 
     fit: TextFit | None = None
     block_h = 0
     safe_x = int(72 * scale)
     safe_w = width - safe_x * 2
-    start_h = max(int(330 * scale), int(poster_h * 0.54))
-    end_h = max(start_h + int(72 * scale), int(590 * scale))
+    badge_h = int(58 * scale)
+    safe_y_offset = diagonal + int(64 * scale)
+    start_h = max(int(380 * scale), int(poster_h * 0.58))
+    end_h = max(start_h + int(80 * scale), int(660 * scale))
     step_h = max(18, int(36 * scale))
     for candidate_h in range(start_h, end_h + 1, step_h):
-        text_box_h = candidate_h - int(142 * scale)
+        text_box_h = candidate_h - safe_y_offset - badge_h - int(112 * scale)
         fit = fit_text(
             plan.cta_text,
             box_width=safe_w,
@@ -1220,35 +1500,40 @@ def _render_bottom_extension(
         fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
         line_fill=(*accent, 255),
-        line_width=max(2, int(4 * scale)),
+        line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = badge_bbox[2] - badge_bbox[0] + int(32 * scale)
-    badge_h = int(46 * scale)
-    safe_y = block_top + int(46 * scale)
-    draw.rounded_rectangle(
-        (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
-        radius=int(17 * scale),
-        fill=accent,
+    safe_y = block_top + safe_y_offset
+    _draw_badge(
+        draw,
+        x=safe_x,
+        y=safe_y,
+        label=badge,
+        font=badge_font,
+        bg=accent,
+        fg=accent_text,
+        accent=text_color,
+        scale=scale,
+        max_width=safe_w,
     )
-    draw.text((safe_x + int(16 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
 
     text_box_y = safe_y + badge_h + int(32 * scale)
-    text_box_h = height - text_box_y - int(58 * scale)
+    text_box_h = height - text_box_y - int(72 * scale)
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
-    line_gap = int(fit.font_px * 0.08)
+    line_gap = int(fit.font_px * 0.18)
     y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
     for line in fit.lines:
-        draw.text((safe_x, y), line, font=main_font, fill=text_color)
+        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
         bbox = _text_bbox(draw, (safe_x, y), line, main_font)
         y += (bbox[3] - bbox[1]) + line_gap
+    if y + int(44 * scale) > height:
+        raise ValueError("text_overflow")
     draw.line(
         (safe_x, height - int(42 * scale), width - safe_x, height - int(42 * scale)),
         fill=accent,
-        width=max(2, int(4 * scale)),
+        width=max(4, int(8 * scale)),
     )
 
     out = io.BytesIO()
@@ -1279,7 +1564,7 @@ def _render_bottom_overlay(
 
     width, height = poster.size
     scale = _layout_scale(width)
-    block_h = max(int(260 * scale), min(int(height * 0.38), int(420 * scale)))
+    block_h = max(int(320 * scale), min(int(height * 0.42), int(480 * scale)))
     block_top = height - block_h
     diagonal = max(int(24 * scale), min(int(54 * scale), int(width * 0.05)))
     palette, surface_inverted = _cta_surface_palette_for_region(
@@ -1296,11 +1581,11 @@ def _render_bottom_overlay(
     safe_x = int(64 * scale)
     safe_w = width - safe_x * 2
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(28 * scale)))
-    badge_h = int(46 * scale)
-    safe_y = block_top + diagonal + int(34 * scale)
+    badge_font = _load_font("Cygre-Bold.ttf", max(20, int(34 * scale)))
+    badge_h = int(58 * scale)
+    safe_y = block_top + diagonal + int(56 * scale)
     text_box_y = safe_y + badge_h + int(30 * scale)
-    text_box_h = height - text_box_y - int(40 * scale)
+    text_box_h = height - text_box_y - int(72 * scale)
 
     fit = fit_text(
         plan.cta_text,
@@ -1314,33 +1599,48 @@ def _render_bottom_overlay(
         raise ValueError("text_overflow")
 
     canvas = poster.copy()
+    shadow_h = max(14, int(28 * scale))
+    shadow_top = max(0, block_top + diagonal - shadow_h)
+    shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    for offset in range(shadow_h):
+        alpha = int(70 * (offset + 1) / shadow_h)
+        y = shadow_top + offset
+        shadow_draw.line((0, y, width, y), fill=(0, 0, 0, alpha))
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     overlay = _aa_overlay(
         size=(width, height),
         polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
-        fill=(*bg, 248 if surface_inverted else 238),
+        fill=(*bg, 255),
         line=[(0, block_top + diagonal), (width, block_top)],
         line_fill=(*accent, 255),
-        line_width=max(2, int(4 * scale)),
+        line_width=max(4, int(12 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = min(safe_w, badge_bbox[2] - badge_bbox[0] + int(32 * scale))
-    draw.rounded_rectangle(
-        (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
-        radius=int(17 * scale),
-        fill=accent,
+    _draw_badge(
+        draw,
+        x=safe_x,
+        y=safe_y,
+        label=badge,
+        font=badge_font,
+        bg=accent,
+        fg=accent_text,
+        accent=text_color,
+        scale=scale,
+        max_width=safe_w,
     )
-    draw.text((safe_x + int(16 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
-    line_gap = int(fit.font_px * 0.08)
+    line_gap = int(fit.font_px * 0.18)
     y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
     for line in fit.lines:
-        draw.text((safe_x, y), line, font=main_font, fill=text_color)
+        _draw_text_line(draw, (safe_x, y), line, font=main_font, fill=text_color, font_px=fit.font_px)
         bbox = _text_bbox(draw, (safe_x, y), line, main_font)
         y += (bbox[3] - bbox[1]) + line_gap
+    if y + int(44 * scale) > height:
+        raise ValueError("text_overflow")
 
     out = io.BytesIO()
     canvas.save(out, format="PNG", optimize=True)
@@ -1394,68 +1694,82 @@ def _render_hook_swipe_cta(
         )
 
     hook_text = _sanitize_cta_text(plan.hook_text or "Есть вопрос к тем, кто уже был?")
-    hook = cover_image().convert("RGBA")
-    scrim = Image.new("RGBA", (card_w, card_h), (*bg, 188))
-    hook = Image.alpha_composite(hook, scrim).convert("RGB")
+    hook = Image.new("RGB", (card_w, card_h), bg)
     draw = ImageDraw.Draw(hook)
+    safe_x = int(86 * scale)
+    safe_w = card_w - safe_x * 2
+    band_h = int(860 * scale)
+    poster_band = ImageOps.contain(poster, (card_w, band_h), method=Image.Resampling.LANCZOS)
+    hook.paste(poster_band, ((card_w - poster_band.width) // 2, (band_h - poster_band.height) // 2))
+
+    block_top = int(790 * scale)
+    diagonal = int(70 * scale)
+    edge = [(0, block_top + diagonal), (card_w, block_top), (card_w, card_h), (0, card_h)]
+    accent_edge = [(0, block_top + diagonal - int(16 * scale)), (card_w, block_top - int(16 * scale)), (card_w, card_h), (0, card_h)]
+    draw.polygon(accent_edge, fill=accent)
+    draw.polygon(edge, fill=bg)
+
+    swipe_font = _load_font("Cygre-Medium.ttf", int(36 * scale))
+    swipe_label = "листай"
+    swipe_bbox = _text_bbox(draw, (0, 0), swipe_label, swipe_font)
+    swipe_w = swipe_bbox[2] - swipe_bbox[0]
+    swipe_h = swipe_bbox[3] - swipe_bbox[1]
+    swipe_right = card_w - safe_x
+    swipe_y = block_top + diagonal + int(60 * scale)
+    arrow_w = int(66 * scale)
+    swipe_x = swipe_right - swipe_w - int(18 * scale) - arrow_w
+    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent)
+    _draw_right_arrow(
+        draw,
+        swipe_x + swipe_w + int(18 * scale),
+        swipe_right,
+        swipe_y + swipe_h / 2,
+        accent,
+        width=max(7, int(10 * scale)),
+        head=max(14, int(18 * scale)),
+    )
+
     hook_fit = fit_text(
         hook_text,
-        box_width=int(card_w * 0.78),
-        box_height=int(card_h * 0.42),
-        preferred_px=92,
-        min_px=54,
-        max_lines=4,
+        box_width=safe_w - int(38 * scale),
+        box_height=int(300 * scale),
+        preferred_px=86,
+        min_px=52,
+        max_lines=3,
     )
     if hook_fit is None:
         raise ValueError("hook_text_overflow")
     hook_font = _load_font("Cygre-Bold.ttf", hook_fit.font_px)
-    x = int(86 * scale)
-    y = int(410 * scale)
-    for line in hook_fit.lines:
-        draw.text((x, y), line, font=hook_font, fill=text_color)
-        bbox = _text_bbox(draw, (x, y), line, hook_font)
-        y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.1)
-    swipe_font = _load_font("Cygre-Medium.ttf", 46)
-    swipe_label = "ЛИСТАЙ"
-    swipe_bbox = _text_bbox(draw, (0, 0), swipe_label, swipe_font)
-    swipe_text_w = swipe_bbox[2] - swipe_bbox[0]
-    swipe_text_h = swipe_bbox[3] - swipe_bbox[1]
-    swipe_badge_h = 64
-    swipe_badge_w = swipe_text_w + 120
-    swipe_badge_y0 = card_h - 188
-    swipe_badge_y1 = swipe_badge_y0 + swipe_badge_h
-    swipe_badge_x0 = x
-    swipe_badge_x1 = swipe_badge_x0 + swipe_badge_w
+    hook_x = safe_x + int(38 * scale)
+    hook_y = swipe_y + swipe_h + int(34 * scale)
     draw.rounded_rectangle(
-        (swipe_badge_x0, swipe_badge_y0, swipe_badge_x1, swipe_badge_y1),
-        radius=26,
+        (safe_x, hook_y + int(6 * scale), safe_x + int(12 * scale), hook_y + max(int(80 * scale), hook_fit.height) - int(6 * scale)),
+        radius=int(6 * scale),
         fill=accent,
     )
-    swipe_text_x = swipe_badge_x0 + 34
-    swipe_text_y = swipe_badge_y0 + int((swipe_badge_h - swipe_text_h) / 2) - 4
-    draw.text((swipe_text_x, swipe_text_y), swipe_label, font=swipe_font, fill=accent_text)
-    arrow_y = swipe_badge_y0 + swipe_badge_h // 2
-    arrow_x0 = swipe_text_x + swipe_text_w + 26
-    arrow_x1 = swipe_badge_x1 - 34
-    draw.line((arrow_x0, arrow_y, arrow_x1, arrow_y), fill=accent_text, width=5)
-    draw.polygon(
-        [
-            (arrow_x1, arrow_y),
-            (arrow_x1 - 16, arrow_y - 12),
-            (arrow_x1 - 16, arrow_y + 12),
-        ],
-        fill=accent_text,
-    )
-    draw.line((x, card_h - 92, card_w - x, card_h - 92), fill=accent, width=5)
+    y = hook_y
+    for line in hook_fit.lines:
+        _draw_text_line(draw, (hook_x, y), line, font=hook_font, fill=text_color, font_px=hook_fit.font_px)
+        bbox = _text_bbox(draw, (hook_x, y), line, hook_font)
+        y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.18)
+    draw.line((safe_x, card_h - 92, card_w - safe_x, card_h - 92), fill=accent, width=6)
 
     cta = Image.new("RGB", (card_w, card_h), bg)
     draw = ImageDraw.Draw(cta)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _load_font("Cygre-Medium.ttf", 42)
-    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = badge_bbox[2] - badge_bbox[0] + 52
-    draw.rounded_rectangle((86, 96, 86 + badge_w, 162), radius=28, fill=accent)
-    draw.text((112, 111), badge, font=badge_font, fill=accent_text)
+    badge_font = _load_font("Cygre-Bold.ttf", 42)
+    _draw_badge(
+        draw,
+        x=86,
+        y=96,
+        label=badge,
+        font=badge_font,
+        bg=accent,
+        fg=accent_text,
+        accent=text_color,
+        scale=1.0,
+        max_width=card_w - 172,
+    )
 
     cta_fit = fit_text(
         plan.cta_text,
@@ -1470,20 +1784,12 @@ def _render_hook_swipe_cta(
     cta_font = _load_font("Cygre-Bold.ttf", cta_fit.font_px)
     y = int(390 * scale)
     for line in cta_fit.lines:
-        draw.text((86, y), line, font=cta_font, fill=text_color)
+        _draw_text_line(draw, (86, y), line, font=cta_font, fill=text_color, font_px=cta_fit.font_px)
         bbox = _text_bbox(draw, (86, y), line, cta_font)
-        y += (bbox[3] - bbox[1]) + int(cta_fit.font_px * 0.08)
+        y += (bbox[3] - bbox[1]) + int(cta_fit.font_px * 0.18)
     arrow_x = card_w // 2
     arrow_top = card_h - 330
-    draw.line((arrow_x, arrow_top, arrow_x, arrow_top + 170), fill=accent, width=10)
-    draw.polygon(
-        [
-            (arrow_x - 48, arrow_top + 132),
-            (arrow_x + 48, arrow_top + 132),
-            (arrow_x, arrow_top + 204),
-        ],
-        fill=accent,
-    )
+    _draw_down_arrow(draw, arrow_x, arrow_top, arrow_top + 204, accent, width=14, head=48)
     draw.line((86, card_h - 92, card_w - 86, card_h - 92), fill=accent, width=5)
 
     return [
@@ -1505,12 +1811,32 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
         poster = ImageOps.exif_transpose(opened).convert("RGB")
     palette_id = _choose_compatible_palette_id(poster, plan.palette_id, plan.seed)
     palette = PALETTES.get(palette_id) or PALETTES["slate_warm_white"]
-    if plan.template_id == "bottom_overlay":
-        return [_render_bottom_overlay(poster, plan, palette_id, palette, started)]
-    if plan.template_id == "bottom_extension":
-        return [_render_bottom_extension(poster, plan, palette_id, palette, started)]
-    if plan.template_id == "hook_swipe_cta":
-        return _render_hook_swipe_cta(poster, plan, palette_id, palette, started)
+    if plan.template_id in {"bottom_overlay", "bottom_extension"} and poster.width < 720:
+        forced = replace(plan, template_id="right_extension")
+        logger.info(
+            "afishaengagement render fallback: forced_right_extension_small_poster width=%s height=%s",
+            poster.width,
+            poster.height,
+        )
+        return [render_right_extension(source_image, forced)]
+    try:
+        if plan.template_id == "bottom_overlay":
+            return [_render_bottom_overlay(poster, plan, palette_id, palette, started)]
+        if plan.template_id == "bottom_extension":
+            return [_render_bottom_extension(poster, plan, palette_id, palette, started)]
+        if plan.template_id == "hook_swipe_cta":
+            return _render_hook_swipe_cta(poster, plan, palette_id, palette, started)
+    except ValueError as exc:
+        if "overflow" in str(exc):
+            fallback = replace(plan, template_id="right_extension")
+            logger.info(
+                "afishaengagement render fallback: forced_right_extension_after_overflow template=%s width=%s height=%s",
+                plan.template_id,
+                poster.width,
+                poster.height,
+            )
+            return [render_right_extension(source_image, fallback)]
+        raise
     return [render_right_extension(source_image, plan)]
 
 

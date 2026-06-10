@@ -37,6 +37,18 @@ def _horizontal_poster_bytes() -> bytes:
     return out.getvalue()
 
 
+def _large_poster_bytes() -> bytes:
+    image = Image.new("RGB", (900, 1260))
+    pixels = []
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels.append(((x * 7 + y * 3) % 255, (x * 11 + y * 5) % 255, (x * 2 + y * 13) % 255))
+    image.putdata(pixels)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=92)
+    return out.getvalue()
+
+
 def test_apply_rate_is_stable_and_uses_bounds():
     first = aeg.should_apply_rate(
         event_id=10,
@@ -198,6 +210,137 @@ def test_repost_template_uses_event_type_noun():
     assert all("такие афиши" not in text for text in seen)
 
 
+def test_cinema_event_type_does_not_use_theatre_copy():
+    event = Event(
+        title="Кинопоказ фильма «Письма»",
+        description="Обсуждение после фильма",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="кинопоказ",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"cinema-copy-{idx}",
+            config={"mechanic_weights": {"comments": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert aeg._event_type_key(event) == "cinema"
+    assert any("кинопоказ" in text.casefold() or "фильм" in text.casefold() for text in seen)
+    assert all("спектак" not in text.casefold() for text in seen)
+
+
+def test_forbidden_generic_phrases_are_not_generated():
+    event = Event(
+        title="Вечер симфонической музыки",
+        description="Концерт камерного оркестра",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"forbidden-copy-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 60}},
+        ).cta_text
+        for idx in range(200)
+    }
+
+    assert all("Были на похожем событии" not in text for text in seen)
+    assert all("Поддержи лайком формат" not in text for text in seen)
+
+
+def test_concert_like_copy_can_use_extracted_theme():
+    event = Event(
+        title="Вечер симфонической музыки",
+        description="Концерт камерного оркестра",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"theme-copy-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(200)
+    }
+
+    assert "Поддержи лайком, если любишь симфоническую музыку." in seen
+
+
+def test_configured_registration_cta_uses_event_type_phrase():
+    event = Event(
+        title="Лекция проекта 80 историй",
+        description="Регистрация открыта",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+        festival="80 историй о главном",
+    )
+
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="registration-like-cta",
+        config={
+            "mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0},
+            "cta_templates": {
+                "by_event_type": {
+                    "*": {
+                        "likes": [
+                            "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+                        ]
+                    }
+                }
+            },
+        },
+    )
+
+    assert plan.mechanic == "likes"
+    assert plan.cta_text == "Поставь лайк ❤️, если уже зарегистрировался на эту лекцию."
+
+
+def test_configured_registration_cta_adapts_to_theatre():
+    event = Event(
+        title="Спектакль проекта 80 историй",
+        description="Регистрация открыта",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="спектакль",
+        festival="80 историй о главном",
+    )
+
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="registration-like-cta-theatre",
+        config={
+            "mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0},
+            "cta_templates": {
+                "likes": ["Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."]
+            },
+        },
+    )
+
+    assert plan.cta_text == "Поставь лайк ❤️, если уже зарегистрировался на этот спектакль."
+
+
 def test_festival_comment_template_names_festival_and_annual_context():
     event = Event(
         title="Кантата",
@@ -309,10 +452,10 @@ def test_render_bottom_overlay_preserves_source_dimensions():
         },
     )
 
-    rendered = aeg.render_plan_images(_poster_bytes(), plan)[0]
+    rendered = aeg.render_plan_images(_large_poster_bytes(), plan)[0]
 
     assert rendered.template_id == "bottom_overlay"
-    assert rendered.dimensions == (420, 620)
+    assert rendered.dimensions == (900, 1260)
     assert rendered.cta_text_font_px >= 22
     assert rendered.data.startswith(b"\x89PNG")
 
@@ -353,11 +496,38 @@ def test_render_explicit_bottom_extension_preserves_source_width():
         },
     )
 
-    rendered = aeg.render_plan_images(_poster_bytes(), plan)[0]
+    rendered = aeg.render_plan_images(_large_poster_bytes(), plan)[0]
 
     assert rendered.template_id == "bottom_extension"
-    assert rendered.dimensions[0] == 420
-    assert rendered.dimensions[1] > 620
+    assert rendered.dimensions[0] == 900
+    assert rendered.dimensions[1] > 1260
+
+
+def test_small_poster_bottom_template_falls_back_to_right_extension():
+    event = Event(
+        title="Мария Макарова акустика",
+        description="Акустический концерт",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="small-poster-fallback-render-test",
+        config={
+            "formats": ["bottom_extension"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"likes": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "right_extension"
+    assert rendered.dimensions[0] > 420
+    assert rendered.dimensions[1] == 620
 
 
 def test_render_hook_swipe_cta_returns_two_cards():

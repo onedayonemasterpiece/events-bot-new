@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement visual debug iteration**: CTA blocks now read as
+  distinct opaque engagement surfaces with stronger accent separation, lower
+  safe-zone badge placement for bottom layouts, engagementcard-style
+  `листай`/arrow carousel cards, small-poster fail-safe fallback, cinema-specific
+  copy instead of theatre wording, banned generic `Были на похожем событии` and
+  `Поддержи лайком формат...` phrases, theme-aware like copy such as
+  `Поддержи лайком, если любишь симфоническую музыку`, and configurable
+  event-type CTA templates for the `80 историй о главном` 70% registration-like
+  activity.
 - **Docs / Afisha Engagement requirements**: recorded the horizontal-poster
   requirement for a bottom engagementcard-style CTA extension and tightened CTA
   copy diversity so like mechanics are not limited to repeated `Лайк, если ...`

@@ -1,7 +1,7 @@
 # Afisha Engagement
 
-> **Status:** MVP implemented locally, production shadow verification pending.  
-> **Confirmation:** Not confirmed by user after VK visual review.  
+> **Status:** Visual-debug iteration implemented locally; production deploy and VK shadow verification pending.
+> **Confirmation:** Not confirmed by user after VK visual review.
 > **Canonical requirements snapshot:** [requirements.md](requirements.md).
 
 `afishaengagement` is a promo activity with the operator-facing meaning
@@ -22,8 +22,9 @@ after a normal event post is created.
 - The normal Smart Update VK post remains unchanged in debug shadow mode.
 - A separate debug copy is scheduled in VK postponed posts with generated
   afishaengagement media and a cleanup marker.
-- Existing managed VK post edits do not create shadow copies; MVP shadows only
-  newly created event posts to avoid repeated copies during Smart Update edits.
+- Existing managed VK post edits can create shadow copies during the visual
+  debug phase, so `/vk_auto_import` can produce the normal post plus a marked
+  postponed CTA copy for every applicable post.
 - Dedupe is stored through `promo_exposure` rows with
   `surface='afishaengagement'` and `publish_status='VK_SCHEDULED_DEBUG'`.
 
@@ -38,10 +39,10 @@ The activity is enabled manually as a `PromoActivity` row:
   "config_json": {
     "target_group": "klgdevents",
     "debug_shadow": true,
-    "apply_rate": 0.5,
+    "apply_rate": 1,
     "debug_marker": "#afishaengagement_shadow",
     "debug_cleanup_before": true,
-    "debug_cap": 20,
+    "debug_cap": 500,
     "debug_publish_delay_days": 3,
     "vision_enabled": true,
     "llm_plan_enabled": true,
@@ -62,13 +63,36 @@ per event.
 
 Optional config `event_type_keys` narrows a broad target after normal promo
 target matching. MVP keys are the internal classifier outputs:
-`lecture`, `concert`, `workshop`, `theatre`, `festival`, `other`. For example,
-lecture-only debug uses `target_type='all'` plus
+`lecture`, `concert`, `workshop`, `theatre`, `cinema`, `festival`, `market`,
+`other`. For example, lecture-only debug uses `target_type='all'` plus
 `"event_type_keys": ["lecture"]`.
 
 `apply_rate` accepts `0..1` or percent-like values above `1` (`50` means 50%).
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,
 so retries do not randomly flip the same event in and out.
+
+Activities may provide prioritized custom CTA templates:
+
+```json
+{
+  "mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0},
+  "cta_templates": {
+    "by_event_type": {
+      "*": {
+        "likes": [
+          "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+        ]
+      }
+    }
+  }
+}
+```
+
+`{THIS_EVENT}` is resolved by event type, for example `эту лекцию`,
+`этот концерт`, `этот спектакль`, or `этот кинопоказ`. Configured templates are
+preferred inside their activity by default; set
+`"prefer_configured_cta_templates": false` only when they should mix with the
+generic pool.
 
 ## Runtime Flags
 
@@ -113,11 +137,21 @@ Implemented templates:
   slightly overlap the image, but must not cover meaningful poster text or key
   visual objects. The poster itself remains at source resolution.
 
+- `bottom_overlay`: places a solid, high-contrast CTA sticker over a safe lower
+  poster area. The block is opaque, has an accent seam, and keeps the mechanic
+  badge below the diagonal safe line.
+
+- `hook_swipe_cta`: creates a two-card carousel. The first card keeps the poster
+  readable in an upper band and places the hook in a separate engagementcard-
+  style lower block with lowercase `листай` plus a right arrow. The second card
+  is a deterministic CTA card with a rounded downward arrow.
+
 The renderer uses engagementcard principles from guide excursion monitoring:
 
 - large editorial typography;
 - safe zones and word-boundary wrapping;
-- no emoji on the generated image;
+- deterministic drawing of the red heart in configured CTA copy instead of
+  relying on a system emoji font;
 - anti-aliased diagonal seams and dividers rendered via deterministic masks;
 - contrast-first palettes based on
   `docs/backlog/features/guide-excursions-monitoring/vk_hook_card_palettes.json`;
@@ -125,10 +159,9 @@ The renderer uses engagementcard principles from guide excursion monitoring:
   poster colors and satisfy contrast/readability constraints;
 - fail-closed when Cygre is missing or text cannot fit.
 
-Future debt: implement the `hook_swipe_cta` carousel fallback as
-`original poster + hook card + CTA card` using the same engagementcard 1080x1080
-safe-zone rules. The MVP code currently prefers `right_extension` for shadow
-debug output.
+Small/narrow posters fail safe to `right_extension` for bottom templates. If a
+bottom template still overflows text, rendering falls back to `right_extension`
+instead of publishing a clipped or visually damaged image.
 
 CTA copy must vary beyond repeated `Лайк, если ...` phrasing. Like mechanics
 should also use forms such as `Поставь лайк, если ...`, `Отметь лайком, если ...`,
