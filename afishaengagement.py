@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import colorsys
 import hashlib
 import io
 import json
@@ -420,14 +421,14 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         "likes": [
             f"Лайк, если хочешь чаще таких {topic}.",
             f"Поставь лайк, если хочешь чаще таких {topic}.",
-            f"Поддержи лайком такие {topic}.",
+            f"Поддержи лайком формат таких {topic}.",
             "Лайк, если такие события — твоё.",
             "Поставь лайк, если добавил событие в планы.",
         ],
         "reposts": [
-            f"Поделись с теми, кому близки такие {topic}.",
+            "Поделись с теми, кому близки такие события.",
             "Перешли тому, с кем пошёл бы вместе.",
-            "Поделись с другом, который любит такие афиши.",
+            "Поделись с другом, который любит такие события.",
         ],
     }
     if event_type == "lecture" and persona:
@@ -692,6 +693,113 @@ def _hex_to_rgb(value: str) -> tuple[int, int, int]:
     return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
 
 
+def _relative_luminance(rgb: tuple[int, int, int]) -> float:
+    values = []
+    for channel in rgb:
+        c = channel / 255.0
+        values.append(c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * values[0] + 0.7152 * values[1] + 0.0722 * values[2]
+
+
+def _contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    l1 = _relative_luminance(a)
+    l2 = _relative_luminance(b)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _rgb_hls(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
+    r, g, b = [channel / 255.0 for channel in rgb]
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    return h * 360.0, l, s
+
+
+def _hue_distance(a: float, b: float) -> float:
+    diff = abs(a - b) % 360.0
+    return min(diff, 360.0 - diff)
+
+
+def _harmony_score(bg_hue: float, bg_sat: float, dominant_hues: Sequence[float]) -> float:
+    if bg_sat < 0.18 or not dominant_hues:
+        return 1.0
+    best = 0.0
+    for hue in dominant_hues:
+        dist = _hue_distance(bg_hue, hue)
+        if dist <= 35:
+            score = 1.0 - dist / 70.0
+        elif 145 <= dist <= 215:
+            score = 0.95 - abs(180 - dist) / 140.0
+        elif 95 <= dist <= 135 or 225 <= dist <= 265:
+            score = 0.78
+        elif 55 <= dist <= 95:
+            score = 0.25
+        else:
+            score = 0.5
+        best = max(best, score)
+    return best
+
+
+def _poster_color_profile(poster: Any) -> dict[str, Any]:
+    from PIL import Image
+
+    sample = poster.convert("RGB")
+    sample.thumbnail((96, 96), Image.Resampling.LANCZOS)
+    quantized = sample.quantize(colors=8, method=Image.Quantize.MEDIANCUT).convert("RGB")
+    colors = quantized.getcolors(maxcolors=96 * 96) or []
+    colors.sort(reverse=True, key=lambda item: item[0])
+    dominant: list[tuple[int, int, int]] = [rgb for _count, rgb in colors[:5]]
+    saturated_hues = []
+    for rgb in dominant:
+        hue, _lightness, saturation = _rgb_hls(rgb)
+        if saturation >= 0.2:
+            saturated_hues.append(hue)
+    edge_w = max(1, int(poster.width * 0.08))
+    edge = poster.crop((poster.width - edge_w, 0, poster.width, poster.height)).resize((1, 1), Image.Resampling.BOX)
+    edge_rgb = edge.getpixel((0, 0))
+    return {
+        "dominant": dominant,
+        "dominant_hues": saturated_hues,
+        "edge_rgb": edge_rgb,
+    }
+
+
+def _choose_compatible_palette_id(poster: Any, preferred_id: str, seed: str) -> str:
+    profile = _poster_color_profile(poster)
+    dominant_hues = list(profile.get("dominant_hues") or [])
+    edge_rgb = profile.get("edge_rgb") or (128, 128, 128)
+    scored: list[tuple[float, str]] = []
+    for palette_id, palette in PALETTES.items():
+        bg = _hex_to_rgb(palette["background"])
+        text = _hex_to_rgb(palette["text"])
+        accent = _hex_to_rgb(palette["accent"])
+        text_contrast = _contrast_ratio(bg, text)
+        accent_contrast = _contrast_ratio(bg, accent)
+        if text_contrast < 4.5:
+            continue
+        bg_hue, _bg_lightness, bg_sat = _rgb_hls(bg)
+        harmony = _harmony_score(bg_hue, bg_sat, dominant_hues)
+        edge_contrast = _contrast_ratio(bg, edge_rgb)
+        edge_score = 1.0 - min(abs(edge_contrast - 2.8), 2.8) / 2.8
+        jitter = stable_unit_interval(f"{seed}:palette_compat:{palette_id}") * 0.08
+        preferred_bonus = 0.12 if palette_id == preferred_id else 0.0
+        score = (
+            min(text_contrast, 10.0) * 0.32
+            + min(accent_contrast, 8.0) * 0.12
+            + harmony * 1.7
+            + edge_score * 0.75
+            + preferred_bonus
+            + jitter
+        )
+        scored.append((score, palette_id))
+    if not scored:
+        return preferred_id if preferred_id in PALETTES else "slate_warm_white"
+    scored.sort(reverse=True)
+    top = scored[: min(4, len(scored))]
+    index = int(stable_unit_interval(f"{seed}:palette_compat_pick") * len(top)) % len(top)
+    return top[index][1]
+
+
 def _text_bbox(draw: Any, xy: tuple[int, int], text: str, font: Any) -> tuple[int, int, int, int]:
     return draw.textbbox(xy, text, font=font)
 
@@ -750,23 +858,49 @@ def _layout_scale(reference_px: int, base_px: int = 1080) -> float:
     return max(0.55, min(2.2, reference_px / base_px))
 
 
+def _aa_overlay(
+    *,
+    size: tuple[int, int],
+    polygon: list[tuple[int, int]],
+    fill: tuple[int, int, int, int],
+    line: list[tuple[int, int]] | None = None,
+    line_fill: tuple[int, int, int, int] | None = None,
+    line_width: int = 4,
+    aa_scale: int = 4,
+) -> Any:
+    from PIL import Image, ImageDraw
+
+    aa_scale = max(2, int(aa_scale))
+    width, height = size
+    hi = Image.new("RGBA", (width * aa_scale, height * aa_scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(hi)
+
+    def scale_points(points: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        return [(int(x * aa_scale), int(y * aa_scale)) for x, y in points]
+
+    draw.polygon(scale_points(polygon), fill=fill)
+    if line and line_fill:
+        draw.line(scale_points(line), fill=line_fill, width=max(1, int(line_width * aa_scale)))
+    return hi.resize((width, height), Image.Resampling.LANCZOS)
+
+
 def render_right_extension(source_image: bytes, plan: EngagementPlan) -> RenderedImage:
     from PIL import Image, ImageDraw, ImageOps
 
     started = time.monotonic()
     if not source_image:
         raise ValueError("source poster is empty")
-    palette = PALETTES.get(plan.palette_id) or PALETTES["slate_warm_white"]
+    with Image.open(io.BytesIO(source_image)) as opened:
+        poster = ImageOps.exif_transpose(opened).convert("RGB")
+    palette_id = _choose_compatible_palette_id(poster, plan.palette_id, plan.seed)
+    palette = PALETTES.get(palette_id) or PALETTES["slate_warm_white"]
     bg = _hex_to_rgb(palette["background"])
     text_color = _hex_to_rgb(palette["text"])
     accent = _hex_to_rgb(palette["accent"])
     accent_text = _hex_to_rgb(palette["accent_text"])
 
-    with Image.open(io.BytesIO(source_image)) as opened:
-        poster = ImageOps.exif_transpose(opened).convert("RGB")
-
     if poster.width > poster.height * 1.12:
-        return _render_bottom_extension(poster, plan, palette, started)
+        return _render_bottom_extension(poster, plan, palette_id, palette, started)
 
     poster_w, height = poster.size
     scale = _layout_scale(height)
@@ -805,15 +939,16 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
 
-    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
     cut_top = poster_w - int(diagonal * 0.35)
     cut_bottom = poster_w - diagonal
-    od.polygon(
-        [(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
+    overlay = _aa_overlay(
+        size=(width, height),
+        polygon=[(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
         fill=(*bg, 255),
+        line=[(cut_top, 0), (cut_bottom, height)],
+        line_fill=(*accent, 255),
+        line_width=max(2, int(4 * scale)),
     )
-    od.line([(cut_top, 0), (cut_bottom, height)], fill=(*accent, 255), width=max(2, int(4 * scale)))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
@@ -850,7 +985,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         data=data,
         filename="afishaengagement-right-extension.png",
         template_id="right_extension",
-        palette_id=plan.palette_id,
+        palette_id=palette_id,
         cta_text_lines=fit.lines,
         cta_text_font_px=fit.font_px,
         dimensions=(width, height),
@@ -861,6 +996,7 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
 def _render_bottom_extension(
     poster: Any,
     plan: EngagementPlan,
+    palette_id: str,
     palette: dict[str, str],
     started: float,
 ) -> RenderedImage:
@@ -906,13 +1042,14 @@ def _render_bottom_extension(
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
 
-    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
-    od.polygon(
-        [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
+    overlay = _aa_overlay(
+        size=(width, height),
+        polygon=[(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
         fill=(*bg, 255),
+        line=[(0, block_top + diagonal), (width, block_top)],
+        line_fill=(*accent, 255),
+        line_width=max(2, int(4 * scale)),
     )
-    od.line([(0, block_top + diagonal), (width, block_top)], fill=(*accent, 255), width=max(2, int(4 * scale)))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
@@ -951,7 +1088,7 @@ def _render_bottom_extension(
         data=data,
         filename="afishaengagement-bottom-extension.png",
         template_id="bottom_extension",
-        palette_id=plan.palette_id,
+        palette_id=palette_id,
         cta_text_lines=fit.lines,
         cta_text_font_px=fit.font_px,
         dimensions=(width, height),

@@ -118,8 +118,11 @@ The renderer uses engagementcard principles from guide excursion monitoring:
 - large editorial typography;
 - safe zones and word-boundary wrapping;
 - no emoji on the generated image;
+- anti-aliased diagonal seams and dividers rendered via deterministic masks;
 - contrast-first palettes based on
   `docs/backlog/features/guide-excursions-monitoring/vk_hook_card_palettes.json`;
+- poster-aware palette selection: CTA colors must be compatible with dominant
+  poster colors and satisfy contrast/readability constraints;
 - fail-closed when Cygre is missing or text cannot fit.
 
 Future debt: implement the `hook_swipe_cta` carousel fallback as

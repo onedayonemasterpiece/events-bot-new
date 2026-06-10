@@ -131,7 +131,7 @@ def test_render_right_extension_outputs_png_with_fit_text():
     rendered = aeg.render_right_extension(_poster_bytes(), plan)
 
     assert rendered.template_id == "right_extension"
-    assert rendered.palette_id == "deep_wine_ivory"
+    assert rendered.palette_id in aeg.PALETTES
     assert rendered.dimensions[0] > 420
     assert rendered.dimensions[1] == 620
     assert rendered.cta_text_font_px >= 24
@@ -172,6 +172,30 @@ def test_cta_text_sanitizer_removes_parenthetical_gender_and_punctuation_spaces(
     assert aeg._sanitize_cta_text("Поставь лайк, если сохранил(а) в планы.") == (
         "Поставь лайк, если добавил в планы."
     )
+
+
+def test_renderer_can_select_poster_compatible_palette():
+    source = _poster_bytes()
+    event = Event(
+        title="Лекция с Иваном Петровым",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="palette-compatible-render-test",
+        config={"palette_ids": ["yellow_violet"], "mechanic_weights": {"comments": 100}},
+    )
+
+    rendered = aeg.render_right_extension(source, plan)
+    palette = aeg.PALETTES[rendered.palette_id]
+
+    assert rendered.palette_id in aeg.PALETTES
+    assert aeg._contrast_ratio(aeg._hex_to_rgb(palette["background"]), aeg._hex_to_rgb(palette["text"])) >= 4.5
 
 
 @pytest.mark.asyncio

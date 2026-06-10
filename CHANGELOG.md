@@ -6,6 +6,13 @@
   requirement for a bottom engagementcard-style CTA extension and tightened CTA
   copy diversity so like mechanics are not limited to repeated `Лайк, если ...`
   formulations.
+- **Docs / Afisha Engagement palette requirements**: added the requirement for
+  poster-aware palette compatibility so CTA colors are selected from image
+  analysis and color-harmony/contrast rules rather than independently of the
+  source poster.
+- **Docs / Afisha Engagement render quality**: recorded anti-aliased diagonal
+  seams as an explicit quality requirement; visible stair-stepping on CTA
+  diagonals is a defect.
 - **Fixed: Afisha Engagement renderer geometry**: right-extension rendering now
   preserves the source poster resolution, grows only the canvas, cuts the poster
   edge directly with a right-leaning diagonal, and uses a bottom extension for
