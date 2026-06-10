@@ -11,6 +11,11 @@
   Russian. Render overflow now retries once with a short safe CTA on
   `right_extension` so debug shadows are not silently lost when one format is
   too tight. Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement horizontal bottom layout**: wide horizontal
+  posters selected for `bottom_overlay` now promote to `bottom_extension`
+  instead of falling through to a right-side extension when the lower overlay is
+  too cramped. This keeps horizontal posters extended downward as required.
+  Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement theme extraction**: concert CTA themes now avoid
   substring false positives such as reading `органную музыку` from
   `Организаторы`, while still detecting real organ concerts. Added safer

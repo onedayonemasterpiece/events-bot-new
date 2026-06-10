@@ -781,6 +781,33 @@ def test_render_bottom_overlay_preserves_source_dimensions():
     assert rendered.data.startswith(b"\x89PNG")
 
 
+def test_horizontal_bottom_overlay_promotes_to_bottom_extension():
+    event = Event(
+        title="Кинохиты. От Баха до Морриконе",
+        description="Концертная программа",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="horizontal-bottom-overlay-promote",
+        config={
+            "formats": ["bottom_overlay"],
+            "palette_ids": ["clay_cobalt_noir"],
+            "mechanic_weights": {"reposts": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_horizontal_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "bottom_extension"
+    assert rendered.dimensions[0] == 800
+    assert rendered.dimensions[1] > 450
+
+
 def test_bottom_overlay_can_invert_surface_on_dark_poster_region():
     poster = Image.new("RGB", (800, 800), (12, 12, 12))
     palette = aeg.PALETTES["black_lime"]

@@ -1822,6 +1822,10 @@ def _force_right_extension_for_bottom_template(poster: Any, template_id: str) ->
     return False
 
 
+def _prefers_bottom_extension_for_horizontal(poster: Any) -> bool:
+    return poster.width >= 720 and poster.width > poster.height * 1.12
+
+
 def _text_bbox(draw: Any, xy: tuple[int, int], text: str, font: Any) -> tuple[int, int, int, int]:
     return draw.textbbox(xy, text, font=font)
 
@@ -2289,7 +2293,7 @@ def render_right_extension(
         raise ValueError("source poster is empty")
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
-    if prefer_bottom_for_horizontal and poster.width >= 720 and poster.width > poster.height * 1.12:
+    if prefer_bottom_for_horizontal and _prefers_bottom_extension_for_horizontal(poster):
         palette_id = _choose_compatible_palette_id(
             poster,
             plan.palette_id,
@@ -2953,6 +2957,34 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
             poster.height,
         )
         return [render_right_extension(source_image, forced)]
+    if plan.template_id == "bottom_overlay" and _prefers_bottom_extension_for_horizontal(poster):
+        promoted = replace(plan, template_id="bottom_extension")
+        palette_id = _choose_compatible_palette_id(
+            poster,
+            promoted.palette_id,
+            promoted.seed,
+            template_id="bottom_extension",
+            event_type=promoted.event_type,
+        )
+        palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
+        logger.info(
+            "afishaengagement render fallback: promoted_horizontal_bottom_overlay_to_bottom_extension width=%s height=%s",
+            poster.width,
+            poster.height,
+        )
+        try:
+            return [_render_bottom_extension(poster, promoted, palette_id, palette, started)]
+        except ValueError as exc:
+            if "overflow" not in str(exc) and "aspect_unsafe" not in str(exc):
+                raise
+            logger.info(
+                "afishaengagement render fallback: horizontal_bottom_extension_rejected_after_overlay_promote width=%s height=%s reason=%s",
+                poster.width,
+                poster.height,
+                exc,
+            )
+            fallback = replace(plan, template_id="right_extension")
+            return [render_right_extension(source_image, fallback, prefer_bottom_for_horizontal=False)]
     try:
         if plan.template_id == "bottom_overlay":
             return [_render_bottom_overlay(poster, plan, palette_id, palette, started)]

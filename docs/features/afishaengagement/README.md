@@ -179,7 +179,9 @@ Implemented templates:
 
 - `bottom_overlay`: places a solid, high-contrast CTA sticker over a safe lower
   poster area. The block is opaque, has an accent seam, and keeps the mechanic
-  badge below the diagonal safe line.
+  badge below the diagonal safe line. Wide horizontal posters do not use this
+  as a cramped overlay; they are promoted to `bottom_extension` so the CTA is
+  added below the poster instead of widening the image to the right.
 
 - `hook_swipe_cta`: creates a two-card carousel. The first card keeps the poster
   readable in an upper band and places the hook in a separate engagementcard-
