@@ -358,6 +358,56 @@ async def test_promo_vk_publication_recovers_telegraph_media_before_posting(tmp_
 
 
 @pytest.mark.asyncio
+async def test_promo_vk_publication_runs_afishaengagement_shadow(tmp_path, monkeypatch) -> None:
+    import main
+    from promo import _build_promo_vk_source_post
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", False)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None):
+        assert group_id == "231920894"
+        assert attachments is None
+        return "https://vk.com/wall-231920894_42"
+
+    shadow_calls: list[dict] = []
+
+    async def fake_shadow(**kwargs):
+        shadow_calls.append(kwargs)
+        return "https://vk.com/wall-231920894_142"
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr("afishaengagement.maybe_publish_shadow_debug_copy", fake_shadow)
+
+    ev = _event("Фестиваль 1", "2026-06-10", festival="80 историй о главном")
+    ev.id = 6101
+    ev.photo_urls = ["https://example.com/promo-poster.jpg"]
+    ev.photo_count = 1
+
+    url = await _build_promo_vk_source_post(
+        db,
+        None,
+        ev,
+        campaign_id=80,
+        activity_id=8,
+        target_group_id=231920894,
+    )
+
+    assert url == "https://vk.com/wall-231920894_42"
+    assert len(shadow_calls) == 1
+    call = shadow_calls[0]
+    assert call["event"] is ev
+    assert call["target_group_id"] == "231920894"
+    assert call["message"] == "SOURCE Фестиваль 1"
+    assert call["photo_urls"] == ["https://example.com/promo-poster.jpg"]
+    assert call["post_to_vk_fn"] is fake_post_to_vk
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_path, monkeypatch) -> None:
     import main
     from promo import _build_promo_vk_source_post

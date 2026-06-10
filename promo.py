@@ -1760,10 +1760,13 @@ async def _build_promo_vk_source_post(
     from main import (
         VK_MAX_ATTACHMENTS,
         VK_PHOTOS_ENABLED,
+        _vk_api,
         _dedupe_event_photo_urls_for_publish,
         build_vk_source_message,
         post_to_vk,
+        upload_images,
         upload_vk_photo,
+        upload_vk_photo_bytes,
     )
 
     festival = None
@@ -1816,13 +1819,51 @@ async def _build_promo_vk_source_post(
             VK_SYNC_MISSING_TG_MEDIA_ERROR,
         )
         raise RuntimeError(VK_SYNC_MISSING_TG_MEDIA_ERROR)
-    return await post_to_vk(
+    url = await post_to_vk(
         str(target_group_id),
         message,
         db,
         bot,
         attachments or None,
     )
+    if url:
+        try:
+            from afishaengagement import maybe_publish_shadow_debug_copy
+
+            shadow_url = await maybe_publish_shadow_debug_copy(
+                event=ev,
+                db=db,
+                bot=bot,
+                target_group_id=str(target_group_id),
+                message=message,
+                photo_urls=photo_urls[:VK_MAX_ATTACHMENTS],
+                post_to_vk_fn=post_to_vk,
+                upload_vk_photo_fn=upload_vk_photo,
+                upload_images_fn=upload_images,
+                vk_api_fn=_vk_api,
+                upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
+            )
+            logger.info(
+                "promo.vk publication afishaengagement checked campaign_id=%s activity_id=%s event_id=%s "
+                "target_group_id=%s source_url=%s shadow_url=%s",
+                campaign_id,
+                activity_id,
+                getattr(ev, "id", None),
+                target_group_id,
+                url,
+                shadow_url,
+            )
+        except Exception:
+            logger.exception(
+                "promo.vk publication afishaengagement failed campaign_id=%s activity_id=%s event_id=%s "
+                "target_group_id=%s source_url=%s",
+                campaign_id,
+                activity_id,
+                getattr(ev, "id", None),
+                target_group_id,
+                url,
+            )
+    return url
 
 
 async def _build_promo_vk_repost_caption(ev: Event) -> str:

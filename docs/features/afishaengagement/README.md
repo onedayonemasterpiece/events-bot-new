@@ -5,13 +5,13 @@
 > **Canonical requirements snapshot:** [requirements.md](requirements.md).
 
 `afishaengagement` is a promo activity with the operator-facing meaning
-`Мотивация`. It enhances Smart Update VK event posts with CTA motivator images
-for comments, likes, and reposts.
+`Мотивация`. It enhances VK event posts with CTA motivator images for comments,
+likes, and reposts.
 
-The feature is deliberately attached to the Smart Update VK media-preparation
-path, not to the standalone promo VK runner. Promo campaign/activity rows decide
-whether the enhancer is eligible; the executor runs from `sync_vk_source_post`
-after a normal event post is created.
+Promo campaign/activity rows decide whether the enhancer is eligible. The
+executor runs after a normal event post is prepared both in the Smart Update
+source-post path and in promo `vk_publication`, so additional promo VK
+publications do not bypass the `Мотивация` activity.
 
 ## MVP Contract
 
@@ -22,9 +22,10 @@ after a normal event post is created.
 - The normal Smart Update VK post remains unchanged in debug shadow mode.
 - A separate debug copy is scheduled in VK postponed posts with generated
   afishaengagement media and a cleanup marker.
-- Existing managed VK post edits can create shadow copies during the visual
-  debug phase, so `/vk_auto_import` can produce the normal post plus a marked
-  postponed CTA copy for every applicable post.
+- Existing managed VK post edits and promo `vk_publication` runs can create
+  shadow copies during the visual debug phase, so `/vk_auto_import` and promo
+  deficit publications can produce the normal post plus a marked postponed CTA
+  copy for every applicable post.
 - Dedupe is stored through `promo_exposure` rows with
   `surface='afishaengagement'` and `publish_status='VK_SCHEDULED_DEBUG'`.
 
