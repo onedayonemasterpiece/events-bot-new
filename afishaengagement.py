@@ -419,12 +419,14 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
         ],
         "likes": [
             f"Лайк, если хочешь чаще таких {topic}.",
+            f"Поставь лайк, если хочешь чаще таких {topic}.",
+            f"Поддержи лайком такие {topic}.",
             "Лайк, если такие события — твоё.",
-            "Поставь лайк, если сохранил(а) в планы.",
+            "Поставь лайк, если добавил событие в планы.",
         ],
         "reposts": [
             f"Поделись с теми, кому близки такие {topic}.",
-            "Перешли тому, кого позвал(а) бы с собой.",
+            "Перешли тому, с кем пошёл бы вместе.",
             "Поделись с другом, который любит такие афиши.",
         ],
     }
@@ -437,6 +439,7 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
             ]
         )
         templates["likes"].append("Лайк, если нравится, как {N} ведёт лекции.")
+        templates["likes"].append("Поставь лайк, если уже слушал {N}.")
         templates["reposts"].append("Перешли другу, кто точно хочет на {N}.")
     elif event_type == "concert" and persona:
         templates["comments"].extend(
@@ -468,9 +471,24 @@ def _templates_for(event_type: str, persona: str | None, festival: str | None) -
                 "Что ждёте от {F}? Напишите в комментариях.",
             ]
         )
-        templates["likes"].extend(["Лайк, если ждёшь {F}.", "Лайк, если был(а) на {F}."])
+        templates["likes"].extend(["Лайк, если ждёшь {F}.", "Поставь лайк, если уже был на {F}."])
         templates["reposts"].append("Поделись с друзьями, если ждёшь {F}.")
     return templates
+
+
+def _sanitize_cta_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    replacements = {
+        "сохранил(а)": "добавил",
+        "был(а)": "был",
+        "позвал(а)": "позвал",
+        "пошёл(а)": "пошёл",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    text = re.sub(r"\s+([,.!?;:])", r"\1", text)
+    text = re.sub(r"\bтакие,\s+([А-Яа-яЁё-]+)", r"такие \1", text)
+    return text
 
 
 def _resolve_template(template: str, *, persona: str | None, festival: str | None, topic: str) -> str | None:
@@ -481,7 +499,7 @@ def _resolve_template(template: str, *, persona: str | None, festival: str | Non
         template = template.replace("{" + key + "}", str(value or ""))
     if re.search(r"\{[^}]+\}", template):
         return None
-    return re.sub(r"\s+", " ", template).strip()
+    return _sanitize_cta_text(template)
 
 
 def build_engagement_plan(
@@ -591,10 +609,10 @@ def _sanitize_llm_plan(
     palette_id = str(payload.get("palette_id") or fallback.palette_id).strip()
     if palette_id not in PALETTES:
         palette_id = fallback.palette_id
-    cta_text = re.sub(r"\s+", " ", str(payload.get("cta_text") or "").strip())
+    cta_text = _sanitize_cta_text(str(payload.get("cta_text") or ""))
     if not cta_text or len(cta_text) > 95 or re.search(r"\{[^}]+\}", cta_text):
         return None
-    hook_text = re.sub(r"\s+", " ", str(payload.get("hook_text") or "").strip()) or fallback.hook_text
+    hook_text = _sanitize_cta_text(str(payload.get("hook_text") or "")) or fallback.hook_text
     return EngagementPlan(
         mechanic=mechanic,
         template_id=template_id,
@@ -728,6 +746,10 @@ def fit_text(
     return None
 
 
+def _layout_scale(reference_px: int, base_px: int = 1080) -> float:
+    return max(0.55, min(2.2, reference_px / base_px))
+
+
 def render_right_extension(source_image: bytes, plan: EngagementPlan) -> RenderedImage:
     from PIL import Image, ImageDraw, ImageOps
 
@@ -742,51 +764,69 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
 
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
-    width, height = 1440, 1080
-    left_w = int(width * 0.62)
-    strip_x_top = int(width * 0.60)
-    strip_x_bottom = int(width * 0.64)
-    canvas = Image.new("RGB", (width, height), bg)
 
-    scale = min(left_w / poster.width, height / poster.height)
-    scaled_w = max(1, int(poster.width * scale))
-    scaled_h = max(1, int(poster.height * scale))
-    poster_resized = poster.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
-    poster_x = max(0, int((left_w - scaled_w) / 2))
-    poster_y = int((height - scaled_h) / 2)
-    canvas.paste(poster_resized, (poster_x, poster_y))
+    if poster.width > poster.height * 1.12:
+        return _render_bottom_extension(poster, plan, palette, started)
+
+    poster_w, height = poster.size
+    scale = _layout_scale(height)
+    badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
+    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(30 * scale)))
+    diagonal = max(int(24 * scale), min(int(86 * scale), int(poster_w * 0.085)))
+
+    fit: TextFit | None = None
+    width = 0
+    safe_x = 0
+    safe_y = int(84 * scale)
+    safe_w = 0
+    text_box_y = 0
+    text_box_h = 0
+    start_w = max(int(460 * scale), int(height * 0.43))
+    end_w = max(start_w + int(80 * scale), int(860 * scale))
+    step_w = max(18, int(40 * scale))
+    for cta_w in range(start_w, end_w + 1, step_w):
+        width = poster_w + cta_w
+        safe_x = poster_w + int(52 * scale)
+        safe_w = width - safe_x - int(60 * scale)
+        text_box_y = safe_y + int(48 * scale) + int(72 * scale)
+        text_box_h = height - text_box_y - int(150 * scale)
+        fit = fit_text(
+            plan.cta_text,
+            box_width=safe_w,
+            box_height=text_box_h,
+            preferred_px=max(30, int(78 * scale)),
+            min_px=max(24, int(46 * scale)),
+        )
+        if fit is not None:
+            break
+    if fit is None:
+        raise ValueError("text_overflow")
+
+    canvas = Image.new("RGB", (width, height), bg)
+    canvas.paste(poster, (0, 0))
 
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
+    cut_top = poster_w - diagonal
+    cut_bottom = poster_w - int(diagonal * 0.35)
     od.polygon(
-        [(strip_x_top, 0), (width, 0), (width, height), (strip_x_bottom, height)],
+        [(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)],
         fill=(*bg, 255),
     )
-    od.line([(strip_x_top, 0), (strip_x_bottom, height)], fill=(*accent, 255), width=4)
+    od.line([(cut_top, 0), (cut_bottom, height)], fill=(*accent, 255), width=max(2, int(4 * scale)))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    safe_x = strip_x_top + 72
-    safe_y = 84
-    safe_w = width - safe_x - 64
-    safe_h = height - safe_y - 112
-    badge_font = _load_font("Cygre-Medium.ttf", 30)
-    badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
     badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = badge_bbox[2] - badge_bbox[0] + 34
-    badge_h = 48
+    badge_w = badge_bbox[2] - badge_bbox[0] + int(34 * scale)
+    badge_h = int(48 * scale)
     draw.rounded_rectangle(
         (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
-        radius=18,
+        radius=int(18 * scale),
         fill=accent,
     )
-    draw.text((safe_x + 17, safe_y + 8), badge, font=badge_font, fill=accent_text)
+    draw.text((safe_x + int(17 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
 
-    text_box_y = safe_y + badge_h + 72
-    text_box_h = height - text_box_y - 150
-    fit = fit_text(plan.cta_text, box_width=safe_w, box_height=text_box_h)
-    if fit is None:
-        raise ValueError("text_overflow")
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.08)
     total_h = fit.height
@@ -795,17 +835,122 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         draw.text((safe_x, y), line, font=main_font, fill=text_color)
         bbox = _text_bbox(draw, (safe_x, y), line, main_font)
         y += (bbox[3] - bbox[1]) + line_gap
-    draw.line((safe_x, height - 80, width - 64, height - 80), fill=accent, width=4)
+    draw.line(
+        (safe_x, height - int(80 * scale), width - int(64 * scale), height - int(80 * scale)),
+        fill=accent,
+        width=max(2, int(4 * scale)),
+    )
 
     out = io.BytesIO()
     canvas.save(out, format="PNG", optimize=True)
     data = out.getvalue()
-    if len(data) < 50_000:
+    if len(data) < 1_000:
         raise ValueError("rendered_png_too_small")
     return RenderedImage(
         data=data,
         filename="afishaengagement-right-extension.png",
         template_id="right_extension",
+        palette_id=plan.palette_id,
+        cta_text_lines=fit.lines,
+        cta_text_font_px=fit.font_px,
+        dimensions=(width, height),
+        render_ms=int((time.monotonic() - started) * 1000),
+    )
+
+
+def _render_bottom_extension(
+    poster: Any,
+    plan: EngagementPlan,
+    palette: dict[str, str],
+    started: float,
+) -> RenderedImage:
+    from PIL import Image, ImageDraw
+
+    bg = _hex_to_rgb(palette["background"])
+    text_color = _hex_to_rgb(palette["text"])
+    accent = _hex_to_rgb(palette["accent"])
+    accent_text = _hex_to_rgb(palette["accent_text"])
+
+    width, poster_h = poster.size
+    scale = _layout_scale(width)
+    overlap = max(int(42 * scale), min(int(82 * scale), int(poster_h * 0.12)))
+    diagonal = max(int(22 * scale), min(int(46 * scale), int(width * 0.035)))
+    badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
+    badge_font = _load_font("Cygre-Medium.ttf", max(18, int(28 * scale)))
+
+    fit: TextFit | None = None
+    block_h = 0
+    safe_x = int(72 * scale)
+    safe_w = width - safe_x * 2
+    start_h = max(int(330 * scale), int(poster_h * 0.54))
+    end_h = max(start_h + int(72 * scale), int(590 * scale))
+    step_h = max(18, int(36 * scale))
+    for candidate_h in range(start_h, end_h + 1, step_h):
+        text_box_h = candidate_h - int(142 * scale)
+        fit = fit_text(
+            plan.cta_text,
+            box_width=safe_w,
+            box_height=text_box_h,
+            preferred_px=max(30, int(66 * scale)),
+            min_px=max(24, int(44 * scale)),
+            max_lines=4,
+        )
+        if fit is not None:
+            block_h = candidate_h
+            break
+    if fit is None:
+        raise ValueError("text_overflow")
+
+    height = poster_h + block_h - overlap
+    block_top = poster_h - overlap
+    canvas = Image.new("RGB", (width, height), bg)
+    canvas.paste(poster, (0, 0))
+
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.polygon(
+        [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)],
+        fill=(*bg, 255),
+    )
+    od.line([(0, block_top + diagonal), (width, block_top)], fill=(*accent, 255), width=max(2, int(4 * scale)))
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(canvas)
+
+    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
+    badge_w = badge_bbox[2] - badge_bbox[0] + int(32 * scale)
+    badge_h = int(46 * scale)
+    safe_y = block_top + int(46 * scale)
+    draw.rounded_rectangle(
+        (safe_x, safe_y, safe_x + badge_w, safe_y + badge_h),
+        radius=int(17 * scale),
+        fill=accent,
+    )
+    draw.text((safe_x + int(16 * scale), safe_y + int(8 * scale)), badge, font=badge_font, fill=accent_text)
+
+    text_box_y = safe_y + badge_h + int(32 * scale)
+    text_box_h = height - text_box_y - int(58 * scale)
+    main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
+    line_gap = int(fit.font_px * 0.08)
+    y = text_box_y + max(0, int((text_box_h - fit.height) / 2))
+    for line in fit.lines:
+        draw.text((safe_x, y), line, font=main_font, fill=text_color)
+        bbox = _text_bbox(draw, (safe_x, y), line, main_font)
+        y += (bbox[3] - bbox[1]) + line_gap
+    draw.line(
+        (safe_x, height - int(42 * scale), width - safe_x, height - int(42 * scale)),
+        fill=accent,
+        width=max(2, int(4 * scale)),
+    )
+
+    out = io.BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    data = out.getvalue()
+    if len(data) < 1_000:
+        raise ValueError("rendered_png_too_small")
+    return RenderedImage(
+        data=data,
+        filename="afishaengagement-bottom-extension.png",
+        template_id="bottom_extension",
         palette_id=plan.palette_id,
         cta_text_lines=fit.lines,
         cta_text_font_px=fit.font_px,

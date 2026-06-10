@@ -101,11 +101,17 @@ publish attempts are included in the structured `afishaengagement.decision` log.
 The MVP renderer is deterministic PIL with Cygre fonts from
 `kaggle/CherryFlash/assets/ro_znanie_fonts/`.
 
-Implemented template:
+Implemented templates:
 
-- `right_extension`: expands the poster into a 1440x1080 image, keeps the
-  original poster on the left, and places CTA text in a right color strip with
-  a slight right-leaning diagonal seam.
+- `right_extension`: expands the poster canvas to the right, keeps the
+  original poster at its source resolution on the left, and places CTA text in
+  an added right color strip with a slight right-leaning diagonal seam. The
+  poster itself is not resized or padded; only the canvas grows.
+
+- `bottom_extension`: for horizontal posters, extends the image downward and
+  places an engagementcard-style CTA block below the poster. The block may
+  slightly overlap the image, but must not cover meaningful poster text or key
+  visual objects. The poster itself remains at source resolution.
 
 The renderer uses engagementcard principles from guide excursion monitoring:
 
@@ -120,6 +126,10 @@ Future debt: implement the `hook_swipe_cta` carousel fallback as
 `original poster + hook card + CTA card` using the same engagementcard 1080x1080
 safe-zone rules. The MVP code currently prefers `right_extension` for shadow
 debug output.
+
+CTA copy must vary beyond repeated `Лайк, если ...` phrasing. Like mechanics
+should also use forms such as `Поставь лайк, если ...`, `Отметь лайком, если ...`,
+and `Поддержи лайком, если ...` where they fit the event.
 
 ## LLM/Vision Roles
 

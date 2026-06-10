@@ -25,6 +25,18 @@ def _poster_bytes() -> bytes:
     return out.getvalue()
 
 
+def _horizontal_poster_bytes() -> bytes:
+    image = Image.new("RGB", (800, 450))
+    pixels = []
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels.append(((x * 5 + y * 11) % 255, (x * 17 + y * 2) % 255, (x * 3 + y * 13) % 255))
+    image.putdata(pixels)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=92)
+    return out.getvalue()
+
+
 def test_apply_rate_is_stable_and_uses_bounds():
     first = aeg.should_apply_rate(
         event_id=10,
@@ -120,10 +132,46 @@ def test_render_right_extension_outputs_png_with_fit_text():
 
     assert rendered.template_id == "right_extension"
     assert rendered.palette_id == "deep_wine_ivory"
-    assert rendered.dimensions == (1440, 1080)
-    assert rendered.cta_text_font_px >= 52
+    assert rendered.dimensions[0] > 420
+    assert rendered.dimensions[1] == 620
+    assert rendered.cta_text_font_px >= 24
     assert rendered.data.startswith(b"\x89PNG")
     assert len(rendered.data) > 50_000
+    with Image.open(io.BytesIO(rendered.data)) as image:
+        assert image.size == rendered.dimensions
+
+
+def test_render_horizontal_poster_uses_bottom_extension_without_resizing_width():
+    event = Event(
+        title="Концерт камерной музыки",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="horizontal-render-test",
+        config={"palette_ids": ["deep_wine_ivory"], "mechanic_weights": {"likes": 100}},
+    )
+
+    rendered = aeg.render_right_extension(_horizontal_poster_bytes(), plan)
+
+    assert rendered.template_id == "bottom_extension"
+    assert rendered.dimensions[0] == 800
+    assert rendered.dimensions[1] > 450
+    assert rendered.cta_text_font_px >= 24
+
+
+def test_cta_text_sanitizer_removes_parenthetical_gender_and_punctuation_spaces():
+    assert aeg._sanitize_cta_text("Поделись с теми, кому близки такие , лекции.") == (
+        "Поделись с теми, кому близки такие лекции."
+    )
+    assert aeg._sanitize_cta_text("Поставь лайк, если сохранил(а) в планы.") == (
+        "Поставь лайк, если добавил в планы."
+    )
 
 
 @pytest.mark.asyncio

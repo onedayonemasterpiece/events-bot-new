@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Docs / Afisha Engagement requirements**: recorded the horizontal-poster
+  requirement for a bottom engagementcard-style CTA extension and tightened CTA
+  copy diversity so like mechanics are not limited to repeated `Лайк, если ...`
+  formulations.
+- **Fixed: Afisha Engagement renderer geometry**: right-extension rendering now
+  preserves the source poster resolution, grows only the canvas, cuts the poster
+  edge directly with a right-leaning diagonal, and uses a bottom extension for
+  horizontal posters. CTA text/badges scale from the source poster dimensions,
+  and CTA text sanitization removes parenthetical gender forms plus punctuation
+  spacing defects.
 - **Afisha Engagement / VK debug shadow CTA motivators**: added the
   `afishaengagement` promo activity for Smart Update VK event posts. In debug
   shadow mode the normal event post remains unchanged, while a marked postponed
