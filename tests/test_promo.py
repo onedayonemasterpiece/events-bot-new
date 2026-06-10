@@ -681,6 +681,115 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_promo_vk_repost_uses_local_day_count_not_rolling_window(
+    tmp_path, monkeypatch
+) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 10, 13, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Сегодняшняя лекция", "2026-06-11")
+        event.source_vk_post_url = "https://vk.com/wall-111_20"
+        session.add(event)
+        campaign = PromoCampaign(
+            title="VK repost local day",
+            status="active",
+            starts_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 6, 30, tzinfo=timezone.utc),
+        )
+        session.add(campaign)
+        await session.flush()
+        target = PromoTarget(
+            campaign_id=int(campaign.id),
+            target_type="event",
+            event_id=int(event.id),
+        )
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key="klgdevents->kenigeventsofficial",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "source_group": "klgdevents",
+                "target_group": "kenigeventsofficial",
+                "window_hours": 24,
+                "active_start_hour": 9,
+                "active_end_hour": 21,
+                "dedup_hours": 72,
+            },
+        )
+        session.add_all([target, activity])
+        await session.commit()
+        await session.refresh(activity)
+        yesterday_repost = PromoExposure(
+            campaign_id=int(campaign.id),
+            activity_id=int(activity.id),
+            event_id=int(event.id),
+            surface=PROMO_SURFACE_VK_REPOST,
+            placement_kind="rolling_window_repost",
+            publish_status="PUBLISHED_MAIN",
+            public_target_count=1,
+            public_targets_json=[{"type": "vk_wall", "url": "https://vk.com/wall-222_1"}],
+            published_at=datetime(2026, 6, 9, 18, 46, tzinfo=timezone.utc),
+            details_json={
+                "source_url": "https://vk.com/wall-111_older",
+                "target_url": "https://vk.com/wall-222_1",
+            },
+        )
+        session.add(yesterday_repost)
+        await session.commit()
+
+    async def fake_resolve(ref: str):
+        if ref == "klgdevents":
+            return 111, "Events", "klgdevents", "group"
+        if ref == "kenigeventsofficial":
+            return 222, "Main", "kenigeventsofficial", "group"
+        raise AssertionError(ref)
+
+    async def fake_vk_api(method: str, **_params):
+        assert method == "wall.getById"
+        return {"response": [{"date": int(now_utc.timestamp())}]}
+
+    reposted: list[str] = []
+
+    async def fake_publish_repost(_db, _bot, *, source_url, target_group_id, message):
+        reposted.append(source_url)
+        assert target_group_id == 222
+        assert message == "caption"
+        return "https://vk.com/wall-222_2"
+
+    async def fake_caption(_ev):
+        return "caption"
+
+    monkeypatch.setattr(main, "vk_resolve_group", fake_resolve)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr("promo._build_promo_vk_repost_caption", fake_caption)
+    monkeypatch.setattr("promo._publish_vk_repost", fake_publish_repost)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [item.status for item in results] == ["published"]
+    assert reposted == ["https://vk.com/wall-111_20"]
+    async with db.get_session() as session:
+        exposures = (
+            await session.execute(
+                select(PromoExposure)
+                .where(PromoExposure.surface == PROMO_SURFACE_VK_REPOST)
+                .order_by(PromoExposure.id)
+            )
+        ).scalars().all()
+    assert [row.details_json["source_url"] for row in exposures] == [
+        "https://vk.com/wall-111_older",
+        "https://vk.com/wall-111_20",
+    ]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_video_promo_resolver_uses_priority_and_global_budget(tmp_path) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

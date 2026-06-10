@@ -1748,6 +1748,25 @@ async def _recent_activity_exposures(
         return list(res.scalars().all())
 
 
+async def _activity_day_exposures(
+    db: Database,
+    *,
+    campaign_id: int,
+    activity_id: int,
+    surface: str,
+    now_utc: datetime,
+) -> list[PromoExposure]:
+    day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
+    return await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        surface=surface,
+        since_utc=day_start_utc,
+        until_utc=day_end_utc,
+    )
+
+
 async def _build_promo_vk_source_post(
     db: Database,
     bot: object | None,
@@ -2306,12 +2325,12 @@ async def run_promo_vk_activities(
                 until_utc=now_utc,
                 db=db,
             )
-            recent_exposures = await _recent_activity_exposures(
+            recent_exposures = await _activity_day_exposures(
                 db,
                 campaign_id=campaign_id,
                 activity_id=activity_id,
                 surface=PROMO_SURFACE_VK_PUBLICATION,
-                since_utc=since_utc,
+                now_utc=now_utc,
             )
             recent_audit_exposures = await _recent_activity_exposures(
                 db,
@@ -2457,12 +2476,12 @@ async def run_promo_vk_activities(
             due_count = _vk_activity_due_count(activity, now_utc)
             if due_count <= 0:
                 continue
-            recent_reposts = await _recent_activity_exposures(
+            recent_reposts = await _activity_day_exposures(
                 db,
                 campaign_id=campaign_id,
                 activity_id=activity_id,
                 surface=PROMO_SURFACE_VK_REPOST,
-                since_utc=since_utc,
+                now_utc=now_utc,
             )
             if len(recent_reposts) >= due_count:
                 continue
@@ -2615,12 +2634,12 @@ async def run_promo_vk_activities(
             due_count = _vk_activity_due_count(activity, now_utc)
             if due_count <= 0:
                 continue
-            recent_stories = await _recent_activity_exposures(
+            recent_stories = await _activity_day_exposures(
                 db,
                 campaign_id=campaign_id,
                 activity_id=activity_id,
                 surface=PROMO_SURFACE_VK_STORY,
-                since_utc=since_utc,
+                now_utc=now_utc,
             )
             if len(recent_stories) >= due_count:
                 continue

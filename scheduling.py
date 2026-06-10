@@ -747,9 +747,11 @@ def _utc_sql_text(dt: datetime) -> str:
 def _video_session_has_remote_handoff(state: dict[str, Any]) -> bool:
     kernel_ref = str(state.get("kaggle_kernel_ref") or "").strip()
     dataset = str(state.get("kaggle_dataset") or "").strip()
+    status = str(state.get("session_status") or "").strip()
+    if status == "FAILED":
+        return False
     if dataset and kernel_ref and not kernel_ref.startswith("local:"):
         return True
-    status = str(state.get("session_status") or "").strip()
     return status in {"DONE", "PUBLISHED_TEST", "PUBLISHED_MAIN"} and not kernel_ref.startswith("local:")
 
 
@@ -1657,11 +1659,16 @@ async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
 
 def runtime_health_status() -> dict[str, Any]:
     enabled, _, _, _, _ = _video_tomorrow_schedule_settings()
+    popular_review_enabled, _, _ = _popular_review_schedule_settings()
     guide_enabled, _, _ = _guide_monitoring_schedule_settings()
+    promo_vk_enabled = _env_enabled("ENABLE_PROMO_VK_SCHEDULER", default=True)
     scheduler = _scheduler
     payload: dict[str, Any] = {
         "scheduler": "missing" if scheduler is None else "unknown",
         "video_tomorrow": "disabled",
+        "video_popular_review": "disabled",
+        "video_popular_review_watchdog": "disabled",
+        "promo_vk": "disabled",
         "guide_excursions_light": "disabled",
         "guide_excursions_full": "disabled",
         "kenigsberg_story_daily": "disabled" if os.getenv("DEV_MODE") == "1" else "unknown",
@@ -1669,6 +1676,11 @@ def runtime_health_status() -> dict[str, Any]:
     if scheduler is None:
         if enabled:
             payload["video_tomorrow"] = "missing_scheduler"
+        if popular_review_enabled:
+            payload["video_popular_review"] = "missing_scheduler"
+            payload["video_popular_review_watchdog"] = "missing_scheduler"
+        if promo_vk_enabled:
+            payload["promo_vk"] = "missing_scheduler"
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
@@ -1679,6 +1691,26 @@ def runtime_health_status() -> dict[str, Any]:
     except Exception:
         running = False
     payload["scheduler"] = "ok" if running else "stopped"
+
+    def _set_job_health(key: str, job_id: str) -> None:
+        try:
+            job = scheduler.get_job(job_id)
+        except Exception:
+            payload[key] = "lookup_error"
+            return
+        next_run = _job_next_run(job) if job else None
+        payload[key] = "ok" if next_run is not None else "missing"
+        if next_run is not None:
+            payload[f"{key}_next_run"] = (
+                next_run.isoformat() if hasattr(next_run, "isoformat") else str(next_run)
+            )
+
+    if popular_review_enabled:
+        _set_job_health("video_popular_review", "video_popular_review")
+        _set_job_health("video_popular_review_watchdog", "video_popular_review_watchdog")
+
+    if promo_vk_enabled:
+        _set_job_health("promo_vk", "promo_vk")
 
     if guide_enabled:
         try:

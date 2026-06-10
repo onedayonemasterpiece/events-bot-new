@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+- **Fixed: CherryFlash VK fanout after Telegram story auth failure**:
+  CherryFlash story publishing no longer lets an unauthorized Telethon session
+  abort VK wall/story targets. Failed remote Kaggle handoffs are now retryable
+  by same-day CherryFlash watchdogs, while active handoffs still suppress
+  duplicate renders. Runtime health now reports `video_popular_review`,
+  `video_popular_review_watchdog`, and `promo_vk`. Added incident
+  `INC-2026-06-10-cherryflash-telegram-auth-vk-fanout`. Covered by
+  `tests/test_kaggle_story_publish.py` and `tests/test_scheduling.py`.
+- **Fixed: promo VK local-day slot suppression**:
+  Promo VK fulfilment for `vk_publication`, `vk_repost`, and `vk_story` now
+  counts already recorded promo exposures by the activity's current local
+  calendar day, while source discovery and source dedup keep their rolling
+  window behavior. This prevents yesterday evening's `80 историй о главном`
+  exposure from suppressing today's 15:00 local repost/story slot. Covered by
+  `tests/test_promo.py`.
 - **Fixed: Telegram event ticket shortlink leak**:
   Smart Update ticket merges no longer let VK shortener URLs (`vk.cc`,
   `vk.link`, `go.vk.com`, `l.vk.com`) replace an existing canonical
