@@ -415,7 +415,7 @@ def load_runtime_config() -> dict[str, Any]:
     for key, value in secrets.items():
         if value is None:
             continue
-        os.environ.setdefault(str(key), str(value))
+        os.environ[str(key)] = str(value)
     return config
 
 
@@ -465,6 +465,14 @@ async def create_client() -> TelegramClient:
     session = str((bundle or {}).get("session") or os.getenv("TG_SESSION") or os.getenv("TELEGRAM_SESSION") or "").strip()
     if not session:
         raise RuntimeError("Missing TELEGRAM auth bundle or session")
+    print(
+        (
+            "Guide auth source="
+            f"{_bundle_env or ('TG_SESSION' if os.getenv('TG_SESSION') else 'TELEGRAM_SESSION')} "
+            f"session_hash={hashlib.sha256(session.encode()).hexdigest()[:12]}"
+        ),
+        flush=True,
+    )
     client = TelegramClient(
         StringSession(session),
         api_id,

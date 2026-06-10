@@ -18,6 +18,12 @@
   `GUIDE_MONITORING_FAILED_RETRY_SECONDS` and incident
   `INC-2026-06-10-guide-watchdog-kaggle-failure-loop`. Covered by
   `tests/test_scheduling.py`.
+- **Fixed: guide Kaggle auth rotation propagation**: guide monitoring notebook
+  runtime secrets from the per-run encrypted payload now override stale Kaggle
+  environment values instead of using `setdefault`, so rotating
+  `TELEGRAM_AUTH_BUNDLE_S22` in Fly actually reaches the Kaggle kernel. The
+  notebook logs only the selected auth source and a short session hash for
+  verification, never secret values.
 - **Fixed: VK postponed rhythm after stale future drafts**: normal Smart Update
   VK scheduling now ignores ordinary postponed anchors beyond
   `VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS` (default 18 hours), in addition to
