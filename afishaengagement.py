@@ -326,15 +326,15 @@ def _group_matches(config: dict[str, Any], group_id: str) -> bool:
     return expected.lstrip("-") == str(group_id).lstrip("-")
 
 
-async def resolve_candidate(
+async def resolve_candidates(
     db: Database | None,
     event: Event,
     *,
     target_group_id: str,
     now_utc: datetime | None = None,
-) -> EngagementCandidate | None:
+) -> list[EngagementCandidate]:
     if db is None:
-        return None
+        return []
     now_utc = now_utc or datetime.now(timezone.utc)
     async with db.get_session() as session:
         query = (
@@ -349,6 +349,7 @@ async def resolve_candidate(
             .order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id, PromoTarget.id)
         )
         rows = list((await session.execute(query)).all())
+    candidates: list[EngagementCandidate] = []
     for campaign, activity, target in rows:
         config = dict(activity.config_json or {})
         if not _group_matches(config, target_group_id):
@@ -356,8 +357,19 @@ async def resolve_candidate(
         if not _config_matches_event(event, config):
             continue
         if _target_matches(event, target):
-            return EngagementCandidate(campaign=campaign, activity=activity, target=target, config=config)
-    return None
+            candidates.append(EngagementCandidate(campaign=campaign, activity=activity, target=target, config=config))
+    return candidates
+
+
+async def resolve_candidate(
+    db: Database | None,
+    event: Event,
+    *,
+    target_group_id: str,
+    now_utc: datetime | None = None,
+) -> EngagementCandidate | None:
+    candidates = await resolve_candidates(db, event, target_group_id=target_group_id, now_utc=now_utc)
+    return candidates[0] if candidates else None
 
 
 def _event_type_key(event: Event) -> str:
@@ -2301,8 +2313,8 @@ async def maybe_publish_shadow_debug_copy(
             )
         )
         return None
-    candidate = await resolve_candidate(db, event, target_group_id=target_group_id, now_utc=now_utc)
-    if candidate is None:
+    candidates = await resolve_candidates(db, event, target_group_id=target_group_id, now_utc=now_utc)
+    if not candidates:
         _json_log(
             StageLog(
                 stage="eligibility",
@@ -2314,93 +2326,118 @@ async def maybe_publish_shadow_debug_copy(
             )
         )
         return None
-    campaign_id = int(candidate.campaign.id) if candidate.campaign.id is not None else None
-    activity_id = int(candidate.activity.id) if candidate.activity.id is not None else None
-    config = candidate.config
-    marker, build_tag = _debug_marker(config, now_utc)
-    shadow_mode = _env_debug_enabled(config)
-    if not shadow_mode:
-        _json_log(
-            StageLog(
-                stage="eligibility",
-                decision="skip",
-                reason="shadow_disabled",
-                event_id=event_id,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                vk_owner_id=owner_id,
-                vk_group_short=group_short,
-                shadow_mode=False,
-            )
-        )
-        return None
-    await maybe_cleanup_once(
-        group_id=target_group_id,
-        marker=marker,
-        config=config,
-        vk_api_fn=vk_api_fn,
-        db=db,
-        bot=bot,
-    )
-    if await _shadow_already_exists(db, event_id=event_id, activity_id=activity_id, marker=marker, build_tag=build_tag):
-        _json_log(
-            StageLog(
-                stage="eligibility",
-                decision="skip",
-                reason="shadow_duplicate",
-                event_id=event_id,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                vk_owner_id=owner_id,
-                vk_group_short=group_short,
-                shadow_mode=True,
-                shadow_marker=marker,
-            )
-        )
-        return None
-    if await _debug_cap_reached(db, activity_id=activity_id, config=config, now_utc=now_utc):
-        _json_log(
-            StageLog(
-                stage="eligibility",
-                decision="skip",
-                reason="debug_cap_reached",
-                event_id=event_id,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                vk_owner_id=owner_id,
-                vk_group_short=group_short,
-                shadow_mode=True,
-                shadow_marker=marker,
-            )
-        )
-        return None
     digest = media_hash(photo_urls)
-    dice = should_apply_rate(
-        event_id=event_id,
-        campaign_id=campaign_id,
-        activity_id=activity_id,
-        apply_rate=_apply_rate_from_config(config),
-        salt=str(config.get("apply_salt") or ""),
-        media_digest=digest,
-    )
-    if not dice.applies:
-        _json_log(
-            StageLog(
-                stage="dice",
-                decision="skip",
-                reason="dice_miss",
-                event_id=event_id,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                vk_owner_id=owner_id,
-                vk_group_short=group_short,
-                seed=dice.seed,
-                apply_rate=dice.apply_rate,
-                dice_value=dice.value,
-                shadow_mode=True,
-                shadow_marker=marker,
+    candidate: EngagementCandidate | None = None
+    config: dict[str, Any] = {}
+    marker = ""
+    build_tag = ""
+    dice: DiceDecision | None = None
+    campaign_id: int | None = None
+    activity_id: int | None = None
+    for candidate_item in candidates:
+        item_campaign_id = int(candidate_item.campaign.id) if candidate_item.campaign.id is not None else None
+        item_activity_id = int(candidate_item.activity.id) if candidate_item.activity.id is not None else None
+        item_config = candidate_item.config
+        item_marker, item_build_tag = _debug_marker(item_config, now_utc)
+        shadow_mode = _env_debug_enabled(item_config)
+        if not shadow_mode:
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="shadow_disabled",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=False,
+                )
             )
+            continue
+        await maybe_cleanup_once(
+            group_id=target_group_id,
+            marker=item_marker,
+            config=item_config,
+            vk_api_fn=vk_api_fn,
+            db=db,
+            bot=bot,
         )
+        if await _shadow_already_exists(
+            db,
+            event_id=event_id,
+            activity_id=item_activity_id,
+            marker=item_marker,
+            build_tag=item_build_tag,
+        ):
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="shadow_duplicate",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=True,
+                    shadow_marker=item_marker,
+                )
+            )
+            continue
+        if await _debug_cap_reached(db, activity_id=item_activity_id, config=item_config, now_utc=now_utc):
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="debug_cap_reached",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=True,
+                    shadow_marker=item_marker,
+                )
+            )
+            continue
+        item_dice = should_apply_rate(
+            event_id=event_id,
+            campaign_id=item_campaign_id,
+            activity_id=item_activity_id,
+            apply_rate=_apply_rate_from_config(item_config),
+            salt=str(item_config.get("apply_salt") or ""),
+            media_digest=digest,
+        )
+        if not item_dice.applies:
+            _json_log(
+                StageLog(
+                    stage="dice",
+                    decision="skip",
+                    reason="dice_miss",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    seed=item_dice.seed,
+                    apply_rate=item_dice.apply_rate,
+                    dice_value=item_dice.value,
+                    shadow_mode=True,
+                    shadow_marker=item_marker,
+                    extra={"candidate_fallback": True, "candidate_count": len(candidates)},
+                )
+            )
+            continue
+        candidate = candidate_item
+        campaign_id = item_campaign_id
+        activity_id = item_activity_id
+        config = item_config
+        marker = item_marker
+        build_tag = item_build_tag
+        dice = item_dice
+        break
+    if candidate is None or dice is None:
         return None
     fetch_image_fn = fetch_image_fn or _default_fetch_image
     try:

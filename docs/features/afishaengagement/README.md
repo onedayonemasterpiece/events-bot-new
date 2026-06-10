@@ -70,6 +70,11 @@ target matching. MVP keys are the internal classifier outputs:
 `apply_rate` accepts `0..1` or percent-like values above `1` (`50` means 50%).
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,
 so retries do not randomly flip the same event in and out.
+When several activities match the same event, they are evaluated in campaign
+priority order. A dice miss, disabled shadow mode, duplicate, or debug cap on
+one activity is logged and the next matching activity may still create the
+shadow copy. This allows a 70% festival-specific CTA to fall through to the
+100% all-post visual-debug activity.
 
 Activities may provide prioritized custom CTA templates:
 

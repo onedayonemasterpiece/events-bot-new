@@ -685,6 +685,112 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
 
 
 @pytest.mark.asyncio
+async def test_shadow_debug_copy_falls_through_after_candidate_dice_miss(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Лекция проекта 80 историй",
+            description="Регистрация открыта",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="лекция",
+            festival="80 историй о главном",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        special_campaign = PromoCampaign(title="80 stories motivation", status="active", starts_at=now, priority=1)
+        fallback_campaign = PromoCampaign(title="all debug", status="active", starts_at=now, priority=2)
+        session.add_all([event, special_campaign, fallback_campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(special_campaign)
+        await session.refresh(fallback_campaign)
+        special_activity = PromoActivity(
+            campaign_id=int(special_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "debug_shadow": True,
+                "apply_rate": 0,
+                "debug_marker": "#aeg_special",
+                "debug_cleanup_before": False,
+                "mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0},
+                "cta_templates": {
+                    "likes": ["Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."]
+                },
+            },
+        )
+        fallback_activity = PromoActivity(
+            campaign_id=int(fallback_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "debug_shadow": True,
+                "apply_rate": 1,
+                "debug_marker": "#aeg_all",
+                "debug_cleanup_before": False,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        session.add_all(
+            [
+                special_activity,
+                fallback_activity,
+                PromoTarget(
+                    campaign_id=int(special_campaign.id),
+                    target_type="festival",
+                    festival_name="80 историй о главном",
+                ),
+                PromoTarget(campaign_id=int(fallback_campaign.id), target_type="all"),
+            ]
+        )
+        await session.commit()
+        await session.refresh(fallback_activity)
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        return {"response": 1}
+
+    async def fake_upload_images(images, *args, **kwargs):
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        return "https://vk.com/wall-231920894_1002"
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1002"
+    async with db.get_session() as session:
+        rows = list((await session.execute(select(PromoExposure))).scalars().all())
+    assert len(rows) == 1
+    assert rows[0].activity_id == int(fallback_activity.id)
+    assert rows[0].details_json["shadow_marker"] == "#aeg_all"
+
+
+@pytest.mark.asyncio
 async def test_shadow_debug_copy_falls_back_to_byte_vk_upload(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

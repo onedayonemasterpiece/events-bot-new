@@ -10,6 +10,8 @@
   `Поддержи лайком формат...` phrases, theme-aware like copy such as
   `Поддержи лайком, если любишь симфоническую музыку`, and configurable
   event-type CTA templates for the `80 историй о главном` 70% registration-like
+  activity. Matching activities now fall through on dice miss/duplicate/cap so
+  a festival-specific CTA can coexist with the all-post visual-debug shadow
   activity.
 - **Docs / Afisha Engagement requirements**: recorded the horizontal-poster
   requirement for a bottom engagementcard-style CTA extension and tightened CTA
