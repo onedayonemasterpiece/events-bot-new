@@ -2186,8 +2186,11 @@ def _render_hook_swipe_cta(
     diagonal = int(70 * scale)
     edge = [(0, block_top + diagonal), (card_w, block_top), (card_w, card_h), (0, card_h)]
     accent_edge = [(0, block_top + diagonal - int(16 * scale)), (card_w, block_top - int(16 * scale)), (card_w, card_h), (0, card_h)]
-    draw.polygon(accent_edge, fill=accent)
-    draw.polygon(edge, fill=bg)
+    accent_overlay = _aa_overlay(size=(card_w, card_h), polygon=accent_edge, fill=(*accent, 255))
+    hook = Image.alpha_composite(hook.convert("RGBA"), accent_overlay).convert("RGB")
+    bg_overlay = _aa_overlay(size=(card_w, card_h), polygon=edge, fill=(*bg, 255))
+    hook = Image.alpha_composite(hook.convert("RGBA"), bg_overlay).convert("RGB")
+    draw = ImageDraw.Draw(hook)
 
     swipe_font = _load_font("Cygre-Medium.ttf", int(36 * scale))
     swipe_label = "листай"
