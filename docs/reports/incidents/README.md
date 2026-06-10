@@ -18,9 +18,6 @@
 
 ## Активные regression contracts
 
-- `INC-2026-06-10-guide-watchdog-kaggle-failure-loop.md`
-  - Scope: Guide excursions critical watchdog, `ops_run(kind='guide_monitoring')`, and Kaggle terminal failure retry behavior.
-  - Must not regress: the watchdog must retry a missed same-day `guide_excursions_full` slot, but terminal `error`/`failed` full attempts must defer the next retry by `GUIDE_MONITORING_FAILED_RETRY_SECONDS`; only `running`/`success`/`partial` full runs satisfy the slot; one Kaggle failure must not cause a new kernel push every watchdog tick.
 - `INC-2026-06-10-event-outbox-fanout-deadlock.md`
   - Scope: Smart Update event fanout through `JobOutbox`, `vk_sync`, `tg_event_publish`, `ics_publish`, and `tg_ics_post`.
   - Must not regress: independent event pipeline jobs must not block each other via a broad same-event prior-job rule; `vk_sync` must not wait behind calendar jobs unless explicitly configured; dependent jobs must not expire while their dependency is actively retrying with bounded backoff; ordinary VK auto-import should restore the expected Telegraph + VK + Telegram rhythm.

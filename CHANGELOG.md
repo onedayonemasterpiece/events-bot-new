@@ -11,13 +11,6 @@
   `INC-2026-06-10-event-outbox-fanout-deadlock`. Covered by
   `tests/test_job_due_filter.py`, `tests/test_job_outbox_depends.py`,
   `tests/test_tg_event_publish.py`, and targeted `tests/test_vk_source.py`.
-- **Fixed: guide full watchdog retry loop after Kaggle failure**: the critical
-  guide excursions watchdog now defers retries after a materialized full
-  `guide_monitoring` run finishes as `error`/`failed` instead of pushing a new
-  Kaggle kernel on every watchdog tick. Added
-  `GUIDE_MONITORING_FAILED_RETRY_SECONDS` and incident
-  `INC-2026-06-10-guide-watchdog-kaggle-failure-loop`. Covered by
-  `tests/test_scheduling.py`.
 - **Fixed: VK postponed rhythm after stale future drafts**: normal Smart Update
   VK scheduling now ignores ordinary postponed anchors beyond
   `VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS` (default 18 hours), in addition to

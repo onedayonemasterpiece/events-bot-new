@@ -709,15 +709,6 @@ def _guide_monitoring_remote_busy_retry_seconds() -> int:
     return max(300, value)
 
 
-def _guide_monitoring_failed_retry_seconds() -> int:
-    raw = (os.getenv("GUIDE_MONITORING_FAILED_RETRY_SECONDS") or "").strip()
-    try:
-        value = int(raw) if raw else 3600
-    except ValueError:
-        value = 3600
-    return max(300, value)
-
-
 _critical_catchup_inflight: set[str] = set()
 _critical_catchup_completed: set[str] = set()
 _critical_catchup_deferred_until: dict[str, datetime] = {}
@@ -929,50 +920,6 @@ async def _latest_guide_full_remote_busy_skip_started_at(
     if not _details_have_remote_telegram_busy(details):
         return None
     return _parse_ops_run_datetime(started_at_raw)
-
-
-async def _latest_guide_full_failed_at(
-    db: Any,
-    *,
-    day_start_utc: datetime,
-    day_end_utc: datetime,
-) -> datetime | None:
-    if db is None or not hasattr(db, "raw_conn"):
-        return None
-    async with db.raw_conn() as conn:
-        cur = await conn.execute(
-            """
-            SELECT status, details_json, started_at, finished_at
-            FROM ops_run
-            WHERE kind = 'guide_monitoring'
-              AND trigger = 'scheduled'
-              AND started_at >= ?
-              AND started_at < ?
-            ORDER BY id DESC
-            LIMIT 8
-            """,
-            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
-        )
-        rows = await cur.fetchall()
-    for status, details_raw, started_at_raw, finished_at_raw in rows:
-        if str(status or "").strip() not in {"error", "failed"}:
-            continue
-        details: dict[str, Any] = {}
-        if isinstance(details_raw, str) and details_raw.strip():
-            try:
-                parsed = json.loads(details_raw)
-            except Exception:
-                parsed = {}
-            if isinstance(parsed, dict):
-                details = parsed
-        elif isinstance(details_raw, dict):
-            details = details_raw
-        if str(details.get("mode") or "").strip() != "full":
-            continue
-        return _parse_ops_run_datetime(finished_at_raw) or _parse_ops_run_datetime(
-            started_at_raw
-        )
-    return None
 
 
 async def _video_tomorrow_session_exists_today(
@@ -1559,26 +1506,6 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
         db_deferred_until = latest_remote_busy_started + timedelta(seconds=retry_seconds)
         if now_utc < db_deferred_until:
             _critical_catchup_deferred_until[catchup_key] = db_deferred_until
-            return 0
-    latest_failed_at = await _latest_guide_full_failed_at(
-        db,
-        day_start_utc=day_start_utc,
-        day_end_utc=day_end_utc,
-    )
-    if latest_failed_at is not None:
-        failed_retry_seconds = _guide_monitoring_failed_retry_seconds()
-        db_deferred_until = latest_failed_at + timedelta(seconds=failed_retry_seconds)
-        if now_utc < db_deferred_until:
-            _critical_catchup_deferred_until[catchup_key] = db_deferred_until
-            logging.warning(
-                "SCHED critical watchdog deferring guide_excursions_full retry "
-                "after failed catch-up scheduled_local=%s now_local=%s "
-                "retry_seconds=%s failed_at=%s",
-                scheduled_local.isoformat(),
-                now_local.isoformat(),
-                failed_retry_seconds,
-                latest_failed_at.isoformat(),
-            )
             return 0
 
     _critical_catchup_inflight.add(catchup_key)
