@@ -8,6 +8,12 @@
   concert themes for kazach choir / folk / patriotic music so CTA copy stays
   aligned with the imported poster and event text. Covered by
   `tests/test_afishaengagement.py`.
+- **Changed: Afisha Engagement debug observability**: scheduled shadow
+  exposures now persist event title/type, campaign/activity profile, source
+  post URLs, first rendered source-photo URL, source photo count, CTA/template
+  metadata, media hash, and vision summary in `promo_exposure.details_json` so
+  poster/text binding issues can be audited directly from production rows.
+  Covered by `tests/test_afishaengagement.py`.
 - **Changed: Afisha Engagement CTA surface separation**: applied the Opus visual
   consultation to make CTA blocks read as separate action cards instead of a
   continuation of the poster. The PIL renderer now uses a multi-layer

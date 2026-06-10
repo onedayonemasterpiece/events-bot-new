@@ -82,6 +82,13 @@ not match unrelated words such as `организаторы`. If a theme is unce
 copy falls back to the event type instead of inventing a specific music/cinema
 topic.
 
+Every scheduled debug shadow exposure stores the durable debugging context
+needed to audit poster/text binding after the post appears in VK postponed
+posts: campaign/activity profile, event title, stored and normalized event type,
+festival name, source post URLs, first rendered source-photo URL, source photo
+count, CTA text, template, palette, rendered dimensions, media hash, vision
+summary, dice value, scheduled timestamp, and VK debug post URL.
+
 `apply_rate` accepts `0..1` or percent-like values above `1` (`50` means 50%).
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,
 so retries do not randomly flip the same event in and out.

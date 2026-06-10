@@ -3141,9 +3141,11 @@ async def record_shadow_exposure(
     rendered: RenderedImage,
     dice: DiceDecision,
     vision: PosterVisionSummary,
+    source_photo_urls: Sequence[str] | None = None,
 ) -> None:
     if db is None or event.id is None or candidate.campaign.id is None:
         return
+    source_photo_urls = [str(url or "").strip() for url in (source_photo_urls or []) if str(url or "").strip()]
     async with db.get_session() as session:
         exposure = PromoExposure(
             campaign_id=int(candidate.campaign.id),
@@ -3165,6 +3167,17 @@ async def record_shadow_exposure(
                 "apply_rate": dice.apply_rate,
                 "dice_value": dice.value,
                 "seed": dice.seed,
+                "campaign_title": str(getattr(candidate.campaign, "title", "") or "")[:160],
+                "activity_profile_key": str(getattr(candidate.activity, "profile_key", "") or "")[:120],
+                "activity_surface": str(getattr(candidate.activity, "surface", "") or "")[:80],
+                "event_title": str(getattr(event, "title", "") or "")[:160],
+                "event_type": plan.event_type,
+                "stored_event_type": str(getattr(event, "event_type", "") or "")[:80],
+                "event_festival": str(getattr(event, "festival", "") or "")[:160],
+                "source_post_url": str(getattr(event, "source_post_url", "") or "")[:240],
+                "event_source_vk_post_url": str(getattr(event, "source_vk_post_url", "") or "")[:240],
+                "source_first_photo_url": source_photo_urls[0] if source_photo_urls else None,
+                "source_photo_urls_count": len(source_photo_urls),
                 "mechanic": plan.mechanic,
                 "template_id": plan.template_id,
                 "palette_id": plan.palette_id,
@@ -3634,6 +3647,7 @@ async def maybe_publish_shadow_debug_copy(
             rendered=rendered,
             dice=dice,
             vision=vision,
+            source_photo_urls=photo_urls,
         )
         _json_log(
             StageLog(

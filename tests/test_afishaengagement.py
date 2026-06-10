@@ -816,6 +816,7 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
             location_name="Зал",
             source_text="",
             event_type="лекция",
+            source_post_url="https://vk.com/wall-1_2",
             photo_urls=["https://example.test/poster.jpg"],
         )
         campaign = PromoCampaign(title="Мотивация", status="active", starts_at=now)
@@ -898,6 +899,15 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
     assert rows[0].surface == aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT
     assert rows[0].publish_status == "VK_SCHEDULED_DEBUG"
     assert rows[0].details_json["shadow_marker"] == "#aeg_test_shadow"
+    assert rows[0].details_json["event_title"] == "Лекция с Иваном Петровым"
+    assert rows[0].details_json["event_type"] == "lecture"
+    assert rows[0].details_json["stored_event_type"] == "лекция"
+    assert rows[0].details_json["source_post_url"] == "https://vk.com/wall-1_2"
+    assert rows[0].details_json["source_first_photo_url"] == "https://example.test/poster.jpg"
+    assert rows[0].details_json["source_photo_urls_count"] == 1
+    assert rows[0].details_json["activity_surface"] == aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT
+    assert rows[0].details_json["activity_profile_key"] == ""
+    assert rows[0].details_json["cta_text"]
 
 
 @pytest.mark.asyncio
