@@ -255,8 +255,10 @@ def test_forbidden_generic_phrases_are_not_generated():
         for idx in range(200)
     }
 
-    assert all("Были на похожем событии" not in text for text in seen)
-    assert all("Поддержи лайком формат" not in text for text in seen)
+    assert all("похож" not in text.casefold() for text in seen)
+    assert all("формат" not in text.casefold() for text in seen)
+    assert all("в таких концертов" not in text.casefold() for text in seen)
+    assert any("в таких концертах" in text.casefold() for text in seen)
 
 
 def test_concert_like_copy_can_use_extracted_theme():

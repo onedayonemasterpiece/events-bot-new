@@ -752,7 +752,7 @@ def _templates_for(
     festival_on = "{FON}"
     templates: dict[str, list[str]] = {
         "comments": [
-            f"Расскажите в комментариях, что для вас главное в таких {topic}.",
+            "Расскажите в комментариях, что для вас главное в таких {TP}.",
             "Что ждёте от этого события? Напишите в комментариях.",
         ],
         "likes": [
@@ -780,7 +780,6 @@ def _templates_for(
         templates["likes"].append("Лайк, если нравится, как {N} ведёт лекции.")
         templates["likes"].append("Поставь лайк, если уже слушал {N}.")
         templates["reposts"].append("Перешли другу, кто точно хочет на {N}.")
-        templates["comments"].append("Бывали на похожих лекциях? Расскажите.")
     elif event_type == "concert" and persona:
         templates["comments"].extend(
             [
@@ -790,14 +789,11 @@ def _templates_for(
         )
         templates["likes"].append("Лайк, если нравится творчество {N}.")
         templates["reposts"].append("Перешли другу, кто слушает {N}.")
-        templates["comments"].append("Были на похожем концерте? Поделитесь впечатлениями.")
-    elif event_type == "concert":
-        templates["comments"].append("Были на похожем концерте? Поделитесь впечатлениями.")
     elif event_type == "workshop":
         templates["comments"].extend(
             [
                 "Что хотели бы освоить на мастер-классе? Напишите в комментариях.",
-                "Какой формат интереснее: теория или практика? Делитесь.",
+                "Что больше всего хочется попробовать на мастер-классе? Делитесь.",
                 "Уже бывали на мастер-классах в этой технике? Поделитесь.",
             ]
         )
@@ -808,7 +804,6 @@ def _templates_for(
                 "Что важнее: режиссура или актёрская игра?",
             ]
         )
-        templates["comments"].append("Видели похожие постановки? Поделитесь.")
     elif event_type == "cinema":
         templates["comments"].extend(
             [
@@ -823,10 +818,6 @@ def _templates_for(
             ]
         )
         templates["reposts"].append("Перешли тому, с кем смотришь фильмы.")
-    elif event_type == "market":
-        templates["comments"].append("Бывали на похожих маркетах? Расскажите про находки.")
-    elif event_type == "festival":
-        templates["comments"].append("Были на похожих фестивалях? Делитесь впечатлениями.")
     if theme:
         templates["likes"].extend(
             [
@@ -947,6 +938,7 @@ def _resolve_template(
         "THEME": theme,
         "T": topic,
         "TA": topic_accusative_plural,
+        "TP": _topic_prepositional_plural(event_type),
         "THIS_EVENT": _this_event_accusative(event_type),
     }
     for key, value in slots.items():
