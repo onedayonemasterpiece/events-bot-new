@@ -26,6 +26,7 @@ PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
 DEFAULT_DEBUG_MARKER = "#afishaengagement_shadow"
 DEFAULT_BUILD_TAG_PREFIX = "#aeg_b"
 DEFAULT_TARGET_GROUP_SHORT = "klgdevents"
+MAX_VK_FEED_PHOTO_ASPECT = 1.45
 
 _CLEANUP_DONE: set[tuple[str, str]] = set()
 
@@ -1646,6 +1647,26 @@ def _aa_overlay(
     return hi.resize((width, height), Image.Resampling.LANCZOS)
 
 
+def _composite_aa_line(
+    image: Any,
+    points: list[tuple[float, float]],
+    *,
+    fill: tuple[int, int, int],
+    width: int,
+    aa_scale: int = 4,
+) -> Any:
+    from PIL import Image, ImageDraw
+
+    aa_scale = max(2, int(aa_scale))
+    image_width, image_height = image.size
+    hi = Image.new("RGBA", (image_width * aa_scale, image_height * aa_scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(hi)
+    scaled = [(int(x * aa_scale), int(y * aa_scale)) for x, y in points]
+    draw.line(scaled, fill=(*fill, 255), width=max(1, int(width * aa_scale)))
+    overlay = hi.resize((image_width, image_height), Image.Resampling.LANCZOS)
+    return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+
 def _round_line(draw: Any, pts: list[tuple[float, float]], color: tuple[int, int, int], width: int) -> None:
     draw.line(pts, fill=color, width=width, joint="curve")
     radius = width / 2
@@ -1839,8 +1860,13 @@ def render_right_extension(source_image: bytes, plan: EngagementPlan) -> Rendere
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
+    canvas = _composite_aa_line(
+        canvas,
+        [(cut_top - int(5 * scale), 0), (cut_bottom - int(5 * scale), height)],
+        fill=rim,
+        width=max(1, int(2 * scale)),
+    )
     draw = ImageDraw.Draw(canvas)
-    draw.line((cut_top - int(5 * scale), 0, cut_bottom - int(5 * scale), height), fill=rim, width=max(1, int(2 * scale)))
 
     _badge_w, badge_h = _draw_badge(
         draw,
@@ -1916,8 +1942,13 @@ def _render_bottom_extension(
     safe_w = width - safe_x * 2
     badge_h = int(58 * scale)
     safe_y_offset = diagonal + int(64 * scale)
-    start_h = max(int(380 * scale), int(poster_h * 0.58))
-    end_h = max(start_h + int(80 * scale), int(660 * scale))
+    max_height = int(width * MAX_VK_FEED_PHOTO_ASPECT)
+    max_block_h = max_height - poster_h + overlap
+    min_block_h = max(int(260 * scale), int(poster_h * 0.18))
+    if max_block_h < min_block_h:
+        raise ValueError("bottom_extension_aspect_unsafe")
+    start_h = max(min_block_h, min(int(360 * scale), max_block_h))
+    end_h = min(max_block_h, max(start_h + int(180 * scale), int(540 * scale)))
     step_h = max(18, int(36 * scale))
     for candidate_h in range(start_h, end_h + 1, step_h):
         text_box_h = candidate_h - safe_y_offset - badge_h - int(112 * scale)
@@ -1949,12 +1980,13 @@ def _render_bottom_extension(
         line_width=max(4, int(8 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    draw = ImageDraw.Draw(canvas)
-    draw.line(
-        (0, block_top + diagonal - int(6 * scale), width, block_top - int(6 * scale)),
+    canvas = _composite_aa_line(
+        canvas,
+        [(0, block_top + diagonal - int(6 * scale)), (width, block_top - int(6 * scale))],
         fill=rim,
         width=max(1, int(2 * scale)),
     )
+    draw = ImageDraw.Draw(canvas)
 
     safe_y = block_top + safe_y_offset
     _draw_badge(
@@ -2066,12 +2098,13 @@ def _render_bottom_overlay(
         line_width=max(4, int(12 * scale)),
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    draw = ImageDraw.Draw(canvas)
-    draw.line(
-        (0, block_top + diagonal - int(7 * scale), width, block_top - int(7 * scale)),
+    canvas = _composite_aa_line(
+        canvas,
+        [(0, block_top + diagonal - int(7 * scale)), (width, block_top - int(7 * scale))],
         fill=rim,
         width=max(1, int(2 * scale)),
     )
+    draw = ImageDraw.Draw(canvas)
 
     _draw_badge(
         draw,
@@ -2288,13 +2321,14 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
         if plan.template_id == "hook_swipe_cta":
             return _render_hook_swipe_cta(poster, plan, palette_id, palette, started)
     except ValueError as exc:
-        if "overflow" in str(exc):
+        if "overflow" in str(exc) or "aspect_unsafe" in str(exc):
             fallback = replace(plan, template_id="right_extension")
             logger.info(
-                "afishaengagement render fallback: forced_right_extension_after_overflow template=%s width=%s height=%s",
+                "afishaengagement render fallback: forced_right_extension_after_render_reject template=%s width=%s height=%s reason=%s",
                 plan.template_id,
                 poster.width,
                 poster.height,
+                exc,
             )
             return [render_right_extension(source_image, fallback)]
         raise

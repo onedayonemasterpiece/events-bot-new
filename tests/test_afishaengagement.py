@@ -518,11 +518,38 @@ def test_render_explicit_bottom_extension_preserves_source_width():
         },
     )
 
-    rendered = aeg.render_plan_images(_large_poster_bytes(), plan)[0]
+    rendered = aeg.render_plan_images(_horizontal_poster_bytes(), plan)[0]
 
     assert rendered.template_id == "bottom_extension"
-    assert rendered.dimensions[0] == 900
-    assert rendered.dimensions[1] > 1260
+    assert rendered.dimensions[0] == 800
+    assert rendered.dimensions[1] > 450
+    assert rendered.dimensions[1] <= int(rendered.dimensions[0] * aeg.MAX_VK_FEED_PHOTO_ASPECT)
+
+
+def test_vertical_poster_bottom_extension_falls_back_to_right_extension():
+    event = Event(
+        title="Лекция о городе",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="лекция",
+    )
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="vertical-bottom-extension-render-test",
+        config={
+            "formats": ["bottom_extension"],
+            "palette_ids": ["midnight_gold"],
+            "mechanic_weights": {"likes": 100},
+        },
+    )
+
+    rendered = aeg.render_plan_images(_large_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "right_extension"
+    assert rendered.dimensions[1] == 1260
 
 
 def test_small_poster_bottom_template_falls_back_to_right_extension():
