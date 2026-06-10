@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement event-type ownership**: CTA generation now treats
+  the stored `event.event_type` as the primary event-type signal before title
+  heuristics. Generic `встреча` no longer becomes `lecture` unless there are
+  explicit lecture/speaker/discussion signals, and child/family meetings such
+  as fairy-character events get family-oriented CTA copy instead of lecture
+  wording. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Guide full watchdog retry loop after Kaggle terminal failures**:
   the critical scheduler watchdog now persists a retry hold for the daily
   `guide_excursions_full` catch-up after recent `error`, `crashed`, or

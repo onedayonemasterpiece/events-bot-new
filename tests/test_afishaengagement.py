@@ -457,6 +457,52 @@ def test_market_event_type_is_not_overridden_by_meeting_words():
     assert "фестивал" not in plan.cta_text.casefold()
 
 
+def test_explicit_event_type_is_reused_before_title_heuristics():
+    event = Event(
+        title="Встреча после концерта",
+        description="Обсуждаем музыку и планы сообщества",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    plan = aeg.build_engagement_plan(
+        event,
+        seed="explicit-type-wins",
+        config={"mechanic_weights": {"reposts": 100}},
+    )
+
+    assert plan.event_type == "concert"
+    assert "лекц" not in plan.cta_text.casefold()
+
+
+def test_family_meeting_with_fairy_characters_does_not_get_lecture_copy():
+    event = Event(
+        title="Встреча со сказочными героями",
+        description="Детский праздник в Холмогорье",
+        date="2026-06-20",
+        time="12:00",
+        location_name="Холмогорье",
+        source_text="",
+        event_type="встреча",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"family-fairy-copy-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 40, "reposts": 20}},
+        ).cta_text
+        for idx in range(120)
+    }
+
+    assert aeg._event_type_key(event) == "family"
+    assert all("лекц" not in text.casefold() for text in seen)
+    assert any("дет" in text.casefold() or "семейн" in text.casefold() for text in seen)
+
+
 def test_renderer_can_select_poster_compatible_palette():
     source = _poster_bytes()
     event = Event(

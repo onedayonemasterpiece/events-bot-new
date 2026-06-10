@@ -570,14 +570,53 @@ async def resolve_candidate(
     return candidates[0] if candidates else None
 
 
-def _event_type_key(event: Event) -> str:
-    explicit_type = str(event.event_type or "").casefold()
+def _explicit_event_type_key(value: str | None) -> str | None:
+    explicit_type = str(value or "").strip().casefold()
+    if not explicit_type:
+        return None
     if any(word in explicit_type for word in ("маркет", "ярмарк")):
         return "market"
     if any(word in explicit_type for word in ("кинопоказ", "киносеанс", "кинолекторий", "кино")):
         return "cinema"
     if "фестив" in explicit_type:
         return "festival"
+    if any(word in explicit_type for word in ("концерт", "музык")):
+        return "concert"
+    if any(word in explicit_type for word in ("мастер-класс", "мастер класс", "воркшоп")):
+        return "workshop"
+    if any(word in explicit_type for word in ("спектак", "театр", "постановк", "пьес")):
+        return "theatre"
+    if any(word in explicit_type for word in ("лекц", "семинар", "лектор", "спикер", "дискусс")):
+        return "lecture"
+    if any(word in explicit_type for word in ("дет", "семейн", "праздник")):
+        return "family"
+    if any(word in explicit_type for word in ("встреч", "клуб", "игр", "квиз")):
+        return "other"
+    return None
+
+
+def _looks_family_event(raw: str) -> bool:
+    return any(
+        word in raw
+        for word in (
+            "дет",
+            "семейн",
+            "малыш",
+            "ребят",
+            "сказоч",
+            "сказк",
+            "геро",
+            "праздник",
+            "аниматор",
+        )
+    )
+
+
+def _event_type_key(event: Event) -> str:
+    explicit_type = str(event.event_type or "").casefold()
+    explicit_key = _explicit_event_type_key(explicit_type)
+    if explicit_key and explicit_key != "other":
+        return explicit_key
     raw = " ".join(
         [
             explicit_type,
@@ -586,6 +625,8 @@ def _event_type_key(event: Event) -> str:
             str(event.search_digest or ""),
         ]
     ).casefold()
+    if explicit_key == "other":
+        return "family" if _looks_family_event(raw) else "other"
     if any(word in raw for word in ("маркет", "ярмарк")):
         return "market"
     if any(word in raw for word in ("кинопоказ", "киносеанс", "кинолекторий", "кинопросмотр")):
@@ -594,7 +635,9 @@ def _event_type_key(event: Event) -> str:
         return "cinema"
     if re.search(r"(^|\s)кино(\s|$|-)", raw) and "сценар" not in raw:
         return "cinema"
-    if any(word in raw for word in ("лекц", "спикер", "дискусс", "встреч")):
+    if _looks_family_event(raw):
+        return "family"
+    if any(word in raw for word in ("лекц", "лектор", "спикер", "дискусс", "семинар", "паблик-ток")):
         return "lecture"
     if any(word in raw for word in ("концерт", "музык", "оркестр", "джаз", "трек")):
         return "concert"
@@ -637,6 +680,8 @@ def _topic_label(event: Event, event_type: str) -> str:
         return "фестивалей"
     if event_type == "market":
         return "ярмарок"
+    if event_type == "family":
+        return "детских событий"
     return "событий"
 
 
@@ -655,6 +700,8 @@ def _topic_accusative_plural(event_type: str) -> str:
         return "фестивали"
     if event_type == "market":
         return "ярмарки"
+    if event_type == "family":
+        return "детские события"
     return "события"
 
 
@@ -673,6 +720,8 @@ def _topic_prepositional_plural(event_type: str) -> str:
         return "фестивалях"
     if event_type == "market":
         return "ярмарках"
+    if event_type == "family":
+        return "детских событиях"
     return "событиях"
 
 
@@ -691,6 +740,8 @@ def _this_event_accusative(event_type: str) -> str:
         return "это событие фестиваля"
     if event_type == "market":
         return "эту ярмарку"
+    if event_type == "family":
+        return "это семейное событие"
     return "это событие"
 
 
@@ -722,6 +773,14 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
         "искусств": "лекции про искусство",
         "наук": "научные лекции",
         "город": "лекции про город",
+    },
+    "family": {
+        "сказоч": "сказочные события",
+        "сказк": "сказочные события",
+        "геро": "сказочных героев",
+        "дет": "детские события",
+        "семейн": "семейные события",
+        "праздник": "детские праздники",
     },
 }
 
@@ -819,6 +878,28 @@ def _templates_for(
             ]
         )
         templates["reposts"].append("Перешли тому, с кем смотришь фильмы.")
+    elif event_type == "family":
+        templates["comments"].extend(
+            [
+                "Кого позвали бы с собой на такое семейное событие?",
+                "Какие детские события вам хочется видеть чаще?",
+            ]
+        )
+        templates["likes"].extend(
+            [
+                "Поставь лайк, если ищешь, куда сходить с детьми.",
+                "Отметь лайком, если любишь семейные события.",
+                "Поддержи лайком, если нужны такие детские праздники.",
+            ]
+        )
+        templates["reposts"].extend(
+            [
+                "Поделись с теми, кто ищет, куда сходить с детьми.",
+            ]
+        )
+        if theme and ("сказоч" in theme or "геро" in theme):
+            templates["comments"].append("Кого из сказочных героев дети ждут больше всего?")
+            templates["reposts"].append("Перешли другу, у кого дети любят сказочных героев.")
     if theme:
         templates["likes"].extend(
             [

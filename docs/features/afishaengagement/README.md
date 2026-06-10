@@ -68,8 +68,14 @@ per event.
 Optional config `event_type_keys` narrows a broad target after normal promo
 target matching. MVP keys are the internal classifier outputs:
 `lecture`, `concert`, `workshop`, `theatre`, `cinema`, `festival`, `market`,
-`other`. For example, lecture-only debug uses `target_type='all'` plus
+`family`, `other`. For example, lecture-only debug uses `target_type='all'` plus
 `"event_type_keys": ["lecture"]`.
+
+CTA copy selection treats the stored event `event_type` as the primary source of
+truth. Title/description heuristics are only a fallback or a narrow refinement:
+a generic `встреча` must not become `lecture` unless lecture/speaker/discussion
+signals are present, and child/family wording such as fairy-character events is
+classified as `family` for CTA text.
 
 `apply_rate` accepts `0..1` or percent-like values above `1` (`50` means 50%).
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,
