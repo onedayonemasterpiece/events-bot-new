@@ -1022,3 +1022,76 @@ async def test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip(
         {"kind": "guide_monitoring", "guard": "wait"},
         {"mode": "full"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_defers_after_crashed_guide_full_run(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_guide_critical_env(monkeypatch)
+    monkeypatch.setenv("GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS", "300")
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    run_id = await start_ops_run(
+        db,
+        kind="guide_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 13, 21, 4, tzinfo=timezone.utc),
+        details={"mode": "full", "run_id": "lost-kaggle-owner"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="crashed",
+        finished_at=datetime(2026, 4, 13, 21, 4, 30, tzinfo=timezone.utc),
+        details={"mode": "full", "run_id": "lost-kaggle-owner"},
+    )
+    skipped_run_id = await start_ops_run(
+        db,
+        kind="guide_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 13, 21, 4, 40, tzinfo=timezone.utc),
+        details={"mode": "full", "skip_reason": "heavy_busy"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=skipped_run_id,
+        status="skipped",
+        finished_at=datetime(2026, 4, 13, 21, 4, 45, tzinfo=timezone.utc),
+        details={"mode": "full", "skip_reason": "heavy_busy"},
+    )
+
+    calls: list[dict[str, str]] = []
+
+    async def fake_run(_db, _bot, *, mode: str) -> None:
+        calls.append({"mode": mode})
+
+    @asynccontextmanager
+    async def fake_heavy_operation(**kwargs):
+        calls.append({"kind": kwargs["kind"], "guard": kwargs["mode"]})
+        yield
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_guide_excursions", fake_run)
+    monkeypatch.setattr(scheduling, "heavy_operation", fake_heavy_operation)
+
+    deferred = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+    _FixedCriticalSchedulerDatetime.fixed_now = datetime(2026, 4, 13, 21, 10, tzinfo=timezone.utc)
+    scheduling._critical_catchup_deferred_until.clear()
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert deferred == 0
+    assert dispatched == 1
+    assert calls == [
+        {"kind": "guide_monitoring", "guard": "wait"},
+        {"mode": "full"},
+    ]

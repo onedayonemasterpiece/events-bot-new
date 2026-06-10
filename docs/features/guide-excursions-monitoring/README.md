@@ -162,6 +162,8 @@ Guide track должен быть проверяемым так же, как Sma
   - для scheduled `full` run с `ENABLE_GUIDE_DIGEST_SCHEDULED=1` recovery должен дотягивать не только import, но и тот же auto-publish `new_occurrences`, если процесс упал между этими фазами;
   - если kernel завершился `failed/error/cancelled`, запись удаляется из реестра и оператор получает уведомление.
 - Источником истины для recovery по-прежнему остаётся Kaggle output; локальный persisted bundle считается лишь durable-копией уже скачанного canonical output и нужен только для того, чтобы рестарт не обнулял фазу import/publish.
+- Critical scheduler watchdog не должен немедленно повторять один и тот же дневной `guide_excursions_full` после recent terminal `error`/`crashed` или `remote_telegram_session_busy`: persisted `ops_run` state ставит retry-hold на `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`), чтобы Fly restart/secret rotation не запускали параллельный Kaggle/Telethon прогон на той же S22-сессии. Это не отключает следующий штатный слот и не считается заменой ремонта первопричины.
+- Пока канонический guide kernel `zigomaro/guide-excursions-monitor` находится в `RUNNING`, запрещено делать manual/prod Telethon smoke на той же `TELEGRAM_AUTH_BUNDLE_S22`; сначала дождаться terminal status или recovery output.
 
 `/general_stats` для guide-track теперь должен показывать не только источники/прогоны, но и:
 

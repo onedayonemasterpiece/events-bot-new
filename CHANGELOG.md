@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Fixed: Guide full watchdog retry loop after Kaggle terminal failures**:
+  the critical scheduler watchdog now persists a retry hold for the daily
+  `guide_excursions_full` catch-up after recent `error`, `crashed`, or
+  remote-session-busy `ops_run` rows. This prevents Fly restarts or secret
+  rotations from immediately launching another Kaggle monitor on the same
+  `TELEGRAM_AUTH_BUNDLE_S22` after a failed remote lifecycle. Scheduled guide
+  digest publishing also clears the processed recovery job after successful
+  publish/no-items outcomes, preventing a later restart from replaying the same
+  completed kernel. Covered by `tests/test_scheduling.py` and
+  `tests/test_scheduling_guide_digest.py`.
 - **Fixed: Smart Update VK/Telegram fanout rhythm**: fixed a JobOutbox
   deadlock where independent same-event jobs could block each other by row
   order, causing `vk_sync` to wait behind calendar jobs and then expire before

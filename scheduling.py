@@ -78,6 +78,7 @@ async def _run_scheduled_guide_excursions(
     mode: str,
 ) -> Any:
     from guide_excursions.service import (
+        clear_guide_monitor_recovery_job,
         guide_digest_vk_enabled,
         publish_guide_digest,
         publish_latest_guide_digest_to_vk,
@@ -132,6 +133,16 @@ async def _run_scheduled_guide_excursions(
         except Exception as exc:
             logging.exception("SCHED scheduled guide VK digest publish failed")
             vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
+    recovery_kernel_ref = str(getattr(result, "recovery_kernel_ref", "") or "").strip()
+    if recovery_kernel_ref and getattr(result, "import_completed", False):
+        try:
+            await clear_guide_monitor_recovery_job(recovery_kernel_ref)
+        except Exception:
+            logging.warning(
+                "SCHED scheduled guide failed to clear recovery job kernel=%s",
+                recovery_kernel_ref,
+                exc_info=True,
+            )
     if target_chat_id and publish_result.get("published"):
         try:
             await bot.send_message(
@@ -922,6 +933,54 @@ async def _latest_guide_full_remote_busy_skip_started_at(
     return _parse_ops_run_datetime(started_at_raw)
 
 
+async def _latest_guide_full_retry_hold_started_at(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> datetime | None:
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json, started_at
+            FROM ops_run
+            WHERE kind = 'guide_monitoring'
+              AND trigger = 'scheduled'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            LIMIT 20
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    for status, details_raw, started_at_raw in rows:
+        details: dict[str, Any] = {}
+        if isinstance(details_raw, str) and details_raw.strip():
+            try:
+                parsed = json.loads(details_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                details = parsed
+        elif isinstance(details_raw, dict):
+            details = details_raw
+        if str(details.get("mode") or "").strip() != "full":
+            continue
+        normalized_status = str(status or "").strip()
+        if normalized_status in {"running", "success", "partial"}:
+            return None
+        if normalized_status == "skipped":
+            if _details_have_remote_telegram_busy(details):
+                return _parse_ops_run_datetime(started_at_raw)
+            continue
+        if normalized_status in {"error", "crashed"}:
+            return _parse_ops_run_datetime(started_at_raw)
+    return None
+
+
 async def _video_tomorrow_session_exists_today(
     db: Any,
     *,
@@ -1507,6 +1566,23 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
         if now_utc < db_deferred_until:
             _critical_catchup_deferred_until[catchup_key] = db_deferred_until
             return 0
+    latest_retry_hold_started = await _latest_guide_full_retry_hold_started_at(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+    )
+    if latest_retry_hold_started is not None:
+        db_deferred_until = latest_retry_hold_started + timedelta(seconds=retry_seconds)
+        if now_utc < db_deferred_until:
+            _critical_catchup_deferred_until[catchup_key] = db_deferred_until
+            logging.warning(
+                "SCHED critical watchdog deferring guide_excursions_full retry "
+                "after recent terminal run scheduled_local=%s now_local=%s retry_seconds=%s",
+                scheduled_local.isoformat(),
+                now_local.isoformat(),
+                retry_seconds,
+            )
+            return 0
 
     _critical_catchup_inflight.add(catchup_key)
     try:
@@ -1537,18 +1613,35 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
                 day_end_utc=day_end_utc,
             )
             if latest_remote_busy_started is None:
-                return 1
-            _critical_catchup_deferred_until[catchup_key] = (
-                latest_remote_busy_started + timedelta(seconds=retry_seconds)
-            )
-            logging.warning(
-                "SCHED critical watchdog deferring guide_excursions_full retry "
-                "after remote session busy scheduled_local=%s now_local=%s "
-                "retry_seconds=%s",
-                scheduled_local.isoformat(),
-                now_local.isoformat(),
-                retry_seconds,
-            )
+                latest_retry_hold_started = await _latest_guide_full_retry_hold_started_at(
+                    db,
+                    day_start_utc=day_start_utc,
+                    day_end_utc=day_end_utc,
+                )
+                if latest_retry_hold_started is None:
+                    return 1
+                _critical_catchup_deferred_until[catchup_key] = (
+                    latest_retry_hold_started + timedelta(seconds=retry_seconds)
+                )
+                logging.warning(
+                    "SCHED critical watchdog deferring guide_excursions_full retry "
+                    "after terminal run scheduled_local=%s now_local=%s retry_seconds=%s",
+                    scheduled_local.isoformat(),
+                    now_local.isoformat(),
+                    retry_seconds,
+                )
+            else:
+                _critical_catchup_deferred_until[catchup_key] = (
+                    latest_remote_busy_started + timedelta(seconds=retry_seconds)
+                )
+                logging.warning(
+                    "SCHED critical watchdog deferring guide_excursions_full retry "
+                    "after remote session busy scheduled_local=%s now_local=%s "
+                    "retry_seconds=%s",
+                    scheduled_local.isoformat(),
+                    now_local.isoformat(),
+                    retry_seconds,
+                )
         return 1
     finally:
         _critical_catchup_inflight.discard(catchup_key)
