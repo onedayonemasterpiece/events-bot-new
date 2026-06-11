@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Fixed: Guide digest hook-card guides and copy**: VK/Telegram carousel hook
+  card footers now keep co-led excursions plural-aware (`Кирилл и Марго` /
+  `3 гида`) instead of always showing only the first guide, and card hooks
+  reject unnatural `за горизонтом` phrasing. Covered by
+  `tests/test_guide_hook_cards.py`.
 - **Fixed: Afisha Engagement CTA text quality**: added selective
   `llm_text_mode=auto` for risky CTA copy while keeping deterministic visual
   rendering. Theme-heavy comment text and guardrail hits such as

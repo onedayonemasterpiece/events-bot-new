@@ -39,6 +39,7 @@ HOOK_MIN_WORDS = 3
 HOOK_MAX_WORDS = 14
 SUBLINE_MAX_CHARS = 32
 SUBLINE_MAX_WORDS = 5
+FOOTER_MAX_CHARS = 40
 
 _EMOJI_RE = re.compile(
     "["
@@ -57,6 +58,10 @@ _PHONE_RE = re.compile(r"(?:\+7|\b8)\s?[\d\-\s()]{7,}")
 _PRICE_RE = re.compile(r"\d[\d\s.]*\s*(?:₽|руб|р\.|рублей|eur|€|\$)", re.IGNORECASE)
 _TIME_RE = re.compile(r"\b\d{1,2}[:.]\d{2}\b")
 _DATE_RE = re.compile(r"\b\d{1,2}\s*(?:янв|фев|мар|апр|мая|июн|июл|авг|сен|окт|ноя|дек)", re.IGNORECASE)
+_BAD_HOOK_PHRASE_RE = re.compile(
+    r"\bза\s+горизонт(?:ом|а)?\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -136,6 +141,8 @@ def sanitize_hook(value: Any) -> str | None:
         return None
     if _PRICE_RE.search(text) or _TIME_RE.search(text) or _DATE_RE.search(text):
         return None
+    if _BAD_HOOK_PHRASE_RE.search(text):
+        return None
     # Cards must be a question hook (same principle as the announce rewrite hook):
     # exactly one curiosity question, ending with "?", no statements.
     if not text.endswith("?") or text.count("?") != 1:
@@ -187,21 +194,57 @@ def _short_date(value: Any) -> str | None:
     return None
 
 
+def _first_name(value: str) -> str:
+    text = _normalize_text(value)
+    if not text:
+        return ""
+    return text.split()[0]
+
+
+def _guide_count_label(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        noun = "гид"
+    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        noun = "гида"
+    else:
+        noun = "гидов"
+    return f"{count} {noun}"
+
+
+def _format_guides_footer(guides: Sequence[Any]) -> str | None:
+    names = [_normalize_text(g) for g in guides if _normalize_text(g)]
+    if not names:
+        return None
+    if len(names) == 1:
+        guide = names[0]
+        return guide if len(guide) <= 24 else guide.split()[0][:24]
+    if len(names) == 2:
+        first_names = [_first_name(name) for name in names]
+        joined_first = f"{first_names[0]} и {first_names[1]}"
+        if first_names[0].casefold() != first_names[1].casefold() and len(joined_first) <= FOOTER_MAX_CHARS:
+            return joined_first
+        joined = f"{names[0]} и {names[1]}"
+        if len(joined) <= FOOTER_MAX_CHARS:
+            return joined
+    return _guide_count_label(len(names))
+
+
 def _format_card_subline(row: Mapping[str, Any]) -> str | None:
-    """Card footer: date + guide (who leads it), as short as possible."""
+    """Card footer: date + guide(s) who lead it, as short as possible."""
     date = _short_date(row.get("date"))
-    guides = row.get("guide_names") if isinstance(row.get("guide_names"), Sequence) else []
-    guide = next((_normalize_text(g) for g in list(guides) if _normalize_text(g)), None)
-    if guide and len(guide) > 24:
-        guide = guide.split()[0][:24]
+    raw_guides = row.get("guide_names")
+    guides = raw_guides if isinstance(raw_guides, Sequence) and not isinstance(raw_guides, (str, bytes)) else []
+    guide = _format_guides_footer(list(guides))
     parts = [p for p in (date, guide) if p]
     return " · ".join(parts) if parts else None
 
 
 def _card_payload_row(row: Mapping[str, Any]) -> dict[str, Any]:
     fact_pack = row.get("fact_pack") if isinstance(row.get("fact_pack"), Mapping) else {}
-    guide_names = row.get("guide_names") if isinstance(row.get("guide_names"), Sequence) else []
-    audience = row.get("audience_fit") if isinstance(row.get("audience_fit"), Sequence) else []
+    raw_guide_names = row.get("guide_names")
+    raw_audience = row.get("audience_fit")
+    guide_names = raw_guide_names if isinstance(raw_guide_names, Sequence) and not isinstance(raw_guide_names, (str, bytes)) else []
+    audience = raw_audience if isinstance(raw_audience, Sequence) and not isinstance(raw_audience, (str, bytes)) else []
     payload = {
         "occurrence_id": int(row.get("occurrence_id") or row.get("id") or 0),
         "title": _normalize_text(row.get("canonical_title")),
@@ -232,6 +275,9 @@ def _build_prompt(payload_rows: Sequence[Mapping[str, Any]], *, cap: int) -> str
         "джип-тур/выезд не превращай в экскурсию;\n"
         "- без эмодзи, без URL, имён пользователей, телефонов, цен, дат, времени и призывов «записаться/купить билет»;\n"
         "- не повторяй дословно название — заинтригуй.\n"
+        "- пиши по-русски естественно: не используй натянутые метафоры и постфиксы вроде "
+        "`за горизонтом`; плохой пример: `Что скрывает Краснознаменский район за горизонтом?`. "
+        "Лучше конкретный grounded вопрос про место/сюжет маршрута.\n"
         "Поле theme: короткий тег темы (история, природа, архитектура, море, индустриальное и т.п.) — для разнообразия.\n"
         "Поле strength: 0..100, насколько крючок цепляет. Сортируй карточки по убыванию strength.\n\n"
         f"Экскурсии (JSON):\n{json.dumps(list(payload_rows), ensure_ascii=False)}"

@@ -30,6 +30,7 @@ def test_sanitize_hook_accepts_clean_question():
         "Запись в t.me/guide",  # url
         "Пишите на @guidekln прямо сейчас",  # username
         "Экскурсия 6 июня по фортам",  # date
+        "Что скрывает Краснознаменский район за горизонтом?",  # unnatural cliché
         "Да?",  # too short
         "Слово " * 20,  # too long
         "Старинный парк и его тайны",  # statement, no question mark
@@ -66,6 +67,18 @@ def test_select_post_palette_varies_across_days():
 def test_short_date_and_subline():
     row = {"date": "2026-06-07", "guide_names": ["Анна Иванова"]}
     assert hc._format_card_subline(row) == "7 июня · Анна Иванова"
+    assert hc._format_card_subline(
+        {"date": "2026-06-07", "guide_names": ["Кирилл Петров", "Марго Соколова"]}
+    ) == "7 июня · Кирилл и Марго"
+    assert hc._format_card_subline(
+        {
+            "date": "2026-06-07",
+            "guide_names": ["Александра Константинопольская", "Маргарита Фон Браун"],
+        }
+    ) == "7 июня · Александра и Маргарита"
+    assert hc._format_card_subline(
+        {"date": "2026-06-07", "guide_names": ["Анна Иванова", "Борис Петров", "Вера Сидорова"]}
+    ) == "7 июня · 3 гида"
     assert hc._format_card_subline({"date": "2026-06-07"}) == "7 июня"
     assert hc._format_card_subline({"guide_names": ["Игорь"]}) == "Игорь"
     assert hc._format_card_subline({}) is None
@@ -130,6 +143,37 @@ async def test_generate_hook_cards_slot_math_and_filtering():
     assert subs[103] == "8 июня · Игорь Селин"
     assert subs[101] == "7 июня · Анна Иванова"
     assert all(c.main_text for c in cards)
+
+
+@pytest.mark.asyncio
+async def test_generate_hook_cards_keeps_co_guides_in_footer():
+    rows = [
+        {
+            "occurrence_id": 201,
+            "canonical_title": "Выезд в Краснознаменский район",
+            "summary_one_liner": "Маршрут по востоку области",
+            "date": "2026-06-14",
+            "guide_names": ["Кирилл Петров", "Марго Соколова"],
+            "fact_pack": {"main_hook": "приграничный район"},
+        }
+    ]
+    cards = await hc.generate_hook_cards(
+        rows,
+        existing_image_count=0,
+        seed=7,
+        ask_fn=_fake_ask_factory(
+            [
+                {
+                    "occurrence_id": 201,
+                    "hook": "Какие истории хранит восток области?",
+                    "theme": "история",
+                    "strength": 90,
+                }
+            ]
+        ),
+    )
+    assert len(cards) == 1
+    assert cards[0].sub_text == "14 июня · Кирилл и Марго"
 
 
 @pytest.mark.asyncio
