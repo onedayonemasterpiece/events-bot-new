@@ -3566,14 +3566,17 @@ async def _resolve_existing_vk_post_url(
         db=db,
         bot=bot,
     )
-    if resolved_id and resolved_id != post_id_num:
-        resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
-        logging.info(
-            "sync_vk_source_post resolved stale postponed id %s -> %s",
-            post_url,
-            resolved,
-        )
-        return resolved
+    if resolved_id:
+        if resolved_id != post_id_num:
+            resolved = f"https://vk.com/wall-{str(target_group_id).lstrip('-')}_{resolved_id}"
+            logging.info(
+                "sync_vk_source_post resolved stale postponed id %s -> %s",
+                post_url,
+                resolved,
+            )
+            return resolved
+        logging.info("sync_vk_source_post existing postponed VK post found: %s", post_url)
+        return post_url
     if missing_confirmed:
         logging.info("sync_vk_source_post existing VK post is missing: %s", post_url)
         return ""

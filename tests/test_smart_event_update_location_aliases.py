@@ -125,3 +125,22 @@ def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
     icae = match_known_venue("ИЦАЭ Калининграда", city="Калининград")
     assert icae is not None
     assert icae.name == "ИЦАЭ (в КГТУ)"
+
+
+def test_russian_art_center_reference_resolves_oktyabrskaya_10() -> None:
+    venue = match_known_venue("Русский центр искусств", city="Калининград")
+    assert venue is not None
+    assert venue.name == "Русский центр искусства"
+    assert venue.address == "Октябрьская 10"
+
+    payload = {
+        "location_name": "РЦИ",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Русский центр искусства",
+        "location_address": "Октябрьская 10",
+        "city": "Калининград",
+    }

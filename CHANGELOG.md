@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Smart Update managed VK post idempotency**: done `vk_sync` jobs now
+  treat existing VK postponed/live wall records as existing even when
+  `wall.getById` cannot see the stored postponed id, preventing a second
+  managed VK post for the same Smart Update event row. Added the Русский центр
+  искусства reference venue at `Октябрьская 10, Калининград` with curated
+  aliases. Covered by `tests/test_job_dedup.py`,
+  `tests/test_vk_source.py`, and
+  `tests/test_smart_event_update_location_aliases.py`.
 - **Fixed: Guide digest hook-card guides and copy**: VK/Telegram carousel hook
   card footers now keep co-led excursions plural-aware (`Кирилл и Марго` /
   `3 гида`) instead of always showing only the first guide, and card hooks

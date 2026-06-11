@@ -115,3 +115,64 @@ async def test_enqueue_job_requeues_done_vk_sync_without_managed_vk_post(tmp_pat
             )
         ).scalar_one()
     assert job.status == JobStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_enqueue_job_skips_done_vk_sync_for_existing_postponed_managed_post(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        assert kwargs["posts"] == "-231920894_2841"
+        return {"response": {"items": []}}
+
+    async def fake_resolve(**kwargs):
+        assert kwargs["owner_id"] == -231920894
+        assert kwargs["post_id"] == 2841
+        return 2841
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id_any_actor", fake_resolve)
+
+    async with db.get_session() as session:
+        ev = Event(
+            title="Postponed VK event",
+            description="d",
+            date="2026-06-17",
+            time="19:00",
+            location_name="loc",
+            source_text="src",
+            source_vk_post_url="https://vk.com/wall-231920894_2841",
+            vk_source_hash="hash",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=int(ev.id),
+                task=JobTask.vk_sync,
+                status=JobStatus.done,
+            )
+        )
+        await session.commit()
+        event_id = int(ev.id)
+
+    action = await main.enqueue_job(db, event_id, JobTask.vk_sync)
+
+    assert action == "skipped"
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.vk_sync,
+                )
+            )
+        ).scalar_one()
+    assert job.status == JobStatus.done

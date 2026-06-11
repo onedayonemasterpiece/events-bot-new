@@ -14194,7 +14194,8 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
         return False
     try:
         response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
-        return bool(_vk_wall_get_by_id_items(response))
+        if _vk_wall_get_by_id_items(response):
+            return True
     except Exception:
         logging.warning(
             "managed VK post existence probe failed event_id=%s url=%s",
@@ -14203,6 +14204,30 @@ async def _event_has_existing_managed_vk_post(ev: Event) -> bool:
             exc_info=True,
         )
         return True
+    try:
+        resolved_id = await _resolve_vk_postponed_wall_id_any_actor(
+            owner_id=int(ids[0]),
+            post_id=int(ids[1]),
+            db=None,
+            bot=None,
+        )
+        if resolved_id:
+            logging.info(
+                "managed VK post exists via postponed lookup event_id=%s url=%s resolved_id=%s",
+                getattr(ev, "id", None),
+                existing_vk_url,
+                resolved_id,
+            )
+            return True
+    except Exception:
+        logging.warning(
+            "managed VK postponed existence probe failed event_id=%s url=%s",
+            getattr(ev, "id", None),
+            existing_vk_url,
+            exc_info=True,
+        )
+        return True
+    return False
 
 
 def _event_vk_publish_end_date(ev: Event) -> date | None:
