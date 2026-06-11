@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement horizontal and context polish**: horizontal
+  posters now stay in `bottom_extension` even when text/layout fitting rejects
+  the first render attempt; the publish fallback compacts to a safe or ultra
+  safe bottom CTA instead of switching to right-side or carousel output. Bottom
+  extension height is capped to one third of the final image while using the
+  full available limit, and the extra lower rail/stripe is removed. CTA typing
+  now treats Russian holidays as holidays, adds volunteer/exhibition/party
+  copy, blocks fairy/family copy for non-family events, and reuses the stored
+  event type as the primary signal. Like CTA copy no longer implies that a
+  user's like can make similar events happen more often. Covered by
+  `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement side CTA regression**: constrained
   `right_extension` to keep the original poster at least two thirds of the
   final width, removed the competing inner accent rail/stripe, centered CTA

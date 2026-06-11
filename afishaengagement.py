@@ -400,6 +400,14 @@ MECHANIC_BADGES = {
     "reposts": "РЕПОСТ",
 }
 SUPPORTED_TEMPLATE_IDS = {"right_extension", "bottom_overlay", "bottom_extension", "hook_swipe_cta"}
+HOLIDAY_FESTIVAL_NAMES = {
+    "день россии",
+    "дню россии",
+    "дня россии",
+    "день победы",
+    "дню победы",
+    "дня победы",
+}
 
 
 def _json_log(stage_log: StageLog) -> None:
@@ -574,6 +582,14 @@ def _explicit_event_type_key(value: str | None) -> str | None:
     explicit_type = str(value or "").strip().casefold()
     if not explicit_type:
         return None
+    if any(word in explicit_type for word in ("вечерин", "party", "пати", "тусов")):
+        return "party"
+    if any(word in explicit_type for word in ("выстав", "экспозиц")):
+        return "exhibition"
+    if any(word in explicit_type for word in ("волонт", "добровол")):
+        return "volunteer"
+    if any(word in explicit_type for word in ("праздник", "праздничн")):
+        return "holiday"
     if any(word in explicit_type for word in ("маркет", "ярмарк")):
         return "market"
     if any(word in explicit_type for word in ("кинопоказ", "киносеанс", "кинолекторий", "кино")):
@@ -588,7 +604,7 @@ def _explicit_event_type_key(value: str | None) -> str | None:
         return "theatre"
     if any(word in explicit_type for word in ("лекц", "семинар", "лектор", "спикер", "дискусс")):
         return "lecture"
-    if any(word in explicit_type for word in ("дет", "семейн", "праздник")):
+    if any(word in explicit_type for word in ("дет", "семейн")):
         return "family"
     if any(word in explicit_type for word in ("встреч", "клуб", "игр", "квиз")):
         return "other"
@@ -622,13 +638,21 @@ def _event_type_key(event: Event) -> str:
             explicit_type,
             str(event.title or ""),
             str(event.description or ""),
+            str(event.source_text or ""),
             str(event.search_digest or ""),
+            str(event.location_name or ""),
         ]
     ).casefold()
-    if explicit_key == "other":
-        return "family" if _looks_family_event(raw) else "other"
+    if explicit_key == "other" and _looks_family_event(raw):
+        return "family"
     if any(word in raw for word in ("маркет", "ярмарк")):
         return "market"
+    if any(word in raw for word in ("волонт", "добровол", "добрыми новостями", "доброцентр", "добро.центр")):
+        return "volunteer"
+    if any(word in raw for word in ("вечерин", "party", "пати", "тусов", "диджей", "dj-сет", "dj сет")):
+        return "party"
+    if any(word in raw for word in ("выстав", "экспозиц", "музейн")):
+        return "exhibition"
     if any(word in raw for word in ("кинопоказ", "киносеанс", "кинолекторий", "кинопросмотр")):
         return "cinema"
     if any(word in raw for word in ("фильм", "cinema", "movie", "film")) and "сценар" not in raw:
@@ -645,6 +669,8 @@ def _event_type_key(event: Event) -> str:
         return "workshop"
     if any(word in raw for word in ("спектак", "театр", "постановк", "пьес")):
         return "theatre"
+    if any(word in raw for word in ("день россии", "день победы", "праздничн", "праздник")):
+        return "holiday"
     if event.festival or any(word in raw for word in ("фестив", "маркет", "ярмарк")):
         return "festival"
     return "other"
@@ -682,6 +708,14 @@ def _topic_label(event: Event, event_type: str) -> str:
         return "ярмарок"
     if event_type == "family":
         return "детских событий"
+    if event_type == "exhibition":
+        return "выставок"
+    if event_type == "party":
+        return "вечеринок"
+    if event_type == "volunteer":
+        return "волонтёрских событий"
+    if event_type == "holiday":
+        return "праздников"
     return "событий"
 
 
@@ -702,6 +736,14 @@ def _topic_accusative_plural(event_type: str) -> str:
         return "ярмарки"
     if event_type == "family":
         return "детские события"
+    if event_type == "exhibition":
+        return "выставки"
+    if event_type == "party":
+        return "вечеринки"
+    if event_type == "volunteer":
+        return "волонтёрские события"
+    if event_type == "holiday":
+        return "праздники"
     return "события"
 
 
@@ -722,6 +764,14 @@ def _topic_prepositional_plural(event_type: str) -> str:
         return "ярмарках"
     if event_type == "family":
         return "детских событиях"
+    if event_type == "exhibition":
+        return "выставках"
+    if event_type == "party":
+        return "вечеринках"
+    if event_type == "volunteer":
+        return "волонтёрских событиях"
+    if event_type == "holiday":
+        return "праздниках"
     return "событиях"
 
 
@@ -742,6 +792,14 @@ def _this_event_accusative(event_type: str) -> str:
         return "эту ярмарку"
     if event_type == "family":
         return "это семейное событие"
+    if event_type == "exhibition":
+        return "эту выставку"
+    if event_type == "party":
+        return "эту вечеринку"
+    if event_type == "volunteer":
+        return "это волонтёрское событие"
+    if event_type == "holiday":
+        return "этот праздник"
     return "это событие"
 
 
@@ -777,6 +835,13 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
         "искусств": "лекции про искусство",
         "наук": "научные лекции",
         "город": "лекции про город",
+    },
+    "exhibition": {
+        "маринист": "морскую живопись",
+        "айвазов": "морскую живопись",
+        "истори": "историю",
+        "живопис": "живопись",
+        "искусств": "искусство",
     },
     "family": {
         "сказоч": "сказочные события",
@@ -830,18 +895,17 @@ def _templates_for(
     templates: dict[str, list[str]] = {
         "comments": [
             "Расскажите в комментариях, что для вас главное в таких {TP}.",
-            "Что ждёте от этого события? Напишите в комментариях.",
+            "Что ждёте от таких {TP}? Напишите в комментариях.",
         ],
         "likes": [
-            f"Лайк, если хочешь чаще таких {topic}.",
-            f"Поставь лайк, если хочешь чаще таких {topic}.",
-            "Поставь лайк, если хочешь чаще такие события.",
+            f"Лайк, если тебе интересны такие {topic_acc}.",
+            f"Поставь лайк, если тебе близки такие {topic_acc}.",
             f"Поставь лайк, если любишь такие {topic_acc}.",
             f"Отметь лайком, если любишь такие {topic_acc}.",
             "Поставь лайк, если добавил событие в планы.",
         ],
         "reposts": [
-            "Поделись с теми, кому близки такие события.",
+            f"Поделись с теми, кому близки такие {topic_acc}.",
             "Поделись с тем, кому это может быть интересно.",
             f"Поделись с другом, который любит такие {topic_acc}.",
         ],
@@ -895,6 +959,57 @@ def _templates_for(
             ]
         )
         templates["reposts"].append("Поделись с тем, с кем смотришь фильмы.")
+    elif event_type == "exhibition":
+        templates["comments"] = [
+            "Какие выставки вас вдохновляют? Напишите в комментариях.",
+            "Что цепляет вас в таких выставках? Поделитесь.",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если любишь выставки.",
+            "Отметь лайком, если интересна такая живопись.",
+        ] + templates["likes"]
+        templates["reposts"] = ["Поделись с тем, кому интересны выставки."] + templates["reposts"]
+    elif event_type == "volunteer":
+        templates["comments"] = [
+            "Вы когда-нибудь занимались волонтёрством? Напишите в комментариях.",
+            "Что вам ближе в добровольчестве? Поделитесь.",
+            "Любите волонтёрские проекты? Расскажите в комментариях.",
+            "Что для вас главное в таких волонтёрских событиях? Напишите в комментариях.",
+        ]
+        templates["likes"] = [
+            "Поставь лайк, если тебе близко волонтёрство.",
+            "Лайк, если любишь добровольческие проекты.",
+            "Отметь лайком, если тебе интересны волонтёрские события.",
+        ]
+        templates["reposts"] = [
+            "Поделись с тем, кому близко волонтёрство.",
+            "Поделись с другом, которому интересны волонтёрские события.",
+        ]
+    elif event_type == "party":
+        templates["comments"] = [
+            "Кого позвал бы на такую тусовку? Напиши в комментариях.",
+            "Какой трек хочешь услышать на вечеринке?",
+            "С кем пошёл бы на такую вечеринку? Напиши в комментариях.",
+        ]
+        templates["likes"] = [
+            "Лайк, если за такие вечеринки.",
+            "Поставь лайк, если любишь такие тусовки.",
+            "Отметь лайком, если тебе близки такие вечеринки.",
+        ]
+        templates["reposts"] = [
+            "Поделись с тем, кто любит такие тусовки.",
+            "Поделись с другом, который пошёл бы на такую вечеринку.",
+        ]
+    elif event_type == "holiday":
+        templates["comments"] = [
+            "Как любите отмечать такие праздники? Напишите в комментариях.",
+            "Что для вас главное в таком празднике? Поделитесь.",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если любишь городские праздники.",
+            "Отметь лайком, если планируешь заглянуть.",
+        ] + templates["likes"]
+        templates["reposts"] = ["Поделись с тем, кто любит праздничные программы."] + templates["reposts"]
     elif event_type == "family":
         templates["comments"].extend(
             [
@@ -1004,6 +1119,18 @@ def _festival_is_annual(event: Event) -> bool:
     return bool(re.search(r"\b(?:[ivxlcdm]{2,}|[2-9]\d*)\s+(?:международн\w+\s+)?фестив", text))
 
 
+def _is_holiday_name(value: str | None) -> bool:
+    normalized = re.sub(r"\s+", " ", str(value or "").strip().casefold())
+    return normalized in HOLIDAY_FESTIVAL_NAMES
+
+
+def _effective_festival(event: Event) -> str | None:
+    value = (event.festival or "").strip()
+    if not value or _is_holiday_name(value):
+        return None
+    return value
+
+
 def _festival_display_name(festival: str | None) -> str | None:
     if not festival:
         return None
@@ -1096,7 +1223,7 @@ def build_engagement_plan(
     rnd = random.Random(hashlib.sha256(seed.encode("utf-8")).hexdigest())
     event_type = _event_type_key(event)
     persona = _extract_persona(event)
-    festival = (event.festival or "").strip() or None
+    festival = _effective_festival(event)
     theme = _extract_theme(event, event_type)
     festival_from = _festival_from_phrase(event, festival)
     festival_on = _festival_on_phrase(festival)
@@ -1154,7 +1281,7 @@ def build_engagement_plan(
             break
     if not cta_text:
         mechanic = "likes"
-        cta_text = "Поставь лайк, если хочешь чаще такие события."
+        cta_text = "Поставь лайк, если интересно."
 
     palette_ids = list(config.get("palette_ids") or PALETTES.keys())
     palette_ids = [pid for pid in palette_ids if pid in PALETTES] or ["slate_warm_white"]
@@ -1262,6 +1389,10 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
         return True
     if event_type == "theatre" and "кинопоказ" in lower:
         return True
+    if event_type != "family" and any(fragment in lower for fragment in ("сказоч", "сказк", "геро")):
+        return True
+    if "фестивал" in lower and any(name in lower for name in HOLIDAY_FESTIVAL_NAMES):
+        return True
     return False
 
 
@@ -1277,6 +1408,14 @@ def _safe_generic_cta(event_type: str, mechanic: str) -> str:
             return "Напишите в комментариях, что ждёте от концерта."
         if event_type == "lecture":
             return "Напишите в комментариях, что ждёте от лекции."
+        if event_type == "exhibition":
+            return "Напишите в комментариях, что ждёте от выставки."
+        if event_type == "volunteer":
+            return "Напишите в комментариях, близко ли вам волонтёрство."
+        if event_type == "party":
+            return "Напиши в комментариях, кого позвал бы на вечеринку."
+        if event_type == "holiday":
+            return "Напишите в комментариях, любите ли такие праздники."
         return "Напишите в комментариях, что ждёте от события."
     if event_type == "cinema":
         return "Поставь лайк, если любишь кинопоказы."
@@ -1286,7 +1425,23 @@ def _safe_generic_cta(event_type: str, mechanic: str) -> str:
         return "Поставь лайк, если любишь концерты."
     if event_type == "lecture":
         return "Поставь лайк, если любишь лекции."
-    return "Поставь лайк, если хочешь чаще такие события."
+    if event_type == "exhibition":
+        return "Поставь лайк, если любишь выставки."
+    if event_type == "volunteer":
+        return "Поставь лайк, если тебе близко волонтёрство."
+    if event_type == "party":
+        return "Лайк, если за такие вечеринки."
+    if event_type == "holiday":
+        return "Поставь лайк, если любишь городские праздники."
+    return "Поставь лайк, если интересно."
+
+
+def _ultra_safe_cta(mechanic: str) -> str:
+    if mechanic == "comments":
+        return "Напишите в комментариях, что думаете."
+    if mechanic == "reposts":
+        return "Поделись с другом."
+    return "Поставь лайк, если интересно."
 
 
 def _llm_text_mode(config: dict[str, Any]) -> str:
@@ -1338,6 +1493,9 @@ async def build_llm_cta_text(
             "не используй канцелярит, не склоняй машинно готовые куски; обращение на ты допустимо. "
             "Запрещены фразы: «Были на похожем событии», «поддержи формат», «поддержка формата», "
             "«из темы ...». Для кинопоказа не пиши про спектакль; для спектакля не пиши про кинопоказ. "
+            "День России, День Победы и другие праздники не называй фестивалями. "
+            "Про сказочных героев пиши только если событие действительно детское/семейное со сказочными героями. "
+            "Для волонтёрских событий уместны формулировки про волонтёрство и добровольчество. "
             "Если используешь тему, впиши её грамотно: например «Поддержи лайком, если любишь симфоническую музыку» "
             "или «Что вам ближе в органной музыке?», но не «из темы органную музыку».\n"
             f"Seed: {plan.seed}\n"
@@ -1834,6 +1992,8 @@ def _choose_compatible_palette_id(
 def _force_right_extension_for_bottom_template(poster: Any, template_id: str) -> bool:
     if template_id not in {"bottom_overlay", "bottom_extension"}:
         return False
+    if _prefers_bottom_extension_for_horizontal(poster):
+        return False
     if poster.width < 720:
         return True
     aspect = poster.height / max(1, poster.width)
@@ -1845,14 +2005,21 @@ def _force_right_extension_for_bottom_template(poster: Any, template_id: str) ->
 
 
 def _prefers_bottom_extension_for_horizontal(poster: Any) -> bool:
-    return poster.width >= 720 and poster.width > poster.height * 1.12
+    return poster.width > poster.height * 1.02
 
 
 def _text_bbox(draw: Any, xy: tuple[int, int], text: str, font: Any) -> tuple[int, int, int, int]:
     return draw.textbbox(xy, text, font=font)
 
 
-def _wrap_words(draw: Any, text: str, font: Any, max_width: int) -> list[str]:
+def _wrap_words(
+    draw: Any,
+    text: str,
+    font: Any,
+    max_width: int,
+    *,
+    allow_hyphen_break: bool = False,
+) -> list[str]:
     words = text.split()
     lines: list[str] = []
     current = ""
@@ -1861,6 +2028,18 @@ def _wrap_words(draw: Any, text: str, font: Any, max_width: int) -> list[str]:
         width = _text_bbox(draw, (0, 0), candidate, font)[2]
         if current and width > max_width:
             lines.append(current)
+            if allow_hyphen_break and "-" in word and _text_bbox(draw, (0, 0), word, font)[2] > max_width:
+                parts = [part for part in word.split("-") if part]
+                if len(parts) == 2:
+                    first = f"{parts[0]}-"
+                    second = parts[1]
+                    if (
+                        _text_bbox(draw, (0, 0), first, font)[2] <= max_width
+                        and _text_bbox(draw, (0, 0), second, font)[2] <= max_width
+                    ):
+                        lines.append(first)
+                        current = second
+                        continue
             current = word
         else:
             current = candidate
@@ -1879,6 +2058,7 @@ def fit_text(
     max_lines: int = 5,
     font_name: str = "Cygre-Bold.ttf",
     avoid_orphan_lines: bool = False,
+    allow_hyphen_break: bool = False,
 ) -> TextFit | None:
     from PIL import Image, ImageDraw
 
@@ -1888,7 +2068,7 @@ def fit_text(
         font = _load_font(font_name, size)
         lines: list[str] = []
         for paragraph in str(text or "").splitlines() or [""]:
-            wrapped = _wrap_words(draw, paragraph, font, box_width)
+            wrapped = _wrap_words(draw, paragraph, font, box_width, allow_hyphen_break=allow_hyphen_break)
             lines.extend(wrapped or [""])
         if len(lines) > max_lines:
             continue
@@ -2419,6 +2599,7 @@ def render_right_extension(
             min_px=max(18, int(32 * scale)),
             max_lines=10,
             avoid_orphan_lines=True,
+            allow_hyphen_break=True,
         )
         if candidate_fit is None:
             fallback_candidate = fit_text(
@@ -2428,6 +2609,7 @@ def render_right_extension(
                 preferred_px=max(34, int(84 * scale)),
                 min_px=max(18, int(32 * scale)),
                 max_lines=10,
+                allow_hyphen_break=True,
             )
             if fallback_candidate is not None:
                 fallback_score = (
@@ -2573,25 +2755,28 @@ def _render_bottom_extension(
 
     fit: TextFit | None = None
     block_h = 0
-    safe_x = max(56, int(72 * scale))
+    safe_x = max(36, int(54 * scale))
     safe_w = width - safe_x * 2
     badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
     badge_h = int(58 * scale)
-    rail_w = max(4, int(6 * scale))
-    rail_gap = int(24 * scale)
-    content_top_pad = diagonal + max(int(54 * scale), int(width * 0.055))
-    badge_gap = max(int(22 * scale), int(width * 0.024))
-    bottom_pad = max(int(28 * scale), int(width * 0.032))
-    badge_clear_from_seam = max(int(260 * scale), int(width * 0.22))
+    rail_w = 0
+    rail_gap = 0
+    content_top_pad = diagonal + max(int(32 * scale), int(width * 0.034))
+    badge_gap = max(int(14 * scale), int(width * 0.016))
+    bottom_pad = max(int(20 * scale), int(width * 0.024))
+    badge_clear_from_seam = max(int(84 * scale), int(width * 0.08))
     max_height = int(width * MAX_VK_FEED_PHOTO_ASPECT)
-    max_block_h = max_height - poster_h + overlap
-    min_block_h = max(int(300 * scale), int(width * 0.26), int(poster_h * 0.20))
+    max_block_h = min(max_height - poster_h + overlap, int(poster_h * 0.50 + overlap))
+    min_block_h = max(int(220 * scale), int(width * 0.20), int(poster_h * 0.16))
     if max_block_h < min_block_h:
         raise ValueError("bottom_extension_aspect_unsafe")
     start_h = max(min_block_h, min(int(360 * scale), max_block_h))
     end_h = min(max_block_h, max(start_h + int(180 * scale), int(540 * scale)))
-    step_h = max(18, int(36 * scale))
-    for candidate_h in range(start_h, end_h + 1, step_h):
+    step_h = max(8, int(18 * scale))
+    candidates = list(range(start_h, end_h + 1, step_h))
+    if not candidates or candidates[-1] != end_h:
+        candidates.append(end_h)
+    for candidate_h in candidates:
         candidate_height = poster_h + candidate_h - overlap
         candidate_badge_y = candidate_height - bottom_pad - badge_h
         if candidate_badge_y < block_top + diagonal + badge_clear_from_seam:
@@ -2603,8 +2788,10 @@ def _render_bottom_extension(
             box_width=safe_w - rail_w - rail_gap,
             box_height=text_box_h,
             preferred_px=max(30, int(66 * scale)),
-            min_px=max(26, int(42 * scale), int(width * 0.038)),
-            max_lines=5,
+            min_px=max(22, int(34 * scale), int(width * 0.030)),
+            max_lines=7,
+            avoid_orphan_lines=True,
+            allow_hyphen_break=True,
         )
         if fit is not None:
             block_h = candidate_h
@@ -2648,6 +2835,7 @@ def _render_bottom_extension(
         accent=accent,
         rim=rim,
         scale=scale,
+        include_accent_stripe=False,
     )
     badge_y = height - bottom_pad - badge_h
     if badge_y < block_top + diagonal + badge_clear_from_seam:
@@ -2671,16 +2859,18 @@ def _render_bottom_extension(
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
     slack = text_box_h - fit.height
-    y = text_box_y if slack > int(fit.font_px * 1.5) else text_box_y + max(0, int(slack / 2))
-    rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
-    rail_y = y + max(0, int((fit.height - rail_h) / 2))
-    canvas = _composite_aa_rounded_rect(
-        canvas,
-        (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
-        radius=max(3, int(5 * scale)),
-        fill=accent,
-        aa_scale=4,
-    )
+    y = text_box_y + max(0, int(slack / 2))
+    y = min(y, max(text_box_y, badge_y - badge_gap - fit.height - int(fit.font_px * 0.22)))
+    if rail_w > 0:
+        rail_h = max(int(72 * scale), min(int(text_box_h * 0.78), fit.height + int(22 * scale)))
+        rail_y = y + max(0, int((fit.height - rail_h) / 2))
+        canvas = _composite_aa_rounded_rect(
+            canvas,
+            (safe_x, rail_y, safe_x + rail_w, rail_y + rail_h),
+            radius=max(3, int(5 * scale)),
+            fill=accent,
+            aa_scale=4,
+        )
     draw = ImageDraw.Draw(canvas)
     text_x = safe_x + rail_w + rail_gap
     text_bottom = y
@@ -2689,7 +2879,7 @@ def _render_bottom_extension(
         bbox = _text_bbox(draw, (text_x, y), line, main_font)
         text_bottom = max(text_bottom, bbox[3])
         y += (bbox[3] - bbox[1]) + line_gap
-    if text_bottom + badge_gap > badge_y:
+    if text_bottom + badge_gap > badge_y + int(fit.font_px * 0.24):
         raise ValueError("text_overflow")
 
     out = io.BytesIO()
@@ -3029,11 +3219,31 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
     started = time.monotonic()
     if not source_image:
         raise ValueError("source poster is empty")
-    if plan.template_id == "right_extension":
-        return [render_right_extension(source_image, plan)]
 
     with Image.open(io.BytesIO(source_image)) as opened:
         poster = ImageOps.exif_transpose(opened).convert("RGB")
+    if plan.template_id == "right_extension":
+        if _prefers_bottom_extension_for_horizontal(poster):
+            promoted = replace(plan, template_id="bottom_extension")
+            palette_id = _choose_compatible_palette_id(
+                poster,
+                promoted.palette_id,
+                promoted.seed,
+                template_id="bottom_extension",
+                event_type=promoted.event_type,
+            )
+            palette = PALETTES.get(palette_id) or PALETTES["graphite_signal_red"]
+            try:
+                return [_render_bottom_extension(poster, promoted, palette_id, palette, started)]
+            except ValueError as exc:
+                logger.info(
+                    "afishaengagement render fallback: horizontal_right_extension_bottom_failed width=%s height=%s reason=%s",
+                    poster.width,
+                    poster.height,
+                    exc,
+                )
+                raise
+        return [render_right_extension(source_image, plan, prefer_bottom_for_horizontal=False)]
     palette_id = _choose_compatible_palette_id(
         poster,
         plan.palette_id,
@@ -3077,8 +3287,7 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
                 poster.height,
                 exc,
             )
-            fallback = replace(plan, template_id="right_extension")
-            return [render_right_extension(source_image, fallback, prefer_bottom_for_horizontal=False)]
+            raise
     try:
         if plan.template_id == "bottom_overlay":
             return [_render_bottom_overlay(poster, plan, palette_id, palette, started)]
@@ -3088,6 +3297,15 @@ def render_plan_images(source_image: bytes, plan: EngagementPlan) -> list[Render
             return _render_hook_swipe_cta(poster, plan, palette_id, palette, started)
     except ValueError as exc:
         if "overflow" in str(exc) or "aspect_unsafe" in str(exc):
+            if _prefers_bottom_extension_for_horizontal(poster):
+                logger.info(
+                    "afishaengagement render fallback: horizontal_bottom_template_rejected template=%s width=%s height=%s reason=%s",
+                    plan.template_id,
+                    poster.width,
+                    poster.height,
+                    exc,
+                )
+                raise
             fallback = replace(plan, template_id="right_extension")
             logger.info(
                 "afishaengagement render fallback: forced_right_extension_after_render_reject template=%s width=%s height=%s reason=%s",
@@ -3105,6 +3323,8 @@ def render_plan_images_for_publish(
     source_image: bytes,
     plan: EngagementPlan,
 ) -> tuple[list[RenderedImage], EngagementPlan, str | None]:
+    from PIL import Image, ImageOps
+
     try:
         rendered = render_plan_images(source_image, plan)
         actual = rendered[-1] if rendered else None
@@ -3114,6 +3334,37 @@ def render_plan_images_for_publish(
     except Exception as exc:
         if "overflow" not in str(exc) and "aspect_unsafe" not in str(exc):
             raise
+        poster = None
+        try:
+            with Image.open(io.BytesIO(source_image)) as opened:
+                poster = ImageOps.exif_transpose(opened).convert("RGB")
+        except Exception:
+            poster = None
+        if poster is not None and _prefers_bottom_extension_for_horizontal(poster):
+            fallback = replace(
+                plan,
+                template_id="bottom_extension",
+                cta_text=_safe_generic_cta(plan.event_type, plan.mechanic),
+            )
+            try:
+                rendered = render_plan_images(source_image, fallback)
+                actual = rendered[-1] if rendered else None
+                if actual and (actual.template_id != fallback.template_id or actual.palette_id != fallback.palette_id):
+                    fallback = replace(fallback, template_id=actual.template_id, palette_id=actual.palette_id)
+                return rendered, fallback, f"safe_bottom_extension_after_{type(exc).__name__}:{exc}"
+            except Exception as second_exc:
+                if "overflow" not in str(second_exc) and "aspect_unsafe" not in str(second_exc):
+                    raise
+                fallback = replace(
+                    fallback,
+                    template_id="bottom_extension",
+                    cta_text=_ultra_safe_cta(plan.mechanic),
+                )
+                rendered = render_plan_images(source_image, fallback)
+                actual = rendered[-1] if rendered else None
+                if actual and (actual.template_id != fallback.template_id or actual.palette_id != fallback.palette_id):
+                    fallback = replace(fallback, template_id=actual.template_id, palette_id=actual.palette_id)
+                return rendered, fallback, f"ultra_safe_bottom_extension_after_{type(second_exc).__name__}:{second_exc}"
         fallback = replace(
             plan,
             template_id="right_extension",

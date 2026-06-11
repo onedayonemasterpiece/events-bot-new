@@ -121,9 +121,114 @@ def test_event_type_config_filters_lecture_only():
     assert aeg._config_matches_event(concert, {"event_type_keys": ["lecture"]}) is False
 
 
+def test_holiday_festival_field_does_not_generate_festival_cta():
+    event = Event(
+        title="Мастер-класс по работе Н. Карякина «На причале»",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Музей",
+        source_text="Мероприятия ко Дню России.",
+        event_type="мастер-класс",
+        festival="День России",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"holiday-not-festival-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 0, "reposts": 100}},
+        ).cta_text
+        for idx in range(60)
+    }
+
+    assert all("фестивал" not in text.casefold() for text in seen)
+    assert all("День России" not in text for text in seen)
+
+
+def test_volunteer_event_gets_volunteer_cta_copy():
+    event = Event(
+        title="пойдем гулять",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Добро.Центр",
+        source_text="Следи за добрыми новостями.",
+        event_type="встреча",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"volunteer-copy-{idx}",
+            config={"mechanic_weights": {"comments": 100, "likes": 100, "reposts": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert all("волонт" in text.casefold() or "доброволь" in text.casefold() for text in seen)
+
+
+def test_exhibition_rejects_family_fairy_copy():
+    assert aeg._event_type_key(Event(title="Выставка «Адмирал маринистики»", event_type="выставка")) == "exhibition"
+    assert aeg._cta_text_has_forbidden_copy(
+        "Поделись, что тебя вдохновляет в сказочных героях!",
+        "exhibition",
+    )
+
+
+def test_party_event_uses_party_tone_not_concert_copy():
+    event = Event(
+        title="Кото пати в Грецком",
+        description="",
+        date="2026-06-20",
+        time="21:00",
+        location_name="Грецкий",
+        source_text="Вечеринка, disco, funk, new wave, танцы под винил.",
+        event_type="вечеринка",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"party-copy-{idx}",
+            config={"mechanic_weights": {"comments": 100, "likes": 100, "reposts": 100}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert any("тусов" in text.casefold() or "вечерин" in text.casefold() for text in seen)
+    assert all("концерт" not in text.casefold() for text in seen)
+
+
+def test_like_cta_does_not_promise_more_events_from_likes():
+    event = Event(
+        title="Мастер-класс по акварели",
+        description="",
+        date="2026-06-20",
+        time="12:00",
+        location_name="Мастерская",
+        source_text="",
+        event_type="мастер-класс",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"no-more-events-like-copy-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0}},
+        ).cta_text.casefold()
+        for idx in range(100)
+    }
+
+    assert all("хочешь чаще" not in text for text in seen)
+    assert all("почаще" not in text for text in seen)
+    assert all("чаще провод" not in text for text in seen)
+
+
 def test_text_fit_keeps_word_boundaries():
     fit = aeg.fit_text(
-        "Лайк, если хочешь чаще таких мастер-классов.",
+        "Поставь лайк, если любишь такие мастер-классы.",
         box_width=520,
         box_height=360,
         preferred_px=72,
@@ -132,8 +237,24 @@ def test_text_fit_keeps_word_boundaries():
 
     assert fit is not None
     assert fit.font_px >= 52
-    assert " ".join(fit.lines) == "Лайк, если хочешь чаще таких мастер-классов."
+    assert " ".join(fit.lines) == "Поставь лайк, если любишь такие мастер-классы."
     assert all("- " not in line for line in fit.lines)
+
+
+def test_text_fit_can_break_hyphenated_masterclass_for_larger_type():
+    fit = aeg.fit_text(
+        "Поставь лайк, если любишь такие мастер-классы.",
+        box_width=170,
+        box_height=420,
+        preferred_px=42,
+        min_px=24,
+        max_lines=8,
+        allow_hyphen_break=True,
+    )
+
+    assert fit is not None
+    assert any(line == "мастер-" for line in fit.lines)
+    assert any(line == "классы." for line in fit.lines)
 
 
 def test_render_right_extension_outputs_png_with_fit_text():
@@ -231,6 +352,8 @@ def test_render_horizontal_poster_uses_bottom_extension_without_resizing_width()
     assert rendered.template_id == "bottom_extension"
     assert rendered.dimensions[0] == 800
     assert rendered.dimensions[1] > 450
+    assert rendered.dimensions[1] - 450 <= rendered.dimensions[1] // 3
+    assert rendered.dimensions[1] - 450 <= rendered.dimensions[1] // 3
     assert rendered.cta_text_font_px >= 24
 
 
@@ -877,6 +1000,27 @@ def test_horizontal_bottom_overlay_promotes_to_bottom_extension():
     assert rendered.dimensions[1] > 450
 
 
+def test_horizontal_right_extension_plan_promotes_to_bottom_extension():
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="right_extension",
+        palette_id="deep_wine_ivory",
+        cta_text="Напишите в комментариях, что ждёте от концерта.",
+        hook_text="Кто уже был на таких концертах?",
+        event_type="concert",
+        has_persona=False,
+        has_festival=False,
+        seed="horizontal-right-promote",
+    )
+
+    rendered = aeg.render_plan_images(_horizontal_poster_bytes(), plan)[0]
+
+    assert rendered.template_id == "bottom_extension"
+    assert rendered.dimensions[0] == 800
+    assert rendered.dimensions[1] > 450
+    assert rendered.dimensions[1] - 450 <= rendered.dimensions[1] // 3
+
+
 def test_bottom_overlay_can_invert_surface_on_dark_poster_region():
     poster = Image.new("RGB", (800, 800), (12, 12, 12))
     palette = aeg.PALETTES["black_lime"]
@@ -918,10 +1062,11 @@ def test_render_explicit_bottom_extension_preserves_source_width():
     assert rendered.template_id == "bottom_extension"
     assert rendered.dimensions[0] == 800
     assert rendered.dimensions[1] > 450
+    assert rendered.dimensions[1] - 450 <= rendered.dimensions[1] // 3
     assert rendered.dimensions[1] <= int(rendered.dimensions[0] * aeg.MAX_VK_FEED_PHOTO_ASPECT)
 
 
-def test_horizontal_bottom_extension_overflow_falls_back_to_real_right_extension(monkeypatch):
+def test_horizontal_bottom_extension_overflow_retries_safe_bottom(monkeypatch):
     event = Event(
         title="Концерт камерной музыки",
         description="",
@@ -941,16 +1086,24 @@ def test_horizontal_bottom_extension_overflow_falls_back_to_real_right_extension
         },
     )
 
+    original_bottom_extension = aeg._render_bottom_extension
+    calls = []
+
     def fake_bottom_extension(*args, **kwargs):
-        raise ValueError("text_overflow")
+        calls.append(args[1])
+        if len(calls) == 1:
+            raise ValueError("text_overflow")
+        return original_bottom_extension(*args, **kwargs)
 
     monkeypatch.setattr(aeg, "_render_bottom_extension", fake_bottom_extension)
 
-    rendered = aeg.render_plan_images(_horizontal_poster_bytes(), plan)[0]
+    rendered, final_plan, reason = aeg.render_plan_images_for_publish(_horizontal_poster_bytes(), plan)
 
-    assert rendered.template_id == "right_extension"
-    assert rendered.dimensions[0] > 800
-    assert rendered.dimensions[1] == 450
+    assert reason and reason.startswith("safe_bottom_extension_after_")
+    assert final_plan.template_id == "bottom_extension"
+    assert final_plan.cta_text == aeg._safe_generic_cta(plan.event_type, plan.mechanic)
+    assert rendered[0].template_id == "bottom_extension"
+    assert rendered[0].dimensions[0] == 800
 
 
 def test_vertical_poster_bottom_extension_falls_back_to_right_extension():
