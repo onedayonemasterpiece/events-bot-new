@@ -142,6 +142,11 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `SCHED_HEAVY_GUARD_MODE` – scheduled heavy jobs gate mode: `skip` (default), `wait`, or `off`.
 - `SCHED_HEAVY_TRY_TIMEOUT_SEC` – try-acquire timeout in seconds for `SCHED_HEAVY_GUARD_MODE=skip` (default: `0.2`).
 - `SCHED_SERIALIZE_HEAVY_JOBS` – legacy flag: when enabled (`1|true|yes|on`) it implies `SCHED_HEAVY_GUARD_MODE=wait` + extra in-scheduler serialization.
+- `VK_AUTO_IMPORT_HEAVY_MODE` – guard mode inside VK auto-import itself:
+  `off`, `try`, or `wait`. Default is `off` for manual `/vk_auto_import` so
+  operators can debug/import while Telegram Monitoring is polling a remote
+  Kaggle kernel, and `wait` for scheduled runs. If forced to `wait`, the bot
+  reports which heavy operation it is waiting for.
 - `VK_USER_TOKEN` – user token for VK posts (scopes: wall,groups,offline). Local/dev runs may also provide the same token as `VK_ACCESS_TOKEN4`.
 - `VK_TOKEN` – optional group token used as a fallback.
 - `VK_EVENTS_GROUP_ID` – target group id for Smart Update event posts with photos/video attachments; defaults to `VK_AFISHA_GROUP_ID`.

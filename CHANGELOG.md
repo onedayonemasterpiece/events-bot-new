@@ -15,6 +15,55 @@
   `3 гида`) instead of always showing only the first guide, and card hooks
   reject unnatural `за горизонтом` phrasing. Covered by
   `tests/test_guide_hook_cards.py`.
+- **Fixed: VK auto-import manual heavy gate wait**: manual `/vk_auto_import`
+  no longer waits behind the shared heavy-job gate by default, so operators can
+  run VK import/debug batches while Telegram Monitoring is polling remote
+  Kaggle. Scheduled auto-import remains serialized; forcing
+  `VK_AUTO_IMPORT_HEAVY_MODE=wait` now sends an explicit waiting notice instead
+  of leaving the chat silent. Covered by `tests/test_vk_auto_queue_import.py`.
+- **Fixed: Afisha Engagement festival/idea CTA copy**: festival umbrella CTA
+  templates no longer ask viewers what they are waiting for from a festival
+  that may already be underway; they now point to the program/project context.
+  Added guarded idea-based CTA copy for explicit concepts such as a festival of
+  music on water, while keeping broad theme extraction from inventing topics.
+  Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement audit polish for festival education cards**:
+  preserved festival umbrella CTA copy while tying it to the concrete project or
+  program, including `80 историй о главном` and the educational program of
+  `Кантата`; added `meeting` and `excursion` CTA handling so creative meetings
+  and zoo excursions do not leak theatre/lecture wording; sparse-OCR photo
+  posters now avoid `bottom_overlay`. Expanded the poster-aware palette bank
+  with modern contrast families and lowered `yellow_violet` dominance for
+  editorial/education cards. Verified against production `Кантата` rows from
+  `/data/db.sqlite` and covered by `tests/test_afishaengagement.py`.
+- **Changed: Afisha Engagement debug cleanup**: the cleanup script can now
+  delete stale scheduled shadow posts by `promo_exposure` target URLs via
+  `--from-db`, not only by marker text in VK postponed posts. This is intended
+  for old debug batches whose VK text is not searchable by marker; matching
+  rows are limited to future `surface='afishaengagement'` /
+  `publish_status='VK_SCHEDULED_DEBUG'` and are marked `VK_DELETED_DEBUG` after
+  deletion. Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement horizontal and context polish**: horizontal
+  posters now stay in `bottom_extension` even when text/layout fitting rejects
+  the first render attempt; the publish fallback compacts to a safe or ultra
+  safe bottom CTA instead of switching to right-side or carousel output. Bottom
+  extension height is capped to one third of the final image while using the
+  full available limit, and the extra lower rail/stripe is removed. CTA typing
+  now treats Russian holidays as holidays, adds volunteer/exhibition/party
+  copy, blocks fairy/family copy for non-family events, and reuses the stored
+  event type as the primary signal. CTA copy no longer implies that likes,
+  comments, or other reactions can make similar events happen more often.
+  Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement side CTA regression**: constrained
+  `right_extension` to keep the original poster at least two thirds of the
+  final width, removed the competing inner accent rail/stripe, centered CTA
+  text in the available side text box, and made text fitting prefer a slightly
+  smaller font over orphan service-word lines such as `с` or `бы`. Repost CTA
+  copy now avoids stilted `Перешли...` templates in favor of natural
+  `Поделись...` wording, and horizontal `bottom_extension` uses a shallower
+  poster overlap so lower poster data is less likely to be covered. Covered by
+  `tests/test_afishaengagement.py` and local real-poster previews in
+  `artifacts/codex/afishaengagement-right-fix-20260610/`.
 - **Fixed: Afisha Engagement CTA text quality**: added selective
   `llm_text_mode=auto` for risky CTA copy while keeping deterministic visual
   rendering. Theme-heavy comment text and guardrail hits such as
