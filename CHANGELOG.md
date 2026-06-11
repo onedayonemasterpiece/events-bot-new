@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Changed: Afisha Engagement debug cleanup**: the cleanup script can now
+  delete stale scheduled shadow posts by `promo_exposure` target URLs via
+  `--from-db`, not only by marker text in VK postponed posts. This is intended
+  for old debug batches whose VK text is not searchable by marker; matching
+  rows are limited to future `surface='afishaengagement'` /
+  `publish_status='VK_SCHEDULED_DEBUG'` and are marked `VK_DELETED_DEBUG` after
+  deletion. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement horizontal and context polish**: horizontal
   posters now stay in `bottom_extension` even when text/layout fitting rejects
   the first render attempt; the publish fallback compacts to a safe or ultra

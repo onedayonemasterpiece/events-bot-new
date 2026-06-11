@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import io
+import importlib.util
+import json
+import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -11,6 +15,15 @@ import afishaengagement as aeg
 import main
 from db import Database
 from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
+
+
+def _load_cleanup_script_module():
+    path = Path(__file__).resolve().parents[1] / "scripts" / "cleanup_afishaengagement_debug_vk.py"
+    spec = importlib.util.spec_from_file_location("cleanup_afishaengagement_debug_vk", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _poster_bytes() -> bytes:
@@ -1727,3 +1740,74 @@ async def test_cleanup_debug_posts_deletes_only_marker_matches():
 
     assert result == {"matched": 1, "deleted": 1, "errors": 0}
     assert calls[-1] == ("wall.delete", {"owner_id": -231920894, "post_id": 11})
+
+
+def test_db_cleanup_selector_only_returns_stale_future_debug_rows(tmp_path):
+    cleanup = _load_cleanup_script_module()
+    db_path = tmp_path / "debug.sqlite"
+    con = sqlite3.connect(db_path)
+    con.execute(
+        """
+        CREATE TABLE promo_exposure (
+            id INTEGER PRIMARY KEY,
+            surface TEXT,
+            publish_status TEXT,
+            created_at TEXT,
+            published_at TEXT,
+            details_json TEXT,
+            public_targets_json TEXT
+        )
+        """
+    )
+
+    def insert_row(
+        row_id: int,
+        *,
+        surface: str = "afishaengagement",
+        status: str = "VK_SCHEDULED_DEBUG",
+        created_at: str,
+        published_at: str = "2036-06-14 08:00:00+00:00",
+        target_url: str = "",
+    ) -> None:
+        details = {"target_url": target_url, "cta_text": f"cta-{row_id}", "event_title": f"event-{row_id}"}
+        targets = [{"type": "vk_wall_debug", "url": target_url}] if target_url else []
+        con.execute(
+            """
+            INSERT INTO promo_exposure
+                (id, surface, publish_status, created_at, published_at, details_json, public_targets_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (row_id, surface, status, created_at, published_at, json.dumps(details), json.dumps(targets)),
+        )
+
+    insert_row(1, created_at="2026-06-11 08:59:00+00:00", target_url="https://vk.com/wall-231920894_1001")
+    insert_row(2, created_at="2026-06-11 09:19:00+00:00", target_url="https://vk.com/wall-231920894_1002")
+    insert_row(
+        3,
+        status="VK_DELETED_DEBUG",
+        created_at="2026-06-11 08:59:00+00:00",
+        target_url="https://vk.com/wall-231920894_1003",
+    )
+    insert_row(
+        4,
+        surface="vk_post",
+        created_at="2026-06-11 08:59:00+00:00",
+        target_url="https://vk.com/wall-231920894_1004",
+    )
+    insert_row(
+        5,
+        created_at="2026-06-11 08:59:00+00:00",
+        published_at="2026-06-10 08:00:00+00:00",
+        target_url="https://vk.com/wall-231920894_1005",
+    )
+    con.commit()
+    con.close()
+
+    rows = cleanup._load_stale_debug_rows(
+        db_path=str(db_path),
+        stale_before=datetime(2026, 6, 11, 9, 18, tzinfo=timezone.utc),
+        include_all=False,
+    )
+
+    assert [row["exposure_id"] for row in rows] == [1]
+    assert rows[0]["post_id"] == 1001

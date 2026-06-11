@@ -277,6 +277,22 @@ Use `--dry-run` to count matching postponed posts without deleting them.
 The script calls VK `wall.get filter=postponed` and deletes only posts whose
 text contains the marker. It does not print VK tokens or secret values.
 
+If old debug posts were created without a searchable marker in VK text, cleanup
+must use the recorded `promo_exposure.public_targets_json` URLs instead:
+
+```bash
+python3 scripts/cleanup_afishaengagement_debug_vk.py \
+  --from-db \
+  --dry-run \
+  --group-id "$VK_EVENTS_GROUP_ID" \
+  --db-path /data/db.sqlite \
+  --stale-before "2026-06-11T09:18:00+00:00"
+```
+
+Remove `--dry-run` only after reviewing the candidates. This mode deletes only
+future `surface='afishaengagement'` / `publish_status='VK_SCHEDULED_DEBUG'`
+posts and marks their exposure rows as `VK_DELETED_DEBUG`.
+
 ## Production Verification Plan
 
 Before declaring the feature confirmed:
