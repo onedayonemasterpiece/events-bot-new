@@ -10,9 +10,9 @@
   full available limit, and the extra lower rail/stripe is removed. CTA typing
   now treats Russian holidays as holidays, adds volunteer/exhibition/party
   copy, blocks fairy/family copy for non-family events, and reuses the stored
-  event type as the primary signal. Like CTA copy no longer implies that a
-  user's like can make similar events happen more often. Covered by
-  `tests/test_afishaengagement.py`.
+  event type as the primary signal. CTA copy no longer implies that likes,
+  comments, or other reactions can make similar events happen more often.
+  Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement side CTA regression**: constrained
   `right_extension` to keep the original poster at least two thirds of the
   final width, removed the competing inner accent rail/stripe, centered CTA

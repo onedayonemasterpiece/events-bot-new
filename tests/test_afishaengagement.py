@@ -222,6 +222,7 @@ def test_like_cta_does_not_promise_more_events_from_likes():
     }
 
     assert all("хочешь чаще" not in text for text in seen)
+    assert all("видеть чаще" not in text for text in seen)
     assert all("почаще" not in text for text in seen)
     assert all("чаще провод" not in text for text in seen)
 

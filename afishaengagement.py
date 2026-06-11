@@ -399,6 +399,11 @@ MECHANIC_BADGES = {
     "likes": "ЛАЙК",
     "reposts": "РЕПОСТ",
 }
+MECHANIC_EYEBROWS = {
+    "comments": "К ВАМ ВОПРОС",
+    "likes": "ОТМЕТЬТЕ ЛАЙКОМ",
+    "reposts": "ПОДЕЛИТЕСЬ",
+}
 SUPPORTED_TEMPLATE_IDS = {"right_extension", "bottom_overlay", "bottom_extension", "hook_swipe_cta"}
 HOLIDAY_FESTIVAL_NAMES = {
     "день россии",
@@ -1014,7 +1019,7 @@ def _templates_for(
         templates["comments"].extend(
             [
                 "Кого позвали бы с собой на такое семейное событие?",
-                "Какие детские события вам хочется видеть чаще?",
+                "Какие детские события вам особенно нравятся?",
             ]
         )
         templates["likes"].extend(
@@ -1382,6 +1387,11 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
         "поддержка формата",
         "поддержать формат",
         "из темы",
+        "хочешь чаще",
+        "хочется видеть чаще",
+        "видеть чаще",
+        "почаще",
+        "чаще провод",
     )
     if any(fragment in lower for fragment in forbidden_fragments):
         return True
@@ -2268,32 +2278,21 @@ def _compose_cta_edge(
     include_accent_stripe: bool = True,
 ) -> Any:
     nx, ny = cta_normal
-    dark = _mix_rgb(ink, surface, 0.25)
-    seam_color = _mix_rgb(seam, accent, 0.25)
     light = _mix_rgb(surface, (255, 255, 255), 0.34)
-    accent_color = _mix_rgb(accent, rim, 0.08)
+    accent_color = _mix_rgb(accent, ink, 0.25)
 
-    dark_start, dark_end = _offset_segment(seam_start, seam_end, dx=-2 * nx, dy=-2 * ny)
-    seam_inner_start, seam_inner_end = _offset_segment(seam_start, seam_end, dx=0, dy=0)
+    light_start, light_end = _offset_segment(seam_start, seam_end, dx=1 * nx, dy=1 * ny)
     accent_start, accent_end = _offset_segment(
         seam_start,
         seam_end,
-        dx=max(16, int(22 * scale)) * nx,
-        dy=max(16, int(22 * scale)) * ny,
-    )
-    light_start, light_end = _offset_segment(
-        seam_start,
-        seam_end,
-        dx=max(8, int(12 * scale)) * nx,
-        dy=max(8, int(12 * scale)) * ny,
+        dx=max(8, int(10 * scale)) * nx,
+        dy=max(8, int(10 * scale)) * ny,
     )
     edge_layers = [
-        (dark_start, dark_end, dark, max(1, int(2 * scale))),
-        (seam_inner_start, seam_inner_end, seam_color, max(4, int(8 * scale))),
-        (light_start, light_end, light, max(1, int(2 * scale))),
+        (light_start, light_end, light, 1),
     ]
     if include_accent_stripe:
-        edge_layers.insert(2, (accent_start, accent_end, accent_color, max(2, int(4 * scale))))
+        edge_layers.append((accent_start, accent_end, accent_color, max(2, int(2 * scale))))
     for start, end, color, width in edge_layers:
         image = _composite_aa_line(image, [start, end], fill=color, width=width, aa_scale=8)
     return image
@@ -2380,6 +2379,43 @@ def _draw_down_arrow(
     _round_line(draw, [(cx + head, y1 - head), (cx, y1)], color, width)
 
 
+def _draw_tracking_text(
+    draw: Any,
+    xy: tuple[int, int],
+    text: str,
+    *,
+    font: Any,
+    fill: tuple[int, int, int],
+    tracking: int,
+) -> None:
+    x, y = xy
+    for ch in text:
+        draw.text((x, y), ch, font=font, fill=fill)
+        x += int(draw.textlength(ch, font=font)) + tracking
+
+
+def _cta_eyebrow_metrics(scale: float) -> tuple[Any, int, int]:
+    font_px = max(16, int(21 * scale))
+    font = _load_font("Cygre-Medium.ttf", font_px)
+    ascent, descent = font.getmetrics()
+    return font, max(1, int(2 * scale)), ascent + descent
+
+
+def _draw_cta_eyebrow(
+    draw: Any,
+    *,
+    x: int,
+    y: int,
+    mechanic: str,
+    scale: float,
+    fill: tuple[int, int, int],
+) -> int:
+    font, tracking, height = _cta_eyebrow_metrics(scale)
+    label = MECHANIC_EYEBROWS.get(mechanic, "ОТ РЕДАКЦИИ")
+    _draw_tracking_text(draw, (x, y), label, font=font, fill=fill, tracking=tracking)
+    return height
+
+
 def _draw_badge(
     draw: Any,
     *,
@@ -2414,18 +2450,26 @@ def _draw_badge(
     return badge_w, badge_h
 
 
-def _fit_badge_font(label: str, *, scale: float, max_width: int, preferred_px: int | None = None) -> Any:
+def _fit_badge_font(
+    label: str,
+    *,
+    scale: float,
+    max_width: int,
+    preferred_px: int | None = None,
+    trailing_arrow: bool = False,
+) -> Any:
     from PIL import Image, ImageDraw
 
     preferred = preferred_px or max(20, int(34 * scale))
     minimum = max(14, int(20 * scale))
     pad_x = int(28 * scale)
+    arrow_reserve = int(46 * scale) if trailing_arrow else 0
     probe = Image.new("RGB", (10, 10))
     draw = ImageDraw.Draw(probe)
     for size in range(preferred, minimum - 1, -2):
         font = _load_font("Cygre-Bold.ttf", size)
         bbox = _text_bbox(draw, (0, 0), label, font)
-        if (bbox[2] - bbox[0]) + pad_x * 2 <= max_width:
+        if (bbox[2] - bbox[0]) + pad_x * 2 + arrow_reserve <= max_width:
             return font
     return _load_font("Cygre-Bold.ttf", minimum)
 
@@ -2442,6 +2486,8 @@ def _draw_badge_on_image(
     accent: tuple[int, int, int],
     scale: float,
     max_width: int | None = None,
+    button: bool = False,
+    trailing_arrow: bool = False,
 ) -> tuple[Any, int, int]:
     from PIL import ImageDraw
 
@@ -2449,8 +2495,9 @@ def _draw_badge_on_image(
     bbox = _text_bbox(draw, (0, 0), label, font)
     label_w = bbox[2] - bbox[0]
     pad_x = int(28 * scale)
+    arrow_reserve = int(46 * scale) if trailing_arrow else 0
     badge_h = int(58 * scale)
-    badge_w = label_w + pad_x * 2
+    badge_w = label_w + pad_x * 2 + arrow_reserve
     if max_width:
         badge_w = min(max_width, badge_w)
         if label_w + pad_x * 2 > badge_w:
@@ -2459,22 +2506,38 @@ def _draw_badge_on_image(
         image,
         (x, y, x + badge_w, y + badge_h),
         radius=badge_h // 2,
-        fill=bg,
-        outline=accent,
-        outline_width=max(2, int(3 * scale)),
+        fill=accent if button else bg,
+        outline=None if button else accent,
+        outline_width=0 if button else max(2, int(3 * scale)),
         aa_scale=4,
     )
-    image = _composite_inset_rule(
-        image,
-        start=(x + int(9 * scale), y + badge_h - int(2 * scale)),
-        end=(x + badge_w - int(9 * scale), y + badge_h - int(2 * scale)),
-        color=_mix_rgb(bg, accent, 0.70),
-        width=max(1, int(2 * scale)),
-        aa_scale=4,
-    )
+    if not button:
+        image = _composite_inset_rule(
+            image,
+            start=(x + int(9 * scale), y + badge_h - int(2 * scale)),
+            end=(x + badge_w - int(9 * scale), y + badge_h - int(2 * scale)),
+            color=_mix_rgb(bg, accent, 0.70),
+            width=max(1, int(2 * scale)),
+            aa_scale=4,
+        )
     draw = ImageDraw.Draw(image)
-    text_x = x + max(0, int((badge_w - label_w) / 2))
+    text_area_w = badge_w - arrow_reserve
+    text_x = x + max(0, int((text_area_w - label_w) / 2))
     draw.text((text_x, y + int(11 * scale)), label, font=font, fill=fg)
+    if trailing_arrow:
+        arrow_gap = int(10 * scale)
+        arrow_x0 = x + text_area_w - int(2 * scale)
+        arrow_x1 = x + badge_w - pad_x + int(3 * scale)
+        arrow_y = y + badge_h / 2
+        _draw_right_arrow(
+            draw,
+            arrow_x0 + arrow_gap,
+            arrow_x1,
+            arrow_y,
+            fg,
+            width=max(3, int(4 * scale)),
+            head=max(7, int(8 * scale)),
+        )
     return image, badge_w, badge_h
 
 
@@ -2553,6 +2616,7 @@ def render_right_extension(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
+    signal_ink = _hex_to_rgb(roles.get("signal_ink") or "#FFFFFF")
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
@@ -2572,6 +2636,8 @@ def render_right_extension(
     badge_gap = max(int(54 * scale), int(height * 0.055))
     bottom_pad = max(int(36 * scale), int(height * 0.045))
     badge_y = height - bottom_pad - badge_h
+    _, _, eyebrow_h = _cta_eyebrow_metrics(scale)
+    eyebrow_gap = max(int(18 * scale), int(height * 0.014))
     max_cta_w = max(1, int(poster_w * 0.5))
     start_w = min(max_cta_w, max(140, int(220 * scale), int(poster_w * 0.30)))
     end_w = max_cta_w
@@ -2589,7 +2655,7 @@ def render_right_extension(
         candidate_safe_w = width - candidate_safe_x - right_pad
         if candidate_safe_w <= int(130 * scale):
             continue
-        text_box_y = safe_y
+        text_box_y = safe_y + eyebrow_h + eyebrow_gap
         text_box_h = badge_y - badge_gap - text_box_y
         candidate_fit = fit_text(
             plan.cta_text,
@@ -2642,7 +2708,7 @@ def render_right_extension(
     if best_fit is None:
         raise ValueError("text_overflow")
     _font_px, _neg_cta_w, width, safe_x, safe_w, fit = best_fit
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
 
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
@@ -2654,7 +2720,7 @@ def render_right_extension(
         size=(width, height),
         polygon=cta_polygon,
         offset=(-int(18 * scale), 0),
-        alpha=CTA_LAYER_SHADOW_ALPHA,
+        alpha=120,
         blur=max(10, int(26 * scale)),
         aa_scale=4,
     )
@@ -2686,7 +2752,7 @@ def render_right_extension(
         accent=accent,
         rim=rim,
         scale=scale,
-        include_accent_stripe=False,
+        include_accent_stripe=True,
     )
     canvas, _badge_w, badge_h = _draw_badge_on_image(
         canvas,
@@ -2695,12 +2761,24 @@ def render_right_extension(
         label=badge,
         font=badge_font,
         bg=bg,
-        fg=accent,
+        fg=signal_ink,
         accent=accent,
         scale=scale,
         max_width=safe_w,
+        button=True,
+        trailing_arrow=True,
     )
     draw = ImageDraw.Draw(canvas)
+
+    eyebrow_color = _mix_rgb(text_color, bg, 0.45)
+    _draw_cta_eyebrow(
+        draw,
+        x=safe_x,
+        y=safe_y,
+        mechanic=plan.mechanic,
+        scale=scale,
+        fill=eyebrow_color,
+    )
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
@@ -2743,6 +2821,7 @@ def _render_bottom_extension(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
+    signal_ink = _hex_to_rgb(roles.get("signal_ink") or "#FFFFFF")
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
@@ -2757,14 +2836,16 @@ def _render_bottom_extension(
     block_h = 0
     safe_x = max(36, int(54 * scale))
     safe_w = width - safe_x * 2
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
     badge_h = int(58 * scale)
     rail_w = 0
     rail_gap = 0
     content_top_pad = diagonal + max(int(32 * scale), int(width * 0.034))
     badge_gap = max(int(14 * scale), int(width * 0.016))
-    bottom_pad = max(int(20 * scale), int(width * 0.024))
-    badge_clear_from_seam = max(int(84 * scale), int(width * 0.08))
+    bottom_pad = max(int(36 * scale), int(width * 0.034))
+    badge_clear_from_seam = max(int(160 * scale), int(width * 0.14))
+    _, _, eyebrow_h = _cta_eyebrow_metrics(scale)
+    eyebrow_gap = max(int(16 * scale), int(width * 0.014))
     max_height = int(width * MAX_VK_FEED_PHOTO_ASPECT)
     max_block_h = min(max_height - poster_h + overlap, int(poster_h * 0.50 + overlap))
     min_block_h = max(int(220 * scale), int(width * 0.20), int(poster_h * 0.16))
@@ -2776,12 +2857,12 @@ def _render_bottom_extension(
     candidates = list(range(start_h, end_h + 1, step_h))
     if not candidates or candidates[-1] != end_h:
         candidates.append(end_h)
-    for candidate_h in candidates:
+    for candidate_h in reversed(candidates):
         candidate_height = poster_h + candidate_h - overlap
         candidate_badge_y = candidate_height - bottom_pad - badge_h
         if candidate_badge_y < block_top + diagonal + badge_clear_from_seam:
             continue
-        text_box_y_candidate = block_top + content_top_pad
+        text_box_y_candidate = block_top + content_top_pad + eyebrow_h + eyebrow_gap
         text_box_h = candidate_badge_y - badge_gap - text_box_y_candidate
         fit = fit_text(
             plan.cta_text,
@@ -2808,8 +2889,8 @@ def _render_bottom_extension(
         size=(width, height),
         polygon=cta_polygon,
         offset=(0, -int(12 * scale)),
-        alpha=CTA_LAYER_SHADOW_ALPHA,
-        blur=max(12, int(28 * scale)),
+        alpha=120,
+        blur=max(10, int(20 * scale)),
         aa_scale=4,
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
@@ -2835,26 +2916,44 @@ def _render_bottom_extension(
         accent=accent,
         rim=rim,
         scale=scale,
-        include_accent_stripe=False,
+        include_accent_stripe=True,
     )
     badge_y = height - bottom_pad - badge_h
     if badge_y < block_top + diagonal + badge_clear_from_seam:
         raise ValueError("badge_clearance_overflow")
+    draw = ImageDraw.Draw(canvas)
+    badge_probe = ImageDraw.Draw(canvas)
+    badge_label_bbox = _text_bbox(badge_probe, (0, 0), badge, badge_font)
+    badge_w = min(safe_w, (badge_label_bbox[2] - badge_label_bbox[0]) + int(28 * scale) * 2 + int(46 * scale))
+    badge_x = safe_x + max(0, safe_w - badge_w)
     canvas, _, _ = _draw_badge_on_image(
         canvas,
-        x=safe_x,
+        x=badge_x,
         y=badge_y,
         label=badge,
         font=badge_font,
         bg=bg,
-        fg=accent,
+        fg=signal_ink,
         accent=accent,
         scale=scale,
         max_width=safe_w,
+        button=True,
+        trailing_arrow=True,
     )
     draw = ImageDraw.Draw(canvas)
 
-    text_box_y = block_top + content_top_pad
+    eyebrow_y = block_top + content_top_pad
+    eyebrow_color = _mix_rgb(text_color, bg, 0.45)
+    _draw_cta_eyebrow(
+        draw,
+        x=safe_x,
+        y=eyebrow_y,
+        mechanic=plan.mechanic,
+        scale=scale,
+        fill=eyebrow_color,
+    )
+
+    text_box_y = eyebrow_y + eyebrow_h + eyebrow_gap
     text_box_h = max(1, badge_y - badge_gap - text_box_y)
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
@@ -2917,24 +3016,27 @@ def _render_bottom_overlay(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
+    signal_ink = _hex_to_rgb(roles.get("signal_ink") or "#FFFFFF")
     seam = _hex_to_rgb(roles["seam"])
     rim = _hex_to_rgb(roles["rim"])
 
     safe_x = max(56, int(72 * scale))
     safe_w = width - safe_x * 2
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
     badge_h = int(58 * scale)
     rail_w = max(4, int(6 * scale))
     rail_gap = int(24 * scale)
     content_top_pad = diagonal + max(int(54 * scale), int(width * 0.060))
     badge_gap = max(int(22 * scale), int(width * 0.024))
-    bottom_pad = max(int(28 * scale), int(width * 0.034))
+    bottom_pad = max(int(36 * scale), int(width * 0.040))
     badge_clear_from_seam = max(int(250 * scale), int(width * 0.22))
+    _, _, eyebrow_h = _cta_eyebrow_metrics(scale)
+    eyebrow_gap = max(int(16 * scale), int(width * 0.014))
     badge_y = height - bottom_pad - badge_h
     if badge_y < block_top + diagonal + badge_clear_from_seam:
         raise ValueError("badge_clearance_overflow")
-    text_box_y = block_top + content_top_pad
+    text_box_y = block_top + content_top_pad + eyebrow_h + eyebrow_gap
     text_box_h = max(1, badge_y - badge_gap - text_box_y)
 
     fit = fit_text(
@@ -2954,8 +3056,8 @@ def _render_bottom_overlay(
         size=(width, height),
         polygon=cta_polygon,
         offset=(0, -int(12 * scale)),
-        alpha=CTA_LAYER_SHADOW_ALPHA,
-        blur=max(12, int(28 * scale)),
+        alpha=120,
+        blur=max(10, int(20 * scale)),
         aa_scale=4,
     )
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
@@ -2982,19 +3084,36 @@ def _render_bottom_overlay(
         rim=rim,
         scale=scale,
     )
+    draw = ImageDraw.Draw(canvas)
+    badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
+    badge_w = min(safe_w, (badge_bbox[2] - badge_bbox[0]) + int(28 * scale) * 2 + int(46 * scale))
+    badge_x = safe_x + max(0, safe_w - badge_w)
     canvas, _, _ = _draw_badge_on_image(
         canvas,
-        x=safe_x,
+        x=badge_x,
         y=badge_y,
         label=badge,
         font=badge_font,
         bg=bg,
-        fg=accent,
+        fg=signal_ink,
         accent=accent,
         scale=scale,
         max_width=safe_w,
+        button=True,
+        trailing_arrow=True,
     )
     draw = ImageDraw.Draw(canvas)
+
+    eyebrow_y = block_top + content_top_pad
+    eyebrow_color = _mix_rgb(text_color, bg, 0.45)
+    _draw_cta_eyebrow(
+        draw,
+        x=safe_x,
+        y=eyebrow_y,
+        mechanic=plan.mechanic,
+        scale=scale,
+        fill=eyebrow_color,
+    )
 
     main_font = _load_font("Cygre-Bold.ttf", fit.font_px)
     line_gap = int(fit.font_px * 0.18)
@@ -3050,6 +3169,7 @@ def _render_hook_swipe_cta(
     bg = _hex_to_rgb(roles["surface"])
     text_color = _hex_to_rgb(roles["ink"])
     accent = _hex_to_rgb(roles["signal"])
+    signal_ink = _hex_to_rgb(roles.get("signal_ink") or "#FFFFFF")
     card_w, card_h = 1080, 1350
     scale = card_w / 1080
 
@@ -3103,48 +3223,31 @@ def _render_hook_swipe_cta(
         rim=text_color,
         scale=scale,
     )
-
-    swipe_font = _load_font("Cygre-Medium.ttf", int(38 * scale))
-    swipe_label = "листай"
-    swipe_bbox = _text_bbox(draw, (0, 0), swipe_label, swipe_font)
-    swipe_w = swipe_bbox[2] - swipe_bbox[0]
-    swipe_h = swipe_bbox[3] - swipe_bbox[1]
-    swipe_right = card_w - safe_x
-    safe_bottom = int(92 * scale)
-    arrow_w = int(66 * scale)
-    pill_pad_x = int(26 * scale)
-    pill_pad_y = int(18 * scale)
-    pill_w = int(swipe_w) + int(20 * scale) + arrow_w + pill_pad_x * 2
-    pill_h = swipe_h + pill_pad_y * 2
-    pill_x = swipe_right - pill_w
-    pill_y = card_h - safe_bottom - pill_h
-    swipe_y = pill_y + pill_pad_y
-    hook = _composite_aa_rounded_rect(
-        hook,
-        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=pill_h // 2,
-        fill=bg,
-        outline=accent,
-        outline_width=max(2, int(3 * scale)),
-        aa_scale=4,
-    )
     draw = ImageDraw.Draw(hook)
-    swipe_x = pill_x + pill_pad_x
-    draw.text((swipe_x, swipe_y), swipe_label, font=swipe_font, fill=accent)
+
+    swipe_font = _load_font("Cygre-Medium.ttf", int(36 * scale))
+    swipe_label = "листай"
+    swipe_w = draw.textlength(swipe_label, font=swipe_font)
+    fa, fd = swipe_font.getmetrics()
+    right_x = card_w - safe_x
+    y0 = card_h - int(96 * scale)
+    arrow_w = int(66 * scale)
+    x0 = right_x - (swipe_w + int(18 * scale) + arrow_w)
+    draw.text((x0, y0 - (fa + fd) / 2), swipe_label, font=swipe_font, fill=accent)
     _draw_right_arrow(
         draw,
-        swipe_x + swipe_w + int(18 * scale),
-        pill_x + pill_w - pill_pad_x,
-        swipe_y + swipe_h / 2,
+        x0 + swipe_w + int(18 * scale),
+        right_x,
+        y0,
         accent,
-        width=max(8, int(12 * scale)),
-        head=max(16, int(22 * scale)),
+        width=max(8, int(10 * scale)),
+        head=max(14, int(18 * scale)),
     )
 
     hook_fit = fit_text(
         hook_text,
         box_width=safe_w - int(38 * scale),
-        box_height=max(1, pill_y - block_top - int(150 * scale)),
+        box_height=max(1, int(y0 - block_top - 170 * scale)),
         preferred_px=86,
         min_px=52,
         max_lines=3,
@@ -3167,11 +3270,13 @@ def _render_hook_swipe_cta(
         _draw_text_line(draw, (hook_x, y), line, font=hook_font, fill=text_color, font_px=hook_fit.font_px)
         bbox = _text_bbox(draw, (hook_x, y), line, hook_font)
         y += (bbox[3] - bbox[1]) + int(hook_fit.font_px * 0.18)
-    draw.line((safe_x, card_h - 92, card_w - safe_x, card_h - 92), fill=_mix_rgb(bg, accent, 0.70), width=5)
+    rule_y = card_h - int(92 * scale)
+    rule_right = max(safe_x, int(x0 - 24 * scale))
+    draw.line((safe_x, rule_y, rule_right, rule_y), fill=accent, width=5)
 
     cta = Image.new("RGB", (card_w, card_h), bg)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _fit_badge_font(badge, scale=1.0, max_width=card_w - 172, preferred_px=42)
+    badge_font = _fit_badge_font(badge, scale=1.0, max_width=card_w - 172, preferred_px=42, trailing_arrow=True)
     cta, _, _ = _draw_badge_on_image(
         cta,
         x=86,
@@ -3179,10 +3284,12 @@ def _render_hook_swipe_cta(
         label=badge,
         font=badge_font,
         bg=bg,
-        fg=accent,
+        fg=signal_ink,
         accent=accent,
         scale=1.0,
         max_width=card_w - 172,
+        button=True,
+        trailing_arrow=True,
     )
     draw = ImageDraw.Draw(cta)
 
