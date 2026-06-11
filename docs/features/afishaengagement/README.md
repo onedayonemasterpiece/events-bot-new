@@ -67,20 +67,30 @@ per event.
 
 Optional config `event_type_keys` narrows a broad target after normal promo
 target matching. MVP keys are the internal classifier outputs:
-`lecture`, `concert`, `workshop`, `theatre`, `cinema`, `festival`, `market`,
-`family`, `other`. For example, lecture-only debug uses `target_type='all'` plus
-`"event_type_keys": ["lecture"]`.
+`lecture`, `meeting`, `excursion`, `concert`, `workshop`, `theatre`, `cinema`,
+`festival`, `market`, `family`, `other`. For example, lecture-only debug uses
+`target_type='all'` plus `"event_type_keys": ["lecture"]`.
 
 CTA copy selection treats the stored event `event_type` as the primary source of
 truth. Title/description heuristics are only a fallback or a narrow refinement:
 a generic `встреча` must not become `lecture` unless lecture/speaker/discussion
 signals are present, and child/family wording such as fairy-character events is
 classified as `family` for CTA text.
+Creative meetings and dialogue formats use `meeting` copy so educational
+programs do not accidentally get theatre/exhibition wording from venue text or
+artist bios. Zoo/excursion events use `excursion` copy; stored `лекция` values
+are overridden only when the event text clearly says excursion/zoo/zoologist
+context, preventing `лекции` CTA copy from leaking into zoo excursions.
 Theme extraction inside an already selected event type must use safe word/stem
 matching: narrow cues such as `орган` may match real organ music forms, but must
 not match unrelated words such as `организаторы`. If a theme is uncertain, the
 copy falls back to the event type instead of inventing a specific music/cinema
 topic.
+Festival context is intentionally preserved as an umbrella, but it must be tied
+to the concrete program, project, or topic. For example, `80 историй о главном`
+uses history/project wording, and the educational program of `Кантата` uses
+`образовательная программа фестиваля Кантата` instead of generic `кто ждёт
+фестиваля` copy.
 CTA text generation is hybrid. The renderer and visual plan stay deterministic,
 but `llm_text_mode=auto` runs a compact LLM CTA-writer only for risky copy:
 theme-heavy comment text, forbidden phrases, or event-type conflicts such as a
@@ -182,6 +192,9 @@ Implemented templates:
   badge below the diagonal safe line. Wide horizontal posters do not use this
   as a cramped overlay; they are promoted to `bottom_extension` so the CTA is
   added below the poster instead of widening the image to the right.
+  Photo-only/collage posters with sparse OCR avoid `bottom_overlay` during plan
+  selection and prefer a side extension or carousel, so the CTA does not cover a
+  key visual object when there is no poster text map to rely on.
 
 - `hook_swipe_cta`: creates a two-card carousel. The first card keeps the poster
   readable in an upper band and places the hook in a separate engagementcard-
@@ -214,9 +227,15 @@ The renderer uses engagementcard principles from guide excursion monitoring:
   CTA block would read as part of the poster.
 - curated/trend palette bank: proven `engagementcard` colors are extended with
   designer-adjacent pairs such as ivory/plum/wasabi, clay/cobalt, botanical
-  green/citron, plum noir/cloud, and smoky jade/terracotta. The renderer chooses
-  among these designed pairs; it does not synthesize arbitrary mathematical
-  colors.
+  green/citron, plum noir/cloud, smoky jade/terracotta, future-dusk/lime,
+  transformative teal/persimmon, mocha/aqua, butter/cherry, thermal
+  cobalt/tomato, ink/fuchsia/mint, sage/lilac, and oxide/citron. The renderer
+  chooses among these designed pairs; it does not synthesize arbitrary
+  mathematical colors.
+- saturated legacy yellow/violet remains available for bright festival/pop
+  cards, but receives a scoring penalty for lecture, meeting, exhibition, and
+  excursion-like cards so real batches do not collapse into one loud color
+  family.
 - extended color roles: `surface`, `ink`, `signal`, `signal_ink`, `seam`, and
   `rim` are mapped back to legacy `background/text/accent` fields for
   compatibility.

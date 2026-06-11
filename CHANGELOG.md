@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement audit polish for festival education cards**:
+  preserved festival umbrella CTA copy while tying it to the concrete project or
+  program, including `80 историй о главном` and the educational program of
+  `Кантата`; added `meeting` and `excursion` CTA handling so creative meetings
+  and zoo excursions do not leak theatre/lecture wording; sparse-OCR photo
+  posters now avoid `bottom_overlay`. Expanded the poster-aware palette bank
+  with modern contrast families and lowered `yellow_violet` dominance for
+  editorial/education cards. Verified against production `Кантата` rows from
+  `/data/db.sqlite` and covered by `tests/test_afishaengagement.py`.
 - **Changed: Afisha Engagement debug cleanup**: the cleanup script can now
   delete stale scheduled shadow posts by `promo_exposure` target URLs via
   `--from-db`, not only by marker text in VK postponed posts. This is intended

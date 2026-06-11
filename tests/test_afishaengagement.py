@@ -238,6 +238,32 @@ def test_like_cta_does_not_promise_more_events_from_likes():
     assert all("видеть чаще" not in text for text in seen)
     assert all("почаще" not in text for text in seen)
     assert all("чаще провод" not in text for text in seen)
+    assert all("нужны такие" not in text for text in seen)
+    assert all("больше таких" not in text for text in seen)
+
+
+def test_family_like_copy_does_not_imply_event_demand():
+    event = Event(
+        title="Встреча со сказочными героями",
+        description="Семейная программа для детей и родителей.",
+        date="2026-06-20",
+        time="12:00",
+        location_name="Дом культуры",
+        source_text="",
+        event_type="семейное",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"family-like-demand-copy-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 100, "reposts": 0}},
+        ).cta_text.casefold()
+        for idx in range(100)
+    }
+
+    assert all("нужны такие" not in text for text in seen)
+    assert all("больше таких" not in text for text in seen)
 
 
 def test_text_fit_keeps_word_boundaries():
@@ -462,7 +488,8 @@ def test_forbidden_generic_phrases_are_not_generated():
     assert all("похож" not in text.casefold() for text in seen)
     assert all("формат" not in text.casefold() for text in seen)
     assert all("в таких концертов" not in text.casefold() for text in seen)
-    assert any("в таких концертах" in text.casefold() for text in seen)
+    assert all("от таких концертах" not in text.casefold() for text in seen)
+    assert any("от таких концертов" in text.casefold() for text in seen)
 
 
 def test_concert_like_copy_can_use_extracted_theme():
@@ -754,8 +781,146 @@ def test_festival_cta_uses_short_display_name_without_duplicate_festival_word():
         for idx in range(80)
     }
 
-    assert "Поделись с теми, кто ждёт фестиваля «Кантата» в этом году." in seen
+    assert "Поделись с теми, кому интересна образовательная программа фестиваля Кантата." in seen
+    assert "Поделись с теми, кто следит за образовательной программой фестиваля Кантата." in seen
     assert all("фестиваля Фестиваль" not in text for text in seen)
+
+
+def test_festival_umbrella_cta_stays_but_names_project_topic():
+    event = Event(
+        title="80 историй о главном: встреча про послевоенный Калининград",
+        description="Лекция проекта о людях и местах Калининградской области.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Библиотека",
+        source_text="",
+        event_type="лекция",
+        festival="80 историй о главном",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"80-stories-festival-umbrella-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 50, "reposts": 50}},
+        ).cta_text
+        for idx in range(120)
+    }
+    hook = aeg.build_engagement_plan(event, seed="80-stories-hook", config={"formats": ["hook_swipe_cta"]}).hook_text
+
+    assert "Поставь лайк, если интересны истории Калининградской области." in seen
+    assert "Поделись с теми, кто следит за проектом «80 историй о главном»." in seen
+    assert all("ждёшь фестиваля" not in text.casefold() for text in seen)
+    assert hook == "Кому близки истории Калининградской области?"
+
+
+def test_zoo_excursion_does_not_get_lecture_copy_even_when_stored_as_lecture():
+    event = Event(
+        title="Экскурсия «Другой зоопарк»: кормокухня и ветеринарный уход",
+        description="Участники узнают, как устроена работа зоологов и уход за животными.",
+        date="2026-06-20",
+        time="12:00",
+        location_name="Калининградский зоопарк",
+        source_text="",
+        event_type="лекция",
+        festival="Другой зоопарк",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"zoo-excursion-copy-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 40, "reposts": 20}},
+        ).cta_text
+        for idx in range(160)
+    }
+    hook = aeg.build_engagement_plan(event, seed="zoo-excursion-hook", config={"formats": ["hook_swipe_cta"]}).hook_text
+
+    assert aeg._event_type_key(event) == "excursion"
+    assert all("лекц" not in text.casefold() for text in seen)
+    assert any("зоопарк изнутри" in text.casefold() or "экскурс" in text.casefold() for text in seen)
+    assert hook == "Кому интересен зоопарк изнутри?"
+
+
+def test_kantata_education_umbrella_uses_program_context():
+    event = Event(
+        title="Образовательная программа VI Международного фестиваля классической музыки Кантата",
+        description="Диалоги, лекции и кинопоказы проходят в рамках образовательной программы.",
+        date="2026-06-13",
+        time="12:00",
+        location_name="Филиал Третьяковской галереи",
+        source_text="",
+        event_type="фестиваль",
+        festival="Кантата",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"kantata-education-context-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 50, "reposts": 50}},
+        ).cta_text
+        for idx in range(160)
+    }
+    hook = aeg.build_engagement_plan(event, seed="kantata-education-hook", config={"formats": ["hook_swipe_cta"]}).hook_text
+
+    assert "Поставь лайк, если интересна образовательная программа фестиваля Кантата." in seen
+    assert "Поделись с теми, кто следит за образовательной программой фестиваля Кантата." in seen
+    assert all("кому может быть интересно" not in text.casefold() for text in seen)
+    assert hook == "Кому близка образовательная программа Кантаты?"
+
+
+def test_kantata_creative_meeting_uses_meeting_copy_not_instrumental_persona():
+    event = Event(
+        title="Творческая встреча с Евгением Князевым",
+        description="Встреча проходит в рамках образовательной программы фестиваля Кантата.",
+        date="2026-06-16",
+        time="18:00",
+        location_name="Филиал Третьяковской галереи",
+        source_text="",
+        event_type="встреча",
+        festival="Кантата",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"kantata-meeting-copy-{idx}",
+            config={"mechanic_weights": {"comments": 30, "likes": 40, "reposts": 30}},
+        ).cta_text
+        for idx in range(180)
+    }
+
+    assert aeg._event_type_key(event) == "meeting"
+    assert aeg._extract_persona(event) is None
+    assert all("Евгением" not in text for text in seen)
+    assert all("спектак" not in text.casefold() for text in seen)
+    assert any("встреч" in text.casefold() for text in seen)
+
+
+def test_broad_festival_does_not_overread_folk_music_from_craft_program():
+    event = Event(
+        title="AIST FEST",
+        description="Большой фестиваль: концерты, лекции, мастер-классы народного творчества и маркет.",
+        date="2026-06-20",
+        time="14:00",
+        location_name="Парк",
+        source_text="",
+        event_type="концерт",
+        festival="AIST FEST",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"aist-no-folk-overread-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(160)
+    }
+
+    assert aeg._extract_theme(event, "concert") is None
+    assert all("народную музыку" not in text.casefold() for text in seen)
 
 
 def test_repost_templates_avoid_stilted_pereshli_copy():
@@ -935,6 +1100,64 @@ def test_renderer_can_select_poster_compatible_palette():
 
     assert rendered.palette_id in aeg.PALETTES
     assert aeg._contrast_ratio(aeg._hex_to_rgb(palette["background"]), aeg._hex_to_rgb(palette["text"])) >= 4.5
+
+
+def test_modern_palette_bank_has_accessible_roles():
+    modern_ids = {
+        "future_dusk_lime",
+        "transform_teal_persimmon",
+        "mocha_aqua_ivory",
+        "espresso_sky_cherry",
+        "butter_ink_cherry",
+        "cool_blue_jade_plum",
+        "thermal_cobalt_tomato",
+        "ink_fuchsia_mint",
+        "sage_black_lilac",
+        "oxide_blue_citron",
+    }
+
+    assert modern_ids <= set(aeg.PALETTES)
+    for palette_id in modern_ids:
+        roles = aeg._palette_roles(aeg.PALETTES[palette_id])
+        surface = aeg._hex_to_rgb(roles["surface"])
+        ink = aeg._hex_to_rgb(roles["ink"])
+        signal = aeg._hex_to_rgb(roles["signal"])
+        signal_ink = aeg._hex_to_rgb(roles["signal_ink"])
+
+        assert aeg._contrast_ratio(surface, ink) >= 4.5, palette_id
+        assert aeg._contrast_ratio(signal, signal_ink) >= 3.0, palette_id
+
+
+def test_yellow_violet_no_longer_beats_modern_editorial_palettes_for_lecture():
+    poster = Image.new("RGB", (900, 1200), (12, 18, 26))
+    profile = aeg._poster_color_profile(
+        poster,
+        region_box=aeg._seam_region_box("right_extension", 900, 1200),
+    )
+    yellow = aeg._score_palette(
+        palette_id="yellow_violet",
+        palette=aeg.PALETTES["yellow_violet"],
+        profile=profile,
+        event_type="lecture",
+        seed="yellow-editorial-penalty",
+        preferred_id="yellow_violet",
+    )
+    modern = [
+        aeg._score_palette(
+            palette_id=palette_id,
+            palette=aeg.PALETTES[palette_id],
+            profile=profile,
+            event_type="lecture",
+            seed="yellow-editorial-penalty",
+            preferred_id="yellow_violet",
+        )
+        for palette_id in ("sage_black_lilac", "mocha_aqua_ivory", "smoky_jade_terracotta")
+    ]
+    modern = [score for score in modern if score is not None]
+
+    assert yellow is not None
+    assert modern
+    assert max(score.score for score in modern) > yellow.score
 
 
 def test_palette_selection_prioritizes_cta_separation_from_poster_edge():

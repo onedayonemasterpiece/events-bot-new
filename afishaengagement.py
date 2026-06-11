@@ -382,6 +382,106 @@ CTA_EDITORIAL_PALETTES: dict[str, dict[str, str]] = {
         "family": "ivory",
         "tone": "lecture",
     },
+    "future_dusk_lime": {
+        "surface": "#15142F",
+        "ink": "#F5F1E8",
+        "signal": "#B7FF2A",
+        "signal_ink": "#15142F",
+        "seam": "#B7FF2A",
+        "rim": "#F5F1E8",
+        "family": "cool_dark",
+        "tone": "festival",
+    },
+    "transform_teal_persimmon": {
+        "surface": "#063B3F",
+        "ink": "#F1F7EA",
+        "signal": "#FF6B4A",
+        "signal_ink": "#101A1A",
+        "seam": "#FF6B4A",
+        "rim": "#F1F7EA",
+        "family": "cool_dark",
+        "tone": "editorial",
+    },
+    "mocha_aqua_ivory": {
+        "surface": "#4A332C",
+        "ink": "#F8EAD2",
+        "signal": "#45D6D0",
+        "signal_ink": "#1B1410",
+        "seam": "#45D6D0",
+        "rim": "#F8EAD2",
+        "family": "warm_dark",
+        "tone": "lecture",
+    },
+    "espresso_sky_cherry": {
+        "surface": "#2A1B17",
+        "ink": "#F4E7D3",
+        "signal": "#64C7F2",
+        "signal_ink": "#111214",
+        "seam": "#C0182D",
+        "rim": "#64C7F2",
+        "family": "warm_dark",
+        "tone": "editorial",
+    },
+    "butter_ink_cherry": {
+        "surface": "#F4D35E",
+        "ink": "#17121F",
+        "signal": "#B9122A",
+        "signal_ink": "#FFF7E3",
+        "seam": "#B9122A",
+        "rim": "#17121F",
+        "family": "saturated_pop",
+        "tone": "festival",
+    },
+    "cool_blue_jade_plum": {
+        "surface": "#EAF1F5",
+        "ink": "#24132E",
+        "signal": "#16866F",
+        "signal_ink": "#F7F4EA",
+        "seam": "#24132E",
+        "rim": "#16866F",
+        "family": "ivory",
+        "tone": "family",
+    },
+    "thermal_cobalt_tomato": {
+        "surface": "#1137A6",
+        "ink": "#F7F2E8",
+        "signal": "#FF553E",
+        "signal_ink": "#111214",
+        "seam": "#FF553E",
+        "rim": "#F7F2E8",
+        "family": "cool_dark",
+        "tone": "concert",
+    },
+    "ink_fuchsia_mint": {
+        "surface": "#101018",
+        "ink": "#F6F1E7",
+        "signal": "#E949A8",
+        "signal_ink": "#F6F1E7",
+        "seam": "#76E7B2",
+        "rim": "#E949A8",
+        "family": "graphite",
+        "tone": "party",
+    },
+    "sage_black_lilac": {
+        "surface": "#DDE8D5",
+        "ink": "#141414",
+        "signal": "#7657D8",
+        "signal_ink": "#F7F2EA",
+        "seam": "#7657D8",
+        "rim": "#141414",
+        "family": "ivory",
+        "tone": "lecture",
+    },
+    "oxide_blue_citron": {
+        "surface": "#B94F36",
+        "ink": "#FFF4E2",
+        "signal": "#C9FF3B",
+        "signal_ink": "#172028",
+        "seam": "#172028",
+        "rim": "#C9FF3B",
+        "family": "warm_dark",
+        "tone": "festival",
+    },
 }
 
 for _palette_id, _palette in CTA_EDITORIAL_PALETTES.items():
@@ -587,6 +687,8 @@ def _explicit_event_type_key(value: str | None) -> str | None:
     explicit_type = str(value or "").strip().casefold()
     if not explicit_type:
         return None
+    if any(word in explicit_type for word in ("экскурс", "прогулк")):
+        return "excursion"
     if any(word in explicit_type for word in ("вечерин", "party", "пати", "тусов")):
         return "party"
     if any(word in explicit_type for word in ("выстав", "экспозиц")):
@@ -633,11 +735,32 @@ def _looks_family_event(raw: str) -> bool:
     )
 
 
+def _looks_excursion_event(raw: str) -> bool:
+    if not raw:
+        return False
+    if "экскурс" in raw:
+        return True
+    return "зоопарк" in raw and any(
+        word in raw
+        for word in (
+            "зоолог",
+            "ветеринар",
+            "вольер",
+            "кормокух",
+            "животн",
+            "закулис",
+            "уход",
+        )
+    )
+
+
+def _looks_meeting_event(raw: str) -> bool:
+    return any(word in raw for word in ("творческ", "встреч", "диалог", "разговор", "обсужден"))
+
+
 def _event_type_key(event: Event) -> str:
     explicit_type = str(event.event_type or "").casefold()
     explicit_key = _explicit_event_type_key(explicit_type)
-    if explicit_key and explicit_key != "other":
-        return explicit_key
     raw = " ".join(
         [
             explicit_type,
@@ -648,6 +771,10 @@ def _event_type_key(event: Event) -> str:
             str(event.location_name or ""),
         ]
     ).casefold()
+    if _looks_excursion_event(raw):
+        return "excursion"
+    if explicit_key and explicit_key != "other":
+        return explicit_key
     if explicit_key == "other" and _looks_family_event(raw):
         return "family"
     if any(word in raw for word in ("маркет", "ярмарк")):
@@ -656,6 +783,8 @@ def _event_type_key(event: Event) -> str:
         return "volunteer"
     if any(word in raw for word in ("вечерин", "party", "пати", "тусов", "диджей", "dj-сет", "dj сет")):
         return "party"
+    if explicit_key == "other" and _looks_meeting_event(raw):
+        return "meeting"
     if any(word in raw for word in ("выстав", "экспозиц", "музейн")):
         return "exhibition"
     if any(word in raw for word in ("кинопоказ", "киносеанс", "кинолекторий", "кинопросмотр")):
@@ -691,12 +820,27 @@ def _extract_persona(event: Event) -> str | None:
         match = re.search(pattern, text)
         if match:
             value = match.group(1).strip()
+            before = text[max(0, match.start(1) - 4) : match.start(1)].casefold()
+            if re.search(r"\bс\s*$", before) and _looks_instrumental_persona(value):
+                continue
             if len(value) <= 60:
                 return value
     return None
 
 
+def _looks_instrumental_persona(value: str) -> bool:
+    tokens = [token for token in re.split(r"\s+", str(value or "").strip()) if token]
+    if not tokens:
+        return False
+    endings = ("ом", "ем", "ым", "им", "ой", "ою", "ей", "ею")
+    return any(token.casefold().endswith(endings) for token in tokens)
+
+
 def _topic_label(event: Event, event_type: str) -> str:
+    if event_type == "excursion":
+        return "экскурсий"
+    if event_type == "meeting":
+        return "встреч"
     if event_type == "lecture":
         return "лекций"
     if event_type == "concert":
@@ -725,6 +869,10 @@ def _topic_label(event: Event, event_type: str) -> str:
 
 
 def _topic_accusative_plural(event_type: str) -> str:
+    if event_type == "excursion":
+        return "экскурсии"
+    if event_type == "meeting":
+        return "встречи"
     if event_type == "lecture":
         return "лекции"
     if event_type == "concert":
@@ -753,6 +901,10 @@ def _topic_accusative_plural(event_type: str) -> str:
 
 
 def _topic_prepositional_plural(event_type: str) -> str:
+    if event_type == "excursion":
+        return "экскурсиях"
+    if event_type == "meeting":
+        return "встречах"
     if event_type == "lecture":
         return "лекциях"
     if event_type == "concert":
@@ -781,6 +933,10 @@ def _topic_prepositional_plural(event_type: str) -> str:
 
 
 def _this_event_accusative(event_type: str) -> str:
+    if event_type == "excursion":
+        return "эту экскурсию"
+    if event_type == "meeting":
+        return "эту встречу"
     if event_type == "lecture":
         return "эту лекцию"
     if event_type == "concert":
@@ -841,6 +997,13 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
         "наук": "научные лекции",
         "город": "лекции про город",
     },
+    "excursion": {
+        "зоопарк": "зоопарк изнутри",
+        "зоолог": "встречи с зоологами",
+        "ветеринар": "ветеринарный уход",
+        "животн": "животных",
+        "закулис": "закулисье зоопарка",
+    },
     "exhibition": {
         "маринист": "морскую живопись",
         "айвазов": "морскую живопись",
@@ -860,6 +1023,13 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
 
 
 def _theme_key_matches(raw: str, key: str) -> bool:
+    if key == "народн":
+        return bool(
+            re.search(
+                r"(?<![а-яё])(?:народн[а-яё]*\s+(?:песн|музык|хор)|фолк)(?![а-яё])",
+                raw,
+            )
+        )
     if key == "орган":
         return bool(
             re.search(
@@ -900,7 +1070,7 @@ def _templates_for(
     templates: dict[str, list[str]] = {
         "comments": [
             "Расскажите в комментариях, что для вас главное в таких {TP}.",
-            "Что ждёте от таких {TP}? Напишите в комментариях.",
+            "Что ждёте от таких {T}? Напишите в комментариях.",
         ],
         "likes": [
             f"Лайк, если тебе интересны такие {topic_acc}.",
@@ -911,7 +1081,7 @@ def _templates_for(
         ],
         "reposts": [
             f"Поделись с теми, кому близки такие {topic_acc}.",
-            "Поделись с тем, кому это может быть интересно.",
+            f"Поделись с другом, которому близки такие {topic_acc}.",
             f"Поделись с другом, который любит такие {topic_acc}.",
         ],
     }
@@ -1015,6 +1185,35 @@ def _templates_for(
             "Отметь лайком, если планируешь заглянуть.",
         ] + templates["likes"]
         templates["reposts"] = ["Поделись с тем, кто любит праздничные программы."] + templates["reposts"]
+    elif event_type == "excursion":
+        templates["comments"] = [
+            "Что больше всего хочется узнать на такой экскурсии?",
+            "Какие закулисные истории зоопарка вам интересны?",
+            "Что вам интереснее увидеть на экскурсии?",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если интересен зоопарк изнутри.",
+            "Отметь лайком, если любишь экскурсии.",
+            "Лайк, если интересны встречи с зоологами.",
+        ] + templates["likes"]
+        templates["reposts"] = [
+            "Поделись с тем, кому интересен зоопарк изнутри.",
+            "Поделись с тем, кто любит экскурсии.",
+        ] + templates["reposts"]
+    elif event_type == "meeting":
+        templates["comments"] = [
+            "Что бы спросили на такой встрече?",
+            "Какие темы таких встреч вам ближе?",
+            "Что ждёте от этой встречи? Напишите в комментариях.",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если интересны такие встречи.",
+            "Отметь лайком, если любишь живые встречи.",
+        ] + templates["likes"]
+        templates["reposts"] = [
+            "Поделись с тем, кому интересны такие встречи.",
+            "Поделись с другом, который любит живые встречи.",
+        ] + templates["reposts"]
     elif event_type == "family":
         templates["comments"].extend(
             [
@@ -1026,7 +1225,7 @@ def _templates_for(
             [
                 "Поставь лайк, если ищешь, куда сходить с детьми.",
                 "Отметь лайком, если любишь семейные события.",
-                "Поддержи лайком, если нужны такие детские праздники.",
+                "Поставь лайк, если планируешь семейный выход.",
             ]
         )
         templates["reposts"].extend(
@@ -1047,19 +1246,19 @@ def _templates_for(
         )
         templates["comments"].append("Расскажите, за что любите {THEME}.")
     if festival:
-        templates["comments"].extend(
-            [
-                f"Были на {festival_on} раньше? Расскажите, как впечатления.",
-                f"Что ждёте от {festival_from}? Напишите в комментариях.",
-            ]
-        )
-        templates["likes"].extend(
-            [
-                f"Лайк, если ждёшь {festival_from}.",
-                f"Поставь лайк, если уже был на {festival_on}.",
-            ]
-        )
-        templates["reposts"].append(f"Поделись с теми, кто ждёт {festival_from}.")
+        templates["comments"] = [
+            f"Были на {festival_on} раньше? Расскажите, как впечатления.",
+            f"Что ждёте от {festival_from}? Напишите в комментариях.",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если {FINTEREST}.",
+            "Лайк, если следите за {FFOLLOW}.",
+            f"Поставь лайк, если уже был на {festival_on}.",
+        ] + templates["likes"]
+        templates["reposts"] = [
+            "Поделись с теми, кому {FINTEREST}.",
+            "Поделись с теми, кто следит за {FFOLLOW}.",
+        ] + templates["reposts"]
     return templates
 
 
@@ -1173,6 +1372,73 @@ def _festival_on_phrase(festival: str | None) -> str | None:
     return f"фестивале {display}"
 
 
+def _festival_interest_clause(event: Event, festival: str | None, event_type: str) -> str | None:
+    display = _festival_display_name(festival)
+    if not display:
+        return None
+    raw = " ".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+    value = display.casefold()
+    if "кантата" in value and "образователь" in raw:
+        return "интересна образовательная программа фестиваля Кантата"
+    if "80 истор" in value:
+        return "интересны истории Калининградской области"
+    if "другой зоопарк" in value or event_type == "excursion":
+        return "интересен зоопарк изнутри"
+    return f"интересны события {_festival_from_phrase(event, festival) or display}"
+
+
+def _festival_follow_phrase(event: Event, festival: str | None) -> str | None:
+    display = _festival_display_name(festival)
+    if not display:
+        return None
+    raw = " ".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+    value = display.casefold()
+    if "кантата" in value and "образователь" in raw:
+        return "образовательной программой фестиваля Кантата"
+    if "80 истор" in value:
+        return "проектом «80 историй о главном»"
+    if "другой зоопарк" in value:
+        return "проектом «Другой зоопарк»"
+    return f"фестивалем {display}"
+
+
+def _festival_hook_text(event: Event, festival: str | None, event_type: str) -> str | None:
+    display = _festival_display_name(festival)
+    if not display:
+        return None
+    value = display.casefold()
+    raw = " ".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+    if "кантата" in value and "образователь" in raw:
+        return "Кому близка образовательная программа Кантаты?"
+    if "80 истор" in value:
+        return "Кому близки истории Калининградской области?"
+    if "другой зоопарк" in value or event_type == "excursion":
+        return "Кому интересен зоопарк изнутри?"
+    annual = " в этом году" if _festival_is_annual(event) else ""
+    return f"Кто следит за фестивалем {display}{annual}?"
+
+
 def _resolve_template(
     template: str,
     *,
@@ -1184,12 +1450,16 @@ def _resolve_template(
     topic_accusative_plural: str,
     festival_from: str | None = None,
     festival_on: str | None = None,
+    festival_interest: str | None = None,
+    festival_follow: str | None = None,
 ) -> str | None:
     slots = {
         "N": persona,
         "F": festival,
         "FFROM": festival_from,
         "FON": festival_on,
+        "FINTEREST": festival_interest,
+        "FFOLLOW": festival_follow,
         "THEME": theme,
         "T": topic,
         "TA": topic_accusative_plural,
@@ -1217,6 +1487,13 @@ def _configured_formats(config: dict[str, Any]) -> list[str]:
     return formats
 
 
+def _vision_has_sparse_poster_text(vision: PosterVisionSummary | None) -> bool:
+    if vision is None:
+        return False
+    text = re.sub(r"\s+", "", str(vision.text or ""))
+    return len(text) < 20
+
+
 def build_engagement_plan(
     event: Event,
     *,
@@ -1232,6 +1509,8 @@ def build_engagement_plan(
     theme = _extract_theme(event, event_type)
     festival_from = _festival_from_phrase(event, festival)
     festival_on = _festival_on_phrase(festival)
+    festival_interest = _festival_interest_clause(event, festival, event_type)
+    festival_follow = _festival_follow_phrase(event, festival)
     topic = _topic_label(event, event_type)
     topic_accusative_plural = _topic_accusative_plural(event_type)
     topic_prepositional_plural = _topic_prepositional_plural(event_type)
@@ -1277,6 +1556,8 @@ def build_engagement_plan(
                 festival_on=festival_on,
                 topic=topic,
                 topic_accusative_plural=topic_accusative_plural,
+                festival_interest=festival_interest,
+                festival_follow=festival_follow,
             )
             if resolved and len(resolved) <= 95:
                 cta_text = resolved
@@ -1298,9 +1579,14 @@ def build_engagement_plan(
             template_id = "right_extension"
         elif "hook_swipe_cta" in formats:
             template_id = "hook_swipe_cta"
+    if template_id == "bottom_overlay" and _vision_has_sparse_poster_text(vision):
+        if "right_extension" in formats:
+            template_id = "right_extension"
+        elif "hook_swipe_cta" in formats:
+            template_id = "hook_swipe_cta"
     hook_text = f"Есть вопрос к тем, кто уже был на таких {topic_prepositional_plural}"
     if festival:
-        hook_text = f"Кто уже был на {festival_on}?"
+        hook_text = _festival_hook_text(event, festival, event_type) or f"Кто уже был на {festival_on}?"
     elif persona:
         hook_text = f"Кто уже слушал {persona}?"
     return EngagementPlan(
@@ -1392,6 +1678,9 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
         "видеть чаще",
         "почаще",
         "чаще провод",
+        "нужны такие",
+        "нужно больше таких",
+        "больше таких событий",
     )
     if any(fragment in lower for fragment in forbidden_fragments):
         return True
@@ -1418,6 +1707,10 @@ def _safe_generic_cta(event_type: str, mechanic: str) -> str:
             return "Напишите в комментариях, что ждёте от концерта."
         if event_type == "lecture":
             return "Напишите в комментариях, что ждёте от лекции."
+        if event_type == "excursion":
+            return "Напишите в комментариях, что ждёте от экскурсии."
+        if event_type == "meeting":
+            return "Напишите в комментариях, что ждёте от встречи."
         if event_type == "exhibition":
             return "Напишите в комментариях, что ждёте от выставки."
         if event_type == "volunteer":
@@ -1435,6 +1728,10 @@ def _safe_generic_cta(event_type: str, mechanic: str) -> str:
         return "Поставь лайк, если любишь концерты."
     if event_type == "lecture":
         return "Поставь лайк, если любишь лекции."
+    if event_type == "excursion":
+        return "Поставь лайк, если любишь экскурсии."
+    if event_type == "meeting":
+        return "Поставь лайк, если интересны такие встречи."
     if event_type == "exhibition":
         return "Поставь лайк, если любишь выставки."
     if event_type == "volunteer":
@@ -1506,6 +1803,9 @@ async def build_llm_cta_text(
             "День России, День Победы и другие праздники не называй фестивалями. "
             "Про сказочных героев пиши только если событие действительно детское/семейное со сказочными героями. "
             "Для волонтёрских событий уместны формулировки про волонтёрство и добровольчество. "
+            "Если событие внутри фестиваля или проекта, можно сохранять зонтичный контекст, "
+            "но привязывай CTA к программе, проекту или теме конкретного события, а не к абстрактному ожиданию фестиваля. "
+            "Для экскурсий по зоопарку не называй событие лекцией. "
             "Если используешь тему, впиши её грамотно: например «Поддержи лайком, если любишь симфоническую музыку» "
             "или «Что вам ближе в органной музыке?», но не «из темы органную музыку».\n"
             f"Seed: {plan.seed}\n"
@@ -1568,6 +1868,8 @@ async def build_llm_engagement_plan(
             "Правила: русский текст, обращение на ты допустимо для лайков/репостов; "
             "cta_text максимум 95 символов; без плейсхолдеров, без ФИО если ФИО нет в данных; "
             "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension или hook_swipe_cta; "
+            "фестивальный зонтик можно сохранять, но текст должен быть про программу/проект/тему события; "
+            "экскурсии по зоопарку не называй лекциями; "
             "финальный layout рисует код, не описывай графику.\n"
             f"Доступные palette_id: {', '.join(palette_ids[:16])}.\n"
             f"Seed: {seed}\n"
@@ -1886,6 +2188,14 @@ def _tone_score(tone: str, event_type: str | None) -> float:
         return 1.0
     if tone == "lecture" and event_type == "lecture":
         return 1.0
+    if tone == "lecture" and event_type == "excursion":
+        return 0.90
+    if tone == "lecture" and event_type == "meeting":
+        return 0.90
+    if tone == "family" and event_type in {"family", "excursion"}:
+        return 1.0
+    if tone == "party" and event_type == "party":
+        return 1.0
     if tone in {"editorial", "noir"}:
         return 0.82
     return 0.62
@@ -1926,8 +2236,14 @@ def _score_palette(
     poster_temp = str(profile.get("temperature") or "neutral")
     temperature_bonus = 0.20 if surface_temp != "neutral" and poster_temp != "neutral" and surface_temp != poster_temp else 0.0
     premium_penalty = 0.0
+    if palette_id == "yellow_violet":
+        premium_penalty += 0.50
+        if event_type not in {"festival", "market", "family", "party"}:
+            premium_penalty += 0.30
     if roles["family"] == "saturated_pop" and profile.get("bucket_chroma") in {"saturated", "neon"}:
         premium_penalty += 0.75
+    if roles["family"] == "saturated_pop" and event_type in {"lecture", "exhibition", "excursion"}:
+        premium_penalty += 0.25
     if surface_temp == poster_temp and luma_sep < 0.45 and surface_temp != "neutral":
         premium_penalty += 0.45
     if signal_contrast < 2.4:
