@@ -7,8 +7,13 @@ import json
 import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from datetime import datetime, timezone
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from afishaengagement import DEFAULT_DEBUG_MARKER, cleanup_debug_posts
 
