@@ -728,6 +728,7 @@ async def build_story_publish_config(
         if target_payload.get("transport") != "vk_wall":
             continue
         if str(target_payload.get("caption_variant") or "").strip() == "crumple_official":
+            target_payload["required"] = True
             target_payload["caption"] = vk_crumple_official_caption
             continue
         current_caption = str(target_payload.get("caption") or "").strip()

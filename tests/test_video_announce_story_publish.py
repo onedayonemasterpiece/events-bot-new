@@ -188,7 +188,7 @@ async def test_default_story_targets_add_crumple_vk_official_wall(monkeypatch):
     assert official_wall_target["peer"] == "kenigeventsofficial"
     assert official_wall_target["transport"] == "vk_wall"
     assert official_wall_target["blocking"] is False
-    assert "required" not in official_wall_target
+    assert official_wall_target["required"] is True
     assert official_wall_target["caption"] == (
         "События на завтра #Калининград #10_июня #10июня"
     )
