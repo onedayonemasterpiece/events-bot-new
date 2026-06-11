@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement festival/idea CTA copy**: festival umbrella CTA
+  templates no longer ask viewers what they are waiting for from a festival
+  that may already be underway; they now point to the program/project context.
+  Added guarded idea-based CTA copy for explicit concepts such as a festival of
+  music on water, while keeping broad theme extraction from inventing topics.
+  Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement audit polish for festival education cards**:
   preserved festival umbrella CTA copy while tying it to the concrete project or
   program, including `80 историй о главном` and the educational program of

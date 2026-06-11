@@ -1057,20 +1057,62 @@ def _extract_theme(event: Event, event_type: str) -> str | None:
     return None
 
 
+def _event_text_blob(event: Event) -> str:
+    return " ".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+        ]
+    ).casefold()
+
+
+def _extract_idea_phrase(event: Event, event_type: str) -> str | None:
+    raw = _event_text_blob(event)
+
+    if re.search(r"\bфестивал\w*\s+музык\w*\s+на\s+воде\b", raw):
+        return "фестиваля музыки на воде"
+    if re.search(r"\b(?:концерт\w*|музык\w*)[^.\n]{0,80}\bна\s+воде\b", raw) and event_type in {
+        "concert",
+        "festival",
+    }:
+        return "концерта на воде"
+    if re.search(r"\bпри\s+свечах\b", raw) and event_type == "concert":
+        return "концерта при свечах"
+    if re.search(r"\bпод\s+открытым\s+небом\b|\bopen[- ]air\b|\bопен[ -]?эйр\b", raw):
+        if event_type == "concert":
+            return "концерта под открытым небом"
+        if event_type == "cinema":
+            return "кинопоказа под открытым небом"
+        return "события под открытым небом"
+    if re.search(r"\bарт[- ]завтрак\w*\b", raw):
+        return "арт-завтрака"
+    if re.search(r"\bмузыкальн\w+\s+путешеств\w*\b", raw):
+        return "музыкального путешествия"
+    if re.search(r"\bв\s+кирхе\b|\bкирх\w*\b", raw) and event_type == "concert":
+        return "концерта в кирхе"
+    if re.search(r"\bв\s+замке\b|\bзамк\w*\b", raw) and event_type == "concert":
+        return "концерта в замке"
+    return None
+
+
 def _templates_for(
     event_type: str,
     persona: str | None,
     festival: str | None,
     theme: str | None = None,
+    idea: str | None = None,
 ) -> dict[str, list[str]]:
     topic = "{T}"
     topic_acc = "{TA}"
     festival_from = "{FFROM}"
     festival_on = "{FON}"
+    festival_context = "{FCONTEXT}"
     templates: dict[str, list[str]] = {
         "comments": [
             "Расскажите в комментариях, что для вас главное в таких {TP}.",
-            "Что ждёте от таких {T}? Напишите в комментариях.",
+            "Что вам ближе в таких {TP}? Напишите в комментариях.",
         ],
         "likes": [
             f"Лайк, если тебе интересны такие {topic_acc}.",
@@ -1248,7 +1290,7 @@ def _templates_for(
     if festival:
         templates["comments"] = [
             f"Были на {festival_on} раньше? Расскажите, как впечатления.",
-            f"Что ждёте от {festival_from}? Напишите в комментариях.",
+            f"Что в {festival_context} вам ближе? Напишите.",
         ] + templates["comments"]
         templates["likes"] = [
             "Поставь лайк, если {FINTEREST}.",
@@ -1258,6 +1300,19 @@ def _templates_for(
         templates["reposts"] = [
             "Поделись с теми, кому {FINTEREST}.",
             "Поделись с теми, кто следит за {FFOLLOW}.",
+        ] + templates["reposts"]
+    if idea:
+        templates["comments"] = [
+            "Как вам идея {IDEA}? Напишите в комментариях.",
+            "Вам близка идея {IDEA}? Расскажите.",
+        ] + templates["comments"]
+        templates["likes"] = [
+            "Поставь лайк, если нравится идея {IDEA}.",
+            "Лайк, если за идею {IDEA}.",
+        ] + templates["likes"]
+        templates["reposts"] = [
+            "Поделись с тем, кому понравится идея {IDEA}.",
+            "Поделись с другом, которому близка идея {IDEA}.",
         ] + templates["reposts"]
     return templates
 
@@ -1372,18 +1427,26 @@ def _festival_on_phrase(festival: str | None) -> str | None:
     return f"фестивале {display}"
 
 
+def _festival_context_phrase(event: Event, festival: str | None, event_type: str) -> str | None:
+    display = _festival_display_name(festival)
+    if not display:
+        return None
+    raw = _event_text_blob(event)
+    value = display.casefold()
+    if "кантата" in value and "образователь" in raw:
+        return "образовательной программе фестиваля Кантата"
+    if "80 истор" in value:
+        return "проекте «80 историй о главном»"
+    if "другой зоопарк" in value or event_type == "excursion":
+        return "проекте «Другой зоопарк»"
+    return f"программе {_festival_from_phrase(event, festival) or f'фестиваля {display}'}"
+
+
 def _festival_interest_clause(event: Event, festival: str | None, event_type: str) -> str | None:
     display = _festival_display_name(festival)
     if not display:
         return None
-    raw = " ".join(
-        [
-            str(event.title or ""),
-            str(event.description or ""),
-            str(event.source_text or ""),
-            str(event.search_digest or ""),
-        ]
-    ).casefold()
+    raw = _event_text_blob(event)
     value = display.casefold()
     if "кантата" in value and "образователь" in raw:
         return "интересна образовательная программа фестиваля Кантата"
@@ -1398,14 +1461,7 @@ def _festival_follow_phrase(event: Event, festival: str | None) -> str | None:
     display = _festival_display_name(festival)
     if not display:
         return None
-    raw = " ".join(
-        [
-            str(event.title or ""),
-            str(event.description or ""),
-            str(event.source_text or ""),
-            str(event.search_digest or ""),
-        ]
-    ).casefold()
+    raw = _event_text_blob(event)
     value = display.casefold()
     if "кантата" in value and "образователь" in raw:
         return "образовательной программой фестиваля Кантата"
@@ -1421,14 +1477,7 @@ def _festival_hook_text(event: Event, festival: str | None, event_type: str) -> 
     if not display:
         return None
     value = display.casefold()
-    raw = " ".join(
-        [
-            str(event.title or ""),
-            str(event.description or ""),
-            str(event.source_text or ""),
-            str(event.search_digest or ""),
-        ]
-    ).casefold()
+    raw = _event_text_blob(event)
     if "кантата" in value and "образователь" in raw:
         return "Кому близка образовательная программа Кантаты?"
     if "80 истор" in value:
@@ -1450,16 +1499,20 @@ def _resolve_template(
     topic_accusative_plural: str,
     festival_from: str | None = None,
     festival_on: str | None = None,
+    festival_context: str | None = None,
     festival_interest: str | None = None,
     festival_follow: str | None = None,
+    idea: str | None = None,
 ) -> str | None:
     slots = {
         "N": persona,
         "F": festival,
         "FFROM": festival_from,
         "FON": festival_on,
+        "FCONTEXT": festival_context,
         "FINTEREST": festival_interest,
         "FFOLLOW": festival_follow,
+        "IDEA": idea,
         "THEME": theme,
         "T": topic,
         "TA": topic_accusative_plural,
@@ -1507,8 +1560,10 @@ def build_engagement_plan(
     persona = _extract_persona(event)
     festival = _effective_festival(event)
     theme = _extract_theme(event, event_type)
+    idea = _extract_idea_phrase(event, event_type)
     festival_from = _festival_from_phrase(event, festival)
     festival_on = _festival_on_phrase(festival)
+    festival_context = _festival_context_phrase(event, festival, event_type)
     festival_interest = _festival_interest_clause(event, festival, event_type)
     festival_follow = _festival_follow_phrase(event, festival)
     topic = _topic_label(event, event_type)
@@ -1528,7 +1583,7 @@ def build_engagement_plan(
         bag = ["comments", "likes", "reposts"]
     rnd.shuffle(bag)
 
-    templates = _templates_for(event_type, persona, festival, theme)
+    templates = _templates_for(event_type, persona, festival, theme, idea)
     configured_templates = _configured_templates_for(config, event_type)
     for configured_mechanic, configured_values in configured_templates.items():
         templates.setdefault(configured_mechanic, [])
@@ -1554,10 +1609,12 @@ def build_engagement_plan(
                 theme=theme,
                 festival_from=festival_from,
                 festival_on=festival_on,
+                festival_context=festival_context,
                 topic=topic,
                 topic_accusative_plural=topic_accusative_plural,
                 festival_interest=festival_interest,
                 festival_follow=festival_follow,
+                idea=idea,
             )
             if resolved and len(resolved) <= 95:
                 cta_text = resolved
@@ -1690,6 +1747,8 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
         return True
     if event_type != "family" and any(fragment in lower for fragment in ("сказоч", "сказк", "геро")):
         return True
+    if "фестивал" in lower and re.search(r"\b(?:жд[её](?:шь|те|т|м|ем)|жду|ждут|ждать)\b", lower):
+        return True
     if "фестивал" in lower and any(name in lower for name in HOLIDAY_FESTIVAL_NAMES):
         return True
     return False
@@ -1805,6 +1864,9 @@ async def build_llm_cta_text(
             "Для волонтёрских событий уместны формулировки про волонтёрство и добровольчество. "
             "Если событие внутри фестиваля или проекта, можно сохранять зонтичный контекст, "
             "но привязывай CTA к программе, проекту или теме конкретного события, а не к абстрактному ожиданию фестиваля. "
+            "Не пиши «ждёшь/ждёте фестиваля»: если фестиваль уже идёт, это звучит неверно. "
+            "Если в данных явно есть концепт события, например концерт на воде или кинопоказ под открытым небом, "
+            "можно использовать CTA про идею этого концепта; не выдумывай концепт без прямого сигнала. "
             "Для экскурсий по зоопарку не называй событие лекцией. "
             "Если используешь тему, впиши её грамотно: например «Поддержи лайком, если любишь симфоническую музыку» "
             "или «Что вам ближе в органной музыке?», но не «из темы органную музыку».\n"
@@ -1869,6 +1931,8 @@ async def build_llm_engagement_plan(
             "cta_text максимум 95 символов; без плейсхолдеров, без ФИО если ФИО нет в данных; "
             "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension или hook_swipe_cta; "
             "фестивальный зонтик можно сохранять, но текст должен быть про программу/проект/тему события; "
+            "не пиши «ждёшь/ждёте фестиваля», особенно для уже идущего фестиваля; "
+            "идея события вроде концерта на воде или кинопоказа под открытым небом допустима только при прямом сигнале; "
             "экскурсии по зоопарку не называй лекциями; "
             "финальный layout рисует код, не описывай графику.\n"
             f"Доступные palette_id: {', '.join(palette_ids[:16])}.\n"

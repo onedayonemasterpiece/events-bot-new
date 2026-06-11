@@ -89,8 +89,15 @@ topic.
 Festival context is intentionally preserved as an umbrella, but it must be tied
 to the concrete program, project, or topic. For example, `80 историй о главном`
 uses history/project wording, and the educational program of `Кантата` uses
-`образовательная программа фестиваля Кантата` instead of generic `кто ждёт
-фестиваля` copy.
+`образовательная программа фестиваля Кантата` instead of generic festival
+waiting copy. Festival CTA text must not ask who is waiting for a festival when
+the festival may already be in progress; it should ask what in the program or
+project is closer to the viewer, or who follows the concrete program/project.
+When the event text explicitly names a clear concept such as a concert on water,
+a candlelight concert, or an open-air screening, deterministic CTA generation
+may use an idea-based CTA such as `Поставь лайк, если нравится идея концерта на
+воде`. These idea CTAs are only allowed from direct event text signals and must
+not invent a concept from vague theme or venue hints.
 CTA text generation is hybrid. The renderer and visual plan stay deterministic,
 but `llm_text_mode=auto` runs a compact LLM CTA-writer only for risky copy:
 theme-heavy comment text, forbidden phrases, or event-type conflicts such as a

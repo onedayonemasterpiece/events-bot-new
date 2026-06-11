@@ -188,6 +188,12 @@ def test_exhibition_rejects_family_fairy_copy():
         "Поделись, что тебя вдохновляет в сказочных героях!",
         "exhibition",
     )
+    assert aeg._cta_text_has_forbidden_copy(
+        "Поделись с друзьями, если ждёшь фестиваля «Кантата» в этом году.",
+        "festival",
+    )
+    assert aeg._cta_text_has_forbidden_copy("Лайк, если ждёте фестиваль.", "festival")
+    assert aeg._cta_text_has_forbidden_copy("Напишите, кто ждёт фестиваль.", "festival")
 
 
 def test_party_event_uses_party_tone_not_concert_copy():
@@ -489,7 +495,7 @@ def test_forbidden_generic_phrases_are_not_generated():
     assert all("формат" not in text.casefold() for text in seen)
     assert all("в таких концертов" not in text.casefold() for text in seen)
     assert all("от таких концертах" not in text.casefold() for text in seen)
-    assert any("от таких концертов" in text.casefold() for text in seen)
+    assert any("в таких концертах" in text.casefold() for text in seen)
 
 
 def test_concert_like_copy_can_use_extracted_theme():
@@ -756,8 +762,9 @@ def test_festival_comment_template_names_festival_and_annual_context():
         for idx in range(80)
     }
 
-    assert "Что ждёте от фестиваля Кантата в этом году? Напишите в комментариях." in seen
+    assert "Что в программе фестиваля Кантата в этом году вам ближе? Напишите." in seen
     assert all("от Кантата" not in text for text in seen)
+    assert all("жд" not in text.casefold() or "фестивал" not in text.casefold() for text in seen)
 
 
 def test_festival_cta_uses_short_display_name_without_duplicate_festival_word():
@@ -868,6 +875,61 @@ def test_kantata_education_umbrella_uses_program_context():
     assert "Поделись с теми, кто следит за образовательной программой фестиваля Кантата." in seen
     assert all("кому может быть интересно" not in text.casefold() for text in seen)
     assert hook == "Кому близка образовательная программа Кантаты?"
+
+
+def test_ongoing_festival_cta_does_not_wait_for_festival():
+    event = Event(
+        title="Образовательная программа фестиваля Кантата",
+        description="Фестиваль уже идет: лекции, диалоги и кинопоказы проходят всю неделю.",
+        date="2026-06-13",
+        time="12:00",
+        location_name="Филиал Третьяковской галереи",
+        source_text="",
+        event_type="фестиваль",
+        festival="Кантата",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"ongoing-festival-no-wait-{idx}",
+            config={"mechanic_weights": {"comments": 50, "likes": 25, "reposts": 25}},
+        ).cta_text
+        for idx in range(180)
+    }
+
+    assert "Что в образовательной программе фестиваля Кантата вам ближе? Напишите." in seen
+    assert all("ждёшь фестивал" not in text.casefold() for text in seen)
+    assert all("ждешь фестивал" not in text.casefold() for text in seen)
+    assert all("ждёте от фестивал" not in text.casefold() for text in seen)
+    assert all("ждете от фестивал" not in text.casefold() for text in seen)
+
+
+def test_idea_cta_uses_explicit_event_concept_without_inventing_theme():
+    event = Event(
+        title="AIST FEST",
+        description="Фестиваль музыки на воде: концерты, лекции, мастер-классы народного творчества и маркет.",
+        date="2026-06-20",
+        time="14:00",
+        location_name="Парк",
+        source_text="",
+        event_type="концерт",
+        festival="AIST FEST",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"aist-idea-cta-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(180)
+    }
+
+    assert aeg._extract_theme(event, "concert") is None
+    assert aeg._extract_idea_phrase(event, "concert") == "фестиваля музыки на воде"
+    assert "Поставь лайк, если нравится идея фестиваля музыки на воде." in seen
+    assert all("народную музыку" not in text.casefold() for text in seen)
 
 
 def test_kantata_creative_meeting_uses_meeting_copy_not_instrumental_persona():
