@@ -84,6 +84,13 @@ VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
 /vk_auto_import --include-skipped
 ```
 
+Ручной `/vk_auto_import` по умолчанию не ждёт общий heavy-job gate
+(`VK_AUTO_IMPORT_HEAVY_MODE=off`), чтобы оператор мог разбирать VK очередь во
+время удалённого Telegram/Kaggle monitoring. Scheduled `vk_auto_import`
+сохраняет сериализацию через heavy gate (`wait`), если env явно не переопределён.
+Если для ручного прогона принудительно включён `VK_AUTO_IMPORT_HEAVY_MODE=wait`,
+бот должен сразу написать, какую тяжёлую операцию он ждёт.
+
 Остановить текущий прогон (остановка произойдёт после завершения текущего поста):
 
 ```text

@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence, Literal
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 
 import vk_intake
@@ -57,6 +58,26 @@ async def _record_vk_auto_import_scheduler_skip(
 def _timings_enabled() -> bool:
     raw = (os.getenv("PIPELINE_TIMINGS") or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
+
+
+def _vk_auto_import_heavy_mode(trigger: str) -> str:
+    raw = (os.getenv("VK_AUTO_IMPORT_HEAVY_MODE") or "").strip().lower()
+    if not raw:
+        return "off" if str(trigger or "").strip().lower() == "manual" else "wait"
+    if raw in {"off", "none", "disabled", "0", "false", "no"}:
+        return "off"
+    if raw in {"try", "skip", "nonblocking", "non-blocking"}:
+        return "try"
+    return "wait"
+
+
+class _NoopHeavyOperation:
+    async def __aenter__(self) -> bool:
+        return True
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
 
 _VK_CANCEL_RE = re.compile(
     r"(?i)\b("
@@ -1347,16 +1368,76 @@ async def run_vk_auto_import(
         total_estimate = None
 
     start = time.time()
-    from heavy_ops import heavy_operation
+    heavy_mode = _vk_auto_import_heavy_mode(trigger)
+    waiting_meta = current_heavy_meta() if heavy_mode != "off" else None
+    if waiting_meta is not None and heavy_mode == "wait":
+        waiting_text = (
+            "⏳ VK auto import ждёт завершения другой тяжёлой операции\n"
+            f"Сейчас занято: {describe_heavy_meta(waiting_meta)}\n"
+            "После освобождения очереди разбор продолжится автоматически."
+        )
+        try:
+            await bot.send_message(chat_id, waiting_text, disable_web_page_preview=True)
+        except Exception:
+            logger.warning("vk_auto: heavy_wait_notice_send_failed", exc_info=True)
+        logger.info(
+            "vk_auto: waiting_heavy kind=%s trigger=%s run_id=%s operator_id=%s",
+            waiting_meta.kind,
+            waiting_meta.trigger,
+            waiting_meta.run_id,
+            waiting_meta.operator_id,
+        )
+    gate = (
+        _NoopHeavyOperation()
+        if heavy_mode == "off"
+        else heavy_operation(
+            kind="vk_auto_import",
+            trigger=trigger,
+            mode="try" if heavy_mode == "try" else "wait",
+            run_id=run_id,
+            operator_id=operator_id,
+            chat_id=chat_id,
+        )
+    )
 
-    async with heavy_operation(
-        kind="vk_auto_import",
-        trigger=trigger,
-        mode="wait",
-        run_id=run_id,
-        operator_id=operator_id,
-        chat_id=chat_id,
-    ):
+    async with gate as acquired:
+        if not acquired:
+            try:
+                await bot.send_message(
+                    chat_id,
+                    "⏳ VK auto import сейчас занят другой тяжёлой операцией. Повтори запуск позже.",
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                logger.warning("vk_auto: heavy_busy_notice_send_failed", exc_info=True)
+            report.cancelled = True
+            report.errors.append("heavy_busy")
+            await finish_ops_run(
+                db,
+                run_id=ops_run_id,
+                status="skipped",
+                metrics={
+                    "inbox_processed": 0,
+                    "inbox_imported": 0,
+                    "inbox_rejected": 0,
+                    "inbox_failed": 0,
+                    "inbox_deferred": 0,
+                    "events_created": 0,
+                    "events_updated": 0,
+                    "cancelled": 1,
+                    "skipped_requeued": int(report.skipped_requeued),
+                    "include_skipped": int(bool(include_skipped)),
+                    "limit": int(limit_int),
+                    "duration_sec": round(float(time.time() - start), 3),
+                },
+                details={
+                    "batch_id": batch_id,
+                    "run_id": run_id,
+                    "skip_reason": "heavy_busy",
+                    "errors": list(report.errors or [])[:40],
+                },
+            )
+            return report
         current_no = 0
         prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
 

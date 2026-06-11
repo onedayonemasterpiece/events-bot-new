@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: VK auto-import manual heavy gate wait**: manual `/vk_auto_import`
+  no longer waits behind the shared heavy-job gate by default, so operators can
+  run VK import/debug batches while Telegram Monitoring is polling remote
+  Kaggle. Scheduled auto-import remains serialized; forcing
+  `VK_AUTO_IMPORT_HEAVY_MODE=wait` now sends an explicit waiting notice instead
+  of leaving the chat silent. Covered by `tests/test_vk_auto_queue_import.py`.
 - **Fixed: Afisha Engagement festival/idea CTA copy**: festival umbrella CTA
   templates no longer ask viewers what they are waiting for from a festival
   that may already be underway; they now point to the program/project context.
