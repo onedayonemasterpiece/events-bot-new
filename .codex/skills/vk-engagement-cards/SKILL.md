@@ -1,0 +1,142 @@
+---
+name: vk-engagement-cards
+description: Use when designing, rendering, reviewing, or evolving generated VK engagement/promo cards in this repo: hook cards, CTA cards, carousel cards, poster extensions, and afishaengagement-derived visual layouts.
+---
+
+# VK Engagement Cards
+
+Contract version: `v1`  
+Last updated: `2026-06-12`
+
+Use this skill whenever a task changes generated VK cards: standalone hook
+cards, CTA cards, carousel first/last slides, poster overlays/extensions, or
+any new VK visual surface that should stay consistent with existing
+`afishaengagement` work.
+
+## Canon
+
+- Visual reference implementation: `afishaengagement.py`
+- Promo carousel application: `promo.py` / `vk_festival_carousel`
+- VK publishing contract: `docs/features/vk-publishing/README.md`
+- Promo docs: `docs/features/promo-campaigns/README.md`
+- Afisha Engagement docs: `docs/features/afishaengagement/README.md`
+
+## v1 Visual Contract
+
+Generated VK cards should reuse the existing afishaengagement visual language
+unless there is an explicit product reason to diverge.
+
+Reuse the maximum practical subset:
+
+- Cygre fonts via `afishaengagement._load_font`;
+- `CTA_EDITORIAL_PALETTES` for editorial card palettes;
+- `fit_text` for Russian text fitting and line count control;
+- anti-aliased edge/seam treatment via `_compose_cta_edge`;
+- subtle surface texture via `_apply_cta_grain`;
+- proven carousel composition ideas from `hook_swipe_cta`: readable hook card,
+  clear CTA card, strong safe zones, no cramped text.
+
+Do not create a second unrelated visual system with ad hoc fonts, random
+palettes, or untested text wrapping while afishaengagement already has a
+working solution for the same class of card.
+
+## Card Types
+
+`hook_card`:
+
+- one clear question or short hook;
+- no links on the image;
+- footer may say `Листайте афиши` / equivalent;
+- text must fit without edge collisions at 1080x1350.
+
+`cta_card`:
+
+- final carousel card when the post text contains links;
+- message should point to the text, not duplicate long URLs;
+- use visual hierarchy from afishaengagement CTA cards, but do not force
+  like/comment/repost mechanics unless the product surface is engagement.
+
+`poster_extension` / `poster_overlay`:
+
+- use afishaengagement renderers directly where possible;
+- preserve source poster readability;
+- do not cover meaningful poster text or faces/logos.
+
+`carousel_event_posters`:
+
+- event poster cards are the original poster attachments;
+- generated cards should be first/last, not overlays on every poster, unless
+  explicitly requested.
+
+## Product Separation
+
+Afishaengagement is for VK-native social actions: like, comment, share/repost.
+Promo carousels are for program navigation and registration intent.
+
+Do not stack both surfaces on the same generated unit:
+
+- `vk_festival_carousel` must not call `maybe_publish_shadow_debug_copy`;
+- afishaengagement should not add a second CTA layer over a carousel hook/CTA
+  card;
+- if a surface already has a generated hook and CTA card, treat it as complete
+  unless the user explicitly asks for engagement mechanics too.
+
+## Copy And LLM
+
+For broad semantic copy such as hooks, use LLM-first when no approved operator
+copy exists:
+
+- exact campaign copy in config wins;
+- otherwise use the existing project LLM wrapper (`main.ask_4o`) with a compact
+  JSON contract;
+- validate length, placeholders, unsupported claims, and tone;
+- keep deterministic fallback for outages and tests.
+
+Visual rendering itself remains deterministic.
+
+## Links On VK Cards
+
+- Do not render long URLs onto image cards.
+- Put links in post text.
+- In VK post text, prefer VK-shortened links (`vk.cc`) where possible.
+- In Telegram surfaces, keep expanded canonical links and never reuse VK-only
+  shortlinks.
+
+## Shadow Review
+
+For visual card changes that need operator review:
+
+1. Publish to VK postponed posts, usually 2-3 days ahead.
+2. Mark the post text clearly as debug/shadow.
+3. Record an audit exposure row if the surface is promo-backed.
+4. Include enough details to reproduce the visual: event ids, hook text,
+   template/card kind, attachment count, target URL, scheduled timestamp.
+5. Do not switch the same configuration to normal publication until the user
+   approves the shadow post.
+
+## Validation
+
+Minimum checks:
+
+- targeted unit test for generated attachments and text;
+- `py_compile` for touched renderer modules;
+- if visual framing matters, create or inspect a rendered sample under
+  `artifacts/codex/...` and do not commit it.
+
+For `vk_festival_carousel` specifically:
+
+```bash
+.venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_shadow_posts_hook_posters_and_cta -q
+.venv/bin/python -m py_compile promo.py
+```
+
+## Versioning
+
+When card grammar, typography, palette policy, LLM copy contract, or shadow
+evidence changes, bump `Contract version` and add a short changelog section:
+
+```markdown
+## v2 Changes
+
+- ...
+```

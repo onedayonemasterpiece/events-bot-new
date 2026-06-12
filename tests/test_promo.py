@@ -28,6 +28,7 @@ from promo import (
     PROMO_SURFACE_AFISHA_ENGAGEMENT,
     PROMO_SURFACE_TG_EVENT_PUBLISH,
     PROMO_SURFACE_TG_REPOST,
+    PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
@@ -533,6 +534,131 @@ async def test_promo_vk_publication_runs_afishaengagement_shadow(tmp_path, monke
     assert call["message"] == "SOURCE Фестиваль 1"
     assert call["photo_urls"] == ["https://example.com/promo-poster.jpg"]
     assert call["post_to_vk_fn"] is fake_post_to_vk
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 13, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="Кантата"))
+        first = _event("Диалог «Опережая время»", "2026-06-13", festival="Кантата")
+        first.ticket_link = "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-13/12:00:00"
+        second = _event("Павел Третьяков и его галерея", "2026-06-13", festival="Кантата")
+        second.ticket_link = "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46534/2026-06-13/13:00:00"
+        second.vk_ticket_short_url = "https://vk.cc/existing"
+        session.add_all([first, second])
+        await session.flush()
+        first_id = int(first.id)
+        second_id = int(second.id)
+        campaign = PromoCampaign(
+            title="Кантата · образовательная программа",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, 23, 59, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+            profile_key="klgdevents:kantata:carousel",
+            max_per_publish=1,
+            target_exposure_goal=1,
+            daily_cap=1,
+            config_json={
+                "target_group": "231920894",
+                "debug_shadow": True,
+                "debug_marker": "#vk_festival_carousel_shadow",
+                "debug_publish_delay_days": 3,
+                "debug_slot_spacing_minutes": 5,
+                "active_start_hour": 9,
+                "active_end_hour": 21,
+                "hook_variant": "registration",
+                "program_phrase": "образовательную программу фестиваля «Кантата»",
+                "hook_texts": {
+                    "registration": "Вы уже записались на образовательную программу фестиваля «Кантата»?"
+                },
+                "carousel_event_ids": [first_id, second_id],
+                "include_cta_card": True,
+                "program_url": "https://kantatafest.ru/obrazovatelnaya-programma",
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="festival", festival_name="Кантата"))
+        await session.commit()
+
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    uploaded_urls: list[str] = []
+    uploaded_bytes: list[tuple[str, int]] = []
+    post_calls: list[dict] = []
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "utils.getShortLink":
+            return {"response": {"short_url": "https://vk.cc/generated", "key": "generated"}}
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        raise AssertionError(method)
+
+    async def fake_upload_vk_photo(group_id, photo_url, db_arg=None, bot_arg=None):
+        uploaded_urls.append(photo_url)
+        return f"photo-{group_id}_{len(uploaded_urls)}"
+
+    async def fake_upload_vk_photo_bytes(group_id, image_bytes, db_arg=None, bot_arg=None, *, filename="image.jpg"):
+        uploaded_bytes.append((filename, len(image_bytes)))
+        return f"photo-{group_id}_bytes{len(uploaded_bytes)}"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, carousel=False, publish_date=None):
+        post_calls.append(
+            {
+                "group_id": group_id,
+                "message": message,
+                "attachments": list(attachments or []),
+                "carousel": carousel,
+                "publish_date": publish_date,
+            }
+        )
+        return "https://vk.com/wall-231920894_700"
+
+    async def fail_afishaengagement(*args, **kwargs):
+        raise AssertionError("vk_festival_carousel must not layer afishaengagement on top")
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
+    monkeypatch.setattr(main, "upload_vk_photo_bytes", fake_upload_vk_photo_bytes)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr("afishaengagement.maybe_publish_shadow_debug_copy", fail_afishaengagement)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [(item.surface, item.status) for item in results] == [
+        (PROMO_SURFACE_VK_FESTIVAL_CAROUSEL, "scheduled_debug")
+    ]
+    assert len(uploaded_urls) == 2
+    assert len(uploaded_bytes) == 2
+    assert post_calls[0]["carousel"] is True
+    assert post_calls[0]["publish_date"] is not None
+    assert len(post_calls[0]["attachments"]) == 4
+    assert "Вы уже записались" in post_calls[0]["message"]
+    assert "vk.cc/generated" in post_calls[0]["message"]
+    assert "vk.cc/existing" in post_calls[0]["message"]
+    assert "https://kaliningrad.tretyakovgallery.ru/tickets/" not in post_calls[0]["message"]
+    assert "[VK FESTIVAL CAROUSEL DEBUG COPY" in post_calls[0]["message"]
+
+    async with db.get_session() as session:
+        exposure = (await session.execute(select(PromoExposure))).scalars().one()
+    assert exposure.surface == PROMO_SURFACE_VK_FESTIVAL_CAROUSEL
+    assert exposure.publish_status == "VK_SCHEDULED_DEBUG"
+    assert exposure.public_targets_json == [{"type": "vk_wall_debug", "url": "https://vk.com/wall-231920894_700"}]
+    assert exposure.details_json["event_ids"] == [first_id, second_id]
+    assert exposure.details_json["include_cta_card"] is True
     await db.close()
 
 

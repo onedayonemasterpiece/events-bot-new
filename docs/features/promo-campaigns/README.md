@@ -27,11 +27,12 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   `"<chat>:<author>"`). See "Author-in-chat trigger" below.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
-  `daily_recommend_today`, `vk_publication`, `tg_event_publish`, `tg_repost`,
-  `vk_repost`, `vk_story`, and `afishaengagement`. Social activity parameters
-  live in `promo_activity.config_json` (`target_group`, `source_group`,
-  `target_chat`, `source_chat`, `window_hours`, `active_start_hour`,
-  `active_end_hour`, dedup policy). `vk_publication`, `tg_event_publish`, and
+  `daily_recommend_today`, `vk_publication`, `vk_festival_carousel`,
+  `tg_event_publish`, `tg_repost`, `vk_repost`, `vk_story`, and
+  `afishaengagement`. Social activity parameters live in
+  `promo_activity.config_json` (`target_group`, `source_group`, `target_chat`,
+  `source_chat`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
+  policy). `vk_publication`, `tg_event_publish`, and
   `daily_recommend_today` can also use
   `preferred_event_ids_by_date={"YYYY-MM-DD": [event_id, ...]}` to keep a
   multi-day educational/festival campaign aligned with the programme calendar.
@@ -235,6 +236,43 @@ is counted against the current local calendar day. Story delivery is complete
 only after `stories.save`; the exposure row uses `surface='vk_story'`,
 `public_targets_json.type='vk_story'`, and stores `details_json.source_url`,
 `details_json.target_url`, `owner_id`, `story_id`, and `expires_at`.
+
+`vk_festival_carousel` publishes a VK carousel at festival/program level. It is
+intended for non-aggressive program promotion: the first card is a hook/question,
+the middle cards are selected event posters, and, when fewer than ten cards are
+used, the last card can be a CTA card pointing readers to the post text. The
+activity config supports:
+
+- `target_group`: destination VK community;
+- `carousel_event_ids` / `event_ids`: explicit event order for poster cards;
+- `hook_variant`: `visited`, `registration`, `celebrity`, or `all_posters`;
+- `program_phrase`, `program_name`, `festival_name`: reusable wording inputs;
+- `hook_text` / `hook_texts`: exact operator-approved copy overrides;
+- `llm_hook_enabled`: optional LLM hook generation when no override is present;
+- `program_url`, `program_vk_url`, `cta_urls_by_event_id`: CTA sources;
+- `include_cta_card`, `cta_card_title`, `cta_card_subtitle`: final-card
+  controls;
+- `debug_shadow`, `debug_marker`, `debug_publish_delay_days`,
+  `debug_slot_spacing_minutes`: shadow review scheduling.
+
+VK carousel links use VK short links where possible. Event links prefer
+`event.vk_ticket_short_url`, otherwise the activity shortens `event.ticket_link`
+through the existing VK shortener helper; configured per-event URLs are also
+shortened before rendering into VK text. Telegram surfaces must continue using
+the original expanded `event.ticket_link` and must not reuse VK-only shortlinks.
+
+When `debug_shadow=true`, `vk_festival_carousel` schedules a marked postponed
+copy several days ahead using the same shadow-slot pattern as
+`afishaengagement`, records `promo_exposure.surface='vk_festival_carousel'` and
+`publish_status='VK_SCHEDULED_DEBUG'`, and keeps it out of public exposure
+counts. This is the required review mode before switching the activity to normal
+`VK_SCHEDULED` publication.
+
+The carousel card visuals intentionally reuse the `afishaengagement` visual
+system: Cygre fonts, editorial CTA palettes, text fitting, grain, and edge
+treatment. The activity does **not** call `afishaengagement` publishing and must
+not layer an engagement CTA over these carousel cards; `afishaengagement`
+remains a separate surface for like/comment/repost motivators on event posts.
 
 `tg_event_publish` publishes a full promo event post into a configured Telegram
 event-flow channel, normally `@kldevents`. It is scheduled by the same

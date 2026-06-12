@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Added: VK festival carousel promo shadow rollout**: added the
+  `vk_festival_carousel` promo activity for festival/program-level VK
+  carousels with a hook card, selected event posters, an optional final CTA
+  card, VK-shortened CTA links, LLM-capable hook generation with configured
+  copy overrides, and `VK_SCHEDULED_DEBUG` shadow scheduling for operator
+  review before production publication. Covered by `tests/test_promo.py`.
 - **Added: Poll to Repost debug rollout**: added the LLM-only debug scheduler
   for hourly daytime polls in `@keniggpt`, persisted `poll_repost_run` audit
   rows, and 30-minute resolver ticks that reply to the poll and forward the

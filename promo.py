@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Iterable
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
@@ -51,6 +53,7 @@ PROMO_SURFACE_TG_REPOST = "tg_repost"
 PROMO_SURFACE_VK_REPOST = "vk_repost"
 PROMO_SURFACE_VK_STORY = "vk_story"
 PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
+PROMO_SURFACE_VK_FESTIVAL_CAROUSEL = "vk_festival_carousel"
 PROMO_VK_DEFAULT_WINDOW_HOURS = 24
 PROMO_VK_REPOST_DEDUP_HOURS = 72
 PROMO_VK_ACTIVE_START_HOUR = 9
@@ -75,6 +78,7 @@ PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
         "DAILY_RECOMMENDED",
     }
 )
+DEBUG_PROMO_EXPOSURE_STATUSES = frozenset({"VK_SCHEDULED_DEBUG"})
 
 # Target that matches events by their Telegram source chat + post author.
 # query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
@@ -2474,6 +2478,674 @@ async def _record_vk_promo_exposure(
         raise last_exc
 
 
+def _config_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on", "да"}:
+        return True
+    if text in {"0", "false", "no", "off", "нет"}:
+        return False
+    return default
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    cleaned = re.sub(r"^```(?:json)?|```$", "", str(text or "").strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+    candidates = [cleaned]
+    match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+    if match:
+        candidates.append(match.group(0))
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _is_vk_short_url(url: str | None) -> bool:
+    try:
+        host = urlparse(str(url or "")).netloc.lower()
+    except Exception:
+        return False
+    return host in {"vk.cc", "vk.link", "go.vk.com", "l.vk.com"}
+
+
+def _display_vk_url(url: str | None) -> str:
+    return re.sub(r"^https?://", "", str(url or "").strip(), flags=re.IGNORECASE)
+
+
+async def _shorten_vk_url_for_display(
+    url: str | None,
+    *,
+    db: Database,
+    bot: object | None,
+) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    if _is_vk_short_url(raw):
+        return _display_vk_url(raw)
+    try:
+        from main import _vk_api
+
+        data = await _vk_api("utils.getShortLink", {"url": raw}, db, bot)
+        payload = data.get("response", data) if isinstance(data, dict) else {}
+        if isinstance(payload, dict):
+            short_url = str(payload.get("short_url") or "").strip()
+            key = str(payload.get("key") or "").strip()
+            if short_url:
+                return _display_vk_url(short_url)
+            if key:
+                return f"vk.cc/{key}"
+    except Exception:
+        logger.warning("promo.vk carousel shortlink fallback url=%s", raw, exc_info=True)
+    return raw
+
+
+async def _event_vk_cta_display_url(
+    ev: Event,
+    *,
+    db: Database,
+    bot: object | None,
+    configured_url: str | None = None,
+) -> str:
+    if configured_url:
+        return await _shorten_vk_url_for_display(configured_url, db=db, bot=bot)
+    if getattr(ev, "vk_ticket_short_url", None):
+        return _display_vk_url(ev.vk_ticket_short_url)
+    ticket_link = str(getattr(ev, "ticket_link", None) or "").strip()
+    if ticket_link:
+        try:
+            from main import _vk_api
+            from shortlinks import ensure_vk_short_ticket_link
+
+            short_result = await ensure_vk_short_ticket_link(ev, db, bot=bot, vk_api_fn=_vk_api)
+            if short_result and short_result[0]:
+                return _display_vk_url(short_result[0])
+        except Exception:
+            logger.warning(
+                "promo.vk carousel ticket shortlink failed event_id=%s",
+                getattr(ev, "id", None),
+                exc_info=True,
+            )
+        return _display_vk_url(ticket_link) if _is_vk_short_url(ticket_link) else ticket_link
+    for attr in ("source_vk_post_url", "source_post_url", "telegraph_url"):
+        value = str(getattr(ev, attr, None) or "").strip()
+        if value:
+            return await _shorten_vk_url_for_display(value, db=db, bot=bot)
+    return ""
+
+
+def _festival_carousel_program_phrase(campaign: PromoCampaign, cfg: dict[str, Any]) -> str:
+    phrase = str(cfg.get("program_phrase") or "").strip()
+    if phrase:
+        return phrase
+    program_name = str(cfg.get("program_name") or "").strip()
+    festival_name = str(cfg.get("festival_name") or "").strip()
+    if not festival_name:
+        title = str(getattr(campaign, "title", "") or "")
+        if "кантат" in title.casefold():
+            festival_name = "Кантата"
+    if program_name and festival_name:
+        return f"{program_name} фестиваля «{festival_name}»"
+    if program_name:
+        return program_name
+    if festival_name:
+        return f"программа фестиваля «{festival_name}»"
+    return "программа фестиваля"
+
+
+def _sanitize_carousel_hook(text: str) -> str:
+    text = re.sub(r"\s+", " ", str(text or "").strip())
+    text = text.replace(" ?", "?").replace(" !", "!")
+    return text[:140].strip()
+
+
+def _fallback_festival_carousel_hook(variant: str, program_phrase: str) -> str:
+    phrase = program_phrase.strip()
+    variants = {
+        "visited": f"Вы уже были или планируете пойти на {phrase}?",
+        "registration": f"Вы уже записались на {phrase}?",
+        "celebrity": f"Знаете, кто ведёт {phrase}?",
+        "all_posters": f"Собрали события: {phrase}",
+    }
+    return variants.get(variant, variants["all_posters"])
+
+
+async def _festival_carousel_hook_text(
+    *,
+    campaign: PromoCampaign,
+    cfg: dict[str, Any],
+    variant: str,
+    events: list[Event],
+) -> tuple[str, str]:
+    program_phrase = _festival_carousel_program_phrase(campaign, cfg)
+    hook_texts = cfg.get("hook_texts")
+    if isinstance(hook_texts, dict):
+        configured = _sanitize_carousel_hook(str(hook_texts.get(variant) or ""))
+        if configured:
+            return configured, "config"
+    configured = _sanitize_carousel_hook(str(cfg.get("hook_text") or ""))
+    if configured:
+        return configured, "config"
+    fallback = _fallback_festival_carousel_hook(variant, program_phrase)
+    if not _config_bool(cfg.get("llm_hook_enabled"), default=False):
+        return fallback, "deterministic_fallback"
+    try:
+        import main as main_mod
+
+        ask_4o = getattr(main_mod, "ask_4o", None)
+        if ask_4o is None:
+            return fallback, "fallback_no_ask_4o"
+        event_brief = "\n".join(f"- {ev.title} ({ev.date} {ev.time or ''})" for ev in events[:12])
+        prompt = (
+            "Ты пишешь первый слайд VK-карусели для промо образовательной/фестивальной программы. "
+            "Верни только JSON без markdown: {\"hook_text\":\"...\"}. "
+            "Нужен один вопрос или короткий хук до 120 символов, естественный русский, без агрессии, без кликбейта, "
+            "без обещаний, которых нет в данных. Можно учитывать название программы/фестиваля. "
+            "Не добавляй ссылки, даты, эмодзи и служебные инструкции.\n"
+            f"Тип хука: {variant!r}.\n"
+            f"Программа: {program_phrase!r}.\n"
+            f"Кампания: {campaign.title!r}.\n"
+            f"События:\n{event_brief}"
+        )
+        raw = await ask_4o(
+            prompt,
+            max_tokens=100,
+            temperature=0.2,
+            meta={"feature": "promo", "stage": "vk_festival_carousel_hook", "campaign_id": campaign.id},
+        )
+        payload = _extract_json_object(str(raw or ""))
+        hook = _sanitize_carousel_hook(str((payload or {}).get("hook_text") or ""))
+        if hook and 20 <= len(hook) <= 140 and "{" not in hook:
+            return hook, "llm_hook"
+    except Exception:
+        logger.warning("promo.vk carousel llm hook failed campaign_id=%s", getattr(campaign, "id", None), exc_info=True)
+    return fallback, "fallback_llm_error"
+
+
+def _load_carousel_font(size: int, *, bold: bool = False):
+    from PIL import ImageFont
+
+    try:
+        from afishaengagement import _load_font
+
+        return _load_font("Cygre-Bold.ttf" if bold else "Cygre-Medium.ttf", size)
+    except Exception:
+        pass
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size=size)
+    return ImageFont.load_default()
+
+
+def _wrap_draw_text(draw: Any, text: str, font: Any, max_width: int) -> list[str]:
+    words = str(text or "").split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        bbox = draw.textbbox((0, 0), candidate, font=font)
+        if current and (bbox[2] - bbox[0]) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def _render_vk_festival_carousel_card(
+    title: str,
+    *,
+    subtitle: str = "",
+    footer: str = "",
+    variant: str = "hook",
+) -> bytes:
+    from PIL import Image, ImageDraw
+
+    width, height = 1080, 1350
+
+    def rgb(hex_value: str) -> tuple[int, int, int]:
+        value = hex_value.lstrip("#")
+        return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+    try:
+        from afishaengagement import (
+            CTA_EDITORIAL_PALETTES,
+            _apply_cta_grain,
+            _compose_cta_edge,
+            _hex_to_rgb,
+            _mix_rgb,
+            fit_text,
+        )
+
+        palette_id = "ivory_navy_ochre" if variant == "hook" else "ivory_charcoal_oxblood"
+        roles = CTA_EDITORIAL_PALETTES[palette_id]
+        bg = _hex_to_rgb(roles["surface"])
+        ink = _hex_to_rgb(roles["ink"])
+        accent = _hex_to_rgb(roles["signal"])
+        rim = _hex_to_rgb(roles.get("rim") or roles["ink"])
+        image = Image.new("RGB", (width, height), bg)
+        block_polygon = [(0, 0), (width, 0), (width, height), (0, height)]
+        image = _apply_cta_grain(image, polygon=block_polygon, seed=f"vk_festival_carousel:{variant}:{title[:32]}")
+        image = _compose_cta_edge(
+            image,
+            seam_start=(0, 28),
+            seam_end=(width, 28),
+            cta_normal=(0.0, 1.0),
+            surface=bg,
+            ink=ink,
+            seam=accent,
+            accent=accent,
+            rim=rim,
+            scale=1.0,
+            include_accent_stripe=True,
+        )
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((72, 112, 178, 126), fill=accent)
+        title_fit = fit_text(
+            title,
+            box_width=width - 144,
+            box_height=560,
+            preferred_px=82 if len(title) < 85 else 68,
+            min_px=46,
+            max_lines=7,
+            font_name="Cygre-Bold.ttf",
+            avoid_orphan_lines=True,
+        )
+        if title_fit is None:
+            raise ValueError("carousel_title_fit_failed")
+        title_font = _load_carousel_font(title_fit.font_px, bold=True)
+        y = max(210, (height - title_fit.height) // 2 - 110)
+        for line in title_fit.lines:
+            draw.text((72, y), line, fill=ink, font=title_font)
+            bbox = draw.textbbox((72, y), line, font=title_font)
+            y += (bbox[3] - bbox[1]) + int(title_fit.font_px * 0.18)
+        if subtitle:
+            subtitle_fit = fit_text(
+                subtitle,
+                box_width=width - 144,
+                box_height=230,
+                preferred_px=38,
+                min_px=30,
+                max_lines=4,
+                font_name="Cygre-Medium.ttf",
+            )
+            if subtitle_fit is not None:
+                subtitle_font = _load_carousel_font(subtitle_fit.font_px)
+                y += 52
+                for line in subtitle_fit.lines:
+                    draw.text((72, y), line, fill=ink, font=subtitle_font)
+                    bbox = draw.textbbox((72, y), line, font=subtitle_font)
+                    y += (bbox[3] - bbox[1]) + int(subtitle_fit.font_px * 0.18)
+        footer_text = footer or ("Листайте афиши" if variant == "hook" else "Ссылки — в тексте поста")
+        footer_font = _load_carousel_font(34, bold=True)
+        draw.line((72, height - 164, width - 72, height - 164), fill=accent, width=5)
+        draw.text((72, height - 136), footer_text, fill=ink, font=footer_font)
+        out = io.BytesIO()
+        image.save(out, format="JPEG", quality=94, optimize=True)
+        return out.getvalue()
+    except Exception:
+        palettes = {
+            "hook": ("#17324D", "#F7F0DD", "#E0B65A"),
+            "cta": ("#F4ECDB", "#1A1A1A", "#8B1A1A"),
+        }
+        bg_hex, ink_hex, accent_hex = palettes.get(variant, palettes["hook"])
+
+    image = Image.new("RGB", (width, height), rgb(bg_hex))
+    draw = ImageDraw.Draw(image)
+    accent = rgb(accent_hex)
+    ink = rgb(ink_hex)
+    draw.rectangle((0, 0, width, 28), fill=accent)
+    draw.rectangle((72, 112, 178, 126), fill=accent)
+    title_font_size = 74 if len(title) < 85 else 62
+    title_font = _load_carousel_font(title_font_size, bold=True)
+    subtitle_font = _load_carousel_font(38)
+    footer_font = _load_carousel_font(32, bold=True)
+    max_width = width - 144
+    title_lines = _wrap_draw_text(draw, title, title_font, max_width)
+    while len(title_lines) > 7 and title_font_size > 46:
+        title_font_size -= 4
+        title_font = _load_carousel_font(title_font_size, bold=True)
+        title_lines = _wrap_draw_text(draw, title, title_font, max_width)
+    line_h = int(title_font_size * 1.18)
+    block_h = line_h * len(title_lines)
+    y = max(210, (height - block_h) // 2 - 80)
+    for line in title_lines:
+        draw.text((72, y), line, fill=ink, font=title_font)
+        y += line_h
+    if subtitle:
+        y += 52
+        for line in _wrap_draw_text(draw, subtitle, subtitle_font, max_width)[:4]:
+            draw.text((72, y), line, fill=ink, font=subtitle_font)
+            y += 54
+    footer_text = footer or ("Листайте афиши" if variant == "hook" else "Ссылки — в тексте поста")
+    draw.rectangle((72, height - 160, width - 72, height - 88), outline=accent, width=3)
+    draw.text((104, height - 142), footer_text, fill=ink, font=footer_font)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=94, optimize=True)
+    return out.getvalue()
+
+
+def _event_compact_label(ev: Event) -> str:
+    title = re.sub(r"\s+", " ", str(ev.title or "").strip())
+    when = " ".join(part for part in [str(ev.date or "").strip(), str(ev.time or "").strip()] if part)
+    return f"{when} — {title}".strip(" —")
+
+
+async def _build_vk_festival_carousel_message(
+    *,
+    db: Database,
+    bot: object | None,
+    campaign: PromoCampaign,
+    cfg: dict[str, Any],
+    hook_text: str,
+    events: list[Event],
+) -> tuple[str, dict[int, str]]:
+    explicit_by_event = cfg.get("cta_urls_by_event_id") or cfg.get("links_by_event_id") or {}
+    if not isinstance(explicit_by_event, dict):
+        explicit_by_event = {}
+    cta_by_event: dict[int, str] = {}
+    for ev in events:
+        if ev.id is None:
+            continue
+        configured = explicit_by_event.get(str(ev.id)) or explicit_by_event.get(int(ev.id))
+        cta = await _event_vk_cta_display_url(ev, db=db, bot=bot, configured_url=configured)
+        if cta:
+            cta_by_event[int(ev.id)] = cta
+
+    program_url = str(cfg.get("program_vk_url") or cfg.get("vk_program_url") or "").strip()
+    if not program_url:
+        program_url = str(cfg.get("program_url") or cfg.get("cta_url") or "").strip()
+    program_display = await _shorten_vk_url_for_display(program_url, db=db, bot=bot) if program_url else ""
+
+    lines = [
+        hook_text,
+        "",
+        "Листайте карусель: собрали афиши событий и ссылки для записи.",
+    ]
+    if program_display:
+        lines.extend(["", f"Вся программа: {program_display}"])
+    event_lines = []
+    for ev in events:
+        if ev.id is None:
+            continue
+        cta = cta_by_event.get(int(ev.id), "")
+        label = _event_compact_label(ev)
+        event_lines.append(f"• {label}" + (f" — {cta}" if cta else ""))
+    if event_lines:
+        lines.extend(["", "Регистрация на события:", *event_lines])
+    if _config_bool(cfg.get("debug_shadow"), default=False):
+        marker = str(cfg.get("debug_marker") or "#vk_festival_carousel_shadow")
+        lines.extend(["", "[VK FESTIVAL CAROUSEL DEBUG COPY — DELETE BEFORE PUBLISH]", marker])
+    return "\n".join(lines).strip(), cta_by_event
+
+
+async def _select_vk_festival_carousel_events(
+    db: Database,
+    *,
+    campaign: PromoCampaign,
+    activity: PromoActivity,
+    target: PromoTarget,
+    today: date,
+) -> list[Event]:
+    cfg = _activity_config(activity)
+    raw_ids = cfg.get("carousel_event_ids") or cfg.get("event_ids")
+    ordered_ids: list[int] = []
+    if isinstance(raw_ids, list):
+        for value in raw_ids:
+            try:
+                ordered_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+    if ordered_ids:
+        async with db.get_session() as session:
+            res = await session.execute(select(Event).where(Event.id.in_(ordered_ids)))
+            by_id = {int(ev.id): ev for ev in res.scalars().all() if ev.id is not None}
+        return [
+            by_id[event_id]
+            for event_id in ordered_ids
+            if event_id in by_id and _event_is_promo_eligible(by_id[event_id], today=today, campaign=campaign)
+        ]
+    events = await _events_for_target(db, target=target, campaign=campaign, today=today)
+    preferred_ids = _preferred_event_ids_for_date(activity, today)
+    if preferred_ids:
+        by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+        preferred_set = set(preferred_ids)
+        ordered = [by_id[event_id] for event_id in preferred_ids if event_id in by_id]
+        ordered.extend(ev for ev in events if ev.id is not None and int(ev.id) not in preferred_set)
+        events = ordered
+    return events
+
+
+async def _publish_vk_festival_carousel(
+    db: Database,
+    bot: object | None,
+    *,
+    campaign: PromoCampaign,
+    activity: PromoActivity,
+    target: PromoTarget,
+    now_utc: datetime,
+    today: date,
+) -> PromoVkActionResult:
+    from main import VK_PHOTOS_ENABLED, _vk_api, post_to_vk, upload_vk_photo, upload_vk_photo_bytes
+
+    campaign_id = int(campaign.id or 0)
+    activity_id = int(activity.id or 0)
+    cfg = _activity_config(activity)
+    target_group_id = await _resolve_vk_group_id(cfg.get("target_group") or activity.profile_key)
+    if not target_group_id:
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="target_group_missing")
+
+    recent = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+        since_utc=now_utc - timedelta(days=14),
+        public_only=False,
+    )
+    target_goal = int(activity.target_exposure_goal or 1)
+    counted_statuses = PUBLIC_PROMO_EXPOSURE_STATUSES | DEBUG_PROMO_EXPOSURE_STATUSES
+    if len([row for row in recent if row.publish_status in counted_statuses]) >= target_goal:
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="target_goal_reached")
+
+    day_rows = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+        since_utc=_promo_day_bounds(now_utc)[0],
+        until_utc=_promo_day_bounds(now_utc)[1],
+        public_only=False,
+    )
+    if activity.daily_cap is not None and len(day_rows) >= int(activity.daily_cap):
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="daily_cap_reached")
+
+    events = await _select_vk_festival_carousel_events(
+        db,
+        campaign=campaign,
+        activity=activity,
+        target=target,
+        today=today,
+    )
+    events = [ev for ev in events if ev.id is not None]
+    if not events:
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="events_missing")
+
+    hook_variant = str(cfg.get("hook_variant") or "all_posters").strip() or "all_posters"
+    hook_text, hook_source = await _festival_carousel_hook_text(
+        campaign=campaign,
+        cfg=cfg,
+        variant=hook_variant,
+        events=events,
+    )
+
+    max_cards = max(2, min(10, int(cfg.get("max_cards") or 10)))
+    include_cta_card = _config_bool(cfg.get("include_cta_card"), default=True)
+    max_event_cards = max(1, max_cards - 1 - (1 if include_cta_card else 0))
+    selected_events: list[Event] = []
+    event_attachments: list[str] = []
+    if VK_PHOTOS_ENABLED:
+        for ev in events:
+            if len(selected_events) >= max_event_cards:
+                break
+            photo_urls = await _ensure_promo_vk_photo_urls(db, ev)
+            first_photo = next((str(url or "").strip() for url in photo_urls if str(url or "").strip()), "")
+            if not first_photo:
+                continue
+            attachment = await upload_vk_photo(str(target_group_id), first_photo, db, bot)
+            if not attachment:
+                continue
+            selected_events.append(ev)
+            event_attachments.append(attachment)
+    if not selected_events:
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "failed", reason="event_posters_missing")
+
+    hook_subtitle = str(cfg.get("hook_subtitle") or "Бесплатные события, лекции, встречи и кинопоказы").strip()
+    hook_bytes = _render_vk_festival_carousel_card(
+        hook_text,
+        subtitle=hook_subtitle,
+        footer="Листайте афиши",
+        variant="hook",
+    )
+    hook_attachment = await upload_vk_photo_bytes(
+        str(target_group_id),
+        hook_bytes,
+        db,
+        bot,
+        filename=f"vk_festival_carousel_{activity_id}_hook.jpg",
+    )
+    if not hook_attachment:
+        return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "failed", reason="hook_upload_failed")
+    attachments = [hook_attachment, *event_attachments]
+    cta_card_added = False
+    if include_cta_card and len(attachments) < max_cards:
+        cta_bytes = _render_vk_festival_carousel_card(
+            str(cfg.get("cta_card_title") or "Выберите событие и записывайтесь"),
+            subtitle=str(cfg.get("cta_card_subtitle") or "Ссылки на регистрацию — в тексте поста"),
+            footer="Ссылки ниже",
+            variant="cta",
+        )
+        cta_attachment = await upload_vk_photo_bytes(
+            str(target_group_id),
+            cta_bytes,
+            db,
+            bot,
+            filename=f"vk_festival_carousel_{activity_id}_cta.jpg",
+        )
+        if cta_attachment:
+            attachments.append(cta_attachment)
+            cta_card_added = True
+
+    message, cta_by_event = await _build_vk_festival_carousel_message(
+        db=db,
+        bot=bot,
+        campaign=campaign,
+        cfg=cfg,
+        hook_text=hook_text,
+        events=selected_events,
+    )
+
+    debug_shadow = _config_bool(cfg.get("debug_shadow"), default=False)
+    publish_date: int | None = None
+    schedule_meta: dict[str, Any] = {}
+    looks_like_collision = None
+    if debug_shadow:
+        try:
+            from afishaengagement import _looks_like_vk_schedule_collision, _next_shadow_schedule
+
+            looks_like_collision = _looks_like_vk_schedule_collision
+            publish_date, schedule_meta = await _next_shadow_schedule(
+                config=cfg,
+                now_utc=now_utc,
+                owner_id=-abs(int(target_group_id)),
+                vk_api_fn=_vk_api,
+                db=db,
+                bot=bot,
+            )
+        except Exception:
+            logger.warning("promo.vk carousel shadow schedule lookup failed", exc_info=True)
+            delay_days = max(2, int(cfg.get("debug_publish_delay_days") or 3))
+            publish_date = int((now_utc + timedelta(days=delay_days)).replace(second=0, microsecond=0).timestamp())
+            schedule_meta = {"fallback": True, "selected_ts": publish_date}
+
+    vk_url = None
+    attempts: list[int | None] = []
+    spacing = int(schedule_meta.get("slot_spacing_seconds") or max(1, int(cfg.get("debug_slot_spacing_minutes") or 5)) * 60)
+    max_attempts = 6 if debug_shadow else 1
+    for attempt in range(max_attempts):
+        attempts.append(publish_date)
+        try:
+            vk_url = await post_to_vk(
+                str(target_group_id),
+                message,
+                db,
+                bot,
+                attachments,
+                carousel=True,
+                publish_date=publish_date,
+            )
+            break
+        except Exception as exc:
+            if not debug_shadow or looks_like_collision is None or not looks_like_collision(exc) or attempt >= max_attempts - 1:
+                raise
+            publish_date = int(publish_date or 0) + spacing
+    if not vk_url:
+        raise RuntimeError("wall.post returned no URL")
+
+    scheduled_at = datetime.fromtimestamp(int(publish_date), timezone.utc) if publish_date else now_utc
+    status = "VK_SCHEDULED_DEBUG" if debug_shadow else "VK_SCHEDULED"
+    placement_kind = "vk_shadow_debug_carousel" if debug_shadow else "vk_festival_carousel"
+    event_ids = [int(ev.id) for ev in selected_events if ev.id is not None]
+    await _record_vk_promo_exposure(
+        db,
+        campaign_id=campaign_id,
+        activity_id=activity_id,
+        event_id=event_ids[0],
+        surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+        placement_kind=placement_kind,
+        status=status,
+        url=vk_url,
+        published_at=scheduled_at,
+        details={
+            "target_group_id": target_group_id,
+            "target_url": vk_url,
+            "event_ids": event_ids,
+            "hook_variant": hook_variant,
+            "hook_text": hook_text,
+            "hook_source": hook_source,
+            "cta_by_event_id": {str(k): v for k, v in cta_by_event.items()},
+            "attachments_count": len(attachments),
+            "include_cta_card": cta_card_added,
+            "debug_shadow": debug_shadow,
+            "scheduled_ts": publish_date,
+            "publish_attempts": attempts,
+            "schedule": schedule_meta,
+        },
+        target_type="vk_wall_debug" if debug_shadow else "vk_wall",
+    )
+    return PromoVkActionResult(
+        campaign_id,
+        activity_id,
+        activity.surface,
+        event_ids[0],
+        "scheduled_debug" if debug_shadow else "scheduled",
+        target_url=vk_url,
+    )
+
+
 def _first_event_photo_url(ev: Event) -> str | None:
     for url in list(getattr(ev, "photo_urls", None) or []):
         text = str(url or "").strip()
@@ -2811,6 +3483,7 @@ async def run_promo_vk_activities(
                                 PROMO_SURFACE_TG_REPOST,
                                 PROMO_SURFACE_VK_REPOST,
                                 PROMO_SURFACE_VK_STORY,
+                                PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
                             ]
                         )
                     )
@@ -2819,11 +3492,49 @@ async def run_promo_vk_activities(
             ).all()
         )
 
+    processed_carousels: set[tuple[int, int]] = set()
     for campaign, activity, target in rows:
         if campaign.id is None or activity.id is None:
             continue
         campaign_id = int(campaign.id)
         activity_id = int(activity.id)
+        if activity.surface == PROMO_SURFACE_VK_FESTIVAL_CAROUSEL:
+            key = (campaign_id, activity_id)
+            if key in processed_carousels:
+                continue
+            processed_carousels.add(key)
+            due_count = _vk_activity_due_count(activity, now_utc)
+            if due_count <= 0:
+                continue
+            try:
+                result = await _publish_vk_festival_carousel(
+                    db,
+                    bot,
+                    campaign=campaign,
+                    activity=activity,
+                    target=target,
+                    now_utc=now_utc,
+                    today=today,
+                )
+                if result.status not in {"skipped"}:
+                    results.append(result)
+            except Exception as exc:
+                logger.exception(
+                    "promo.vk festival carousel failed campaign_id=%s activity_id=%s",
+                    campaign_id,
+                    activity_id,
+                )
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "failed",
+                        reason=str(exc) or type(exc).__name__,
+                    )
+                )
+            continue
         window_hours = _vk_activity_window(activity)
         since_utc = now_utc - timedelta(hours=window_hours)
         events = await _events_for_target(db, target=target, campaign=campaign, today=today)
