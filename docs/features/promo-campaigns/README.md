@@ -34,9 +34,10 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   `active_end_hour`, dedup policy). `vk_publication`, `tg_event_publish`, and
   `daily_recommend_today` can also use
   `preferred_event_ids_by_date={"YYYY-MM-DD": [event_id, ...]}` to keep a
-  multi-day educational/festival campaign aligned with the programme calendar
-  instead of letting the stable shuffle pull later events ahead of today's
-  planned slots.
+  multi-day educational/festival campaign aligned with the programme calendar.
+  For publication surfaces, a configured date acts as that day's allow-list:
+  once those ids are exhausted, the runner does not fill remaining daily slots
+  with later programme dates.
 - Telegram event publishing is channel-default behavior, not a separate
   campaign activity: when an event is covered by any active `promo_target`, the
   `@kldevents` publisher renders that event with its promo intro/CTA style.

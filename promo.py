@@ -1614,17 +1614,27 @@ def _event_occurs_on_date(ev: Event, day: date) -> bool:
 
 
 def _preferred_event_rank(activity: PromoActivity, local_day: date, event_id: int) -> int:
+    preferred_ids = _preferred_event_ids_for_date(activity, local_day)
+    if preferred_ids is None:
+        return 10_000
+    try:
+        return preferred_ids.index(int(event_id))
+    except (ValueError, TypeError):
+        return 10_000
+
+
+def _preferred_event_ids_for_date(activity: PromoActivity, local_day: date) -> list[int] | None:
     cfg = _activity_config(activity)
     by_date = cfg.get("preferred_event_ids_by_date")
     if not isinstance(by_date, dict):
-        return 10_000
+        return None
     raw_ids = by_date.get(local_day.isoformat())
     if not isinstance(raw_ids, list):
-        return 10_000
+        return None
     try:
-        return [int(value) for value in raw_ids].index(int(event_id))
+        return [int(value) for value in raw_ids]
     except (ValueError, TypeError):
-        return 10_000
+        return None
 
 
 async def resolve_daily_promo_recommendations(
@@ -2866,6 +2876,8 @@ async def run_promo_vk_activities(
             recent_event_ids = {int(ev.id) for ev, _url, _dt in organic if ev.id is not None}
             for exposure in recent_exposures:
                 recent_event_ids.add(int(exposure.event_id))
+            preferred_ids = _preferred_event_ids_for_date(activity, today)
+            preferred_id_set = set(preferred_ids or [])
             stats = await _load_public_exposure_stats(
                 db,
                 campaign_id=campaign_id,
@@ -2889,6 +2901,8 @@ async def run_promo_vk_activities(
             candidates: list[Event] = []
             for ev in sorted(events, key=sort_key):
                 if int(ev.id) in recent_event_ids:
+                    continue
+                if preferred_ids is not None and int(ev.id) not in preferred_id_set:
                     continue
                 if _promo_vk_publication_missing_required_media(ev):
                     recovered_urls = await _ensure_promo_vk_photo_urls(db, ev)
@@ -3020,6 +3034,8 @@ async def run_promo_vk_activities(
             if len(recent_exposures) >= due_count:
                 continue
             recent_event_ids = {int(exposure.event_id) for exposure in recent_exposures}
+            preferred_ids = _preferred_event_ids_for_date(activity, today)
+            preferred_id_set = set(preferred_ids or [])
             stats = await _load_public_exposure_stats(
                 db,
                 campaign_id=campaign_id,
@@ -3040,7 +3056,12 @@ async def run_promo_vk_activities(
                     event_id,
                 )
 
-            candidates = [ev for ev in sorted(events, key=sort_key) if int(ev.id) not in recent_event_ids]
+            candidates = [
+                ev
+                for ev in sorted(events, key=sort_key)
+                if int(ev.id) not in recent_event_ids
+                and (preferred_ids is None or int(ev.id) in preferred_id_set)
+            ]
             for ev in candidates[:1]:
                 try:
                     from main import publish_tg_promo_event_publication

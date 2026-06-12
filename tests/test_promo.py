@@ -1011,7 +1011,7 @@ async def test_tg_event_publish_honors_preferred_ids_by_date(tmp_path, monkeypat
 
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
-    now_utc = datetime(2026, 6, 13, 10, 30, tzinfo=timezone.utc)
+    now_utc = datetime(2026, 6, 13, 14, 30, tzinfo=timezone.utc)
 
     async with db.get_session() as session:
         session.add(Festival(name="Кантата"))
@@ -1031,12 +1031,12 @@ async def test_tg_event_publish_honors_preferred_ids_by_date(tmp_path, monkeypat
             campaign_id=int(campaign.id),
             surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
             profile_key="kldevents",
-            max_per_publish=1,
-            daily_cap=1,
+            max_per_publish=3,
+            daily_cap=3,
             config_json={
                 "target_chat": "@kldevents",
                 "active_start_hour": 10,
-                "active_end_hour": 14,
+                "active_end_hour": 17,
             },
         )
         session.add(activity)
@@ -1065,10 +1065,12 @@ async def test_tg_event_publish_honors_preferred_ids_by_date(tmp_path, monkeypat
     monkeypatch.setattr(main, "publish_tg_promo_event_publication", fake_publish)
 
     results = await run_promo_vk_activities(db, object(), now_utc=now_utc)
+    second_results = await run_promo_vk_activities(db, object(), now_utc=now_utc)
 
     assert [(item.surface, item.status, item.event_id) for item in results] == [
         (PROMO_SURFACE_TG_EVENT_PUBLISH, "published", preferred_id)
     ]
+    assert second_results == []
     assert published_ids == [preferred_id]
     await db.close()
 

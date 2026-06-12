@@ -24,7 +24,9 @@
   `vk_publication` now honor `preferred_event_ids_by_date` in
   `promo_activity.config_json`, allowing dense educational/festival campaigns
   to follow the programme calendar instead of stable-shuffling later events
-  ahead of today's slots. Covered by `tests/test_promo.py`.
+  ahead of today's slots. A configured date is treated as that day's allow-list,
+  so unused daily cap is not filled from later programme dates. Covered by
+  `tests/test_promo.py`.
 - **Changed: Poll to Repost audience framing**: poll questions now use a fixed
   set of friendly participation frames rotated by poll slot, each stating when
   the announcement will arrive, while LLM remains responsible only for options
