@@ -10,6 +10,24 @@ from db import Database
 from models import Event
 
 
+def test_repost_intro_handles_tied_topics_without_preview_link_copy():
+    text = pf._repost_intro_text(
+        "Выставки",
+        "как раз открывается выставка, и это хорошо попадает в голосование",
+        event_title="Точка и линия",
+        telegraph_url="https://telegra.ph/vystavka",
+        tied_texts=["Выставки", "Экскурсии и прогулки"],
+    )
+
+    assert text == (
+        "Спасибо за голоса: в лидерах были «Выставки» и «Экскурсии и прогулки».\n"
+        'Я бы предложил <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
+        "как раз открывается выставка, и это хорошо попадает в голосование.\n"
+        "Сейчас перешлю анонс 👇"
+    )
+    assert "Подробнее" not in text
+
+
 class DummyPollBot:
     def __init__(self):
         self.sent_polls = []
@@ -178,12 +196,12 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
-        "Вы выбрали: Вечер с музыкой. Спасибо за голос — показываю анонс, "
-        "который лучше всего совпал с этим выбором.\n"
-        "самый сильный концерт.\n"
-        "Подробнее: https://telegra.ph/event-101\n"
+        "Спасибо за голоса: вы выбрали «Вечер с музыкой».\n"
+        'Я бы предложил <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n'
         "Сейчас перешлю анонс 👇"
     )
+    assert bot.messages[0]["parse_mode"] == "HTML"
+    assert bot.messages[0]["disable_web_page_preview"] is True
     assert bot.forwarded[0] == {
         "chat_id": "@keniggpt",
         "from_chat_id": "@kldevents",

@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import hashlib
+from html import escape
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
@@ -27,15 +28,16 @@ STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 DEFAULT_POLL_QUESTION_TEXT = (
-    "Давайте выберем тему на завтра. Голосуйте, а через 30 минут пришлю сюда один анонс из варианта-победителя."
+    "Что завтра больше хочется? Голосуем, и примерно через полчаса принесу один живой анонс по теме."
 )
 DEFAULT_POLL_QUESTION_VARIANTS = (
     DEFAULT_POLL_QUESTION_TEXT,
-    "Поможете выбрать завтрашнюю рекомендацию? Отмечайте тему — через 30 минут пришлю один подходящий анонс.",
-    "Что порекомендовать на завтра? Выберите тему — через 30 минут пришлю один анонс по итогам голосования.",
-    "Сделаем рекомендацию вместе: вы выбираете тему, я через 30 минут пришлю один анонс из победившей.",
-    "Какую тему взять на завтра? Голосуйте, и через 30 минут здесь появится один анонс по выбору большинства.",
-    "Давайте соберём завтрашнюю рекомендацию: выберите тему, а я через 30 минут пришлю один анонс по голосованию.",
+    "Куда завтра тянет? Выберите настроение, а я через ~30 минут покажу один подходящий анонс.",
+    "Поможем завтрашнему вечеру определиться? Голосуйте за тему — скоро принесу один вариант.",
+    "Что завтра было бы в самый раз? Голосуем сейчас, а минут через 30 покажу анонс по выбранной теме.",
+    "За что голосуем на завтра? Победит тема — появится один конкретный анонс, без долгих списков.",
+    "Какой завтра план звучит лучше всего? Голосуйте, и чуть позже принесу один анонс по общему выбору.",
+    "Выберите, чего хочется завтра. Через полчаса вернусь с одним событием по теме, за которую проголосует большинство.",
 )
 
 
@@ -44,6 +46,7 @@ class CandidateEvent:
     id: int
     title: str
     date: str
+    end_date: str | None
     time: str
     event_type: str | None
     festival: str | None
@@ -127,19 +130,40 @@ def _repost_intro_text(
     reason: str | None,
     *,
     total_votes: int = 0,
+    event_title: str | None = None,
     telegraph_url: str | None = None,
+    tied_texts: Sequence[str] | None = None,
 ) -> str:
     winner = re.sub(r"\s+", " ", str(winner_text or "").strip()).rstrip(".")
+    tied = [
+        re.sub(r"\s+", " ", str(text or "").strip()).rstrip(".")
+        for text in (tied_texts or [])
+        if re.sub(r"\s+", " ", str(text or "").strip()).rstrip(".")
+    ]
     reason_text = re.sub(r"\s+", " ", str(reason or "").strip()).rstrip(".")
     if len(reason_text) > 180:
         reason_text = reason_text[:177].rstrip() + "..."
-    thanks = "Спасибо за голос" if int(total_votes or 0) == 1 else "Спасибо за голоса"
-    parts = [f"Вы выбрали: {winner}. {thanks} — показываю анонс, который лучше всего совпал с этим выбором."]
-    if reason_text:
-        parts.append(reason_text + ".")
+    title = re.sub(r"\s+", " ", str(event_title or "").strip()).rstrip(".") or "этот анонс"
     link = str(telegraph_url or "").strip()
-    if link:
-        parts.append(f"Подробнее: {link}")
+    linked_title = (
+        f'<a href="{escape(link, quote=True)}">{escape(title)}</a>'
+        if link
+        else escape(title)
+    )
+    if len(tied) > 1:
+        shown = tied[:3]
+        if len(shown) == 2:
+            tied_text = f"«{escape(shown[0])}» и «{escape(shown[1])}»"
+        else:
+            tied_text = ", ".join(f"«{escape(text)}»" for text in shown[:-1])
+            tied_text = f"{tied_text} и «{escape(shown[-1])}»"
+        parts = [f"Спасибо за голоса: в лидерах были {tied_text}."]
+    else:
+        parts = [f"Спасибо за голоса: вы выбрали «{escape(winner)}»."]
+    if reason_text:
+        parts.append(f"Я бы предложил {linked_title} — {escape(reason_text)}.")
+    else:
+        parts.append(f"Я бы предложил {linked_title}.")
     parts.append("Сейчас перешлю анонс 👇")
     return "\n".join(parts)
 
@@ -300,6 +324,7 @@ async def load_eligible_events(
                 id=event_id,
                 title=title,
                 date=str(getattr(event, "date", "") or "").strip(),
+                end_date=(str(getattr(event, "end_date", "") or "").strip() or None),
                 time=str(getattr(event, "time", "") or "").strip(),
                 event_type=(str(getattr(event, "event_type", "") or "").strip() or None),
                 festival=(str(getattr(event, "festival", "") or "").strip() or None),
@@ -699,6 +724,7 @@ async def _choose_winner_with_llm(
     *,
     tied_options: Sequence[PollOptionPlan],
     events: Sequence[CandidateEvent],
+    target_date: date | None = None,
 ) -> tuple[PollOptionPlan | None, int | None, str]:
     by_id = {event.id: event for event in events}
     candidate_ids = {
@@ -721,6 +747,8 @@ async def _choose_winner_with_llm(
         {
             "id": ev.id,
             "title": ev.title,
+            "date": ev.date,
+            "end_date": ev.end_date,
             "time": ev.time,
             "type": ev.event_type,
             "festival": ev.festival,
@@ -739,12 +767,18 @@ async def _choose_winner_with_llm(
         "Выбирай наиболее сильную публичную рекомендацию на завтра: событие должно быть интересно само по себе, "
         "соответствовать теме опроса и не выглядеть случайным. Ничего не придумывай.\n"
         "reason должен быть короткой дружелюбной причиной для сообщения перед анонсом: "
-        "почему именно этот анонс подходит под выбранную тему. Пиши спокойно и конкретно, "
-        "с фокусом на соответствие выбору аудитории. Не продавай событие, не обещай разбор, "
-        "комментарий или подборку. Не используй рекламные клише и оценки вроде "
+        "почему именно этот анонс подходит под выбранную тему. Пиши как человек из локального канала, "
+        "не как рекомендательная система. Покажи связь с голосами людей, но не пересказывай весь анонс. "
+        "Используй конкретику события, если она есть в данных: например, если выставка начинается в целевую дату "
+        "или из описания видно открытие, уместно сказать «как раз открывается выставка» / "
+        "«можно сходить на открывающуюся выставку». Не выдумывай открытие, если оно не следует из даты/описания. "
+        "Не используй слова и смыслы: алгоритм, репост, форвард, подборка, разбор, рекомендательная модель, контент. "
+        "Не обещай, что это «лучшее событие» или «идеальный выбор»; формулируй мягко: "
+        "«хорошо попадает», «подходит», «звучит в тему». Не используй рекламные клише и оценки вроде "
         "«отличный повод», «уникальные вещи», «лучший», «с пользой», «драйв». "
         "Верни JSON строго такого вида: "
         "{\"winner_key\":\"...\",\"event_id\":123,\"reason\":\"коротко почему\"}.\n\n"
+        f"Целевая дата события: {target_date.isoformat() if target_date else ''}\n\n"
         f"Опции-победители/ничья:\n{json.dumps(option_payload, ensure_ascii=False)}\n\n"
         f"События-кандидаты:\n{json.dumps(event_payload, ensure_ascii=False)}"
     )
@@ -903,6 +937,7 @@ async def resolve_due_debug_polls(
             winner_option, chosen_id, llm_reason = await _choose_winner_with_llm(
                 tied_options=tied_options,
                 events=events,
+                target_date=target_date,
             )
             chosen = next((event for event in events if event.id == chosen_id), None)
             if not winner_option or not chosen:
@@ -933,9 +968,13 @@ async def resolve_due_debug_polls(
                     winner_option.text,
                     llm_reason,
                     total_votes=total_votes,
+                    event_title=chosen.title,
                     telegraph_url=chosen.telegraph_url,
+                    tied_texts=[option.text for option in tied_options],
                 ),
                 reply_to_message_id=int(run["poll_message_id"]),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
             )
             forwarded = await bot.forward_message(
                 chat_id=target_chat,

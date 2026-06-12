@@ -42,6 +42,10 @@
   voters, links the chosen event's Telegraph page when available, and frames
   the forwarded announcement as the result of their choice, while the LLM reason
   prompt rejects promotional phrasing.
+- **Changed: Poll to Repost product copy polish**: tied poll results are now
+  named as ties instead of false winners, event titles carry the Telegraph link
+  with web preview disabled, and the LLM winner prompt can use concrete opening
+  context such as a newly opening exhibition when it is grounded in event data.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

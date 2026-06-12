@@ -85,8 +85,9 @@ and production rotate several friendly participation frames by slot, for
 example:
 
 - `Давайте выберем тему на завтра. Голосуйте, а через 30 минут пришлю сюда один анонс из варианта-победителя.`
-- `Поможете выбрать завтрашнюю рекомендацию? Отмечайте тему — через 30 минут пришлю один подходящий анонс.`
-- `Сделаем рекомендацию вместе: вы выбираете тему, я через 30 минут пришлю один анонс из победившей.`
+- `Что завтра больше хочется? Голосуем, и примерно через полчаса принесу один живой анонс по теме.`
+- `Куда завтра тянет? Выберите настроение, а я через ~30 минут покажу один подходящий анонс.`
+- `Выберите, чего хочется завтра. Через полчаса вернусь с одним событием по теме, за которую проголосует большинство.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
@@ -132,14 +133,20 @@ Rules:
 Before the repost, the bot sends a short reply to the original poll message
 with the winning topic and, when LLM provides it, a compact reason for the final
 event choice. Example:
-`Вы выбрали: музыка. Спасибо за голоса — показываю анонс, который лучше всего совпал с этим выбором.
-Он проходит завтра вечером и подходит под музыкальный вариант.
-Подробнее: https://telegra.ph/...
+`Спасибо за голоса: вы выбрали «музыка».
+Я бы предложил <a href="https://telegra.ph/...">Название события</a> — оно хорошо попадает в выбранную тему.
 Сейчас перешлю анонс 👇`
+
+If the poll result is tied, the reply must say so directly instead of naming a
+single false winner, for example: `Спасибо за голоса: в лидерах были «выставки»
+и «экскурсии».` The LLM reason should use concrete event facts when available:
+if an exhibition starts on the target date, natural wording such as "как раз
+открывается выставка" is preferred over generic "сходить на выставку".
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical
-`forward_message`/repost mechanic to the audience.
+`forward_message`/repost mechanic to the audience. Telegraph links are attached
+to the event title in HTML and sent with web preview disabled.
 
 ## Event Selection
 
