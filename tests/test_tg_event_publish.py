@@ -1199,3 +1199,86 @@ async def test_schedule_event_update_tasks_skips_tg_publish_for_past(tmp_path, m
     await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
 
     assert main.JobTask.tg_event_publish not in tasks
+
+
+@pytest.mark.asyncio
+async def test_schedule_event_update_tasks_skips_ticket_giveaway_when_alternative_exists(
+    tmp_path,
+    monkeypatch,
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    alternative = _event(
+        id=None,
+        title="Обычный концерт",
+        source_text="Анонс концерта без розыгрыша.",
+        tg_event_post_url="https://t.me/kldevents/500",
+    )
+    giveaway = _event(
+        id=None,
+        title="Розыгрыш билетов",
+        source_text="Разыгрываем два билета: подпишитесь и отметьте друга.",
+    )
+    async with db.get_session() as session:
+        session.add(alternative)
+        session.add(giveaway)
+        await session.commit()
+        await session.refresh(giveaway)
+
+    await main.schedule_event_update_tasks(db, giveaway, skip_vk_sync=False)
+
+    assert main.JobTask.telegraph_build in tasks
+    assert main.JobTask.vk_sync not in tasks
+    assert main.JobTask.tg_event_publish not in tasks
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_schedule_event_update_tasks_allows_ticket_giveaway_without_alternative(
+    tmp_path,
+    monkeypatch,
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    async def fake_has_managed_vk_post(event):
+        return False
+
+    monkeypatch.setattr(
+        main,
+        "_event_has_existing_managed_vk_post",
+        fake_has_managed_vk_post,
+    )
+
+    giveaway = _event(
+        id=None,
+        title="Розыгрыш билетов",
+        source_text="Разыгрываем два билета: подпишитесь и отметьте друга.",
+    )
+    async with db.get_session() as session:
+        session.add(giveaway)
+        await session.commit()
+        await session.refresh(giveaway)
+
+    await main.schedule_event_update_tasks(db, giveaway, skip_vk_sync=False)
+
+    assert main.JobTask.vk_sync in tasks
+    assert main.JobTask.tg_event_publish in tasks
+    await db.close()

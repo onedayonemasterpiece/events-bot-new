@@ -14473,6 +14473,104 @@ def _is_sqlite_locked_error(exc: BaseException) -> bool:
     return "database is locked" in msg or "database table is locked" in msg
 
 
+_TICKET_GIVEAWAY_RE = re.compile(
+    r"\b(?:"
+    r"розыгрыш\w*|розыгрыва\w*|разыгрыва\w*|разыгра\w*|"
+    r"дарим|подарим|выигра\w*|победител\w*"
+    r")\b",
+    re.IGNORECASE,
+)
+_TICKET_WORD_RE = re.compile(
+    r"\b(?:билет\w*|пригласительн\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _event_ticket_giveaway_text(event: Event) -> str:
+    parts: list[str] = []
+    for raw in (
+        getattr(event, "title", None),
+        getattr(event, "description", None),
+        getattr(event, "short_description", None),
+        getattr(event, "search_digest", None),
+        getattr(event, "source_text", None),
+    ):
+        value = str(raw or "").strip()
+        if value:
+            parts.append(value)
+    raw_sources = getattr(event, "source_texts", None) or []
+    if isinstance(raw_sources, list):
+        for raw in raw_sources:
+            value = str(raw or "").strip()
+            if value:
+                parts.append(value)
+    return "\n".join(parts)
+
+
+def _event_looks_like_ticket_giveaway(event: Event) -> bool:
+    text = _event_ticket_giveaway_text(event)
+    if not text:
+        return False
+    return bool(_TICKET_GIVEAWAY_RE.search(text) and _TICKET_WORD_RE.search(text))
+
+
+async def _has_non_giveaway_tg_publication_alternative(
+    db: Database,
+    event: Event,
+) -> bool:
+    event_id = getattr(event, "id", None)
+    if event_id is None:
+        return False
+    today = datetime.now(LOCAL_TZ).date().isoformat()
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event, JobOutbox.status)
+                    .outerjoin(
+                        JobOutbox,
+                        and_(
+                            JobOutbox.event_id == Event.id,
+                            JobOutbox.task == JobTask.tg_event_publish,
+                            JobOutbox.status.in_(
+                                [JobStatus.pending, JobStatus.running, JobStatus.done]
+                            ),
+                        ),
+                    )
+                    .where(Event.id != int(event_id))
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                    .where(func.coalesce(Event.end_date, Event.date) >= today)
+                    .where(
+                        or_(
+                            Event.tg_event_post_url.is_not(None),
+                            JobOutbox.id.is_not(None),
+                        )
+                    )
+                    .order_by(Event.date, Event.time, Event.id)
+                    .limit(200)
+                )
+            ).all()
+        )
+    for candidate, status in rows:
+        if _event_has_ended_before_today(candidate):
+            continue
+        has_tg_post = bool(str(getattr(candidate, "tg_event_post_url", "") or "").strip())
+        has_tg_job = status in {JobStatus.pending, JobStatus.running, JobStatus.done}
+        if not has_tg_post and not has_tg_job:
+            continue
+        if _event_looks_like_ticket_giveaway(candidate):
+            continue
+        return True
+    return False
+
+
+async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -> bool:
+    if not _event_looks_like_ticket_giveaway(event):
+        return False
+    return await _has_non_giveaway_tg_publication_alternative(db, event)
+
+
 async def schedule_event_update_tasks(
     db: Database, ev: Event, *, drain_nav: bool = False, skip_vk_sync: bool = False
 ) -> dict[JobTask, str]:
@@ -14493,6 +14591,12 @@ async def schedule_event_update_tasks(
     if _event_has_ended_before_today(ev):
         # Fully past events may still need page rebuild cleanup, but they must not create
         # a new managed klgdevents wall post.
+        skip_vk_sync = True
+    if (not skip_vk_sync) and await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "schedule_event_update_tasks: skip managed VK/TG publication for ticket giveaway event_id=%s; alternative exists",
+            eid,
+        )
         skip_vk_sync = True
     telegraph_dep_key = f"{JobTask.telegraph_build.value}:{eid}"
     tg_ics_dep_key = f"{JobTask.tg_ics_post.value}:{eid}"
@@ -19890,6 +19994,12 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             getattr(ev, "end_date", None),
         )
         return False
+    if await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "job_sync_vk_source_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
+            event_id,
+        )
+        return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
@@ -19984,6 +20094,12 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             event_id,
             getattr(ev, "date", None),
             getattr(ev, "end_date", None),
+        )
+        return False
+    if await _should_skip_ticket_giveaway_publication(db, ev):
+        logging.info(
+            "job_publish_tg_event_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
+            event_id,
         )
         return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)

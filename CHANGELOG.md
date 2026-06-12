@@ -14,6 +14,11 @@
   non-promo posts keep their existing link/button behavior. The Telegram hook
   writer also rejects repetitive openings such as `Хотите...`, `Готовы...`, and
   `Что здесь стоит увидеть?`. Covered by `tests/test_tg_event_publish.py`.
+- **Changed: Telegram/VK event raffle source fallback**: source posts that look
+  like third-party ticket giveaways are no longer scheduled for managed
+  Telegram/VK event publication when a non-giveaway alternative is already
+  queued or published. They still publish when no alternative exists, preserving
+  the empty-feed fallback. Covered by `tests/test_tg_event_publish.py`.
 - **Fixed: Future event quality LLM-first repair guardrails**: added
   `INC-2026-06-12-future-event-quality-llm-first-repair` as the regression
   contract and strengthened Telegram LLM venue-default prompts, source-grounded
