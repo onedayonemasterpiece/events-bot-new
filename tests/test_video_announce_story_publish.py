@@ -269,6 +269,28 @@ async def test_build_story_publish_config_keeps_native_upload_profile(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_build_story_publish_config_keeps_legacy_h264_upload_profile(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+
+    config = await story_publish.build_story_publish_config(
+        None,
+        main_chat_id=None,
+        selection_params={
+            "story_publish_enabled": True,
+            "story_publish_mode": "video",
+            "story_upload_profile": "legacy_h264_transcode",
+            "story_targets_override": [
+                {"peer": "@mostvkenig", "delay_seconds": 0, "mode": "upload"},
+            ],
+        },
+        selected_event_dates=["2026-06-12"],
+    )
+
+    assert config is not None
+    assert config["upload_profile"] == "legacy_h264_transcode"
+
+
+@pytest.mark.asyncio
 async def test_build_story_publish_config_appends_encrypted_business_targets(
     monkeypatch,
     tmp_path,

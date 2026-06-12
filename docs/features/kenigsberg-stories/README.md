@@ -111,11 +111,11 @@ MVP должен быть sibling product к CherryFlash, а не новым н�
   - `bundle_manifest.json`;
   - runtime scripts/assets копируются в dataset, а не подтягиваются из внешнего repo в notebook.
 - Kernel handoff / polling / error diagnostics из `video_announce.scenario`.
-- `telegram_story_native_hevc_720p_v1` encoding contract:
+- story-safe Telegram upload contract:
   - `720x1280`;
-  - H.265 / HEVC in MP4;
-  - AAC audio `48kHz`;
-  - story-safe size under Bot API limit.
+  - H.264 / `avc1` MP4 prepared by the shared story helper;
+  - AAC audio;
+  - story-safe size under Telegram limits.
 - Shared Kaggle story helper:
   - `kaggle/CrumpleVideo/story_publish.py` mounted as `kaggle_common/story_publish.py`.
 - Business Stories publish path from `docs/features/telegram-business-stories/README.md`.
@@ -398,6 +398,7 @@ Production:
   - `kaggle/CrumpleVideo/story_publish.py` is bundled as `kaggle_common/story_publish.py`;
   - `story_publish.json`, `story_publish.enc`, and `story_publish.key` are written into the same `kenigsberg-session-*` dataset;
   - Kaggle preflights story targets before render and publishes `kenigsberg_story_final.mp4` after render.
+- Kenigsberg production sets `story_upload_profile=legacy_h264_transcode` so the shared helper always prepares a Telegram-safe H.264/`avc1` upload copy before `SendStoryRequest`. Do not switch Kenigsberg back to the CherryFlash `telegram_story_native_hevc_720p_v1` bypass without live Telegram story evidence; incident `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop` tracks the `MEDIA_FILE_INVALID` regression.
 - the required production story target is `@mostvkenig` with `fallback_peer=me`: the shared Kaggle story helper first attempts to publish the story as the channel `@mostvkenig` (so reposts show the channel as the author) and, if that attempt raises (e.g. Telegram returns `BOOSTS_REQUIRED` because channel-native story rights are not yet available), the helper transparently retries the same upload against `peer=me`. Either outcome counts as a successful blocking/required publish, and the resulting story id is what downstream `repost_previous` targets forward from;
 - after the primary story is live, the Kaggle helper reposts it to `@loving_guide39` and `@jane_tour39` as best-effort `repost_previous` targets with `600` second spacing (matching the CherryFlash fanout cadence); failures there do not block render/publish;
 - the same generated story is also published as a VK community story to `vk.com/mostvkenig` (`transport=vk_story`, `peer=mostvkenig`) `120` seconds after the primary Telegram publish. The VK target is intentionally `blocking=false, required=false`: failure (missing VK admin rights, VK rejecting the upload, etc.) is logged in `story_publish_report.json` but must not gate or fail the Telegram publish. The VK story uses the same encrypted runtime bundle as CherryFlash KONB (`VK_ACCESS_TOKEN5`, no new env), reusing the upload path validated by `kaggle/CrumpleVideo/story_publish.py` (`stories.getVideoUploadServer` → upload → `stories.save`).
@@ -429,6 +430,9 @@ Important boundary:
   a separate `TELEGRAM_AUTH_BUNDLE_STORY` session. The remote Telegram session
   guard serializes jobs with the same auth source and permits parallel jobs only
   when their `remote_telegram_auth_scope` values differ.
+- Startup catch-up is capped after repeated same-day failed scheduled/story
+  sessions so deploy restarts do not keep launching expensive Kaggle renders
+  after terminal publish failures.
 
 ## Open questions
 

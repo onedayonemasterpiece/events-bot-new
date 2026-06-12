@@ -68,7 +68,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 ### Mandatory checks before closure or deploy
 
 - `python -m py_compile` for changed modules.
-- `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
+- `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile`
 - Verify `kaggle_registry` entries include `remote_telegram_auth_scope` for new remote Telegram jobs.
 - Verify production story auth is not borrowing `TELEGRAM_AUTH_BUNDLE_E2E`.
 - For true parallel monitoring/story operation, set story publishing to a distinct `TELEGRAM_AUTH_BUNDLE_STORY`.
@@ -112,7 +112,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 - deploy path: `origin/main` -> Fly remote deploy
 - regression checks:
   - `python -m py_compile remote_telegram_session.py handlers/kenigsberg_stories_cmd.py source_parsing/telegram/service.py guide_excursions/service.py guide_excursions/kaggle_service.py video_announce/story_publish.py video_announce/poller.py telegraph_cache_sanitizer.py tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py`
-  - `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile` -> `29 passed`
+  - `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile` -> `29 passed`
 - post-deploy verification:
   - Fly machine `48e42d5b714228`, version `1365`, checks `1 passing`
   - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`

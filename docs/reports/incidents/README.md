@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop.md`
+  - Scope: Kenigsberg `/kenigsberg` Kaggle story media profile, startup
+    catch-up retry behavior, and Telegram/VK fanout terminal status handling.
+  - Must not regress: Kenigsberg production story publish must use the
+    story-safe H.264/`avc1` helper path instead of bypassing it with the
+    CherryFlash native HEVC profile; startup catch-up must stop after repeated
+    same-day failed scheduled/story sessions instead of relaunching after every
+    deploy restart; closure requires terminal Telegram publish evidence or an
+    explicit operator blocker before another compensation run.
 - `INC-2026-06-12-kenigsberg-story-session-duplication.md`
   - Scope: Kenigsberg `/kenigsberg` Kaggle story publishing, shared remote
     Telegram session guard, Telegram/Guide monitoring Kaggle auth bundles, and

@@ -56,7 +56,7 @@ python -m py_compile remote_telegram_session.py handlers/kenigsberg_stories_cmd.
 ```
 
 ```text
-pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile
+pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile
 29 passed in 1.90s
 ```
 

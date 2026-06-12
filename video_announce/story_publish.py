@@ -679,7 +679,7 @@ def _story_should_be_pinned(
 
 def _story_upload_profile(selection_params: dict[str, Any]) -> str | None:
     raw = str(selection_params.get("story_upload_profile") or "").strip().lower()
-    if raw == "telegram_story_native_hevc_720p_v1":
+    if raw in {"telegram_story_native_hevc_720p_v1", "legacy_h264_transcode"}:
         return raw
     return None
 

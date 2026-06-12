@@ -221,6 +221,17 @@ class _FixedPopularReviewDatetime(datetime):
         return value.replace(tzinfo=None)
 
 
+class _FixedKenigsbergStoryDatetime(datetime):
+    fixed_now = datetime(2026, 6, 12, 20, 45, tzinfo=timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        value = cls.fixed_now
+        if tz is not None:
+            return value.astimezone(tz)
+        return value.replace(tzinfo=None)
+
+
 async def _insert_video_tomorrow_session(
     db: Database,
     *,
@@ -242,6 +253,35 @@ async def _insert_video_tomorrow_session(
                 json.dumps({"target_date": target_date}),
                 created_at,
                 error,
+            ),
+        )
+        await conn.commit()
+
+
+async def _insert_kenigsberg_story_session(
+    db: Database,
+    *,
+    status: str,
+    created_at: str,
+    trigger: str = "startup_catchup",
+    story_publish_requested: bool = True,
+) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO videoannounce_session(status, profile_key, selection_params, created_at)
+            VALUES(?, 'kenigsberg_story', ?, ?)
+            """,
+            (
+                status,
+                json.dumps(
+                    {
+                        "mode": "kenigsberg_story",
+                        "trigger": trigger,
+                        "story_publish_requested": story_publish_requested,
+                    }
+                ),
+                created_at,
             ),
         )
         await conn.commit()
@@ -548,6 +588,67 @@ async def test_video_tomorrow_startup_catchup_skips_second_recoverable_retry_sam
     monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
 
     dispatched = await scheduling._maybe_catch_up_video_tomorrow_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_story_startup_catchup_retries_single_failed_session(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedKenigsbergStoryDatetime)
+    await _insert_kenigsberg_story_session(
+        db,
+        status="FAILED",
+        created_at="2026-06-12 18:15:00",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_kenigsberg_story", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_kenigsberg_story_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is True
+    assert calls == [{"startup_catchup": True}]
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_story_startup_catchup_skips_after_two_failed_sessions(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedKenigsbergStoryDatetime)
+    await _insert_kenigsberg_story_session(
+        db,
+        status="FAILED",
+        created_at="2026-06-12 18:15:00",
+    )
+    await _insert_kenigsberg_story_session(
+        db,
+        status="FAILED",
+        created_at="2026-06-12 18:30:00",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_kenigsberg_story", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_kenigsberg_story_on_startup(
         db, bot=object()
     )
 

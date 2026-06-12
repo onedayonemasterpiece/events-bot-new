@@ -1276,6 +1276,49 @@ async def _kenigsberg_story_session_exists_today(
     return False
 
 
+async def _kenigsberg_story_failed_session_count_today(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> int:
+    if db is None or not hasattr(db, "raw_conn"):
+        return 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, selection_params
+            FROM videoannounce_session
+            WHERE profile_key = 'kenigsberg_story'
+              AND created_at >= ?
+              AND created_at < ?
+            ORDER BY id DESC
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    count = 0
+    for status, selection_params_raw in rows:
+        if str(status or "").strip() != "FAILED":
+            continue
+        params: dict[str, Any] = {}
+        if isinstance(selection_params_raw, str) and selection_params_raw.strip():
+            try:
+                parsed = json.loads(selection_params_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                params = parsed
+        elif isinstance(selection_params_raw, dict):
+            params = selection_params_raw
+        if str(params.get("trigger") or "").strip() not in {"scheduled", "startup_catchup"}:
+            continue
+        if not bool(params.get("story_publish_requested")):
+            continue
+        count += 1
+    return count
+
+
 async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
     enabled, video_tz_name, video_time_raw, profile_key, video_test_mode = _video_tomorrow_schedule_settings()
     if not enabled:
@@ -1422,10 +1465,24 @@ async def _maybe_catch_up_kenigsberg_story_on_startup(db: Any, bot: Any) -> bool
 
     day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     day_end_local = day_start_local + timedelta(days=1)
+    day_start_utc = day_start_local.astimezone(timezone.utc)
+    day_end_utc = day_end_local.astimezone(timezone.utc)
+    failed_session_count = await _kenigsberg_story_failed_session_count_today(
+        db,
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
+    )
+    if failed_session_count >= 2:
+        logging.info(
+            "SCHED startup catchup skip kenigsberg_story: failed session retry cap reached count=%s",
+            failed_session_count,
+        )
+        return False
+
     if await _kenigsberg_story_session_exists_today(
         db,
-        day_start_utc=day_start_local.astimezone(timezone.utc),
-        day_end_utc=day_end_local.astimezone(timezone.utc),
+        day_start_utc=day_start_utc,
+        day_end_utc=day_end_utc,
     ):
         logging.info(
             "SCHED startup catchup skip kenigsberg_story: confirmed scheduled story handoff already exists today"

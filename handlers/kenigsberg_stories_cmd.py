@@ -278,7 +278,7 @@ async def _build_production_story_config(
         "mode": KENIGSBERG_PROFILE_KEY,
         "story_publish_enabled": True,
         "story_publish_mode": "video",
-        "story_upload_profile": "telegram_story_native_hevc_720p_v1",
+        "story_upload_profile": "legacy_h264_transcode",
         "story_targets_override": _kenigsberg_story_targets(
             poetry_test=poetry_test,
             poetry_vk_caption=poetry_vk_caption,
