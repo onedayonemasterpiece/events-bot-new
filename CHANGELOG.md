@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **Added: Future event quality audit Codex skill**: added
+  `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
+  production future-event quality audits, LLM-first prevention, DB repair,
+  Telegraph rebuilds, and Telegram/VK duplicate cleanup evidence.
 - **Changed: Telegram event promo captions and quieter footer**: Telegram event
   posts now support a `tg_event_publish` promo surface with richer intro copy
   (up to 500 chars, combined editorial/source context, 2-3 concrete
