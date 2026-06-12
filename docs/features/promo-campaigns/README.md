@@ -239,9 +239,12 @@ only after `stories.save`; the exposure row uses `surface='vk_story'`,
 
 `vk_festival_carousel` publishes a VK carousel at festival/program level. It is
 intended for non-aggressive program promotion: the first card is a hook/question,
-the middle cards are selected event posters, and, when fewer than ten cards are
-used, the last card can be a CTA card pointing readers to the post text. The
-activity config supports:
+the middle cards are selected event posters plus optional curated person cards,
+and, when there is room, the last card can be a CTA card pointing readers to
+the post text. Non-celebrity carousels can use up to ten VK attachments;
+`hook_variant=celebrity` is capped at nine cards total so the first card,
+poster cards, person cards, and final CTA stay reviewable. The activity config
+supports:
 
 - `target_group`: destination VK community;
 - `carousel_event_ids` / `event_ids`: explicit event order for poster cards;
@@ -258,6 +261,14 @@ activity config supports:
   no curated poster where the person/role is visible on the image;
 - `celebrity_requires_image_evidence`: keeps the celebrity image gate enabled
   by default;
+- `celebrity_person_cards`: curated cards for missing people in celebrity
+  carousels. Each item must include `name` and `role` (optionally `event_id`),
+  or the value can be a mapping from event id to such items;
+- `covered_celebrity_names_by_event_id` /
+  `celebrity_names_on_posters_by_event_id`: names already visible on selected
+  poster cards. These are skipped when filling `celebrity_person_cards`, so the
+  carousel can add missing figures without duplicating people already present
+  on the афиши;
 - `palette_id`, `palette_ids`, `palette_id_by_hook_variant`: stable palette
   selection controls using `afishaengagement` editorial palettes;
 - `poster_swipe_badge`, `swipe_label`: poster-card carousel cue controls,

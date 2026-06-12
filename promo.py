@@ -2841,6 +2841,121 @@ def _event_configured_poster_urls(
     return []
 
 
+@dataclass(frozen=True)
+class _VkFestivalCarouselPersonCard:
+    name: str
+    role: str
+    event_id: int | None = None
+
+
+def _normalize_vk_festival_carousel_person_name(value: str) -> str:
+    text = str(value or "").casefold().replace("ё", "е")
+    text = re.sub(r"[^0-9a-zа-я]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _iter_vk_festival_carousel_person_card_payloads(raw: Any) -> Iterable[dict[str, Any]]:
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                yield item
+    elif isinstance(raw, dict):
+        for event_key, items in raw.items():
+            event_id = _int_or_none(event_key)
+            if isinstance(items, dict):
+                payload = dict(items)
+                payload.setdefault("event_id", event_id)
+                yield payload
+            elif isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        payload = dict(item)
+                        payload.setdefault("event_id", event_id)
+                        yield payload
+
+
+def _vk_festival_carousel_person_cards_from_config(
+    cfg: dict[str, Any],
+) -> list[_VkFestivalCarouselPersonCard]:
+    raw = cfg.get("celebrity_person_cards")
+    if raw is None:
+        raw = cfg.get("person_cards")
+    cards: list[_VkFestivalCarouselPersonCard] = []
+    for payload in _iter_vk_festival_carousel_person_card_payloads(raw):
+        name = str(payload.get("name") or payload.get("title") or "").strip()
+        role = str(
+            payload.get("role")
+            or payload.get("subtitle")
+            or payload.get("description")
+            or ""
+        ).strip()
+        if not name or not role:
+            continue
+        cards.append(
+            _VkFestivalCarouselPersonCard(
+                name=name,
+                role=role,
+                event_id=_int_or_none(payload.get("event_id")),
+            )
+        )
+    return cards
+
+
+def _covered_vk_festival_carousel_person_names(
+    cfg: dict[str, Any],
+    selected_events: list[Event],
+) -> set[str]:
+    covered: set[str] = set()
+    for key in ("covered_celebrity_names", "celebrity_names_on_posters"):
+        for name in _url_list_from_config(cfg.get(key)):
+            normalized = _normalize_vk_festival_carousel_person_name(name)
+            if normalized:
+                covered.add(normalized)
+    selected_event_ids = {int(ev.id) for ev in selected_events if ev.id is not None}
+    by_event = (
+        cfg.get("covered_celebrity_names_by_event_id")
+        or cfg.get("celebrity_names_on_posters_by_event_id")
+        or cfg.get("poster_celebrity_names_by_event_id")
+    )
+    if not isinstance(by_event, dict):
+        return covered
+    for event_id in selected_event_ids:
+        for name in _url_list_from_config(by_event.get(str(event_id)) or by_event.get(event_id)):
+            normalized = _normalize_vk_festival_carousel_person_name(name)
+            if normalized:
+                covered.add(normalized)
+    return covered
+
+
+def _select_vk_festival_carousel_person_cards(
+    cfg: dict[str, Any],
+    *,
+    selected_events: list[Event],
+    limit: int,
+) -> list[_VkFestivalCarouselPersonCard]:
+    if limit <= 0:
+        return []
+    covered = _covered_vk_festival_carousel_person_names(cfg, selected_events)
+    selected: list[_VkFestivalCarouselPersonCard] = []
+    seen = set(covered)
+    for card in _vk_festival_carousel_person_cards_from_config(cfg):
+        normalized = _normalize_vk_festival_carousel_person_name(card.name)
+        if not normalized or normalized in seen:
+            continue
+        selected.append(card)
+        seen.add(normalized)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 def _render_vk_festival_carousel_card(
     title: str,
     *,
@@ -2959,7 +3074,7 @@ def _render_vk_festival_carousel_card(
         footer_text = footer or ("листай" if variant == "hook" else "Ссылки — в тексте поста")
         footer_font = _load_carousel_font(44 if variant == "hook" else 34, bold=True)
         draw.line((72, height - 164, width - 72, height - 164), fill=accent, width=5)
-        if variant == "hook":
+        if variant in {"hook", "person"}:
             label = footer_text or "листай"
             label_w = draw.textlength(label, font=footer_font)
             y0 = height - 120
@@ -3250,7 +3365,8 @@ async def _publish_vk_festival_carousel(
         events=events,
     )
 
-    max_cards = max(2, min(10, int(cfg.get("max_cards") or 10)))
+    max_cards_cap = 9 if hook_variant == "celebrity" else 10
+    max_cards = max(2, min(max_cards_cap, int(cfg.get("max_cards") or max_cards_cap)))
     include_cta_card = _config_bool(cfg.get("include_cta_card"), default=True)
     max_event_cards = max(1, max_cards - 1 - (1 if include_cta_card else 0))
     palette_id = _carousel_palette_id(activity, cfg, hook_variant)
@@ -3263,6 +3379,8 @@ async def _publish_vk_festival_carousel(
     selected_events: list[Event] = []
     event_attachments: list[str] = []
     selected_photo_urls: dict[int, str] = {}
+    person_cards_added: list[_VkFestivalCarouselPersonCard] = []
+    person_attachments: list[str] = []
     if VK_PHOTOS_ENABLED:
         for ev in events:
             if len(selected_events) >= max_event_cards:
@@ -3310,6 +3428,44 @@ async def _publish_vk_festival_carousel(
     if not selected_events:
         return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "failed", reason="event_posters_missing")
 
+    if VK_PHOTOS_ENABLED and hook_variant == "celebrity":
+        person_slots = max_cards - 1 - len(event_attachments) - (1 if include_cta_card else 0)
+        person_candidates = _select_vk_festival_carousel_person_cards(
+            cfg,
+            selected_events=selected_events,
+            limit=max(0, person_slots),
+        )
+        for index, card in enumerate(person_candidates, start=1):
+            if len(person_attachments) >= person_slots:
+                break
+            try:
+                person_bytes = _render_vk_festival_carousel_card(
+                    card.name,
+                    subtitle=card.role,
+                    footer=swipe_label,
+                    variant="person",
+                    palette_id=palette_id,
+                )
+                attachment = await upload_vk_photo_bytes(
+                    str(target_group_id),
+                    person_bytes,
+                    db,
+                    bot,
+                    filename=f"vk_festival_carousel_{activity_id}_person_{index}.jpg",
+                )
+            except Exception:
+                logger.warning(
+                    "promo.vk carousel person card upload failed activity_id=%s name=%s",
+                    activity_id,
+                    card.name,
+                    exc_info=True,
+                )
+                continue
+            if not attachment:
+                continue
+            person_cards_added.append(card)
+            person_attachments.append(attachment)
+
     hook_subtitle = str(cfg.get("hook_subtitle") or "Бесплатные события, лекции, встречи и кинопоказы").strip()
     hook_bytes = _render_vk_festival_carousel_card(
         hook_text,
@@ -3327,7 +3483,7 @@ async def _publish_vk_festival_carousel(
     )
     if not hook_attachment:
         return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "failed", reason="hook_upload_failed")
-    attachments = [hook_attachment, *event_attachments]
+    attachments = [hook_attachment, *event_attachments, *person_attachments]
     cta_card_added = False
     if include_cta_card and len(attachments) < max_cards:
         cta_bytes = _render_vk_festival_carousel_card(
@@ -3430,9 +3586,14 @@ async def _publish_vk_festival_carousel(
             "poster_swipe_badge": poster_swipe_badge,
             "swipe_label": swipe_label,
             "celebrity_requires_image_evidence": celebrity_requires_configured_poster,
+            "person_cards": [
+                {"name": card.name, "role": card.role, "event_id": card.event_id}
+                for card in person_cards_added
+            ],
             "selected_photo_urls_by_event_id": {str(k): v for k, v in selected_photo_urls.items()},
             "cta_by_event_id": {str(k): v for k, v in cta_by_event.items()},
             "attachments_count": len(attachments),
+            "max_cards": max_cards,
             "include_cta_card": cta_card_added,
             "debug_shadow": debug_shadow,
             "scheduled_ts": publish_date,

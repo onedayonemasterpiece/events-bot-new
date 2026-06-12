@@ -829,6 +829,147 @@ async def test_vk_festival_carousel_celebrity_requires_image_evidence_config(tmp
 
 
 @pytest.mark.asyncio
+async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_duplicates(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 13, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Диалог «Опережая время»", "2026-06-13", festival="Кантата")
+        event.description = "В разговоре участвуют Андрей Борисов и Фабио Мастранджело."
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="Кантата · образовательная программа",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, 23, 59, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+                profile_key="klgdevents:kantata:carousel:celebrity",
+                max_per_publish=1,
+                target_exposure_goal=1,
+                daily_cap=1,
+                config_json={
+                    "target_group": "231920894",
+                    "hook_variant": "celebrity",
+                    "hook_text": "Знаете, кто ведёт образовательную программу «Кантаты»?",
+                    "carousel_event_ids": [event_id],
+                    "celebrity_event_ids": [event_id],
+                    "celebrity_poster_urls_by_event_id": {
+                        str(event_id): "https://example.com/curated-celebrity-poster.jpg"
+                    },
+                    "covered_celebrity_names_by_event_id": {
+                        str(event_id): ["Андрей Борисов", "Фабио Мастранджело"]
+                    },
+                    "celebrity_person_cards": [
+                        {"name": "Андрей Борисов", "role": "генеральный продюсер фестиваля «Кантата»"},
+                        {"name": "Евгений Князев", "role": "народный артист России"},
+                        {"name": "Татьяна Юденкова", "role": "доктор искусствоведения"},
+                        {"name": "Максим Шостакович", "role": "продюсер Большого театра России"},
+                        {"name": "Дарья Костина", "role": "культурный ведущий и модератор"},
+                        {"name": "Иван Никифорчин", "role": "дирижёр"},
+                        {"name": "Фабио Мастранджело", "role": "художественный руководитель фестиваля"},
+                        {"name": "Марк Ваза", "role": "деятель искусства"},
+                        {"name": "Наталья Патрушева", "role": "деятель искусства"},
+                    ],
+                    "max_cards": 10,
+                    "include_cta_card": True,
+                    "debug_shadow": True,
+                },
+            )
+        )
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="festival", festival_name="Кантата"))
+        await session.commit()
+
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    post_calls: list[dict] = []
+    uploaded_bytes: list[str] = []
+
+    def sample_image_bytes() -> bytes:
+        from io import BytesIO
+
+        from PIL import Image
+
+        image = Image.new("RGB", (720, 1080), "#ece3d0")
+        out = BytesIO()
+        image.save(out, format="JPEG")
+        return out.getvalue()
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        if method == "utils.getShortLink":
+            return {"response": {"short_url": "https://vk.cc/generated"}}
+        raise AssertionError(method)
+
+    async def fake_fetch_image(url):
+        return sample_image_bytes()
+
+    async def fake_upload_vk_photo_bytes(group_id, image_bytes, db_arg=None, bot_arg=None, *, filename="image.jpg"):
+        uploaded_bytes.append(filename)
+        return f"photo-{group_id}_bytes{len(uploaded_bytes)}"
+
+    async def fake_upload_vk_photo(*args, **kwargs):
+        raise AssertionError("celebrity carousel must use configured poster bytes")
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, carousel=False, publish_date=None):
+        post_calls.append(
+            {
+                "message": message,
+                "attachments": list(attachments or []),
+                "carousel": carousel,
+                "publish_date": publish_date,
+            }
+        )
+        return "https://vk.com/wall-231920894_701"
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
+    monkeypatch.setattr(main, "upload_vk_photo_bytes", fake_upload_vk_photo_bytes)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr("afishaengagement._default_fetch_image", fake_fetch_image)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [(item.surface, item.status) for item in results] == [
+        (PROMO_SURFACE_VK_FESTIVAL_CAROUSEL, "scheduled_debug")
+    ]
+    assert post_calls[0]["carousel"] is True
+    assert len(post_calls[0]["attachments"]) == 9
+    assert len(uploaded_bytes) == 9
+    assert sum("_person_" in name for name in uploaded_bytes) == 6
+    assert all("person_7" not in name for name in uploaded_bytes)
+
+    async with db.get_session() as session:
+        exposure = (await session.execute(select(PromoExposure))).scalars().one()
+    assert exposure.details_json["max_cards"] == 9
+    assert exposure.details_json["attachments_count"] == 9
+    assert [item["name"] for item in exposure.details_json["person_cards"]] == [
+        "Евгений Князев",
+        "Татьяна Юденкова",
+        "Максим Шостакович",
+        "Дарья Костина",
+        "Иван Никифорчин",
+        "Марк Ваза",
+    ]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_publication_dedupes_mirrors_and_blocks_empty_upload(tmp_path, monkeypatch) -> None:
     import main
     from promo import _build_promo_vk_source_post

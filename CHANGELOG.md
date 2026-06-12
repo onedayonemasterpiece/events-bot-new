@@ -6,6 +6,11 @@
   CTA theme extraction now prefers explicit art/painting/impressionism subjects
   over broad `история` wording, so art-history events do not get generic
   `лекции по истории` copy. Covered by `tests/test_afishaengagement.py`.
+- **Changed: VK festival carousel visual contract v4**: celebrity/program-leader
+  carousels can now fill remaining slots with curated FIO/role person cards,
+  skip names already visible on selected poster cards, and are capped at nine
+  total cards including the hook and final CTA. Covered by
+  `tests/test_promo.py`.
 - **Added: Afisha Engagement public canary mode**: `afishaengagement`
   activities can now publish real VK engagement posts via
   `publish_mode="public"` while dice misses fall through to lower-priority

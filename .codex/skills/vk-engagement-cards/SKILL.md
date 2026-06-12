@@ -5,7 +5,7 @@ description: Use when designing, rendering, reviewing, or evolving generated VK 
 
 # VK Engagement Cards
 
-Contract version: `v3`
+Contract version: `v4`
 Last updated: `2026-06-12`
 
 Use this skill whenever a task changes generated VK cards: standalone hook
@@ -21,7 +21,7 @@ any new VK visual surface that should stay consistent with existing
 - Promo docs: `docs/features/promo-campaigns/README.md`
 - Afisha Engagement docs: `docs/features/afishaengagement/README.md`
 
-## v3 Visual Contract
+## v4 Visual Contract
 
 Generated VK cards should reuse the existing afishaengagement visual language
 unless there is an explicit product reason to diverge.
@@ -119,6 +119,13 @@ claim. Use explicit `celebrity_poster_urls_by_event_id` /
 include only images where OCR/vision or another evidence source shows visible
 person names/roles on the poster. Fail closed when unsure.
 
+Celebrity/program-leader carousels may add curated FIO/role cards after the
+poster cards when the poster set does not cover all important people. Keep the
+full carousel at nine cards maximum for this variant: hook, poster cards,
+person cards, optional final CTA. Use `covered_celebrity_names_by_event_id` or
+the equivalent poster-name config to skip people already visible on selected
+posters.
+
 ## Links On VK Cards
 
 - Do not render long URLs onto image cards.
@@ -152,6 +159,7 @@ For `vk_festival_carousel` specifically:
 
 ```bash
 .venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_shadow_posts_hook_posters_and_cta -q
+.venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_duplicates -q
 .venv/bin/python -m py_compile promo.py
 ```
 
@@ -175,4 +183,10 @@ evidence changes, bump `Contract version` and add a short changelog section:
 - CTA cards require a large central down arrow.
 - Celebrity/program-leader carousels require image-level evidence, not just
   event metadata.
+
+## v4 Changes
+
+- Celebrity/program-leader carousels can add curated FIO/role person cards.
+- Celebrity carousels are capped at nine total cards.
+- Person cards skip names configured as already visible on selected posters.
 ```
