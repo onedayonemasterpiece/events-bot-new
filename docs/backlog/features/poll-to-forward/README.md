@@ -82,7 +82,7 @@ returns a compact poll plan:
 
 The poll question itself is product copy, not a semantic topic decision. Debug
 and production use a fixed friendly participation frame by default:
-`Что порекомендовать на завтра? Ваш голос решает, какой анонс покажем в канале.`
+`Что порекомендовать на завтра? Голосуйте — через 30 минут пришлю сюда один анонс по выбранному варианту.`
 It can be tuned with `POLL_TO_FORWARD_QUESTION_TEXT` without changing topic
 selection. This keeps the poll from drifting into promotional copy such as
 "we will pick the best events" while the LLM still owns the meaningful option
@@ -127,7 +127,14 @@ Rules:
 Before the repost, the bot sends a short reply to the original poll message
 with the winning topic and, when LLM provides it, a compact reason for the final
 event choice. Example:
-`Вы выбрали: музыка. Показываем этот анонс: он лучше всего попадает в выбранное настроение.`
+`Вы выбрали: музыка. Спасибо за голоса — показываю анонс, который лучше всего совпал с этим выбором.
+Он проходит завтра вечером и подходит под музыкальный вариант.
+Подробнее: https://telegra.ph/...
+Сейчас перешлю анонс 👇`
+
+The intro copy should make voters feel that the recommendation is a consequence
+of their choice. Avoid generic promo phrasing and avoid exposing the technical
+`forward_message`/repost mechanic to the audience.
 
 ## Event Selection
 

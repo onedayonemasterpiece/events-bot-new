@@ -54,6 +54,7 @@ def _event(event_id: int, *, title: str, post_id: int, event_type: str = "кон
         event_type=event_type,
         tg_event_post_id=post_id,
         tg_event_post_url=f"https://t.me/kldevents/{post_id}",
+        telegraph_url=f"https://telegra.ph/event-{event_id}",
         lifecycle_status="active",
         silent=False,
     )
@@ -176,7 +177,13 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert result["resolved"] == 1
     assert bot.sent_polls[0]["question"] == pf.DEFAULT_POLL_QUESTION_TEXT
     assert bot.messages[0]["reply_to_message_id"] == 101
-    assert bot.messages[0]["text"] == "Вы выбрали: Вечер с музыкой. Показываем этот анонс: самый сильный концерт."
+    assert bot.messages[0]["text"] == (
+        "Вы выбрали: Вечер с музыкой. Спасибо за голос — показываю анонс, "
+        "который лучше всего совпал с этим выбором.\n"
+        "самый сильный концерт.\n"
+        "Подробнее: https://telegra.ph/event-101\n"
+        "Сейчас перешлю анонс 👇"
+    )
     assert bot.forwarded[0] == {
         "chat_id": "@keniggpt",
         "from_chat_id": "@kldevents",

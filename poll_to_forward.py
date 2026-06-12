@@ -26,7 +26,7 @@ STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 DEFAULT_POLL_QUESTION_TEXT = (
-    "Что порекомендовать на завтра? Ваш голос решает, какой анонс покажем в канале."
+    "Что порекомендовать на завтра? Голосуйте — через 30 минут пришлю сюда один анонс по выбранному варианту."
 )
 
 
@@ -43,6 +43,7 @@ class CandidateEvent:
     is_free: bool
     tg_event_post_id: int
     tg_event_post_url: str | None
+    telegraph_url: str | None
     summary: str
 
 
@@ -80,14 +81,38 @@ def _poll_question_text() -> str:
     return _env_str("POLL_TO_FORWARD_QUESTION_TEXT", DEFAULT_POLL_QUESTION_TEXT)
 
 
-def _repost_intro_text(winner_text: str, reason: str | None) -> str:
+def _event_telegraph_url(event: CandidateEvent | Event | None) -> str | None:
+    if event is None:
+        return None
+    url = str(getattr(event, "telegraph_url", "") or "").strip()
+    if url:
+        return url
+    path = str(getattr(event, "telegraph_path", "") or "").strip()
+    if path:
+        return f"https://telegra.ph/{path.lstrip('/')}"
+    return None
+
+
+def _repost_intro_text(
+    winner_text: str,
+    reason: str | None,
+    *,
+    total_votes: int = 0,
+    telegraph_url: str | None = None,
+) -> str:
     winner = re.sub(r"\s+", " ", str(winner_text or "").strip()).rstrip(".")
     reason_text = re.sub(r"\s+", " ", str(reason or "").strip()).rstrip(".")
     if len(reason_text) > 180:
         reason_text = reason_text[:177].rstrip() + "..."
+    thanks = "Спасибо за голос" if int(total_votes or 0) == 1 else "Спасибо за голоса"
+    parts = [f"Вы выбрали: {winner}. {thanks} — показываю анонс, который лучше всего совпал с этим выбором."]
     if reason_text:
-        return f"Вы выбрали: {winner}. Показываем этот анонс: {reason_text}."
-    return f"Вы выбрали: {winner}. Показываем рекомендацию на завтра."
+        parts.append(reason_text + ".")
+    link = str(telegraph_url or "").strip()
+    if link:
+        parts.append(f"Подробнее: {link}")
+    parts.append("Сейчас перешлю анонс 👇")
+    return "\n".join(parts)
 
 
 def _local_tz() -> ZoneInfo:
@@ -254,6 +279,7 @@ async def load_eligible_events(
                 is_free=bool(getattr(event, "is_free", False)),
                 tg_event_post_id=int(post_id),
                 tg_event_post_url=(str(getattr(event, "tg_event_post_url", "") or "").strip() or None),
+                telegraph_url=_event_telegraph_url(event),
                 summary=_short_summary(event),
             )
         )
@@ -683,7 +709,10 @@ async def _choose_winner_with_llm(
         "Выбирай наиболее сильную публичную рекомендацию на завтра: событие должно быть интересно само по себе, "
         "соответствовать теме опроса и не выглядеть случайным. Ничего не придумывай.\n"
         "reason должен быть короткой дружелюбной причиной для сообщения перед анонсом: "
-        "почему именно этот анонс подходит под выбранную тему. Не обещай разбор, комментарий или подборку. "
+        "почему именно этот анонс подходит под выбранную тему. Пиши спокойно и конкретно, "
+        "с фокусом на соответствие выбору аудитории. Не продавай событие, не обещай разбор, "
+        "комментарий или подборку. Не используй рекламные клише и оценки вроде "
+        "«отличный повод», «уникальные вещи», «лучший», «с пользой», «драйв». "
         "Верни JSON строго такого вида: "
         "{\"winner_key\":\"...\",\"event_id\":123,\"reason\":\"коротко почему\"}.\n\n"
         f"Опции-победители/ничья:\n{json.dumps(option_payload, ensure_ascii=False)}\n\n"
@@ -870,7 +899,12 @@ async def resolve_due_debug_polls(
             source_chat = _env_str("POLL_TO_FORWARD_SOURCE_CHAT", "@kldevents")
             reply = await bot.send_message(
                 chat_id=target_chat,
-                text=_repost_intro_text(winner_option.text, llm_reason),
+                text=_repost_intro_text(
+                    winner_option.text,
+                    llm_reason,
+                    total_votes=total_votes,
+                    telegraph_url=chosen.telegraph_url,
+                ),
                 reply_to_message_id=int(run["poll_message_id"]),
             )
             forwarded = await bot.forward_message(

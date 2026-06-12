@@ -16,7 +16,7 @@
   `DAILY_RECOMMENDED`, `TG_PUBLISHED`, and `TG_FORWARDED`. Covered by
   `tests/test_promo.py`.
 - **Changed: Poll to Repost audience framing**: poll questions now use a fixed
-  friendly participation frame ("your vote decides which announcement we show")
+  friendly participation frame that states when the announcement will arrive,
   while LLM remains responsible only for options and event selection, preventing
   promotional drift such as "we will pick the best events".
 - **Changed: Poll to Repost intro copy**: the resolver now replies to the poll
@@ -26,6 +26,10 @@
 - **Fixed: Poll to Repost scheduler tick**: the debug scheduler entrypoint now
   accepts the scheduler wrapper's `run_id` keyword, so the standard 30-minute
   tick can resolve due polls instead of failing before the resolver runs.
+- **Changed: Poll to Repost voter-aware intro**: the resolver reply now thanks
+  voters, links the chosen event's Telegraph page when available, and frames
+  the forwarded announcement as the result of their choice, while the LLM reason
+  prompt rejects promotional phrasing.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,
