@@ -98,15 +98,16 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "КАМЕРНЫЙ КОНЦЕРТ" not in text
     assert '<a href="https://example.com/tickets">Билеты</a>' in text
     assert "Калининград" in text
-    assert "#Калининград" in text
+    assert "Ленинский проспект 155, #Калининград" in text
+    assert text.count("#Калининград") == 1
     assert "#афишакалининград" in text
     assert "#концерт" in text
     assert "#20июня" in text
     assert "#Фестивальсвета" in text
     assert "#анонс" not in text
-    assert '<a href="https://telegra.ph/event">Подробнее</a>' in text
-    assert '<a href="https://t.me/+MrSeuZSHv3VjMThi">Подписаться</a>' in text
-    assert '<a href="https://vk.com/klgdevents">Вконтакте</a>' in text
+    assert '<a href="https://telegra.ph/event">🔎 Подробнее</a>' in text
+    assert "Подписаться" not in text
+    assert "Вконтакте" not in text
 
 
 
@@ -141,6 +142,16 @@ def test_tg_event_source_hash_includes_media_signature():
     assert main.build_tg_event_source_hash(event, "source text") != base_hash
 
 
+def test_tg_event_source_hash_includes_promo_highlight():
+    event = _event()
+    base_hash = main.build_tg_event_source_hash(event, "source text")
+
+    assert (
+        main.build_tg_event_source_hash(event, "source text", promo_highlight=True)
+        != base_hash
+    )
+
+
 def test_tg_event_text_for_publish_uses_source_when_utility_description_conflicts():
     source = (
         "Собранное сырье направят на переработку. От одного физического лица "
@@ -160,6 +171,22 @@ def test_tg_event_text_for_publish_uses_source_when_utility_description_conflict
     )
 
     assert main.select_tg_event_text_for_publish(event) == source
+
+
+def test_tg_event_promo_text_for_publish_combines_context_sources():
+    event = _event(
+        description="Описание с главной программой.",
+        short_description="Коротко о формате.",
+        search_digest="Суть события для поиска.",
+        source_text="Исходный текст с деталями участников.",
+    )
+
+    text = main.select_tg_event_text_for_publish(event, promo_highlight=True)
+
+    assert "Описание: Описание с главной программой." in text
+    assert "Коротко: Коротко о формате." in text
+    assert "Суть: Суть события для поиска." in text
+    assert "Исходный текст: Исходный текст с деталями участников." in text
 
 
 def test_tg_event_utility_hashtags_ignore_conflicting_description():
@@ -231,6 +258,39 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     assert "Что здесь стоит увидеть?" not in hook
 
 
+@pytest.mark.asyncio
+async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
+    import google_ai
+
+    event = _event(title="Камерный концерт", source_text="Музыканты играют редкую программу.")
+
+    class FakeGoogleAIClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def generate_content_async(self, **kwargs):
+            prompt = kwargs["prompt"]
+            assert "до 500 символов" in prompt
+            assert "Это промо-событие" in prompt
+            assert "2-3 самые сильные конкретные причины" in prompt
+            assert kwargs["max_output_tokens"] == 260
+            return (
+                "Редкая камерная программа для тех, кто хочет услышать живой ансамбль "
+                "в спокойном формате. В описании есть детали состава и настроения вечера.",
+                {},
+            )
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+
+    hook = await main.build_tg_event_hook_text(
+        event,
+        event.source_text,
+        promo_highlight=True,
+    )
+
+    assert hook.startswith("Редкая камерная программа")
+
+
 def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"
@@ -278,7 +338,7 @@ async def test_tg_event_publish_dedupes_managed_and_vk_cdn_mirror(monkeypatch):
             return "8001c001000c9c09430561ac78e858358b0706a338e534c498c0d06819000800"
         return main._extract_dhash_from_managed_photo_url(url)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         return "Короткий анонс события."
 
@@ -312,7 +372,7 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     )
     long_text = " ".join(["Очень длинное описание события."] * 120)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         assert source_text == long_text
         return "Что делает этот вечер особенным? Музыка прозвучит в камерном формате."
@@ -341,7 +401,8 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert "Что делает этот вечер особенным?" in message_text
     assert main._tg_html_visible_len(message_text) <= 1000
     assert "Подробнее" in message_text
-    assert "Подписаться" in message_text
+    assert "Подписаться" not in message_text
+    assert "Вконтакте" not in message_text
     assert "#20июня" in message_text
     assert "#Калининград" in message_text
     assert "#афишакалининград" in message_text
@@ -363,7 +424,7 @@ async def test_tg_event_publish_replaces_old_text_when_media_appears(monkeypatch
     )
     long_text = " ".join(["Описание события."] * 20)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         return "Что делает этот вечер особенным? Камерный формат."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
@@ -394,7 +455,7 @@ async def test_tg_event_publish_sends_album_caption_for_multiple_media(monkeypat
     )
     long_text = " ".join(["Очень длинное описание события."] * 120)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         assert source_text == long_text
         return "Что делает этот вечер особенным? Музыка прозвучит в камерном формате."
@@ -421,7 +482,8 @@ async def test_tg_event_publish_sends_album_caption_for_multiple_media(monkeypat
     assert materialize_calls == [(f"https://img.example/{idx}.jpg", idx) for idx in range(9)]
     assert not isinstance(bot.media_groups[0][1][0].media, str)
     assert "Что делает этот вечер особенным?" in bot.media_groups[0][1][0].caption
-    assert "Добавить в календарь" in bot.media_groups[0][1][0].caption
+    assert "Добавить в календарь" not in bot.media_groups[0][1][0].caption
+    assert "🔎 Подробнее" in bot.media_groups[0][1][0].caption
 
 
 @pytest.mark.asyncio
@@ -432,7 +494,7 @@ async def test_tg_event_publish_fails_closed_when_materialized_media_unavailable
     )
     long_text = " ".join(["Описание события."] * 40)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         assert event_arg is event
         assert source_text == long_text
         return "Что делает этот вечер особенным? Водная программа и активности."
@@ -463,7 +525,7 @@ async def test_tg_event_publish_does_not_keep_text_mode_when_media_exists(monkey
     )
     event.tg_event_source_hash = main.build_tg_event_source_hash(event, long_text)
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         return "Что делает этот вечер особенным? Камерный формат."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
@@ -497,7 +559,7 @@ async def test_tg_event_publish_deletes_old_album_when_mode_changes(monkeypatch)
         tg_event_source_hash="old",
     )
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         return "Что делает этот вечер особенным? Камерный формат."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)
@@ -529,7 +591,7 @@ async def test_tg_event_publish_deletes_old_post_when_edit_falls_back_to_send(mo
         tg_event_source_hash="old",
     )
 
-    async def fake_hook_text(event_arg, source_text):
+    async def fake_hook_text(event_arg, source_text, **_kwargs):
         return "Что делает этот вечер особенным? Камерный формат."
 
     monkeypatch.setattr(main, "build_tg_event_hook_text", fake_hook_text)

@@ -19770,12 +19770,17 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
         )
         return False
 
-    text_for_tg = select_tg_event_text_for_publish(ev)
+    promo_highlight = await resolve_tg_event_promo_highlight(ev, db)
+    text_for_tg = select_tg_event_text_for_publish(
+        ev,
+        promo_highlight=promo_highlight,
+    )
     url, post_id, mode, source_hash = await publish_tg_event_announcement(
         ev,
         text_for_tg,
         db,
         bot,
+        promo_highlight=promo_highlight,
     )
     if not url and not source_hash:
         return False

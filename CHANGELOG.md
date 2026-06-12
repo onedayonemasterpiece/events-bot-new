@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Changed: Telegram event promo captions and quieter footer**: Telegram event
+  posts now support a `tg_event_publish` promo surface with richer intro copy
+  (up to 500 chars, combined editorial/source context, 2-3 concrete
+  reasons/details), put the city hashtag in the location line, stop duplicating
+  the city in the bottom hashtag line, and keep the footer focused on a single
+  `🔎 Подробнее` link instead of repeated subscribe/VK links. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: Telegram event intro repair for utility/service posts**: Telegram
   event publishing no longer forces every intro to start as a hook question.
   The writer may use a useful short paragraph or friendly `Друзья, ...` format,

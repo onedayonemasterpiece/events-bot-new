@@ -3842,7 +3842,9 @@ TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v4"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v5"
+TG_EVENT_INTRO_MAX_CHARS = 330
+TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
 
 
 def _tg_event_publish_enabled() -> bool:
@@ -3944,7 +3946,6 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
     tags.extend(vk_date_hashtags(getattr(event, "date", None)))
     city = getattr(event, "city", None)
     if city:
-        tags.append(city)
         tags.append(city_afisha_hashtag(city))
     tags.extend(
         event_type_hashtags(
@@ -3964,6 +3965,12 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
     if festival_tag:
         tags.append(festival_tag)
     return format_vk_hashtag_line(dedupe_vk_hashtags(tags))
+
+
+def _tg_event_city_hashtag(city: str | None) -> str | None:
+    from vk_hashtags import normalize_vk_hashtag
+
+    return normalize_vk_hashtag(city)
 
 
 def _tg_event_ticket_line(event: Event) -> str:
@@ -4072,7 +4079,7 @@ def _tg_event_description_conflicts_with_utility_source(
     return any(marker in lower for marker in entertainment_markers)
 
 
-def select_tg_event_text_for_publish(event: Event) -> str:
+def select_tg_event_text_for_publish(event: Event, *, promo_highlight: bool = False) -> str:
     description = (getattr(event, "description", None) or "").strip()
     source_text = (getattr(event, "source_text", None) or "").strip()
     if description and looks_like_genai_response_dump(description):
@@ -4087,7 +4094,48 @@ def select_tg_event_text_for_publish(event: Event) -> str:
             getattr(event, "id", None),
         )
         description = ""
+    if promo_highlight:
+        parts: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for label, raw in (
+            ("Описание", description),
+            ("Коротко", getattr(event, "short_description", None)),
+            ("Суть", getattr(event, "search_digest", None)),
+            ("Исходный текст", source_text),
+        ):
+            value = re.sub(r"\s+", " ", str(raw or "")).strip()
+            if not value:
+                continue
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            parts.append((label, value))
+        if parts:
+            return "\n\n".join(f"{label}: {value}" for label, value in parts)
     return description or source_text
+
+
+async def resolve_tg_event_promo_highlight(event: Event, db: Database | None) -> bool:
+    event_id = getattr(event, "id", None)
+    if not db or event_id is None:
+        return False
+    try:
+        from promo import resolve_surface_promo_event_ids
+
+        promo_ids = await resolve_surface_promo_event_ids(
+            db,
+            surface="tg_event_publish",
+            profile_key="kldevents",
+        )
+    except Exception:
+        logging.warning(
+            "tg_event: promo resolver failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
+    return int(event_id) in promo_ids
 
 
 def build_tg_event_announcement(
@@ -4126,7 +4174,7 @@ def build_tg_event_announcement(
     if addr:
         loc_parts.append(addr)
     if event.city:
-        loc_parts.append(event.city)
+        loc_parts.append(_tg_event_city_hashtag(event.city) or event.city)
     if loc_parts:
         lines.append("📍 " + html.escape(", ".join(loc_parts)))
 
@@ -4151,15 +4199,14 @@ def build_tg_event_announcement(
     footer_links: list[str] = []
     details_url = _tg_event_details_url(event)
     if details_url:
-        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">Подробнее</a>')
+        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">🔎 Подробнее</a>')
     calendar_url = _tg_event_calendar_post_url(event)
-    if include_calendar_link and calendar_url:
+    if include_calendar_link and calendar_url and not footer_links:
         footer_links.append(
-            f'<a href="{html.escape(calendar_url, quote=True)}">Добавить в календарь</a>'
+            f'<a href="{html.escape(calendar_url, quote=True)}">📅 Добавить в календарь</a>'
         )
-    footer_links.append(f'<a href="{TG_EVENT_SUBSCRIBE_URL}">Подписаться</a>')
-    footer_links.append(f'<a href="{TG_EVENT_VK_URL}">Вконтакте</a>')
-    lines.append(" · ".join(footer_links))
+    if footer_links:
+        lines.append(" · ".join(footer_links))
     return "\n".join(lines).strip()
 
 
@@ -4191,13 +4238,27 @@ def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
     return ""
 
 
-async def build_tg_event_hook_text(event: Event, text: str) -> str:
+async def build_tg_event_hook_text(
+    event: Event,
+    text: str,
+    *,
+    promo_highlight: bool = False,
+) -> str:
     source = (text or "").strip()
     if not source:
         return _fallback_tg_event_hook_text(event, text)
+    max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
+    promo_instruction = ""
+    if promo_highlight:
+        promo_instruction = (
+            "Это промо-событие: дай более богатое, но всё ещё компактное описание. "
+            "Выбери 2-3 самые сильные конкретные причины пойти, назови отличительную деталь "
+            "программы/участников/формата, избегай общей рекламной воды.\n"
+        )
     prompt = (
         "Сделай короткий Telegram-анонс события на русском языке.\n"
-        "Формат: 1-2 предложения, до 330 символов.\n"
+        f"Формат: 1-3 предложения, до {max_chars} символов.\n"
+        f"{promo_instruction}"
         "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
         "или friendly-вступление вроде «Друзья, ...». Вопрос не обязателен, если событие "
         "утилитарное, сервисное или важнее объяснить практическую пользу.\n"
@@ -4225,7 +4286,7 @@ async def build_tg_event_hook_text(event: Event, text: str) -> str:
             model=TG_EVENT_REWRITE_MODEL,
             prompt=prompt,
             generation_config={"temperature": 0.4},
-            max_output_tokens=180,
+            max_output_tokens=260 if promo_highlight else 180,
         )
     except Exception:
         logging.warning(
@@ -4244,8 +4305,8 @@ async def build_tg_event_hook_text(event: Event, text: str) -> str:
         for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
     ):
         return _fallback_tg_event_hook_text(event, text)
-    if len(cleaned) > 360:
-        cleaned = _truncate_tg_plain_body(cleaned, 360)
+    if len(cleaned) > max_chars + 30:
+        cleaned = _truncate_tg_plain_body(cleaned, max_chars + 30)
     return cleaned
 
 
@@ -4271,8 +4332,13 @@ async def build_tg_event_announcement_for_publish(
     *,
     force_caption_limit: bool = False,
     include_calendar_link: bool = False,
+    promo_highlight: bool = False,
 ) -> tuple[str, bool]:
-    hook_text = await build_tg_event_hook_text(event, text)
+    hook_text = await build_tg_event_hook_text(
+        event,
+        text,
+        promo_highlight=promo_highlight,
+    )
     message_html = build_tg_event_announcement(
         event,
         hook_text,
@@ -4308,12 +4374,13 @@ def _tg_event_publish_media_urls(event: Event) -> list[str]:
     return _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])[:TG_EVENT_MAX_MEDIA]
 
 
-def build_tg_event_source_hash(event: Event, text: str) -> str:
+def build_tg_event_source_hash(event: Event, text: str, *, promo_highlight: bool = False) -> str:
     media_signature = "\n".join(_tg_event_publish_media_urls(event))
     return content_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
+                f"promo_highlight={bool(promo_highlight)}",
                 str(getattr(event, "title", "") or ""),
                 str(getattr(event, "date", "") or ""),
                 str(getattr(event, "time", "") or ""),
@@ -4445,6 +4512,8 @@ async def publish_tg_event_announcement(
     text: str,
     db: Database | None,
     bot: Bot | None,
+    *,
+    promo_highlight: bool = False,
 ) -> tuple[str | None, int | None, str | None, str | None]:
     if not bot or not _tg_event_publish_enabled():
         return None, None, None, None
@@ -4453,7 +4522,11 @@ async def publish_tg_event_announcement(
         return None, None, None, None
 
     festival = await _resolve_event_festival(db, event)
-    source_hash = build_tg_event_source_hash(event, text)
+    source_hash = build_tg_event_source_hash(
+        event,
+        text,
+        promo_highlight=promo_highlight,
+    )
     photo_urls = (
         await _dedupe_event_photo_urls_for_publish(
             _tg_event_publish_media_urls(event)
@@ -4485,6 +4558,7 @@ async def publish_tg_event_announcement(
         festival=festival,
         force_caption_limit=bool(chunks),
         include_calendar_link=desired_mode == "album_caption",
+        promo_highlight=promo_highlight,
     )
     reply_markup = build_tg_event_reply_markup(event)
 
