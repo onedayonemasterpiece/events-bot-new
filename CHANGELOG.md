@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: raffle-source event publication false skips**: managed VK and
+  Telegram event publication now still enqueue when a raw source mentions a
+  ticket raffle/giveaway but Smart Update has already produced substantial
+  cleaned non-giveaway event copy. Prize-only giveaway sources without cleaned
+  event copy remain fallback content. Tracks
+  `INC-2026-06-12-raffle-source-publication-false-skip` and is covered by
+  `tests/test_tg_event_publish.py`.
 - **Added: VK festival carousel promo shadow rollout**: added the
   `vk_festival_carousel` promo activity for festival/program-level VK
   carousels with a hook card, selected event posters, an optional final CTA

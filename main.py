@@ -14514,6 +14514,38 @@ def _event_looks_like_ticket_giveaway(event: Event) -> bool:
     return bool(_TICKET_GIVEAWAY_RE.search(text) and _TICKET_WORD_RE.search(text))
 
 
+def _strip_ticket_giveaway_fragments(text: str) -> str:
+    kept: list[str] = []
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _TICKET_GIVEAWAY_RE.search(line) or _TICKET_WORD_RE.search(line):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def _event_has_publishable_non_giveaway_editorial_body(event: Event) -> bool:
+    """Return True when Smart Update already produced event copy beyond raffle mechanics."""
+
+    for raw in (
+        getattr(event, "short_description", None),
+        getattr(event, "description", None),
+        getattr(event, "search_digest", None),
+    ):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        cleaned = _strip_ticket_giveaway_fragments(text)
+        if len(cleaned) >= 120:
+            return True
+        sentenceish = [part for part in re.split(r"[.!?…\n]+", cleaned) if len(part.strip()) >= 25]
+        if len(sentenceish) >= 2:
+            return True
+    return False
+
+
 async def _has_non_giveaway_tg_publication_alternative(
     db: Database,
     event: Event,
@@ -14567,6 +14599,8 @@ async def _has_non_giveaway_tg_publication_alternative(
 
 async def _should_skip_ticket_giveaway_publication(db: Database, event: Event) -> bool:
     if not _event_looks_like_ticket_giveaway(event):
+        return False
+    if _event_has_publishable_non_giveaway_editorial_body(event):
         return False
     return await _has_non_giveaway_tg_publication_alternative(db, event)
 

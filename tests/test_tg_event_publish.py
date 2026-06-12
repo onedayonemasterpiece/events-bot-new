@@ -1243,6 +1243,74 @@ async def test_schedule_event_update_tasks_skips_ticket_giveaway_when_alternativ
 
 
 @pytest.mark.asyncio
+async def test_schedule_event_update_tasks_publishes_cleaned_event_with_giveaway_source(
+    tmp_path,
+    monkeypatch,
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    async def fake_has_managed_vk_post(event):
+        return False
+
+    monkeypatch.setattr(
+        main,
+        "_event_has_existing_managed_vk_post",
+        fake_has_managed_vk_post,
+    )
+
+    alternative = _event(
+        id=None,
+        title="Обычный концерт",
+        source_text="Анонс концерта без розыгрыша.",
+        tg_event_post_url="https://t.me/kldevents/500",
+    )
+    fair = _event(
+        id=None,
+        title="Путешествие в сказку в деревне Холмогорье",
+        event_type="ярмарка",
+        source_post_url="https://vk.com/wall-146688375_7432",
+        source_vk_post_url="https://vk.com/wall-146688375_7432",
+        source_text=(
+            "Поздравляем победителей розыгрыша. Каждый билет на 4 человека. "
+            "13 июня сказочная деревня Холмогорье снова распахнет двери."
+        ),
+        short_description=(
+            "Ярмарка в Холмогорье с конкурсами костюмов и рисунков, "
+            "выступлением ходулистов, клоуном Мультиком и запуском "
+            "воздушных змеев для всей семьи."
+        ),
+        description=(
+            "Деревня Холмогорье превращается в пространство для тех, кто верит "
+            "в чудеса и стремится провести время в кругу семьи.\n\n"
+            "В рамках ярмарки запланированы конкурс костюмов, конкурс рисунков, "
+            "выступление ходулистов, анимация с клоуном Мультиком и запуск "
+            "воздушных змеев.\n\n"
+            "Итоги розыгрыша: победители получили билеты."
+        ),
+    )
+    async with db.get_session() as session:
+        session.add(alternative)
+        session.add(fair)
+        await session.commit()
+        await session.refresh(fair)
+
+    await main.schedule_event_update_tasks(db, fair, skip_vk_sync=False)
+
+    assert main.JobTask.vk_sync in tasks
+    assert main.JobTask.tg_event_publish in tasks
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_allows_ticket_giveaway_without_alternative(
     tmp_path,
     monkeypatch,

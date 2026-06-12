@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-raffle-source-publication-false-skip.md`
+  - Scope: VK auto-import / Smart Update fanout from `schedule_event_update_tasks` into managed VK `vk_sync` and Telegram `tg_event_publish`, especially source posts that contain raffle/giveaway fragments alongside a real event.
+  - Must not regress: a valid event whose raw source mentions a ticket raffle/giveaway must still enqueue and publish managed VK + Telegram event posts when Smart Update has produced substantial cleaned non-giveaway event copy; prize-only giveaway sources without cleaned event copy may still be skipped when a non-giveaway alternative exists.
 - `INC-2026-06-12-future-event-quality-llm-first-repair.md`
   - Scope: Telegram Monitoring / VK auto-import / Smart Update future-event quality, including malformed dates, source-non-grounded venue fragments, false `Калининград Сити Джаз Клуб` defaults, `DD.MM` date markers leaking as times, and duplicate public cards across Telegraph/Telegram/VK.
   - Must not regress: active future rows must keep ISO dates only; source prose/default venue conflicts must route through LLM-first venue review instead of becoming public `location_name`; same real event clusters such as Westside `Род мужской`/`Солнцестояние`, Kantata/Agropark/Pianissimo duplicates must collapse while distinct same-time productions remain separate; confirmed bad public rows/pages/posts must be repaired or explicitly blocked by platform editing limits.
