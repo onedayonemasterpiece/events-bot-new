@@ -170,7 +170,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `POLL_TO_FORWARD_SOURCE_CHAT` – Telegram source chat for `forward_message`;
   default `@kldevents`.
 - `POLL_TO_FORWARD_DEBUG_START_HOUR` / `POLL_TO_FORWARD_DEBUG_END_HOUR` –
-  local daytime create window; defaults `10` and `19`.
+  local debug create window; production debug rollout uses `9` and `24`
+  (end hour is exclusive, so the last create slot is `23:00` local; the
+  quiet night window is `00:00-08:30`).
 - `POLL_TO_FORWARD_DEBUG_RESOLVE_AFTER_MINUTES` – delay before resolving debug
   polls; default `30`.
 - `POLL_TO_FORWARD_LLM_MODEL` – LLM model for topic and winner selection;

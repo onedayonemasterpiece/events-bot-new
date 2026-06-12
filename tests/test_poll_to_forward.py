@@ -43,7 +43,7 @@ def test_repost_intro_compacts_long_reason():
         telegraph_url="https://telegra.ph/demo",
     )
 
-    reason = text.split(" — ", 1)[1].split(".", 1)[0]
+    reason = text.split(" — ", 1)[1].split("\n\n", 1)[0]
     assert len(reason) <= 103
     assert " — " not in reason
     assert reason.endswith("...")
@@ -147,7 +147,7 @@ async def _seed_many_events(db: Database) -> None:
 
 def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
-    assert "Проголосуйте, на какую тему порекомендовать событие на завтра вечером." in pf.DEFAULT_POLL_QUESTION_VARIANTS
+    assert "Сегодня вечером проголосуйте, какую тематику взять для рекомендации на завтра." in pf.DEFAULT_POLL_QUESTION_VARIANTS
     banned = (
         "план звучит",
         "звучит лучше",

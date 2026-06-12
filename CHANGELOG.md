@@ -121,6 +121,10 @@
 - **Added: Poll to Repost cycle regression**: added an isolated five-cycle
   poll→resolve→reply→forward regression that verifies the selected event always
   belongs to the voted or tied topic before any live-channel smoke.
+- **Changed: Poll to Repost debug window**: production debug polls now create
+  from `09:00` through the `23:00 Europe/Kaliningrad` slot
+  (`POLL_TO_FORWARD_DEBUG_START_HOUR=9`, `POLL_TO_FORWARD_DEBUG_END_HOUR=24`),
+  keeping the quiet night window at `00:00-08:30`.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

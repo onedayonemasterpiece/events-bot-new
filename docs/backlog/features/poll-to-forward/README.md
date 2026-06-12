@@ -272,7 +272,9 @@ The resolver tick can be infrequent. Debug does not need tight polling; every
 Current debug defaults:
 
 - `ENABLE_POLL_TO_FORWARD_DEBUG=1` in `fly.toml`;
-- create ticks only in local hours `10 <= hour < 19`;
+- create ticks only in local hours `9 <= hour < 24` (`24` is exclusive, so
+  the last create slot is `23:00 Europe/Kaliningrad`; the quiet night window is
+  `00:00-08:30`);
 - scheduler checks at minutes `0,30`;
 - debug minimum eligible events: `3`;
 - debug minimum LLM options: `3`;
