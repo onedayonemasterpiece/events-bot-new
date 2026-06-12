@@ -1,10 +1,10 @@
 # INC-2026-06-11 Telegram Monitoring Recovery After Deploy Cancel
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring scheduled import / Kaggle recovery / Fly production deploy
 Opened: 2026-06-11
-Closed: —
+Closed: 2026-06-12
 Owners: events-bot operator + release agent
 Related incidents: `INC-2026-06-04-kraftmarket271-tg-monitoring-tpm-import-cancel.md`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -128,14 +128,19 @@ run. Recovery import `ops_run.id=2275` finished successfully.
 ## Release And Closure Evidence
 
 - deployed SHA: `31a44dfaf5b62b2f717369ac863e2400beaca33a` for the manual
-  VK auto-import unblock fix; current Afisha Engagement CTA guard release TBD.
-- deploy path: Fly production app `events-bot-new-wngqia`.
+  VK auto-import unblock fix; `0833a53670c93d208e3284485ce54de16d898cf4`
+  for the Afisha Engagement CTA guard release.
+- deploy path: Fly production app `events-bot-new-wngqia`, image
+  `events-bot-new-wngqia:deployment-01KTWKJCVMREK6W3AF29NJTRW5`, machine
+  version `1316`.
 - regression checks: `ops_run.id=2275` success with
   `messages_processed=165`, `events_imported=29`, `events_created=16`,
   `events_merged=13`, `errors_count=0`; `/data/kaggle_jobs.json` cleaned to an
   empty jobs list.
-- post-deploy verification: `/healthz` was OK after the unblock deploy; current
-  CTA guard deploy evidence to be added if deployed.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`,
+  `db=ok`, scheduler/tasks `ok`, and no issues after the CTA guard deploy;
+  post-deploy production DB probe showed no active `ops_run`, registry
+  `{"jobs":[]}`, and 31 recent Afisha Engagement shadow rows.
 
 ## Prevention
 
