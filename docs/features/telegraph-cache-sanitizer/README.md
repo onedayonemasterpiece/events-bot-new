@@ -101,7 +101,15 @@ Secrets:
 - Telethon: `TG_API_ID` + `TG_API_HASH` и одна из:
   - `TELEGRAM_AUTH_BUNDLE_S22` / `TELEGRAM_AUTH_BUNDLE_E2E` (предпочтительнее)
   - `TG_SESSION` / `TELEGRAM_SESSION` (fallback)
-- Выбор bundle‑ключа: `TELEGRAPH_CACHE_AUTH_BUNDLE_ENV` (если нужно форсировать, например `TELEGRAM_AUTH_BUNDLE_E2E`).
+- Выбор bundle‑ключа: `TELEGRAPH_CACHE_AUTH_BUNDLE_ENV`.
+  Production default должен оставаться `TELEGRAM_AUTH_BUNDLE_S22`; E2E bundle не
+  используется для remote Kaggle без явного аварийного override.
+- Перед Kaggle push санитайзер проходит общий remote Telegram session guard с
+  `remote_telegram_auth_scope`, а registry-запись `telegraph_cache_probe`
+  получает тот же scope. Поэтому он не может запустить вторую удалённую
+  Telethon session поверх уже занятого `TELEGRAM_AUTH_BUNDLE_S22`, но не
+  блокирует story jobs, если они используют отдельный
+  `TELEGRAM_AUTH_BUNDLE_STORY`.
 
 ## Важное про “битые” медиа (Supabase 404 / Catbox)
 

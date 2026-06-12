@@ -19,6 +19,7 @@ from db import Database
 from heavy_ops import heavy_operation
 from kaggle_registry import register_job, remove_job
 from ops_run import finish_ops_run, start_ops_run
+from remote_telegram_session import raise_if_remote_telegram_session_busy
 from source_parsing.telegram.split_secrets import encrypt_secret
 from video_announce.kaggle_client import KaggleClient
 
@@ -138,6 +139,17 @@ def _resolve_auth_bundle_env_key() -> str | None:
     if _get_env_value("TELEGRAM_AUTH_BUNDLE_E2E"):
         return "TELEGRAM_AUTH_BUNDLE_E2E"
     return None
+
+
+def remote_telegram_auth_scope() -> str:
+    bundle_env_key = _resolve_auth_bundle_env_key()
+    if bundle_env_key:
+        return bundle_env_key
+    if _get_env_value("TG_SESSION"):
+        return "TG_SESSION"
+    if _get_env_value("TELEGRAM_SESSION"):
+        return "TELEGRAM_SESSION"
+    return "TG_SESSION"
 
 
 def _build_secrets_payload() -> str:
@@ -1335,6 +1347,11 @@ async def run_telegraph_cache_sanitizer(
                     "targets_meta": targets_meta,
                 }
 
+            auth_scope = remote_telegram_auth_scope()
+            await raise_if_remote_telegram_session_busy(
+                current_job_type="telegraph_cache_probe",
+                current_auth_scope=auth_scope,
+            )
             await _update_kaggle_status("prepare", kaggle_kernel_ref, None)
             config = _build_config_payload(
                 run_id=run_id,
@@ -1366,7 +1383,12 @@ async def run_telegraph_cache_sanitizer(
                 await register_job(
                     "telegraph_cache_probe",
                     kernel_ref,
-                    meta={"run_id": run_id, "chat_id": chat_id, "pid": os.getpid()},
+                    meta={
+                        "run_id": run_id,
+                        "chat_id": chat_id,
+                        "pid": os.getpid(),
+                        "remote_telegram_auth_scope": auth_scope,
+                    },
                 )
             except Exception:
                 logger.debug("telegraph_cache: register_job failed (non-fatal)", exc_info=True)

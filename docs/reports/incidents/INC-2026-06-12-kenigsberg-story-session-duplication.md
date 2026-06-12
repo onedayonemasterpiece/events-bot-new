@@ -50,6 +50,7 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 - Changing `remote_telegram_session.py`.
 - Changing Kenigsberg story Kaggle handoff, story publish config, or poller cleanup.
 - Changing Telegram Monitoring / Guide Monitoring Kaggle auth bundle selection.
+- Changing Telegraph cache sanitizer Kaggle/Telethon probe auth or registry behavior.
 - Changing `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV`, `TG_MONITORING_AUTH_BUNDLE_ENV`, or `GUIDE_MONITORING_AUTH_BUNDLE_ENV`.
 
 ### Affected surfaces
@@ -61,12 +62,13 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 - `source_parsing/telegram/service.py`
 - `guide_excursions/service.py`
 - `guide_excursions/kaggle_service.py`
+- `telegraph_cache_sanitizer.py`
 - Fly production env/secrets and Kaggle encrypted datasets.
 
 ### Mandatory checks before closure or deploy
 
 - `python -m py_compile` for changed modules.
-- `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
+- `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_poller.py tests/test_video_announce_story_publish.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
 - Verify `kaggle_registry` entries include `remote_telegram_auth_scope` for new remote Telegram jobs.
 - Verify production story auth is not borrowing `TELEGRAM_AUTH_BUNDLE_E2E`.
 - For true parallel monitoring/story operation, set story publishing to a distinct `TELEGRAM_AUTH_BUNDLE_STORY`.
@@ -93,6 +95,8 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 - Added auth-source-scoped remote Telegram session guard.
 - Registered `kenigsberg_story` jobs with `remote_telegram_auth_scope`.
 - Registered Telegram Monitoring and Guide Monitoring jobs with `remote_telegram_auth_scope`.
+- Added Telegraph cache sanitizer preflight and `remote_telegram_auth_scope`
+  registry metadata for `telegraph_cache_probe`.
 - Added docs recommending `TELEGRAM_AUTH_BUNDLE_STORY` for story publishing and reserving `TELEGRAM_AUTH_BUNDLE_S22` for remote monitoring.
 
 ## Follow-up Actions

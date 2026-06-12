@@ -9,7 +9,14 @@
   story/monitoring parallelism on separate bundles. Tracks
   `INC-2026-06-12-kenigsberg-story-session-duplication` and is covered by
   `tests/test_remote_telegram_session.py`, `tests/test_video_announce_poller.py`,
-  `tests/test_video_announce_story_publish.py`, and `tests/test_kenigsberg_stories.py`.
+  `tests/test_video_announce_story_publish.py`,
+  `tests/test_telegraph_cache_session_guard.py`, and
+  `tests/test_kenigsberg_stories.py`.
+- **Fixed: Telegraph cache remote Telegram session guard**:
+  `telegraph_cache_probe` now performs the same auth-scope preflight as
+  Telegram/Guide monitoring and writes `remote_telegram_auth_scope` to
+  `kaggle_registry`, closing the remaining remote Telethon/Kaggle entry point
+  that could otherwise borrow an already active session.
 - **Fixed: VK festival carousel CTA arrow clearance**: final CTA cards now draw
   the footer/rule line with a central gap around the down arrow, avoiding the
   visible line/arrow intersection while keeping the large CTA cue. Covered by
