@@ -622,6 +622,62 @@ def test_theme_like_copy_does_not_use_bad_neuter_template():
     assert any("Отметь лайком, если выбираешь симфоническую музыку." == text for text in seen)
 
 
+def test_lecture_art_theme_overrides_generic_history_wording():
+    event = Event(
+        title="Лекция «Моне / Мане: погружение в мир импрессионизма»",
+        description=(
+            "Лекция предлагает взглянуть на эпоху художественных революций через творчество "
+            "двух фигур французского искусства. В описании есть история людей, но центр темы — "
+            "живопись, картины и наследие импрессионизма."
+        ),
+        date="2026-06-20",
+        time="16:00",
+        location_name="Арт-пространство",
+        source_text="",
+        event_type="лекция",
+    )
+
+    assert aeg._extract_theme(event, "lecture") == "лекции про искусство"
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"art-history-priority-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(300)
+    }
+
+    assert all("истори" not in text.casefold() for text in seen)
+    assert any("искусств" in text.casefold() or "живопис" in text.casefold() for text in seen)
+
+
+def test_workshop_art_theme_uses_art_not_generic_workshop_only():
+    event = Event(
+        title="Иммерсивный мастер-класс «Слушай и пиши: Моне»",
+        description=(
+            "Участники создадут работу в стиле Клода Моне, поговорят об искусстве, "
+            "живописи и принципах импрессионизма."
+        ),
+        date="2026-06-20",
+        time="11:00",
+        location_name="Арт-пространство",
+        source_text="",
+        event_type="мастер-класс",
+    )
+
+    assert aeg._extract_theme(event, "workshop") == "живопись"
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"workshop-art-theme-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(300)
+    }
+
+    assert any("живопис" in text.casefold() or "искусств" in text.casefold() for text in seen)
+
+
 @pytest.mark.asyncio
 async def test_llm_cta_text_rewrites_risky_theme_comment(monkeypatch):
     event = Event(

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement art-topic CTA priority**: lecture and workshop
+  CTA theme extraction now prefers explicit art/painting/impressionism subjects
+  over broad `история` wording, so art-history events do not get generic
+  `лекции по истории` copy. Covered by `tests/test_afishaengagement.py`.
 - **Added: Afisha Engagement public canary mode**: `afishaengagement`
   activities can now publish real VK engagement posts via
   `publish_mode="public"` while dice misses fall through to lower-priority

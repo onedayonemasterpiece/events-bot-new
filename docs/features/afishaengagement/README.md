@@ -153,6 +153,11 @@ matching: narrow cues such as `орган` may match real organ music forms, but
 not match unrelated words such as `организаторы`. If a theme is uncertain, the
 copy falls back to the event type instead of inventing a specific music/cinema
 topic.
+When a lecture or workshop text contains both broad `история` wording and a
+strong art subject (`искусство`, `живопись`, `импрессионизм`, `художник`,
+`картина`), art/painting wins as the CTA theme. This prevents art-history
+lectures and painting workshops from collapsing to generic `лекции по истории`
+copy when the event is really about art.
 Festival context is intentionally preserved as an umbrella, but it must be tied
 to the concrete program, project, or topic. For example, `80 историй о главном`
 uses history/project wording, and the educational program of `Кантата` uses
