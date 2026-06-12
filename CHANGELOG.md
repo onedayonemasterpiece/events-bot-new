@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement carousel/poster and CTA specificity polish**:
+  `hook_swipe_cta` now preserves the full source poster in its hook card instead
+  of center-cropping dense posters such as `Шахматы` / `Краны и стаканы`, and
+  carousel format selection is weighted lower by default in mixed-format
+  configs. CTA mechanic badges now use a heart for likes, a downward arrow for
+  comments, and a right arrow only for repost-style actions. CTA copy can ground
+  cinema-club questions such as Westside Movie, artist-work likes such as
+  Elvis Presley, and LLM auto-rewrites generic comment prompts into more
+  event-specific questions. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement fresh shadow audit regressions**: tightened CTA
   event-type guardrails from a 31-post VK shadow audit so theatre backstage
   excursions no longer get zoo copy, День России programs do not get festival

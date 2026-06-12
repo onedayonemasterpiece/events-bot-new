@@ -116,9 +116,16 @@ not invent a concept from vague theme or venue hints.
 CTA text generation is hybrid. The renderer and visual plan stay deterministic,
 but `llm_text_mode=auto` runs a compact LLM CTA-writer only for risky copy:
 theme-heavy comment text, forbidden phrases, or event-type conflicts such as a
-cinema post getting theatre wording. Simple safe ready-made CTAs can stay
-deterministic. If the LLM is unavailable or returns invalid copy, guardrails
-fall back to a generic safe CTA instead of publishing an awkward template.
+cinema post getting theatre wording, plus overly generic comment questions such
+as `что для вас главное` / `что цепляет вас в таких событиях`. Simple safe
+ready-made CTAs can stay deterministic. Comment CTAs should ask a concrete
+question about the event, poster topic, organizer, artist, work, or explicit
+idea when those facts are present. Cinema club events may ask whether viewers
+have already attended that club's screenings, and artist/persona events may ask
+about the artist's creative work, including historical artists, but only when
+the name is grounded in event text. If the LLM is unavailable or returns
+invalid copy, guardrails fall back to a generic safe CTA instead of publishing
+an awkward template.
 LLM CTA output is also post-filtered for unsupported concrete references: for
 example, an LLM suggestion about a zoo is rejected when the event text does not
 actually mention a zoo, zoologists, animals, veterinary care, enclosures, or a
@@ -224,8 +231,13 @@ Implemented templates:
 
 - `hook_swipe_cta`: creates a two-card carousel. The first card keeps the poster
   readable in an upper band and places the hook in a separate engagementcard-
-  style lower block with lowercase `листай` plus a right arrow. The second card
-  is a deterministic CTA card with a rounded downward arrow.
+  style lower block with lowercase `листай` plus a right arrow. The poster is
+  fitted with contain-style scaling so dense source posters keep all edge
+  lettering instead of being center-cropped. The second card is a deterministic
+  CTA card with a rounded downward arrow. In mixed `formats` configurations,
+  `hook_swipe_cta` is weighted as a rarer format by default; use
+  `format_weights` / `template_weights` or a single-format list when a carousel
+  batch is intentional.
 
 The renderer uses engagementcard principles from guide excursion monitoring:
 
@@ -243,7 +255,9 @@ The renderer uses engagementcard principles from guide excursion monitoring:
   clearance from the diagonal seam; when the safe spacing cannot be met, the
   renderer fails over instead of publishing a cramped bottom block.
 - mechanic badges are rendered as outline pills on the CTA surface, using the
-  same signal color as the rim/rail, to avoid a cheap sticker look.
+  same signal color as the rim/rail, to avoid a cheap sticker look. Badge icons
+  are mechanic-aware: likes use a drawn red heart, comments use a small downward
+  arrow, and reposts keep a right arrow.
 - contrast-first palettes based on
   `docs/backlog/features/guide-excursions-monitoring/vk_hook_card_palettes.json`;
 - poster-aware CTA color separation: the scorer evaluates the local seam-side

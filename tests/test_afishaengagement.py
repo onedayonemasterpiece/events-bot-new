@@ -1146,6 +1146,12 @@ def test_comments_badge_is_action_phrase():
     assert aeg.MECHANIC_BADGES["comments"] == "НАПИШИ КОММЕНТАРИЙ"
 
 
+def test_badge_icons_match_action_mechanics():
+    assert aeg._badge_trailing_icon("likes") == "heart"
+    assert aeg._badge_trailing_icon("comments") == "down_arrow"
+    assert aeg._badge_trailing_icon("reposts") == "right_arrow"
+
+
 def test_hook_text_uses_prepositional_plural():
     event = Event(
         title="Концерт камерной музыки",
@@ -1160,6 +1166,135 @@ def test_hook_text_uses_prepositional_plural():
     plan = aeg.build_engagement_plan(event, seed="hook-case", config={"formats": ["hook_swipe_cta"]})
 
     assert plan.hook_text == "Есть вопрос к тем, кто уже был на таких концертах"
+
+
+def test_hook_swipe_preserves_full_horizontal_poster_edges():
+    poster = Image.new("RGB", (800, 450), (30, 30, 30))
+    for x in range(0, 90):
+        for y in range(poster.height):
+            poster.putpixel((x, y), (240, 20, 30))
+    for x in range(710, 800):
+        for y in range(poster.height):
+            poster.putpixel((x, y), (20, 80, 240))
+    out = io.BytesIO()
+    poster.save(out, format="PNG")
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="hook_swipe_cta",
+        palette_id="midnight_gold",
+        cta_text="Были на таких событиях? Напишите.",
+        hook_text="Кто уже был?",
+        event_type="other",
+        has_persona=False,
+        has_festival=False,
+        seed="hook-preserve-poster-edges",
+    )
+
+    hook = aeg.render_plan_images(out.getvalue(), plan)[0]
+    rendered = Image.open(io.BytesIO(hook.data)).convert("RGB")
+    band_mid_y = int(1350 * 0.58 / 2)
+
+    assert rendered.getpixel((18, band_mid_y))[0] > 180
+    assert rendered.getpixel((1062, band_mid_y))[2] > 180
+
+
+def test_hook_swipe_is_rare_when_formats_are_mixed():
+    formats = ["right_extension", "bottom_overlay", "bottom_extension", "hook_swipe_cta"]
+    selected = [
+        aeg._select_template_id(formats, {}, f"format-weight-{idx}")
+        for idx in range(500)
+    ]
+
+    assert selected.count("hook_swipe_cta") < 90
+    assert aeg._select_template_id(["hook_swipe_cta"], {}, "single-format") == "hook_swipe_cta"
+
+
+def test_cinema_club_comment_cta_can_name_westside_movie():
+    event = Event(
+        title="Киноклуб Westside Movie: специальный показ",
+        description="Westside Movie приглашает на авторский кинопоказ.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="кинопоказ",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"westside-movie-{idx}",
+            config={"mechanic_weights": {"comments": 100}},
+        ).cta_text
+        for idx in range(120)
+    }
+
+    assert any("Westside Movie" in text and "показах" in text for text in seen)
+
+
+def test_concert_persona_can_come_from_artist_creative_phrase():
+    event = Event(
+        title="Вечер музыки Элвиса Пресли",
+        description="Разговор и концерт о творчестве Элвиса Пресли.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        event_type="концерт",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"elvis-persona-{idx}",
+            config={"mechanic_weights": {"likes": 100}},
+        ).cta_text
+        for idx in range(120)
+    }
+
+    assert aeg._extract_persona(event) == "Элвиса Пресли"
+    assert any("творчество Элвиса Пресли" in text for text in seen)
+
+
+@pytest.mark.asyncio
+async def test_generic_comment_question_is_rewritten_to_event_specific(monkeypatch):
+    event = Event(
+        title="Краны и стаканы",
+        description="Выставка о промышленном дизайне и городской среде.",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Галерея",
+        source_text="",
+        event_type="выставка",
+    )
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="right_extension",
+        palette_id="midnight_gold",
+        cta_text="Что цепляет вас в таких выставках? Поделитесь.",
+        hook_text="Кто любит выставки?",
+        event_type="exhibition",
+        has_persona=False,
+        has_festival=False,
+        seed="generic-comment-rewrite",
+    )
+
+    async def fake_ask_4o(prompt, **kwargs):
+        assert "конкретный вопрос" in prompt
+        return '{"cta_text":"Что в выставке «Краны и стаканы» цепляет сильнее?","hook_text":"Кому близок промышленный дизайн?"}'
+
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    assert aeg._should_run_llm_text(event, plan, {}) is True
+    rewritten, _elapsed, provider = await aeg.build_llm_cta_text(
+        event,
+        plan=plan,
+        config={},
+        vision=aeg.PosterVisionSummary(provider="test", confidence=0.8),
+    )
+
+    assert provider == "llm_text"
+    assert rewritten.cta_text == "Что в выставке «Краны и стаканы» цепляет сильнее?"
 
 
 def test_render_for_publish_retries_with_safe_right_extension(monkeypatch):

@@ -499,6 +499,11 @@ MECHANIC_BADGES = {
     "likes": "ЛАЙК",
     "reposts": "РЕПОСТ",
 }
+MECHANIC_BADGE_ICONS = {
+    "comments": "down_arrow",
+    "likes": "heart",
+    "reposts": "right_arrow",
+}
 MECHANIC_EYEBROWS = {
     "comments": "К ВАМ ВОПРОС",
     "likes": "ОТМЕТЬТЕ ЛАЙКОМ",
@@ -885,21 +890,36 @@ def _event_type_key(event: Event) -> str:
     return "other"
 
 
+def _clean_persona_value(value: str) -> str | None:
+    value = re.sub(r"\s+", " ", str(value or "").strip(" .,!?:;—-"))
+    value = re.sub(
+        r"\s+(?:и|или|на|в|с|от|для|по|про|где|котор[а-яё]+|что|как)\b.*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip(" .,!?:;—-")
+    if 2 <= len(value) <= 60:
+        return value
+    return None
+
+
 def _extract_persona(event: Event) -> str | None:
     text = f"{event.title or ''}\n{event.description or ''}\n{event.search_digest or ''}"
     patterns = [
-        r"(?:лекци[яю]|встреч[ау]|концерт|спектакль)\s+(?:с|от)\s+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})",
-        r"(?:спикер|лектор|артист|ведущ[аи]й)[:\s]+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})",
+        r"(?:лекци[яю]|встреч[ау]|концерт|спектакль)[ \t]+(?:с|от)[ \t]+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+(?:[ \t]+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+){0,2})",
+        r"(?:спикер|лектор|артист|ведущ[аи]й)[: \t]+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+(?:[ \t]+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+){0,2})",
+        r"(?:творчеств[оа]|песн[ияи]|музык[аи])[ \t]+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+(?:[ \t]+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё.'-]+){0,2})",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
-            value = match.group(1).strip()
+            value = _clean_persona_value(match.group(1))
+            if not value:
+                continue
             before = text[max(0, match.start(1) - 4) : match.start(1)].casefold()
             if re.search(r"\bс\s*$", before) and _looks_instrumental_persona(value):
                 continue
-            if len(value) <= 60:
-                return value
+            return value
     return None
 
 
@@ -1177,12 +1197,52 @@ def _extract_idea_phrase(event: Event, event_type: str) -> str | None:
     return None
 
 
+def _clean_organizer_name(value: str) -> str | None:
+    value = re.sub(r"\s+", " ", str(value or "").strip(" .,!?:;—-"))
+    value = re.sub(
+        r"\s+(?:приглашает|показывает|present|представляет|организует|устраивает|и|на|в|с)\b.*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip(" .,!?:;—-")
+    if 3 <= len(value) <= 42:
+        return value
+    return None
+
+
+def _extract_cinema_club(event: Event) -> str | None:
+    text = "\n".join(
+        [
+            str(event.title or ""),
+            str(event.description or ""),
+            str(event.source_text or ""),
+            str(event.search_digest or ""),
+            str(event.location_name or ""),
+        ]
+    )
+    if re.search(r"\bwestside\s+movie\b", text, flags=re.IGNORECASE):
+        return "Westside Movie"
+    patterns = [
+        r"(?:киноклуб[а-яё]*|кино\s*клуб[а-яё]*)\s+[«\"]?([A-ZА-ЯЁ0-9][A-Za-zА-Яа-яЁё0-9&.' -]{2,42})",
+        r"(?:клуб[а-яё]*)\s+[«\"]?([A-ZА-ЯЁ0-9][A-Za-zА-Яа-яЁё0-9&.' -]{2,42})\s+(?:приглашает|показывает|представляет)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        value = _clean_organizer_name(match.group(1))
+        if value:
+            return value
+    return None
+
+
 def _templates_for(
     event_type: str,
     persona: str | None,
     festival: str | None,
     theme: str | None = None,
     idea: str | None = None,
+    cinema_club: str | None = None,
 ) -> dict[str, list[str]]:
     topic = "{T}"
     topic_acc = "{TA}"
@@ -1256,6 +1316,14 @@ def _templates_for(
             ]
         )
         templates["reposts"].append("Поделись с тем, с кем смотришь фильмы.")
+        if cinema_club:
+            templates["comments"] = [
+                "Были на показах киноклуба {ORG}? Расскажите.",
+                "Что запомнилось на показах киноклуба {ORG}?",
+            ] + templates["comments"]
+            templates["likes"] = [
+                "Лайк, если нравится киноклуб {ORG}.",
+            ] + templates["likes"]
     elif event_type == "exhibition":
         templates["comments"] = [
             "Какие выставки вас вдохновляют? Напишите в комментариях.",
@@ -1587,9 +1655,11 @@ def _resolve_template(
     festival_interest: str | None = None,
     festival_follow: str | None = None,
     idea: str | None = None,
+    cinema_club: str | None = None,
 ) -> str | None:
     slots = {
         "N": persona,
+        "ORG": cinema_club,
         "F": festival,
         "FFROM": festival_from,
         "FON": festival_on,
@@ -1624,6 +1694,51 @@ def _configured_formats(config: dict[str, Any]) -> list[str]:
     return formats
 
 
+DEFAULT_FORMAT_WEIGHTS = {
+    "right_extension": 42,
+    "bottom_extension": 30,
+    "bottom_overlay": 18,
+    "hook_swipe_cta": 10,
+}
+
+
+def _select_template_id(formats: Sequence[str], config: dict[str, Any], seed: str) -> str:
+    if not formats:
+        return "right_extension"
+    if len(formats) == 1:
+        return formats[0]
+    raw_weights = config.get("format_weights") or config.get("template_weights") or {}
+    weights: dict[str, float] = {}
+    if isinstance(raw_weights, dict):
+        for template_id, value in raw_weights.items():
+            key = str(template_id).strip()
+            if key not in SUPPORTED_TEMPLATE_IDS:
+                continue
+            try:
+                weight = float(value)
+            except Exception:
+                continue
+            if weight > 0:
+                weights[key] = weight
+    weighted: list[tuple[str, float]] = []
+    for template_id in formats:
+        weight = weights.get(template_id)
+        if weight is None:
+            weight = float(DEFAULT_FORMAT_WEIGHTS.get(template_id, 1))
+        if weight > 0:
+            weighted.append((template_id, weight))
+    if not weighted:
+        return formats[int(stable_unit_interval(seed + ":format") * len(formats)) % len(formats)]
+    total = sum(weight for _template_id, weight in weighted)
+    roll = stable_unit_interval(seed + ":format") * total
+    upto = 0.0
+    for template_id, weight in weighted:
+        upto += weight
+        if roll < upto:
+            return template_id
+    return weighted[-1][0]
+
+
 def _vision_has_sparse_poster_text(vision: PosterVisionSummary | None) -> bool:
     if vision is None:
         return False
@@ -1645,6 +1760,7 @@ def build_engagement_plan(
     festival = _effective_festival(event)
     theme = _extract_theme(event, event_type)
     idea = _extract_idea_phrase(event, event_type)
+    cinema_club = _extract_cinema_club(event) if event_type == "cinema" else None
     festival_from = _festival_from_phrase(event, festival)
     festival_on = _festival_on_phrase(festival)
     festival_context = _festival_context_phrase(event, festival, event_type)
@@ -1667,7 +1783,7 @@ def build_engagement_plan(
         bag = ["comments", "likes", "reposts"]
     rnd.shuffle(bag)
 
-    templates = _templates_for(event_type, persona, festival, theme, idea)
+    templates = _templates_for(event_type, persona, festival, theme, idea, cinema_club)
     configured_templates = _configured_templates_for(config, event_type)
     for configured_mechanic, configured_values in configured_templates.items():
         templates.setdefault(configured_mechanic, [])
@@ -1699,6 +1815,7 @@ def build_engagement_plan(
                 festival_interest=festival_interest,
                 festival_follow=festival_follow,
                 idea=idea,
+                cinema_club=cinema_club,
             )
             if resolved and len(resolved) <= 95:
                 cta_text = resolved
@@ -1714,7 +1831,7 @@ def build_engagement_plan(
     palette_ids = [pid for pid in palette_ids if pid in PALETTES] or ["slate_warm_white"]
     palette_id = palette_ids[int(stable_unit_interval(seed + ":palette") * len(palette_ids)) % len(palette_ids)]
     formats = _configured_formats(config)
-    template_id = formats[int(stable_unit_interval(seed + ":format") * len(formats)) % len(formats)]
+    template_id = _select_template_id(formats, config, seed)
     if vision and vision.confidence < float(config.get("right_extension_confidence_min", 0.55)):
         if "right_extension" in formats:
             template_id = "right_extension"
@@ -1856,6 +1973,20 @@ def _text_has_unsupported_event_reference(event: Event, text: str | None) -> boo
     return False
 
 
+def _cta_text_is_generic_comment_question(text: str, mechanic: str) -> bool:
+    if mechanic != "comments":
+        return False
+    lower = str(text or "").casefold()
+    generic_fragments = (
+        "что для вас главное",
+        "что вам ближе в таких",
+        "что ждёте от",
+        "что цепляет вас в таких",
+        "какие темы таких",
+    )
+    return any(fragment in lower for fragment in generic_fragments)
+
+
 def _safe_generic_hook(event_type: str) -> str:
     if event_type == "cinema":
         return "Кто любит кинопоказы?"
@@ -1956,6 +2087,8 @@ def _should_run_llm_text(event: Event, plan: EngagementPlan, config: dict[str, A
         return True
     if _text_has_unsupported_event_reference(event, plan.hook_text):
         return True
+    if _cta_text_is_generic_comment_question(plan.cta_text, plan.mechanic):
+        return True
     theme = _extract_theme(event, plan.event_type)
     if theme and plan.mechanic == "comments" and theme.casefold() in plan.cta_text.casefold():
         return True
@@ -1977,12 +2110,19 @@ async def build_llm_cta_text(
         if ask_4o is None:
             return plan, 0, "fallback_no_ask_4o"
         theme = _extract_theme(event, plan.event_type)
+        cinema_club = _extract_cinema_club(event) if plan.event_type == "cinema" else None
         prompt = (
             "Ты пишешь финальный CTA-текст для карточки афиши VK. "
             "Layout уже выбран кодом; не описывай дизайн и не меняй механику. "
             "Верни только JSON без markdown: {\"cta_text\":\"...\",\"hook_text\":\"...\"}.\n"
             "Правила: cta_text максимум 95 символов; живой естественный русский; "
             "не используй канцелярит, не склоняй машинно готовые куски; обращение на ты допустимо. "
+            "Для механики comments задай цепляющий, но конкретный вопрос по этому событию: "
+            "про тему афиши, формат, организатора, артиста, произведение или идею события, если они явно есть в данных. "
+            "Не оставляй общий вопрос вида «что цепляет вас в таких событиях» без конкретики. "
+            "Если кинопоказ делает киноклуб, можно спросить, были ли уже на показах этого киноклуба. "
+            "Если событие связано с конкретным артистом или его творчеством, можно спросить про отношение к его творчеству, "
+            "включая давно умерших известных артистов, но только если имя явно есть в данных. "
             "Запрещены фразы: «Были на похожем событии», «поддержи формат», «поддержка формата», "
             "«из темы ...». Для кинопоказа не пиши про спектакль; для спектакля не пиши про кинопоказ. "
             "День России, День Победы и другие праздники не называй фестивалями. "
@@ -2000,7 +2140,8 @@ async def build_llm_cta_text(
             f"Seed: {plan.seed}\n"
             f"Механика: {plan.mechanic}; текущий черновик: {plan.cta_text!r}; hook: {plan.hook_text!r}.\n"
             f"Событие: title={event.title!r}; normalized_type={plan.event_type!r}; stored_type={event.event_type!r}; "
-            f"festival={event.festival!r}; theme={theme!r}; date={event.date!r}; place={event.location_name!r}; "
+            f"festival={event.festival!r}; theme={theme!r}; cinema_club={cinema_club!r}; "
+            f"date={event.date!r}; place={event.location_name!r}; "
             f"description={(event.description or '')[:700]!r}; search_digest={(event.search_digest or '')[:400]!r}; "
             f"poster_text={(vision.text if vision else '')[:500]!r}."
         )
@@ -2060,6 +2201,10 @@ async def build_llm_engagement_plan(
             "Правила: русский текст, обращение на ты допустимо для лайков/репостов; "
             "cta_text максимум 95 символов; без плейсхолдеров, без ФИО если ФИО нет в данных; "
             "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension или hook_swipe_cta; "
+            "для comments лучше задать конкретный вопрос по событию, организатору, артисту, теме афиши или идее события, "
+            "а не общий вопрос про «такие события»; "
+            "если кинопоказ делает киноклуб, можно спросить, были ли уже на его показах; "
+            "если явно указан артист/автор, можно спросить про отношение к его творчеству; "
             "фестивальный зонтик можно сохранять, но текст должен быть про программу/проект/тему события; "
             "не пиши «ждёшь/ждёте фестиваля», особенно для уже идущего фестиваля; "
             "идея события вроде концерта на воде или кинопоказа под открытым небом допустима только при прямом сигнале; "
@@ -2889,6 +3034,20 @@ def _draw_down_arrow(
     _round_line(draw, [(cx + head, y1 - head), (cx, y1)], color, width)
 
 
+def _badge_trailing_icon(mechanic: str) -> str:
+    return MECHANIC_BADGE_ICONS.get(mechanic, "right_arrow")
+
+
+def _badge_icon_reserve(icon: str | None, scale: float) -> int:
+    if not icon:
+        return 0
+    if icon == "heart":
+        return int(44 * scale)
+    if icon == "down_arrow":
+        return int(38 * scale)
+    return int(46 * scale)
+
+
 def _draw_tracking_text(
     draw: Any,
     xy: tuple[int, int],
@@ -2967,19 +3126,21 @@ def _fit_badge_font(
     max_width: int,
     preferred_px: int | None = None,
     trailing_arrow: bool = False,
+    trailing_icon: str | None = None,
 ) -> Any:
     from PIL import Image, ImageDraw
 
     preferred = preferred_px or max(20, int(34 * scale))
     minimum = max(14, int(20 * scale))
     pad_x = int(28 * scale)
-    arrow_reserve = int(46 * scale) if trailing_arrow else 0
+    icon = trailing_icon or ("right_arrow" if trailing_arrow else None)
+    icon_reserve = _badge_icon_reserve(icon, scale)
     probe = Image.new("RGB", (10, 10))
     draw = ImageDraw.Draw(probe)
     for size in range(preferred, minimum - 1, -2):
         font = _load_font("Cygre-Bold.ttf", size)
         bbox = _text_bbox(draw, (0, 0), label, font)
-        if (bbox[2] - bbox[0]) + pad_x * 2 + arrow_reserve <= max_width:
+        if (bbox[2] - bbox[0]) + pad_x * 2 + icon_reserve <= max_width:
             return font
     return _load_font("Cygre-Bold.ttf", minimum)
 
@@ -2998,6 +3159,7 @@ def _draw_badge_on_image(
     max_width: int | None = None,
     button: bool = False,
     trailing_arrow: bool = False,
+    trailing_icon: str | None = None,
 ) -> tuple[Any, int, int]:
     from PIL import ImageDraw
 
@@ -3005,9 +3167,10 @@ def _draw_badge_on_image(
     bbox = _text_bbox(draw, (0, 0), label, font)
     label_w = bbox[2] - bbox[0]
     pad_x = int(28 * scale)
-    arrow_reserve = int(46 * scale) if trailing_arrow else 0
+    icon = trailing_icon or ("right_arrow" if trailing_arrow else None)
+    icon_reserve = _badge_icon_reserve(icon, scale)
     badge_h = int(58 * scale)
-    badge_w = label_w + pad_x * 2 + arrow_reserve
+    badge_w = label_w + pad_x * 2 + icon_reserve
     if max_width:
         badge_w = min(max_width, badge_w)
         if label_w + pad_x * 2 > badge_w:
@@ -3031,10 +3194,10 @@ def _draw_badge_on_image(
             aa_scale=4,
         )
     draw = ImageDraw.Draw(image)
-    text_area_w = badge_w - arrow_reserve
+    text_area_w = badge_w - icon_reserve
     text_x = x + max(0, int((text_area_w - label_w) / 2))
     draw.text((text_x, y + int(11 * scale)), label, font=font, fill=fg)
-    if trailing_arrow:
+    if icon == "right_arrow":
         arrow_gap = int(10 * scale)
         arrow_x0 = x + text_area_w - int(2 * scale)
         arrow_x1 = x + badge_w - pad_x + int(3 * scale)
@@ -3048,6 +3211,23 @@ def _draw_badge_on_image(
             width=max(3, int(4 * scale)),
             head=max(7, int(8 * scale)),
         )
+    elif icon == "down_arrow":
+        arrow_x = x + badge_w - pad_x + int(2 * scale)
+        arrow_top = y + int(16 * scale)
+        arrow_bottom = y + badge_h - int(14 * scale)
+        _draw_down_arrow(
+            draw,
+            arrow_x,
+            arrow_top,
+            arrow_bottom,
+            fg,
+            width=max(3, int(4 * scale)),
+            head=max(7, int(7 * scale)),
+        )
+    elif icon == "heart":
+        heart_x = x + badge_w - pad_x - int(25 * scale)
+        heart_y = y + int(6 * scale)
+        _draw_heart_icon(draw, heart_x, heart_y, int(42 * scale))
     return image, badge_w, badge_h
 
 
@@ -3218,7 +3398,8 @@ def render_right_extension(
     if best_fit is None:
         raise ValueError("text_overflow")
     _font_px, _neg_cta_w, width, safe_x, safe_w, fit = best_fit
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
+    badge_icon = _badge_trailing_icon(plan.mechanic)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_icon=badge_icon)
 
     canvas = Image.new("RGB", (width, height), bg)
     canvas.paste(poster, (0, 0))
@@ -3276,7 +3457,7 @@ def render_right_extension(
         scale=scale,
         max_width=safe_w,
         button=True,
-        trailing_arrow=True,
+        trailing_icon=badge_icon,
     )
     draw = ImageDraw.Draw(canvas)
 
@@ -3346,7 +3527,8 @@ def _render_bottom_extension(
     block_h = 0
     safe_x = max(36, int(54 * scale))
     safe_w = width - safe_x * 2
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
+    badge_icon = _badge_trailing_icon(plan.mechanic)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_icon=badge_icon)
     badge_h = int(58 * scale)
     rail_w = 0
     rail_gap = 0
@@ -3434,7 +3616,10 @@ def _render_bottom_extension(
     draw = ImageDraw.Draw(canvas)
     badge_probe = ImageDraw.Draw(canvas)
     badge_label_bbox = _text_bbox(badge_probe, (0, 0), badge, badge_font)
-    badge_w = min(safe_w, (badge_label_bbox[2] - badge_label_bbox[0]) + int(28 * scale) * 2 + int(46 * scale))
+    badge_w = min(
+        safe_w,
+        (badge_label_bbox[2] - badge_label_bbox[0]) + int(28 * scale) * 2 + _badge_icon_reserve(badge_icon, scale),
+    )
     badge_x = safe_x + max(0, safe_w - badge_w)
     canvas, _, _ = _draw_badge_on_image(
         canvas,
@@ -3448,7 +3633,7 @@ def _render_bottom_extension(
         scale=scale,
         max_width=safe_w,
         button=True,
-        trailing_arrow=True,
+        trailing_icon=badge_icon,
     )
     draw = ImageDraw.Draw(canvas)
 
@@ -3533,7 +3718,8 @@ def _render_bottom_overlay(
     safe_x = max(56, int(72 * scale))
     safe_w = width - safe_x * 2
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_arrow=True)
+    badge_icon = _badge_trailing_icon(plan.mechanic)
+    badge_font = _fit_badge_font(badge, scale=scale, max_width=safe_w, trailing_icon=badge_icon)
     badge_h = int(58 * scale)
     rail_w = max(4, int(6 * scale))
     rail_gap = int(24 * scale)
@@ -3596,7 +3782,10 @@ def _render_bottom_overlay(
     )
     draw = ImageDraw.Draw(canvas)
     badge_bbox = _text_bbox(draw, (0, 0), badge, badge_font)
-    badge_w = min(safe_w, (badge_bbox[2] - badge_bbox[0]) + int(28 * scale) * 2 + int(46 * scale))
+    badge_w = min(
+        safe_w,
+        (badge_bbox[2] - badge_bbox[0]) + int(28 * scale) * 2 + _badge_icon_reserve(badge_icon, scale),
+    )
     badge_x = safe_x + max(0, safe_w - badge_w)
     canvas, _, _ = _draw_badge_on_image(
         canvas,
@@ -3610,7 +3799,7 @@ def _render_bottom_overlay(
         scale=scale,
         max_width=safe_w,
         button=True,
-        trailing_arrow=True,
+        trailing_icon=badge_icon,
     )
     draw = ImageDraw.Draw(canvas)
 
@@ -3698,13 +3887,47 @@ def _render_hook_swipe_cta(
             render_ms=int((time.monotonic() - started) * 1000),
         )
 
+    def poster_band_preserve_full_image() -> Image.Image:
+        from PIL import ImageFilter
+
+        band_size = (card_w, band_h)
+        background = ImageOps.fit(
+            poster,
+            band_size,
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        ).filter(ImageFilter.GaussianBlur(radius=24))
+        tint = Image.new("RGB", band_size, bg)
+        band = Image.blend(background.convert("RGB"), tint, 0.42)
+        resize_scale = min(card_w / max(1, poster.width), band_h / max(1, poster.height))
+        contained = poster.resize(
+            (max(1, int(poster.width * resize_scale)), max(1, int(poster.height * resize_scale))),
+            Image.Resampling.LANCZOS,
+        )
+        poster_x = int((card_w - contained.width) / 2)
+        poster_y = int((band_h - contained.height) / 2)
+        shadow_pad = max(6, int(12 * scale))
+        shadow_box = (
+            poster_x - shadow_pad,
+            poster_y - shadow_pad,
+            poster_x + contained.width + shadow_pad,
+            poster_y + contained.height + shadow_pad,
+        )
+        shadow = Image.new("RGBA", band_size, (0, 0, 0, 0))
+        shadow_draw = ImageDraw.Draw(shadow)
+        shadow_draw.rounded_rectangle(shadow_box, radius=max(2, int(8 * scale)), fill=(0, 0, 0, 76))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=max(5, int(10 * scale))))
+        band = Image.alpha_composite(band.convert("RGBA"), shadow).convert("RGB")
+        band.paste(contained, (poster_x, poster_y))
+        return band
+
     hook_text = _sanitize_cta_text(plan.hook_text or "Есть вопрос к тем, кто уже был?")
     hook = Image.new("RGB", (card_w, card_h), bg)
     draw = ImageDraw.Draw(hook)
     safe_x = int(86 * scale)
     safe_w = card_w - safe_x * 2
     band_h = int(card_h * 0.58)
-    poster_band = ImageOps.fit(poster, (card_w, band_h), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+    poster_band = poster_band_preserve_full_image()
     hook.paste(poster_band, (0, 0))
 
     block_top = band_h
@@ -3786,7 +4009,14 @@ def _render_hook_swipe_cta(
 
     cta = Image.new("RGB", (card_w, card_h), bg)
     badge = MECHANIC_BADGES.get(plan.mechanic, "CTA")
-    badge_font = _fit_badge_font(badge, scale=1.0, max_width=card_w - 172, preferred_px=42, trailing_arrow=True)
+    badge_icon = _badge_trailing_icon(plan.mechanic)
+    badge_font = _fit_badge_font(
+        badge,
+        scale=1.0,
+        max_width=card_w - 172,
+        preferred_px=42,
+        trailing_icon=badge_icon,
+    )
     cta, _, _ = _draw_badge_on_image(
         cta,
         x=86,
@@ -3799,7 +4029,7 @@ def _render_hook_swipe_cta(
         scale=1.0,
         max_width=card_w - 172,
         button=True,
-        trailing_arrow=True,
+        trailing_icon=badge_icon,
     )
     draw = ImageDraw.Draw(cta)
 
