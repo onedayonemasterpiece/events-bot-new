@@ -1,10 +1,10 @@
 # INC-2026-06-12-afishaengagement-public-canary-no-show Afisha Engagement Public Canary No-Show
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Afisha Engagement / VK event publishing
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: events-bot
 Related incidents: `INC-2026-06-12-vk-partial-media-family-cta`
 Related docs: `docs/features/afishaengagement/README.md`, `docs/features/promo-campaigns/README.md`, `docs/operations/runtime-logs.md`
@@ -117,17 +117,42 @@ festival event because its activity used the human-readable
 
 ## Follow-up Actions
 
-- [ ] After deploy, verify the next 80-stories event evaluates the 0.5 public
+- [x] After deploy, verify the next 80-stories event evaluates the 0.5 public
   campaign before all-events fallback.
-- [ ] After a real public dice winner appears, capture `VK_SCHEDULED`
+- [x] After a real public dice winner appears, capture `VK_SCHEDULED`
   `promo_exposure` evidence and operator-visible VK URL.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `0ae4c1c2`, reachable from `origin/main`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`;
+  release `v1359`, image
+  `events-bot-new-wngqia:deployment-01KTYR2VGAXJXNS777R6KMDDAC`
 - regression checks:
+  - `tests/test_afishaengagement.py::test_resolve_candidates_matches_klgdevents_alias_to_numeric_group`
+  - `tests/test_afishaengagement.py::test_public_engagement_copy_schedules_without_debug_marker`
+  - `tests/test_afishaengagement.py::test_shadow_debug_copy_falls_through_after_candidate_dice_miss`
+  - `tests/test_afishaengagement.py::test_family_market_uses_soft_mom_friend_repost_copy`
+  - full `tests/test_afishaengagement.py` -> `87 passed`
+  - `py_compile afishaengagement.py tests/test_afishaengagement.py`
+  - `git diff --cached --check`
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, DB and scheduler checks ok.
+  - Production `resolve_candidates(event_id=4759, target_group_id=231920894)`
+    returned campaign `8` / activity `25` (`target_group=klgdevents`,
+    `publish_mode=public`, `apply_rate=0.5`) before all-events fallback; this
+    was rechecked after a later parallel deploy left production on machine
+    version `1360`.
+  - A real public canary winner was compensated for event `5951`: exposure
+    `277`, `publish_status=VK_SCHEDULED`, `placement_kind=vk_engagement`,
+    URL `https://vk.com/wall-231920894_3137`, `publish_mode=public`,
+    `debug_shadow=false`, dice `0.08243301562464822 < 0.1`.
+  - VK `wall.getById` confirmed `wall-231920894_3137` exists as a postponed
+    wall post, has one generated attachment, and contains no
+    `AFISHAENGAGEMENT DEBUG COPY` / `#afishaengagement` marker.
+  - Accidental shadow fallback from the 4759 compensation attempt
+    (`wall-231920894_3136`, exposure `276`) was deleted via VK
+    `wall.delete -> {"response": 1}` and marked `VK_DELETED_DEBUG`.
 
 ## Prevention
 
