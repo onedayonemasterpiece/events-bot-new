@@ -1494,7 +1494,7 @@ def test_renderer_extracts_cfr_segment_frames_and_pads_short_decode(monkeypatch,
 
 
 @pytest.mark.asyncio
-async def test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile(monkeypatch):
+async def test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile(monkeypatch):
     captured = {}
 
     async def fake_build_story_publish_config(
@@ -1520,7 +1520,7 @@ async def test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profi
     params = captured["selection_params"]
     assert params["mode"] == "kenigsberg_story"
     assert params["story_publish_mode"] == "video"
-    assert params["story_upload_profile"] == "legacy_h264_transcode"
+    assert params["story_upload_profile"] == "telegram_story_native_hevc_720p_v1"
     assert params["story_business_targets"] == []
     overrides = params["story_targets_override"]
     assert overrides[0]["peer"] == "@mostvkenig"

@@ -232,6 +232,10 @@ class _FixedKenigsbergStoryDatetime(datetime):
         return value.replace(tzinfo=None)
 
 
+class _FixedKenigsbergStorySaturdayDatetime(_FixedKenigsbergStoryDatetime):
+    fixed_now = datetime(2026, 6, 13, 20, 45, tzinfo=timezone.utc)
+
+
 async def _insert_video_tomorrow_session(
     db: Database,
     *,
@@ -640,6 +644,29 @@ async def test_kenigsberg_story_startup_catchup_skips_after_two_failed_sessions(
         status="FAILED",
         created_at="2026-06-12 18:30:00",
     )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_kenigsberg_story", fake_run)
+
+    dispatched = await scheduling._maybe_catch_up_kenigsberg_story_on_startup(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_story_startup_catchup_skips_non_weekly_day(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedKenigsbergStorySaturdayDatetime)
 
     calls: list[dict] = []
 

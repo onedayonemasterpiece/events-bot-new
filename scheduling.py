@@ -1445,6 +1445,7 @@ async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
 async def _maybe_catch_up_kenigsberg_story_on_startup(db: Any, bot: Any) -> bool:
     tz_name = "Europe/Kaliningrad"
     time_raw = "19:30"
+    weekly_weekday = 4  # Friday; keep the existing 19:30 local slot, but not daily.
     tz = _safe_zoneinfo(tz_name, label="KENIGSBERG_STORY_TZ")
     hour_local, minute_local = _parse_hhmm(
         time_raw,
@@ -1454,6 +1455,8 @@ async def _maybe_catch_up_kenigsberg_story_on_startup(db: Any, bot: Any) -> bool
     )
     now_utc = datetime.now(timezone.utc)
     now_local = now_utc.astimezone(tz)
+    if now_local.weekday() != weekly_weekday:
+        return False
     scheduled_local = now_local.replace(
         hour=hour_local,
         minute=minute_local,
@@ -3586,6 +3589,7 @@ def startup(
             _job_wrapper("kenigsberg_story_daily", kenigsberg_story_scheduler, notify_skip=_notify_admin_skip),
             "cron",
             id="kenigsberg_story_daily",
+            day_of_week="fri",
             hour=kenigsberg_hour,
             minute=kenigsberg_minute,
             args=[db, bot],

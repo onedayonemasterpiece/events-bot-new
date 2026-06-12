@@ -32,14 +32,18 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 - 2026-06-12 20:43 UTC: story preflight passed for `@mostvkenig` and `@loving_guide39`; `@jane_tour39` was best-effort and failed preflight with `PeerIdInvalidError`.
 - 2026-06-12 20:47 UTC approx: Telegram publish of required primary target failed with `MEDIA_FILE_INVALID`; VK story and wall later succeeded.
 - 2026-06-12 21:13 UTC: Kaggle status became `ERROR`; bot reported session `#661` failure.
-- 2026-06-12: investigation downloaded Kaggle output from production and identified the HEVC-native Kenigsberg upload profile as the publish blocker.
+- 2026-06-12: investigation downloaded Kaggle output from production.
+- 2026-06-12: follow-up git/DB review corrected the initial hypothesis:
+  the compact HEVC-native profile had been used successfully by earlier
+  thought-mode scheduled stories; the failed 2026-06-12 sessions were the first
+  long production poetry runs.
 
 ## Root Cause
 
-1. Kenigsberg production story config forced `story_upload_profile=telegram_story_native_hevc_720p_v1`.
-2. That profile bypassed the shared helper's H.264 story-safe transcode path and uploaded `kenigsberg_story_final.mp4` directly as HEVC/`hvc1`.
-3. Telegram rejected the rendered file during `SendStoryRequest` with `MEDIA_FILE_INVALID`.
-4. Kenigsberg startup catch-up checked only for a confirmed handoff, not for repeated same-day failed scheduled/story sessions, so deploy restarts could relaunch the missed slot repeatedly.
+1. The failed 2026-06-12 sessions were long poetry productions (`poem-1`) rather than the previously successful thought-mode scheduled stories.
+2. Session `#661` produced a native HEVC/`hvc1` file with `duration_seconds=59.133`, very close to Telegram's story duration boundary, and Telegram rejected it during `SendStoryRequest` with `MEDIA_FILE_INVALID`.
+3. Kenigsberg startup catch-up checked only for a confirmed handoff, not for repeated same-day failed scheduled/story sessions, so deploy restarts could relaunch the missed slot repeatedly.
+4. The initial H.264 permanent fix was too broad because it changed the compact media profile that had worked for earlier Kenigsberg stories; it is kept only as evidence from the one-off compensation publish.
 
 ## Contributing Factors
 
@@ -68,18 +72,19 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 ### Mandatory checks before closure or deploy
 
 - `python -m py_compile` for changed modules.
-- `pytest -q tests/test_scheduling.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile`
-- Verify generated Kenigsberg `story_publish.json` carries `upload_profile=legacy_h264_transcode`.
+- `pytest -q tests/test_scheduling.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
+- Verify generated Kenigsberg `story_publish.json` carries `upload_profile=telegram_story_native_hevc_720p_v1`.
+- Verify the scheduled Kenigsberg cron trigger is weekly (`day_of_week='fri'`) rather than daily while this mitigation is active.
 - Verify startup catch-up skips after at least two same-day failed scheduled/story sessions.
 - Verify Fly `/healthz` is ready after deploy.
 
 ### Required evidence
 
-- deployed SHA: `85ad5fc7f827e775d260c26b9601ba736eab9d34`
+- deployed SHA: pending weekly-cadence redeploy
 - deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - regression checks:
-  - `python3 -m py_compile scheduling.py handlers/kenigsberg_stories_cmd.py video_announce/story_publish.py tests/test_scheduling.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py`
-  - `/tmp/events-bot-poll-venv2/bin/python -m pytest -q tests/test_scheduling.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile` -> `38 passed, 1 warning`
+  - `python3 -m py_compile scheduling.py handlers/kenigsberg_stories_cmd.py tests/test_scheduling.py tests/test_kenigsberg_stories.py`
+  - `/tmp/events-bot-poll-venv2/bin/python -m pytest -q tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_retries_single_failed_session tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_after_two_failed_sessions tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_non_weekly_day tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
 - Kaggle/session evidence:
   - session `#661` Kaggle output: preflight passed for `@mostvkenig`, media diagnostics `video_codec=hevc`, `video_tag=hvc1`, Telegram publish failed with `BadRequestError: RPCError 400: MEDIA_FILE_INVALID`, VK story/wall targets succeeded.
   - post-deploy `/data/kaggle_jobs.json`: `{"jobs": []}`.
@@ -95,12 +100,12 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 ## Immediate Mitigation
 
 - Stop treating session `#661` as an auth-session duplication recurrence: its output proves the auth preflight used the dedicated story account and passed the required primary target.
-- Do not manually replay the rejected HEVC artifact as a Telegram story; wait for the H.264 profile fix before any compensation run.
+- Do not start another same-day Kaggle retry for the rejected long-poetry artifact; keep further compensation Telegram-only unless VK fanout also failed.
 
 ## Corrective Actions
 
-- Kenigsberg production story config now requests `legacy_h264_transcode`, forcing the shared helper's H.264/`avc1` story-safe path.
-- `build_story_publish_config` preserves the explicit legacy H.264 profile in `story_publish.json`.
+- Kenigsberg production story config is restored to `telegram_story_native_hevc_720p_v1`.
+- Scheduled production cadence is temporarily reduced from daily to weekly Friday `19:30 Europe/Kaliningrad`; startup catch-up also runs only for that weekly slot day.
 - Kenigsberg startup catch-up now stops after two same-day failed scheduled/story publish sessions.
 
 ## Follow-up Actions
@@ -112,14 +117,14 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ## Release And Closure Evidence
 
-- deployed SHA: `85ad5fc7f827e775d260c26b9601ba736eab9d34`
-- deploy image: `events-bot-new-wngqia:deployment-01KTYVGW573EGB2RTSGZQ28T78`
+- deployed SHA: pending weekly-cadence redeploy
+- deploy image: pending weekly-cadence redeploy
 - deploy path: clean worktree at `origin/main`, then Fly remote deploy
 - regression checks:
   - py_compile for changed code/test modules passed
-  - targeted pytest suite passed: `38 passed, 1 warning`
+  - targeted pytest suite passed
 - post-deploy verification:
-  - Fly machine `48e42d5b714228`, version `1366`, checks `1 passing`
+  - Fly machine/check evidence pending weekly-cadence redeploy
   - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
   - `/data/kaggle_jobs.json` empty
   - startup catch-up did not launch a new Kenigsberg Kaggle job; runtime log recorded the new failed-session retry cap.
@@ -134,5 +139,6 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ## Prevention
 
-- Kenigsberg no longer borrows the CherryFlash HEVC-native upload assumption.
+- Kenigsberg keeps the proven compact HEVC-native upload profile for scheduled stories while the long-poetry media edge case is reviewed.
+- Weekly cadence reduces exposure and quota burn during that review.
 - The startup catch-up retry cap prevents deploy/restart churn from repeatedly burning Kaggle sessions after terminal publish failures.
