@@ -3044,7 +3044,17 @@ async def _llm_vk_festival_carousel_person_cards(
         program_phrase = _festival_carousel_program_phrase(campaign, cfg)
         covered_names = sorted(_covered_vk_festival_carousel_person_names(cfg, selected_events))
         selected_event_ids = [int(ev.id) for ev in selected_events if ev.id is not None]
-        event_brief = "\n".join(f"- {_event_brief_for_celebrity_llm(ev)}" for ev in source_events[:12])
+        selected_event_id_set = set(selected_event_ids)
+        source_events_with_ids = [ev for ev in source_events if ev.id is not None]
+        events_without_posters = [
+            ev for ev in source_events_with_ids if int(ev.id) not in selected_event_id_set
+        ]
+        events_with_posters = [
+            ev for ev in source_events_with_ids if int(ev.id) in selected_event_id_set
+        ]
+        ordered_source_events = [*events_without_posters, *events_with_posters]
+        events_without_poster_ids = [int(ev.id) for ev in events_without_posters]
+        event_brief = "\n".join(f"- {_event_brief_for_celebrity_llm(ev)}" for ev in ordered_source_events[:12])
         prompt = (
             "Ты выбираешь карточки персон для VK-карусели промо образовательной/фестивальной программы. "
             "Верни только JSON без markdown: {\"cards\":[{\"name\":\"...\",\"role\":\"...\",\"event_id\":123,\"evidence\":\"...\"}]}. "
@@ -3052,6 +3062,9 @@ async def _llm_vk_festival_carousel_person_cards(
             "Заполни список максимально полно в пределах лимита: если в данных есть 4-5 релевантных людей, верни 4-5, "
             "не останавливайся на первых трёх. Приоритет — гости, спикеры, модераторы и ведущие событий, "
             "особенно из событий, не представленных выбранными poster cards. "
+            "Обязательная проверка: пройди по каждому event_id из Events without poster cards; "
+            "если в title/source_text этого события назван гость, спикер, модератор или ведущий с ролью, включи его, пока не исчерпан лимит. "
+            "События с poster cards используй после непостерных, чтобы не дублировать уже видимых людей. "
             "Выбирай только реальных людей, явно названных в предоставленных событиях, и только если рядом есть роль/статус. "
             "Не добавляй названия фильмов, организаций, фестивалей, вымышленные роли или людей без явной роли. "
             "Не повторяй людей, которые уже видны на афишах выбранных poster cards. "
@@ -3060,6 +3073,7 @@ async def _llm_vk_festival_carousel_person_cards(
             f"Программа: {program_phrase!r}.\n"
             f"Кампания: {campaign.title!r}.\n"
             f"Poster event ids: {selected_event_ids!r}.\n"
+            f"Events without poster cards: {events_without_poster_ids!r}.\n"
             f"Names already covered on posters (normalized): {covered_names!r}.\n"
             f"Events:\n{event_brief}"
         )

@@ -11,6 +11,10 @@
   extraction now prompts from primary `source_text` first and uses generated
   `description` only when the source text is unavailable, avoiding noisy
   cross-event description artifacts.
+- **Changed: VK festival carousel missing-person priority**: celebrity/person
+  extraction now lists events without poster cards first and requires the LLM to
+  inspect each of them before using people from already represented poster
+  events.
 - **Fixed: Afisha Engagement art-topic CTA priority**: lecture and workshop
   CTA theme extraction now prefers explicit art/painting/impressionism subjects
   over broad `история` wording, so art-history events do not get generic

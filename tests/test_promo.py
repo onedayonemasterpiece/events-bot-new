@@ -841,10 +841,20 @@ async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
 
     async with db.get_session() as session:
         event = _event("Диалог «Опережая время»", "2026-06-13", festival="Кантата")
-        event.description = "В разговоре участвуют Андрей Борисов и Фабио Мастранджело."
-        session.add(event)
+        event.source_text = (
+            "Модератор встречи — культурный ведущий Дарья Костина. "
+            "В разговоре участвуют: Андрей Борисов — генеральный продюсер фестиваля; "
+            "Фабио Мастранджело — художественный руководитель фестиваля."
+        )
+        missing_event = _event("Сцена как пространство трансформации", "2026-06-16", festival="Кантата")
+        missing_event.source_text = (
+            "Её гостем станет Евгений Князев — народный артист России, "
+            "лауреат Государственной премии, ректор Театрального института им. Б. В. Щукина."
+        )
+        session.add_all([event, missing_event])
         await session.flush()
         event_id = int(event.id)
+        missing_event_id = int(missing_event.id)
         campaign = PromoCampaign(
             title="Кантата · образовательная программа",
             status="active",
@@ -874,14 +884,15 @@ async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
                     "covered_celebrity_names_by_event_id": {
                         str(event_id): ["Андрей Борисов", "Фабио Мастранджело"]
                     },
-                    "celebrity_person_source_event_ids": [event_id],
+                    "celebrity_person_source_from_campaign_targets": True,
                     "max_cards": 10,
                     "include_cta_card": True,
                     "debug_shadow": True,
                 },
             )
         )
-        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="festival", festival_name="Кантата"))
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=event_id))
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=missing_event_id))
         await session.commit()
 
     monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
@@ -964,6 +975,8 @@ async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
     assert sum("_person_" in name for name in uploaded_bytes) == 6
     assert all("person_7" not in name for name in uploaded_bytes)
     assert "Нужно не больше 6 cards" in llm_prompts[0]
+    assert f"Events without poster cards: [{missing_event_id}]" in llm_prompts[0]
+    assert "Евгений Князев" in llm_prompts[0]
 
     async with db.get_session() as session:
         exposure = (await session.execute(select(PromoExposure))).scalars().one()
