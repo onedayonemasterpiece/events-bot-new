@@ -21,7 +21,7 @@ any new VK visual surface that should stay consistent with existing
 - Promo docs: `docs/features/promo-campaigns/README.md`
 - Afisha Engagement docs: `docs/features/afishaengagement/README.md`
 
-## v1 Visual Contract
+## v2 Visual Contract
 
 Generated VK cards should reuse the existing afishaengagement visual language
 unless there is an explicit product reason to diverge.
