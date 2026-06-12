@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Changed: VK festival carousel celebrity extraction**: celebrity/program-
+  leader FIO cards are now discovered through an LLM stage by default, with the
+  remaining carousel budget included in the prompt and enforced again in code
+  before rendering. Explicit `celebrity_person_cards` remains an operator
+  override. Covered by `tests/test_promo.py`.
 - **Fixed: Afisha Engagement art-topic CTA priority**: lecture and workshop
   CTA theme extraction now prefers explicit art/painting/impressionism subjects
   over broad `история` wording, so art-history events do not get generic

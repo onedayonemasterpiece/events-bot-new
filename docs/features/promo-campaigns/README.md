@@ -261,9 +261,20 @@ supports:
   no curated poster where the person/role is visible on the image;
 - `celebrity_requires_image_evidence`: keeps the celebrity image gate enabled
   by default;
-- `celebrity_person_cards`: curated cards for missing people in celebrity
-  carousels. Each item must include `name` and `role` (optionally `event_id`),
-  or the value can be a mapping from event id to such items;
+- `celebrity_person_cards_llm_enabled`: enables LLM extraction of missing
+  people for celebrity carousels when no explicit `celebrity_person_cards`
+  override is configured. The LLM receives the remaining card budget, but the
+  code still hard-caps the selected cards before rendering;
+- `celebrity_person_source_event_ids` / `person_source_event_ids`: optional
+  event ids used as the LLM extraction scope for FIO/role cards when poster
+  cards are intentionally limited to a smaller evidence-backed set;
+- `celebrity_person_source_from_campaign_targets`: lets the LLM extraction
+  scope use all event targets from the campaign when source ids are not listed
+  explicitly;
+- `celebrity_person_cards`: operator-approved override cards for missing
+  people. Each item must include `name` and `role` (optionally `event_id`), or
+  the value can be a mapping from event id to such items. Use this only when the
+  LLM output needs a curated correction;
 - `covered_celebrity_names_by_event_id` /
   `celebrity_names_on_posters_by_event_id`: names already visible on selected
   poster cards. These are skipped when filling `celebrity_person_cards`, so the

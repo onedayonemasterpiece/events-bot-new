@@ -2939,13 +2939,15 @@ def _select_vk_festival_carousel_person_cards(
     *,
     selected_events: list[Event],
     limit: int,
+    candidate_cards: list[_VkFestivalCarouselPersonCard] | None = None,
 ) -> list[_VkFestivalCarouselPersonCard]:
     if limit <= 0:
         return []
     covered = _covered_vk_festival_carousel_person_names(cfg, selected_events)
     selected: list[_VkFestivalCarouselPersonCard] = []
     seen = set(covered)
-    for card in _vk_festival_carousel_person_cards_from_config(cfg):
+    cards = candidate_cards if candidate_cards is not None else _vk_festival_carousel_person_cards_from_config(cfg)
+    for card in cards:
         normalized = _normalize_vk_festival_carousel_person_name(card.name)
         if not normalized or normalized in seen:
             continue
@@ -2954,6 +2956,140 @@ def _select_vk_festival_carousel_person_cards(
         if len(selected) >= limit:
             break
     return selected
+
+
+def _has_configured_vk_festival_carousel_person_cards(cfg: dict[str, Any]) -> bool:
+    return cfg.get("celebrity_person_cards") is not None or cfg.get("person_cards") is not None
+
+
+def _event_brief_for_celebrity_llm(ev: Event) -> str:
+    parts = [
+        f"id={getattr(ev, 'id', None)}",
+        f"title={getattr(ev, 'title', '')!r}",
+        f"date={getattr(ev, 'date', '')!r}",
+        f"time={getattr(ev, 'time', '')!r}",
+    ]
+    for label in ("short_description", "description", "source_text", "search_digest"):
+        value = re.sub(r"\s+", " ", str(getattr(ev, label, "") or "").strip())
+        if value:
+            parts.append(f"{label}={value[:1400]!r}")
+    return "; ".join(parts)
+
+
+async def _select_vk_festival_carousel_person_source_events(
+    db: Database,
+    *,
+    campaign: PromoCampaign,
+    cfg: dict[str, Any],
+    fallback_events: list[Event],
+) -> list[Event]:
+    raw_ids = cfg.get("celebrity_person_source_event_ids") or cfg.get("person_source_event_ids")
+    explicit_ids: list[int] = []
+    if isinstance(raw_ids, list):
+        for value in raw_ids:
+            event_id = _int_or_none(value)
+            if event_id is not None and event_id not in explicit_ids:
+                explicit_ids.append(event_id)
+    if not explicit_ids and _config_bool(cfg.get("celebrity_person_source_from_campaign_targets"), default=False):
+        campaign_id = int(campaign.id or 0)
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    select(PromoTarget.event_id)
+                    .where(PromoTarget.campaign_id == campaign_id)
+                    .where(PromoTarget.event_id.is_not(None))
+                    .order_by(PromoTarget.id)
+                )
+            ).all()
+        for (event_id,) in rows:
+            parsed = _int_or_none(event_id)
+            if parsed is not None and parsed not in explicit_ids:
+                explicit_ids.append(parsed)
+    if not explicit_ids:
+        return fallback_events
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event).where(Event.id.in_(explicit_ids))
+            )
+        ).scalars().all()
+    by_id = {int(ev.id): ev for ev in rows if ev.id is not None}
+    return [by_id[event_id] for event_id in explicit_ids if event_id in by_id]
+
+
+async def _llm_vk_festival_carousel_person_cards(
+    *,
+    campaign: PromoCampaign,
+    cfg: dict[str, Any],
+    source_events: list[Event],
+    selected_events: list[Event],
+    limit: int,
+) -> tuple[list[_VkFestivalCarouselPersonCard], str]:
+    if limit <= 0:
+        return [], "no_slots"
+    if not _config_bool(cfg.get("celebrity_person_cards_llm_enabled"), default=True):
+        return [], "disabled"
+    try:
+        import main as main_mod
+
+        ask_4o = getattr(main_mod, "ask_4o", None)
+        if ask_4o is None:
+            return [], "missing_ask_4o"
+        program_phrase = _festival_carousel_program_phrase(campaign, cfg)
+        covered_names = sorted(_covered_vk_festival_carousel_person_names(cfg, selected_events))
+        selected_event_ids = [int(ev.id) for ev in selected_events if ev.id is not None]
+        event_brief = "\n".join(f"- {_event_brief_for_celebrity_llm(ev)}" for ev in source_events[:12])
+        prompt = (
+            "Ты выбираешь карточки персон для VK-карусели промо образовательной/фестивальной программы. "
+            "Верни только JSON без markdown: {\"cards\":[{\"name\":\"...\",\"role\":\"...\",\"event_id\":123,\"evidence\":\"...\"}]}. "
+            f"Нужно не больше {limit} cards. Это жёсткий лимит: не предлагай больше. "
+            "Выбирай только реальных людей, явно названных в предоставленных событиях, и только если рядом есть роль/статус. "
+            "Не добавляй названия фильмов, организаций, фестивалей, вымышленные роли или людей без явной роли. "
+            "Не повторяй людей, которые уже видны на афишах выбранных poster cards. "
+            "role должен быть коротким: кто это/почему важен для программы, до 120 символов. "
+            "evidence — короткая цитата/фрагмент из данных, по которому видно имя и роль.\n"
+            f"Программа: {program_phrase!r}.\n"
+            f"Кампания: {campaign.title!r}.\n"
+            f"Poster event ids: {selected_event_ids!r}.\n"
+            f"Names already covered on posters (normalized): {covered_names!r}.\n"
+            f"Events:\n{event_brief}"
+        )
+        raw = await ask_4o(
+            prompt,
+            max_tokens=700,
+            temperature=0.1,
+            meta={"feature": "promo", "stage": "vk_festival_carousel_person_cards", "campaign_id": campaign.id},
+        )
+        payload = _extract_json_object(str(raw or ""))
+        raw_cards = (payload or {}).get("cards")
+        if not isinstance(raw_cards, list):
+            return [], "llm_empty"
+        cards = _vk_festival_carousel_person_cards_from_config({"celebrity_person_cards": raw_cards})
+        cards = [
+            _VkFestivalCarouselPersonCard(
+                name=card.name[:80].strip(),
+                role=card.role[:160].strip(),
+                event_id=card.event_id,
+            )
+            for card in cards
+            if card.name.strip() and card.role.strip()
+        ]
+        return (
+            _select_vk_festival_carousel_person_cards(
+                cfg,
+                selected_events=selected_events,
+                limit=limit,
+                candidate_cards=cards,
+            ),
+            "llm",
+        )
+    except Exception:
+        logger.warning(
+            "promo.vk carousel llm person cards failed campaign_id=%s",
+            getattr(campaign, "id", None),
+            exc_info=True,
+        )
+        return [], "llm_error"
 
 
 def _render_vk_festival_carousel_card(
@@ -3351,6 +3487,7 @@ async def _publish_vk_festival_carousel(
         return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="events_missing")
 
     hook_variant = str(cfg.get("hook_variant") or "all_posters").strip() or "all_posters"
+    person_source_events = events
     events = _filter_vk_festival_carousel_events_for_variant(
         events,
         cfg=cfg,
@@ -3381,6 +3518,7 @@ async def _publish_vk_festival_carousel(
     selected_photo_urls: dict[int, str] = {}
     person_cards_added: list[_VkFestivalCarouselPersonCard] = []
     person_attachments: list[str] = []
+    person_cards_source = "not_requested"
     if VK_PHOTOS_ENABLED:
         for ev in events:
             if len(selected_events) >= max_event_cards:
@@ -3430,11 +3568,27 @@ async def _publish_vk_festival_carousel(
 
     if VK_PHOTOS_ENABLED and hook_variant == "celebrity":
         person_slots = max_cards - 1 - len(event_attachments) - (1 if include_cta_card else 0)
-        person_candidates = _select_vk_festival_carousel_person_cards(
-            cfg,
-            selected_events=selected_events,
-            limit=max(0, person_slots),
-        )
+        if _has_configured_vk_festival_carousel_person_cards(cfg):
+            person_candidates = _select_vk_festival_carousel_person_cards(
+                cfg,
+                selected_events=selected_events,
+                limit=max(0, person_slots),
+            )
+            person_cards_source = "config"
+        else:
+            person_source_events = await _select_vk_festival_carousel_person_source_events(
+                db,
+                campaign=campaign,
+                cfg=cfg,
+                fallback_events=person_source_events,
+            )
+            person_candidates, person_cards_source = await _llm_vk_festival_carousel_person_cards(
+                campaign=campaign,
+                cfg=cfg,
+                source_events=person_source_events,
+                selected_events=selected_events,
+                limit=max(0, person_slots),
+            )
         for index, card in enumerate(person_candidates, start=1):
             if len(person_attachments) >= person_slots:
                 break
@@ -3590,6 +3744,7 @@ async def _publish_vk_festival_carousel(
                 {"name": card.name, "role": card.role, "event_id": card.event_id}
                 for card in person_cards_added
             ],
+            "person_cards_source": person_cards_source,
             "selected_photo_urls_by_event_id": {str(k): v for k, v in selected_photo_urls.items()},
             "cta_by_event_id": {str(k): v for k, v in cta_by_event.items()},
             "attachments_count": len(attachments),

@@ -829,7 +829,7 @@ async def test_vk_festival_carousel_celebrity_requires_image_evidence_config(tmp
 
 
 @pytest.mark.asyncio
-async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_duplicates(
+async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -874,17 +874,7 @@ async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_d
                     "covered_celebrity_names_by_event_id": {
                         str(event_id): ["Андрей Борисов", "Фабио Мастранджело"]
                     },
-                    "celebrity_person_cards": [
-                        {"name": "Андрей Борисов", "role": "генеральный продюсер фестиваля «Кантата»"},
-                        {"name": "Евгений Князев", "role": "народный артист России"},
-                        {"name": "Татьяна Юденкова", "role": "доктор искусствоведения"},
-                        {"name": "Максим Шостакович", "role": "продюсер Большого театра России"},
-                        {"name": "Дарья Костина", "role": "культурный ведущий и модератор"},
-                        {"name": "Иван Никифорчин", "role": "дирижёр"},
-                        {"name": "Фабио Мастранджело", "role": "художественный руководитель фестиваля"},
-                        {"name": "Марк Ваза", "role": "деятель искусства"},
-                        {"name": "Наталья Патрушева", "role": "деятель искусства"},
-                    ],
+                    "celebrity_person_source_event_ids": [event_id],
                     "max_cards": 10,
                     "include_cta_card": True,
                     "debug_shadow": True,
@@ -898,6 +888,7 @@ async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_d
 
     post_calls: list[dict] = []
     uploaded_bytes: list[str] = []
+    llm_prompts: list[str] = []
 
     def sample_image_bytes() -> bytes:
         from io import BytesIO
@@ -937,10 +928,29 @@ async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_d
         )
         return "https://vk.com/wall-231920894_701"
 
+    async def fake_ask_4o(prompt, **kwargs):
+        llm_prompts.append(prompt)
+        return """
+        {
+          "cards": [
+            {"name": "Андрей Борисов", "role": "генеральный продюсер фестиваля «Кантата»", "event_id": 1, "evidence": "Андрей Борисов — генеральный продюсер"},
+            {"name": "Евгений Князев", "role": "народный артист России", "event_id": 2, "evidence": "Евгений Князев — народный артист России"},
+            {"name": "Татьяна Юденкова", "role": "доктор искусствоведения", "event_id": 3, "evidence": "Татьяна Юденкова — доктор искусствоведения"},
+            {"name": "Максим Шостакович", "role": "продюсер Большого театра России", "event_id": 4, "evidence": "Максим Шостакович, продюсер"},
+            {"name": "Дарья Костина", "role": "культурный ведущий и модератор", "event_id": 1, "evidence": "Модератор встречи — Дарья Костина"},
+            {"name": "Иван Никифорчин", "role": "дирижёр", "event_id": 5, "evidence": "Иван Никифорчин"},
+            {"name": "Фабио Мастранджело", "role": "художественный руководитель фестиваля", "event_id": 1, "evidence": "Фабио Мастранджело"},
+            {"name": "Марк Ваза", "role": "деятель искусства", "event_id": 1, "evidence": "Марк Ваза"},
+            {"name": "Наталья Патрушева", "role": "деятель искусства", "event_id": 1, "evidence": "Наталья Патрушева"}
+          ]
+        }
+        """
+
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
     monkeypatch.setattr(main, "upload_vk_photo_bytes", fake_upload_vk_photo_bytes)
     monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
     monkeypatch.setattr("afishaengagement._default_fetch_image", fake_fetch_image)
 
     results = await run_promo_vk_activities(db, None, now_utc=now_utc)
@@ -953,11 +963,13 @@ async def test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_d
     assert len(uploaded_bytes) == 9
     assert sum("_person_" in name for name in uploaded_bytes) == 6
     assert all("person_7" not in name for name in uploaded_bytes)
+    assert "Нужно не больше 6 cards" in llm_prompts[0]
 
     async with db.get_session() as session:
         exposure = (await session.execute(select(PromoExposure))).scalars().one()
     assert exposure.details_json["max_cards"] == 9
     assert exposure.details_json["attachments_count"] == 9
+    assert exposure.details_json["person_cards_source"] == "llm"
     assert [item["name"] for item in exposure.details_json["person_cards"]] == [
         "Евгений Князев",
         "Татьяна Юденкова",

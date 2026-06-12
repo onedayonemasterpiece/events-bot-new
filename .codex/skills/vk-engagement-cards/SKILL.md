@@ -5,7 +5,7 @@ description: Use when designing, rendering, reviewing, or evolving generated VK 
 
 # VK Engagement Cards
 
-Contract version: `v4`
+Contract version: `v5`
 Last updated: `2026-06-12`
 
 Use this skill whenever a task changes generated VK cards: standalone hook
@@ -21,7 +21,7 @@ any new VK visual surface that should stay consistent with existing
 - Promo docs: `docs/features/promo-campaigns/README.md`
 - Afisha Engagement docs: `docs/features/afishaengagement/README.md`
 
-## v4 Visual Contract
+## v5 Visual Contract
 
 Generated VK cards should reuse the existing afishaengagement visual language
 unless there is an explicit product reason to diverge.
@@ -126,6 +126,12 @@ person cards, optional final CTA. Use `covered_celebrity_names_by_event_id` or
 the equivalent poster-name config to skip people already visible on selected
 posters.
 
+Celebrity/program-leader person discovery is LLM-first. The prompt must receive
+the remaining card budget and event evidence, but rendering code must still
+enforce the nine-card carousel cap and dedupe covered poster names after the
+LLM returns. Explicit `celebrity_person_cards` is an operator override, not the
+default production workflow.
+
 ## Links On VK Cards
 
 - Do not render long URLs onto image cards.
@@ -159,7 +165,7 @@ For `vk_festival_carousel` specifically:
 
 ```bash
 .venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_shadow_posts_hook_posters_and_cta -q
-.venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_celebrity_adds_person_cards_without_poster_duplicates -q
+.venv/bin/python -m pytest tests/test_promo.py::test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget -q
 .venv/bin/python -m py_compile promo.py
 ```
 
@@ -189,4 +195,10 @@ evidence changes, bump `Contract version` and add a short changelog section:
 - Celebrity/program-leader carousels can add curated FIO/role person cards.
 - Celebrity carousels are capped at nine total cards.
 - Person cards skip names configured as already visible on selected posters.
+
+## v5 Changes
+
+- Celebrity/program-leader person discovery is LLM-first by default.
+- The LLM prompt receives the remaining person-card budget.
+- Rendering still hard-caps and deduplicates person cards after LLM output.
 ```
