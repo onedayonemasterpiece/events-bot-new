@@ -1658,17 +1658,27 @@ async def resolve_daily_promo_recommendations(
             ).all()
         )
 
-    recommendations: list[DailyPromoRecommendation] = []
-    used_event_ids: set[int] = set()
-    activity_pick_counts: dict[int, int] = {}
+    grouped: list[tuple[PromoCampaign, PromoActivity, list[PromoTarget]]] = []
+    group_index: dict[tuple[int, int], int] = {}
     for campaign, activity, target in rows:
         if campaign.id is None or activity.id is None:
             continue
         campaign_id = int(campaign.id)
         activity_id = int(activity.id)
+        key = (campaign_id, activity_id)
+        idx = group_index.get(key)
+        if idx is None:
+            group_index[key] = len(grouped)
+            grouped.append((campaign, activity, [target]))
+        else:
+            grouped[idx][2].append(target)
+
+    recommendations: list[DailyPromoRecommendation] = []
+    used_event_ids: set[int] = set()
+    for campaign, activity, targets in grouped:
+        campaign_id = int(campaign.id)
+        activity_id = int(activity.id)
         max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
-        if activity_pick_counts.get(activity_id, 0) >= max_per_publish:
-            continue
         if campaign.total_exposure_goal is not None:
             total_count = await _count_public_exposures(db, campaign_id=campaign_id)
             if total_count >= max(0, int(campaign.total_exposure_goal)):
@@ -1700,15 +1710,23 @@ async def resolve_daily_promo_recommendations(
             )
             if activity_daily >= max(0, int(activity.daily_cap)):
                 continue
-        events = await _events_for_target(
-            db,
-            target=target,
-            campaign=campaign,
-            today=local_day,
-        )
+        events_by_id: dict[int, Event] = {}
+        for target in targets:
+            target_events = await _events_for_target(
+                db,
+                target=target,
+                campaign=campaign,
+                today=local_day,
+            )
+            for ev in target_events:
+                if ev.id is None:
+                    continue
+                event_id = int(ev.id)
+                if event_id not in events_by_id:
+                    events_by_id[event_id] = ev
         events = [
             ev
-            for ev in events
+            for ev in events_by_id.values()
             if ev.id is not None
             and int(ev.id) not in used_event_ids
             and _event_occurs_on_date(ev, local_day)
@@ -1735,11 +1753,9 @@ async def resolve_daily_promo_recommendations(
                 event_id,
             )
 
-        remaining = max(0, max_per_publish - activity_pick_counts.get(activity_id, 0))
-        for ev in sorted(events, key=sort_key)[:remaining]:
+        for ev in sorted(events, key=sort_key)[:max_per_publish]:
             event_id = int(ev.id)
             used_event_ids.add(event_id)
-            activity_pick_counts[activity_id] = activity_pick_counts.get(activity_id, 0) + 1
             target_url = str(getattr(ev, "telegraph_url", "") or "").strip() or None
             recommendations.append(
                 DailyPromoRecommendation(
