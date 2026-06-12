@@ -5333,6 +5333,15 @@ async def sync_vk_source_post(
                     len(ids),
                     len(photo_urls_for_publish),
                 )
+            elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
+                logging.error(
+                    "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",
+                    event.id,
+                    getattr(event, "source_post_url", None),
+                    len(ids),
+                    len(photo_urls_for_publish),
+                )
+                raise RuntimeError("vk_sync_partial_media_upload")
             else:
                 attachments = ids
     elif photo_urls_source:

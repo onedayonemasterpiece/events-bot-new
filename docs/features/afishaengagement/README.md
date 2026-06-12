@@ -95,6 +95,11 @@ wrong stored event types without changing the source event row:
   text is genuinely about a film screening;
 - recycling/drop-off actions such as `Приём шин` do not inherit `market`
   (`ярмарка`) copy from a bad stored type.
+- family fairs/markets with explicit child/family audience signals
+  (`семейный`, `детский`, `сказочные герои`, `аниматоры`, etc.) use `family`
+  copy even when the stored type says `ярмарка`, so a family fair does not get
+  generic market repost text like `Поделись с подругой, которая любит такие
+  ярмарки`.
 
 Theme extraction inside an already selected event type must use safe word/stem
 matching: narrow cues such as `орган` may match real organ music forms, but must
@@ -133,7 +138,9 @@ joining/participating in the event itself (`присоединяйся к пра
 This guardrail applies both to deterministic templates and to configured
 activity templates. Repost copy should keep natural variants for both `друг`
 and `подруга` where the wording names a friend directly, so batches do not
-repeat a single gendered formula.
+repeat a single gendered formula. Family repost copy may use softer
+mom-friend variants such as `подруга-мама` / `мама-подруга` when the event is
+clearly aimed at parents and children.
 LLM CTA output is also post-filtered for unsupported concrete references: for
 example, an LLM suggestion about a zoo is rejected when the event text does not
 actually mention a zoo, zoologists, animals, veterinary care, enclosures, or a

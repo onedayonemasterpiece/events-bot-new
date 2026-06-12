@@ -356,6 +356,89 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_upload_vk_photo_retries_upload_server_request(monkeypatch):
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+    monkeypatch.setattr(
+        main,
+        "choose_vk_actor",
+        lambda owner_id, intent: [main.VkActor("user", "user-token", "user:test")],
+    )
+    monkeypatch.setattr(main, "detect_image_type", lambda data: "png")
+    monkeypatch.setattr(main, "ensure_jpeg", lambda data, name: (data, name))
+
+    async def fake_sleep(_delay):
+        return None
+
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+
+    class FakeContent:
+        async def iter_chunked(self, _size):
+            yield b"image-bytes"
+
+    class FakeDownloadResponse:
+        headers = {"Content-Length": "11"}
+        content_length = 11
+        content = FakeContent()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def raise_for_status(self):
+            return None
+
+    class FakeUploadResponse:
+        def __init__(self, attempt):
+            self.attempt = attempt
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            if self.attempt == 1:
+                raise ValueError("unexpected mimetype text/html")
+            return {"photo": "photo-json", "server": 7, "hash": "hash-json"}
+
+    upload_urls: list[str] = []
+
+    class FakeSession:
+        def get(self, _url):
+            return FakeDownloadResponse()
+
+        def post(self, upload_url, data=None):
+            upload_urls.append(upload_url)
+            return FakeUploadResponse(len(upload_urls))
+
+    monkeypatch.setattr(main, "get_http_session", lambda: FakeSession())
+
+    upload_server_calls = 0
+    save_params: dict[str, object] = {}
+
+    async def fake_vk_api(method, params=None, *args, **kwargs):
+        nonlocal upload_server_calls
+        if method == "photos.getWallUploadServer":
+            upload_server_calls += 1
+            return {"response": {"upload_url": f"https://upload/{upload_server_calls}"}}
+        if method == "photos.saveWallPhoto":
+            save_params.update(params or {})
+            return {"response": [{"owner_id": -1, "id": 42}]}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    result = await main.upload_vk_photo("1", "https://storage.example/photo.webp")
+
+    assert result == "photo-1_42"
+    assert upload_urls == ["https://upload/1", "https://upload/2"]
+    assert save_params["photo"] == "photo-json"
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_passes_vk_coauthor_candidate(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = False
@@ -550,6 +633,41 @@ async def test_sync_vk_source_post_blocks_vk_origin_when_available_media_uploads
     monkeypatch.setattr(main, "post_to_vk", fake_post)
 
     with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_blocks_new_post_on_partial_media_upload(monkeypatch):
+    sync_globals = main.sync_vk_source_post.__globals__
+    monkeypatch.setitem(sync_globals, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setitem(sync_globals, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setitem(sync_globals, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setitem(sync_globals, "VK_USER_TOKEN", "u")
+    monkeypatch.setitem(sync_globals, "VK_MAX_ATTACHMENTS", 10)
+
+    event = main.Event(
+        id=5951,
+        title="Путешествие в сказку в деревне Холмогорье",
+        description="",
+        date="2026-06-13",
+        time="11:00",
+        location_name="Холмогорье",
+        source_text="Text",
+        source_post_url="https://vk.com/wall-146688375_7432",
+        photo_urls=["https://storage.example/1.webp", "https://storage.example/2.webp"],
+        photo_count=2,
+    )
+
+    async def fake_upload(group_id, photo_url, db=None, bot=None):
+        return "photo-1_1" if photo_url.endswith("1.webp") else None
+
+    async def fake_post(group_id, message, db=None, bot=None, attachments=None, **_kwargs):
+        raise AssertionError("vk_sync must not create a source post with partial media")
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(RuntimeError, match="vk_sync_partial_media_upload"):
         await main.sync_vk_source_post(event, "Text", None, None)
 
 

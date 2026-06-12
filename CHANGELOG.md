@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: VK event media parity and Afisha Engagement family CTA**: VK photo
+  upload now retries transient `upload.php` failures with fresh upload-server
+  URLs, new managed VK event posts fail closed on partial media upload instead
+  of publishing a 2/4 photo set, and family fairs/markets get softer
+  family-parent repost copy in `afishaengagement`. Tracks
+  `INC-2026-06-12-vk-partial-media-family-cta` and is covered by
+  `tests/test_vk_source.py` and `tests/test_afishaengagement.py`.
 - **Fixed: raffle-source event publication false skips**: managed VK and
   Telegram event publication now still enqueue when a raw source mentions a
   ticket raffle/giveaway but Smart Update has already produced substantial

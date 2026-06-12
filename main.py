@@ -3988,16 +3988,6 @@ async def upload_vk_photo(
             try:
                 if DEBUG:
                     mem_info("VK upload before")
-                data = await _vk_api(
-                    "photos.getWallUploadServer",
-                    {"group_id": group_id.lstrip("-")},
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-                upload_url = data["response"]["upload_url"]
                 session = get_http_session()
 
                 async def _download():
@@ -4033,39 +4023,63 @@ async def upload_vk_photo(
                     return None
                 if detect_image_type(img_bytes) == "jpeg":
                     validate_jpeg_markers(img_bytes)
-                form = FormData()
-                form.add_field(
-                    "photo",
-                    img_bytes,
-                    filename="image.jpg",
-                    content_type="image/jpeg",
-                )
+                for upload_attempt in range(1, 4):
+                    data = await _vk_api(
+                        "photos.getWallUploadServer",
+                        {"group_id": group_id.lstrip("-")},
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    upload_url = data["response"]["upload_url"]
+                    form = FormData()
+                    form.add_field(
+                        "photo",
+                        img_bytes,
+                        filename="image.jpg",
+                        content_type="image/jpeg",
+                    )
 
-                async def _upload():
-                    async with span("http"):
-                        async with HTTP_SEMAPHORE:
-                            async with session.post(upload_url, data=form) as up:
-                                return await up.json()
+                    async def _upload():
+                        async with span("http"):
+                            async with HTTP_SEMAPHORE:
+                                async with session.post(upload_url, data=form) as up:
+                                    return await up.json()
 
-                upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
-                save = await _vk_api(
-                    "photos.saveWallPhoto",
-                    {
-                        "group_id": group_id.lstrip("-"),
-                        "photo": upload_result.get("photo"),
-                        "server": upload_result.get("server"),
-                        "hash": upload_result.get("hash"),
-                    },
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-                info = save["response"][0]
-                if DEBUG:
-                    mem_info("VK upload after")
-                return f"photo{info['owner_id']}_{info['id']}"
+                    try:
+                        upload_result = await asyncio.wait_for(_upload(), HTTP_TIMEOUT)
+                    except Exception as exc:
+                        logging.warning(
+                            "vk.upload upload_request_failed owner_id=%s actor=%s attempt=%s error=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            exc,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(min(2.0, 0.25 * upload_attempt))
+                            continue
+                        raise
+                    save = await _vk_api(
+                        "photos.saveWallPhoto",
+                        {
+                            "group_id": group_id.lstrip("-"),
+                            "photo": upload_result.get("photo"),
+                            "server": upload_result.get("server"),
+                            "hash": upload_result.get("hash"),
+                        },
+                        db,
+                        bot,
+                        token=token,
+                        token_kind=actor.kind,
+                        skip_captcha=(actor.kind == "group"),
+                    )
+                    info = save["response"][0]
+                    if DEBUG:
+                        mem_info("VK upload after")
+                    return f"photo{info['owner_id']}_{info['id']}"
             except VKAPIError as e:
                 logging.warning(
                     "vk.upload error actor=%s token=%s code=%s msg=%s",

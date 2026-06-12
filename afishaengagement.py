@@ -741,6 +741,24 @@ def _looks_family_event(raw: str) -> bool:
     )
 
 
+def _looks_family_audience_event(raw: str) -> bool:
+    return any(
+        word in raw
+        for word in (
+            "дет",
+            "семейн",
+            "малыш",
+            "ребят",
+            "ребен",
+            "ребён",
+            "сказоч",
+            "сказк",
+            "геро",
+            "аниматор",
+        )
+    )
+
+
 def _looks_zoo_event(raw: str) -> bool:
     if not raw:
         return False
@@ -856,6 +874,8 @@ def _event_type_key(event: Event) -> str:
         return "theatre"
     if explicit_key == "market" and _looks_recycling_event(semantic_raw):
         return "other"
+    if explicit_key == "market" and _looks_family_audience_event(semantic_raw):
+        return "family"
     if explicit_key and explicit_key != "other":
         return explicit_key
     if explicit_key == "other" and _looks_family_event(raw):
@@ -1434,12 +1454,15 @@ def _templates_for(
             [
                 "Поделись с теми, кому близки семейные события.",
                 "Поделись с подругой, которой интересны детские события.",
+                "Поделись с подругой-мамой, которой близки семейные события.",
+                "Поделись с мамой-подругой, которой интересны детские выходные.",
             ]
         )
         if theme and ("сказоч" in theme or "геро" in theme):
             templates["comments"].append("Кого из сказочных героев дети ждут больше всего?")
             templates["reposts"].append("Поделись с другом, чьи дети любят сказочных героев.")
             templates["reposts"].append("Поделись с подругой, чьи дети любят сказочных героев.")
+            templates["reposts"].append("Поделись с подругой-мамой, чьи дети любят сказочные истории.")
     if theme:
         templates["likes"].extend(
             [

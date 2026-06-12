@@ -1047,6 +1047,31 @@ def test_recycling_collection_overrides_misstored_market_type():
     assert all("маркет" not in text.casefold() for text in seen)
 
 
+def test_family_market_uses_soft_mom_friend_repost_copy():
+    event = Event(
+        title="Путешествие в сказку в деревне Холмогорье",
+        description="Семейная ярмарка, детская программа, аниматоры и сказочные герои.",
+        date="2026-06-13",
+        time="11:00",
+        location_name="Холмогорье",
+        source_text="",
+        event_type="ярмарка",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"family-market-repost-{idx}",
+            config={"mechanic_weights": {"comments": 0, "likes": 0, "reposts": 100}},
+        ).cta_text
+        for idx in range(160)
+    }
+
+    assert aeg._event_type_key(event) == "family"
+    assert any("подругой-мамой" in text.casefold() or "мамой-подругой" in text.casefold() for text in seen)
+    assert "Поделись с подругой, которая любит такие ярмарки." not in seen
+
+
 def test_kantata_education_umbrella_uses_program_context():
     event = Event(
         title="Образовательная программа VI Международного фестиваля классической музыки Кантата",

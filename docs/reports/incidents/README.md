@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-vk-partial-media-family-cta.md`
+  - Scope: managed VK event media upload/parity and Afisha Engagement CTA
+    selection for family fairs/markets.
+  - Must not regress: new managed `klgdevents` event posts must fail closed on
+    partial media upload instead of creating a public/postponed post with only
+    part of `event.photo_urls`; transient VK `upload.php` failures must be
+    retried with fresh upload-server URLs; family fairs/markets with explicit
+    child/family audience signals must use `family` CTA copy rather than
+    generic market repost wording.
 - `INC-2026-06-12-raffle-source-publication-false-skip.md`
   - Scope: VK auto-import / Smart Update fanout from `schedule_event_update_tasks` into managed VK `vk_sync` and Telegram `tg_event_publish`, especially source posts that contain raffle/giveaway fragments alongside a real event.
   - Must not regress: a valid event whose raw source mentions a ticket raffle/giveaway must still enqueue and publish managed VK + Telegram event posts when Smart Update has produced substantial cleaned non-giveaway event copy; prize-only giveaway sources without cleaned event copy may still be skipped when a non-giveaway alternative exists.
