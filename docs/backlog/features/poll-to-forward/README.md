@@ -83,25 +83,27 @@ returns a compact poll plan:
 - warnings when the topic set is weak or underfilled.
 
 The poll question itself is product copy, not a semantic topic decision. Its
-primary promise is: today in the evening the channel will recommend where to go
-tomorrow, and the audience is choosing the direction for that recommendation.
-Debug and production rotate several friendly participation frames by slot, for
-example:
+primary promise is: today the audience chooses the type/theme of tomorrow's
+event, and in the evening the channel author chooses one concrete announcement
+inside that theme. The copy should feel friendly and a little blogger-like, not
+like an algorithm or a marketing banner. Debug and production rotate several
+participation frames by slot, for example:
 
-- `Сегодня вечером порекомендую, куда можно пойти завтра. Что вам ближе?`
-- `Сегодня вечером выберу одну рекомендацию на завтра. Какой план вам ближе?`
-- `Сегодня вечером подберу событие, куда можно сходить завтра. На что настроены?`
-- `Выбираем, что рекомендовать сегодня вечером на завтра. Что вам интереснее?`
-- `Сегодня вечером порекомендую, куда сходить завтра. Помогите выбрать тематику.`
 - `Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.`
-- `Проголосуйте, на какую тему порекомендовать событие на завтра вечером.`
+- `Давайте выберем тему для завтрашней рекомендации. Вечером я возьму один анонс из варианта, за который будет больше голосов.`
+- `Что завтра порекомендовать в канале? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.`
+- `Давайте вместе решим, из какой темы завтра сделать рекомендацию. Я вечером выберу один анонс и перешлю его сюда.`
+- `Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
-separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
-from drifting into meta copy such as "choose a topic and we will forward an
-announcement" while still allowing theme/type wording when it is clearly tied
-to the evening recommendation promise. The LLM still owns the meaningful option
-set.
+separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. The default rotation
+also avoids repeating the same question text in adjacent debug hourly slots.
+The LLM still owns the meaningful option set.
+
+Avoid false mechanics such as "найду/поищу" when the feature operates on
+events already stored in the database. Avoid pseudo-personal mood wording such
+as "по вашему настроению", neural clichés such as "завтрашний план звучит",
+and generic marketing phrases.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
@@ -148,18 +150,19 @@ Rules:
 Before the repost, the bot sends a short reply to the original poll message
 with the winning topic and, when LLM provides it, a compact reason for the final
 event choice. Example:
-`Вы выбрали «музыка».
+`Спасибо за голоса — берём тему «музыка».
 
-Рекомендация: <a href="https://telegra.ph/...">Название события</a> — хорошо подходит под выбранную тему.
+Из этой темы я бы предложил <a href="https://telegra.ph/...">Название события</a> — хорошо подходит под выбранную тему.
 
-Поставьте 👍, если рекомендация понравилась, или 👎, если нет.
+Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.
 
 Сейчас перешлю анонс 👇`
 
 If the poll result is tied, the reply must say so directly instead of naming a
-single false winner, for example: `Голоса поровну: «выставки» и
-«экскурсии».` The LLM reason should then explain why the selected event still
-makes sense as the final recommendation. It may mention
+single false winner, for example: `Голоса разделились поровну между
+«выставки» и «экскурсии». Беру один из этих вариантов.` The LLM reason should
+then explain why the selected event still makes sense as the final
+recommendation. It may mention
 popularity or public interest only when such signals are grounded in passed
 metrics or event text. If an exhibition starts on the target date, natural
 wording such as "как раз открывается выставка" is preferred over generic

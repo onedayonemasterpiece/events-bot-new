@@ -22,10 +22,11 @@ def test_repost_intro_handles_tied_topics_without_preview_link_copy():
     )
 
     assert text == (
-        "Голоса поровну: «Выставки» и «Экскурсии и прогулки».\n\n"
-        'Рекомендация: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
+        "Голоса разделились поровну между «Выставки» и «Экскурсии и прогулки». "
+        "Беру один из этих вариантов.\n\n"
+        'Я выбрал один вариант из этих тем: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
         "как раз открывается выставка, и это хорошо попадает в голосование.\n\n"
-        "Поставьте 👍, если рекомендация понравилась, или 👎, если нет.\n\n"
+        "Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"
     )
     assert "Подробнее" not in text
@@ -43,7 +44,8 @@ def test_repost_intro_compacts_long_reason():
         telegraph_url="https://telegra.ph/demo",
     )
 
-    reason = text.split(" — ", 1)[1].split("\n\n", 1)[0]
+    recommendation_line = next(line for line in text.splitlines() if line.startswith("Из этой темы"))
+    reason = recommendation_line.split(" — ", 1)[1]
     assert len(reason) <= 103
     assert " — " not in reason
     assert reason.endswith("...")
@@ -147,22 +149,22 @@ async def _seed_many_events(db: Database) -> None:
 
 def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
-    assert "Сегодня вечером проголосуйте, какую тематику взять для рекомендации на завтра." in pf.DEFAULT_POLL_QUESTION_VARIANTS
+    assert "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе." in pf.DEFAULT_POLL_QUESTION_VARIANTS
     banned = (
         "план звучит",
         "звучит лучше",
         "общему выбору",
         "лучшие события",
         "алгоритм",
-        "за какую тему",
-        "выберите тему",
-        "анонс",
-        "перешлю",
+        "найду",
+        "искать",
+        "по настроению",
+        "куда тянет",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()
         assert not any(fragment in lowered for fragment in banned)
-        assert "сегодня вечером" in lowered
+        assert "вечером" in lowered
         assert "завтра" in lowered
         assert any(
             marker in lowered
@@ -176,11 +178,27 @@ def test_default_question_variants_frame_real_tomorrow_plan():
                 "провести",
                 "направление",
                 "выбрать",
+                "выбира",
+                "тема",
+                "тему",
+                "темы",
                 "темати",
                 "тип события",
             )
         )
-        assert any(marker in lowered for marker in ("рекоменд", "посовет", "подбер", "найду", "покажу"))
+        assert any(
+            marker in lowered
+            for marker in ("рекоменд", "посовет", "подбер", "покажу", "выбер", "выбира", "подсвет")
+        )
+
+
+def test_poll_question_rotation_does_not_repeat_adjacent_debug_slots():
+    previous = None
+    for hour in range(24):
+        text = pf._poll_question_text(f"debug:2026-06-12T{hour:02d}")
+        if previous is not None:
+            assert text != previous
+        previous = text
 
 
 def test_production_min_vote_threshold_grows_weekly(monkeypatch):
@@ -356,12 +374,12 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
         text = bot.messages[index]["text"]
         assert winner_text in text
         assert "Подробнее" not in text
-        assert "Поставьте 👍, если рекомендация понравилась" in text
+        assert "Если рекомендация зашла" in text
         assert "Сейчас перешлю анонс 👇" in text
         assert text.count("\n\n") == 3
         assert bot.messages[index]["parse_mode"] == "HTML"
         assert bot.messages[index]["disable_web_page_preview"] is True
-    assert "Голоса поровну" in bot.messages[3]["text"]
+    assert "Голоса разделились поровну" in bot.messages[3]["text"]
     await db.close()
 
 
@@ -411,9 +429,9 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
-        "Вы выбрали «Вечер с музыкой».\n\n"
-        'Рекомендация: <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n\n'
-        "Поставьте 👍, если рекомендация понравилась, или 👎, если нет.\n\n"
+        "Спасибо за голоса — берём тему «Вечер с музыкой».\n\n"
+        'Из этой темы я бы предложил <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n\n'
+        "Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"
     )
     assert bot.messages[0]["parse_mode"] == "HTML"

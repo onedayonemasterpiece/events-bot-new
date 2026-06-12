@@ -69,6 +69,12 @@
   choice as the mechanism, avoiding meta phrasing like "which topic are we
   taking on tomorrow"; theme/type-event wording is allowed only when it stays
   attached to that evening recommendation promise.
+- **Changed: Poll to Repost audience copy**: poll questions now keep the
+  friendlier "choose the event type together" framing while making the real
+  flow explicit: subscribers choose tomorrow's theme/type and the channel picks
+  one concrete announcement inside it in the evening. Adjacent debug hourly
+  slots no longer repeat the same default question text, and the repost intro
+  uses a more conversational thank-you/recommendation/feedback flow.
 - **Changed: Poll to Repost production vote threshold**: production reposts now
   have a documented threshold helper starting at 10 votes on 2026-06-12 and
   growing by 1 every full week, with env overrides for the base and start date.

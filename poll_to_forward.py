@@ -29,23 +29,20 @@ STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 DEFAULT_POLL_QUESTION_TEXT = (
-    "Сегодня вечером порекомендую, куда можно пойти завтра. Куда тянет?"
+    "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе."
 )
 DEFAULT_POLL_QUESTION_VARIANTS = (
     DEFAULT_POLL_QUESTION_TEXT,
-    "Сегодня вечером выберу одну рекомендацию на завтра. Какой план вам ближе?",
-    "Сегодня вечером подберу событие, куда можно сходить завтра. На что настроены?",
-    "Сегодня вечером выберем, куда завтра можно сходить, и я порекомендую один вариант.",
-    "Сегодня вечером будет рекомендация на завтра. Куда больше тянет?",
-    "Сегодня вечером покажу один вариант на завтра. На что больше настроены?",
-    "Помогите выбрать направление: сегодня вечером принесу рекомендацию на завтра.",
-    "Сегодня вечером найду, куда сходить завтра. Какой вариант вам ближе?",
-    "Сегодня вечером соберу рекомендацию на завтра. Что выбрать за основу?",
-    "Сегодня вечером посоветую одно событие на завтра. Какое настроение выбрать?",
-    "Сегодня вечером порекомендую, куда сходить завтра. Помогите выбрать тематику.",
-    "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.",
-    "Голосуйте за тип события, а сегодня вечером подберу, куда можно пойти завтра.",
-    "Сегодня вечером проголосуйте, какую тематику взять для рекомендации на завтра.",
+    "Давайте выберем тему для завтрашней рекомендации. Вечером я возьму один анонс из варианта, за который будет больше голосов.",
+    "Что завтра порекомендовать в канале? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.",
+    "Голосуем за тему завтрашнего события. Вечером покажу один анонс из той темы, которую выберет большинство.",
+    "Давайте вместе решим, из какой темы завтра сделать рекомендацию. Я вечером выберу один анонс и перешлю его сюда.",
+    "Какую тематику взять на завтра? Вы голосуете, я вечером выбираю один анонс внутри победившего варианта.",
+    "Помогите выбрать направление для завтрашней рекомендации: выставки, прогулки, музыка, семья или что-то ещё. Вечером покажу один анонс.",
+    "Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.",
+    "Давайте так: вы голосуете за тематику на завтра, а я вечером выберу из неё один анонс и покажу в канале.",
+    "Из какой темы завтра хочется рекомендацию? Голосуйте, а вечером я выберу один конкретный анонс из победившего варианта.",
+    "Что завтра подсветить в канале? Выбирайте тематику, а вечером будет один конкретный анонс по голосам.",
 )
 PROD_MIN_VOTES_BASE = 10
 PROD_MIN_VOTES_START_DATE = date(2026, 6, 12)
@@ -146,7 +143,34 @@ def _poll_question_text(run_key: str | None = None) -> str:
         return variants[0]
     raw_key = str(run_key or _now_utc().date().isoformat())
     digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
-    return variants[int(digest[:8], 16) % len(variants)]
+    index = int(digest[:8], 16) % len(variants)
+    previous_key = _previous_question_run_key(raw_key)
+    if previous_key:
+        previous_digest = hashlib.sha256(previous_key.encode("utf-8")).hexdigest()
+        previous_index = int(previous_digest[:8], 16) % len(variants)
+        if previous_index == index:
+            index = (index + 1) % len(variants)
+    return variants[index]
+
+
+def _previous_question_run_key(raw_key: str) -> str | None:
+    text = str(raw_key or "").strip()
+    debug_prefix = "debug:"
+    if text.startswith(debug_prefix):
+        slot = text.removeprefix(debug_prefix)
+        try:
+            previous = datetime.strptime(slot, "%Y-%m-%dT%H") - timedelta(hours=1)
+        except ValueError:
+            return None
+        return f"{debug_prefix}{previous.strftime('%Y-%m-%dT%H')}"
+    for prefix in ("prod:", ""):
+        value = text.removeprefix(prefix) if prefix else text
+        try:
+            previous_date = date.fromisoformat(value) - timedelta(days=1)
+        except ValueError:
+            continue
+        return f"{prefix}{previous_date.isoformat()}"
+    return None
 
 
 def _event_telegraph_url(event: CandidateEvent | Event | None) -> str | None:
@@ -191,15 +215,17 @@ def _repost_intro_text(
         else:
             tied_text = ", ".join(f"«{escape(text)}»" for text in shown[:-1])
             tied_text = f"{tied_text} и «{escape(shown[-1])}»"
-        parts = [f"Голоса поровну: {tied_text}."]
+        parts = [f"Голоса разделились поровну между {tied_text}. Беру один из этих вариантов."]
+        recommendation_lead = f"Я выбрал один вариант из этих тем: {linked_title}"
     else:
-        parts = [f"Вы выбрали «{escape(winner)}»."]
+        parts = [f"Спасибо за голоса — берём тему «{escape(winner)}»."]
+        recommendation_lead = f"Из этой темы я бы предложил {linked_title}"
     if reason_text:
         reason_end = "" if reason_text.endswith((".", "!", "?", "…")) else "."
-        parts.append(f"Рекомендация: {linked_title} — {escape(reason_text)}{reason_end}")
+        parts.append(f"{recommendation_lead} — {escape(reason_text)}{reason_end}")
     else:
-        parts.append(f"Рекомендация: {linked_title}.")
-    parts.append("Поставьте 👍, если рекомендация понравилась, или 👎, если нет.")
+        parts.append(f"{recommendation_lead}.")
+    parts.append("Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.")
     parts.append("Сейчас перешлю анонс 👇")
     return "\n\n".join(parts)
 
