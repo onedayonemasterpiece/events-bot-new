@@ -83,7 +83,7 @@ Event `5951` (`Путешествие в сказку в деревне Холм
 - Add upload-server retry loop with a fresh `photos.getWallUploadServer` URL per attempt.
 - Make new managed VK event posts fail closed with `vk_sync_partial_media_upload` when only part of the expected media uploads.
 - Classify family fairs/markets as `family` for afishaengagement when cleaned event text contains explicit child/family audience signals.
-- Add softer parent-aware repost templates for family events.
+- Add a family-market repost pool with softer parent-aware templates for `подруга-мама`, `мама-подруга`, parents, and children.
 
 ## Follow-up Actions
 

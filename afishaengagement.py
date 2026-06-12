@@ -759,6 +759,24 @@ def _looks_family_audience_event(raw: str) -> bool:
     )
 
 
+def _looks_family_market_event(event: Event, semantic_raw: str | None = None) -> bool:
+    explicit_key = _explicit_event_type_key(getattr(event, "event_type", None))
+    if explicit_key != "market":
+        return False
+    raw = semantic_raw
+    if raw is None:
+        raw = " ".join(
+            [
+                str(event.title or ""),
+                str(event.description or ""),
+                str(event.source_text or ""),
+                str(event.search_digest or ""),
+                str(event.location_name or ""),
+            ]
+        ).casefold()
+    return _looks_family_audience_event(raw)
+
+
 def _looks_zoo_event(raw: str) -> bool:
     if not raw:
         return False
@@ -874,7 +892,7 @@ def _event_type_key(event: Event) -> str:
         return "theatre"
     if explicit_key == "market" and _looks_recycling_event(semantic_raw):
         return "other"
-    if explicit_key == "market" and _looks_family_audience_event(semantic_raw):
+    if explicit_key == "market" and _looks_family_market_event(event, semantic_raw):
         return "family"
     if explicit_key and explicit_key != "other":
         return explicit_key
@@ -1264,6 +1282,7 @@ def _templates_for(
     theme: str | None = None,
     idea: str | None = None,
     cinema_club: str | None = None,
+    family_market: bool = False,
 ) -> dict[str, list[str]]:
     topic = "{T}"
     topic_acc = "{TA}"
@@ -1438,6 +1457,11 @@ def _templates_for(
             "Поделись с подругой, которой близки живые встречи.",
         ] + templates["reposts"]
     elif event_type == "family":
+        family_market_reposts = [
+            "Поделись с подругой-мамой, которой близки семейные события.",
+            "Поделись с мамой-подругой, которой интересны детские выходные.",
+            "Поделись с родителями, которым близки детские события.",
+        ]
         templates["comments"].extend(
             [
                 "Кому из близких нравятся такие семейные события?",
@@ -1450,19 +1474,25 @@ def _templates_for(
                 "Поставь лайк, если интересны детские события.",
             ]
         )
-        templates["reposts"].extend(
-            [
-                "Поделись с теми, кому близки семейные события.",
-                "Поделись с подругой, которой интересны детские события.",
-                "Поделись с подругой-мамой, которой близки семейные события.",
-                "Поделись с мамой-подругой, которой интересны детские выходные.",
-            ]
-        )
+        if family_market:
+            templates["reposts"] = family_market_reposts
+        else:
+            templates["reposts"].extend(
+                [
+                    "Поделись с теми, кому близки семейные события.",
+                    "Поделись с подругой, которой интересны детские события.",
+                    *family_market_reposts,
+                ]
+            )
         if theme and ("сказоч" in theme or "геро" in theme):
             templates["comments"].append("Кого из сказочных героев дети ждут больше всего?")
-            templates["reposts"].append("Поделись с другом, чьи дети любят сказочных героев.")
-            templates["reposts"].append("Поделись с подругой, чьи дети любят сказочных героев.")
-            templates["reposts"].append("Поделись с подругой-мамой, чьи дети любят сказочные истории.")
+            if family_market:
+                templates["reposts"].append("Поделись с подругой-мамой, чьи дети любят сказочные истории.")
+                templates["reposts"].append("Поделись с родителями, чьи дети любят сказочных героев.")
+            else:
+                templates["reposts"].append("Поделись с другом, чьи дети любят сказочных героев.")
+                templates["reposts"].append("Поделись с подругой, чьи дети любят сказочных героев.")
+                templates["reposts"].append("Поделись с подругой-мамой, чьи дети любят сказочные истории.")
     if theme:
         templates["likes"].extend(
             [
@@ -1817,7 +1847,15 @@ def build_engagement_plan(
         bag = ["comments", "likes", "reposts"]
     rnd.shuffle(bag)
 
-    templates = _templates_for(event_type, persona, festival, theme, idea, cinema_club)
+    templates = _templates_for(
+        event_type,
+        persona,
+        festival,
+        theme,
+        idea,
+        cinema_club,
+        family_market=_looks_family_market_event(event),
+    )
     configured_templates = _configured_templates_for(config, event_type)
     for configured_mechanic, configured_values in configured_templates.items():
         templates.setdefault(configured_mechanic, [])

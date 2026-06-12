@@ -1069,6 +1069,10 @@ def test_family_market_uses_soft_mom_friend_repost_copy():
 
     assert aeg._event_type_key(event) == "family"
     assert any("подругой-мамой" in text.casefold() or "мамой-подругой" in text.casefold() for text in seen)
+    assert all(
+        "мам" in text.casefold() or "родител" in text.casefold() or "дет" in text.casefold()
+        for text in seen
+    )
     assert "Поделись с подругой, которая любит такие ярмарки." not in seen
 
 

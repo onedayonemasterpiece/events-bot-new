@@ -99,7 +99,8 @@ wrong stored event types without changing the source event row:
   (`семейный`, `детский`, `сказочные герои`, `аниматоры`, etc.) use `family`
   copy even when the stored type says `ярмарка`, so a family fair does not get
   generic market repost text like `Поделись с подругой, которая любит такие
-  ярмарки`.
+  ярмарки`. Their repost templates use a separate parent-aware pool with
+  softer `подруга-мама`, `мама-подруга`, `родители`, and child-focused wording.
 
 Theme extraction inside an already selected event type must use safe word/stem
 matching: narrow cues such as `орган` may match real organ music forms, but must
