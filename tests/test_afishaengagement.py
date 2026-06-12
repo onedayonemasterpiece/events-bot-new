@@ -2005,6 +2005,97 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
 
 
 @pytest.mark.asyncio
+async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Лекция с Иваном Петровым",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="лекция",
+            source_post_url="https://vk.com/wall-1_2",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация public", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "publish_mode": "public",
+                "apply_rate": 1,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+
+    posted = {}
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        raise AssertionError("public mode should not call shadow cleanup/slot lookup")
+
+    async def fake_upload_images(images, *args, **kwargs):
+        assert len(images) == 1
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        posted["message"] = message
+        posted["attachments"] = attachments
+        posted["kwargs"] = kwargs
+        return "https://vk.com/wall-231920894_1000"
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1000"
+    assert posted["attachments"] == ["photo-231920894_777"]
+    assert posted["kwargs"]["carousel"] is True
+    assert posted["kwargs"]["publish_date"] is None
+    assert "AFISHAENGAGEMENT DEBUG COPY" not in posted["message"]
+    assert "#afishaengagement" not in posted["message"]
+
+    async with db.get_session() as session:
+        rows = list((await session.execute(select(PromoExposure))).scalars().all())
+    assert len(rows) == 1
+    assert rows[0].surface == aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT
+    assert rows[0].publish_status == "VK_SCHEDULED"
+    assert rows[0].placement_kind == "vk_engagement"
+    assert rows[0].public_targets_json == [{"type": "vk_wall", "url": "https://vk.com/wall-231920894_1000"}]
+    assert rows[0].details_json["publish_mode"] == "public"
+    assert rows[0].details_json["debug_shadow"] is False
+    assert "shadow_marker" not in rows[0].details_json
+
+
+@pytest.mark.asyncio
 async def test_shadow_debug_copy_falls_through_after_candidate_dice_miss(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -2108,6 +2199,104 @@ async def test_shadow_debug_copy_falls_through_after_candidate_dice_miss(tmp_pat
     assert len(rows) == 1
     assert rows[0].activity_id == int(fallback_activity.id)
     assert rows[0].details_json["shadow_marker"] == "#aeg_all"
+
+
+@pytest.mark.asyncio
+async def test_public_engagement_dice_miss_falls_through_to_shadow(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Концерт",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="концерт",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        public_campaign = PromoCampaign(title="public 10", status="active", starts_at=now, priority=0)
+        shadow_campaign = PromoCampaign(title="shadow fallback", status="active", starts_at=now, priority=9)
+        session.add_all([event, public_campaign, shadow_campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(public_campaign)
+        await session.refresh(shadow_campaign)
+        public_activity = PromoActivity(
+            campaign_id=int(public_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "publish_mode": "public",
+                "apply_rate": 0,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        shadow_activity = PromoActivity(
+            campaign_id=int(shadow_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "debug_shadow": True,
+                "apply_rate": 1,
+                "debug_marker": "#aeg_shadow_fallback",
+                "debug_cleanup_before": False,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        session.add_all(
+            [
+                public_activity,
+                shadow_activity,
+                PromoTarget(campaign_id=int(public_campaign.id), target_type="all"),
+                PromoTarget(campaign_id=int(shadow_campaign.id), target_type="all"),
+            ]
+        )
+        await session.commit()
+        await session.refresh(shadow_activity)
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        return {"response": 1}
+
+    async def fake_upload_images(images, *args, **kwargs):
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        return "https://vk.com/wall-231920894_1003"
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1003"
+    async with db.get_session() as session:
+        rows = list((await session.execute(select(PromoExposure))).scalars().all())
+    assert len(rows) == 1
+    assert rows[0].activity_id == int(shadow_activity.id)
+    assert rows[0].publish_status == "VK_SCHEDULED_DEBUG"
+    assert rows[0].details_json["publish_mode"] == "shadow"
+    assert rows[0].details_json["shadow_marker"] == "#aeg_shadow_fallback"
 
 
 @pytest.mark.asyncio

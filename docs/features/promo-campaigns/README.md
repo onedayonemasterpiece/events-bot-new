@@ -322,10 +322,12 @@ The initial `80 историй о главном` campaign now includes:
 - `vk_story` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=2`, `daily_cap=2`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
-- `afishaengagement` for `https://vk.com/klgdevents`, debug shadow enabled,
-  `apply_rate=0.70`, likes-only registration CTA
+- `afishaengagement` for `https://vk.com/klgdevents`, public canary enabled
+  through a higher-priority public activity and a lower-priority shadow
+  fallback. The initial public rollout rate is `0.50`, with shadow fallback
+  `1.0`, likes-only registration CTA
   `Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}.`, and all
-  visual formats enabled for the first VK visual-debug pass. Existing legacy
+  visual formats enabled for VK visual-debug monitoring. Existing legacy
   `klgdevents:motivation:80stories` activities are synchronized into the
   canonical `klgdevents:afishaengagement` profile instead of creating a second
   active `afishaengagement` activity.

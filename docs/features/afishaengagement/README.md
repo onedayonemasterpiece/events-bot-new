@@ -1,6 +1,7 @@
 # Afisha Engagement
 
-> **Status:** Visual-debug iteration deployed; fresh VK shadow audit found and fixed CTA/type guardrails.
+> **Status:** Public canary rollout supported; shadow fallback remains enabled
+> for visual audit.
 > **Confirmation:** Not confirmed by user after VK visual review.
 > **Canonical requirements snapshot:** [requirements.md](requirements.md).
 
@@ -30,7 +31,9 @@ publications do not bypass the `Мотивация` activity.
   photo attachments into the shadow renderer. This keeps the CTA text, event
   metadata, and generated poster media bound to the same event/photo set.
 - Dedupe is stored through `promo_exposure` rows with
-  `surface='afishaengagement'` and `publish_status='VK_SCHEDULED_DEBUG'`.
+  `surface='afishaengagement'`: shadow copies use
+  `publish_status='VK_SCHEDULED_DEBUG'`, public canary posts use
+  `publish_status='VK_SCHEDULED'`.
 
 ## Promo Activity Config
 
@@ -54,6 +57,49 @@ The activity is enabled manually as a `PromoActivity` row:
   }
 }
 ```
+
+Public canary publication uses the same surface and renderer, but switches the
+activity to public mode:
+
+```json
+{
+  "surface": "afishaengagement",
+  "enabled": true,
+  "config_json": {
+    "target_group": "klgdevents",
+    "publish_mode": "public",
+    "apply_rate": 0.1,
+    "vision_enabled": true,
+    "llm_plan_enabled": true,
+    "apply_salt": "public-rollout-20260612"
+  }
+}
+```
+
+Public mode does not append a debug marker, does not run marker cleanup, posts
+through the normal VK postponed-publication path, and records
+`placement_kind='vk_engagement'` with target type `vk_wall`. To keep a visual
+audit stream while exposing only a fraction publicly, create a higher-priority
+public campaign/activity followed by a lower-priority shadow activity for the
+same target:
+
+1. Public activity: `publish_mode="public"`, desired `apply_rate`, no
+   `debug_marker`.
+2. Shadow fallback activity: `debug_shadow=true`, `apply_rate=1.0`, marker and
+   future postponed debug scheduling.
+
+Because candidate evaluation is ordered by promo campaign priority, public
+canary rows should live in a campaign with a smaller `priority` value than the
+matching shadow fallback campaign. A public dice miss, duplicate, disabled
+activity, or cap on an earlier candidate falls through to the next matching
+activity.
+
+Initial production canary rates on 2026-06-12:
+
+- `80 историй о главном`: public `apply_rate=0.5`, shadow fallback `1.0`;
+- educational program of `Кантата`: public `apply_rate=0.3`, shadow fallback
+  `1.0`;
+- all other events: public `apply_rate=0.1`, shadow fallback `1.0`.
 
 Supported target types are the existing promo campaign targets:
 
@@ -162,10 +208,10 @@ summary, dice value, scheduled timestamp, and VK debug post URL.
 The decision is stable per `event_id/campaign_id/activity_id/apply_salt/media_hash`,
 so retries do not randomly flip the same event in and out.
 When several activities match the same event, they are evaluated in campaign
-priority order. A dice miss, disabled shadow mode, duplicate, or debug cap on
-one activity is logged and the next matching activity may still create the
-shadow copy. This allows a 70% festival-specific CTA to fall through to the
-100% all-post visual-debug activity.
+priority order. A dice miss, disabled publish mode, duplicate, or debug cap on
+one activity is logged and the next matching activity may still create a public
+post or shadow copy. This allows a 10% public canary to fall through to the
+100% visual-debug fallback.
 
 Activities may provide prioritized custom CTA templates:
 

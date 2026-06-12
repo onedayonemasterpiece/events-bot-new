@@ -4431,6 +4431,13 @@ def _env_debug_enabled(config: dict[str, Any]) -> bool:
     return _parse_bool(config.get("debug_shadow"), default=False)
 
 
+def _public_publish_enabled(config: dict[str, Any]) -> bool:
+    if _parse_bool(config.get("public_post"), default=False):
+        return True
+    mode = str(config.get("publish_mode") or "").strip().casefold()
+    return mode in {"public", "public_post", "prod", "production"}
+
+
 def _debug_marker(config: dict[str, Any], now_utc: datetime) -> tuple[str, str]:
     marker = str(config.get("debug_marker") or os.getenv("AFISHAENGAGEMENT_DEBUG_MARKER") or DEFAULT_DEBUG_MARKER)
     build_tag = f"{DEFAULT_BUILD_TAG_PREFIX}{now_utc.strftime('%Y%m%d')}"
@@ -4637,6 +4644,27 @@ async def _shadow_already_exists(
     return False
 
 
+async def _public_engagement_already_exists(
+    db: Database | None,
+    *,
+    event_id: int | None,
+    activity_id: int | None,
+) -> bool:
+    if db is None or event_id is None:
+        return False
+    async with db.get_session() as session:
+        query = (
+            select(PromoExposure)
+            .where(PromoExposure.event_id == int(event_id))
+            .where(PromoExposure.surface == PROMO_SURFACE_AFISHA_ENGAGEMENT)
+            .where(PromoExposure.publish_status.in_(["VK_SCHEDULED", "PUBLISHED"]))
+        )
+        if activity_id is not None:
+            query = query.where(PromoExposure.activity_id == int(activity_id))
+        rows = list((await session.execute(query)).scalars().all())
+    return bool(rows)
+
+
 async def _debug_cap_reached(
     db: Database | None,
     *,
@@ -4673,62 +4701,75 @@ async def record_shadow_exposure(
     candidate: EngagementCandidate,
     event: Event,
     vk_url: str,
-    scheduled_ts: int,
-    marker: str,
-    build_tag: str,
+    scheduled_ts: int | None,
+    marker: str = "",
+    build_tag: str = "",
     media_digest: str,
     plan: EngagementPlan,
     rendered: RenderedImage,
     dice: DiceDecision,
     vision: PosterVisionSummary,
     source_photo_urls: Sequence[str] | None = None,
+    publish_mode: str = "shadow",
 ) -> None:
     if db is None or event.id is None or candidate.campaign.id is None:
         return
     source_photo_urls = [str(url or "").strip() for url in (source_photo_urls or []) if str(url or "").strip()]
+    debug_shadow = publish_mode == "shadow"
+    publish_status = "VK_SCHEDULED_DEBUG" if debug_shadow else "VK_SCHEDULED"
+    placement_kind = "vk_shadow_debug" if debug_shadow else "vk_engagement"
+    target_type = "vk_wall_debug" if debug_shadow else "vk_wall"
+    details = {
+        "target_url": vk_url,
+        "vk_post_id": _vk_post_id_from_url(vk_url),
+        "scheduled_ts": scheduled_ts,
+        "media_hash": media_digest,
+        "apply_rate": dice.apply_rate,
+        "dice_value": dice.value,
+        "seed": dice.seed,
+        "campaign_title": str(getattr(candidate.campaign, "title", "") or "")[:160],
+        "activity_profile_key": str(getattr(candidate.activity, "profile_key", "") or "")[:120],
+        "activity_surface": str(getattr(candidate.activity, "surface", "") or "")[:80],
+        "event_title": str(getattr(event, "title", "") or "")[:160],
+        "event_type": plan.event_type,
+        "stored_event_type": str(getattr(event, "event_type", "") or "")[:80],
+        "event_festival": str(getattr(event, "festival", "") or "")[:160],
+        "source_post_url": str(getattr(event, "source_post_url", "") or "")[:240],
+        "event_source_vk_post_url": str(getattr(event, "source_vk_post_url", "") or "")[:240],
+        "source_first_photo_url": source_photo_urls[0] if source_photo_urls else None,
+        "source_photo_urls_count": len(source_photo_urls),
+        "mechanic": plan.mechanic,
+        "template_id": plan.template_id,
+        "palette_id": plan.palette_id,
+        "cta_text": plan.cta_text,
+        "cta_text_lines": rendered.cta_text_lines,
+        "cta_text_font_px": rendered.cta_text_font_px,
+        "dimensions": list(rendered.dimensions),
+        "vision_provider": vision.provider,
+        "vision_confidence": vision.confidence,
+        "vision_reason": vision.reason,
+        "publish_mode": publish_mode,
+        "debug_shadow": debug_shadow,
+    }
+    if debug_shadow:
+        details["shadow_marker"] = marker
+        details["build_tag"] = build_tag
     async with db.get_session() as session:
         exposure = PromoExposure(
             campaign_id=int(candidate.campaign.id),
             activity_id=int(candidate.activity.id) if candidate.activity.id is not None else None,
             event_id=int(event.id),
             surface=PROMO_SURFACE_AFISHA_ENGAGEMENT,
-            placement_kind="vk_shadow_debug",
-            publish_status="VK_SCHEDULED_DEBUG",
+            placement_kind=placement_kind,
+            publish_status=publish_status,
             public_target_count=1,
-            public_targets_json=[{"type": "vk_wall_debug", "url": vk_url}],
-            published_at=datetime.fromtimestamp(scheduled_ts, tz=timezone.utc),
-            details_json={
-                "target_url": vk_url,
-                "vk_post_id": _vk_post_id_from_url(vk_url),
-                "scheduled_ts": scheduled_ts,
-                "shadow_marker": marker,
-                "build_tag": build_tag,
-                "media_hash": media_digest,
-                "apply_rate": dice.apply_rate,
-                "dice_value": dice.value,
-                "seed": dice.seed,
-                "campaign_title": str(getattr(candidate.campaign, "title", "") or "")[:160],
-                "activity_profile_key": str(getattr(candidate.activity, "profile_key", "") or "")[:120],
-                "activity_surface": str(getattr(candidate.activity, "surface", "") or "")[:80],
-                "event_title": str(getattr(event, "title", "") or "")[:160],
-                "event_type": plan.event_type,
-                "stored_event_type": str(getattr(event, "event_type", "") or "")[:80],
-                "event_festival": str(getattr(event, "festival", "") or "")[:160],
-                "source_post_url": str(getattr(event, "source_post_url", "") or "")[:240],
-                "event_source_vk_post_url": str(getattr(event, "source_vk_post_url", "") or "")[:240],
-                "source_first_photo_url": source_photo_urls[0] if source_photo_urls else None,
-                "source_photo_urls_count": len(source_photo_urls),
-                "mechanic": plan.mechanic,
-                "template_id": plan.template_id,
-                "palette_id": plan.palette_id,
-                "cta_text": plan.cta_text,
-                "cta_text_lines": rendered.cta_text_lines,
-                "cta_text_font_px": rendered.cta_text_font_px,
-                "dimensions": list(rendered.dimensions),
-                "vision_provider": vision.provider,
-                "vision_confidence": vision.confidence,
-                "vision_reason": vision.reason,
-            },
+            public_targets_json=[{"type": target_type, "url": vk_url}],
+            published_at=(
+                datetime.fromtimestamp(scheduled_ts, tz=timezone.utc)
+                if scheduled_ts is not None
+                else datetime.now(timezone.utc)
+            ),
+            details_json=details,
         )
         session.add(exposure)
         await session.commit()
@@ -4893,58 +4934,73 @@ async def maybe_publish_shadow_debug_copy(
     dice: DiceDecision | None = None
     campaign_id: int | None = None
     activity_id: int | None = None
+    publish_mode = "shadow"
     for candidate_item in candidates:
         item_campaign_id = int(candidate_item.campaign.id) if candidate_item.campaign.id is not None else None
         item_activity_id = int(candidate_item.activity.id) if candidate_item.activity.id is not None else None
         item_config = candidate_item.config
         item_marker, item_build_tag = _debug_marker(item_config, now_utc)
-        shadow_mode = _env_debug_enabled(item_config)
-        if not shadow_mode:
+        public_mode = _public_publish_enabled(item_config)
+        shadow_mode = (not public_mode) and _env_debug_enabled(item_config)
+        item_publish_mode = "public" if public_mode else "shadow"
+        if not public_mode and not shadow_mode:
             _json_log(
                 StageLog(
                     stage="eligibility",
                     decision="skip",
-                    reason="shadow_disabled",
+                    reason="publishing_disabled",
                     event_id=event_id,
                     campaign_id=item_campaign_id,
                     activity_id=item_activity_id,
                     vk_owner_id=owner_id,
                     vk_group_short=group_short,
                     shadow_mode=False,
+                    extra={"publish_mode": "disabled"},
                 )
             )
             continue
-        await maybe_cleanup_once(
-            group_id=target_group_id,
-            marker=item_marker,
-            config=item_config,
-            vk_api_fn=vk_api_fn,
-            db=db,
-            bot=bot,
+        if shadow_mode:
+            await maybe_cleanup_once(
+                group_id=target_group_id,
+                marker=item_marker,
+                config=item_config,
+                vk_api_fn=vk_api_fn,
+                db=db,
+                bot=bot,
+            )
+        duplicate = (
+            await _shadow_already_exists(
+                db,
+                event_id=event_id,
+                activity_id=item_activity_id,
+                marker=item_marker,
+                build_tag=item_build_tag,
+            )
+            if shadow_mode
+            else await _public_engagement_already_exists(
+                db,
+                event_id=event_id,
+                activity_id=item_activity_id,
+            )
         )
-        if await _shadow_already_exists(
-            db,
-            event_id=event_id,
-            activity_id=item_activity_id,
-            marker=item_marker,
-            build_tag=item_build_tag,
-        ):
+        if duplicate:
             _json_log(
                 StageLog(
                     stage="eligibility",
                     decision="skip",
-                    reason="shadow_duplicate",
+                    reason="shadow_duplicate" if shadow_mode else "public_duplicate",
                     event_id=event_id,
                     campaign_id=item_campaign_id,
                     activity_id=item_activity_id,
                     vk_owner_id=owner_id,
                     vk_group_short=group_short,
-                    shadow_mode=True,
-                    shadow_marker=item_marker,
+                    shadow_mode=shadow_mode,
+                    shadow_marker=item_marker if shadow_mode else None,
+                    extra={"publish_mode": item_publish_mode, "candidate_fallback": True},
                 )
             )
             continue
-        if await _debug_cap_reached(db, activity_id=item_activity_id, config=item_config, now_utc=now_utc):
+        if shadow_mode and await _debug_cap_reached(db, activity_id=item_activity_id, config=item_config, now_utc=now_utc):
             _json_log(
                 StageLog(
                     stage="eligibility",
@@ -4957,6 +5013,7 @@ async def maybe_publish_shadow_debug_copy(
                     vk_group_short=group_short,
                     shadow_mode=True,
                     shadow_marker=item_marker,
+                    extra={"publish_mode": item_publish_mode},
                 )
             )
             continue
@@ -4982,9 +5039,13 @@ async def maybe_publish_shadow_debug_copy(
                     seed=item_dice.seed,
                     apply_rate=item_dice.apply_rate,
                     dice_value=item_dice.value,
-                    shadow_mode=True,
-                    shadow_marker=item_marker,
-                    extra={"candidate_fallback": True, "candidate_count": len(candidates)},
+                    shadow_mode=shadow_mode,
+                    shadow_marker=item_marker if shadow_mode else None,
+                    extra={
+                        "candidate_fallback": True,
+                        "candidate_count": len(candidates),
+                        "publish_mode": item_publish_mode,
+                    },
                 )
             )
             continue
@@ -4995,6 +5056,7 @@ async def maybe_publish_shadow_debug_copy(
         marker = item_marker
         build_tag = item_build_tag
         dice = item_dice
+        publish_mode = item_publish_mode
         break
     if candidate is None or dice is None:
         return None
@@ -5078,9 +5140,9 @@ async def maybe_publish_shadow_debug_copy(
                 cta_text_final=plan.cta_text,
                 cta_text_len=len(plan.cta_text),
                 llm_ms_text=llm_ms,
-                shadow_mode=True,
-                shadow_marker=marker,
-                extra={"plan_provider": plan_provider},
+                shadow_mode=(publish_mode == "shadow"),
+                shadow_marker=marker if publish_mode == "shadow" else None,
+                extra={"plan_provider": plan_provider, "publish_mode": publish_mode},
             )
         )
         return None
@@ -5150,30 +5212,38 @@ async def maybe_publish_shadow_debug_copy(
             if not attachment:
                 raise RuntimeError("upload_vk_photo_returned_empty")
             generated_attachments.append(attachment)
-        debug_message = (
-            f"{message.rstrip()}\n\n"
-            f"[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n"
-            f"{marker} {build_tag}"
-        )
-        scheduled_ts, schedule_meta = await _next_shadow_schedule(
-            config=config,
-            now_utc=now_utc,
-            owner_id=owner_id,
-            vk_api_fn=vk_api_fn,
-            db=db,
-            bot=bot,
-        )
+        outgoing_message = message.rstrip()
+        scheduled_ts: int | None = None
+        schedule_meta: dict[str, Any] = {}
+        if publish_mode == "shadow":
+            outgoing_message = (
+                f"{outgoing_message}\n\n"
+                f"[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n"
+                f"{marker} {build_tag}"
+            )
+            scheduled_ts, schedule_meta = await _next_shadow_schedule(
+                config=config,
+                now_utc=now_utc,
+                owner_id=owner_id,
+                vk_api_fn=vk_api_fn,
+                db=db,
+                bot=bot,
+            )
         vk_url = None
-        publish_attempts: list[int] = []
-        spacing = int(schedule_meta.get("slot_spacing_seconds") or _debug_slot_spacing_seconds(config))
-        max_publish_attempts = min(6, 1 + _debug_slot_search_limit(config))
+        publish_attempts: list[int | None] = []
+        spacing = (
+            int(schedule_meta.get("slot_spacing_seconds") or _debug_slot_spacing_seconds(config))
+            if publish_mode == "shadow"
+            else 0
+        )
+        max_publish_attempts = min(6, 1 + _debug_slot_search_limit(config)) if publish_mode == "shadow" else 1
         last_publish_exc: Exception | None = None
         for attempt in range(max_publish_attempts):
             publish_attempts.append(scheduled_ts)
             try:
                 vk_url = await post_to_vk_fn(
                     target_group_id,
-                    debug_message,
+                    outgoing_message,
                     db,
                     bot,
                     generated_attachments,
@@ -5184,11 +5254,11 @@ async def maybe_publish_shadow_debug_copy(
                 break
             except Exception as exc:
                 last_publish_exc = exc
-                if not _looks_like_vk_schedule_collision(exc):
+                if publish_mode != "shadow" or not _looks_like_vk_schedule_collision(exc):
                     raise
                 if attempt >= max_publish_attempts - 1:
                     break
-                scheduled_ts += spacing
+                scheduled_ts = int(scheduled_ts or 0) + spacing
                 logger.info(
                     "afishaengagement: debug shadow slot collision; retrying event_id=%s next_ts=%s",
                     event_id,
@@ -5214,6 +5284,7 @@ async def maybe_publish_shadow_debug_copy(
             dice=dice,
             vision=vision,
             source_photo_urls=photo_urls,
+            publish_mode=publish_mode,
         )
         _json_log(
             StageLog(
@@ -5244,14 +5315,19 @@ async def maybe_publish_shadow_debug_copy(
                 llm_ms_text=llm_ms,
                 llm_ms_vision=vision_ms,
                 total_ms=int((time.monotonic() - started) * 1000),
-                shadow_mode=True,
-                shadow_marker=marker,
-                shadow_scheduled_for_ts=datetime.fromtimestamp(scheduled_ts, timezone.utc).isoformat(),
+                shadow_mode=(publish_mode == "shadow"),
+                shadow_marker=marker if publish_mode == "shadow" else None,
+                shadow_scheduled_for_ts=(
+                    datetime.fromtimestamp(scheduled_ts, timezone.utc).isoformat()
+                    if scheduled_ts is not None
+                    else None
+                ),
                 vk_post_id=_vk_post_id_from_url(vk_url),
                 vk_post_url=vk_url,
                 extra={
                     "media_hash": digest,
-                    "build_tag": build_tag,
+                    "build_tag": build_tag if publish_mode == "shadow" else None,
+                    "publish_mode": publish_mode,
                     "uploaded_url_count": len(generated_urls),
                     "generated_attachment_count": len(generated_attachments),
                     "rendered_template_ids": [image.template_id for image in rendered_images],
@@ -5284,13 +5360,14 @@ async def maybe_publish_shadow_debug_copy(
                 palette_id=plan.palette_id,
                 cta_text_final=plan.cta_text,
                 llm_ms_text=llm_ms,
-                shadow_mode=True,
-                shadow_marker=marker,
+                shadow_mode=(publish_mode == "shadow"),
+                shadow_marker=marker if publish_mode == "shadow" else None,
                 total_ms=int((time.monotonic() - started) * 1000),
                 extra={
                     "error": str(exc),
                     "media_hash": digest,
                     "plan_provider": plan_provider,
+                    "publish_mode": publish_mode,
                     "schedule": schedule_meta if "schedule_meta" in locals() else {},
                 },
             )

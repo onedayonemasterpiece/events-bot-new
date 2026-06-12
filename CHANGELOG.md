@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Added: Afisha Engagement public canary mode**: `afishaengagement`
+  activities can now publish real VK engagement posts via
+  `publish_mode="public"` while dice misses fall through to lower-priority
+  shadow fallback activities. The first production rollout uses public rates
+  `0.5` for `80 историй о главном`, `0.3` for the educational program of
+  `Кантата`, and `0.1` for all other events. Covered by
+  `tests/test_afishaengagement.py`.
 - **Fixed: VK event media parity and Afisha Engagement family CTA**: VK photo
   upload now retries transient `upload.php` failures with fresh upload-server
   URLs, new managed VK event posts fail closed on partial media upload instead
