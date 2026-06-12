@@ -176,9 +176,7 @@ def _repost_intro_text(
         for text in (tied_texts or [])
         if re.sub(r"\s+", " ", str(text or "").strip()).rstrip(".")
     ]
-    reason_text = re.sub(r"\s+", " ", str(reason or "").strip()).rstrip(".")
-    if len(reason_text) > 180:
-        reason_text = reason_text[:177].rstrip() + "..."
+    reason_text = _compact_repost_reason(reason)
     title = re.sub(r"\s+", " ", str(event_title or "").strip()).rstrip(".") or "этот анонс"
     link = str(telegraph_url or "").strip()
     linked_title = (
@@ -193,16 +191,28 @@ def _repost_intro_text(
         else:
             tied_text = ", ".join(f"«{escape(text)}»" for text in shown[:-1])
             tied_text = f"{tied_text} и «{escape(shown[-1])}»"
-        parts = [f"Спасибо за голоса: голоса разделились поровну между {tied_text}."]
+        parts = [f"Голоса поровну: {tied_text}."]
     else:
-        parts = [f"Спасибо за голоса: вы выбрали «{escape(winner)}»."]
+        parts = [f"Вы выбрали «{escape(winner)}»."]
     if reason_text:
-        parts.append(f"Я бы предложил {linked_title} — {escape(reason_text)}.")
+        reason_end = "" if reason_text.endswith((".", "!", "?", "…")) else "."
+        parts.append(f"Рекомендация: {linked_title} — {escape(reason_text)}{reason_end}")
     else:
-        parts.append(f"Я бы предложил {linked_title}.")
-    parts.append("Поставьте 👍, если рекомендация попала, или 👎, если нет.")
+        parts.append(f"Рекомендация: {linked_title}.")
+    parts.append("Поставьте 👍, если рекомендация понравилась, или 👎, если нет.")
     parts.append("Сейчас перешлю анонс 👇")
-    return "\n".join(parts)
+    return "\n\n".join(parts)
+
+
+def _compact_repost_reason(reason: str | None, limit: int = 100) -> str:
+    text = re.sub(r"\s+", " ", str(reason or "").strip()).rstrip(".")
+    text = re.sub(r"\s+[—–-]\s+", ", ", text)
+    if len(text) <= limit:
+        return text
+    cutoff = text.rfind(" ", 0, max(1, limit - 1))
+    if cutoff < int(limit * 0.65):
+        cutoff = max(1, limit - 1)
+    return text[:cutoff].rstrip(" ,;:—–-") + "..."
 
 
 def _local_tz() -> ZoneInfo:
@@ -804,9 +814,10 @@ async def _choose_winner_with_llm(
         "Если опция одна, всё равно оцени события внутри неё. "
         "Выбирай наиболее сильную публичную рекомендацию на завтра: событие должно быть интересно само по себе, "
         "соответствовать теме опроса и не выглядеть случайным. Ничего не придумывай.\n"
-        "reason должен быть короткой дружелюбной причиной для сообщения перед анонсом: "
+        "reason должен быть короткой дружелюбной причиной для сообщения перед анонсом, до 90 символов: "
         "почему именно этот анонс подходит под выбранную тему. Пиши как человек из локального канала, "
-        "не как рекомендательная система. Покажи связь с голосами людей, но не пересказывай весь анонс. "
+        "не как рекомендательная система. Покажи связь с голосами людей, но не пересказывай весь анонс "
+        "и не повторяй название события. "
         "Если есть ничья между темами, не называй тему победителем: объясни, почему в итоге выбираешь именно это событие. "
         "Можно ссылаться на популярность/ожидаемость только если это явно видно из переданных метрик или текста события; "
         "если таких данных нет, не утверждай, что событие популярнее в каналах. "

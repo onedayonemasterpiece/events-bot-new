@@ -35,6 +35,11 @@
 - **Changed: Poll to Repost production vote threshold**: production reposts now
   have a documented threshold helper starting at 10 votes on 2026-06-12 and
   growing by 1 every full week, with env overrides for the base and start date.
+- **Changed: Poll to Repost reply formatting**: recommendation replies now use
+  shorter vote-result wording and blank lines between the result,
+  recommendation, feedback prompt, and forward line, use the softer
+  "понравилась" feedback wording, and ask LLM to keep the reason short without
+  repeating the event title.
 - **Added: Poll to Repost debug rollout**: added the LLM-only debug scheduler
   for hourly daytime polls in `@keniggpt`, persisted `poll_repost_run` audit
   rows, and 30-minute resolver ticks that reply to the poll and forward the

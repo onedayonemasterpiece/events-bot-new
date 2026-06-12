@@ -148,24 +148,30 @@ Rules:
 Before the repost, the bot sends a short reply to the original poll message
 with the winning topic and, when LLM provides it, a compact reason for the final
 event choice. Example:
-`Спасибо за голоса: вы выбрали «музыка».
-Я бы предложил <a href="https://telegra.ph/...">Название события</a> — оно хорошо попадает в выбранную тему.
-Поставьте 👍, если рекомендация попала, или 👎, если нет.
+`Вы выбрали «музыка».
+
+Рекомендация: <a href="https://telegra.ph/...">Название события</a> — хорошо подходит под выбранную тему.
+
+Поставьте 👍, если рекомендация понравилась, или 👎, если нет.
+
 Сейчас перешлю анонс 👇`
 
 If the poll result is tied, the reply must say so directly instead of naming a
-single false winner, for example: `Спасибо за голоса: голоса разделились
-поровну между «выставки» и «экскурсии».` The LLM reason should then explain why
-the selected event still makes sense as the final recommendation. It may mention
+single false winner, for example: `Голоса поровну: «выставки» и
+«экскурсии».` The LLM reason should then explain why the selected event still
+makes sense as the final recommendation. It may mention
 popularity or public interest only when such signals are grounded in passed
 metrics or event text. If an exhibition starts on the target date, natural
 wording such as "как раз открывается выставка" is preferred over generic
-"сходить на выставку".
+"сходить на выставку". Keep the LLM reason compact, ideally under 90
+characters, and do not repeat the event title in the reason.
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical
 `forward_message`/repost mechanic to the audience. Telegraph links are attached
-to the event title in HTML and sent with web preview disabled.
+to the event title in HTML and sent with web preview disabled. Separate the
+thanks, recommendation, feedback prompt, and forwarding line with blank lines so
+the Telegram message does not render as one dense block.
 
 Do not debug this feature by publishing several polls in a burst to the public
 debug channel. Live verification must use one visible cycle at a time unless the

@@ -22,13 +22,32 @@ def test_repost_intro_handles_tied_topics_without_preview_link_copy():
     )
 
     assert text == (
-        "Спасибо за голоса: голоса разделились поровну между «Выставки» и «Экскурсии и прогулки».\n"
-        'Я бы предложил <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
-        "как раз открывается выставка, и это хорошо попадает в голосование.\n"
-        "Поставьте 👍, если рекомендация попала, или 👎, если нет.\n"
+        "Голоса поровну: «Выставки» и «Экскурсии и прогулки».\n\n"
+        'Рекомендация: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
+        "как раз открывается выставка, и это хорошо попадает в голосование.\n\n"
+        "Поставьте 👍, если рекомендация понравилась, или 👎, если нет.\n\n"
         "Сейчас перешлю анонс 👇"
     )
     assert "Подробнее" not in text
+    assert text.count("\n\n") == 3
+
+
+def test_repost_intro_compacts_long_reason():
+    text = pf._repost_intro_text(
+        "Провести время с семьёй",
+        (
+            "Холмогорье завтра как раз устраивают встречу со сказочными героями — "
+            "хороший вариант, чтобы выбраться на природу и занять детей мастер-классами"
+        ),
+        event_title="Встреча со сказочными героями в Холмогорье",
+        telegraph_url="https://telegra.ph/demo",
+    )
+
+    reason = text.split(" — ", 1)[1].split(".", 1)[0]
+    assert len(reason) <= 103
+    assert " — " not in reason
+    assert reason.endswith("...")
+    assert text.count("\n\n") == 3
 
 
 class DummyPollBot:
@@ -337,11 +356,12 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
         text = bot.messages[index]["text"]
         assert winner_text in text
         assert "Подробнее" not in text
-        assert "Поставьте 👍" in text
+        assert "Поставьте 👍, если рекомендация понравилась" in text
         assert "Сейчас перешлю анонс 👇" in text
+        assert text.count("\n\n") == 3
         assert bot.messages[index]["parse_mode"] == "HTML"
         assert bot.messages[index]["disable_web_page_preview"] is True
-    assert "голоса разделились поровну" in bot.messages[3]["text"]
+    assert "Голоса поровну" in bot.messages[3]["text"]
     await db.close()
 
 
@@ -391,9 +411,9 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
-        "Спасибо за голоса: вы выбрали «Вечер с музыкой».\n"
-        'Я бы предложил <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n'
-        "Поставьте 👍, если рекомендация попала, или 👎, если нет.\n"
+        "Вы выбрали «Вечер с музыкой».\n\n"
+        'Рекомендация: <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n\n'
+        "Поставьте 👍, если рекомендация понравилась, или 👎, если нет.\n\n"
         "Сейчас перешлю анонс 👇"
     )
     assert bot.messages[0]["parse_mode"] == "HTML"
