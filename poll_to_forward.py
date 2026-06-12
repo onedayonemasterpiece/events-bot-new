@@ -248,7 +248,7 @@ def _soften_repost_reason_lead(text: str) -> str:
         return ""
     value = re.sub(
         r"^(?:отличный|интересный|хороший)\s+вариант\s+для\s+тех,\s+кто\s+",
-        "Для тех, кто ",
+        "для тех, кто ",
         value,
         flags=re.IGNORECASE,
     )
@@ -258,8 +258,6 @@ def _soften_repost_reason_lead(text: str) -> str:
         value,
         flags=re.IGNORECASE,
     )
-    if value.startswith("для тех, кто "):
-        value = "Для тех, кто " + value[len("для тех, кто ") :]
     return value
 
 
