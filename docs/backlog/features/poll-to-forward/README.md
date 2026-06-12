@@ -80,19 +80,21 @@ returns a compact poll plan:
 - short rationale for why the option is relevant today;
 - warnings when the topic set is weak or underfilled.
 
-The poll question itself is product copy, not a semantic topic decision. Debug
-and production rotate several friendly participation frames by slot, for
+The poll question itself is product copy, not a semantic topic decision. Its
+primary promise is: today in the evening the channel will recommend where to go
+tomorrow, and the audience is choosing the direction for that recommendation.
+Debug and production rotate several friendly participation frames by slot, for
 example:
 
-- `Давайте выберем тему на завтра. Голосуйте, а чуть позже принесу один конкретный анонс.`
-- `Что вам завтра больше интересно? Выберите тему — потом найду один анонс под большинство голосов.`
-- `Выберите направление на завтра. Я посмотрю события в этой теме и принесу один вариант.`
-- `Давайте вы выберете тематику на завтра, а я потом принесу один анонс из выбранного направления.`
+- `Сегодня вечером порекомендую, куда можно пойти завтра. Что вам ближе?`
+- `Сегодня вечером выберу одну рекомендацию на завтра. Какой план вам ближе?`
+- `Сегодня вечером подберу событие, куда можно сходить завтра. На что настроены?`
+- `Выбираем, что рекомендовать сегодня вечером на завтра. Что вам интереснее?`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
-from drifting into promotional copy such as "we will pick the best events"
-while the LLM still owns the meaningful option set.
+from drifting into meta copy such as "choose a topic and we will forward an
+announcement" while the LLM still owns the meaningful option set.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 

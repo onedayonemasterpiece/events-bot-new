@@ -126,7 +126,7 @@ async def _seed_many_events(db: Database) -> None:
         await session.commit()
 
 
-def test_default_question_variants_avoid_machiney_phrasing():
+def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
     banned = (
         "план звучит",
@@ -134,12 +134,32 @@ def test_default_question_variants_avoid_machiney_phrasing():
         "общему выбору",
         "лучшие события",
         "алгоритм",
+        "за какую тему",
+        "выберите тему",
+        "тематику",
+        "анонс",
+        "перешлю",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()
         assert not any(fragment in lowered for fragment in banned)
+        assert "сегодня вечером" in lowered
         assert "завтра" in lowered
-        assert any(marker in lowered for marker in ("голос", "выбер", "тему", "тематику", "направление"))
+        assert any(
+            marker in lowered
+            for marker in (
+                "куда",
+                "пойти",
+                "сходить",
+                "выбраться",
+                "план",
+                "настро",
+                "провести",
+                "направление",
+                "выбрать",
+            )
+        )
+        assert any(marker in lowered for marker in ("рекоменд", "посовет", "подбер", "найду", "покажу"))
 
 
 @pytest.mark.asyncio
