@@ -123,6 +123,7 @@ async def test_debug_create_uses_llm_plan_and_sends_poll(tmp_path, monkeypatch):
 
     assert result["created"] is True
     assert bot.sent_polls[0]["chat_id"] == "@keniggpt"
+    assert bot.sent_polls[0]["question"] == pf.DEFAULT_POLL_QUESTION_TEXT
     assert bot.sent_polls[0]["options"] == ["Вечер с музыкой", "Узнать новое", "С детьми"]
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status, poll_message_id FROM poll_repost_run")
@@ -173,7 +174,9 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     )
 
     assert result["resolved"] == 1
+    assert bot.sent_polls[0]["question"] == pf.DEFAULT_POLL_QUESTION_TEXT
     assert bot.messages[0]["reply_to_message_id"] == 101
+    assert bot.messages[0]["text"] == "Вы выбрали: Вечер с музыкой. Показываем этот анонс: самый сильный концерт."
     assert bot.forwarded[0] == {
         "chat_id": "@keniggpt",
         "from_chat_id": "@kldevents",

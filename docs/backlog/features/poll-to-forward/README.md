@@ -76,10 +76,17 @@ varied outcomes.
 Topic generation is LLM-only. The LLM receives the eligible tomorrow events and
 returns a compact poll plan:
 
-- `question_text`;
 - `options`, each with public text and hidden candidate event ids;
 - short rationale for why the option is relevant today;
 - warnings when the topic set is weak or underfilled.
+
+The poll question itself is product copy, not a semantic topic decision. Debug
+and production use a fixed friendly participation frame by default:
+`Что порекомендовать на завтра? Ваш голос решает, какой анонс покажем в канале.`
+It can be tuned with `POLL_TO_FORWARD_QUESTION_TEXT` without changing topic
+selection. This keeps the poll from drifting into promotional copy such as
+"we will pick the best events" while the LLM still owns the meaningful option
+set.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
@@ -91,6 +98,10 @@ Good options are audience jobs-to-be-done, not raw database categories. Examples
 - "что-то необычное";
 - "в помещении";
 - "загород / восток области".
+
+Avoid advertising-style option text and superlatives. The poll should feel like
+the channel asks subscribers what they want the next recommendation to cover,
+not like a generic promo banner.
 
 Deterministic code may normalize dates, remove empty options, and enforce
 minimum candidate counts. It must not generate semantic poll topics. If the LLM
@@ -113,8 +124,10 @@ Rules:
   still-eligible candidate at resolve time, skip the repost and record the
   reason; do not use deterministic fallback.
 
-Before the repost, the bot sends a short reply to the original poll message,
-for example: `Вы выбрали: музыка. Нашли рекомендацию на завтра.`
+Before the repost, the bot sends a short reply to the original poll message
+with the winning topic and, when LLM provides it, a compact reason for the final
+event choice. Example:
+`Вы выбрали: музыка. Показываем этот анонс: он лучше всего попадает в выбранное настроение.`
 
 ## Event Selection
 
