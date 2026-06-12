@@ -5,7 +5,8 @@
 - **Changed: Poll to Repost question promise**: default poll questions now lead
   with "today evening I will recommend where to go tomorrow" and keep the topic
   choice as the mechanism, avoiding meta phrasing like "which topic are we
-  taking on tomorrow".
+  taking on tomorrow"; theme/type-event wording is allowed only when it stays
+  attached to that evening recommendation promise.
 - **Added: Poll to Repost debug rollout**: added the LLM-only debug scheduler
   for hourly daytime polls in `@keniggpt`, persisted `poll_repost_run` audit
   rows, and 30-minute resolver ticks that reply to the poll and forward the

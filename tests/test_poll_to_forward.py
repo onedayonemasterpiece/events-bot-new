@@ -136,7 +136,6 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         "алгоритм",
         "за какую тему",
         "выберите тему",
-        "тематику",
         "анонс",
         "перешлю",
     )
@@ -157,6 +156,8 @@ def test_default_question_variants_frame_real_tomorrow_plan():
                 "провести",
                 "направление",
                 "выбрать",
+                "темати",
+                "тип события",
             )
         )
         assert any(marker in lowered for marker in ("рекоменд", "посовет", "подбер", "найду", "покажу"))
