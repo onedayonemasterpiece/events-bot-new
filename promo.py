@@ -2806,6 +2806,41 @@ def _filter_vk_festival_carousel_events_for_variant(
     return [ev for ev in events if _event_has_explicit_celebrity_signal(ev)]
 
 
+def _url_list_from_config(value: Any) -> list[str]:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    if isinstance(value, list):
+        return [str(item or "").strip() for item in value if str(item or "").strip()]
+    return []
+
+
+def _event_configured_poster_urls(
+    ev: Event,
+    *,
+    cfg: dict[str, Any],
+    hook_variant: str,
+) -> list[str]:
+    if ev.id is None:
+        return []
+    event_id = int(ev.id)
+    config_keys = ["poster_urls_by_event_id", "photo_urls_by_event_id"]
+    if hook_variant == "celebrity":
+        config_keys = [
+            "celebrity_poster_urls_by_event_id",
+            "celebrity_photo_urls_by_event_id",
+            *config_keys,
+        ]
+    for key in config_keys:
+        raw = cfg.get(key)
+        if not isinstance(raw, dict):
+            continue
+        urls = _url_list_from_config(raw.get(str(event_id)) or raw.get(event_id))
+        if urls:
+            return urls
+    return []
+
+
 def _render_vk_festival_carousel_card(
     title: str,
     *,
@@ -2813,6 +2848,7 @@ def _render_vk_festival_carousel_card(
     footer: str = "",
     variant: str = "hook",
     palette_id: str | None = None,
+    badge_label: str = "",
 ) -> bytes:
     from PIL import Image, ImageDraw
 
@@ -2827,8 +2863,10 @@ def _render_vk_festival_carousel_card(
             CTA_EDITORIAL_PALETTES,
             _apply_cta_grain,
             _compose_cta_edge,
+            _draw_badge_on_image,
             _draw_down_arrow,
             _draw_right_arrow,
+            _fit_badge_font,
             _hex_to_rgb,
             _mix_rgb,
             fit_text,
@@ -2857,7 +2895,32 @@ def _render_vk_festival_carousel_card(
             include_accent_stripe=True,
         )
         draw = ImageDraw.Draw(image)
-        draw.rectangle((72, 112, 178, 126), fill=accent)
+        if variant == "cta":
+            label = badge_label or "ЗАПИСЬ"
+            badge_font = _fit_badge_font(
+                label,
+                scale=1.0,
+                max_width=width - 172,
+                preferred_px=42,
+                trailing_icon="right_arrow",
+            )
+            image, _, _ = _draw_badge_on_image(
+                image,
+                x=86,
+                y=96,
+                label=label,
+                font=badge_font,
+                bg=bg,
+                fg=_hex_to_rgb(roles.get("signal_ink") or roles["surface"]),
+                accent=accent,
+                scale=1.0,
+                max_width=width - 172,
+                button=True,
+                trailing_icon="right_arrow",
+            )
+            draw = ImageDraw.Draw(image)
+        if variant != "cta":
+            draw.rectangle((72, 112, 178, 126), fill=accent)
         title_fit = fit_text(
             title,
             box_width=width - 144,
@@ -2894,20 +2957,23 @@ def _render_vk_festival_carousel_card(
                     bbox = draw.textbbox((72, y), line, font=subtitle_font)
                     y += (bbox[3] - bbox[1]) + int(subtitle_fit.font_px * 0.18)
         footer_text = footer or ("листай" if variant == "hook" else "Ссылки — в тексте поста")
-        footer_font = _load_carousel_font(34, bold=True)
+        footer_font = _load_carousel_font(44 if variant == "hook" else 34, bold=True)
         draw.line((72, height - 164, width - 72, height - 164), fill=accent, width=5)
         if variant == "hook":
             label = footer_text or "листай"
             label_w = draw.textlength(label, font=footer_font)
             y0 = height - 120
-            right_x = width - 72
-            arrow_start = right_x - 76
-            text_x = arrow_start - int(label_w) - 20
+            right_x = width - 78
+            arrow_start = right_x - 92
+            text_x = arrow_start - int(label_w) - 24
             draw.text((text_x, y0 - 24), label, fill=accent, font=footer_font)
-            _draw_right_arrow(draw, arrow_start, right_x, y0, accent, width=10, head=18)
+            _draw_right_arrow(draw, arrow_start, right_x, y0, accent, width=14, head=28)
         else:
-            draw.text((72, height - 136), footer_text, fill=ink, font=footer_font)
-            _draw_down_arrow(draw, width - 128, height - 144, height - 86, accent, width=8, head=18)
+            if footer_text:
+                draw.text((72, height - 136), footer_text, fill=ink, font=footer_font)
+            arrow_x = width // 2
+            arrow_top = height - 344
+            _draw_down_arrow(draw, arrow_x, arrow_top, height - 132, accent, width=18, head=56)
         out = io.BytesIO()
         image.save(out, format="JPEG", quality=94, optimize=True)
         return out.getvalue()
@@ -2960,7 +3026,7 @@ def _render_vk_festival_carousel_poster_card(
     swipe_label: str = "листай",
     seed: str = "",
 ) -> bytes:
-    from PIL import Image, ImageDraw, ImageFilter, ImageOps
+    from PIL import Image, ImageOps
 
     try:
         from afishaengagement import (
@@ -2972,67 +3038,42 @@ def _render_vk_festival_carousel_poster_card(
 
         roles = CTA_EDITORIAL_PALETTES.get(palette_id) or CTA_EDITORIAL_PALETTES["ivory_navy_ochre"]
         bg = _hex_to_rgb(roles["surface"])
-        ink = _hex_to_rgb(roles["ink"])
         accent = _hex_to_rgb(roles["signal"])
         signal_ink = _hex_to_rgb(roles.get("signal_ink") or roles["surface"])
         with Image.open(io.BytesIO(source_image)) as opened:
             poster = ImageOps.exif_transpose(opened).convert("RGB")
-        card_w, card_h = 1080, 1350
-        rail_h = 132
-        background = ImageOps.fit(
-            poster,
-            (card_w, card_h),
-            method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.5),
-        ).filter(ImageFilter.GaussianBlur(radius=28))
-        tint = Image.new("RGB", (card_w, card_h), bg)
-        canvas = Image.blend(background, tint, 0.38)
-        max_poster_w = card_w
-        max_poster_h = card_h - rail_h
-        resize_scale = min(max_poster_w / max(1, poster.width), max_poster_h / max(1, poster.height))
-        contained = poster.resize(
-            (max(1, int(poster.width * resize_scale)), max(1, int(poster.height * resize_scale))),
-            Image.Resampling.LANCZOS,
-        )
-        poster_x = int((card_w - contained.width) / 2)
-        poster_y = max(0, int((max_poster_h - contained.height) / 2))
-        shadow = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
-        shadow_draw = ImageDraw.Draw(shadow)
-        shadow_pad = 12
-        shadow_draw.rounded_rectangle(
-            (
-                poster_x - shadow_pad,
-                poster_y - shadow_pad,
-                poster_x + contained.width + shadow_pad,
-                poster_y + contained.height + shadow_pad,
-            ),
-            radius=10,
-            fill=(0, 0, 0, 82),
-        )
-        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
-        canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
-        canvas.paste(contained, (poster_x, poster_y))
-        draw = ImageDraw.Draw(canvas)
-        draw.rectangle((0, card_h - rail_h, card_w, card_h), fill=bg)
-        draw.line((72, card_h - rail_h + 2, card_w - 72, card_h - rail_h + 2), fill=accent, width=5)
+        max_side = 1600
+        if max(poster.size) > max_side:
+            scale_down = max_side / max(poster.size)
+            poster = poster.resize(
+                (max(1, int(poster.width * scale_down)), max(1, int(poster.height * scale_down))),
+                Image.Resampling.LANCZOS,
+            )
+        canvas = poster.copy()
+        card_w, card_h = canvas.size
+        scale = max(0.65, min(1.25, card_w / 1080))
+        max_badge_w = max(160, min(int(390 * scale), card_w - int(48 * scale)))
         badge_font = _fit_badge_font(
             swipe_label,
-            scale=1.0,
-            max_width=360,
-            preferred_px=36,
+            scale=scale,
+            max_width=max_badge_w,
+            preferred_px=max(26, int(42 * scale)),
             trailing_icon="right_arrow",
         )
+        badge_w_probe = max_badge_w
+        badge_x = card_w - int(72 * scale) - badge_w_probe
+        badge_y = card_h - int(174 * scale)
         canvas, _, _ = _draw_badge_on_image(
             canvas,
-            x=card_w - 72 - 360,
-            y=card_h - rail_h + 36,
+            x=max(int(24 * scale), badge_x),
+            y=max(int(24 * scale), badge_y),
             label=swipe_label,
             font=badge_font,
             bg=bg,
             fg=signal_ink,
             accent=accent,
-            scale=1.0,
-            max_width=360,
+            scale=scale,
+            max_width=badge_w_probe,
             button=True,
             trailing_icon="right_arrow",
         )
@@ -3215,13 +3256,21 @@ async def _publish_vk_festival_carousel(
     palette_id = _carousel_palette_id(activity, cfg, hook_variant)
     poster_swipe_badge = _config_bool(cfg.get("poster_swipe_badge"), default=True)
     swipe_label = str(cfg.get("swipe_label") or "листай").strip() or "листай"
+    celebrity_requires_configured_poster = (
+        hook_variant == "celebrity"
+        and _config_bool(cfg.get("celebrity_requires_image_evidence"), default=True)
+    )
     selected_events: list[Event] = []
     event_attachments: list[str] = []
+    selected_photo_urls: dict[int, str] = {}
     if VK_PHOTOS_ENABLED:
         for ev in events:
             if len(selected_events) >= max_event_cards:
                 break
-            photo_urls = await _ensure_promo_vk_photo_urls(db, ev)
+            configured_photo_urls = _event_configured_poster_urls(ev, cfg=cfg, hook_variant=hook_variant)
+            if celebrity_requires_configured_poster and not configured_photo_urls:
+                continue
+            photo_urls = configured_photo_urls or await _ensure_promo_vk_photo_urls(db, ev)
             first_photo = next((str(url or "").strip() for url in photo_urls if str(url or "").strip()), "")
             if not first_photo:
                 continue
@@ -3257,6 +3306,7 @@ async def _publish_vk_festival_carousel(
                 continue
             selected_events.append(ev)
             event_attachments.append(attachment)
+            selected_photo_urls[int(ev.id)] = first_photo
     if not selected_events:
         return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "failed", reason="event_posters_missing")
 
@@ -3286,6 +3336,7 @@ async def _publish_vk_festival_carousel(
             footer="Ссылки ниже",
             variant="cta",
             palette_id=palette_id,
+            badge_label=str(cfg.get("cta_badge_label") or "ЗАПИСЬ"),
         )
         cta_attachment = await upload_vk_photo_bytes(
             str(target_group_id),
@@ -3378,6 +3429,8 @@ async def _publish_vk_festival_carousel(
             "palette_id": palette_id,
             "poster_swipe_badge": poster_swipe_badge,
             "swipe_label": swipe_label,
+            "celebrity_requires_image_evidence": celebrity_requires_configured_poster,
+            "selected_photo_urls_by_event_id": {str(k): v for k, v in selected_photo_urls.items()},
             "cta_by_event_id": {str(k): v for k, v in cta_by_event.items()},
             "attachments_count": len(attachments),
             "include_cta_card": cta_card_added,

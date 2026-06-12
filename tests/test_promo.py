@@ -38,6 +38,8 @@ from promo import (
     record_daily_promo_recommendation_exposures,
     run_promo_vk_activities,
     _filter_vk_festival_carousel_events_for_variant,
+    _render_vk_festival_carousel_card,
+    _render_vk_festival_carousel_poster_card,
     resolve_video_promo_candidates,
 )
 from video_announce.popular_review import PopularReviewPick, _merge_promo_and_fresh_picks
@@ -719,6 +721,111 @@ def test_vk_festival_carousel_celebrity_variant_requires_explicit_signal() -> No
     )
 
     assert [ev.id for ev in filtered] == [10]
+
+
+def test_vk_festival_carousel_poster_card_preserves_bottom_without_rail() -> None:
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    source = Image.new("RGB", (1080, 1350), "#101010")
+    draw = ImageDraw.Draw(source)
+    draw.rectangle((0, 1210, 1080, 1350), fill="#C0182D")
+    draw.text((96, 1260), "native poster footer", fill="#ffffff")
+    buf = BytesIO()
+    source.save(buf, format="JPEG", quality=95)
+
+    rendered = _render_vk_festival_carousel_poster_card(
+        buf.getvalue(),
+        palette_id="butter_ink_cherry",
+        swipe_label="листай",
+    )
+
+    with Image.open(BytesIO(rendered)).convert("RGB") as image:
+        # The bottom center must still be the poster's own footer, not a full
+        # generated palette rail.
+        r, g, b = image.getpixel((540, 1280))
+    assert r > 120 and g < 80 and b < 90
+
+
+def test_vk_festival_carousel_cta_card_has_large_down_arrow() -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
+    rendered = _render_vk_festival_carousel_card(
+        "Выберите событие и записывайтесь",
+        subtitle="Ссылки на регистрацию — в тексте поста",
+        footer="Ссылки ниже",
+        variant="cta",
+        palette_id="butter_ink_cherry",
+        badge_label="ЗАПИСЬ",
+    )
+
+    with Image.open(BytesIO(rendered)).convert("RGB") as image:
+        center_column = [image.getpixel((540, y)) for y in range(1010, 1210, 8)]
+    accent_hits = sum(1 for r, g, b in center_column if r > 120 and g < 80 and b < 90)
+    assert accent_hits >= 12
+
+
+@pytest.mark.asyncio
+async def test_vk_festival_carousel_celebrity_requires_image_evidence_config(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 13, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        celebrity = _event("Творческая встреча с Иваном Никифорчиным", "2026-06-15", festival="Кантата")
+        celebrity.description = "Гостем станет дирижёр Иван Никифорчин."
+        celebrity.photo_urls = ["https://example.com/generic-festival-poster.jpg"]
+        session.add(celebrity)
+        await session.flush()
+        campaign = PromoCampaign(
+            title="Кантата · образовательная программа",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, 23, 59, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        session.add(
+            PromoActivity(
+                campaign_id=int(campaign.id),
+                surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+                profile_key="klgdevents:kantata:carousel:celebrity",
+                max_per_publish=1,
+                target_exposure_goal=1,
+                daily_cap=1,
+                config_json={
+                    "target_group": "231920894",
+                    "hook_variant": "celebrity",
+                    "carousel_event_ids": [int(celebrity.id)],
+                    "celebrity_event_ids": [int(celebrity.id)],
+                    "celebrity_requires_image_evidence": True,
+                    "debug_shadow": True,
+                },
+            )
+        )
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="festival", festival_name="Кантата"))
+        await session.commit()
+
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    async def fail_upload(*args, **kwargs):
+        raise AssertionError("generic celebrity poster must not be uploaded without image evidence config")
+
+    monkeypatch.setattr(main, "upload_vk_photo", fail_upload)
+    monkeypatch.setattr(main, "upload_vk_photo_bytes", fail_upload)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.reason) for item in results] == [
+        (PROMO_SURFACE_VK_FESTIVAL_CAROUSEL, "failed", "event_posters_missing")
+    ]
+    await db.close()
 
 
 @pytest.mark.asyncio

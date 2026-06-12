@@ -5,7 +5,7 @@ description: Use when designing, rendering, reviewing, or evolving generated VK 
 
 # VK Engagement Cards
 
-Contract version: `v2`
+Contract version: `v3`
 Last updated: `2026-06-12`
 
 Use this skill whenever a task changes generated VK cards: standalone hook
@@ -21,7 +21,7 @@ any new VK visual surface that should stay consistent with existing
 - Promo docs: `docs/features/promo-campaigns/README.md`
 - Afisha Engagement docs: `docs/features/afishaengagement/README.md`
 
-## v2 Visual Contract
+## v3 Visual Contract
 
 Generated VK cards should reuse the existing afishaengagement visual language
 unless there is an explicit product reason to diverge.
@@ -57,6 +57,8 @@ working solution for the same class of card.
 - message should point to the text, not duplicate long URLs;
 - visual should include a down-arrow cue when the next action is below the
   carousel in post text;
+- the down arrow must be large, central, and high-contrast, following
+  `afishaengagement._render_hook_swipe_cta`, not a small corner icon;
 - use visual hierarchy from afishaengagement CTA cards, but do not force
   like/comment/repost mechanics unless the product surface is engagement.
 
@@ -70,9 +72,11 @@ working solution for the same class of card.
 
 - for VK carousels, preserve the poster while wrapping it as a 1080x1350 card
   when a carousel cue is needed;
-- add the compact `листай` + right-arrow cue consistently to poster cards;
-- do not cover meaningful poster text or faces/logos; prefer a reserved rail or
-  safe corner over a heavy overlay.
+- do not add a full-width bottom rail by default; poster cards are poster-first;
+- add the compact `листай` + right-arrow cue as a floating/control element that
+  does not create an extra decorative stripe;
+- do not cover meaningful poster text or faces/logos; prefer a safe corner or
+  small floating control over a heavy overlay.
 
 ## Palette Policy
 
@@ -109,8 +113,11 @@ copy exists:
 Visual rendering itself remains deterministic.
 
 For celebrity/program-leader hooks, do not fill the carousel with generic event
-posters. Use explicit `celebrity_event_ids` when the campaign has been curated;
-otherwise include only events with an explicit person/role signal in event data.
+posters. Event metadata is only a hypothesis; the image itself must prove the
+claim. Use explicit `celebrity_poster_urls_by_event_id` /
+`celebrity_photo_urls_by_event_id` when the campaign has been curated; otherwise
+include only images where OCR/vision or another evidence source shows visible
+person names/roles on the poster. Fail closed when unsure.
 
 ## Links On VK Cards
 
@@ -160,4 +167,12 @@ evidence changes, bump `Contract version` and add a short changelog section:
 - Require palette diversity through stable per-activity palette selection.
 - Require celebrity/program-leader carousels to use only explicitly relevant
   event posters.
+
+## v3 Changes
+
+- Poster cards are poster-first and must not add a full-width bottom rail by
+  default.
+- CTA cards require a large central down arrow.
+- Celebrity/program-leader carousels require image-level evidence, not just
+  event metadata.
 ```

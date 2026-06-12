@@ -16,6 +16,11 @@
   event copy remain fallback content. Tracks
   `INC-2026-06-12-raffle-source-publication-false-skip` and is covered by
   `tests/test_tg_event_publish.py`.
+- **Changed: VK festival carousel visual contract v3**: poster cards now keep
+  the source poster first without a generated bottom rail, CTA cards use a
+  large central down arrow, and celebrity/program-leader carousels require
+  image-level evidence URLs instead of relying on event metadata alone. Covered
+  by `tests/test_promo.py`.
 - **Changed: VK festival carousel visual contract v2**: carousel hook,
   poster, and CTA cards now reuse afishaengagement's `листай` right-arrow and
   down-arrow cues, choose stable varied editorial palettes per activity, and

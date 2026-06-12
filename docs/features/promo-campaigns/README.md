@@ -252,6 +252,12 @@ activity config supports:
 - `program_url`, `program_vk_url`, `cta_urls_by_event_id`: CTA sources;
 - `celebrity_event_ids`: explicit event ids for `hook_variant=celebrity`; when
   absent, the activity keeps only events with a clear person/role signal;
+- `celebrity_poster_urls_by_event_id` /
+  `celebrity_photo_urls_by_event_id`: explicit image-evidence URLs for
+  celebrity carousels; by default celebrity hooks fail closed when an event has
+  no curated poster where the person/role is visible on the image;
+- `celebrity_requires_image_evidence`: keeps the celebrity image gate enabled
+  by default;
 - `palette_id`, `palette_ids`, `palette_id_by_hook_variant`: stable palette
   selection controls using `afishaengagement` editorial palettes;
 - `poster_swipe_badge`, `swipe_label`: poster-card carousel cue controls,
@@ -276,13 +282,15 @@ counts. This is the required review mode before switching the activity to normal
 
 The carousel card visuals intentionally reuse the `afishaengagement` visual
 system: Cygre fonts, editorial CTA palettes, text fitting, grain, and edge
-treatment. Hook and poster cards use the compact `листай` right-arrow cue from
-the `hook_swipe_cta` pattern; CTA cards use a down-arrow cue when links live in
-the post text. Palette selection must be stable but varied across activities so
-parallel carousel hooks do not all render in the same color scheme. The activity
-does **not** call `afishaengagement` publishing and must not layer an engagement
-CTA over these carousel cards; `afishaengagement` remains a separate surface for
-like/comment/repost motivators on event posts.
+treatment. Hook cards use the compact `листай` right-arrow cue from the
+`hook_swipe_cta` pattern; poster cards keep the source poster first and do not
+add a full-width bottom rail by default. CTA cards use a large central
+down-arrow cue when links live in the post text. Palette selection must be
+stable but varied across activities so parallel carousel hooks do not all render
+in the same color scheme. The activity does **not** call `afishaengagement`
+publishing and must not layer an engagement CTA over these carousel cards;
+`afishaengagement` remains a separate surface for like/comment/repost motivators
+on event posts.
 
 `tg_event_publish` publishes a full promo event post into a configured Telegram
 event-flow channel, normally `@kldevents`. It is scheduled by the same
