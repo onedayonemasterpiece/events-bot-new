@@ -1,10 +1,10 @@
 # INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop
 
-Status: monitoring
+Status: closed
 Severity: sev2
 Service: Kenigsberg Stories / Kaggle story publish / scheduler catch-up
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: Codex / operator
 Related incidents: `INC-2026-06-12-kenigsberg-story-session-duplication`, `INC-2026-05-13-kenigsberg-production-story-boosts-required`, `INC-2026-04-19-cherryflash-story-media-invalid`
 Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cron.md`, `docs/operations/runtime-logs.md`
@@ -84,7 +84,13 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
   - session `#661` Kaggle output: preflight passed for `@mostvkenig`, media diagnostics `video_codec=hevc`, `video_tag=hvc1`, Telegram publish failed with `BadRequestError: RPCError 400: MEDIA_FILE_INVALID`, VK story/wall targets succeeded.
   - post-deploy `/data/kaggle_jobs.json`: `{"jobs": []}`.
   - post-deploy startup catch-up log: `SCHED startup catchup skip kenigsberg_story: failed session retry cap reached count=9`.
-- compensation decision/evidence: pending operator/Codex decision; no automatic rerun was launched after deploy because VK already partially published session `#661` and Kaggle quota is constrained.
+- compensation decision/evidence: no new Kaggle render was launched. The finished
+  `#661` output was downloaded, transcoded locally through the shared H.264
+  story-safe helper path, and published only to the required Telegram target
+  `@mostvkenig` to avoid duplicating the already-successful VK story/wall.
+  Compensation result: `ok=true`, `story_id=22`, media `720x1280`,
+  `30fps`, `59.1s`, `7,563,742` bytes. Local temporary output/runtime files
+  containing encrypted story secrets were removed after the run.
 
 ## Immediate Mitigation
 
@@ -99,9 +105,10 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ## Follow-up Actions
 
-- [ ] Codex: deploy the fix from `origin/main`.
-- [ ] Codex/operator: decide whether to run a compensation `/kenigsberg --poetry-today` or wait for the next slot, since VK already published for `#661` and Kaggle quota is constrained.
-- [ ] Codex: after compensation or next scheduled run, attach terminal Telegram publish evidence and close/monitor this incident.
+- [x] Codex: deploy the fix from `origin/main`.
+- [x] Codex: run Telegram-only compensation from the already-rendered `#661`
+  artifact without starting another Kaggle render or duplicating VK fanout.
+- [x] Codex: attach terminal Telegram publish evidence and close this incident.
 
 ## Release And Closure Evidence
 
@@ -116,6 +123,14 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
   - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
   - `/data/kaggle_jobs.json` empty
   - startup catch-up did not launch a new Kenigsberg Kaggle job; runtime log recorded the new failed-session retry cap.
+- compensation verification:
+  - downloaded `#661` output from `zigomaro/koenigsberg-stories`
+  - H.264 story-safe upload copy prepared as `720x1280`, `30fps`, `59.1s`,
+    `7,563,742` bytes
+  - Telegram story published to `@mostvkenig`, `story_id=22`,
+    `blocking_ok=true`, `required_ok=true`
+  - VK fanout was intentionally excluded from compensation because `#661` had
+    already published the VK story/wall successfully.
 
 ## Prevention
 
