@@ -9,6 +9,11 @@
   event copy remain fallback content. Tracks
   `INC-2026-06-12-raffle-source-publication-false-skip` and is covered by
   `tests/test_tg_event_publish.py`.
+- **Changed: VK festival carousel visual contract v2**: carousel hook,
+  poster, and CTA cards now reuse afishaengagement's `листай` right-arrow and
+  down-arrow cues, choose stable varied editorial palettes per activity, and
+  filter celebrity/program-leader carousels to explicitly relevant events.
+  Covered by `tests/test_promo.py`.
 - **Added: VK festival carousel promo shadow rollout**: added the
   `vk_festival_carousel` promo activity for festival/program-level VK
   carousels with a hook card, selected event posters, an optional final CTA

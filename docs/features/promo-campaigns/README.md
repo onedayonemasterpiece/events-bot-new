@@ -250,6 +250,12 @@ activity config supports:
 - `hook_text` / `hook_texts`: exact operator-approved copy overrides;
 - `llm_hook_enabled`: optional LLM hook generation when no override is present;
 - `program_url`, `program_vk_url`, `cta_urls_by_event_id`: CTA sources;
+- `celebrity_event_ids`: explicit event ids for `hook_variant=celebrity`; when
+  absent, the activity keeps only events with a clear person/role signal;
+- `palette_id`, `palette_ids`, `palette_id_by_hook_variant`: stable palette
+  selection controls using `afishaengagement` editorial palettes;
+- `poster_swipe_badge`, `swipe_label`: poster-card carousel cue controls,
+  enabled by default with `листай` + right arrow;
 - `include_cta_card`, `cta_card_title`, `cta_card_subtitle`: final-card
   controls;
 - `debug_shadow`, `debug_marker`, `debug_publish_delay_days`,
@@ -270,9 +276,13 @@ counts. This is the required review mode before switching the activity to normal
 
 The carousel card visuals intentionally reuse the `afishaengagement` visual
 system: Cygre fonts, editorial CTA palettes, text fitting, grain, and edge
-treatment. The activity does **not** call `afishaengagement` publishing and must
-not layer an engagement CTA over these carousel cards; `afishaengagement`
-remains a separate surface for like/comment/repost motivators on event posts.
+treatment. Hook and poster cards use the compact `листай` right-arrow cue from
+the `hook_swipe_cta` pattern; CTA cards use a down-arrow cue when links live in
+the post text. Palette selection must be stable but varied across activities so
+parallel carousel hooks do not all render in the same color scheme. The activity
+does **not** call `afishaengagement` publishing and must not layer an engagement
+CTA over these carousel cards; `afishaengagement` remains a separate surface for
+like/comment/repost motivators on event posts.
 
 `tg_event_publish` publishes a full promo event post into a configured Telegram
 event-flow channel, normally `@kldevents`. It is scheduled by the same

@@ -37,6 +37,7 @@ from promo import (
     ensure_initial_80_stories_campaign,
     record_daily_promo_recommendation_exposures,
     run_promo_vk_activities,
+    _filter_vk_festival_carousel_events_for_variant,
     resolve_video_promo_candidates,
 )
 from video_announce.popular_review import PopularReviewPick, _merge_promo_and_fresh_picks
@@ -600,6 +601,19 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     uploaded_bytes: list[tuple[str, int]] = []
     post_calls: list[dict] = []
 
+    def sample_image_bytes() -> bytes:
+        from io import BytesIO
+
+        from PIL import Image, ImageDraw
+
+        image = Image.new("RGB", (720, 1080), "#ece3d0")
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((60, 60, 660, 1020), outline="#18201d", width=8)
+        draw.text((120, 480), "Poster", fill="#18201d")
+        out = BytesIO()
+        image.save(out, format="JPEG")
+        return out.getvalue()
+
     async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
         if method == "utils.getShortLink":
             return {"response": {"short_url": "https://vk.cc/generated", "key": "generated"}}
@@ -614,6 +628,9 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     async def fake_upload_vk_photo_bytes(group_id, image_bytes, db_arg=None, bot_arg=None, *, filename="image.jpg"):
         uploaded_bytes.append((filename, len(image_bytes)))
         return f"photo-{group_id}_bytes{len(uploaded_bytes)}"
+
+    async def fake_fetch_image(url):
+        return sample_image_bytes()
 
     async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, carousel=False, publish_date=None):
         post_calls.append(
@@ -634,6 +651,7 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
     monkeypatch.setattr(main, "upload_vk_photo_bytes", fake_upload_vk_photo_bytes)
     monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr("afishaengagement._default_fetch_image", fake_fetch_image)
     monkeypatch.setattr("afishaengagement.maybe_publish_shadow_debug_copy", fail_afishaengagement)
 
     results = await run_promo_vk_activities(db, None, now_utc=now_utc)
@@ -641,8 +659,14 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     assert [(item.surface, item.status) for item in results] == [
         (PROMO_SURFACE_VK_FESTIVAL_CAROUSEL, "scheduled_debug")
     ]
-    assert len(uploaded_urls) == 2
-    assert len(uploaded_bytes) == 2
+    assert uploaded_urls == []
+    assert len(uploaded_bytes) == 4
+    assert [name for name, _ in uploaded_bytes] == [
+        f"vk_festival_carousel_{int(activity.id)}_{first_id}_poster.jpg",
+        f"vk_festival_carousel_{int(activity.id)}_{second_id}_poster.jpg",
+        f"vk_festival_carousel_{int(activity.id)}_hook.jpg",
+        f"vk_festival_carousel_{int(activity.id)}_cta.jpg",
+    ]
     assert post_calls[0]["carousel"] is True
     assert post_calls[0]["publish_date"] is not None
     assert len(post_calls[0]["attachments"]) == 4
@@ -659,7 +683,42 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     assert exposure.public_targets_json == [{"type": "vk_wall_debug", "url": "https://vk.com/wall-231920894_700"}]
     assert exposure.details_json["event_ids"] == [first_id, second_id]
     assert exposure.details_json["include_cta_card"] is True
+    assert exposure.details_json["poster_swipe_badge"] is True
+    assert exposure.details_json["swipe_label"] == "листай"
+    assert exposure.details_json["palette_id"]
     await db.close()
+
+
+def test_vk_festival_carousel_celebrity_variant_uses_explicit_ids() -> None:
+    celebrity = _event("Творческая встреча с Иваном Никифорчиным", "2026-06-15")
+    celebrity.id = 10
+    film = _event("Народные художественные промыслы", "2026-06-15")
+    film.id = 11
+
+    filtered = _filter_vk_festival_carousel_events_for_variant(
+        [celebrity, film],
+        cfg={"celebrity_event_ids": [10]},
+        hook_variant="celebrity",
+    )
+
+    assert [ev.id for ev in filtered] == [10]
+
+
+def test_vk_festival_carousel_celebrity_variant_requires_explicit_signal() -> None:
+    celebrity = _event("Творческая встреча с Иваном Никифорчиным", "2026-06-15")
+    celebrity.id = 10
+    celebrity.description = "Гостем станет дирижёр Иван Никифорчин."
+    film = _event("Народные художественные промыслы", "2026-06-15")
+    film.id = 11
+    film.description = "Документальный сериал-путешествие о старинных российских ремёслах."
+
+    filtered = _filter_vk_festival_carousel_events_for_variant(
+        [celebrity, film],
+        cfg={},
+        hook_variant="celebrity",
+    )
+
+    assert [ev.id for ev in filtered] == [10]
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ description: Use when designing, rendering, reviewing, or evolving generated VK 
 
 # VK Engagement Cards
 
-Contract version: `v1`  
+Contract version: `v2`
 Last updated: `2026-06-12`
 
 Use this skill whenever a task changes generated VK cards: standalone hook
@@ -34,7 +34,9 @@ Reuse the maximum practical subset:
 - anti-aliased edge/seam treatment via `_compose_cta_edge`;
 - subtle surface texture via `_apply_cta_grain`;
 - proven carousel composition ideas from `hook_swipe_cta`: readable hook card,
-  clear CTA card, strong safe zones, no cramped text.
+  clear CTA card, strong safe zones, no cramped text;
+- the `листай` right-arrow cue and CTA down-arrow cue from
+  `afishaengagement._render_hook_swipe_cta`.
 
 Do not create a second unrelated visual system with ad hoc fonts, random
 palettes, or untested text wrapping while afishaengagement already has a
@@ -46,13 +48,15 @@ working solution for the same class of card.
 
 - one clear question or short hook;
 - no links on the image;
-- footer may say `Листайте афиши` / equivalent;
+- footer should use the compact `листай` cue with a right arrow for carousels;
 - text must fit without edge collisions at 1080x1350.
 
 `cta_card`:
 
 - final carousel card when the post text contains links;
 - message should point to the text, not duplicate long URLs;
+- visual should include a down-arrow cue when the next action is below the
+  carousel in post text;
 - use visual hierarchy from afishaengagement CTA cards, but do not force
   like/comment/repost mechanics unless the product surface is engagement.
 
@@ -64,9 +68,19 @@ working solution for the same class of card.
 
 `carousel_event_posters`:
 
-- event poster cards are the original poster attachments;
-- generated cards should be first/last, not overlays on every poster, unless
-  explicitly requested.
+- for VK carousels, preserve the poster while wrapping it as a 1080x1350 card
+  when a carousel cue is needed;
+- add the compact `листай` + right-arrow cue consistently to poster cards;
+- do not cover meaningful poster text or faces/logos; prefer a reserved rail or
+  safe corner over a heavy overlay.
+
+## Palette Policy
+
+Generated carousel posts must not all use the same fixed palette. Reuse
+`CTA_EDITORIAL_PALETTES` and select a stable palette per activity or per hook
+variant from a configured `palette_ids` list, falling back to the standard
+editorial set. Store the selected `palette_id` in audit details so the visual can
+be reproduced.
 
 ## Product Separation
 
@@ -93,6 +107,10 @@ copy exists:
 - keep deterministic fallback for outages and tests.
 
 Visual rendering itself remains deterministic.
+
+For celebrity/program-leader hooks, do not fill the carousel with generic event
+posters. Use explicit `celebrity_event_ids` when the campaign has been curated;
+otherwise include only events with an explicit person/role signal in event data.
 
 ## Links On VK Cards
 
@@ -138,5 +156,8 @@ evidence changes, bump `Contract version` and add a short changelog section:
 ```markdown
 ## v2 Changes
 
-- ...
+- Add `листай` right-arrow and CTA down-arrow cues from afishaengagement.
+- Require palette diversity through stable per-activity palette selection.
+- Require celebrity/program-leader carousels to use only explicitly relevant
+  event posters.
 ```
