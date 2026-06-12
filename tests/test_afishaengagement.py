@@ -2152,6 +2152,77 @@ async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_resolve_candidates_matches_klgdevents_alias_to_numeric_group(tmp_path, monkeypatch):
+    monkeypatch.delenv("AFISHAENGAGEMENT_TARGET_GROUP_ID", raising=False)
+    monkeypatch.delenv("VK_EVENTS_GROUP_ID", raising=False)
+    monkeypatch.delenv("VK_AFISHA_GROUP_ID", raising=False)
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Лекция проекта 80 историй",
+            description="Регистрация открыта",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="лекция",
+            festival="80 историй о главном",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        stories_campaign = PromoCampaign(title="80 stories public", status="active", starts_at=now, priority=0)
+        fallback_campaign = PromoCampaign(title="all public", status="active", starts_at=now, priority=8)
+        session.add_all([event, stories_campaign, fallback_campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(stories_campaign)
+        await session.refresh(fallback_campaign)
+        stories_activity = PromoActivity(
+            campaign_id=int(stories_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "target_group": "klgdevents",
+                "publish_mode": "public",
+                "apply_rate": 0.5,
+            },
+        )
+        fallback_activity = PromoActivity(
+            campaign_id=int(fallback_campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "target_group": "231920894",
+                "publish_mode": "public",
+                "apply_rate": 0.1,
+            },
+        )
+        session.add_all(
+            [
+                stories_activity,
+                fallback_activity,
+                PromoTarget(
+                    campaign_id=int(stories_campaign.id),
+                    target_type="festival",
+                    festival_name="80 историй о главном",
+                ),
+                PromoTarget(campaign_id=int(fallback_campaign.id), target_type="all"),
+            ]
+        )
+        await session.commit()
+        await session.refresh(stories_activity)
+        await session.refresh(fallback_activity)
+
+    candidates = await aeg.resolve_candidates(db, event, target_group_id="231920894", now_utc=now)
+
+    assert [int(candidate.activity.id) for candidate in candidates] == [
+        int(stories_activity.id),
+        int(fallback_activity.id),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_shadow_debug_copy_falls_through_after_candidate_dice_miss(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

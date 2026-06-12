@@ -27,6 +27,7 @@ PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
 DEFAULT_DEBUG_MARKER = "#afishaengagement_shadow"
 DEFAULT_BUILD_TAG_PREFIX = "#aeg_b"
 DEFAULT_TARGET_GROUP_SHORT = "klgdevents"
+DEFAULT_TARGET_GROUP_ID = "231920894"
 MAX_VK_FEED_PHOTO_ASPECT = 1.45
 CTA_LAYER_SHADOW_ALPHA = 170
 
@@ -631,6 +632,26 @@ def _config_matches_event(event: Event, config: dict[str, Any]) -> bool:
     return actual in wanted
 
 
+def _group_aliases(value: str) -> set[str]:
+    normalized = str(value or "").strip().lstrip("-").lower()
+    if not normalized:
+        return set()
+    aliases = {normalized}
+    short_name = str(os.getenv("AFISHAENGAGEMENT_TARGET_GROUP_SHORT") or DEFAULT_TARGET_GROUP_SHORT).strip().lower()
+    configured_ids = {
+        str(os.getenv("AFISHAENGAGEMENT_TARGET_GROUP_ID") or "").strip().lstrip("-"),
+        str(os.getenv("VK_EVENTS_GROUP_ID") or "").strip().lstrip("-"),
+        str(os.getenv("VK_AFISHA_GROUP_ID") or "").strip().lstrip("-"),
+        DEFAULT_TARGET_GROUP_ID,
+    }
+    configured_ids.discard("")
+    if short_name and normalized == short_name:
+        aliases.update(identifier.lower() for identifier in configured_ids)
+    if normalized in {identifier.lower() for identifier in configured_ids} and short_name:
+        aliases.add(short_name)
+    return aliases
+
+
 def _group_matches(config: dict[str, Any], group_id: str) -> bool:
     expected = str(
         config.get("target_group")
@@ -640,7 +661,7 @@ def _group_matches(config: dict[str, Any], group_id: str) -> bool:
     ).strip()
     if not expected:
         return True
-    return expected.lstrip("-") == str(group_id).lstrip("-")
+    return bool(_group_aliases(expected) & _group_aliases(group_id))
 
 
 async def resolve_candidates(

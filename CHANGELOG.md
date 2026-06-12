@@ -6,6 +6,12 @@
   the footer/rule line with a central gap around the down arrow, avoiding the
   visible line/arrow intersection while keeping the large CTA cue. Covered by
   `tests/test_promo.py`.
+- **Fixed: Afisha Engagement VK group alias matching**: public canary
+  activities configured with `target_group="klgdevents"` now match Smart Update
+  calls that pass numeric `VK_EVENTS_GROUP_ID=231920894`, so the `80 историй о
+  главном` 0.5 public canary participates before the all-events 0.1 fallback.
+  Tracks `INC-2026-06-12-afishaengagement-public-canary-no-show` and is covered
+  by `tests/test_afishaengagement.py`.
 - **Changed: VK festival carousel celebrity extraction**: celebrity/program-
   leader FIO cards are now discovered through an LLM stage by default, with the
   remaining carousel budget included in the prompt and enforced again in code

@@ -93,6 +93,9 @@ canary rows should live in a campaign with a smaller `priority` value than the
 matching shadow fallback campaign. A public dice miss, duplicate, disabled
 activity, or cap on an earlier candidate falls through to the next matching
 activity.
+For the default events VK community, `target_group="klgdevents"` is treated as
+an alias for numeric group id `231920894`, so old human-readable 80-stories
+configs still match Smart Update calls that pass `VK_EVENTS_GROUP_ID`.
 
 Initial production canary rates on 2026-06-12:
 

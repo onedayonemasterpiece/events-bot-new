@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-afishaengagement-public-canary-no-show.md`
+  - Scope: Afisha Engagement public/shadow candidate resolution, VK group alias
+    matching, and production public canary rates for `80 историй о главном`.
+  - Must not regress: `target_group="klgdevents"` must match numeric
+    `VK_EVENTS_GROUP_ID=231920894`; the 80-stories public activity at
+    `apply_rate=0.5` must be evaluated before the all-events 0.1 fallback, with
+    dice misses falling through to the shadow debug activity.
 - `INC-2026-06-12-vk-partial-media-family-cta.md`
   - Scope: managed VK event media upload/parity and Afisha Engagement CTA
     selection for family fairs/markets.
