@@ -16,9 +16,9 @@
   `DAILY_RECOMMENDED`, `TG_PUBLISHED`, and `TG_FORWARDED`. Covered by
   `tests/test_promo.py`.
 - **Changed: Poll to Repost audience framing**: poll questions now use a fixed
-  friendly participation frame that states when the announcement will arrive,
-  while LLM remains responsible only for options and event selection, preventing
-  promotional drift such as "we will pick the best events".
+  set of friendly participation frames rotated by poll slot, each stating when
+  the announcement will arrive, while LLM remains responsible only for options
+  and event selection.
 - **Changed: Poll to Repost intro copy**: the resolver now replies to the poll
   with the winning option plus the LLM's short reason for the selected event,
   without exposing the technical repost mechanic or promising a separate

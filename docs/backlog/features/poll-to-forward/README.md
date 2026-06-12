@@ -81,12 +81,17 @@ returns a compact poll plan:
 - warnings when the topic set is weak or underfilled.
 
 The poll question itself is product copy, not a semantic topic decision. Debug
-and production use a fixed friendly participation frame by default:
-`Что порекомендовать на завтра? Голосуйте — через 30 минут пришлю сюда один анонс по выбранному варианту.`
-It can be tuned with `POLL_TO_FORWARD_QUESTION_TEXT` without changing topic
-selection. This keeps the poll from drifting into promotional copy such as
-"we will pick the best events" while the LLM still owns the meaningful option
-set.
+and production rotate several friendly participation frames by slot, for
+example:
+
+- `Давайте выберем тему на завтра. Голосуйте, а через 30 минут пришлю сюда один анонс из варианта-победителя.`
+- `Поможете выбрать завтрашнюю рекомендацию? Отмечайте тему — через 30 минут пришлю один подходящий анонс.`
+- `Сделаем рекомендацию вместе: вы выбираете тему, я через 30 минут пришлю один анонс из победившей.`
+
+The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
+separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
+from drifting into promotional copy such as "we will pick the best events"
+while the LLM still owns the meaningful option set.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 

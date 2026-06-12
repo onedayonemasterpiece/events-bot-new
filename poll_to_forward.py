@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
@@ -26,7 +27,15 @@ STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 DEFAULT_POLL_QUESTION_TEXT = (
-    "Что порекомендовать на завтра? Голосуйте — через 30 минут пришлю сюда один анонс по выбранному варианту."
+    "Давайте выберем тему на завтра. Голосуйте, а через 30 минут пришлю сюда один анонс из варианта-победителя."
+)
+DEFAULT_POLL_QUESTION_VARIANTS = (
+    DEFAULT_POLL_QUESTION_TEXT,
+    "Поможете выбрать завтрашнюю рекомендацию? Отмечайте тему — через 30 минут пришлю один подходящий анонс.",
+    "Что порекомендовать на завтра? Выберите тему — через 30 минут пришлю один анонс по итогам голосования.",
+    "Сделаем рекомендацию вместе: вы выбираете тему, я через 30 минут пришлю один анонс из победившей.",
+    "Какую тему взять на завтра? Голосуйте, и через 30 минут здесь появится один анонс по выбору большинства.",
+    "Давайте соберём завтрашнюю рекомендацию: выберите тему, а я через 30 минут пришлю один анонс по голосованию.",
 )
 
 
@@ -77,8 +86,28 @@ def _env_str(name: str, default: str) -> str:
     return raw or default
 
 
-def _poll_question_text() -> str:
-    return _env_str("POLL_TO_FORWARD_QUESTION_TEXT", DEFAULT_POLL_QUESTION_TEXT)
+def _poll_question_variants() -> tuple[str, ...]:
+    fixed = (os.getenv("POLL_TO_FORWARD_QUESTION_TEXT") or "").strip()
+    if fixed:
+        return (fixed,)
+    raw = (os.getenv("POLL_TO_FORWARD_QUESTION_VARIANTS") or "").strip()
+    if not raw:
+        return DEFAULT_POLL_QUESTION_VARIANTS
+    variants = tuple(
+        re.sub(r"\s+", " ", part).strip()
+        for part in raw.split("||")
+        if re.sub(r"\s+", " ", part).strip()
+    )
+    return variants or DEFAULT_POLL_QUESTION_VARIANTS
+
+
+def _poll_question_text(run_key: str | None = None) -> str:
+    variants = _poll_question_variants()
+    if len(variants) == 1:
+        return variants[0]
+    raw_key = str(run_key or _now_utc().date().isoformat())
+    digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    return variants[int(digest[:8], 16) % len(variants)]
 
 
 def _event_telegraph_url(event: CandidateEvent | Event | None) -> str | None:
@@ -415,9 +444,10 @@ async def build_poll_plan(
     events: Sequence[CandidateEvent],
     *,
     min_options: int,
+    run_key: str | None = None,
 ) -> tuple[str, list[PollOptionPlan], str]:
     _question, llm_options = await _call_llm_topic_planner(events)
-    question = _poll_question_text()
+    question = _poll_question_text(run_key)
     if len(llm_options) >= min_options:
         return question, llm_options, "llm"
     return (
@@ -544,7 +574,7 @@ async def create_debug_poll_if_due(
         return {"created": False, "reason": "low_inventory", "eligible_events": len(events)}
 
     min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
-    question, options, strategy = await build_poll_plan(events, min_options=min_options)
+    question, options, strategy = await build_poll_plan(events, min_options=min_options, run_key=run_key)
     if len(options) < min_options:
         await _insert_run(
             db,
