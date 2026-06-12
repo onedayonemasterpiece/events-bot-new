@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -1259,12 +1260,14 @@ def _templates_for(
             f"Поставь лайк, если тебе близки такие {topic_acc}.",
             f"Поставь лайк, если любишь такие {topic_acc}.",
             f"Отметь лайком, если любишь такие {topic_acc}.",
-            "Поставь лайк, если добавил событие в планы.",
+            f"Поставь лайк, если такие {topic_acc} тебе близки.",
         ],
         "reposts": [
             f"Поделись с теми, кому близки такие {topic_acc}.",
             f"Поделись с другом, которому близки такие {topic_acc}.",
+            f"Поделись с подругой, которой близки такие {topic_acc}.",
             f"Поделись с другом, который любит такие {topic_acc}.",
+            f"Поделись с подругой, которая любит такие {topic_acc}.",
         ],
     }
     if event_type == "lecture" and persona:
@@ -1272,12 +1275,13 @@ def _templates_for(
             [
                 "Были на лекции {N}? Расскажите, что унесли с собой.",
                 "Что ещё вы бы спросили у {N}? Напишите в комментариях.",
-                "Если уже слушали {N} — поделитесь, стоит ли идти впервые.",
+                "Если уже слушали {N} — поделитесь, что запомнилось.",
             ]
         )
         templates["likes"].append("Лайк, если нравится, как {N} ведёт лекции.")
         templates["likes"].append("Поставь лайк, если уже слушал {N}.")
-        templates["reposts"].append("Поделись с другом, который точно хочет на {N}.")
+        templates["reposts"].append("Поделись с другом, который уже слушал {N}.")
+        templates["reposts"].append("Поделись с подругой, которая уже слушала {N}.")
     elif event_type == "concert" and persona:
         templates["comments"].extend(
             [
@@ -1316,6 +1320,7 @@ def _templates_for(
             ]
         )
         templates["reposts"].append("Поделись с тем, с кем смотришь фильмы.")
+        templates["reposts"].append("Поделись с подругой, с которой обсуждаешь фильмы.")
         if cinema_club:
             templates["comments"] = [
                 "Были на показах киноклуба {ORG}? Расскажите.",
@@ -1349,12 +1354,13 @@ def _templates_for(
         templates["reposts"] = [
             "Поделись с тем, кому близко волонтёрство.",
             "Поделись с другом, которому интересны волонтёрские события.",
+            "Поделись с подругой, которой близко волонтёрство.",
         ]
     elif event_type == "party":
         templates["comments"] = [
-            "Кого позвал бы на такую тусовку? Напиши в комментариях.",
+            "С кем обсуждаешь такие тусовки? Напиши в комментариях.",
             "Какой трек хочешь услышать на вечеринке?",
-            "С кем пошёл бы на такую вечеринку? Напиши в комментариях.",
+            "Какая музыка делает вечеринку твоей? Напиши в комментариях.",
         ]
         templates["likes"] = [
             "Лайк, если за такие вечеринки.",
@@ -1363,7 +1369,8 @@ def _templates_for(
         ]
         templates["reposts"] = [
             "Поделись с тем, кто любит такие тусовки.",
-            "Поделись с другом, который пошёл бы на такую вечеринку.",
+            "Поделись с другом, который любит такие вечеринки.",
+            "Поделись с подругой, которая любит такие вечеринки.",
         ]
     elif event_type == "holiday":
         templates["comments"] = [
@@ -1372,7 +1379,7 @@ def _templates_for(
         ] + templates["comments"]
         templates["likes"] = [
             "Поставь лайк, если любишь городские праздники.",
-            "Отметь лайком, если планируешь заглянуть.",
+            "Отметь лайком, если тебе близки городские праздники.",
         ] + templates["likes"]
         templates["reposts"] = ["Поделись с тем, кто любит праздничные программы."] + templates["reposts"]
     elif event_type == "excursion":
@@ -1386,6 +1393,7 @@ def _templates_for(
         ] + templates["likes"]
         templates["reposts"] = [
             "Поделись с тем, кто любит экскурсии.",
+            "Поделись с подругой, которая любит экскурсии.",
         ] + templates["reposts"]
         if theme and any(word in theme.casefold() for word in ("зоопарк", "зоолог", "ветеринар", "животн")):
             templates["comments"] = ["Какие закулисные истории зоопарка вам интересны?"] + templates["comments"]
@@ -1407,29 +1415,31 @@ def _templates_for(
         templates["reposts"] = [
             "Поделись с тем, кому интересны такие встречи.",
             "Поделись с другом, который любит живые встречи.",
+            "Поделись с подругой, которой близки живые встречи.",
         ] + templates["reposts"]
     elif event_type == "family":
         templates["comments"].extend(
             [
-                "Кого позвали бы с собой на такое семейное событие?",
+                "Кому из близких нравятся такие семейные события?",
                 "Какие детские события вам особенно нравятся?",
             ]
         )
         templates["likes"].extend(
             [
-                "Поставь лайк, если ищешь, куда сходить с детьми.",
                 "Отметь лайком, если любишь семейные события.",
-                "Поставь лайк, если планируешь семейный выход.",
+                "Поставь лайк, если интересны детские события.",
             ]
         )
         templates["reposts"].extend(
             [
-                "Поделись с теми, кто ищет, куда сходить с детьми.",
+                "Поделись с теми, кому близки семейные события.",
+                "Поделись с подругой, которой интересны детские события.",
             ]
         )
         if theme and ("сказоч" in theme or "геро" in theme):
             templates["comments"].append("Кого из сказочных героев дети ждут больше всего?")
             templates["reposts"].append("Поделись с другом, чьи дети любят сказочных героев.")
+            templates["reposts"].append("Поделись с подругой, чьи дети любят сказочных героев.")
     if theme:
         templates["likes"].extend(
             [
@@ -1465,6 +1475,7 @@ def _templates_for(
         templates["reposts"] = [
             "Поделись с тем, кому понравится идея {IDEA}.",
             "Поделись с другом, которому близка идея {IDEA}.",
+            "Поделись с подругой, которой близка идея {IDEA}.",
         ] + templates["reposts"]
     return templates
 
@@ -1817,7 +1828,7 @@ def build_engagement_plan(
                 idea=idea,
                 cinema_club=cinema_club,
             )
-            if resolved and len(resolved) <= 95:
+            if resolved and len(resolved) <= 95 and not _cta_text_has_forbidden_copy(resolved, event_type):
                 cta_text = resolved
                 mechanic = candidate_mechanic
                 break
@@ -1945,6 +1956,8 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
     )
     if any(fragment in lower for fragment in forbidden_fragments):
         return True
+    if _cta_text_has_non_social_action(lower):
+        return True
     if event_type == "cinema" and "спектак" in lower:
         return True
     if event_type == "theatre" and "кинопоказ" in lower:
@@ -1956,6 +1969,39 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
     if "фестивал" in lower and any(name in lower for name in HOLIDAY_FESTIVAL_NAMES):
         return True
     return False
+
+
+def _cta_text_has_non_social_action(lower_text: str) -> bool:
+    """Reject CTA copy that acts as attendance/commerce prompt, not VK engagement."""
+
+    direct_fragments = (
+        "зарегистр",
+        "запиш",
+        "куп",
+        "билет",
+        "приход",
+        "приди",
+        "посети",
+        "сходи",
+        "успей",
+        "заброни",
+        "планиру",
+        "в планы",
+        "куда сходить",
+        "куда пойти",
+        "хочет на",
+        "хочешь на",
+        "пошёл бы на",
+        "пошла бы на",
+        "пойти на",
+        "пойдешь на",
+        "пойдёшь на",
+        "пойдете на",
+        "пойдёте на",
+        "заглянуть",
+        "загляни",
+    )
+    return any(fragment in lower_text for fragment in direct_fragments)
 
 
 def _text_has_unsupported_event_reference(event: Event, text: str | None) -> bool:
@@ -2117,6 +2163,8 @@ async def build_llm_cta_text(
             "Верни только JSON без markdown: {\"cta_text\":\"...\",\"hook_text\":\"...\"}.\n"
             "Правила: cta_text максимум 95 символов; живой естественный русский; "
             "не используй канцелярит, не склоняй машинно готовые куски; обращение на ты допустимо. "
+            "CTA должен призывать только к доступному действию во VK: написать комментарий, поставить лайк или поделиться/сделать репост. "
+            "Не зови идти на событие, покупать билеты, регистрироваться, записываться, планировать визит, сохранять в планы или искать, куда сходить. "
             "Для механики comments задай цепляющий, но конкретный вопрос по этому событию: "
             "про тему афиши, формат, организатора, артиста, произведение или идею события, если они явно есть в данных. "
             "Не оставляй общий вопрос вида «что цепляет вас в таких событиях» без конкретики. "
@@ -2201,6 +2249,8 @@ async def build_llm_engagement_plan(
             "Правила: русский текст, обращение на ты допустимо для лайков/репостов; "
             "cta_text максимум 95 символов; без плейсхолдеров, без ФИО если ФИО нет в данных; "
             "не обещай факт, которого нет; для плотной/неуверенной афиши предпочитай right_extension или hook_swipe_cta; "
+            "CTA должен быть только про действие во VK: комментарий, лайк или репост/поделиться. "
+            "Не зови идти на событие, покупать билеты, регистрироваться, записываться, планировать визит, сохранять в планы или искать, куда сходить; "
             "для comments лучше задать конкретный вопрос по событию, организатору, артисту, теме афиши или идее события, "
             "а не общий вопрос про «такие события»; "
             "если кинопоказ делает киноклуб, можно спросить, были ли уже на его показах; "
@@ -2918,6 +2968,28 @@ def _offset_segment(
     return (start[0] + dx, start[1] + dy), (end[0] + dx, end[1] + dy)
 
 
+def _diagonal_shadow_offset(
+    seam_start: tuple[float, float],
+    seam_end: tuple[float, float],
+    *,
+    toward: tuple[float, float],
+    distance: float,
+) -> tuple[int, int]:
+    sx, sy = seam_start
+    ex, ey = seam_end
+    vx = ex - sx
+    vy = ey - sy
+    length = math.hypot(vx, vy)
+    if length <= 0:
+        tx, ty = toward
+        fallback_len = math.hypot(tx, ty) or 1.0
+        return int(round(distance * tx / fallback_len)), int(round(distance * ty / fallback_len))
+    candidates = ((-vy / length, vx / length), (vy / length, -vx / length))
+    tx, ty = toward
+    nx, ny = max(candidates, key=lambda item: item[0] * tx + item[1] * ty)
+    return int(round(nx * distance)), int(round(ny * distance))
+
+
 def _compose_cta_edge(
     image: Any,
     *,
@@ -3407,10 +3479,17 @@ def render_right_extension(
     cut_top = poster_w - int(diagonal * 0.35)
     cut_bottom = poster_w - diagonal
     cta_polygon = [(cut_top, 0), (width, 0), (width, height), (cut_bottom, height)]
+    seam_start = (cut_top, 0)
+    seam_end = (cut_bottom, height)
     shadow = _drop_shadow_overlay(
         size=(width, height),
         polygon=cta_polygon,
-        offset=(-int(18 * scale), 0),
+        offset=_diagonal_shadow_offset(
+            seam_start,
+            seam_end,
+            toward=(-1.0, 0.0),
+            distance=int(18 * scale),
+        ),
         alpha=120,
         blur=max(10, int(26 * scale)),
         aa_scale=4,
@@ -3434,8 +3513,8 @@ def render_right_extension(
     )
     canvas = _compose_cta_edge(
         canvas,
-        seam_start=(cut_top, 0),
-        seam_end=(cut_bottom, height),
+        seam_start=seam_start,
+        seam_end=seam_end,
         cta_normal=(1.0, 0.0),
         surface=bg,
         ink=text_color,
@@ -3577,10 +3656,17 @@ def _render_bottom_extension(
     canvas.paste(poster, (0, 0))
 
     cta_polygon = [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)]
+    seam_start = (0, block_top + diagonal)
+    seam_end = (width, block_top)
     shadow = _drop_shadow_overlay(
         size=(width, height),
         polygon=cta_polygon,
-        offset=(0, -int(12 * scale)),
+        offset=_diagonal_shadow_offset(
+            seam_start,
+            seam_end,
+            toward=(0.0, -1.0),
+            distance=int(12 * scale),
+        ),
         alpha=120,
         blur=max(10, int(20 * scale)),
         aa_scale=4,
@@ -3599,8 +3685,8 @@ def _render_bottom_extension(
     )
     canvas = _compose_cta_edge(
         canvas,
-        seam_start=(0, block_top + diagonal),
-        seam_end=(width, block_top),
+        seam_start=seam_start,
+        seam_end=seam_end,
         cta_normal=(0.0, 1.0),
         surface=bg,
         ink=text_color,
@@ -3748,10 +3834,17 @@ def _render_bottom_overlay(
 
     canvas = poster.copy()
     cta_polygon = [(0, block_top + diagonal), (width, block_top), (width, height), (0, height)]
+    seam_start = (0, block_top + diagonal)
+    seam_end = (width, block_top)
     shadow = _drop_shadow_overlay(
         size=(width, height),
         polygon=cta_polygon,
-        offset=(0, -int(12 * scale)),
+        offset=_diagonal_shadow_offset(
+            seam_start,
+            seam_end,
+            toward=(0.0, -1.0),
+            distance=int(12 * scale),
+        ),
         alpha=120,
         blur=max(10, int(20 * scale)),
         aa_scale=4,
@@ -3770,8 +3863,8 @@ def _render_bottom_overlay(
     )
     canvas = _compose_cta_edge(
         canvas,
-        seam_start=(0, block_top + diagonal),
-        seam_end=(width, block_top),
+        seam_start=seam_start,
+        seam_end=seam_end,
         cta_normal=(0.0, 1.0),
         surface=bg,
         ink=text_color,

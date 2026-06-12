@@ -468,7 +468,33 @@ def test_repost_template_uses_event_type_noun():
     }
 
     assert "Поделись с другом, который любит такие концерты." in seen
+    assert "Поделись с подругой, которая любит такие концерты." in seen
     assert all("такие афиши" not in text for text in seen)
+
+
+def test_generated_cta_stays_on_vk_social_action_not_attendance():
+    event = Event(
+        title="Семейный праздник",
+        description="Детская программа и мастер-классы",
+        date="2026-06-20",
+        time="12:00",
+        location_name="Парк",
+        source_text="",
+        event_type="семейное",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"social-action-only-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 40, "reposts": 20}},
+        ).cta_text
+        for idx in range(160)
+    }
+
+    assert all(not aeg._cta_text_has_forbidden_copy(text, "family") for text in seen)
+    assert all("куда сходить" not in text.casefold() for text in seen)
+    assert all("планиру" not in text.casefold() for text in seen)
 
 
 def test_cinema_event_type_does_not_use_theatre_copy():
@@ -707,7 +733,7 @@ def test_concert_theme_still_detects_real_organ_music():
     assert aeg._extract_theme(event, "concert") == "органную музыку"
 
 
-def test_configured_registration_cta_uses_event_type_phrase():
+def test_configured_registration_cta_is_rejected_as_attendance_copy():
     event = Event(
         title="Лекция проекта 80 историй",
         description="Регистрация открыта",
@@ -737,7 +763,8 @@ def test_configured_registration_cta_uses_event_type_phrase():
     )
 
     assert plan.mechanic == "likes"
-    assert plan.cta_text == "Поставь лайк ❤️, если уже зарегистрировался на эту лекцию."
+    assert "зарегистр" not in plan.cta_text.casefold()
+    assert not aeg._cta_text_has_forbidden_copy(plan.cta_text, plan.event_type)
 
 
 def test_configured_registration_cta_adapts_to_theatre():
@@ -763,7 +790,8 @@ def test_configured_registration_cta_adapts_to_theatre():
         },
     )
 
-    assert plan.cta_text == "Поставь лайк ❤️, если уже зарегистрировался на этот спектакль."
+    assert "зарегистр" not in plan.cta_text.casefold()
+    assert not aeg._cta_text_has_forbidden_copy(plan.cta_text, plan.event_type)
 
 
 def test_festival_comment_template_names_festival_and_annual_context():
@@ -1150,6 +1178,26 @@ def test_badge_icons_match_action_mechanics():
     assert aeg._badge_trailing_icon("likes") == "heart"
     assert aeg._badge_trailing_icon("comments") == "down_arrow"
     assert aeg._badge_trailing_icon("reposts") == "right_arrow"
+
+
+def test_diagonal_shadow_offset_follows_seam_normal():
+    right_offset = aeg._diagonal_shadow_offset(
+        (790, 0),
+        (772, 900),
+        toward=(-1.0, 0.0),
+        distance=18,
+    )
+    bottom_offset = aeg._diagonal_shadow_offset(
+        (0, 520),
+        (900, 480),
+        toward=(0.0, -1.0),
+        distance=18,
+    )
+
+    assert right_offset[0] < 0
+    assert abs(right_offset[0]) >= 17
+    assert bottom_offset[1] < 0
+    assert bottom_offset[0] < 0
 
 
 def test_hook_text_uses_prepositional_plural():

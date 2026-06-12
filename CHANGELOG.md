@@ -45,6 +45,12 @@
   cinema-club questions such as Westside Movie, artist-work likes such as
   Elvis Presley, and LLM auto-rewrites generic comment prompts into more
   event-specific questions. Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement VK-native CTA guardrails**: CTA copy now stays on
+  VK social actions only (`comment`, `like`, `share/repost`) and rejects direct
+  attendance, registration, ticket, booking, planning, or "where to go" prompts
+  from deterministic, configured, and LLM-generated templates. Repost copy now
+  includes `друг` / `подруга` variants, and diagonal CTA shadows follow the
+  actual seam normal. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement fresh shadow audit regressions**: tightened CTA
   event-type guardrails from a 31-post VK shadow audit so theatre backstage
   excursions no longer get zoo copy, День России programs do not get festival

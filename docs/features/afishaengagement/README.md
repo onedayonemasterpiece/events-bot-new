@@ -126,6 +126,13 @@ about the artist's creative work, including historical artists, but only when
 the name is grounded in event text. If the LLM is unavailable or returns
 invalid copy, guardrails fall back to a generic safe CTA instead of publishing
 an awkward template.
+CTA text must stay native to VK engagement: it may ask the viewer to comment,
+like, share, or repost, but must not directly push attendance, registration,
+ticket purchase, booking, saving to plans, or "where to go" decisions. This
+guardrail applies both to deterministic templates and to configured activity
+templates. Repost copy should keep natural variants for both `друг` and
+`подруга` where the wording names a friend directly, so batches do not repeat a
+single gendered formula.
 LLM CTA output is also post-filtered for unsupported concrete references: for
 example, an LLM suggestion about a zoo is rejected when the event text does not
 actually mention a zoo, zoologists, animals, veterinary care, enclosures, or a
@@ -160,7 +167,7 @@ Activities may provide prioritized custom CTA templates:
     "by_event_type": {
       "*": {
         "likes": [
-          "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
+          "Поставь лайк ❤️, если тебе близки такие события."
         ]
       }
     }
@@ -251,6 +258,9 @@ The renderer uses engagementcard principles from guide excursion monitoring:
   poster-side shadow, and deterministic low-amplitude grain only inside the CTA
   surface. Palette compatibility must not make the CTA read as part of the
   original poster.
+- diagonal CTA shadows follow the actual seam normal instead of using a fixed
+  horizontal or vertical offset, so side and bottom templates keep the shadow
+  aligned with the slanted boundary.
 - bottom CTA layouts keep mechanic badges as lower action anchors with explicit
   clearance from the diagonal seam; when the safe spacing cannot be met, the
   renderer fails over instead of publishing a cramped bottom block.
