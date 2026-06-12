@@ -735,12 +735,28 @@ def _looks_family_event(raw: str) -> bool:
     )
 
 
+def _looks_zoo_event(raw: str) -> bool:
+    if not raw:
+        return False
+    return any(
+        word in raw
+        for word in (
+            "зоопарк",
+            "зоолог",
+            "ветеринар",
+            "вольер",
+            "кормокух",
+            "животн",
+        )
+    )
+
+
 def _looks_excursion_event(raw: str) -> bool:
     if not raw:
         return False
     if "экскурс" in raw:
         return True
-    return "зоопарк" in raw and any(
+    return "зоопарк" in raw and _looks_zoo_event(raw) and any(
         word in raw
         for word in (
             "зоолог",
@@ -758,12 +774,55 @@ def _looks_meeting_event(raw: str) -> bool:
     return any(word in raw for word in ("творческ", "встреч", "диалог", "разговор", "обсужден"))
 
 
+def _looks_theatre_event(raw: str) -> bool:
+    return any(word in raw for word in ("спектак", "театр", "постановк", "пьес"))
+
+
+def _looks_cinema_event(raw: str) -> bool:
+    return any(word in raw for word in ("кинопоказ", "киносеанс", "кинолекторий", "кинопросмотр", "фильм"))
+
+
+def _looks_recycling_event(raw: str) -> bool:
+    return any(
+        word in raw
+        for word in (
+            "прием шин",
+            "приём шин",
+            "отработанных шин",
+            "утилизац",
+            "переработк",
+            "раздельн",
+            "экосбор",
+        )
+    )
+
+
+def _looks_holiday_program(event: Event, raw: str, explicit_key: str | None) -> bool:
+    holiday_markers = (
+        "день россии",
+        "дня россии",
+        "дню россии",
+        "день победы",
+        "дня победы",
+        "дню победы",
+    )
+    if _is_holiday_name(getattr(event, "festival", None)):
+        return True
+    title = str(event.title or "").casefold()
+    if any(marker in title for marker in holiday_markers) and (
+        explicit_key in {"festival", "holiday"} or re.match(r"\s*(?:празднован|день\s+(?:россии|победы))", title)
+    ):
+        return True
+    if explicit_key == "festival" and any(marker in raw for marker in holiday_markers):
+        return True
+    return False
+
+
 def _event_type_key(event: Event) -> str:
     explicit_type = str(event.event_type or "").casefold()
     explicit_key = _explicit_event_type_key(explicit_type)
-    raw = " ".join(
+    semantic_raw = " ".join(
         [
-            explicit_type,
             str(event.title or ""),
             str(event.description or ""),
             str(event.source_text or ""),
@@ -771,8 +830,26 @@ def _event_type_key(event: Event) -> str:
             str(event.location_name or ""),
         ]
     ).casefold()
+    raw = " ".join(
+        [
+            explicit_type,
+            semantic_raw,
+        ]
+    ).casefold()
     if _looks_excursion_event(raw):
         return "excursion"
+    if _looks_holiday_program(event, raw, explicit_key):
+        return "holiday"
+    title_raw = str(event.title or "").casefold()
+    location_raw = str(event.location_name or "").casefold()
+    if explicit_key == "cinema" and _looks_theatre_event(semantic_raw) and (
+        not _looks_cinema_event(semantic_raw)
+        or re.match(r"\s*спектак", title_raw)
+        or "театр" in location_raw
+    ):
+        return "theatre"
+    if explicit_key == "market" and _looks_recycling_event(semantic_raw):
+        return "other"
     if explicit_key and explicit_key != "other":
         return explicit_key
     if explicit_key == "other" and _looks_family_event(raw):
@@ -801,10 +878,8 @@ def _event_type_key(event: Event) -> str:
         return "concert"
     if any(word in raw for word in ("мастер-класс", "мастер класс", "воркшоп", "практик")):
         return "workshop"
-    if any(word in raw for word in ("спектак", "театр", "постановк", "пьес")):
+    if _looks_theatre_event(raw):
         return "theatre"
-    if any(word in raw for word in ("день россии", "день победы", "праздничн", "праздник")):
-        return "holiday"
     if event.festival or any(word in raw for word in ("фестив", "маркет", "ярмарк")):
         return "festival"
     return "other"
@@ -1002,7 +1077,7 @@ THEME_KEYWORDS: dict[str, dict[str, str]] = {
         "зоолог": "встречи с зоологами",
         "ветеринар": "ветеринарный уход",
         "животн": "животных",
-        "закулис": "закулисье зоопарка",
+        "закулис": "закулисье",
     },
     "exhibition": {
         "маринист": "морскую живопись",
@@ -1049,10 +1124,14 @@ def _extract_theme(event: Event, event_type: str) -> str | None:
             str(event.description or ""),
             str(event.source_text or ""),
             str(event.search_digest or ""),
+            str(event.location_name or ""),
         ]
     ).casefold()
+    zoo_context = _looks_zoo_event(raw)
     for key, label in THEME_KEYWORDS.get(event_type, {}).items():
         if _theme_key_matches(raw, key):
+            if event_type == "excursion" and key in {"зоолог", "ветеринар", "животн"} and not zoo_context:
+                continue
             return label
     return None
 
@@ -1064,6 +1143,7 @@ def _event_text_blob(event: Event) -> str:
             str(event.description or ""),
             str(event.source_text or ""),
             str(event.search_digest or ""),
+            str(event.location_name or ""),
         ]
     ).casefold()
 
@@ -1230,18 +1310,22 @@ def _templates_for(
     elif event_type == "excursion":
         templates["comments"] = [
             "Что больше всего хочется узнать на такой экскурсии?",
-            "Какие закулисные истории зоопарка вам интересны?",
             "Что вам интереснее увидеть на экскурсии?",
         ] + templates["comments"]
         templates["likes"] = [
-            "Поставь лайк, если интересен зоопарк изнутри.",
             "Отметь лайком, если любишь экскурсии.",
-            "Лайк, если интересны встречи с зоологами.",
+            "Поставь лайк, если любишь такие экскурсии.",
         ] + templates["likes"]
         templates["reposts"] = [
-            "Поделись с тем, кому интересен зоопарк изнутри.",
             "Поделись с тем, кто любит экскурсии.",
         ] + templates["reposts"]
+        if theme and any(word in theme.casefold() for word in ("зоопарк", "зоолог", "ветеринар", "животн")):
+            templates["comments"] = ["Какие закулисные истории зоопарка вам интересны?"] + templates["comments"]
+            templates["likes"] = [
+                "Поставь лайк, если интересен зоопарк изнутри.",
+                "Лайк, если интересны встречи с зоологами.",
+            ] + templates["likes"]
+            templates["reposts"] = ["Поделись с тем, кому интересен зоопарк изнутри."] + templates["reposts"]
     elif event_type == "meeting":
         templates["comments"] = [
             "Что бы спросили на такой встрече?",
@@ -1437,7 +1521,7 @@ def _festival_context_phrase(event: Event, festival: str | None, event_type: str
         return "образовательной программе фестиваля Кантата"
     if "80 истор" in value:
         return "проекте «80 историй о главном»"
-    if "другой зоопарк" in value or event_type == "excursion":
+    if "другой зоопарк" in value or _looks_zoo_event(raw):
         return "проекте «Другой зоопарк»"
     return f"программе {_festival_from_phrase(event, festival) or f'фестиваля {display}'}"
 
@@ -1452,7 +1536,7 @@ def _festival_interest_clause(event: Event, festival: str | None, event_type: st
         return "интересна образовательная программа фестиваля Кантата"
     if "80 истор" in value:
         return "интересны истории Калининградской области"
-    if "другой зоопарк" in value or event_type == "excursion":
+    if "другой зоопарк" in value or _looks_zoo_event(raw):
         return "интересен зоопарк изнутри"
     return f"интересны события {_festival_from_phrase(event, festival) or display}"
 
@@ -1482,7 +1566,7 @@ def _festival_hook_text(event: Event, festival: str | None, event_type: str) -> 
         return "Кому близка образовательная программа Кантаты?"
     if "80 истор" in value:
         return "Кому близки истории Калининградской области?"
-    if "другой зоопарк" in value or event_type == "excursion":
+    if "другой зоопарк" in value or _looks_zoo_event(raw):
         return "Кому интересен зоопарк изнутри?"
     annual = " в этом году" if _festival_is_annual(event) else ""
     return f"Кто следит за фестивалем {display}{annual}?"
@@ -1703,9 +1787,12 @@ def _sanitize_llm_plan(
         or len(cta_text) > 95
         or re.search(r"\{[^}]+\}", cta_text)
         or _cta_text_has_forbidden_copy(cta_text, fallback.event_type)
+        or _text_has_unsupported_event_reference(event, cta_text)
     ):
         return None
     hook_text = _sanitize_cta_text(str(payload.get("hook_text") or "")) or fallback.hook_text
+    if _text_has_unsupported_event_reference(event, hook_text):
+        hook_text = fallback.hook_text
     return EngagementPlan(
         mechanic=mechanic,
         template_id=template_id,
@@ -1752,6 +1839,39 @@ def _cta_text_has_forbidden_copy(text: str, event_type: str | None = None) -> bo
     if "фестивал" in lower and any(name in lower for name in HOLIDAY_FESTIVAL_NAMES):
         return True
     return False
+
+
+def _text_has_unsupported_event_reference(event: Event, text: str | None) -> bool:
+    lower = str(text or "").casefold()
+    if not lower:
+        return False
+    event_blob = _event_text_blob(event)
+    has_zoo_place = "зоопарк" in event_blob or "зоолог" in event_blob
+    if any(word in lower for word in ("зоопарк", "зоолог")) and not has_zoo_place:
+        return True
+    if any(word in lower for word in ("ветеринар", "животн")) and not _looks_zoo_event(event_blob):
+        return True
+    if "закулисье зоопарка" in lower and "зоопарк" not in event_blob:
+        return True
+    return False
+
+
+def _safe_generic_hook(event_type: str) -> str:
+    if event_type == "cinema":
+        return "Кто любит кинопоказы?"
+    if event_type == "theatre":
+        return "Кто любит спектакли?"
+    if event_type == "concert":
+        return "Кто любит концерты?"
+    if event_type == "lecture":
+        return "Кто любит лекции?"
+    if event_type == "excursion":
+        return "Кто любит экскурсии?"
+    if event_type == "exhibition":
+        return "Кто любит выставки?"
+    if event_type == "holiday":
+        return "Кто любит городские праздники?"
+    return "Кому интересно такое событие?"
 
 
 def _safe_generic_cta(event_type: str, mechanic: str) -> str:
@@ -1827,8 +1947,14 @@ def _should_run_llm_text(event: Event, plan: EngagementPlan, config: dict[str, A
     if mode == "always":
         return True
     if config.get("cta_templates") and not _parse_bool(config.get("llm_text_rewrite_configured"), False):
-        return _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type)
-    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type):
+        return _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type) or _text_has_unsupported_event_reference(
+            event, plan.cta_text
+        )
+    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type) or _text_has_unsupported_event_reference(
+        event, plan.cta_text
+    ):
+        return True
+    if _text_has_unsupported_event_reference(event, plan.hook_text):
         return True
     theme = _extract_theme(event, plan.event_type)
     if theme and plan.mechanic == "comments" and theme.casefold() in plan.cta_text.casefold():
@@ -1867,6 +1993,7 @@ async def build_llm_cta_text(
             "Не пиши «ждёшь/ждёте фестиваля»: если фестиваль уже идёт, это звучит неверно. "
             "Если в данных явно есть концепт события, например концерт на воде или кинопоказ под открытым небом, "
             "можно использовать CTA про идею этого концепта; не выдумывай концепт без прямого сигнала. "
+            "Зоопарк, зоологов, животных или ветеринарный уход упоминай только если это явно есть в данных события. "
             "Для экскурсий по зоопарку не называй событие лекцией. "
             "Если используешь тему, впиши её грамотно: например «Поддержи лайком, если любишь симфоническую музыку» "
             "или «Что вам ближе в органной музыке?», но не «из темы органную музыку».\n"
@@ -1892,9 +2019,12 @@ async def build_llm_cta_text(
             or len(cta_text) > 95
             or re.search(r"\{[^}]+\}", cta_text)
             or _cta_text_has_forbidden_copy(cta_text, plan.event_type)
+            or _text_has_unsupported_event_reference(event, cta_text)
         ):
             return plan, int((time.monotonic() - started) * 1000), "fallback_text_invalid"
         hook_text = _sanitize_cta_text(str(payload.get("hook_text") or ""))
+        if _text_has_unsupported_event_reference(event, hook_text):
+            hook_text = ""
         return (
             replace(plan, cta_text=cta_text, hook_text=(hook_text[:95] if hook_text else plan.hook_text)),
             int((time.monotonic() - started) * 1000),
@@ -4532,9 +4662,14 @@ async def maybe_publish_shadow_debug_copy(
             plan_provider = f"{plan_provider}+llm_text"
         else:
             plan_provider = f"{plan_provider}+{text_provider}"
-    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type):
+    if _cta_text_has_forbidden_copy(plan.cta_text, plan.event_type) or _text_has_unsupported_event_reference(
+        event, plan.cta_text
+    ):
         plan = replace(plan, cta_text=_safe_generic_cta(plan.event_type, plan.mechanic))
         plan_provider = f"{plan_provider}+safe_text_fallback"
+    if _text_has_unsupported_event_reference(event, plan.hook_text):
+        plan = replace(plan, hook_text=_safe_generic_hook(plan.event_type))
+        plan_provider = f"{plan_provider}+safe_hook_fallback"
     if "{" in plan.cta_text or len(plan.cta_text) > 95:
         _json_log(
             StageLog(

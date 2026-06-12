@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement fresh shadow audit regressions**: tightened CTA
+  event-type guardrails from a 31-post VK shadow audit so theatre backstage
+  excursions no longer get zoo copy, День России programs do not get festival
+  CTA wording, theatre productions mis-stored as `кинопоказ` use theatre copy,
+  and recycling/drop-off actions mis-stored as `ярмарка` avoid market copy.
+  LLM CTA output now rejects unsupported concrete references such as zoo terms
+  when the event text has no zoo context. Covered by
+  `tests/test_afishaengagement.py`.
 - **Fixed: Smart Update managed VK post idempotency**: done `vk_sync` jobs now
   treat existing VK postponed/live wall records as existing even when
   `wall.getById` cannot see the stored postponed id, preventing a second

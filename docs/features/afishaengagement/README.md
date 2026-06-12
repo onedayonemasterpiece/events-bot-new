@@ -1,6 +1,6 @@
 # Afisha Engagement
 
-> **Status:** Visual-debug iteration implemented locally; production deploy and VK shadow verification pending.
+> **Status:** Visual-debug iteration deployed; fresh VK shadow audit found and fixed CTA/type guardrails.
 > **Confirmation:** Not confirmed by user after VK visual review.
 > **Canonical requirements snapshot:** [requirements.md](requirements.md).
 
@@ -81,6 +81,21 @@ programs do not accidentally get theatre/exhibition wording from venue text or
 artist bios. Zoo/excursion events use `excursion` copy; stored `лекция` values
 are overridden only when the event text clearly says excursion/zoo/zoologist
 context, preventing `лекции` CTA copy from leaking into zoo excursions.
+Zoo-specific CTA copy (`зоопарк изнутри`, `зоологи`, `животные`,
+`ветеринарный уход`) is allowed only when the event text or location carries a
+real zoo signal. Generic backstage excursions such as `Закулисье театра` stay
+on ordinary excursion/behind-the-scenes wording and must not inherit zoo copy.
+Several narrow semantic safety overrides protect the CTA surface from obviously
+wrong stored event types without changing the source event row:
+
+- holiday programs like `Празднование Дня России` use `holiday` copy even when
+  the stored type says `фестиваль`;
+- theatre titles/venues such as `Спектакль «Гараж»` at a drama theatre use
+  `theatre` copy even when the stored type says `кинопоказ`, unless the event
+  text is genuinely about a film screening;
+- recycling/drop-off actions such as `Приём шин` do not inherit `market`
+  (`ярмарка`) copy from a bad stored type.
+
 Theme extraction inside an already selected event type must use safe word/stem
 matching: narrow cues such as `орган` may match real organ music forms, but must
 not match unrelated words such as `организаторы`. If a theme is uncertain, the
@@ -104,6 +119,10 @@ theme-heavy comment text, forbidden phrases, or event-type conflicts such as a
 cinema post getting theatre wording. Simple safe ready-made CTAs can stay
 deterministic. If the LLM is unavailable or returns invalid copy, guardrails
 fall back to a generic safe CTA instead of publishing an awkward template.
+LLM CTA output is also post-filtered for unsupported concrete references: for
+example, an LLM suggestion about a zoo is rejected when the event text does not
+actually mention a zoo, zoologists, animals, veterinary care, enclosures, or a
+zoo location.
 If a selected visual format still overflows at render time, debug shadow
 generation retries once with a short safe CTA in `right_extension`; a failed
 bottom/card variant must not make the whole shadow post disappear during visual
@@ -334,3 +353,17 @@ Before declaring the feature confirmed:
    marker, scheduled date, generated photo attachment, normal post unaffected.
 6. Inspect visual output manually before publish time.
 7. Delete the debug copies by marker after review/debug.
+
+Fresh audit evidence from 2026-06-11 production recovery:
+
+- Telegram Monitoring Kaggle recovery import for
+  `run_id=7f4af7474db2421f9ee506d8157886be` finished successfully as
+  `ops_run.id=2275` with `messages_processed=165`, `events_imported=29`,
+  `events_created=16`, `events_merged=13`, and `errors_count=0`.
+- The existing recovery mechanism produced 31
+  `surface='afishaengagement'` / `publish_status='VK_SCHEDULED_DEBUG'` rows in
+  the last 24 hours, so no manual `/vk_auto_import` batch was needed after
+  recovery completed.
+- Audit artifacts for this run are under
+  `artifacts/codex/afishaengagement-audit-20260611/` and are intentionally not
+  committed.

@@ -159,6 +159,31 @@ def test_holiday_festival_field_does_not_generate_festival_cta():
     assert all("День России" not in text for text in seen)
 
 
+def test_day_russia_explicit_festival_type_uses_holiday_cta():
+    event = Event(
+        title="Празднование Дня России",
+        description="Масштабное мероприятие посвящено Дню России. Гостей ждёт концерт и мастер-классы.",
+        date="2026-06-12",
+        time="12:00",
+        location_name="Верхнее озеро",
+        source_text="Приглашаем на масштабное празднование Дня России.",
+        event_type="фестиваль",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"day-russia-not-festival-{idx}",
+            config={"mechanic_weights": {"comments": 50, "likes": 25, "reposts": 25}},
+        ).cta_text
+        for idx in range(80)
+    }
+
+    assert aeg._event_type_key(event) == "holiday"
+    assert all("фестивал" not in text.casefold() for text in seen)
+    assert any("праздник" in text.casefold() or "праздничн" in text.casefold() for text in seen)
+
+
 def test_volunteer_event_gets_volunteer_cta_copy():
     event = Event(
         title="пойдем гулять",
@@ -847,6 +872,114 @@ def test_zoo_excursion_does_not_get_lecture_copy_even_when_stored_as_lecture():
     assert all("лекц" not in text.casefold() for text in seen)
     assert any("зоопарк изнутри" in text.casefold() or "экскурс" in text.casefold() for text in seen)
     assert hook == "Кому интересен зоопарк изнутри?"
+
+
+def test_theatre_backstage_excursion_does_not_invent_zoo_copy():
+    event = Event(
+        title="Женитьба и экскурсия «Закулисье театра»",
+        description="Атмосфера театрального закулисья открывается зрителям после спектакля.",
+        date="2026-08-09",
+        time="18:00",
+        location_name="Калининградский драматический театр",
+        source_text="Август уже в продаже. Экскурсия «Закулисье театра».",
+        event_type="экскурсия",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"theatre-backstage-no-zoo-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 40, "reposts": 20}},
+        ).cta_text
+        for idx in range(180)
+    }
+    hook = aeg.build_engagement_plan(event, seed="theatre-backstage-hook", config={"formats": ["hook_swipe_cta"]}).hook_text
+
+    assert aeg._event_type_key(event) == "excursion"
+    assert aeg._extract_theme(event, "excursion") == "закулисье"
+    assert all("зоопарк" not in text.casefold() for text in seen)
+    assert all("зоолог" not in text.casefold() for text in seen)
+    assert all("животн" not in text.casefold() for text in seen)
+    assert "зоопарк" not in hook.casefold()
+
+
+def test_llm_plan_rejects_zoo_copy_without_zoo_context():
+    event = Event(
+        title="Женитьба и экскурсия «Закулисье театра»",
+        description="Атмосфера театрального закулисья открывается зрителям после спектакля.",
+        date="2026-08-09",
+        time="18:00",
+        location_name="Калининградский драматический театр",
+        source_text="Экскурсия «Закулисье театра».",
+        event_type="экскурсия",
+    )
+
+    assert (
+        aeg._sanitize_llm_plan(
+            event,
+            seed="llm-zoo-copy-rejected",
+            config={},
+            vision=None,
+            payload={
+                "mechanic": "likes",
+                "template_id": "right_extension",
+                "palette_id": "midnight_gold",
+                "cta_text": "Поставь лайк, если любишь закулисье зоопарка.",
+                "hook_text": "Кому интересен зоопарк изнутри?",
+            },
+        )
+        is None
+    )
+
+
+def test_theatre_title_overrides_misstored_cinema_type():
+    event = Event(
+        title="Спектакль «Гараж»",
+        description="Сатирическая история о собрании гаражно-строительного кооператива на сцене драмтеатра.",
+        date="2026-08-01",
+        time="18:00",
+        location_name="Калининградский драматический театр",
+        source_text="Спектакли драматического театра. Основная сцена.",
+        event_type="кинопоказ",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"garage-theatre-not-cinema-{idx}",
+            config={"mechanic_weights": {"comments": 50, "likes": 50, "reposts": 0}},
+        ).cta_text
+        for idx in range(120)
+    }
+
+    assert aeg._event_type_key(event) == "theatre"
+    assert all("кинопоказ" not in text.casefold() for text in seen)
+    assert any("спектак" in text.casefold() or "актёр" in text.casefold() for text in seen)
+
+
+def test_recycling_collection_overrides_misstored_market_type():
+    event = Event(
+        title="Приём шин",
+        description="Бесплатный приём отработанных шин от физических лиц на переработку.",
+        date="2026-06-20",
+        time="08:00",
+        location_name="Правая набережная, 25",
+        source_text="ЭКОИЮНЬ: бесплатный прием отработанных шин.",
+        event_type="ярмарка",
+    )
+
+    seen = {
+        aeg.build_engagement_plan(
+            event,
+            seed=f"recycling-not-market-{idx}",
+            config={"mechanic_weights": {"comments": 40, "likes": 40, "reposts": 20}},
+        ).cta_text
+        for idx in range(120)
+    }
+
+    assert aeg._event_type_key(event) == "other"
+    assert all("ярмарк" not in text.casefold() for text in seen)
+    assert all("маркет" not in text.casefold() for text in seen)
 
 
 def test_kantata_education_umbrella_uses_program_context():

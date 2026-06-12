@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-11-tg-monitoring-recovery-after-deploy-cancel.md`
+  - Scope: Telegram Monitoring scheduled Kaggle runs, `/data/kaggle_jobs.json`
+    recovery registry, `kaggle_recovery`, `ops_run` terminal evidence, and Fly
+    deploy/restart timing during active scheduled imports.
+  - Must not regress: a local deploy cancellation of `tg_monitoring` must not be
+    treated as lost output while the original Kaggle kernel is still alive; do
+    not start a replacement monitoring run before checking registry/Kaggle
+    status and recovery import evidence; closure requires terminal
+    `recovery_import` metrics or explicit registry/log evidence explaining why
+    recovery cannot proceed.
 - `INC-2026-06-10-event-outbox-fanout-deadlock.md`
   - Scope: Smart Update event fanout through `JobOutbox`, `vk_sync`, `tg_event_publish`, `ics_publish`, and `tg_ics_post`.
   - Must not regress: independent event pipeline jobs must not block each other via a broad same-event prior-job rule; `vk_sync` must not wait behind calendar jobs unless explicitly configured; dependent jobs must not expire while their dependency is actively retrying with bounded backoff; ordinary VK auto-import should restore the expected Telegraph + VK + Telegram rhythm.
