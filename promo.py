@@ -2873,15 +2873,17 @@ async def run_promo_vk_activities(
                 event_ids=[int(ev.id) for ev in events],
             )
 
-            def sort_key(ev: Event) -> tuple[int, datetime, str, str, int]:
-                count, last_at = stats.get(int(ev.id), (0, None))
+            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
+                event_id = int(ev.id)
+                count, last_at = stats.get(event_id, (0, None))
                 last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
                 return (
+                    _preferred_event_rank(activity, today, event_id),
                     count,
                     last_key,
                     _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
                     str(ev.date or ""),
-                    int(ev.id),
+                    event_id,
                 )
 
             candidates: list[Event] = []
@@ -3025,15 +3027,17 @@ async def run_promo_vk_activities(
                 event_ids=[int(ev.id) for ev in events],
             )
 
-            def sort_key(ev: Event) -> tuple[int, datetime, str, str, int]:
-                count, last_at = stats.get(int(ev.id), (0, None))
+            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
+                event_id = int(ev.id)
+                count, last_at = stats.get(event_id, (0, None))
                 last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
                 return (
+                    _preferred_event_rank(activity, today, event_id),
                     count,
                     last_key,
                     _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
                     str(ev.date or ""),
-                    int(ev.id),
+                    event_id,
                 )
 
             candidates = [ev for ev in sorted(events, key=sort_key) if int(ev.id) not in recent_event_ids]

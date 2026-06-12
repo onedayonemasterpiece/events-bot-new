@@ -1005,6 +1005,75 @@ async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_tg_event_publish_honors_preferred_ids_by_date(tmp_path, monkeypatch) -> None:
+    import main
+    from promo import _stable_shuffle_key
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 10, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(Festival(name="Кантата"))
+        first = _event("Shuffle first", "2026-06-13", festival="Кантата")
+        preferred = _event("Preferred today", "2026-06-13", festival="Кантата")
+        session.add_all([first, preferred])
+        campaign = PromoCampaign(
+            title="Кантата · preferred",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, 23, 59, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+            profile_key="kldevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "target_chat": "@kldevents",
+                "active_start_hour": 10,
+                "active_end_hour": 14,
+            },
+        )
+        session.add(activity)
+        await session.flush()
+        ids = [int(first.id), int(preferred.id)]
+        default_first = min(
+            ids,
+            key=lambda event_id: _stable_shuffle_key(
+                int(campaign.id), int(activity.id), now_utc.date().isoformat(), event_id
+            ),
+        )
+        preferred_id = next(event_id for event_id in ids if event_id != default_first)
+        activity.config_json = {
+            **activity.config_json,
+            "preferred_event_ids_by_date": {now_utc.date().isoformat(): [preferred_id]},
+        }
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="festival", festival_name="Кантата"))
+        await session.commit()
+
+    published_ids: list[int] = []
+
+    async def fake_publish(ev, db_arg, bot_arg, *, target_chat):
+        published_ids.append(int(ev.id))
+        return f"https://t.me/kldevents/{ev.id}"
+
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", fake_publish)
+
+    results = await run_promo_vk_activities(db, object(), now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id) for item in results] == [
+        (PROMO_SURFACE_TG_EVENT_PUBLISH, "published", preferred_id)
+    ]
+    assert published_ids == [preferred_id]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_repost_uses_local_day_count_not_rolling_window(
     tmp_path, monkeypatch
 ) -> None:

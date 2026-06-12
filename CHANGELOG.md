@@ -20,6 +20,11 @@
   campaigns, while `/promo report` / archive views still include ended active
   rows for history. Covered by `tests/test_promo.py` and
   `tests/test_partner_promo.py`.
+- **Changed: Promo publication date preferences**: `tg_event_publish` and
+  `vk_publication` now honor `preferred_event_ids_by_date` in
+  `promo_activity.config_json`, allowing dense educational/festival campaigns
+  to follow the programme calendar instead of stable-shuffling later events
+  ahead of today's slots. Covered by `tests/test_promo.py`.
 - **Changed: Poll to Repost audience framing**: poll questions now use a fixed
   set of friendly participation frames rotated by poll slot, each stating when
   the announcement will arrive, while LLM remains responsible only for options
