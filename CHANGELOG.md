@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Added: Poll to Repost debug rollout**: added the LLM-only debug scheduler
+  for hourly daytime polls in `@keniggpt`, persisted `poll_repost_run` audit
+  rows, and 30-minute resolver ticks that reply to the poll and forward the
+  selected managed event post from `@kldevents`. If LLM topic or winner/event
+  selection is unavailable, the slot is skipped instead of using deterministic
+  fallback categories.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

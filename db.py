@@ -504,6 +504,45 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_media_asset_kind ON event_media_asset(kind)"
             )
 
+            dbg("poll_repost_run")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS poll_repost_run(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_key TEXT NOT NULL,
+                    run_key TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    target_event_date TEXT NOT NULL,
+                    poll_chat_id TEXT,
+                    poll_message_id INTEGER,
+                    poll_id TEXT,
+                    question_text TEXT,
+                    options_json TEXT NOT NULL DEFAULT '[]',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    winner_option_id TEXT,
+                    winner_text TEXT,
+                    chosen_event_id INTEGER,
+                    kldevents_chat_id TEXT,
+                    kldevents_message_id INTEGER,
+                    kldevents_post_url TEXT,
+                    reply_message_id INTEGER,
+                    forwarded_message_id INTEGER,
+                    resolve_after TIMESTAMP,
+                    error_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(profile_key, run_key),
+                    FOREIGN KEY(chosen_event_id) REFERENCES event(id)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_poll_repost_run_status_resolve ON poll_repost_run(profile_key, status, resolve_after)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_poll_repost_run_event_updated ON poll_repost_run(chosen_event_id, updated_at)"
+            )
+
             dbg("event_source")
             await conn.execute(
                 """

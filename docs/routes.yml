@@ -78,6 +78,8 @@ sections:
       smart_event_update: docs/backlog/features/smart-event-update/README.md
       event_scoring: docs/backlog/features/event-scoring/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
+      poll_to_forward: docs/backlog/features/poll-to-forward/README.md
+      poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md
       promo_campaigns: docs/backlog/features/promo-campaigns/README.md
       festival_monitoring_debt: docs/backlog/features/festival-monitoring-debt/README.md
       afishathumb: docs/features/afishathumb/README.md

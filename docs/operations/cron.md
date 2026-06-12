@@ -74,6 +74,14 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   09:00-21:00 Europe/Kaliningrad) and are spread across even due-slots rather
   than published as one batch. The runner is enabled by default via
   `ENABLE_PROMO_VK_SCHEDULER`.
+- **Poll to Repost debug runner** – when `ENABLE_POLL_TO_FORWARD_DEBUG=1`, runs
+  at minutes `0,30`. It publishes at most one LLM-generated debug poll per local
+  hour to `POLL_TO_FORWARD_DEBUG_TARGET_CHAT` (default `@keniggpt`) during the
+  configured daytime window, then resolves due polls about 30 minutes later and
+  forwards the chosen managed Telegram event post from
+  `POLL_TO_FORWARD_SOURCE_CHAT` (default `@kldevents`). LLM is a hard
+  dependency: if topic generation or winner/event choice fails, the slot is
+  skipped and no deterministic fallback is published.
 - **VK auto queue import** – imports queued VK posts (`vk_inbox`) via Smart Update on a fixed schedule when enabled.
 - **VK past-event post prune** – twice a day deletes managed `klgdevents` event posts whose event is already in the past and that gained no reposts/story shares (`reposts.count == 0`) and no comments (`comments.count == 0`), so the community feed stops surfacing stale events. Default times `02:30,14:30` Europe/Kaliningrad (`VK_POST_PRUNE_TIMES_LOCAL`), enabled in production via `ENABLE_VK_POST_PRUNE`. Only posts whose `Event.source_vk_post_url` points at `-VK_EVENTS_GROUP_ID` are eligible; external VK-import source walls, pinned posts, future/ongoing events (`end_date`), and daily/poll/promo posts (not stored in `source_vk_post_url`) are never touched. The job is part of `_HEAVY_JOB_IDS`, so it skips (and notifies `ADMIN_CHAT_ID`) when another heavy job holds the gate instead of competing for the VK token. Canonical doc: `docs/features/vk-publishing/autodeletevkposts.md`.
 - **Telegraph pages sync** – refreshes month and weekend Telegraph pages after 01:00 local time. Disabled by default; enable with `ENABLE_NIGHTLY_PAGE_SYNC=1`. Nightly runs update both page content and the month navigation block.
@@ -155,6 +163,18 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `ENABLE_PROMO_VK_SCHEDULER` – enable the lightweight promo VK runner; default
   `true`.
 - `PROMO_VK_INTERVAL_MINUTES` – promo VK runner interval; default `30`.
+- `ENABLE_POLL_TO_FORWARD_DEBUG` – enable debug Poll to Repost scheduler; default
+  `false` locally, enabled in production `fly.toml` for the debug rollout.
+- `POLL_TO_FORWARD_DEBUG_TARGET_CHAT` – debug poll/repost target; default
+  `@keniggpt`.
+- `POLL_TO_FORWARD_SOURCE_CHAT` – Telegram source chat for `forward_message`;
+  default `@kldevents`.
+- `POLL_TO_FORWARD_DEBUG_START_HOUR` / `POLL_TO_FORWARD_DEBUG_END_HOUR` –
+  local daytime create window; defaults `10` and `19`.
+- `POLL_TO_FORWARD_DEBUG_RESOLVE_AFTER_MINUTES` – delay before resolving debug
+  polls; default `30`.
+- `POLL_TO_FORWARD_LLM_MODEL` – LLM model for topic and winner selection;
+  default `gemini-3.1-flash-lite`.
 - `EVBOT_DEBUG` – enables extra logging and queue statistics.
 - `ENABLE_SOURCE_PARSING` – enable nightly source parsing schedule.
 - `SOURCE_PARSING_TIME_LOCAL` / `SOURCE_PARSING_TZ` – nightly parse time in local time zone.

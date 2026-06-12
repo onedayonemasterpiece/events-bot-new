@@ -190,6 +190,13 @@ async def _run_scheduled_guide_excursions(
             logging.exception("SCHED failed to notify admin about empty scheduled guide digest")
 
 
+async def _run_poll_to_forward_debug_tick(db, bot) -> None:
+    from poll_to_forward import run_debug_tick
+
+    result = await run_debug_tick(db, bot)
+    logging.info("SCHED poll_to_forward_debug result=%s", result)
+
+
 async def _run_scheduled_video_tomorrow_test(
     db,
     bot,
@@ -3389,6 +3396,26 @@ def startup(
     else:
         logging.info("SCHED skipping promo_vk (ENABLE_PROMO_VK_SCHEDULER!=1)")
         _notify_admin_skip("promo_vk", "ENABLE_PROMO_VK_SCHEDULER!=1")
+
+    if _env_enabled("ENABLE_POLL_TO_FORWARD_DEBUG", default=False):
+        _register_job(
+            "poll_to_forward_debug",
+            _job_wrapper(
+                "poll_to_forward_debug",
+                _run_poll_to_forward_debug_tick,
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id="poll_to_forward_debug",
+            minute="0,30",
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=120,
+        )
+    else:
+        logging.info("SCHED skipping poll_to_forward_debug (ENABLE_POLL_TO_FORWARD_DEBUG!=1)")
 
     # CherryFlash partner tracks. Intentionally always on:
     # the user asked NOT to gate this behind a feature flag. Times still
