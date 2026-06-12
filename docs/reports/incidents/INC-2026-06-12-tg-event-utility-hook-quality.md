@@ -1,10 +1,10 @@
 # INC-2026-06-12 Telegram Event Utility Hook Quality
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Telegram event publishing (`@kldevents`)
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: Codex
 Related incidents: `INC-2026-06-07-tg-event-publishing-media-calendar-dedup`, `INC-2026-06-04-tg-monitoring-media-and-digest-quality`
 Related docs: `docs/features/tg-publishing/README.md`
@@ -30,6 +30,7 @@ Telegram post `https://t.me/kldevents/354` for event `5923` (`Прием шин`
 - 2026-06-12 — `tg_event_publish` published `@kldevents/354` using the bad description-derived intro.
 - 2026-06-12 — Operator reported the public mismatch.
 - 2026-06-12 — Fix scoped to Telegram event intro source selection, prompt format, and repair of post `354`.
+- 2026-06-12 — Deployed fix through `origin/main` and repaired `@kldevents/354`; final caption preview contains a practical recycling intro and no entertainment type hashtags.
 
 ## Root Cause
 
@@ -93,10 +94,11 @@ Telegram post `https://t.me/kldevents/354` for event `5923` (`Прием шин`
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- post-deploy verification:
+- deployed SHA: `6cce3cbfe4a3d633ecbae0fab8f88c6c95dbd8ac`
+- deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KTXBYJMZNBSZ3ERNXAZZAQN5`; machine `48e42d5b714228` version `1319`.
+- regression checks: `/tmp/codex-venvs/events-bot-aeg/bin/python -m pytest tests/test_tg_event_publish.py -q` -> `30 passed in 5.72s`; `git diff --check` clean.
+- post-deploy verification: `https://events-bot-new-wngqia.fly.dev/healthz` returned `{"ok": true, "ready": true, ... "issues": []}`.
+- repair evidence: Bot API `edit_message_caption` succeeded for event `5923`, message `354`, target `@kldevents`; `select_tg_event_text_for_publish` logged that the conflicting utility/service description was ignored; final preview starts `♻️ Прием шин ... Можно сдать до 4 чистых шин на переработку...` and verification reported `has_bad_tags=false`.
 
 ## Prevention
 
