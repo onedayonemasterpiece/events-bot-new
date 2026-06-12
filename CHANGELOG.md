@@ -12,6 +12,10 @@
   главном` 0.5 public canary participates before the all-events 0.1 fallback.
   Tracks `INC-2026-06-12-afishaengagement-public-canary-no-show` and is covered
   by `tests/test_afishaengagement.py`.
+- **Changed: VK festival carousel production scheduling**: production carousel
+  activities can now set `scheduled_at`/`publish_at` for explicit VK postponed
+  timing, and superseded shadow copies no longer block replacement through the
+  daily cap. Covered by `tests/test_promo.py`.
 - **Changed: VK festival carousel celebrity extraction**: celebrity/program-
   leader FIO cards are now discovered through an LLM stage by default, with the
   remaining carousel budget included in the prompt and enforced again in code

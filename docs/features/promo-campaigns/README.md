@@ -290,6 +290,10 @@ supports:
   enabled by default with `листай` + right arrow;
 - `include_cta_card`, `cta_card_title`, `cta_card_subtitle`: final-card
   controls;
+- `scheduled_at` / `publish_at`: optional ISO datetime or Unix timestamp for a
+  normal production carousel. When set in the future, it is passed to VK as the
+  postponed `publish_date`; otherwise the shared VK postponed-slot reserver
+  chooses the next available slot;
 - `debug_shadow`, `debug_marker`, `debug_publish_delay_days`,
   `debug_slot_spacing_minutes`: shadow review scheduling.
 

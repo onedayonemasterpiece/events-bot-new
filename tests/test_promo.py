@@ -40,6 +40,8 @@ from promo import (
     _filter_vk_festival_carousel_events_for_variant,
     _render_vk_festival_carousel_card,
     _render_vk_festival_carousel_poster_card,
+    _publish_vk_festival_carousel,
+    _vk_festival_carousel_configured_publish_date,
     resolve_video_promo_candidates,
 )
 from video_announce.popular_review import PopularReviewPick, _merge_promo_and_fresh_picks
@@ -691,6 +693,152 @@ async def test_vk_festival_carousel_shadow_posts_hook_posters_and_cta(tmp_path, 
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_vk_festival_carousel_prod_uses_scheduled_at_after_superseded_debug(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 13, 0, tzinfo=timezone.utc)
+    scheduled_at = "2026-06-14T08:40:00+00:00"
+    scheduled_ts = int(datetime(2026, 6, 14, 8, 40, tzinfo=timezone.utc).timestamp())
+
+    async with db.get_session() as session:
+        session.add(Festival(name="Кантата"))
+        event = _event("Диалог «Опережая время»", "2026-06-14", festival="Кантата")
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="Кантата · образовательная программа",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, 23, 59, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+            profile_key="klgdevents:kantata:carousel:registration",
+            max_per_publish=1,
+            target_exposure_goal=1,
+            daily_cap=1,
+            config_json={
+                "target_group": "231920894",
+                "debug_shadow": False,
+                "active_start_hour": 9,
+                "active_end_hour": 23,
+                "hook_variant": "registration",
+                "program_phrase": "образовательную программу фестиваля «Кантата»",
+                "carousel_event_ids": [event_id],
+                "include_cta_card": True,
+                "scheduled_at": scheduled_at,
+            },
+        )
+        session.add(activity)
+        await session.flush()
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=event_id))
+        session.add(
+            PromoExposure(
+                campaign_id=int(campaign.id),
+                activity_id=int(activity.id),
+                event_id=event_id,
+                surface=PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+                placement_kind="vk_shadow_debug_carousel",
+                publish_status="SUPERSEDED_DEBUG",
+                public_target_count=1,
+                public_targets_json=[{"type": "vk_wall_debug", "url": "https://vk.com/wall-231920894_1"}],
+                published_at=now_utc,
+                details_json={"debug_shadow": True},
+            )
+        )
+        await session.commit()
+
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    post_calls: list[dict] = []
+
+    def sample_image_bytes() -> bytes:
+        from io import BytesIO
+
+        from PIL import Image, ImageDraw
+
+        image = Image.new("RGB", (720, 1080), "#ece3d0")
+        draw = ImageDraw.Draw(image)
+        draw.text((120, 480), "Poster", fill="#18201d")
+        out = BytesIO()
+        image.save(out, format="JPEG")
+        return out.getvalue()
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        if method == "wall.get":
+            return {"response": {"items": []}}
+        raise AssertionError(method)
+
+    async def fake_upload_vk_photo_bytes(group_id, image_bytes, db_arg=None, bot_arg=None, *, filename="image.jpg"):
+        return f"photo-{group_id}_{filename}"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, carousel=False, publish_date=None):
+        post_calls.append(
+            {
+                "group_id": group_id,
+                "attachments": list(attachments or []),
+                "carousel": carousel,
+                "publish_date": publish_date,
+            }
+        )
+        return "https://vk.com/wall-231920894_800"
+
+    async def fake_fetch_image(url):
+        return sample_image_bytes()
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo_bytes", fake_upload_vk_photo_bytes)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr("afishaengagement._default_fetch_image", fake_fetch_image)
+
+    async with db.get_session() as session:
+        campaign = (await session.execute(select(PromoCampaign))).scalars().one()
+        activity = (await session.execute(select(PromoActivity))).scalars().one()
+        target = (await session.execute(select(PromoTarget))).scalars().one()
+
+    result = await _publish_vk_festival_carousel(
+        db,
+        None,
+        campaign=campaign,
+        activity=activity,
+        target=target,
+        now_utc=now_utc,
+        today=now_utc.date(),
+    )
+
+    assert (result.surface, result.status, result.reason) == (
+        PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
+        "scheduled",
+        None,
+    )
+    assert post_calls[0]["carousel"] is True
+    assert post_calls[0]["publish_date"] == scheduled_ts
+
+    async with db.get_session() as session:
+        exposures = (
+            await session.execute(select(PromoExposure).order_by(PromoExposure.id))
+        ).scalars().all()
+    assert [row.publish_status for row in exposures] == ["SUPERSEDED_DEBUG", "VK_SCHEDULED"]
+    assert exposures[-1].placement_kind == "vk_festival_carousel"
+    assert exposures[-1].public_targets_json == [{"type": "vk_wall", "url": "https://vk.com/wall-231920894_800"}]
+    assert exposures[-1].details_json["debug_shadow"] is False
+    assert exposures[-1].details_json["schedule"] == {
+        "configured_publish_date": scheduled_at,
+        "configured_publish_date_source": "iso",
+    }
+    await db.close()
+
+
 def test_vk_festival_carousel_celebrity_variant_uses_explicit_ids() -> None:
     celebrity = _event("Творческая встреча с Иваном Никифорчиным", "2026-06-15")
     celebrity.id = 10
@@ -797,6 +945,32 @@ def test_vk_festival_carousel_cta_rule_leaves_arrow_gap() -> None:
     assert is_cherry(right_rule)
     assert not is_cherry(left_gap)
     assert not is_cherry(right_gap)
+
+
+def test_vk_festival_carousel_configured_publish_date_iso() -> None:
+    now_utc = datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc)
+    publish_at = "2026-06-13T08:40:00+00:00"
+
+    publish_ts, meta = _vk_festival_carousel_configured_publish_date(
+        {"scheduled_at": publish_at},
+        now_utc=now_utc,
+    )
+
+    assert publish_ts == int(datetime(2026, 6, 13, 8, 40, tzinfo=timezone.utc).timestamp())
+    assert meta == {"configured_publish_date": publish_at, "configured_publish_date_source": "iso"}
+
+
+def test_vk_festival_carousel_configured_publish_date_ignores_past() -> None:
+    publish_ts, meta = _vk_festival_carousel_configured_publish_date(
+        {"scheduled_at": "2026-06-12T08:00:00+00:00"},
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert publish_ts is None
+    assert meta == {
+        "configured_publish_date_ignored": "2026-06-12T08:00:00+00:00",
+        "reason": "not_future",
+    }
 
 
 @pytest.mark.asyncio

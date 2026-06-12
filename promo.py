@@ -2617,6 +2617,46 @@ def _fallback_festival_carousel_hook(variant: str, program_phrase: str) -> str:
     return variants.get(variant, variants["all_posters"])
 
 
+def _vk_festival_carousel_configured_publish_date(
+    cfg: dict[str, Any],
+    *,
+    now_utc: datetime,
+) -> tuple[int | None, dict[str, Any]]:
+    raw = (
+        cfg.get("scheduled_at")
+        or cfg.get("publish_at")
+        or cfg.get("publish_datetime")
+        or cfg.get("publish_date")
+    )
+    if raw in (None, ""):
+        return None, {}
+    source = "scheduled_at"
+    publish_ts: int | None = None
+    if isinstance(raw, (int, float)):
+        publish_ts = int(raw)
+        source = "unix"
+    else:
+        text = str(raw).strip()
+        if text.isdigit():
+            publish_ts = int(text)
+            source = "unix"
+        else:
+            try:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                publish_ts = int(dt.astimezone(timezone.utc).timestamp())
+                source = "iso"
+            except ValueError:
+                logger.warning("promo.vk carousel configured publish date is invalid: %r", raw)
+                return None, {"configured_publish_date_invalid": raw}
+    if publish_ts is None:
+        return None, {}
+    if publish_ts <= int(now_utc.timestamp()) + 60:
+        return None, {"configured_publish_date_ignored": raw, "reason": "not_future"}
+    return publish_ts, {"configured_publish_date": raw, "configured_publish_date_source": source}
+
+
 async def _festival_carousel_hook_text(
     *,
     campaign: PromoCampaign,
@@ -3563,7 +3603,8 @@ async def _publish_vk_festival_carousel(
         until_utc=_promo_day_bounds(now_utc)[1],
         public_only=False,
     )
-    if activity.daily_cap is not None and len(day_rows) >= int(activity.daily_cap):
+    active_day_rows = [row for row in day_rows if row.publish_status in counted_statuses]
+    if activity.daily_cap is not None and len(active_day_rows) >= int(activity.daily_cap):
         return PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="daily_cap_reached")
 
     events = await _select_vk_festival_carousel_events(
@@ -3781,6 +3822,8 @@ async def _publish_vk_festival_carousel(
             delay_days = max(2, int(cfg.get("debug_publish_delay_days") or 3))
             publish_date = int((now_utc + timedelta(days=delay_days)).replace(second=0, microsecond=0).timestamp())
             schedule_meta = {"fallback": True, "selected_ts": publish_date}
+    else:
+        publish_date, schedule_meta = _vk_festival_carousel_configured_publish_date(cfg, now_utc=now_utc)
 
     vk_url = None
     attempts: list[int | None] = []
