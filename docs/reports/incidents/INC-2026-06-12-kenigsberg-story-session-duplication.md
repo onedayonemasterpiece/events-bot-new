@@ -7,7 +7,7 @@ Opened: 2026-06-12
 Closed: —
 Owners: Codex / operator
 Related incidents: `INC-2026-05-13-kenigsberg-production-story-boosts-required`, `INC-2026-06-07-guide-remote-session-stale-busy`
-Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cron.md`, `docs/operations/kaggle-secrets.md`, `docs/operations/runtime-logs.md`
+Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cron.md`, `docs/operations/kaggle-secrets.md`, `docs/operations/runtime-logs.md`, `docs/reports/remote-telegram-session-isolation-audit-2026-06-12.md`
 
 ## Summary
 
@@ -75,9 +75,9 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 
 ### Required evidence
 
-- deployed SHA: `1fc20ec927548822e84b020be36ef7d584bcb34b`
+- deployed SHA: `572a683a0f74a3c8594eef10e1d640f8f78a55c6`
 - deploy path: pushed to `origin/main`, then `flyctl deploy -a events-bot-new-wngqia --remote-only`
-- regression checks: targeted pytest suite passed locally
+- regression checks: targeted pytest suite passed locally (`29 passed`)
 - production env/secret evidence: Fly runtime has `TELEGRAM_AUTH_BUNDLE_S22`,
   `TELEGRAM_AUTH_BUNDLE_STORY`, and
   `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`
@@ -107,14 +107,14 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 
 ## Release And Closure Evidence
 
-- deployed SHA: `1fc20ec927548822e84b020be36ef7d584bcb34b`
-- deploy image: `events-bot-new-wngqia:deployment-01KTYS80MRX0JFK8SC1S0Q7GVH`
+- deployed SHA: `572a683a0f74a3c8594eef10e1d640f8f78a55c6`
+- deploy image: `events-bot-new-wngqia:deployment-01KTYSMKNM59F9MWD6NYBQVQ2A`
 - deploy path: `origin/main` -> Fly remote deploy
 - regression checks:
-  - `python -m py_compile remote_telegram_session.py handlers/kenigsberg_stories_cmd.py source_parsing/telegram/service.py guide_excursions/service.py guide_excursions/kaggle_service.py video_announce/story_publish.py video_announce/poller.py tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_kenigsberg_stories.py`
-  - `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile` -> `27 passed`
+  - `python -m py_compile remote_telegram_session.py handlers/kenigsberg_stories_cmd.py source_parsing/telegram/service.py guide_excursions/service.py guide_excursions/kaggle_service.py video_announce/story_publish.py video_announce/poller.py telegraph_cache_sanitizer.py tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py`
+  - `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_telegraph_cache_session_guard.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile` -> `29 passed`
 - post-deploy verification:
-  - Fly machine `48e42d5b714228`, version `1364`, checks `1 passing`
+  - Fly machine `48e42d5b714228`, version `1365`, checks `1 passing`
   - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
   - runtime env: `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`,
     both `TELEGRAM_AUTH_BUNDLE_S22` and `TELEGRAM_AUTH_BUNDLE_STORY` present
