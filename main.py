@@ -19770,14 +19770,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
         )
         return False
 
-    description_for_tg = (getattr(ev, "description", None) or "").strip()
-    if description_for_tg and looks_like_genai_response_dump(description_for_tg):
-        logging.warning(
-            "job_publish_tg_event_post: description for event %s looks like a genai SDK dump; using source_text",
-            event_id,
-        )
-        description_for_tg = ""
-    text_for_tg = description_for_tg or (ev.source_text or "")
+    text_for_tg = select_tg_event_text_for_publish(ev)
     url, post_id, mode, source_hash = await publish_tg_event_announcement(
         ev,
         text_for_tg,

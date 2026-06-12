@@ -3842,7 +3842,7 @@ TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v3"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v4"
 
 
 def _tg_event_publish_enabled() -> bool:
@@ -4025,6 +4025,66 @@ def _tg_event_calendar_post_url(event: Event) -> str | None:
     return None
 
 
+def _tg_event_source_is_utility_service(text: str | None) -> bool:
+    lower = str(text or "").casefold()
+    if not lower:
+        return False
+    service_markers = (
+        "прием шин",
+        "приём шин",
+        "отработанных шин",
+        "переработ",
+        "перерабат",
+        "утилизац",
+        "сдать шин",
+        "пункт приема",
+        "пункт приёма",
+        "временной точки приема",
+        "временной точки приёма",
+    )
+    return any(marker in lower for marker in service_markers)
+
+
+def _tg_event_description_conflicts_with_utility_source(
+    description: str | None,
+    source_text: str | None,
+) -> bool:
+    if not _tg_event_source_is_utility_service(source_text):
+        return False
+    lower = str(description or "").casefold()
+    if not lower:
+        return False
+    entertainment_markers = (
+        "музыкальные номера",
+        "театральные постановки",
+        "выступления",
+        "зрителей",
+        "входной билет",
+        "билет",
+        "вечер будет наполнен",
+        "насладиться разнообразной программой",
+    )
+    return any(marker in lower for marker in entertainment_markers)
+
+
+def select_tg_event_text_for_publish(event: Event) -> str:
+    description = (getattr(event, "description", None) or "").strip()
+    source_text = (getattr(event, "source_text", None) or "").strip()
+    if description and looks_like_genai_response_dump(description):
+        logging.warning(
+            "tg_event: description for event %s looks like a genai SDK dump; using source_text",
+            getattr(event, "id", None),
+        )
+        description = ""
+    if description and _tg_event_description_conflicts_with_utility_source(description, source_text):
+        logging.warning(
+            "tg_event: description for event %s conflicts with utility/service source; using source_text",
+            getattr(event, "id", None),
+        )
+        description = ""
+    return description or source_text
+
+
 def build_tg_event_announcement(
     event: Event,
     text: str,
@@ -4099,6 +4159,11 @@ def build_tg_event_announcement(
 
 
 def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
+    if _tg_event_source_is_utility_service(text):
+        return (
+            "Можно сдать до 4 чистых шин на переработку: их отправят на предприятие "
+            "и сделают из сырья новые полезные материалы."
+        )
     for raw in (
         getattr(event, "short_description", None),
         getattr(event, "search_digest", None),
@@ -4128,9 +4193,14 @@ async def build_tg_event_hook_text(event: Event, text: str) -> str:
     prompt = (
         "Сделай короткий Telegram-анонс события на русском языке.\n"
         "Формат: 1-2 предложения, до 330 символов.\n"
-        "Первая фраза должна быть цепляющим hook-вопросом.\n"
+        "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
+        "или friendly-вступление вроде «Друзья, ...». Вопрос не обязателен, если событие "
+        "утилитарное, сервисное или важнее объяснить практическую пользу.\n"
         "Не повторяй дату, время, место, цену и билетную ссылку: они будут в инфоблоке отдельно.\n"
         "Не добавляй хештеги, эмодзи, ссылки, призыв купить билеты или служебные фразы.\n"
+        "Для пунктов приёма, сбора, переработки, волонтёрских и городских полезных акций "
+        "пиши в формате «какую пользу это даёт / что можно сделать / какие ограничения важны», "
+        "а не как про концерт, фестиваль или развлекательную программу.\n"
         "Собственные имена и названия копируй буквально из названия или текста события; "
         "если не уверен в форме слова, лучше опусти имя, чем меняй написание.\n"
         "Не выдумывай факты; используй только текст ниже.\n\n"
@@ -4164,11 +4234,11 @@ async def build_tg_event_hook_text(event: Event, text: str) -> str:
     cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
     if not cleaned:
         return _fallback_tg_event_hook_text(event, text)
-    first = re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)[0].strip()
-    if "?" not in first:
-        base = first.rstrip(".!?").strip()
-        if base:
-            cleaned = f"Что здесь стоит увидеть? {base}."
+    if _tg_event_source_is_utility_service(text) and any(
+        marker in cleaned.casefold()
+        for marker in ("концерт", "фестиваль", "театраль", "музыкальн", "зрител", "билет")
+    ):
+        return _fallback_tg_event_hook_text(event, text)
     if len(cleaned) > 360:
         cleaned = _truncate_tg_plain_body(cleaned, 360)
     return cleaned

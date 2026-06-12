@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-tg-event-utility-hook-quality.md`
+  - Scope: Telegram event publishing intro generation for `@kldevents`,
+    especially utility/service posts whose source text is practical but stored
+    description/search digest may be hallucinated or entertainment-framed.
+  - Must not regress: `tg_event_publish` must not force every intro to be a
+    hook question; utility/service events such as tire collection/recycling
+    should use source-grounded useful copy and must prefer source text over a
+    conflicting entertainment-style description. Closure requires repair
+    evidence for `@kldevents/354` or an explicit external blocker.
 - `INC-2026-06-11-tg-monitoring-recovery-after-deploy-cancel.md`
   - Scope: Telegram Monitoring scheduled Kaggle runs, `/data/kaggle_jobs.json`
     recovery registry, `kaggle_recovery`, `ops_run` terminal evidence, and Fly

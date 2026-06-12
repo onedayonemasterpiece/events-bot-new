@@ -141,6 +141,73 @@ def test_tg_event_source_hash_includes_media_signature():
     assert main.build_tg_event_source_hash(event, "source text") != base_hash
 
 
+def test_tg_event_text_for_publish_uses_source_when_utility_description_conflicts():
+    source = (
+        "Собранное сырье направят на переработку. От одного физического лица "
+        "принимается не более 4 шин. Временная точка приема: Правая набережная, 25."
+    )
+    event = _event(
+        title="Прием шин",
+        description=(
+            "Приглашаем на уникальное мероприятие с музыкальными номерами, "
+            "театральными постановками и входными билетами."
+        ),
+        search_digest="На ярмарке вас ждет насыщенная программа.",
+        source_text=source,
+        event_type="ярмарка",
+        is_free=True,
+        ticket_link=None,
+    )
+
+    assert main.select_tg_event_text_for_publish(event) == source
+
+
+def test_tg_event_utility_fallback_is_practical_not_generic_question():
+    text = (
+        "Собранное сырье будет направлено на перерабатывающее предприятие. "
+        "От одного физического лица принимается не более 4 шин."
+    )
+    event = _event(title="Прием шин", source_text=text)
+
+    hook = main._fallback_tg_event_hook_text(event, text)
+
+    assert "до 4 чистых шин" in hook
+    assert not hook.startswith("Что здесь стоит увидеть?")
+
+
+@pytest.mark.asyncio
+async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
+    import google_ai
+
+    source = (
+        "Собранное сырье будет направлено на перерабатывающее предприятие, "
+        "где из шин изготовят новые полезные продукты. От одного физического "
+        "лица принимается не более 4 шин."
+    )
+    event = _event(title="Прием шин", source_text=source)
+
+    class FakeGoogleAIClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def generate_content_async(self, **kwargs):
+            prompt = kwargs["prompt"]
+            assert "Вопрос не обязателен" in prompt
+            assert "какую пользу это даёт" in prompt
+            return (
+                "Можно сдать до 4 чистых шин на переработку: из них сделают "
+                "резиновую крошку и другие полезные материалы.",
+                {},
+            )
+
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+
+    hook = await main.build_tg_event_hook_text(event, source)
+
+    assert hook.startswith("Можно сдать")
+    assert "Что здесь стоит увидеть?" not in hook
+
+
 def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"

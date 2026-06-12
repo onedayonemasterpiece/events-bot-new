@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram event intro repair for utility/service posts**: Telegram
+  event publishing no longer forces every intro to start as a hook question.
+  The writer may use a useful short paragraph or friendly `Друзья, ...` format,
+  and utility/service sources such as `Приём шин` now prefer source text over a
+  conflicting hallucinated event description. Guardrails reject entertainment
+  wording for tire-collection/recycling posts and fall back to a practical
+  "what to do / why it helps" intro. Covered by `tests/test_tg_event_publish.py`
+  and tracked as
+  `INC-2026-06-12-tg-event-utility-hook-quality`.
 - **Fixed: Afisha Engagement carousel/poster and CTA specificity polish**:
   `hook_swipe_cta` now preserves the full source poster in its hook card instead
   of center-cropping dense posters such as `Шахматы` / `Краны и стаканы`, and
