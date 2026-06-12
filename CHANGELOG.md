@@ -23,6 +23,9 @@
   with the winning option plus the LLM's short reason for the selected event,
   without exposing the technical repost mechanic or promising a separate
   editorial breakdown.
+- **Fixed: Poll to Repost scheduler tick**: the debug scheduler entrypoint now
+  accepts the scheduler wrapper's `run_id` keyword, so the standard 30-minute
+  tick can resolve due polls instead of failing before the resolver runs.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

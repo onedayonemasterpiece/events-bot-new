@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from types import SimpleNamespace
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -14,6 +15,25 @@ import vk_intake
 from db import Database
 from heavy_ops import HeavyOpMeta
 from ops_run import finish_ops_run, start_ops_run
+
+
+@pytest.mark.asyncio
+async def test_poll_to_forward_debug_tick_accepts_scheduler_run_id(monkeypatch):
+    calls = []
+
+    async def fake_run_debug_tick(db, bot):
+        calls.append((db, bot))
+        return {"resolved": 1}
+
+    monkeypatch.setitem(
+        sys.modules,
+        "poll_to_forward",
+        SimpleNamespace(run_debug_tick=fake_run_debug_tick),
+    )
+
+    await scheduling._run_poll_to_forward_debug_tick("db", "bot", run_id="sched-run")
+
+    assert calls == [("db", "bot")]
 
 
 def test_scheduler_and_extract_do_not_import_main(monkeypatch):

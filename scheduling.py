@@ -190,11 +190,11 @@ async def _run_scheduled_guide_excursions(
             logging.exception("SCHED failed to notify admin about empty scheduled guide digest")
 
 
-async def _run_poll_to_forward_debug_tick(db, bot) -> None:
+async def _run_poll_to_forward_debug_tick(db, bot, run_id: str | None = None) -> None:
     from poll_to_forward import run_debug_tick
 
     result = await run_debug_tick(db, bot)
-    logging.info("SCHED poll_to_forward_debug result=%s", result)
+    logging.info("SCHED poll_to_forward_debug run_id=%s result=%s", run_id, result)
 
 
 async def _run_scheduled_video_tomorrow_test(
