@@ -2675,6 +2675,60 @@ def _split_default_location_line(value: str | None) -> tuple[str | None, str | N
     return parts[0], ", ".join(parts[1:]).strip() or None, city
 
 
+def _default_location_requires_source_grounding(value: str | None) -> bool:
+    norm = _normalize_location_probe_text(value)
+    return "калининград" in norm and "сити" in norm and "джаз" in norm
+
+
+def _address_grounded_in_text(address: str | None, text: str | None) -> bool:
+    address_norm = _normalize_location_probe_text(address)
+    text_norm = _normalize_location_probe_text(text)
+    if not address_norm or not text_norm:
+        return False
+    if address_norm in text_norm:
+        return True
+    address_tokens = [tok for tok in address_norm.split() if len(tok) >= 4 and not tok.isdigit()]
+    address_nums = set(re.findall(r"\d{1,4}", address_norm))
+    text_nums = set(re.findall(r"\d{1,4}", text_norm))
+    if address_tokens and any(tok in text_norm for tok in address_tokens):
+        if not address_nums or (address_nums & text_nums):
+            return True
+    return False
+
+
+def _location_payload_grounded_in_text(
+    *,
+    location_name: str | None,
+    location_address: str | None,
+    text: str | None,
+) -> bool:
+    return (
+        _source_text_explicitly_mentions_location(
+            text,
+            location_name=location_name,
+            location_address=location_address,
+        )
+        or _location_is_grounded_in_text(location_name, text)
+        or _address_grounded_in_text(location_address, text)
+    )
+
+
+def _event_local_location_candidate_ok(location_name: str | None, location_address: str | None) -> bool:
+    raw = str(location_name or "").strip()
+    if not raw:
+        return False
+    if "@" in raw or re.search(r"(?i)\bt\.me/", raw):
+        return False
+    if _looks_like_location_prose_fragment(raw) or _looks_like_location_person_name_fragment(raw):
+        return False
+    return bool(
+        location_address
+        or _ADDRESS_HINT_RE.search(raw)
+        or _LOCATION_VENUE_CUE_RE.search(raw)
+        or len(_location_support_tokens(raw)) >= 1
+    )
+
+
 def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]:
     raw = str(text or "").strip()
     if not raw:
@@ -2714,6 +2768,16 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if "," in cleaned:
             left, right = (part.strip() for part in cleaned.split(",", 1))
             if left and right:
+                inline_venue = re.search(
+                    r"(?iu)(?:^|\s)(?:в|на)\s+([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 &'’._-]{1,50})$",
+                    left,
+                )
+                if inline_venue and (
+                    _ADDRESS_HINT_RE.search(right) or re.search(r"\b\d{1,4}[A-Za-zА-Яа-яЁё]?\b", right)
+                ):
+                    venue = inline_venue.group(1).strip()
+                    if venue and not _looks_like_location_prose_fragment(venue):
+                        return venue, right
                 if re.search(r"\b\d{1,2}:\d{2}\b", cleaned) and re.search(
                     r"\b\d{1,2}\s+[А-Яа-яЁё]+\b",
                     left,
@@ -3530,6 +3594,7 @@ def _build_candidate(
     end_date = event_data.get("end_date")
     extracted_location = event_data.get("location_name")
     location_name = extracted_location or source.default_location
+    location_from_source_default = bool(source.default_location and not str(extracted_location or "").strip())
     location_address = event_data.get("location_address")
     extracted_location_address = location_address
     location_overridden_by_default = False
@@ -3678,17 +3743,17 @@ def _build_candidate(
             )
             title = inferred_title
 
-    inferred_loc, inferred_addr = _infer_location_from_text(message_text_s or event_source_text)
+    inferred_loc, inferred_addr = _infer_location_from_text(event_source_text or message_text_s)
     poster_loc, poster_addr = _infer_location_from_poster_payloads(
         assigned_posters_payload or posters_payload or message_posters_payload
     )
     probe_for_known_location = "\n".join(
         str(part)
         for part in (
-            message_text_s,
             event_source_text,
             event_source_text_raw,
             raw_excerpt,
+            message_text_s,
         )
         if str(part or "").strip()
     )
@@ -3740,10 +3805,73 @@ def _build_candidate(
         ):
             extracted_location = None
 
+    default_grounding_parts = [str(event_source_text or "").strip(), str(raw_excerpt or "").strip()]
+    if message_text_s and message_text_s not in default_grounding_parts:
+        default_grounding_parts.append(message_text_s)
+    for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if chunk:
+                default_grounding_parts.append(chunk)
+    default_grounding_text = "\n".join(part for part in default_grounding_parts if part).strip()
+    if location_from_source_default and source.default_location:
+        default_name, default_address, _default_city = _split_default_location_line(source.default_location)
+        default_requires_grounding = _default_location_requires_source_grounding(source.default_location)
+        default_is_grounded = _location_payload_grounded_in_text(
+            location_name=default_name,
+            location_address=default_address,
+            text=default_grounding_text,
+        )
+        alternate_loc = None
+        alternate_addr = None
+        if inferred_loc and not _location_matches(inferred_loc, default_name):
+            alternate_loc = inferred_loc
+            alternate_addr = inferred_addr
+        elif known_loc and not _location_matches(known_loc, default_name):
+            alternate_loc = known_loc
+            alternate_addr = known_addr
+        elif poster_loc and not _location_matches(poster_loc, default_name):
+            alternate_loc = poster_loc
+            alternate_addr = poster_addr
+        if default_requires_grounding and default_is_grounded:
+            alternate_loc = None
+            alternate_addr = None
+        if alternate_loc and _event_local_location_candidate_ok(alternate_loc, alternate_addr) and _location_payload_grounded_in_text(
+            location_name=alternate_loc,
+            location_address=alternate_addr,
+            text=default_grounding_text,
+        ):
+            logger.info(
+                "telegram: overriding source default with event-grounded venue source=%s message_id=%s title=%r default=%r venue=%r",
+                username,
+                message_id,
+                title,
+                default_name,
+                alternate_loc,
+            )
+            location_name = alternate_loc
+            location_address = alternate_addr
+            location_from_source_default = False
+            if known_city and not extracted_city:
+                extracted_city = known_city
+        elif default_requires_grounding and not default_is_grounded:
+            logger.warning(
+                "telegram: dropping ungrounded risky source default source=%s message_id=%s title=%r default=%r",
+                username,
+                message_id,
+                title,
+                source.default_location,
+            )
+            location_name = None
+            location_address = None
+            location_from_source_default = False
+
     if not location_name:
         fallback_loc = inferred_loc or poster_loc or known_loc
         fallback_addr = inferred_addr or poster_addr or known_addr
-        if fallback_loc:
+        if fallback_loc and _event_local_location_candidate_ok(fallback_loc, fallback_addr):
             location_name = fallback_loc
             if fallback_addr and not location_address:
                 location_address = fallback_addr

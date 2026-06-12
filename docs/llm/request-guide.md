@@ -42,10 +42,12 @@ Documented exceptions (rare, guardrail-only):
 - Fail-closed contradiction guards: a zero/missing price never creates a free
   label; explicit giveaway/included-entry-ticket/positive-price evidence can only
   clear `is_free`, not invent paid/free meaning.
-- Exact identity plumbing: a specific ticket URL plus same date/place, or
-  near-identical source text plus same date/time/place, may converge candidates
-  before LLM to prevent duplicate public cards. Generic ticket landing pages and
-  ambiguous title/location-only matches remain LLM-owned.
+- Exact identity plumbing: a specific ticket URL plus same date/place, a specific
+  ticket URL plus same date/time with no explicit time conflict when venue is
+  already suspected to come from a wrong source default, or near-identical source
+  text plus same date/time/place, may keep candidates visible for LLM/dedupe or
+  converge them before create to prevent duplicate public cards. Generic ticket
+  landing pages and ambiguous title/location-only matches remain LLM-owned.
 - Event-quality safety rails from `INC-2026-06-07-future-event-quality-recurrence.md`:
   deterministic code may preserve short LLM-produced titles that are already
   contentful (`Идиот`, `Гараж`, `№ 13`) and may reject ambiguous dotted

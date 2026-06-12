@@ -138,6 +138,30 @@ async def _seed_dachniki_event(db: Database) -> int:
         return int(ev.id or 0)
 
 
+async def _seed_westside_men_event(db: Database) -> int:
+    async with db.get_session() as session:
+        ev = Event(
+            title="Род мужской",
+            description="Кинопоказ киноклуба Westside Movieclub.",
+            date="2026-06-12",
+            time="20:30",
+            location_name="ОКЦ на Горького",
+            location_address="Горького 116",
+            city="Калининград",
+            event_type="кинопоказ",
+            ticket_link="https://okts-na-gorkogo.timepad.ru/event/4024691",
+            source_text=(
+                "12 июня 20:30 - «Род мужской» (2026)\n"
+                "📍Новый ОКЦ, Горького 116\n"
+                "Билеты: https://okts-na-gorkogo.timepad.ru/event/4024691"
+            ),
+            source_post_url="https://t.me/westside_movieclub/6092",
+        )
+        session.add(ev)
+        await session.commit()
+        return int(ev.id or 0)
+
+
 @pytest.mark.asyncio
 async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_differs(
     tmp_path,
@@ -489,5 +513,58 @@ async def test_smart_update_merges_doors_vs_start_duplicate_without_ticket_ancho
             assert [int(ev.id or 0) for ev in rows] == [eid]
             merged = rows[0]
             assert str(merged.time or "") == "20:00"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_smart_update_recalls_same_ticket_duplicate_despite_wrong_default_location(
+    tmp_path,
+    monkeypatch,
+):
+    """INC-2026-06-12: wrong channel defaults must not remove a same-ticket
+    duplicate from the Smart Update recall set before LLM/dedup matching."""
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+        eid = await _seed_westside_men_event(db)
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/terkatalk/4990",
+            source_chat_id=123,
+            source_message_id=4990,
+            source_text=(
+                "12.06/13.06 | Women Power в киноклубе westside movieclub\n"
+                "12 июня в 20:30 — «Род мужской» (2026)\n"
+                "📍Новый ОКЦ, ул. Горького, 116\n"
+                "Билеты: https://okts-na-gorkogo.timepad.ru/event/4024691/"
+            ),
+            title="Род мужской» (2026)",
+            date="2026-06-12",
+            time="20:30",
+            location_name="Пространство Тёрка",
+            location_address="Пл. Победы 4 (1 под. 2 этаж)",
+            city="Калининград",
+            ticket_link="https://okts-na-gorkogo.timepad.ru/event/4024691/",
+            event_type="кинопоказ",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        assert int(result.event_id or 0) == eid
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    su.select(Event).where(Event.date == "2026-06-12").order_by(Event.id)
+                )
+            ).scalars().all()
+            assert [int(ev.id or 0) for ev in rows] == [eid]
+            assert rows[0].location_name == "ОКЦ на Горького"
     finally:
         await db.close()

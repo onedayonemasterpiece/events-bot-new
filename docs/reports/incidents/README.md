@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-future-event-quality-llm-first-repair.md`
+  - Scope: Telegram Monitoring / VK auto-import / Smart Update future-event quality, including malformed dates, source-non-grounded venue fragments, false `Калининград Сити Джаз Клуб` defaults, `DD.MM` date markers leaking as times, and duplicate public cards across Telegraph/Telegram/VK.
+  - Must not regress: active future rows must keep ISO dates only; source prose/default venue conflicts must route through LLM-first venue review instead of becoming public `location_name`; same real event clusters such as Westside `Род мужской`/`Солнцестояние`, Kantata/Agropark/Pianissimo duplicates must collapse while distinct same-time productions remain separate; confirmed bad public rows/pages/posts must be repaired or explicitly blocked by platform editing limits.
 - `INC-2026-06-12-tg-event-utility-hook-quality.md`
   - Scope: Telegram event publishing intro generation for `@kldevents`,
     especially utility/service posts whose source text is practical but stored

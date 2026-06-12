@@ -10748,6 +10748,47 @@ def _pre_create_duplicate_probe(
     return None
 
 
+def _same_specific_ticket_shortlist_recall(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> list[Event]:
+    """Keep exact ticket/date/time duplicate candidates visible to LLM matching.
+
+    Location defaults can be wrong before LLM repair. A specific ticket URL plus
+    overlapping date and no time conflict is identity plumbing, not an editorial
+    duplicate decision.
+    """
+
+    cand_ticket = _specific_ticket_url_for_match(candidate.ticket_link)
+    if not cand_ticket or not events:
+        return []
+    cand_start, cand_end = _candidate_date_range(candidate)
+    if not cand_start or not cand_end:
+        return []
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    recalled: list[Event] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if _specific_ticket_url_for_match(getattr(ev, "ticket_link", None)) != cand_ticket:
+            continue
+        ev_start, ev_end = _event_date_range(ev)
+        if not ev_start or not ev_end or cand_end < ev_start or ev_end < cand_start:
+            continue
+        if _has_explicit_time_conflict(cand_time, _event_anchor_time(ev)):
+            continue
+        if not (
+            _titles_look_related(candidate.title, getattr(ev, "title", None))
+            or _source_texts_look_nearly_identical(
+                candidate.source_text or candidate.raw_excerpt,
+                getattr(ev, "source_text", None),
+            )
+        ):
+            continue
+        recalled.append(ev)
+    return recalled
+
+
 def _deterministic_related_title_anchor_match(
     candidate: EventCandidate,
     events: Sequence[Event],
@@ -12545,9 +12586,16 @@ async def _smart_event_update_impl(
         and candidate.location_name
         and (not candidate_location_unsupported_prose)
     ):
+        same_ticket_recall = _same_specific_ticket_shortlist_recall(candidate, shortlist)
         shortlist = [
             ev for ev in shortlist if _event_candidate_location_matches(ev, candidate)
         ]
+        if same_ticket_recall:
+            seen_ids = {getattr(ev, "id", None) for ev in shortlist}
+            for ev in same_ticket_recall:
+                if getattr(ev, "id", None) not in seen_ids:
+                    shortlist.append(ev)
+                    seen_ids.add(getattr(ev, "id", None))
 
     # Time is an anchor field, but for canonical site/parser imports we allow time corrections:
     # matching must work even if a Telegram-first event had a wrong/empty time.

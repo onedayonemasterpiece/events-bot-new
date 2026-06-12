@@ -541,6 +541,110 @@ async def test_tg_build_candidate_terkatalk_default_location_recovers_venue():
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_default_location_loses_to_event_local_venue():
+    """INC-2026-06-12: Terka reposts of Westside schedule must not keep the
+    channel default when the event-local block names ОКЦ/Сигнал."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Пространство Тёрка, Пл. Победы 4 (1 под. 2 этаж), Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "terkatalk",
+        "message_id": 4990,
+        "source_link": "https://t.me/terkatalk/4990",
+        "text": (
+            "12.06/13.06 | Women Power в киноклубе westside movieclub\n"
+            "12 июня в 20:30 — «Род мужской» (2026)\n"
+            "📍Новый ОКЦ, ул. Горького, 116\n"
+            "13 июня в 20:00 — «Солнцестояние» (2017)\n"
+            "📍Сигнал, Леонова 22"
+        ),
+    }
+    event_data = {
+        "title": "Род мужской",
+        "date": "2026-06-12",
+        "time": "20:30",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград",
+        "ticket_link": "https://okts-na-gorkogo.timepad.ru/event/4024691/",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name == "ОКЦ на Горького"
+    assert cand.location_address == "Горького 116"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_rejects_unsupported_city_jazz_default():
+    """INC-2026-06-12: risky City Jazz defaults must be source-grounded, not
+    silently applied to unrelated posts."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Калининград Сити Джаз Клуб, Мира 33-35, Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "terkatalk",
+        "message_id": 4735,
+        "source_link": "https://t.me/terkatalk/4735",
+        "text": (
+            "Женская арт-терапевтическая группа.\n"
+            "Старт: 23 апреля.\n"
+            "Место: очно в Калининграде (уютный кабинет в центре города).\n"
+            "Вопросы, запись @lena_zaka"
+        ),
+    }
+    event_data = {
+        "title": "Женская арт-терапевтическая группа",
+        "date": "2026-04-23",
+        "time": "",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name is None
+    assert cand.location_address is None
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_keeps_source_grounded_city_jazz_default():
+    """Negative control: City Jazz is valid when source/poster grounds it."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Калининград Сити Джаз Клуб, Мира 33-35, Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "qtickets",
+        "message_id": 240069,
+        "source_link": "https://kaliningrad.qtickets.events/240069-mariya-makarova-akustika",
+        "text": "Мария Макарова акустика. 7 августа 20:00. пр-т Мира, 33 Калининград.",
+    }
+    event_data = {
+        "title": "Мария Макарова акустика",
+        "date": "2026-08-07",
+        "time": "20:00",
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград",
+    }
+    cand = _build_candidate(src, message, event_data)
+    assert cand.location_name == "Калининград Сити Джаз Клуб"
+    assert cand.location_address == "Мира 33-35"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_rejects_ungrounded_known_venue_from_extraction():
     """festdir/4357 replay: extraction picks Калининград Сити Джаз Клуб from the
     reference list although the source post does not mention any venue. The

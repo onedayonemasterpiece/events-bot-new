@@ -1924,13 +1924,7 @@ async def build_event_drafts_from_vk(
         time_colon = f"{hh:02d}:{mm:02d}"
         # Source contains DD.MM, but not HH:MM -> likely date, not time.
         if (date_dot in source_norm or date_dot2 in source_norm) and (time_colon not in source_norm):
-            # If there is any other explicit time token in the source, do not touch.
-            # (We only fix the "time copied from date" case when the source otherwise has no time.)
-            other_times = re.findall(r"\b\d{1,2}[:.]\d{2}\b", source_norm)
-            # Filter out the date-like token itself.
-            other_times = [x for x in other_times if x.replace(".", ":") != time_colon]
-            if not other_times:
-                return None
+            return None
         return draft_time
 
     def _looks_like_program_schedule_source() -> bool:

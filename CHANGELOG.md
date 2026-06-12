@@ -9,6 +9,13 @@
   the city in the bottom hashtag line, and keep the footer focused on a single
   `🔎 Подробнее` link instead of repeated subscribe/VK links. Covered by
   `tests/test_tg_event_publish.py`.
+- **Fixed: Future event quality LLM-first repair guardrails**: added
+  `INC-2026-06-12-future-event-quality-llm-first-repair` as the regression
+  contract and strengthened Telegram LLM venue-default prompts, source-grounded
+  venue/default handoff, risky City Jazz grounding, VK `DD.MM`-as-time cleanup,
+  and Smart Update same-specific-ticket recall. Added replay fixtures and
+  regression tests for the Westside duplicate, City Jazz negative/positive
+  controls, date-marker times, and wrong-default-location duplicate recall.
 - **Fixed: Telegram event intro repair for utility/service posts**: Telegram
   event publishing no longer forces every intro to start as a hook question.
   The writer may use a useful short paragraph or friendly `Друзья, ...` format,

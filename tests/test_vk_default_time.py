@@ -469,6 +469,34 @@ async def test_build_event_payload_includes_default_time(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_build_event_payload_drops_ddmm_date_marker_time_even_with_other_times(monkeypatch):
+    """INC-2026-06-12: date markers like 12.06 must not survive as 12:06
+    when the same source contains real times elsewhere."""
+
+    async def fake_parse(text, **kwargs):
+        return [
+            {
+                "title": "Род мужской",
+                "date": "2026-06-12",
+                "time": "12:06",
+                "location_name": "ОКЦ на Горького",
+                "location_address": "Горького 116",
+                "city": "Калининград",
+            }
+        ]
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse)
+
+    draft, festival_payload = await vk_intake.build_event_payload_from_vk(
+        "12.06 — «Род мужской» в 20:30\n13.06 — «Солнцестояние» в 20:00"
+    )
+
+    assert draft.time is None
+    assert draft.time_is_default is False
+    assert festival_payload is None
+
+
+@pytest.mark.asyncio
 async def test_build_event_payload_uses_default_ticket_link(monkeypatch):
     captured = {}
 
