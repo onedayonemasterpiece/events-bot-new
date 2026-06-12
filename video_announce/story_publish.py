@@ -227,6 +227,16 @@ def _story_session_payload() -> dict[str, Any]:
     )
 
 
+def story_remote_auth_scope() -> str | None:
+    bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
+    if bundle_env_key:
+        return bundle_env_key
+    session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    if session_env_key:
+        return session_env_key
+    return None
+
+
 def build_story_secrets_payload() -> str:
     payload = _story_session_payload()
     vk_access_token = _get_env_value("VK_ACCESS_TOKEN5")
@@ -740,6 +750,7 @@ async def build_story_publish_config(
         "mode": mode,
         "smoke_only": smoke_only,
         "upload_profile": _story_upload_profile(selection_params),
+        "auth_source": story_remote_auth_scope(),
         "period_seconds": _story_period_seconds(selected_event_dates=selected_event_dates),
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,

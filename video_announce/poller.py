@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from kaggle_registry import remove_job
 from main import format_day_pretty
 from models import (
     Event,
@@ -34,6 +35,7 @@ from promo import record_video_promo_exposures
 from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient, resolve_kaggle_slug as _accel_pref_resolve_slug
 
 logger = logging.getLogger(__name__)
+KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE = "kenigsberg_story"
 
 _status_messages: dict[int, tuple[int, int]] = {}
 _status_locks: dict[int, asyncio.Lock] = {}
@@ -231,7 +233,40 @@ def start_kernel_poller_task(
         )
     )
     _track_poller_task(session_obj.id, task)
+    _track_remote_telegram_session_cleanup(session_obj, task)
     return task
+
+
+def _track_remote_telegram_session_cleanup(
+    session_obj: VideoAnnounceSession,
+    task: asyncio.Task,
+) -> None:
+    if str(getattr(session_obj, "profile_key", "") or "") != KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE:
+        return
+    kernel_ref = str(getattr(session_obj, "kaggle_kernel_ref", "") or "").strip()
+    if not kernel_ref or kernel_ref.startswith("local:"):
+        return
+
+    def _cleanup(_task: asyncio.Task) -> None:
+        async def _remove() -> None:
+            try:
+                await remove_job(KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE, kernel_ref)
+            except Exception:
+                logger.warning(
+                    "video_announce: failed to clear kenigsberg remote telegram job kernel=%s",
+                    kernel_ref,
+                    exc_info=True,
+                )
+
+        try:
+            asyncio.create_task(_remove())
+        except RuntimeError:
+            logger.warning(
+                "video_announce: no running loop to clear kenigsberg remote telegram job kernel=%s",
+                kernel_ref,
+            )
+
+    task.add_done_callback(_cleanup)
 
 
 def _parse_positive_int(value: object) -> int | None:

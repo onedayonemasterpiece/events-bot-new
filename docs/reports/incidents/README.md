@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-kenigsberg-story-session-duplication.md`
+  - Scope: Kenigsberg `/kenigsberg` Kaggle story publishing, shared remote
+    Telegram session guard, Telegram/Guide monitoring Kaggle auth bundles, and
+    `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV`.
+  - Must not regress: two Kaggle jobs must never use the same Telethon auth
+    bundle concurrently; active unknown-scope registry entries stay
+    conservative and block; new remote Telegram jobs must write
+    `remote_telegram_auth_scope`; story publishing should use a separate
+    `TELEGRAM_AUTH_BUNDLE_STORY` when parallelism with S22 monitoring is
+    required.
 - `INC-2026-06-12-afishaengagement-public-canary-no-show.md`
   - Scope: Afisha Engagement public/shadow candidate resolution, VK group alias
     matching, and production public canary rates for `80 историй о главном`.

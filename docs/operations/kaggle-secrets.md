@@ -79,6 +79,16 @@ client = TelegramClient(
 - храните отдельные bundle для prod и dev/e2e;
 - для Telegram Monitoring можно явно выбрать, какой env-ключ брать, через
   `TG_MONITORING_AUTH_BUNDLE_ENV` (например `TELEGRAM_AUTH_BUNDLE_E2E`).
+- для production role separation держите минимум два удалённых bundle:
+  `TELEGRAM_AUTH_BUNDLE_S22` для remote monitoring и
+  `TELEGRAM_AUTH_BUNDLE_STORY` для Kaggle story publishing
+  (`VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`). Если
+  `tg_monitoring` и `guide_monitoring` тоже должны идти параллельно друг с
+  другом, заведите третий monitoring bundle и включайте его только явным
+  `*_AUTH_BUNDLE_ENV` override.
+- новые remote Telegram jobs должны писать `remote_telegram_auth_scope` в
+  `kaggle_registry`: guard блокирует совпадающие scopes и считает неизвестный
+  scope конфликтующим, чтобы не рисковать повторным `AuthKeyDuplicatedError`.
 
 Примечание: для **автоматических запусков через Kaggle API** по‑прежнему используйте encrypted datasets (см. базовый паттерн выше), так как Kaggle Secrets не всегда доступны при API‑старте.
 

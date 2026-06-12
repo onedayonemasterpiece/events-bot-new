@@ -17,12 +17,19 @@ logger = logging.getLogger(__name__)
 REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
     {
         "guide_monitoring",
+        "kenigsberg_story",
         "tg_monitoring",
         "telegraph_cache_probe",
     }
 )
 UNKNOWN_STATUS_STALE_MINUTES_ENV = "REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES"
 DEFAULT_UNKNOWN_STATUS_STALE_MINUTES = 390
+AUTH_SCOPE_META_KEYS = (
+    "remote_telegram_auth_scope",
+    "auth_scope",
+    "auth_source",
+    "auth_bundle_env",
+)
 TERMINAL_KAGGLE_STATES = frozenset(
     {
         "CANCEL_ACKNOWLEDGED",
@@ -43,6 +50,7 @@ class RemoteTelegramSessionConflict:
     status: str
     created_at: str | None
     failure_message: str | None
+    auth_scope: str | None
     meta: dict[str, Any]
 
 
@@ -60,6 +68,32 @@ def _extract_failure_message(status: dict[str, Any] | None) -> str:
         if value:
             return str(value).strip()
     return ""
+
+
+def normalize_remote_telegram_auth_scope(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    return raw or None
+
+
+def remote_telegram_auth_scope_from_meta(meta: dict[str, Any] | None) -> str | None:
+    if not isinstance(meta, dict):
+        return None
+    for key in AUTH_SCOPE_META_KEYS:
+        scope = normalize_remote_telegram_auth_scope(meta.get(key))
+        if scope:
+            return scope
+    return None
+
+
+def remote_telegram_auth_scopes_conflict(
+    current_auth_scope: str | None,
+    existing_auth_scope: str | None,
+) -> bool:
+    current = normalize_remote_telegram_auth_scope(current_auth_scope)
+    existing = normalize_remote_telegram_auth_scope(existing_auth_scope)
+    if current is None or existing is None:
+        return True
+    return current == existing
 
 
 def _unknown_status_stale_minutes() -> int:
@@ -132,6 +166,8 @@ def describe_remote_telegram_session_conflicts(
             part += f" run_id={conflict.run_id}"
         if conflict.kernel_ref:
             part += f" kernel={conflict.kernel_ref}"
+        if conflict.auth_scope:
+            part += f" auth={conflict.auth_scope}"
         if conflict.failure_message:
             part += f" failure={conflict.failure_message}"
         parts.append(part)
@@ -154,6 +190,8 @@ def format_remote_telegram_session_busy_lines(
             line += f" run_id={conflict.run_id}"
         if conflict.kernel_ref:
             line += f" kernel={conflict.kernel_ref}"
+        if conflict.auth_scope:
+            line += f" auth={conflict.auth_scope}"
         lines.append(line)
         if conflict.failure_message:
             lines.append(f"  причина: {conflict.failure_message}")
@@ -164,6 +202,7 @@ async def find_remote_telegram_session_conflicts(
     *,
     current_job_type: str | None = None,
     current_kernel_ref: str | None = None,
+    current_auth_scope: str | None = None,
 ) -> list[RemoteTelegramSessionConflict]:
     jobs = await list_jobs()
     candidates = [
@@ -187,6 +226,9 @@ async def find_remote_telegram_session_conflicts(
                 continue
 
         meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
+        auth_scope = remote_telegram_auth_scope_from_meta(meta)
+        if not remote_telegram_auth_scopes_conflict(current_auth_scope, auth_scope):
+            continue
         try:
             status_payload = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
         except Exception as exc:
@@ -234,6 +276,7 @@ async def find_remote_telegram_session_conflicts(
                     status="UNKNOWN",
                     created_at=str(job.get("created_at") or "").strip() or None,
                     failure_message=failure_message,
+                    auth_scope=auth_scope,
                     meta=dict(meta),
                 )
             )
@@ -250,6 +293,7 @@ async def find_remote_telegram_session_conflicts(
                 status=state or "UNKNOWN",
                 created_at=str(job.get("created_at") or "").strip() or None,
                 failure_message=_extract_failure_message(status_payload) or None,
+                auth_scope=auth_scope,
                 meta=dict(meta),
             )
         )
@@ -260,10 +304,12 @@ async def raise_if_remote_telegram_session_busy(
     *,
     current_job_type: str,
     current_kernel_ref: str | None = None,
+    current_auth_scope: str | None = None,
 ) -> None:
     conflicts = await find_remote_telegram_session_conflicts(
         current_job_type=current_job_type,
         current_kernel_ref=current_kernel_ref,
+        current_auth_scope=current_auth_scope,
     )
     if conflicts:
         raise RemoteTelegramSessionBusyError(conflicts)

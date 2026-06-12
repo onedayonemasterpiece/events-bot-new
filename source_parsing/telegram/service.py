@@ -3167,6 +3167,7 @@ async def _run_telegram_monitor_locked(
     elif source_usernames:
         requested = ", ".join(f"@{username}" for username in source_usernames)
         raise RuntimeError(f"Telegram source scope has no enabled sources: {requested}")
+    auth_scope = _resolve_auth_bundle_env_key() or "TG_SESSION"
     secrets_payload = _build_secrets_payload()
     try:
         payload_keys = sorted((json.loads(secrets_payload) or {}).keys())
@@ -3216,6 +3217,7 @@ async def _run_telegram_monitor_locked(
     try:
         await raise_if_remote_telegram_session_busy(
             current_job_type="tg_monitoring",
+            current_auth_scope=auth_scope,
         )
     except RemoteTelegramSessionBusyError as exc:
         await _notify(
@@ -3270,6 +3272,7 @@ async def _run_telegram_monitor_locked(
                     "run_id": run_id,
                     "chat_id": chat_id,
                     "pid": os.getpid(),
+                    "remote_telegram_auth_scope": auth_scope,
                     "dataset_slugs": [dataset_cipher, dataset_key],
                     "source_usernames": sorted(set(source_usernames or [])),
                 },

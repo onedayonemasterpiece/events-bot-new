@@ -32,6 +32,13 @@ def test_story_session_payload_includes_optional_source_channel_id(monkeypatch):
     assert payload["source_channel_id"] == -100987654321
 
 
+def test_story_remote_auth_scope_prefers_bundle_env(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_SESSION_ENV", "TELEGRAM_SESSION")
+
+    assert story_publish.story_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_STORY"
+
+
 def test_popular_review_selection_params_enable_story_publish_with_repost_target():
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
@@ -101,6 +108,7 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     )
 
     assert config is not None
+    assert "auth_source" in config
     assert config["targets"][0]["blocking"] is False
     assert config["targets"][1]["transport"] == "telegram_chat"
     assert config["targets"][1]["caption"] == "Видеоанонс"

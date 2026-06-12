@@ -421,6 +421,14 @@ Important boundary:
 
 - Business Stories use Bot API `postStory` and encrypted `business_connection_id`.
 - Do not repurpose `TELEGRAM_AUTH_BUNDLE_E2E` or `TELEGRAM_AUTH_BUNDLE_S22` for Business story publishing.
+- Telethon-based Kaggle story publishing must use a role-scoped auth source.
+  `TELEGRAM_AUTH_BUNDLE_S22` is reserved for remote monitoring
+  (`tg_monitoring` / `guide_monitoring`). For `/kenigsberg` and other story
+  publish jobs that need to run while monitoring is alive, set
+  `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY` and provide
+  a separate `TELEGRAM_AUTH_BUNDLE_STORY` session. The remote Telegram session
+  guard serializes jobs with the same auth source and permits parallel jobs only
+  when their `remote_telegram_auth_scope` values differ.
 
 ## Open questions
 

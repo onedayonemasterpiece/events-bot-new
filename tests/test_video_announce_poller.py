@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -136,6 +137,42 @@ async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypa
     assert recovered == 1
     assert started == [(session_id, "zigomaro/video-announce-session-1")]
     assert bot.messages == []
+
+
+@pytest.mark.asyncio
+async def test_kenigsberg_poller_clears_remote_telegram_registry(monkeypatch):
+    removed: list[tuple[str, str]] = []
+
+    async def fake_run_kernel_poller(*args, **kwargs):  # noqa: ANN002, ANN003
+        return None
+
+    async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
+        removed.append((job_type, kernel_ref))
+
+    monkeypatch.setattr(poller_module, "run_kernel_poller", fake_run_kernel_poller)
+    monkeypatch.setattr(poller_module, "remove_job", fake_remove_job)
+
+    session_obj = VideoAnnounceSession(
+        id=777,
+        status=VideoAnnounceSessionStatus.RENDERING,
+        profile_key="kenigsberg_story",
+        kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+    )
+
+    task = poller_module.start_kernel_poller_task(
+        object(),
+        object(),
+        session_obj,
+        bot=object(),
+        notify_chat_id=1,
+        test_chat_id=None,
+        main_chat_id=None,
+    )
+
+    await task
+    await asyncio.sleep(0)
+
+    assert removed == [("kenigsberg_story", "zigomaro/koenigsberg-stories")]
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ from aiogram import Router, types
 from aiogram.filters import Command, CommandObject
 from sqlalchemy import select
 
+from kaggle_registry import register_job
 from kenigsberg_stories.state import (
     KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
@@ -33,6 +34,11 @@ from kenigsberg_stories.state import (
     reset_bans,
 )
 from models import Channel, VideoAnnounceSession, VideoAnnounceSessionStatus
+from remote_telegram_session import (
+    RemoteTelegramSessionBusyError,
+    format_remote_telegram_session_busy_lines,
+    raise_if_remote_telegram_session_busy,
+)
 from runtime import require_main_attr
 from video_announce.kaggle_client import (
     KaggleClient,
@@ -51,6 +57,7 @@ from video_announce.story_publish import (
     STORY_PUBLISH_CONFIG_FILENAME,
     STORY_PUBLISH_KEY_FILENAME,
     build_story_publish_config,
+    story_remote_auth_scope,
     write_story_secret_files,
 )
 
@@ -953,6 +960,24 @@ async def _launch_kaggle_generation(
 
     test_chat_id = None
 
+    story_auth_scope = story_remote_auth_scope()
+    try:
+        await raise_if_remote_telegram_session_busy(
+            current_job_type=KENIGSBERG_PROFILE_KEY,
+            current_auth_scope=story_auth_scope,
+        )
+    except RemoteTelegramSessionBusyError as exc:
+        logger.warning(
+            "kenigsberg.remote_telegram_session_busy conflicts=%s",
+            [conflict.kernel_ref for conflict in exc.conflicts],
+        )
+        for line in format_remote_telegram_session_busy_lines(
+            exc.conflicts,
+            actor_label="Kenigsberg Stories",
+        ):
+            await notify(line)
+        return None
+
     issue_number = await reserve_issue_number(db)
     seed = (secrets.randbits(63) ^ time.time_ns() ^ issue_number) & ((1 << 63) - 1)
     state = await load_state(db)
@@ -1140,6 +1165,28 @@ async def _launch_kaggle_generation(
             "local:KoenigsbergStories",
             [dataset_id],
         )
+        try:
+            await register_job(
+                KENIGSBERG_PROFILE_KEY,
+                kernel_ref,
+                meta={
+                    "session_id": obj.id,
+                    "issue_number": issue_number,
+                    "trigger": trigger,
+                    "chat_id": notify_chat_id,
+                    "operator_user_id": operator_user_id,
+                    "dataset_slug": dataset_id,
+                    "remote_telegram_auth_scope": story_auth_scope,
+                    "pid": os.getpid(),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "kenigsberg: failed to register remote telegram session job session=%s kernel=%s",
+                obj.id,
+                kernel_ref,
+                exc_info=True,
+            )
         await await_kernel_dataset_sources(
             client,
             kernel_ref,

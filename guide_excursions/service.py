@@ -49,6 +49,7 @@ from .kaggle_service import (
     download_guide_results,
     extract_guide_failure_message,
     format_kaggle_status_message,
+    remote_telegram_auth_scope,
     run_guide_monitor_kaggle,
 )
 from .parser import (
@@ -3688,6 +3689,7 @@ async def run_guide_monitor(
                     try:
                         await raise_if_remote_telegram_session_busy(
                             current_job_type="guide_monitoring",
+                            current_auth_scope=remote_telegram_auth_scope(),
                         )
                         results_path, kaggle_meta = await run_guide_monitor_kaggle(
                             db,

@@ -203,6 +203,10 @@ def _resolve_auth_bundle_env_key() -> str | None:
     return None
 
 
+def remote_telegram_auth_scope() -> str:
+    return _resolve_auth_bundle_env_key() or "TG_SESSION"
+
+
 def _require_kaggle_username() -> str:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
@@ -1161,6 +1165,7 @@ async def run_guide_monitor_kaggle(
     config_payload = await _build_config_payload(db, run_id=run_id, mode=mode, limit=limit, days_back=days_back)
     sources_count = len(config_payload.get("sources") or [])
     timeout_minutes = _compute_poll_timeout_minutes(sources_count=sources_count)
+    auth_scope = remote_telegram_auth_scope()
     secrets_payload = _build_secrets_payload()
     dataset_slugs: list[str] = []
     kernel_ref = _kernel_ref_from_meta(KERNEL_PATH)
@@ -1195,6 +1200,7 @@ async def run_guide_monitor_kaggle(
                     "mode": mode,
                     "chat_id": chat_id,
                     "pid": os.getpid(),
+                    "remote_telegram_auth_scope": auth_scope,
                     "dataset_slugs": list(dataset_slugs),
                     **dict(recovery_meta or {}),
                 },
@@ -1241,6 +1247,7 @@ async def run_guide_monitor_kaggle(
             "duration_sec": int(max(0, round(duration))),
             "timeout_minutes": timeout_minutes,
             "sources_count": sources_count,
+            "remote_telegram_auth_scope": auth_scope,
             "dataset_slugs": list(dataset_slugs),
             "remote_kernel_meta": dict(remote_kernel_meta or {}),
         }

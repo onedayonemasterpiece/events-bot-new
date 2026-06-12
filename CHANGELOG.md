@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Kenigsberg story remote Telegram session isolation**: `/kenigsberg`
+  Kaggle story jobs now participate in the shared remote Telegram session
+  registry with auth-source scoped locking and poller cleanup, preventing a
+  second concurrent use of the same Telethon auth bundle while allowing future
+  story/monitoring parallelism on separate bundles. Tracks
+  `INC-2026-06-12-kenigsberg-story-session-duplication` and is covered by
+  `tests/test_remote_telegram_session.py`, `tests/test_video_announce_poller.py`,
+  `tests/test_video_announce_story_publish.py`, and `tests/test_kenigsberg_stories.py`.
 - **Fixed: VK festival carousel CTA arrow clearance**: final CTA cards now draw
   the footer/rule line with a central gap around the down arrow, avoiding the
   visible line/arrow intersection while keeping the large CTA cue. Covered by
