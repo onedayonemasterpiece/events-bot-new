@@ -7,6 +7,10 @@
   remaining carousel budget included in the prompt and enforced again in code
   before rendering. Explicit `celebrity_person_cards` remains an operator
   override. Covered by `tests/test_promo.py`.
+- **Fixed: VK festival carousel LLM evidence scope**: celebrity/person
+  extraction now prompts from primary `source_text` first and uses generated
+  `description` only when the source text is unavailable, avoiding noisy
+  cross-event description artifacts.
 - **Fixed: Afisha Engagement art-topic CTA priority**: lecture and workshop
   CTA theme extraction now prefers explicit art/painting/impressionism subjects
   over broad `история` wording, so art-history events do not get generic

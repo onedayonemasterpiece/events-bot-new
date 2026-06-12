@@ -2969,10 +2969,16 @@ def _event_brief_for_celebrity_llm(ev: Event) -> str:
         f"date={getattr(ev, 'date', '')!r}",
         f"time={getattr(ev, 'time', '')!r}",
     ]
-    for label in ("short_description", "description", "source_text", "search_digest"):
-        value = re.sub(r"\s+", " ", str(getattr(ev, label, "") or "").strip())
-        if value:
-            parts.append(f"{label}={value[:1400]!r}")
+    source_text = re.sub(r"\s+", " ", str(getattr(ev, "source_text", "") or "").strip())
+    if source_text:
+        parts.append(f"source_text={source_text[:1800]!r}")
+    else:
+        description = re.sub(r"\s+", " ", str(getattr(ev, "description", "") or "").strip())
+        if description:
+            parts.append(f"description={description[:1400]!r}")
+    short_description = re.sub(r"\s+", " ", str(getattr(ev, "short_description", "") or "").strip())
+    if short_description:
+        parts.append(f"short_description={short_description[:500]!r}")
     return "; ".join(parts)
 
 
