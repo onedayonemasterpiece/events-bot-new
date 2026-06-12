@@ -15,6 +15,9 @@
   extraction now lists events without poster cards first and requires the LLM to
   inspect each of them before using people from already represented poster
   events.
+- **Changed: VK festival carousel per-event extraction**: celebrity/person
+  extraction now runs the LLM per source event by default, so a broad response
+  cannot skip later non-poster events while filling the carousel budget.
 - **Fixed: Afisha Engagement art-topic CTA priority**: lecture and workshop
   CTA theme extraction now prefers explicit art/painting/impressionism subjects
   over broad `история` wording, so art-history events do not get generic

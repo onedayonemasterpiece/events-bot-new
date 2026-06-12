@@ -264,10 +264,11 @@ supports:
 - `celebrity_person_cards_llm_enabled`: enables LLM extraction of missing
   people for celebrity carousels when no explicit `celebrity_person_cards`
   override is configured. The LLM receives the remaining card budget, but the
-  code still hard-caps the selected cards before rendering. The extraction
-  prompt lists events without poster cards first and requires the LLM to inspect
-  each of them before using people from events already represented by poster
-  cards;
+  code still hard-caps the selected cards before rendering. By default the
+  extraction runs per event: events without poster cards are inspected first,
+  then events already represented by poster cards;
+- `celebrity_person_cards_llm_per_event`: keeps the per-event extraction mode
+  enabled by default so one broad LLM response cannot skip later source events;
 - `celebrity_person_source_event_ids` / `person_source_event_ids`: optional
   event ids used as the LLM extraction scope for FIO/role cards when poster
   cards are intentionally limited to a smaller evidence-backed set;

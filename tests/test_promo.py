@@ -974,15 +974,14 @@ async def test_vk_festival_carousel_celebrity_llm_adds_person_cards_with_budget(
     assert len(uploaded_bytes) == 9
     assert sum("_person_" in name for name in uploaded_bytes) == 6
     assert all("person_7" not in name for name in uploaded_bytes)
-    assert "Нужно не больше 6 cards" in llm_prompts[0]
-    assert f"Events without poster cards: [{missing_event_id}]" in llm_prompts[0]
-    assert "Евгений Князев" in llm_prompts[0]
+    assert any("This event without poster card: True" in prompt for prompt in llm_prompts)
+    assert any("Евгений Князев" in prompt for prompt in llm_prompts)
 
     async with db.get_session() as session:
         exposure = (await session.execute(select(PromoExposure))).scalars().one()
     assert exposure.details_json["max_cards"] == 9
     assert exposure.details_json["attachments_count"] == 9
-    assert exposure.details_json["person_cards_source"] == "llm"
+    assert exposure.details_json["person_cards_source"] == "llm_per_event"
     assert [item["name"] for item in exposure.details_json["person_cards"]] == [
         "Евгений Князев",
         "Татьяна Юденкова",

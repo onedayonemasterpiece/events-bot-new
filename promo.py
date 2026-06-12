@@ -3054,6 +3054,76 @@ async def _llm_vk_festival_carousel_person_cards(
         ]
         ordered_source_events = [*events_without_posters, *events_with_posters]
         events_without_poster_ids = [int(ev.id) for ev in events_without_posters]
+        per_event = _config_bool(cfg.get("celebrity_person_cards_llm_per_event"), default=True)
+
+        async def ask_cards(prompt: str, *, max_tokens: int, stage: str) -> list[_VkFestivalCarouselPersonCard]:
+            raw = await ask_4o(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=0.1,
+                meta={"feature": "promo", "stage": stage, "campaign_id": campaign.id},
+            )
+            payload = _extract_json_object(str(raw or ""))
+            raw_cards = (payload or {}).get("cards")
+            if not isinstance(raw_cards, list):
+                return []
+            return [
+                _VkFestivalCarouselPersonCard(
+                    name=card.name[:80].strip(),
+                    role=card.role[:160].strip(),
+                    event_id=card.event_id,
+                )
+                for card in _vk_festival_carousel_person_cards_from_config({"celebrity_person_cards": raw_cards})
+                if card.name.strip() and card.role.strip()
+            ]
+
+        if per_event:
+            cards: list[_VkFestivalCarouselPersonCard] = []
+            for ev in ordered_source_events[:12]:
+                selected_so_far = _select_vk_festival_carousel_person_cards(
+                    cfg,
+                    selected_events=selected_events,
+                    limit=limit,
+                    candidate_cards=cards,
+                )
+                remaining = limit - len(selected_so_far)
+                if remaining <= 0:
+                    break
+                event_id = int(ev.id) if ev.id is not None else None
+                event_without_poster = event_id is not None and event_id not in selected_event_id_set
+                prompt = (
+                    "Ты выбираешь карточки персон для VK-карусели промо образовательной/фестивальной программы. "
+                    "Сейчас проверяется ОДНО событие. Верни только JSON без markdown: "
+                    "{\"cards\":[{\"name\":\"...\",\"role\":\"...\",\"event_id\":123,\"evidence\":\"...\"}]}. "
+                    f"Для этого события можно вернуть не больше {min(2, remaining)} cards; общий оставшийся бюджет {remaining}. "
+                    "Если в title/source_text события назван гость, спикер, модератор или ведущий с ролью, верни карточку. "
+                    "Если явного человека с ролью нет, верни {\"cards\":[]}. "
+                    "Не добавляй названия фильмов, организаций, фестивалей, вымышленные роли или людей без явной роли. "
+                    "Не повторяй людей, которые уже видны на афишах выбранных poster cards. "
+                    "role должен быть коротким: кто это/почему важен для программы, до 120 символов. "
+                    "evidence — короткая цитата/фрагмент из данных, по которому видно имя и роль.\n"
+                    f"Программа: {program_phrase!r}.\n"
+                    f"Кампания: {campaign.title!r}.\n"
+                    f"Poster event ids: {selected_event_ids!r}.\n"
+                    f"This event without poster card: {event_without_poster!r}.\n"
+                    f"Names already covered on posters (normalized): {covered_names!r}.\n"
+                    f"Event:\n- {_event_brief_for_celebrity_llm(ev)}"
+                )
+                cards.extend(
+                    await ask_cards(
+                        prompt,
+                        max_tokens=260,
+                        stage="vk_festival_carousel_person_cards_event",
+                    )
+                )
+            selected_cards = _select_vk_festival_carousel_person_cards(
+                cfg,
+                selected_events=selected_events,
+                limit=limit,
+                candidate_cards=cards,
+            )
+            return selected_cards, "llm_per_event"
+
         event_brief = "\n".join(f"- {_event_brief_for_celebrity_llm(ev)}" for ev in ordered_source_events[:12])
         prompt = (
             "Ты выбираешь карточки персон для VK-карусели промо образовательной/фестивальной программы. "
@@ -3077,26 +3147,13 @@ async def _llm_vk_festival_carousel_person_cards(
             f"Names already covered on posters (normalized): {covered_names!r}.\n"
             f"Events:\n{event_brief}"
         )
-        raw = await ask_4o(
+        cards = await ask_cards(
             prompt,
             max_tokens=700,
-            temperature=0.1,
-            meta={"feature": "promo", "stage": "vk_festival_carousel_person_cards", "campaign_id": campaign.id},
+            stage="vk_festival_carousel_person_cards",
         )
-        payload = _extract_json_object(str(raw or ""))
-        raw_cards = (payload or {}).get("cards")
-        if not isinstance(raw_cards, list):
+        if not cards:
             return [], "llm_empty"
-        cards = _vk_festival_carousel_person_cards_from_config({"celebrity_person_cards": raw_cards})
-        cards = [
-            _VkFestivalCarouselPersonCard(
-                name=card.name[:80].strip(),
-                role=card.role[:160].strip(),
-                event_id=card.event_id,
-            )
-            for card in cards
-            if card.name.strip() and card.role.strip()
-        ]
         return (
             _select_vk_festival_carousel_person_cards(
                 cfg,
