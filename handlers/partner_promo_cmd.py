@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from aiogram import Bot, types
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from db import Database
 from models import (
@@ -71,6 +71,10 @@ SLOT_ORDER = (
 )
 COUNT_PRESETS = (1, 2, 3, 5, 7, 10)
 DEFAULT_DURATIONS_DAYS = (7, 14, 30)
+
+
+def _current_or_future_campaign_filter(now_utc: datetime):
+    return or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc)
 
 
 def _status_label(status: str) -> str:
@@ -135,6 +139,7 @@ async def _list_campaigns_covering_event(
     partner sees only their own campaigns, regardless of target type.
     """
 
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
         festival_name = (getattr(event, "festival", None) or "").strip() if event else ""
@@ -145,6 +150,7 @@ async def _list_campaigns_covering_event(
             .where(PromoTarget.target_type == "event")
             .where(PromoTarget.event_id == int(event_id))
             .where(PromoCampaign.status != "archived")
+            .where(_current_or_future_campaign_filter(now_utc))
             .order_by(PromoCampaign.created_at.desc())
         )
         if not user.is_superadmin:
@@ -159,6 +165,7 @@ async def _list_campaigns_covering_event(
                 .where(PromoTarget.target_type == "festival")
                 .where(PromoTarget.festival_name == festival_name)
                 .where(PromoCampaign.status != "archived")
+                .where(_current_or_future_campaign_filter(now_utc))
                 .order_by(PromoCampaign.created_at.desc())
             )
             if not user.is_superadmin:
@@ -1392,12 +1399,15 @@ async def _load_user(db: Database, user_id: int) -> User | None:
 async def _list_campaigns_for_role(
     db: Database, *, user: User, include_archived: bool
 ) -> list[PromoCampaign]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         stmt = select(PromoCampaign).order_by(
             PromoCampaign.status, PromoCampaign.created_at.desc()
         )
         if not include_archived:
-            stmt = stmt.where(PromoCampaign.status != "archived")
+            stmt = stmt.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         if not user.is_superadmin:
             stmt = stmt.where(PromoCampaign.created_by == int(user.user_id))
         res = await session.execute(stmt)

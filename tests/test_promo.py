@@ -89,6 +89,41 @@ def test_parse_until_date_accepts_russian_month() -> None:
     assert end == date(2026, 7, 18)
 
 
+@pytest.mark.asyncio
+async def test_campaign_lines_hide_ended_active_campaigns_by_default(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add_all(
+            [
+                PromoCampaign(
+                    title="Past but active",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2020, 1, 2, tzinfo=timezone.utc),
+                ),
+                PromoCampaign(
+                    title="Future active",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2099, 1, 2, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        await session.commit()
+
+    current_lines = "\n".join(await _campaign_lines(db))
+    report_lines = "\n".join(
+        await _campaign_lines(db, include_archived=True, include_details=True)
+    )
+
+    assert "Future active" in current_lines
+    assert "Past but active" not in current_lines
+    assert "Past but active" in report_lines
+    await db.close()
+
+
 def test_popular_review_guaranteed_any_position_is_mixed_stably() -> None:
     positions: list[int] = []
     for day in range(9, 22):

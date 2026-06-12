@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timezone
 
 from aiogram import Bot, types
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 
 from db import Database
 from models import Event, EventSource, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
@@ -180,7 +180,12 @@ def _promo_keyboard(campaigns: list[PromoCampaign]) -> types.InlineKeyboardMarku
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def _current_or_future_campaign_filter(now_utc: datetime):
+    return or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc)
+
+
 async def _active_campaigns(db: Database, *, include_archived: bool = False) -> list[PromoCampaign]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         query = select(PromoCampaign).order_by(
             PromoCampaign.priority,
@@ -188,7 +193,9 @@ async def _active_campaigns(db: Database, *, include_archived: bool = False) -> 
             PromoCampaign.created_at,
         )
         if not include_archived:
-            query = query.where(PromoCampaign.status != "archived")
+            query = query.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         res = await session.execute(query)
         return list(res.scalars().all())
 
@@ -445,10 +452,13 @@ async def _campaign_lines(
     include_archived: bool = False,
     include_details: bool = False,
 ) -> list[str]:
+    now_utc = datetime.now(timezone.utc)
     async with db.get_session() as session:
         query = select(PromoCampaign).order_by(PromoCampaign.status, PromoCampaign.created_at)
         if not include_archived:
-            query = query.where(PromoCampaign.status != "archived")
+            query = query.where(PromoCampaign.status != "archived").where(
+                _current_or_future_campaign_filter(now_utc)
+            )
         res = await session.execute(query)
         campaigns = res.scalars().all()
     if not campaigns:

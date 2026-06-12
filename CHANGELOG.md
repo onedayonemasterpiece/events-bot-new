@@ -15,6 +15,11 @@
   via `tg_repost`. Public exposure accounting now includes
   `DAILY_RECOMMENDED`, `TG_PUBLISHED`, and `TG_FORWARDED`. Covered by
   `tests/test_promo.py`.
+- **Fixed: Promo campaign lists hide ended active campaigns**: default `/promo`
+  and partner/admin promo menus now show only current/future non-archived
+  campaigns, while `/promo report` / archive views still include ended active
+  rows for history. Covered by `tests/test_promo.py` and
+  `tests/test_partner_promo.py`.
 - **Changed: Poll to Repost audience framing**: poll questions now use a fixed
   set of friendly participation frames rotated by poll slot, each stating when
   the announcement will arrive, while LLM remains responsible only for options

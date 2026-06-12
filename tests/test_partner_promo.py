@@ -552,6 +552,42 @@ async def test_list_campaigns_covering_event_includes_festival(tmp_path) -> None
 
 
 @pytest.mark.asyncio
+async def test_partner_campaign_menu_hides_ended_active_campaigns_by_default(tmp_path) -> None:
+    from handlers.partner_promo_cmd import _list_campaigns_for_role
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        admin = User(user_id=1, username="root", is_superadmin=True)
+        session.add(admin)
+        session.add_all(
+            [
+                PromoCampaign(
+                    title="Past partner promo",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2020, 1, 2, tzinfo=timezone.utc),
+                ),
+                PromoCampaign(
+                    title="Future partner promo",
+                    status="active",
+                    starts_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    ends_at=datetime(2099, 1, 2, tzinfo=timezone.utc),
+                ),
+            ]
+        )
+        await session.commit()
+        admin = await session.get(User, 1)
+
+    current = await _list_campaigns_for_role(db, user=admin, include_archived=False)
+    report = await _list_campaigns_for_role(db, user=admin, include_archived=True)
+
+    assert [c.title for c in current] == ["Future partner promo"]
+    assert {c.title for c in report} == {"Past partner promo", "Future partner promo"}
+
+
+@pytest.mark.asyncio
 async def test_list_campaigns_covering_event_partner_hides_admin_festival(tmp_path) -> None:
     """A partner does not see a festival campaign created by another user."""
 

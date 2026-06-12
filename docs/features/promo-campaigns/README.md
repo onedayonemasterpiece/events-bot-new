@@ -53,16 +53,18 @@ events whose start date is today or later.
 
 ## Operator Commands
 
-- `/promo` or `/promo list` lists non-archived campaigns and seeds the
-  `80 историй о главном` campaign if the festival is eligible.
+- `/promo` or `/promo list` lists current/future non-archived campaigns
+  (`ends_at` is empty or not in the past) and seeds the `80 историй о главном`
+  campaign if the festival is eligible. Ended active campaigns are hidden from
+  the default management list so stale rows do not look runnable.
 - `/promo seed80` explicitly creates/returns the initial campaign for
   `80 историй о главном` through 2026-07-18.
-- `/promo report` lists all campaigns, including archived, with current future
-  event count, video publication count, promo-show count, and per-session
-  CherryFlash publication details: date/time, profile, session id, stored
-  status, target count, positions, and event ids/titles. VK promo activities
-  are shown as concrete exposure rows with event id/date, status, source URL
-  for reposts, and target VK post URL.
+- `/promo report` lists all campaigns, including archived and ended active
+  campaigns, with current future event count, video publication count,
+  promo-show count, and per-session CherryFlash publication details: date/time,
+  profile, session id, stored status, target count, positions, and event
+  ids/titles. VK promo activities are shown as concrete exposure rows with
+  event id/date, status, source URL for reposts, and target VK post URL.
 - `/promo add festival НАЗВАНИЕ [до ДАТА]` creates an active festival campaign.
 - `/promo add event ПРИМЕРНОЕ НАЗВАНИЕ [до ДАТА]` finds a future event and
   creates an active event campaign. If several future events are too similar,
