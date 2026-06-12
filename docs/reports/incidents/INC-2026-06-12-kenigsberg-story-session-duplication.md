@@ -1,6 +1,6 @@
 # INC-2026-06-12-kenigsberg-story-session-duplication
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories / Kaggle story publish / remote Telegram sessions
 Opened: 2026-06-12
@@ -73,11 +73,14 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 
 ### Required evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks:
-- production env/secret evidence:
-- post-deploy `/kenigsberg` or dry-run evidence:
+- deployed SHA: `1fc20ec927548822e84b020be36ef7d584bcb34b`
+- deploy path: pushed to `origin/main`, then `flyctl deploy -a events-bot-new-wngqia --remote-only`
+- regression checks: targeted pytest suite passed locally
+- production env/secret evidence: Fly runtime has `TELEGRAM_AUTH_BUNDLE_S22`,
+  `TELEGRAM_AUTH_BUNDLE_STORY`, and
+  `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`
+- post-deploy `/kenigsberg` or dry-run evidence: pending next operator run; `/healthz`
+  is ready and scheduler has `kenigsberg_story_daily`
 
 ## Immediate Mitigation
 
@@ -100,10 +103,19 @@ Related docs: `docs/features/kenigsberg-stories/README.md`, `docs/operations/cro
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
-- regression checks: local targeted tests passed in hotfix worktree on 2026-06-12.
+- deployed SHA: `1fc20ec927548822e84b020be36ef7d584bcb34b`
+- deploy image: `events-bot-new-wngqia:deployment-01KTYS80MRX0JFK8SC1S0Q7GVH`
+- deploy path: `origin/main` -> Fly remote deploy
+- regression checks:
+  - `python -m py_compile remote_telegram_session.py handlers/kenigsberg_stories_cmd.py source_parsing/telegram/service.py guide_excursions/service.py guide_excursions/kaggle_service.py video_announce/story_publish.py video_announce/poller.py tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_kenigsberg_stories.py`
+  - `pytest -q tests/test_remote_telegram_session.py tests/test_video_announce_story_publish.py tests/test_video_announce_poller.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile` -> `27 passed`
 - post-deploy verification:
+  - Fly machine `48e42d5b714228`, version `1364`, checks `1 passing`
+  - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
+  - runtime env: `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`,
+    both `TELEGRAM_AUTH_BUNDLE_S22` and `TELEGRAM_AUTH_BUNDLE_STORY` present
+  - `/data/kaggle_jobs.json` was empty before deploy, so no stale active registry
+    job had to be cleared manually
 
 ## Prevention
 
