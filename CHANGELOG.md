@@ -25,6 +25,9 @@
   choice as the mechanism, avoiding meta phrasing like "which topic are we
   taking on tomorrow"; theme/type-event wording is allowed only when it stays
   attached to that evening recommendation promise.
+- **Changed: Poll to Repost production vote threshold**: production reposts now
+  have a documented threshold helper starting at 10 votes on 2026-06-12 and
+  growing by 1 every full week, with env overrides for the base and start date.
 - **Added: Poll to Repost debug rollout**: added the LLM-only debug scheduler
   for hourly daytime polls in `@keniggpt`, persisted `poll_repost_run` audit
   rows, and 30-minute resolver ticks that reply to the poll and forward the

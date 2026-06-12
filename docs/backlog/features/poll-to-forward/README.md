@@ -21,9 +21,11 @@ Production:
 
 - publish one poll per day in `@kenigevents`;
 - resolve it at the evening slot, for example `19:30 Europe/Kaliningrad`;
-- require at least `10` total poll answers before publishing a recommendation;
-- if the threshold is not met, reply to the poll that fewer than 10 votes were
-  collected and no repost is made;
+- require a production-only minimum answer threshold before publishing a
+  recommendation: `10` at rollout start, then `+1` every full week from
+  `2026-06-12`;
+- if the threshold is not met, reply to the poll that too few votes were
+  collected for today's threshold and no repost is made;
 - if there is a winner, reply to the poll with a short line naming the chosen
   topic, then forward the selected `@kldevents` post into `@kenigevents`.
 
@@ -92,6 +94,7 @@ example:
 - `Выбираем, что рекомендовать сегодня вечером на завтра. Что вам интереснее?`
 - `Сегодня вечером порекомендую, куда сходить завтра. Помогите выбрать тематику.`
 - `Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.`
+- `Проголосуйте, на какую тему порекомендовать событие на завтра вечером.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
@@ -126,7 +129,13 @@ The resolver stops the poll and stores a final result snapshot.
 
 Rules:
 
-- production requires at least `10` total answers;
+- production requires at least `production_min_vote_threshold(target_date)`
+  total answers before reposting. The default formula is:
+  `10 + floor((target_date - 2026-06-12).days / 7)`, with negative values
+  clamped to `10`; this grows the minimum by `1` every full week. Operators can
+  override the rollout anchor and base with
+  `POLL_TO_FORWARD_PROD_MIN_VOTES_START_DATE` and
+  `POLL_TO_FORWARD_PROD_MIN_VOTES_BASE`;
 - debug does not require a minimum vote threshold;
 - the highest vote count wins;
 - if there is a tie, LLM compares tied topics and their candidate events, then

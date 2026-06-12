@@ -128,6 +128,7 @@ async def _seed_many_events(db: Database) -> None:
 
 def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
+    assert "Проголосуйте, на какую тему порекомендовать событие на завтра вечером." in pf.DEFAULT_POLL_QUESTION_VARIANTS
     banned = (
         "план звучит",
         "звучит лучше",
@@ -161,6 +162,18 @@ def test_default_question_variants_frame_real_tomorrow_plan():
             )
         )
         assert any(marker in lowered for marker in ("рекоменд", "посовет", "подбер", "найду", "покажу"))
+
+
+def test_production_min_vote_threshold_grows_weekly(monkeypatch):
+    monkeypatch.delenv("POLL_TO_FORWARD_PROD_MIN_VOTES_BASE", raising=False)
+    monkeypatch.delenv("POLL_TO_FORWARD_PROD_MIN_VOTES_START_DATE", raising=False)
+
+    assert pf.production_min_vote_threshold(pf.PROD_MIN_VOTES_START_DATE) == 10
+    assert pf.production_min_vote_threshold(pf.PROD_MIN_VOTES_START_DATE.replace(day=18)) == 10
+    assert pf.production_min_vote_threshold(pf.PROD_MIN_VOTES_START_DATE.replace(day=19)) == 11
+    assert pf.production_min_vote_threshold(pf.PROD_MIN_VOTES_START_DATE.replace(day=26)) == 12
+    assert pf.min_vote_threshold_for_profile(pf.PROFILE_PROD, pf.PROD_MIN_VOTES_START_DATE.replace(day=26)) == 12
+    assert pf.min_vote_threshold_for_profile(pf.PROFILE_DEBUG, pf.PROD_MIN_VOTES_START_DATE.replace(day=26)) == 1
 
 
 @pytest.mark.asyncio

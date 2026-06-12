@@ -19,6 +19,7 @@ from runtime import require_main_attr
 
 logger = logging.getLogger(__name__)
 
+PROFILE_PROD = "prod"
 PROFILE_DEBUG = "debug"
 STATUS_OPEN = "open"
 STATUS_SKIPPED_LOW_INVENTORY = "skipped_low_inventory"
@@ -44,7 +45,10 @@ DEFAULT_POLL_QUESTION_VARIANTS = (
     "Сегодня вечером порекомендую, куда сходить завтра. Помогите выбрать тематику.",
     "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.",
     "Голосуйте за тип события, а сегодня вечером подберу, куда можно пойти завтра.",
+    "Проголосуйте, на какую тему порекомендовать событие на завтра вечером.",
 )
+PROD_MIN_VOTES_BASE = 10
+PROD_MIN_VOTES_START_DATE = date(2026, 6, 12)
 
 
 @dataclass(slots=True, frozen=True)
@@ -93,6 +97,32 @@ def _env_int(name: str, default: int) -> int:
 def _env_str(name: str, default: str) -> str:
     raw = (os.getenv(name) or "").strip()
     return raw or default
+
+
+def _env_date(name: str, default: date) -> date:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return date.fromisoformat(raw)
+    except Exception:
+        return default
+
+
+def production_min_vote_threshold(target_date: date | datetime | None = None) -> int:
+    value = target_date or _now_utc().astimezone(_local_tz()).date()
+    if isinstance(value, datetime):
+        value = value.astimezone(_local_tz()).date() if value.tzinfo else value.date()
+    start_date = _env_date("POLL_TO_FORWARD_PROD_MIN_VOTES_START_DATE", PROD_MIN_VOTES_START_DATE)
+    base = max(1, _env_int("POLL_TO_FORWARD_PROD_MIN_VOTES_BASE", PROD_MIN_VOTES_BASE))
+    weeks = max(0, (value - start_date).days // 7)
+    return base + weeks
+
+
+def min_vote_threshold_for_profile(profile_key: str, target_date: date | datetime | None = None) -> int:
+    if str(profile_key or "").strip().lower() == PROFILE_PROD:
+        return production_min_vote_threshold(target_date)
+    return 1
 
 
 def _poll_question_variants() -> tuple[str, ...]:
@@ -912,12 +942,21 @@ async def resolve_due_debug_polls(
             )
             snapshot = _poll_result_snapshot(poll, options)
             total_votes = int(snapshot.get("total_voter_count", 0) or 0)
-            if total_votes <= 0:
-                await _update_run(db, run_id, status=STATUS_SKIPPED_NO_VOTES, result=snapshot)
+            min_votes = min_vote_threshold_for_profile(PROFILE_DEBUG, now_value)
+            if total_votes < min_votes:
+                await _update_run(
+                    db,
+                    run_id,
+                    status=STATUS_SKIPPED_NO_VOTES,
+                    result=snapshot,
+                    error={"total_votes": total_votes, "min_votes": min_votes},
+                )
                 logger.info(
-                    "poll_to_forward.debug_resolve skipped no_votes run_id=%s run_key=%s",
+                    "poll_to_forward.debug_resolve skipped low_votes run_id=%s run_key=%s total_votes=%s min_votes=%s",
                     run_id,
                     run.get("run_key"),
+                    total_votes,
+                    min_votes,
                 )
                 resolved += 1
                 continue
