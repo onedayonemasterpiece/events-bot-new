@@ -80,11 +80,11 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ### Required evidence
 
-- deployed SHA: pending weekly-cadence redeploy
+- deployed SHA: `799d3786a03c885be840d907e1ae86af4afc0d3c`
 - deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - regression checks:
   - `python3 -m py_compile scheduling.py handlers/kenigsberg_stories_cmd.py tests/test_scheduling.py tests/test_kenigsberg_stories.py`
-  - `/tmp/events-bot-poll-venv2/bin/python -m pytest -q tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_retries_single_failed_session tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_after_two_failed_sessions tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_non_weekly_day tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile`
+  - `/tmp/events-bot-poll-venv2/bin/python -m pytest -q tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_retries_single_failed_session tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_after_two_failed_sessions tests/test_scheduling.py::test_kenigsberg_story_startup_catchup_skips_non_weekly_day tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_native_profile` -> printed `4 passed` before a known post-summary runner hang; the pytest process was stopped manually after the pass summary.
 - Kaggle/session evidence:
   - session `#661` Kaggle output: preflight passed for `@mostvkenig`, media diagnostics `video_codec=hevc`, `video_tag=hvc1`, Telegram publish failed with `BadRequestError: RPCError 400: MEDIA_FILE_INVALID`, VK story/wall targets succeeded.
   - post-deploy `/data/kaggle_jobs.json`: `{"jobs": []}`.
@@ -117,15 +117,16 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending weekly-cadence redeploy
-- deploy image: pending weekly-cadence redeploy
+- deployed SHA: `799d3786a03c885be840d907e1ae86af4afc0d3c`
+- deploy image: `events-bot-new-wngqia:deployment-01KTYWEBHF6FCGHFAC8450VFZ5`
 - deploy path: clean worktree at `origin/main`, then Fly remote deploy
 - regression checks:
   - py_compile for changed code/test modules passed
-  - targeted pytest suite passed
+  - targeted pytest suite printed `4 passed`; the pytest process was stopped manually after a post-summary runner hang.
 - post-deploy verification:
-  - Fly machine/check evidence pending weekly-cadence redeploy
+  - Fly machine `48e42d5b714228`, version `1367`, checks `1 passing`
   - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
+  - `/healthz`: `kenigsberg_story_daily_next_run=2026-06-19T17:30:00+00:00`, confirming the next scheduled run is Friday `19:30 Europe/Kaliningrad`
   - `/data/kaggle_jobs.json` empty
   - startup catch-up did not launch a new Kenigsberg Kaggle job; runtime log recorded the new failed-session retry cap.
 - compensation verification:
