@@ -3289,8 +3289,9 @@ def _render_vk_festival_carousel_card(
                     y += (bbox[3] - bbox[1]) + int(subtitle_fit.font_px * 0.18)
         footer_text = footer or ("листай" if variant == "hook" else "Ссылки — в тексте поста")
         footer_font = _load_carousel_font(44 if variant == "hook" else 34, bold=True)
-        draw.line((72, height - 164, width - 72, height - 164), fill=accent, width=5)
+        footer_rule_y = height - 164
         if variant in {"hook", "person"}:
+            draw.line((72, footer_rule_y, width - 72, footer_rule_y), fill=accent, width=5)
             label = footer_text or "листай"
             label_w = draw.textlength(label, font=footer_font)
             y0 = height - 120
@@ -3300,9 +3301,12 @@ def _render_vk_festival_carousel_card(
             draw.text((text_x, y0 - 24), label, fill=accent, font=footer_font)
             _draw_right_arrow(draw, arrow_start, right_x, y0, accent, width=14, head=28)
         else:
+            arrow_x = width // 2
+            arrow_gap = 150
+            draw.line((72, footer_rule_y, arrow_x - arrow_gap, footer_rule_y), fill=accent, width=5)
+            draw.line((arrow_x + arrow_gap, footer_rule_y, width - 72, footer_rule_y), fill=accent, width=5)
             if footer_text:
                 draw.text((72, height - 136), footer_text, fill=ink, font=footer_font)
-            arrow_x = width // 2
             arrow_top = height - 344
             _draw_down_arrow(draw, arrow_x, arrow_top, height - 132, accent, width=18, head=56)
         out = io.BytesIO()
@@ -3343,7 +3347,14 @@ def _render_vk_festival_carousel_card(
             draw.text((72, y), line, fill=ink, font=subtitle_font)
             y += 54
     footer_text = footer or ("Листайте афиши" if variant == "hook" else "Ссылки — в тексте поста")
-    draw.rectangle((72, height - 160, width - 72, height - 88), outline=accent, width=3)
+    footer_rule_y = height - 160
+    if variant == "cta":
+        arrow_x = width // 2
+        arrow_gap = 150
+        draw.line((72, footer_rule_y, arrow_x - arrow_gap, footer_rule_y), fill=accent, width=3)
+        draw.line((arrow_x + arrow_gap, footer_rule_y, width - 72, footer_rule_y), fill=accent, width=3)
+    else:
+        draw.rectangle((72, height - 160, width - 72, height - 88), outline=accent, width=3)
     draw.text((104, height - 142), footer_text, fill=ink, font=footer_font)
     out = io.BytesIO()
     image.save(out, format="JPEG", quality=94, optimize=True)

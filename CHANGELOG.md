@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **Fixed: VK festival carousel CTA arrow clearance**: final CTA cards now draw
+  the footer/rule line with a central gap around the down arrow, avoiding the
+  visible line/arrow intersection while keeping the large CTA cue. Covered by
+  `tests/test_promo.py`.
 - **Changed: VK festival carousel celebrity extraction**: celebrity/program-
   leader FIO cards are now discovered through an LLM stage by default, with the
   remaining carousel budget included in the prompt and enforced again in code

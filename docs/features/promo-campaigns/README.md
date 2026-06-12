@@ -311,12 +311,13 @@ system: Cygre fonts, editorial CTA palettes, text fitting, grain, and edge
 treatment. Hook cards use the compact `листай` right-arrow cue from the
 `hook_swipe_cta` pattern; poster cards keep the source poster first and do not
 add a full-width bottom rail by default. CTA cards use a large central
-down-arrow cue when links live in the post text. Palette selection must be
-stable but varied across activities so parallel carousel hooks do not all render
-in the same color scheme. The activity does **not** call `afishaengagement`
-publishing and must not layer an engagement CTA over these carousel cards;
-`afishaengagement` remains a separate surface for like/comment/repost motivators
-on event posts.
+down-arrow cue when links live in the post text; any CTA footer/rule line must
+leave a central gap around that arrow so the arrow never visually crosses the
+line. Palette selection must be stable but varied across activities so parallel
+carousel hooks do not all render in the same color scheme. The activity does
+**not** call `afishaengagement` publishing and must not layer an engagement CTA
+over these carousel cards; `afishaengagement` remains a separate surface for
+like/comment/repost motivators on event posts.
 
 `tg_event_publish` publishes a full promo event post into a configured Telegram
 event-flow channel, normally `@kldevents`. It is scheduled by the same

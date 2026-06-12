@@ -5,7 +5,7 @@ description: Use when designing, rendering, reviewing, or evolving generated VK 
 
 # VK Engagement Cards
 
-Contract version: `v5`
+Contract version: `v6`
 Last updated: `2026-06-12`
 
 Use this skill whenever a task changes generated VK cards: standalone hook
@@ -59,6 +59,8 @@ working solution for the same class of card.
   carousel in post text;
 - the down arrow must be large, central, and high-contrast, following
   `afishaengagement._render_hook_swipe_cta`, not a small corner icon;
+- footer/rule lines must leave a central gap around the down arrow, so the
+  arrow never crosses a horizontal line;
 - use visual hierarchy from afishaengagement CTA cards, but do not force
   like/comment/repost mechanics unless the product surface is engagement.
 
@@ -201,4 +203,9 @@ evidence changes, bump `Contract version` and add a short changelog section:
 - Celebrity/program-leader person discovery is LLM-first by default.
 - The LLM prompt receives the remaining person-card budget.
 - Rendering still hard-caps and deduplicates person cards after LLM output.
+
+## v6 Changes
+
+- CTA footer/rule lines must leave a central gap around the down arrow so final
+  action cards do not visually cross the arrow with a horizontal line.
 ```

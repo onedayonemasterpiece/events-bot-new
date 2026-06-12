@@ -768,6 +768,37 @@ def test_vk_festival_carousel_cta_card_has_large_down_arrow() -> None:
     assert accent_hits >= 12
 
 
+def test_vk_festival_carousel_cta_rule_leaves_arrow_gap() -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
+    rendered = _render_vk_festival_carousel_card(
+        "Выберите событие и записывайтесь",
+        subtitle="Ссылки на регистрацию — в тексте поста",
+        footer="Ссылки ниже",
+        variant="cta",
+        palette_id="butter_ink_cherry",
+        badge_label="ЗАПИСЬ",
+    )
+
+    with Image.open(BytesIO(rendered)).convert("RGB") as image:
+        y = image.height - 164
+        left_rule = image.getpixel((300, y))
+        right_rule = image.getpixel((780, y))
+        left_gap = image.getpixel((430, y))
+        right_gap = image.getpixel((650, y))
+
+    def is_cherry(pixel: tuple[int, int, int]) -> bool:
+        r, g, b = pixel
+        return r > 120 and g < 80 and b < 90
+
+    assert is_cherry(left_rule)
+    assert is_cherry(right_rule)
+    assert not is_cherry(left_gap)
+    assert not is_cherry(right_gap)
+
+
 @pytest.mark.asyncio
 async def test_vk_festival_carousel_celebrity_requires_image_evidence_config(tmp_path, monkeypatch) -> None:
     import main
