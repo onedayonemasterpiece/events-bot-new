@@ -718,6 +718,51 @@ def _critical_sched_watchdog_grace_seconds() -> int:
     return max(60, value)
 
 
+def _critical_sched_interval_seconds() -> int:
+    raw = (os.getenv("CRITICAL_SCHED_WATCHDOG_INTERVAL_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 60
+    except ValueError:
+        value = 60
+    return max(30, value)
+
+
+def _tg_monitoring_misfire_grace_seconds() -> int:
+    raw = (os.getenv("TG_MONITORING_MISFIRE_GRACE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 1800
+    except ValueError:
+        value = 1800
+    return max(30, value)
+
+
+def _tg_monitoring_catchup_lookback_seconds() -> int:
+    raw = (os.getenv("TG_MONITORING_CATCHUP_LOOKBACK_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 86400
+    except ValueError:
+        value = 86400
+    return max(3600, value)
+
+
+def _vk_auto_import_misfire_grace_seconds() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 1800
+    except ValueError:
+        value = 1800
+    return max(30, value)
+
+
+def _vk_auto_import_catchup_lookback_seconds() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_CATCHUP_LOOKBACK_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 86400
+    except ValueError:
+        value = 86400
+    return max(3600, value)
+
+
 def _guide_monitoring_remote_busy_retry_seconds() -> int:
     raw = (os.getenv("GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS") or "").strip()
     try:
@@ -861,6 +906,72 @@ async def _guide_full_dispatch_exists_today(
         if str(status or "").strip() in {"running", "success", "partial"}:
             return True
     return False
+
+
+async def _ops_run_delivery_exists(
+    db: Any,
+    *,
+    kind: str,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    triggers: set[str],
+) -> bool:
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, trigger
+            FROM ops_run
+            WHERE kind = ?
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            """,
+            (kind, _utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        rows = await cur.fetchall()
+    ok_statuses = {"running", "success", "partial", "empty"}
+    for status, trigger in rows:
+        if str(trigger or "").strip() not in triggers:
+            continue
+        if str(status or "").strip() in ok_statuses:
+            return True
+    return False
+
+
+def _last_local_slot(
+    *,
+    now_utc: datetime,
+    tz_name: str,
+    time_raw: str,
+    default_hour: int,
+    default_minute: int,
+    label: str,
+) -> tuple[datetime, datetime, datetime]:
+    tz = _safe_zoneinfo(tz_name, label=label.replace("_TIME_LOCAL", "_TZ"))
+    hour_local, minute_local = _parse_hhmm(
+        time_raw,
+        default_hour=default_hour,
+        default_minute=default_minute,
+        label=label,
+    )
+    now_local = now_utc.astimezone(tz)
+    scheduled_local = now_local.replace(
+        hour=hour_local,
+        minute=minute_local,
+        second=0,
+        microsecond=0,
+    )
+    if now_local < scheduled_local:
+        scheduled_local -= timedelta(days=1)
+    return now_local, scheduled_local, scheduled_local.astimezone(timezone.utc)
+
+
+def _slot_day_window_utc(scheduled_local: datetime) -> tuple[datetime, datetime]:
+    day_start_local = scheduled_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + timedelta(days=1)
+    return day_start_local.astimezone(timezone.utc), day_end_local.astimezone(timezone.utc)
 
 
 def _details_have_remote_telegram_busy(details: dict[str, Any]) -> bool:
@@ -1575,36 +1686,27 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
     return True
 
 
-async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
+async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
     enabled, tz_name, full_time_raw = _guide_monitoring_schedule_settings()
     if not enabled:
         return 0
-    guide_tz = _safe_zoneinfo(tz_name, label="GUIDE_EXCURSIONS_TZ")
-    hour_local, minute_local = _parse_hhmm(
-        full_time_raw,
+    now_utc = datetime.now(timezone.utc)
+    now_local, scheduled_local, scheduled_utc = _last_local_slot(
+        now_utc=now_utc,
+        tz_name=tz_name,
+        time_raw=full_time_raw,
         default_hour=20,
         default_minute=10,
         label="GUIDE_EXCURSIONS_FULL_TIME_LOCAL",
-    )
-    now_utc = datetime.now(timezone.utc)
-    now_local = now_utc.astimezone(guide_tz)
-    scheduled_local = now_local.replace(
-        hour=hour_local,
-        minute=minute_local,
-        second=0,
-        microsecond=0,
     )
     watchdog_delay_sec = max(
         _critical_sched_watchdog_grace_seconds(),
         _guide_monitoring_misfire_grace_seconds() + 120,
     )
-    if now_local <= scheduled_local + timedelta(seconds=watchdog_delay_sec):
+    if now_utc <= scheduled_utc + timedelta(seconds=watchdog_delay_sec):
         return 0
 
-    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end_local = day_start_local + timedelta(days=1)
-    day_start_utc = day_start_local.astimezone(timezone.utc)
-    day_end_utc = day_end_local.astimezone(timezone.utc)
+    day_start_utc, day_end_utc = _slot_day_window_utc(scheduled_local)
     if await _guide_full_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
@@ -1712,6 +1814,169 @@ async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
         return 1
     finally:
         _critical_catchup_inflight.discard(catchup_key)
+
+
+async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
+    is_prod = os.getenv("DEV_MODE") != "1" and os.getenv("PYTEST_CURRENT_TEST") is None
+    if not _env_enabled("ENABLE_TG_MONITORING", default=is_prod):
+        return 0
+    now_utc = datetime.now(timezone.utc)
+    now_local, scheduled_local, scheduled_utc = _last_local_slot(
+        now_utc=now_utc,
+        tz_name=os.getenv("TG_MONITORING_TZ", "Europe/Kaliningrad"),
+        time_raw=os.getenv("TG_MONITORING_TIME_LOCAL", "23:40").strip(),
+        default_hour=23,
+        default_minute=40,
+        label="TG_MONITORING_TIME_LOCAL",
+    )
+    watchdog_delay_sec = max(
+        _critical_sched_watchdog_grace_seconds(),
+        _tg_monitoring_misfire_grace_seconds() + 120,
+    )
+    if now_utc <= scheduled_utc + timedelta(seconds=watchdog_delay_sec):
+        return 0
+    if now_utc - scheduled_utc > timedelta(seconds=_tg_monitoring_catchup_lookback_seconds()):
+        return 0
+
+    window_start = scheduled_utc - timedelta(minutes=5)
+    if await _ops_run_delivery_exists(
+        db,
+        kind="tg_monitoring",
+        day_start_utc=window_start,
+        day_end_utc=now_utc + timedelta(seconds=1),
+        triggers={"scheduled", "recovery_import"},
+    ):
+        return 0
+
+    catchup_key = f"tg_monitoring:{scheduled_local.isoformat()}"
+    if catchup_key in _critical_catchup_completed:
+        return 0
+    if catchup_key in _critical_catchup_inflight:
+        return 0
+
+    from source_parsing.telegram.service import telegram_monitor_scheduler
+
+    _critical_catchup_inflight.add(catchup_key)
+    try:
+        catchup_run_id = f"catchup-tg-monitoring-{uuid4().hex}"
+        logging.error(
+            "SCHED critical watchdog dispatching missing tg_monitoring slot "
+            "scheduled_local=%s now_local=%s run_id=%s",
+            scheduled_local.isoformat(),
+            now_local.isoformat(),
+            catchup_run_id,
+        )
+        async with heavy_operation(
+            kind="tg_monitoring",
+            trigger="scheduled",
+            mode="wait",
+            run_id=catchup_run_id,
+            operator_id=0,
+        ):
+            await telegram_monitor_scheduler(db, bot, run_id=catchup_run_id)
+        if await _ops_run_delivery_exists(
+            db,
+            kind="tg_monitoring",
+            day_start_utc=window_start,
+            day_end_utc=datetime.now(timezone.utc) + timedelta(seconds=1),
+            triggers={"scheduled", "recovery_import"},
+        ):
+            _critical_catchup_completed.add(catchup_key)
+        return 1
+    finally:
+        _critical_catchup_inflight.discard(catchup_key)
+
+
+def _last_vk_auto_import_slot(now_utc: datetime) -> tuple[datetime, datetime, datetime] | None:
+    times_raw = os.getenv(
+        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,18:30"
+    ).strip()
+    tz_name = os.getenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad").strip()
+    candidates: list[tuple[datetime, datetime, datetime]] = []
+    for raw in times_raw.split(","):
+        time_raw = raw.strip()
+        if not time_raw:
+            continue
+        candidates.append(
+            _last_local_slot(
+                now_utc=now_utc,
+                tz_name=tz_name,
+                time_raw=time_raw,
+                default_hour=6,
+                default_minute=30,
+                label="VK_AUTO_IMPORT_TIMES_LOCAL",
+            )
+        )
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[2])
+
+
+async def _maybe_dispatch_vk_auto_import_watchdog(db: Any, bot: Any) -> int:
+    if not _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False):
+        return 0
+    now_utc = datetime.now(timezone.utc)
+    slot = _last_vk_auto_import_slot(now_utc)
+    if slot is None:
+        return 0
+    now_local, scheduled_local, scheduled_utc = slot
+    watchdog_delay_sec = max(
+        _critical_sched_watchdog_grace_seconds(),
+        _vk_auto_import_misfire_grace_seconds() + 120,
+    )
+    if now_utc <= scheduled_utc + timedelta(seconds=watchdog_delay_sec):
+        return 0
+    if now_utc - scheduled_utc > timedelta(seconds=_vk_auto_import_catchup_lookback_seconds()):
+        return 0
+
+    window_start = scheduled_utc - timedelta(minutes=5)
+    if await _ops_run_delivery_exists(
+        db,
+        kind="vk_auto_import",
+        day_start_utc=window_start,
+        day_end_utc=now_utc + timedelta(seconds=1),
+        triggers={"scheduled"},
+    ):
+        return 0
+
+    catchup_key = f"vk_auto_import:{scheduled_local.isoformat()}"
+    if catchup_key in _critical_catchup_completed:
+        return 0
+    if catchup_key in _critical_catchup_inflight:
+        return 0
+
+    from vk_auto_queue import vk_auto_import_scheduler
+
+    _critical_catchup_inflight.add(catchup_key)
+    try:
+        catchup_run_id = f"catchup-vk-auto-import-{uuid4().hex}"
+        logging.error(
+            "SCHED critical watchdog dispatching missing vk_auto_import slot "
+            "scheduled_local=%s now_local=%s run_id=%s",
+            scheduled_local.isoformat(),
+            now_local.isoformat(),
+            catchup_run_id,
+        )
+        await vk_auto_import_scheduler(db, bot, run_id=catchup_run_id)
+        if await _ops_run_delivery_exists(
+            db,
+            kind="vk_auto_import",
+            day_start_utc=window_start,
+            day_end_utc=datetime.now(timezone.utc) + timedelta(seconds=1),
+            triggers={"scheduled"},
+        ):
+            _critical_catchup_completed.add(catchup_key)
+        return 1
+    finally:
+        _critical_catchup_inflight.discard(catchup_key)
+
+
+async def maybe_dispatch_critical_scheduler_watchdog(db: Any, bot: Any) -> int:
+    dispatched = 0
+    dispatched += await _maybe_dispatch_tg_monitoring_watchdog(db, bot)
+    dispatched += await _maybe_dispatch_guide_critical_watchdog(db, bot)
+    dispatched += await _maybe_dispatch_vk_auto_import_watchdog(db, bot)
+    return dispatched
 
 
 # Partner-track scheduling: defaults are intentionally hard-coded — the user
@@ -1887,9 +2152,18 @@ def runtime_health_status() -> dict[str, Any]:
     popular_review_enabled, _, _ = _popular_review_schedule_settings()
     guide_enabled, _, _ = _guide_monitoring_schedule_settings()
     promo_vk_enabled = _env_enabled("ENABLE_PROMO_VK_SCHEDULER", default=True)
+    is_prod = os.getenv("DEV_MODE") != "1" and os.getenv("PYTEST_CURRENT_TEST") is None
+    tg_monitoring_enabled = _env_enabled("ENABLE_TG_MONITORING", default=is_prod)
+    vk_auto_import_enabled = _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False)
+    critical_watchdog_enabled = (
+        tg_monitoring_enabled or guide_enabled or vk_auto_import_enabled
+    )
     scheduler = _scheduler
     payload: dict[str, Any] = {
         "scheduler": "missing" if scheduler is None else "unknown",
+        "critical_scheduler_watchdog": "disabled",
+        "tg_monitoring": "disabled",
+        "vk_auto_import": "disabled",
         "video_tomorrow": "disabled",
         "video_popular_review": "disabled",
         "video_popular_review_watchdog": "disabled",
@@ -1906,6 +2180,12 @@ def runtime_health_status() -> dict[str, Any]:
             payload["video_popular_review_watchdog"] = "missing_scheduler"
         if promo_vk_enabled:
             payload["promo_vk"] = "missing_scheduler"
+        if critical_watchdog_enabled:
+            payload["critical_scheduler_watchdog"] = "missing_scheduler"
+        if tg_monitoring_enabled:
+            payload["tg_monitoring"] = "missing_scheduler"
+        if vk_auto_import_enabled:
+            payload["vk_auto_import"] = "missing_scheduler"
         if guide_enabled:
             payload["guide_excursions_light"] = "missing_scheduler"
             payload["guide_excursions_full"] = "missing_scheduler"
@@ -1936,6 +2216,42 @@ def runtime_health_status() -> dict[str, Any]:
 
     if promo_vk_enabled:
         _set_job_health("promo_vk", "promo_vk")
+
+    if critical_watchdog_enabled:
+        _set_job_health("critical_scheduler_watchdog", "critical_scheduler_watchdog")
+
+    if tg_monitoring_enabled:
+        _set_job_health("tg_monitoring", "tg_monitoring")
+
+    if vk_auto_import_enabled:
+        try:
+            jobs = list(scheduler.get_jobs()) if hasattr(scheduler, "get_jobs") else []
+        except Exception:
+            jobs = []
+            payload["vk_auto_import"] = "lookup_error"
+        if jobs or payload.get("vk_auto_import") != "lookup_error":
+            vk_jobs = [
+                job for job in jobs if str(getattr(job, "id", "")).startswith("vk_auto_import_")
+            ]
+            if not vk_jobs:
+                idx = 0
+                while True:
+                    try:
+                        job = scheduler.get_job(f"vk_auto_import_{idx}")
+                    except Exception:
+                        job = None
+                    if job is None:
+                        break
+                    vk_jobs.append(job)
+                    idx += 1
+            vk_next = [_job_next_run(job) for job in vk_jobs]
+            vk_next = [value for value in vk_next if value is not None]
+            payload["vk_auto_import"] = "ok" if vk_next else "missing"
+            if vk_next:
+                first_next = min(vk_next)
+                payload["vk_auto_import_next_run"] = (
+                    first_next.isoformat() if hasattr(first_next, "isoformat") else str(first_next)
+                )
 
     if guide_enabled:
         try:
@@ -2964,7 +3280,7 @@ def startup(
             replace_existing=True,
             max_instances=1,
             coalesce=True,
-            misfire_grace_time=30,
+            misfire_grace_time=_tg_monitoring_misfire_grace_seconds(),
         )
     else:
         logging.info("SCHED skipping tg_monitoring (ENABLE_TG_MONITORING!=1)")
@@ -3000,11 +3316,43 @@ def startup(
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
-                misfire_grace_time=30,
+                misfire_grace_time=_vk_auto_import_misfire_grace_seconds(),
             )
     else:
         logging.info("SCHED skipping vk_auto_import (ENABLE_VK_AUTO_IMPORT!=1)")
         _notify_admin_skip("vk_auto_import", "ENABLE_VK_AUTO_IMPORT!=1")
+
+    if (
+        enable_tg_monitoring
+        or enable_vk_auto_import
+        or _guide_monitoring_schedule_settings()[0]
+    ):
+        async def critical_scheduler_watchdog_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await maybe_dispatch_critical_scheduler_watchdog(db_obj, bot_obj)
+
+        _register_job(
+            "critical_scheduler_watchdog",
+            _job_wrapper(
+                "critical_scheduler_watchdog",
+                critical_scheduler_watchdog_scheduler,
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="critical_scheduler_watchdog",
+            seconds=_critical_sched_interval_seconds(),
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+        )
+    else:
+        logging.info("SCHED skipping critical_scheduler_watchdog (no critical jobs enabled)")
 
     # Auto-delete past-event VK posts in the klgdevents community. Runs twice a
     # day at quiet local times and shares the heavy-ops gate, so it never

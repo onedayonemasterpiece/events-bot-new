@@ -383,6 +383,17 @@ class _FixedCriticalSchedulerDatetime(datetime):
         return value.replace(tzinfo=None)
 
 
+class _FixedCriticalAfterMidnightDatetime(datetime):
+    fixed_now = datetime(2026, 6, 12, 22, 20, tzinfo=timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        value = cls.fixed_now
+        if tz is not None:
+            return value.astimezone(tz)
+        return value.replace(tzinfo=None)
+
+
 def _configure_guide_critical_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_GUIDE_EXCURSIONS_SCHEDULED", "1")
     monkeypatch.setenv("GUIDE_EXCURSIONS_TZ", "Europe/Kaliningrad")
@@ -469,6 +480,46 @@ def test_runtime_health_status_reports_cherryflash_and_promo_jobs(monkeypatch):
     assert "video_popular_review_next_run" in payload
     assert "video_popular_review_watchdog_next_run" in payload
     assert "promo_vk_next_run" in payload
+
+
+def test_runtime_health_status_reports_critical_monitoring_jobs(monkeypatch):
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.delenv("ENABLE_V_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.delenv("ENABLE_V_TEST_TOMORROW_SCHEDULED", raising=False)
+    monkeypatch.setenv("DEV_MODE", "1")
+
+    class Job:
+        def __init__(self, job_id: str) -> None:
+            self.id = job_id
+            self.next_run_time = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+
+    class Scheduler:
+        running = True
+
+        def __init__(self) -> None:
+            self.jobs = {
+                "critical_scheduler_watchdog": Job("critical_scheduler_watchdog"),
+                "tg_monitoring": Job("tg_monitoring"),
+                "vk_auto_import_0": Job("vk_auto_import_0"),
+            }
+
+        def get_job(self, job_id: str):
+            return self.jobs.get(job_id)
+
+        def get_jobs(self):
+            return list(self.jobs.values())
+
+    monkeypatch.setattr(scheduling, "_scheduler", Scheduler())
+
+    payload = scheduling.runtime_health_status()
+
+    assert payload["critical_scheduler_watchdog"] == "ok"
+    assert payload["tg_monitoring"] == "ok"
+    assert payload["vk_auto_import"] == "ok"
+    assert "critical_scheduler_watchdog_next_run" in payload
+    assert "tg_monitoring_next_run" in payload
+    assert "vk_auto_import_next_run" in payload
 
 
 @pytest.mark.asyncio
@@ -999,6 +1050,162 @@ async def test_critical_scheduler_watchdog_dispatches_guide_full_after_light_run
         {"kind": "guide_monitoring", "guard": "wait"},
         {"mode": "full"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    crashed_run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 21, 40, tzinfo=timezone.utc),
+        details={"run_id": "deploy-killed"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=crashed_run_id,
+        status="crashed",
+        finished_at=datetime(2026, 6, 12, 21, 41, tzinfo=timezone.utc),
+        details={"run_id": "deploy-killed"},
+    )
+
+    calls: list[str] = []
+
+    async def fake_telegram_monitor_scheduler(_db, _bot, *, run_id=None):
+        calls.append(run_id or "")
+        recovery_id = await start_ops_run(
+            db,
+            kind="tg_monitoring",
+            trigger="scheduled",
+            operator_id=0,
+            started_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={"run_id": run_id},
+        )
+        await finish_ops_run(
+            db,
+            run_id=recovery_id,
+            status="success",
+            finished_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={"run_id": run_id},
+        )
+
+    @asynccontextmanager
+    async def fake_heavy_operation(**kwargs):
+        calls.append(f"{kwargs['kind']}:{kwargs['mode']}")
+        yield
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_telegram_monitor_scheduler),
+    )
+    monkeypatch.setattr(scheduling, "heavy_operation", fake_heavy_operation)
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 1
+    assert calls[0] == "tg_monitoring:wait"
+    assert calls[1].startswith("catchup-")
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_dispatches_vk_auto_import_after_slot_crash(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TIMES_LOCAL", "10:15,23:40")
+    monkeypatch.setenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    morning_run_id = await start_ops_run(
+        db,
+        kind="vk_auto_import",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 8, 15, tzinfo=timezone.utc),
+        details={"run_id": "morning-ok"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=morning_run_id,
+        status="success",
+        finished_at=datetime(2026, 6, 12, 8, 45, tzinfo=timezone.utc),
+        details={"run_id": "morning-ok"},
+    )
+    crashed_run_id = await start_ops_run(
+        db,
+        kind="vk_auto_import",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 21, 40, tzinfo=timezone.utc),
+        details={"run_id": "evening-crashed"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=crashed_run_id,
+        status="crashed",
+        finished_at=datetime(2026, 6, 12, 21, 41, tzinfo=timezone.utc),
+        details={"run_id": "evening-crashed"},
+    )
+
+    calls: list[str] = []
+
+    async def fake_vk_auto_import_scheduler(_db, _bot, *, run_id=None):
+        calls.append(run_id or "")
+        recovery_id = await start_ops_run(
+            db,
+            kind="vk_auto_import",
+            trigger="scheduled",
+            operator_id=0,
+            started_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={"run_id": run_id},
+        )
+        await finish_ops_run(
+            db,
+            run_id=recovery_id,
+            status="success",
+            finished_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={"run_id": run_id},
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "vk_auto_queue",
+        SimpleNamespace(vk_auto_import_scheduler=fake_vk_auto_import_scheduler),
+    )
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 1
+    assert calls[0].startswith("catchup-")
 
 
 @pytest.mark.asyncio

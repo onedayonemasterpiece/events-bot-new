@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: critical scheduler watchdog for Telegram Monitoring and VK auto-import**:
+  the `critical_scheduler_watchdog` interval job is now actually registered
+  whenever `tg_monitoring`, guide full monitoring, or `vk_auto_import` is
+  enabled, and `/healthz` reports those scheduler jobs explicitly. The watchdog
+  now catches up the last local scheduled slot, including after local midnight,
+  so a deploy-killed 23:40 Telegram Monitoring run marked `crashed` is replayed
+  instead of waiting until the next day. Tracks
+  `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog` and is covered by
+  `tests/test_scheduling.py`.
 - **Changed: Kenigsberg story cadence and catch-up retry cap**:
   `/kenigsberg` production stories keep the existing compact
   `telegram_story_native_hevc_720p_v1` upload profile, but the scheduled slot is

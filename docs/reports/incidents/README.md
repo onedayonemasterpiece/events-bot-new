@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog.md`
+  - Scope: Telegram Monitoring scheduled Kaggle handoff, critical scheduler
+    watchdog registration, `ops_run` delivery evidence, `/healthz` scheduler
+    health, and VK auto-import critical-slot recovery.
+  - Must not regress: deploy/restart during the 23:40 Telegram Monitoring slot
+    must not lose the day; `critical_scheduler_watchdog` must be registered and
+    health-visible whenever `tg_monitoring`, guide full monitoring, or
+    `vk_auto_import` is enabled; watchdog catch-up must inspect the last local
+    scheduled slot even after local midnight, and per-slot VK auto-import
+    recovery must not be masked by an earlier same-day success.
 - `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop.md`
   - Scope: Kenigsberg `/kenigsberg` Kaggle story media profile, startup
     catch-up retry behavior, and Telegram/VK fanout terminal status handling.

@@ -259,7 +259,8 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 - `error` — results не были получены/разобраны или run был прерван до завершения import.
 - Важно: `empty` выставляется **только** когда бот реально прочитал `telegram_results.json`. Пустой in-memory `TelegramMonitorReport` после рестарта/отмены больше не считается `success`.
 - Scheduled entrypoint теперь создаёт bootstrap `ops_run` ещё до резолва superadmin и до входа в `run_telegram_monitor()`. Если bootstrap-слой падает раньше основного runner'а, запись закрывается как `error` с `scheduler_entrypoint/fatal_error` в `details_json`; если run стартовал нормально, он переиспользует ту же запись вместо создания второй строки.
-- Если APScheduler задержал или потерял слот до входа в `telegram_monitor_scheduler()` (`JOB_SUBMITTED`/`JOB_MISSED` без строки `ops_run`), общий critical-run watchdog после grace-окна сверяет последний плановый слот с `ops_run` и запускает тот же scheduled entrypoint как catch-up. Catch-up использует `run_id` с префиксом `startup_catchup_tg_monitoring_...` или `watchdog_tg_monitoring_...`, поэтому такие восстановления видны в обычных логах `tg_monitoring`.
+- Если APScheduler задержал, потерял или deploy/restart оборвал слот до регистрации Kaggle kernel, общий `critical_scheduler_watchdog` после grace-окна сверяет последний локальный плановый слот с `ops_run`. `running/success/partial/empty` считаются доставкой, а `crashed/error/skipped` — нет; поэтому deploy-killed run, вроде `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog`, будет запущен заново как scheduled catch-up.
+- Watchdog вычисляет именно последний локальный слот `TG_MONITORING_TIME_LOCAL`, включая предыдущий день после полуночи, и запускает `telegram_monitor_scheduler()` с `run_id` вида `catchup-tg-monitoring-...`. Такой catch-up проходит через тот же remote Telegram session guard и `heavy_operation`, что и обычный scheduled run.
 
 ## Надёжность импорта (SQLite lock)
 
