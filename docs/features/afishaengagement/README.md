@@ -128,11 +128,12 @@ invalid copy, guardrails fall back to a generic safe CTA instead of publishing
 an awkward template.
 CTA text must stay native to VK engagement: it may ask the viewer to comment,
 like, share, or repost, but must not directly push attendance, registration,
-ticket purchase, booking, saving to plans, or "where to go" decisions. This
-guardrail applies both to deterministic templates and to configured activity
-templates. Repost copy should keep natural variants for both `друг` and
-`подруга` where the wording names a friend directly, so batches do not repeat a
-single gendered formula.
+ticket purchase, booking, saving to plans, "where to go" decisions, or
+joining/participating in the event itself (`присоединяйся к празднику`).
+This guardrail applies both to deterministic templates and to configured
+activity templates. Repost copy should keep natural variants for both `друг`
+and `подруга` where the wording names a friend directly, so batches do not
+repeat a single gendered formula.
 LLM CTA output is also post-filtered for unsupported concrete references: for
 example, an LLM suggestion about a zoo is rejected when the event text does not
 actually mention a zoo, zoologists, animals, veterinary care, enclosures, or a

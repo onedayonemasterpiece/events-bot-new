@@ -219,6 +219,7 @@ def test_exhibition_rejects_family_fairy_copy():
     )
     assert aeg._cta_text_has_forbidden_copy("Лайк, если ждёте фестиваль.", "festival")
     assert aeg._cta_text_has_forbidden_copy("Напишите, кто ждёт фестиваль.", "festival")
+    assert aeg._cta_text_has_forbidden_copy("Присоединяйся к празднику в Баре Советов.", "holiday")
 
 
 def test_party_event_uses_party_tone_not_concert_copy():
@@ -679,6 +680,42 @@ async def test_llm_cta_text_rejects_forbidden_copy(monkeypatch):
 
     async def fake_ask_4o(*args, **kwargs):
         return '{"cta_text":"Какой спектакль ждёте больше всего?","hook_text":""}'
+
+    monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
+
+    rewritten, _elapsed, provider = await aeg.build_llm_cta_text(
+        event,
+        plan=plan,
+        config={"llm_text_mode": "always"},
+        vision=None,
+    )
+
+    assert provider == "fallback_text_invalid"
+    assert rewritten.cta_text == plan.cta_text
+
+
+@pytest.mark.asyncio
+async def test_llm_cta_text_rejects_join_the_event_copy(monkeypatch):
+    event = Event(
+        title="Вечеринка в Баре Советов",
+        event_type="вечеринка",
+        location_name="Бар Советов",
+        description="Праздничная программа в баре.",
+    )
+    plan = aeg.EngagementPlan(
+        mechanic="comments",
+        template_id="right_extension",
+        palette_id="black_lime",
+        cta_text="Какой трек делает праздник вашим? Напишите.",
+        hook_text=None,
+        event_type="party",
+        has_persona=False,
+        has_festival=False,
+        seed="llm-text-reject-join",
+    )
+
+    async def fake_ask_4o(*args, **kwargs):
+        return '{"cta_text":"Присоединяйся к празднику в Баре Советов.","hook_text":""}'
 
     monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
 

@@ -99,6 +99,10 @@
   from deterministic, configured, and LLM-generated templates. Repost copy now
   includes `друг` / `подруга` variants, and diagonal CTA shadows follow the
   actual seam normal. Covered by `tests/test_afishaengagement.py`.
+- **Fixed: Afisha Engagement join-event CTA leak**: LLM/configured CTA copy
+  such as `Присоединяйся к празднику в Баре Советов` is now treated as a
+  non-social attendance prompt and falls back to the safe VK comment/like/repost
+  CTA path. Covered by `tests/test_afishaengagement.py`.
 - **Fixed: Afisha Engagement fresh shadow audit regressions**: tightened CTA
   event-type guardrails from a 31-post VK shadow audit so theatre backstage
   excursions no longer get zoo copy, День России programs do not get festival
