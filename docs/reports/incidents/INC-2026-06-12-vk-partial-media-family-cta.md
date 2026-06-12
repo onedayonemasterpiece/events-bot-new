@@ -1,10 +1,10 @@
 # INC-2026-06-12-vk-partial-media-family-cta VK Partial Media And Family CTA
 
-Status: open
+Status: closed
 Severity: sev2
 Service: VK event publishing / Afisha Engagement
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: events-bot
 Related incidents: `INC-2026-06-07-tg-event-publishing-media-calendar-dedup`, `INC-2026-06-02-vk-captcha-text-only-posts`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/features/afishaengagement/README.md`, `docs/operations/runtime-logs.md`
@@ -76,7 +76,9 @@ Event `5951` (`Путешествие в сказку в деревне Холм
 ## Immediate Mitigation
 
 - Code fix blocks new partial-media VK posts and retries transient upload-server failures.
-- Existing event `5951` requires post-deploy compensation.
+- Existing event `5951` was compensated after deploy: the managed VK event post
+  was edited to four photo attachments, and stale shadow copies with old CTA
+  text were deleted/replaced.
 
 ## Corrective Actions
 
@@ -87,15 +89,36 @@ Event `5951` (`Путешествие в сказку в деревне Холм
 
 ## Follow-up Actions
 
-- [ ] Repair event `5951` managed VK post media after deploy.
-- [ ] Remove or replace the stale event `5951` afishaengagement shadow copy after deploy.
+- [x] Repair event `5951` managed VK post media after deploy.
+- [x] Remove or replace the stale event `5951` afishaengagement shadow copy after deploy.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `5cf38b7f` reachable from `origin/main`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`, image
+  `events-bot-new-wngqia:deployment-01KTYB3VY0CHMXXW8JMMXV4RW7`, machine
+  version `1345`
 - regression checks:
+  - `tests/test_afishaengagement.py::test_family_market_uses_soft_mom_friend_repost_copy`
+  - `tests/test_afishaengagement.py::test_market_event_type_is_not_overridden_by_meeting_words`
+  - `tests/test_afishaengagement.py::test_recycling_collection_overrides_misstored_market_type`
+  - `tests/test_vk_source.py::test_upload_vk_photo_retries_upload_server_request`
+  - `tests/test_vk_source.py::test_sync_vk_source_post_blocks_new_post_on_partial_media_upload`
+  - broader affected-file run reported `124 passed` before the pytest process
+    hung during teardown and was terminated.
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, no issues.
+  - VK event post resolved from stale postponed URL to
+    `https://vk.com/wall-231920894_3101`; VK API reported
+    `attachments_count=4`, `photo_count=4`.
+  - Old shadow `https://vk.com/wall-231920894_3097` was deleted and exposure
+    `251` changed to `VK_SCHEDULED_DEBUG_DELETED`.
+  - Intermediate family shadow `https://vk.com/wall-231920894_3104` was deleted
+    after the parent-aware follow-up and exposure `256` changed to
+    `VK_SCHEDULED_DEBUG_DELETED`.
+  - Replacement shadow `https://vk.com/wall-231920894_3105` was scheduled with
+    exposure `257`, `event_type=family`, and CTA
+    `Поделись с родителями, чьи дети любят сказочных героев.`
 
 ## Prevention
 
