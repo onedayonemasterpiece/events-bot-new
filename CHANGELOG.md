@@ -88,7 +88,8 @@
   flow explicit: subscribers choose tomorrow's theme/type and the channel picks
   one concrete announcement inside it in the evening. Adjacent debug hourly
   slots no longer repeat the same default question text, and the repost intro
-  uses a more conversational thank-you/recommendation/feedback flow.
+  uses a more conversational thank-you/recommendation/feedback flow. Repost
+  reasons now also reject/soften marketing leads such as "отличный вариант".
 - **Changed: Poll to Repost production vote threshold**: production reposts now
   have a documented threshold helper starting at 10 votes on 2026-06-12 and
   growing by 1 every full week, with env overrides for the base and start date.

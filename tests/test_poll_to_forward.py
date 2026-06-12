@@ -52,6 +52,21 @@ def test_repost_intro_compacts_long_reason():
     assert text.count("\n\n") == 3
 
 
+def test_repost_intro_softens_marketing_reason_lead():
+    text = pf._repost_intro_text(
+        "Вкусно провести время",
+        "Отличный вариант для тех, кто проголосовал за гастро-отдых — на ферме как раз праздник",
+        event_title="Фермерский праздник",
+        telegraph_url="https://telegra.ph/farm",
+    )
+
+    assert "Отличный вариант" not in text
+    assert (
+        'Из этой темы я бы предложил <a href="https://telegra.ph/farm">Фермерский праздник</a> — '
+        "Для тех, кто проголосовал за гастро-отдых, на ферме как раз праздник."
+    ) in text
+
+
 class DummyPollBot:
     def __init__(self):
         self.sent_polls = []

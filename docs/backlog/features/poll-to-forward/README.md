@@ -167,7 +167,10 @@ popularity or public interest only when such signals are grounded in passed
 metrics or event text. If an exhibition starts on the target date, natural
 wording such as "как раз открывается выставка" is preferred over generic
 "сходить на выставку". Keep the LLM reason compact, ideally under 90
-characters, and do not repeat the event title in the reason.
+characters, and do not repeat the event title in the reason. Avoid marketing
+reason leads such as "отличный вариант" or "интересный вариант"; prefer
+concrete human phrasing like "для тех, кто голосовал за гастро-отдых, на ферме
+как раз праздник".
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical

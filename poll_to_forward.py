@@ -233,12 +233,34 @@ def _repost_intro_text(
 def _compact_repost_reason(reason: str | None, limit: int = 100) -> str:
     text = re.sub(r"\s+", " ", str(reason or "").strip()).rstrip(".")
     text = re.sub(r"\s+[—–-]\s+", ", ", text)
+    text = _soften_repost_reason_lead(text)
     if len(text) <= limit:
         return text
     cutoff = text.rfind(" ", 0, max(1, limit - 1))
     if cutoff < int(limit * 0.65):
         cutoff = max(1, limit - 1)
     return text[:cutoff].rstrip(" ,;:—–-") + "..."
+
+
+def _soften_repost_reason_lead(text: str) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return ""
+    value = re.sub(
+        r"^(?:отличный|интересный|хороший)\s+вариант\s+для\s+тех,\s+кто\s+",
+        "Для тех, кто ",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(
+        r"^(?:отличный|интересный|хороший)\s+вариант:\s*",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if value.startswith("для тех, кто "):
+        value = "Для тех, кто " + value[len("для тех, кто ") :]
+    return value
 
 
 def _local_tz() -> ZoneInfo:
@@ -853,7 +875,8 @@ async def _choose_winner_with_llm(
         "Не используй слова и смыслы: алгоритм, репост, форвард, подборка, разбор, рекомендательная модель, контент. "
         "Не обещай, что это «лучшее событие» или «идеальный выбор»; формулируй мягко: "
         "«хорошо попадает», «подходит», «ложится в выбранную тему». Не используй рекламные клише и оценки вроде "
-        "«отличный повод», «уникальные вещи», «лучший», «с пользой», «драйв». "
+        "«отличный повод», «отличный вариант», «интересный вариант», «хороший вариант», "
+        "«уникальные вещи», «лучший», «с пользой», «драйв». "
         "Верни JSON строго такого вида: "
         "{\"winner_key\":\"...\",\"event_id\":123,\"reason\":\"коротко почему\"}.\n\n"
         f"Целевая дата события: {target_date.isoformat() if target_date else ''}\n\n"
