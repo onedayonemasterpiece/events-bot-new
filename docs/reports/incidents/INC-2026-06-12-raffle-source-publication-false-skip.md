@@ -1,10 +1,10 @@
 # INC-2026-06-12 raffle-source publication false skip
 
-Status: open
+Status: closed
 Severity: sev2
 Service: VK auto-import / Smart Update / Telegram+VK event publication
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: events-bot
 Related incidents: `INC-2026-06-07-tg-event-publishing-media-calendar-dedup`, `INC-2026-06-10-event-outbox-fanout-deadlock`, `INC-2026-05-05-event-quality-regression`
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/vk-publishing/README.md`, `docs/operations/runtime-logs.md`
@@ -49,6 +49,13 @@ could reach Telegram/VK publication.
   giveaway fallback.
 - 2026-06-12 15:19 UTC — Telegraph, ICS, and calendar Telegram post completed.
 - 2026-06-12 — operator reported missing VK/TG/shadow result.
+- 2026-06-12 16:10 UTC — after the guard fix, incident catch-up reimported the
+  source as an update to event `5951` and enqueued `vk_sync` plus
+  `tg_event_publish`.
+- 2026-06-12 16:11 UTC — managed VK post
+  `https://vk.com/wall-231920894_3096`, afishaengagement shadow post
+  `https://vk.com/wall-231920894_3097`, and Telegram event post
+  `https://t.me/c/3954607218/400` were created.
 
 ## Root Cause
 
@@ -110,8 +117,10 @@ could reach Telegram/VK publication.
 
 ## Immediate Mitigation
 
-- Pending: deploy guard fix, then reset the specific VK inbox row
-  `group_id=146688375, post_id=7432` from imported back to pending and rerun it.
+- Completed: deployed the guard fix, reset the specific VK inbox row
+  `group_id=146688375, post_id=7432`, reran the import, and restored final
+  import bookkeeping to `status=imported`, `imported_event_id=5951`, with
+  `vk_inbox_import_event(8588, 5951)`.
 
 ## Corrective Actions
 
@@ -128,8 +137,15 @@ could reach Telegram/VK publication.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- fix SHA: `37e39ff3d13eb96c5c6d8f7c3dad559562b73ad5`
+  (`Fix raffle-source event publication skips`), reachable from current
+  `origin/main` `e8771cbe970e935b74cf7cffb6537f6c61d0f2b5`.
+- deploy path: hotfix branch
+  `hotfix/raffle-guard-publish-cleaned-events` was pushed, then
+  `37e39ff3` was pushed to `origin/main` and deployed to Fly. Fly releases
+  showed `v1339` complete for the fix deployment; a later parallel `v1340`
+  release is current with machine `48e42d5b714228` started and `1/1` checks
+  passing.
 - regression checks:
   - `PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp /tmp/codex-venvs/events-bot-aeg/bin/python -m pytest -q -p no:cacheprovider tests/test_tg_event_publish.py::test_schedule_event_update_tasks_skips_ticket_giveaway_when_alternative_exists tests/test_tg_event_publish.py::test_schedule_event_update_tasks_publishes_cleaned_event_with_giveaway_source tests/test_tg_event_publish.py::test_schedule_event_update_tasks_allows_ticket_giveaway_without_alternative` -> `3 passed in 1.13s`
   - `PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp /tmp/codex-venvs/events-bot-aeg/bin/python -m pytest -q -p no:cacheprovider tests/test_tg_event_publish.py` -> `40 passed in 7.00s`
@@ -137,6 +153,30 @@ could reach Telegram/VK publication.
   - `PYTHONDONTWRITEBYTECODE=1 /tmp/codex-venvs/events-bot-aeg/bin/python -m py_compile main.py tests/test_tg_event_publish.py` -> passed
   - `git diff --check` -> passed
 - post-deploy verification:
+  - production DB before mitigation: event `5951` had `telegraph_build`,
+    `ics_publish`, and `tg_ics_post` only; `source_vk_post_url` pointed to
+    original source `https://vk.com/wall-146688375_7432`; no
+    `tg_event_post_url`.
+  - production runtime logs before fix contained
+    `schedule_event_update_tasks: skip managed VK/TG publication for ticket giveaway event_id=5951; alternative exists`.
+  - incident catch-up ops evidence: `ops_run` `2331` finished `success` with
+    `inbox_imported=1`, `events_updated=1`, source
+    `https://vk.com/wall-146688375_7432`.
+  - production runtime logs after fix: `vk_auto: unified_report_sent ... updated=1`,
+    `VK [E5951] event done | url=https://vk.com/wall-231920894_3096`, and
+    `TG [E5951] event done | url=https://t.me/c/3954607218/400`.
+  - production DB after catch-up: `joboutbox` rows `vk_sync` and
+    `tg_event_publish` are `done`; event `5951` has
+    `source_vk_post_url=https://vk.com/wall-231920894_3096` and
+    `tg_event_post_url=https://t.me/c/3954607218/400`.
+  - VK API verification with `VK_USER_TOKEN`: `wall.getById` for
+    `-231920894_3096` returned a non-deleted post with event text and
+    attachments.
+  - afishaengagement shadow evidence: runtime logs recorded
+    `afishaengagement.decision` with `decision=apply`, `shadow_mode=true`, and
+    `vk_post_url=https://vk.com/wall-231920894_3097`.
+  - final VK inbox state: row `8588` is `status=imported`,
+    `imported_event_id=5951`, mapping `vk_inbox_import_event(8588,5951)`.
 
 ## Prevention
 
