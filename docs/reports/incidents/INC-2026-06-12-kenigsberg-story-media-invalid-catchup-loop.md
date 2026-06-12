@@ -1,6 +1,6 @@
 # INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Kenigsberg Stories / Kaggle story publish / scheduler catch-up
 Opened: 2026-06-12
@@ -75,11 +75,16 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ### Required evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `85ad5fc7f827e775d260c26b9601ba736eab9d34`
+- deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - regression checks:
+  - `python3 -m py_compile scheduling.py handlers/kenigsberg_stories_cmd.py video_announce/story_publish.py tests/test_scheduling.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py`
+  - `/tmp/events-bot-poll-venv2/bin/python -m pytest -q tests/test_scheduling.py tests/test_video_announce_story_publish.py tests/test_kenigsberg_stories.py::test_kenigsberg_production_story_config_uses_mostvkenig_and_h264_profile` -> `38 passed, 1 warning`
 - Kaggle/session evidence:
-- compensation decision/evidence:
+  - session `#661` Kaggle output: preflight passed for `@mostvkenig`, media diagnostics `video_codec=hevc`, `video_tag=hvc1`, Telegram publish failed with `BadRequestError: RPCError 400: MEDIA_FILE_INVALID`, VK story/wall targets succeeded.
+  - post-deploy `/data/kaggle_jobs.json`: `{"jobs": []}`.
+  - post-deploy startup catch-up log: `SCHED startup catchup skip kenigsberg_story: failed session retry cap reached count=9`.
+- compensation decision/evidence: pending operator/Codex decision; no automatic rerun was launched after deploy because VK already partially published session `#661` and Kaggle quota is constrained.
 
 ## Immediate Mitigation
 
@@ -100,10 +105,17 @@ Kenigsberg scheduled startup catch-up session `#661` failed after Kaggle rendere
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `85ad5fc7f827e775d260c26b9601ba736eab9d34`
+- deploy image: `events-bot-new-wngqia:deployment-01KTYVGW573EGB2RTSGZQ28T78`
+- deploy path: clean worktree at `origin/main`, then Fly remote deploy
 - regression checks:
+  - py_compile for changed code/test modules passed
+  - targeted pytest suite passed: `38 passed, 1 warning`
 - post-deploy verification:
+  - Fly machine `48e42d5b714228`, version `1366`, checks `1 passing`
+  - `/healthz`: `ok=true`, `ready=true`, `kenigsberg_story_daily=ok`
+  - `/data/kaggle_jobs.json` empty
+  - startup catch-up did not launch a new Kenigsberg Kaggle job; runtime log recorded the new failed-session retry cap.
 
 ## Prevention
 
