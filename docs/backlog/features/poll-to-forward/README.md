@@ -84,10 +84,10 @@ The poll question itself is product copy, not a semantic topic decision. Debug
 and production rotate several friendly participation frames by slot, for
 example:
 
-- `Давайте выберем тему на завтра. Голосуйте, а через 30 минут пришлю сюда один анонс из варианта-победителя.`
-- `Что завтра больше хочется? Голосуем, и примерно через полчаса принесу один живой анонс по теме.`
-- `Куда завтра тянет? Выберите настроение, а я через ~30 минут покажу один подходящий анонс.`
-- `Выберите, чего хочется завтра. Через полчаса вернусь с одним событием по теме, за которую проголосует большинство.`
+- `Давайте выберем тему на завтра. Голосуйте, а чуть позже принесу один конкретный анонс.`
+- `Что вам завтра больше интересно? Выберите тему — потом найду один анонс под большинство голосов.`
+- `Выберите направление на завтра. Я посмотрю события в этой теме и принесу один вариант.`
+- `Давайте вы выберете тематику на завтра, а я потом принесу один анонс из выбранного направления.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
@@ -135,18 +135,26 @@ with the winning topic and, when LLM provides it, a compact reason for the final
 event choice. Example:
 `Спасибо за голоса: вы выбрали «музыка».
 Я бы предложил <a href="https://telegra.ph/...">Название события</a> — оно хорошо попадает в выбранную тему.
+Поставьте 👍, если рекомендация попала, или 👎, если нет.
 Сейчас перешлю анонс 👇`
 
 If the poll result is tied, the reply must say so directly instead of naming a
-single false winner, for example: `Спасибо за голоса: в лидерах были «выставки»
-и «экскурсии».` The LLM reason should use concrete event facts when available:
-if an exhibition starts on the target date, natural wording such as "как раз
-открывается выставка" is preferred over generic "сходить на выставку".
+single false winner, for example: `Спасибо за голоса: голоса разделились
+поровну между «выставки» и «экскурсии».` The LLM reason should then explain why
+the selected event still makes sense as the final recommendation. It may mention
+popularity or public interest only when such signals are grounded in passed
+metrics or event text. If an exhibition starts on the target date, natural
+wording such as "как раз открывается выставка" is preferred over generic
+"сходить на выставку".
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical
 `forward_message`/repost mechanic to the audience. Telegraph links are attached
 to the event title in HTML and sent with web preview disabled.
+
+Do not debug this feature by publishing several polls in a burst to the public
+debug channel. Live verification must use one visible cycle at a time unless the
+target chat is an isolated private operator sandbox.
 
 ## Event Selection
 
@@ -160,6 +168,16 @@ The prompt may use these signals:
 
 The selected event must be potentially interesting on its own. Popularity should
 help rank strong candidates, not rescue a weak or off-topic event.
+
+## Feedback Signals
+
+The reply before the forwarded announcement asks readers for a lightweight
+reaction: 👍 if the recommendation landed, 👎 if it did not. These reactions can
+be monitored later with the same Telegram metrics foundation that already stores
+`telegram_post_metric.reactions_json`; the bounded long-term shape is to snapshot
+reactions for the Poll to Repost reply and forwarded announcement, aggregate them
+by `poll_repost_run`, and delete old raw snapshots under the existing post
+metrics retention policy.
 
 ## Popularity Signals
 

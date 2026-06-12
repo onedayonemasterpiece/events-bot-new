@@ -46,6 +46,10 @@
   named as ties instead of false winners, event titles carry the Telegraph link
   with web preview disabled, and the LLM winner prompt can use concrete opening
   context such as a newly opening exhibition when it is grounded in event data.
+- **Changed: Poll to Repost feedback copy**: poll question variants no longer
+  use generic "plan sounds" wording, tied results say votes split evenly, and
+  the recommendation intro asks for 👍/👎 reaction feedback for later quality
+  monitoring.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

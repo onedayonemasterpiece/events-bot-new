@@ -20,9 +20,10 @@ def test_repost_intro_handles_tied_topics_without_preview_link_copy():
     )
 
     assert text == (
-        "Спасибо за голоса: в лидерах были «Выставки» и «Экскурсии и прогулки».\n"
+        "Спасибо за голоса: голоса разделились поровну между «Выставки» и «Экскурсии и прогулки».\n"
         'Я бы предложил <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
         "как раз открывается выставка, и это хорошо попадает в голосование.\n"
+        "Поставьте 👍, если рекомендация попала, или 👎, если нет.\n"
         "Сейчас перешлю анонс 👇"
     )
     assert "Подробнее" not in text
@@ -198,6 +199,7 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.messages[0]["text"] == (
         "Спасибо за голоса: вы выбрали «Вечер с музыкой».\n"
         'Я бы предложил <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n'
+        "Поставьте 👍, если рекомендация попала, или 👎, если нет.\n"
         "Сейчас перешлю анонс 👇"
     )
     assert bot.messages[0]["parse_mode"] == "HTML"
