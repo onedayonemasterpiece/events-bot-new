@@ -7,8 +7,9 @@
   The writer may use a useful short paragraph or friendly `Друзья, ...` format,
   and utility/service sources such as `Приём шин` now prefer source text over a
   conflicting hallucinated event description. Guardrails reject entertainment
-  wording for tire-collection/recycling posts and fall back to a practical
-  "what to do / why it helps" intro. Covered by `tests/test_tg_event_publish.py`
+  wording for tire-collection/recycling posts, fall back to a practical
+  "what to do / why it helps" intro, and keep the same conflicting description
+  out of Telegram event type hashtags. Covered by `tests/test_tg_event_publish.py`
   and tracked as
   `INC-2026-06-12-tg-event-utility-hook-quality`.
 - **Fixed: Afisha Engagement carousel/poster and CTA specificity polish**:

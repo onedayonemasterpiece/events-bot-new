@@ -25,7 +25,8 @@
   - Must not regress: `tg_event_publish` must not force every intro to be a
     hook question; utility/service events such as tire collection/recycling
     should use source-grounded useful copy and must prefer source text over a
-    conflicting entertainment-style description. Closure requires repair
+    conflicting entertainment-style description. The same conflicting
+    description must not feed Telegram type hashtags. Closure requires repair
     evidence for `@kldevents/354` or an explicit external blocker.
 - `INC-2026-06-11-tg-monitoring-recovery-after-deploy-cancel.md`
   - Scope: Telegram Monitoring scheduled Kaggle runs, `/data/kaggle_jobs.json`

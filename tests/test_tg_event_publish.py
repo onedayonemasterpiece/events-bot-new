@@ -162,6 +162,29 @@ def test_tg_event_text_for_publish_uses_source_when_utility_description_conflict
     assert main.select_tg_event_text_for_publish(event) == source
 
 
+def test_tg_event_utility_hashtags_ignore_conflicting_description():
+    source = (
+        "Собранное сырье направят на переработку. От одного физического лица "
+        "принимается не более 4 шин. Временная точка приема: Правая набережная, 25."
+    )
+    event = _event(
+        title="Прием шин",
+        description=(
+            "Приглашаем на уникальное мероприятие с музыкальными номерами, "
+            "театральными постановками и входными билетами."
+        ),
+        source_text=source,
+        event_type="ярмарка",
+        is_free=True,
+        ticket_link=None,
+    )
+
+    text = main.build_tg_event_announcement(event, "Можно сдать шины на переработку.")
+
+    assert "#спектакль" not in text
+    assert "#концерт" not in text
+
+
 def test_tg_event_utility_fallback_is_practical_not_generic_question():
     text = (
         "Собранное сырье будет направлено на перерабатывающее предприятие. "

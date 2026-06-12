@@ -3949,7 +3949,12 @@ def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> st
     tags.extend(
         event_type_hashtags(
             getattr(event, "title", None),
-            getattr(event, "description", None),
+            None
+            if _tg_event_description_conflicts_with_utility_source(
+                getattr(event, "description", None),
+                getattr(event, "source_text", None),
+            )
+            else getattr(event, "description", None),
             getattr(event, "source_text", None),
         )
     )

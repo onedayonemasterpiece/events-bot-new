@@ -36,6 +36,7 @@ Telegram post `https://t.me/kldevents/354` for event `5923` (`Прием шин`
 1. `job_publish_tg_event_post()` preferred `event.description` over `event.source_text` unless the description looked like a GenAI SDK dump.
 2. The Telegram rewrite prompt forced a hook question as the first phrase, even for utility/service posts where a practical benefit paragraph is more suitable.
 3. There was no guardrail for syntactically valid but semantically conflicting entertainment wording on utility/service sources.
+4. Telegram type hashtags were built from the same conflicting description, so a repaired utility intro could still leak unrelated tags such as `#спектакль`.
 
 ## Contributing Factors
 
@@ -63,6 +64,7 @@ Telegram post `https://t.me/kldevents/354` for event `5923` (`Прием шин`
 - `pytest tests/test_tg_event_publish.py -q`
 - Verify utility/service source text wins over conflicting entertainment description.
 - Verify hook rewrite may return a useful non-question intro without automatic `Что здесь стоит увидеть?` prefix.
+- Verify Telegram type hashtags ignore a utility event description that conflicts with source text.
 - Production repair evidence for `@kldevents/354`: edited caption or explicit reason why edit was not possible.
 - `/healthz` after deploy.
 
@@ -83,6 +85,7 @@ Telegram post `https://t.me/kldevents/354` for event `5923` (`Прием шин`
 - Prefer `source_text` over conflicting hallucinated descriptions for utility/service posts.
 - Update Telegram intro prompt to allow a useful paragraph or friendly intro instead of requiring a hook question.
 - Reject entertainment wording in LLM output for tire collection/recycling posts and fall back to a practical utility intro.
+- Exclude the same conflicting description from Telegram type hashtag selection.
 
 ## Follow-up Actions
 
