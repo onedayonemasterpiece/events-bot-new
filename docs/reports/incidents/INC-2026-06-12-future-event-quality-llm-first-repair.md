@@ -1,10 +1,10 @@
 # INC-2026-06-12 Future Event Quality LLM-First Repair
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / VK auto-import / Smart Update / public Telegraph, Telegram and VK event surfaces
 Opened: 2026-06-12
-Closed: —
+Closed: 2026-06-12
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-06-07-future-event-quality-recurrence`, `INC-2026-05-17-future-event-quality-regressions`, `INC-2026-05-09-event-location-alias-free-dup-regressions`, `INC-2026-05-01-future-event-quality-audit`, `INC-2026-05-01-daily-location-drift`, `INC-2026-04-29-bar-bastion-city-jazz-location`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/llm/request-guide.md`, `docs/llm/prompts.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -56,6 +56,9 @@ Artifacts:
 - 2026-06-12 08:35-08:38 UTC — affected `telegraph_build` jobs rebuilt active event Telegraph pages; post-repair probe showed no active known malformed-date rows and no active unsupported City Jazz rows.
 - 2026-06-12 08:39 UTC — public duplicate cleanup removed managed VK posts for archived duplicate rows `5156`, `5263`, `5410`, `5636`, `5641`, `5645`, `5848`, `5871`, `5890`, `5906`, `5933`, `5934`, `5936`; `PRAGMA quick_check` stayed `ok`.
 - 2026-06-12 08:39-08:41 UTC — Telegram duplicate posts for archived rows `5871`, `5890`, `5906`, `5933`, `5934` were deleted. Telegram refused deletion of archived row `5848` (`Bad Request: message can't be deleted`), so its caption was edited to `Снято как дубль. Актуальная карточка: https://t.me/c/3954607218/115`.
+- 2026-06-12 08:48 UTC — preventive code deployed to Fly from `origin/main` SHA `91b133483bd22b22f4b9ed51bcee619c4ef7d5e3`; Fly machine version `1321`, image `deployment-01KTXG7CA2D72RD84CMZHF738A`, `/healthz` ready.
+- 2026-06-12 08:50-08:56 UTC — active survivor Telegram posts were refreshed where safe: `5749`, `5791`, `5805`, `5868`, `5869`, `5922`; `5728` was republished to `https://t.me/c/3954607218/381` after album->photo mode change and old album caption `https://t.me/c/3954607218/11` was edited to point at the new card. Managed VK orphan posts accidentally created during manual refresh (`wall-231920894_3073`, `wall-231920894_3074`) were deleted and verified absent; `5285` gained a replacement managed VK event post `wall-231920894_3072` because its previous managed post was missing.
+- 2026-06-12 08:57 UTC — final production probe: `PRAGMA quick_check=ok`; known malformed active rows empty; future/ongoing City Jazz scope contains only source-grounded `5873` (`qtickets`, `Мира 33-35`); affected open jobs reduced to scheduled `tg_event_publish` for active `5942`.
 
 ## Confirmed Candidate Inventory
 
@@ -181,6 +184,7 @@ Known negative controls:
 - Production data repair was applied transactionally on 2026-06-12 after full compressed logical backup and in-DB row backup.
 - Active public data now has the audited malformed-date rows archived, false City Jazz defaults removed, date-marker times repaired, and confirmed duplicate clusters merged/archived.
 - Public Telegram/VK duplicate posts were removed where platform permissions allowed. The only remaining Telegram deletion blocker is event `5848` / message `209`; the post is no longer misleading because its caption was edited to point at survivor `5805`.
+- Active survivor Telegram posts were refreshed; `5728` old album post could not be deleted but was edited to point at the new card.
 
 ## Corrective Actions
 
@@ -195,16 +199,17 @@ Known negative controls:
 - [x] Codex / current incident / implement LLM-first venue-default-conflict review in primary import path.
 - [x] Codex / current incident / implement replay-backed Smart Update duplicate recall/match improvement.
 - [x] Codex / current incident / repair confirmed production rows and rebuild public surfaces.
+- [ ] Maintainers / no due date / reconcile old remote branch drift: `origin/hotfix/cherryflash-vk-promo-20260610` and `origin/hotfix/google-ai-reserve-overflow` were still ahead of `origin/main` during this release gate and are unrelated to this incident.
 - [ ] Maintainers / no due date / add a reusable future-event quality audit command for active future rows before public fanout.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `91b133483bd22b22f4b9ed51bcee619c4ef7d5e3` (reachable from `origin/main`; docs-only closure update may be newer and does not change deployed code).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean worktree; Fly machine `48e42d5b714228`, version `1321`, image `events-bot-new-wngqia:deployment-01KTXG7CA2D72RD84CMZHF738A`.
 - regression checks: `tests/test_tg_candidate_location_grounding.py`, `tests/test_vk_default_time.py`, `tests/test_smart_event_update_duplicate_guards.py` passed (`47 passed`); `py_compile` passed for `source_parsing/telegram/handlers.py`, `vk_intake.py`, `smart_event_update.py`, `kaggle/TelegramMonitor/telegram_monitor.py`; replay fixture JSON validated.
 - production data repair: compressed backup `/data/db.sqlite.inc20260612_future_quality_full_dump_202606120835.sql.gz`; row backup table `incident_future_quality_20260612_event` count `39`; final apply artifact `artifacts/codex/INC-2026-06-12-future-event-quality-llm-first-repair/prod_repair_apply_committed.jsonl`; post-repair probe artifact `artifacts/codex/INC-2026-06-12-future-event-quality-llm-first-repair/prod_post_repair_probe.json`; `PRAGMA quick_check=ok`.
-- public surface rebuild/edit evidence: `telegraph_build` jobs for active affected rows completed between 08:34-08:38 UTC except row `5942`, whose previous valid Telegraph page remained present while a duplicate rebuild was marked running; managed VK duplicate deletion evidence in `prod_public_cleanup_apply.json`; Telegram duplicate deletion evidence in `prod_public_cleanup_apply.json`; Telegram `5848` delete blocker and caption edit evidence in `prod_tg_delete_5848_retry.json` and `prod_tg_edit_5848_fallback.json`.
-- post-deploy verification:
+- public surface rebuild/edit evidence: `telegraph_build` jobs for active affected rows completed between 08:34-08:38 UTC; managed VK duplicate deletion evidence in `prod_public_cleanup_apply.json`; Telegram duplicate deletion evidence in `prod_public_cleanup_apply.json`; Telegram `5848` delete blocker and caption edit evidence in `prod_tg_delete_5848_retry.json` and `prod_tg_edit_5848_fallback.json`; survivor TG refresh/orphan cleanup evidence in `prod_refresh_public_survivors.json`, `prod_tg_edit_5728_old_fallback.json`, and `prod_delete_orphan_vk_refresh_posts.json`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`; runtime file mirror was enabled at `/data/runtime_logs`; final DB probe `prod_final_probe.json` showed `quick_check=ok`, no active known malformed rows, future City Jazz only `5873`, archived duplicate public URLs cleared except edited Telegram blocker `5848`, and only scheduled active `5942` `tg_event_publish` remained pending.
 
 ## Prevention
 
