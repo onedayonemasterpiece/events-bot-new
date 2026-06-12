@@ -2836,13 +2836,30 @@ def split_vk_daily_text_atomic(text: str, limit: int | None = None) -> list[str]
     return parts
 
 
+def _format_daily_recommend_today_line(event: Event) -> str:
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = html.escape(f"{emoji_part}{title_text}".strip())
+    link_href = str(getattr(event, "telegraph_url", "") or "").strip()
+    if not link_href and getattr(event, "telegraph_path", None):
+        link_href = f"https://telegra.ph/{str(event.telegraph_path).lstrip('/')}"
+    if link_href:
+        title = f'<a href="{html.escape(link_href)}">{title}</a>'
+    details: list[str] = []
+    if getattr(event, "time", None):
+        details.append(str(event.time).strip())
+    if getattr(event, "location_name", None):
+        details.append(str(event.location_name).strip())
+    suffix = f" — {html.escape(', '.join(part for part in details if part))}" if details else ""
+    return f"• {title}{suffix}"
+
+
 async def build_daily_posts(
     db: Database,
     tz: timezone,
     now: datetime | None = None,
 ) -> list[tuple[str, types.InlineKeyboardMarkup | None]]:
     from models import Event, WeekendPage, MonthPage, Festival
-    from promo import resolve_surface_promo_event_ids
+    from promo import resolve_daily_promo_recommendations, resolve_surface_promo_event_ids
 
     def _is_sold_out_status(value: str | None) -> bool:
         text = (value or "").strip().casefold()
@@ -2858,6 +2875,10 @@ async def build_daily_posts(
     promo_highlight_ids = await resolve_surface_promo_event_ids(
         db,
         surface="daily_highlight",
+        now_utc=now.astimezone(timezone.utc),
+    )
+    daily_recommendations = await resolve_daily_promo_recommendations(
+        db,
         now_utc=now.astimezone(timezone.utc),
     )
     yesterday_utc = recent_cutoff(tz, now)
@@ -3059,6 +3080,11 @@ async def build_daily_posts(
                 partner_creator_ids=partner_creator_ids,
             )
         )
+    if daily_recommendations:
+        lines1.append("")
+        lines1.append("<b><i>ИТОГО РЕКОМЕНДУЕМ ПОСЕТИТЬ СЕГОДНЯ</i></b>")
+        for item in daily_recommendations:
+            lines1.append(_format_daily_recommend_today_line(item.event))
     lines1.append("")
     lines1.append(
         f"#Афиша_Калининград #Калининград #концерт #{tag} #{today.day}_{MONTHS[today.month - 1]}"
@@ -3832,6 +3858,148 @@ def _vk_owner_and_post_id(url: str) -> tuple[str, str] | None:
     if not m:
         return None
     return m.group(1), m.group(2)
+
+
+def _tg_channel_message_link(target_chat: str, message_id: int) -> str:
+    chat = str(target_chat or "").strip()
+    if chat.startswith("@"):
+        return f"https://t.me/{chat.lstrip('@')}/{message_id}"
+    if re.fullmatch(r"[A-Za-z0-9_]{5,}", chat):
+        return f"https://t.me/{chat}/{message_id}"
+    if chat.startswith("-100"):
+        return f"https://t.me/c/{chat[4:]}/{message_id}"
+    return f"tg:{chat}/{message_id}"
+
+
+def _tg_promo_event_keyboard(event: Event) -> types.InlineKeyboardMarkup | None:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    details_url = getattr(event, "telegraph_url", None) or (
+        f"https://telegra.ph/{str(event.telegraph_path).lstrip('/')}"
+        if getattr(event, "telegraph_path", None)
+        else None
+    )
+    if details_url:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="✨ Подробнее",
+                    url=str(details_url),
+                )
+            ]
+        )
+    return types.InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
+
+
+def _tg_promo_text_source(event: Event) -> str:
+    return (
+        str(getattr(event, "description", None) or "").strip()
+        or str(getattr(event, "source_text", None) or "").strip()
+        or str(getattr(event, "search_digest", None) or "").strip()
+    )
+
+
+def _tg_promo_strip_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text or "")
+
+
+def _tg_promo_plain_location(event: Event) -> str:
+    return _compose_event_location(
+        getattr(event, "location_name", None),
+        getattr(event, "location_address", None),
+        getattr(event, "city", None),
+        city_hashtag=False,
+    )
+
+
+def build_tg_promo_event_publication_message(event: Event) -> str:
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = f"{emoji_part}{title_text}".strip()
+    date_part = str(event.date or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else date_part
+    time_part = str(getattr(event, "time", "") or "").strip()
+    when = f"{day} {time_part}".strip()
+
+    lines = [f"<b>{html.escape(title)}</b>", "", f"📅 {html.escape(when)}"]
+    loc = _tg_promo_plain_location(event)
+    if loc:
+        lines.append(f"📍 {html.escape(loc)}")
+    if getattr(event, "pushkin_card", False):
+        lines.append(html.escape("✅ Пушкинская карта"))
+    if getattr(event, "is_free", False):
+        lines.append(html.escape("🟡 Бесплатно"))
+    elif getattr(event, "ticket_status", None) == "sold_out":
+        lines.append(html.escape("❌ Билеты все проданы"))
+    elif getattr(event, "ticket_price_min", None) is not None or getattr(event, "ticket_price_max", None) is not None:
+        if event.ticket_price_min is not None and event.ticket_price_max is not None and event.ticket_price_min != event.ticket_price_max:
+            price = f"от {event.ticket_price_min} до {event.ticket_price_max} руб."
+        else:
+            value = event.ticket_price_min if event.ticket_price_min is not None else event.ticket_price_max
+            price = f"{value} руб." if value is not None else ""
+        if price:
+            lines.append(html.escape(f"🎟 Билеты {price}"))
+
+    body = _tg_promo_strip_tags(_tg_promo_text_source(event)).strip()
+    if body:
+        lines.extend(["", html.escape(body)])
+    hashtag_line = _tg_event_hashtag_line(event)
+    if hashtag_line:
+        lines.extend(["", html.escape(hashtag_line)])
+    return "\n".join(lines).strip()
+
+
+async def publish_tg_promo_event_publication(
+    event: Event,
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    target_chat: str,
+) -> str | None:
+    target_chat = str(target_chat or "").strip()
+    if not target_chat or not bot:
+        return None
+    message = build_tg_promo_event_publication_message(event)
+    if len(message) > 4096:
+        message = message[:4050].rstrip() + "\n\n..."
+    markup = _tg_promo_event_keyboard(event)
+
+    photo_urls = [str(url).strip() for url in (getattr(event, "photo_urls", None) or []) if str(url).strip()]
+    async with TG_SEND_SEMAPHORE:
+        if photo_urls and len(message) <= 1024:
+            if len(photo_urls) == 1:
+                sent = await bot.send_photo(
+                    target_chat,
+                    photo_urls[0],
+                    caption=message,
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+            else:
+                media = [
+                    types.InputMediaPhoto(
+                        media=url,
+                        caption=message if idx == 0 else None,
+                        parse_mode="HTML" if idx == 0 else None,
+                    )
+                    for idx, url in enumerate(photo_urls[:TG_EVENT_ALBUM_SIZE])
+                ]
+                group = await bot.send_media_group(target_chat, media)
+                sent = group[0]
+                if markup:
+                    await bot.edit_message_reply_markup(
+                        target_chat,
+                        sent.message_id,
+                        reply_markup=markup,
+                    )
+        else:
+            sent = await bot.send_message(
+                target_chat,
+                message,
+                parse_mode="HTML",
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+    return _tg_channel_message_link(target_chat, int(sent.message_id))
 
 
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
@@ -5648,6 +5816,17 @@ async def send_daily_announcement(
                 continue
             pending_error = e
             break
+    if record and sent > 0:
+        try:
+            from promo import record_daily_promo_recommendation_exposures
+
+            record_now = now or datetime.now(tz)
+            await record_daily_promo_recommendation_exposures(
+                db,
+                now_utc=record_now.astimezone(timezone.utc),
+            )
+        except Exception:
+            logging.warning("daily promo recommendation exposure record failed", exc_info=True)
     # 3) Отмечаем только если что-то реально ушло
     if record and now is None and sent > 0:
         try:

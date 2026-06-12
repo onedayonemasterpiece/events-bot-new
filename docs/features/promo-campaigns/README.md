@@ -27,15 +27,18 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   `"<chat>:<author>"`). See "Author-in-chat trigger" below.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
-  `vk_publication`, `vk_repost`, `vk_story`, and `afishaengagement`. VK
-  activity parameters live in `promo_activity.config_json` (`target_group`,
-  `source_group`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
-  policy).
+  `daily_recommend_today`, `vk_publication`, `tg_event_publish`, `tg_repost`,
+  `vk_repost`, `vk_story`, and `afishaengagement`. Social activity parameters
+  live in `promo_activity.config_json` (`target_group`, `source_group`,
+  `target_chat`, `source_chat`, `window_hours`, `active_start_hour`,
+  `active_end_hour`, dedup policy).
 - Telegram event publishing is channel-default behavior, not a separate
   campaign activity: when an event is covered by any active `promo_target`, the
   `@kldevents` publisher renders that event with its promo intro/CTA style.
   Campaign authors must not add a separate `tg_event_publish` activity just to
-  make Telegram copy richer.
+  make ordinary Telegram copy richer. The `tg_event_publish` promo activity is
+  only for an explicit extra campaign slot in an event-flow channel; its output
+  can then be used as a source by `tg_repost`.
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
@@ -225,6 +228,23 @@ only after `stories.save`; the exposure row uses `surface='vk_story'`,
 `public_targets_json.type='vk_story'`, and stores `details_json.source_url`,
 `details_json.target_url`, `owner_id`, `story_id`, and `expires_at`.
 
+`tg_event_publish` publishes a full promo event post into a configured Telegram
+event-flow channel, normally `@kldevents`. It is scheduled by the same
+lightweight promo runner as VK activities and respects the same local active
+window / due-slot rules. The activity is intentionally separate from ordinary
+Smart Update Telegram event publication: it creates an explicit campaign post,
+records `promo_exposure.surface='tg_event_publish'` with
+`publish_status='TG_PUBLISHED'`, and stores the resulting source post URL back
+on the event for downstream reposts.
+
+`tg_repost` forwards an existing source-channel post, normally
+`@kldevents -> @kenigevents`, instead of rendering a new text post in the
+daily/digest channel. It looks at the promoted event's stored
+`event.tg_event_post_url` and recent `tg_event_publish` exposures, applies
+`dedup_hours` to source URLs, forwards with Telegram Bot API, and records
+`promo_exposure.surface='tg_repost'` / `publish_status='TG_FORWARDED'` with
+`details_json.source_url` and `details_json.target_url`.
+
 The initial `80 историй о главном` campaign now includes:
 
 - `vk_publication` to `https://vk.com/klgdevents`, `max_per_publish=2`,
@@ -310,13 +330,27 @@ The marker is subtle editorial highlighting, not an advertising disclosure. If a
 future campaign is paid/sponsored, it must use explicit disclosure text before
 activation.
 
+`daily_recommend_today` is a separate daily surface for editorial summary
+recommendations in the "НЕ ПРОПУСТИТЕ СЕГОДНЯ" section. It appends a compact
+block before the section hashtags:
+
+`ИТОГО РЕКОМЕНДУЕМ ПОСЕТИТЬ СЕГОДНЯ`
+
+with one-line Telegraph links to at most two promoted events that actually occur
+on the local date (`Europe/Kaliningrad`). The surface records
+`publish_status='DAILY_RECOMMENDED'` after a successful daily send and supports
+`config_json.preferred_event_ids_by_date` for date-specific editorial ordering.
+
 ## Current Limits
 
-- MVP implements CherryFlash general boost and daily-section highlighting.
-- VK publication/repost/story promo activities are implemented through the scheduled
-  `promo_vk` runner and normalized `promo_exposure` reporting. The current
-  publication formatter uses the source-style Smart Update VK message; later UX
-  can add per-activity copy style controls without changing the exposure model.
+- MVP implements CherryFlash general boost, daily-section highlighting, and
+  daily "today" summary recommendations.
+- VK publication/repost/story and Telegram publication/repost promo activities
+  are implemented through the scheduled `promo_vk` runner and normalized
+  `promo_exposure` reporting. The current VK publication formatter uses the
+  source-style Smart Update VK message; Telegram promo publication uses a full
+  event post in the event-flow channel, while `tg_repost` forwards that source
+  post into the daily/digest channel.
 - Telegraph month/weekend activities are stored for campaigns, but page-render
   adapters are still pending.
 - First-slot video promo is implemented through `slot=1` /

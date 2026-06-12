@@ -8,6 +8,13 @@
   selected managed event post from `@kldevents`. If LLM topic or winner/event
   selection is unavailable, the slot is skipped instead of using deterministic
   fallback categories.
+- **Added: Kantata education promo surfaces**: promo campaigns can now append a
+  compact `daily_recommend_today` block to the Telegram daily "today" section,
+  publish explicit full promo event posts to a Telegram event-flow channel via
+  `tg_event_publish`, and forward those source posts to a daily/digest channel
+  via `tg_repost`. Public exposure accounting now includes
+  `DAILY_RECOMMENDED`, `TG_PUBLISHED`, and `TG_FORWARDED`. Covered by
+  `tests/test_promo.py`.
 - **Added: Future event quality audit Codex skill**: added
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,

@@ -19,6 +19,26 @@
 - Spacing игнорирует `error` jobs и pending/running anchors дальше `TG_EVENT_PUBLISH_SPACING_HORIZON_HOURS` (по умолчанию `24`) от текущего времени: это защищает новые публикации от ручных cleanup-marker rows вроде `next_run_at=2036-...`. Планировщик выбирает ближайший свободный слот внутри publish window, а не слот после самого позднего pending anchor: вечерний или завтрашний backlog не должен оставлять дневную дыру в `@kldevents`, если после последней фактической публикации уже прошёл стандартный интервал. Если текущий локальный publish window уже закрыт и новый кандидат нормализован на завтрашнее `07:00`, stale anchors того же следующего дня, стоящие намного позже утреннего старта, тоже не должны сдвигать свежие импорты в вечерний кластер; нормальные соседние anchors продолжают задавать стандартный интервал.
 - Пока Telegram-пост ждёт утренний слот, Smart Update-отчёты должны показывать строку `Посты: VK ... · TG ⏳`; после публикации `TG ⏳` заменяется ссылкой на пост в канале.
 
+## Promo Campaign Surfaces
+
+- `promo_activity.surface='tg_event_publish'` is an explicit campaign slot in a
+  Telegram event-flow channel such as `@kldevents`. It is separate from the
+  ordinary `JobTask.tg_event_publish` pipeline above: campaign slots may publish
+  an extra full event post for selected targets and record
+  `promo_exposure.publish_status='TG_PUBLISHED'`.
+- The promo activity target channel is configured per activity through
+  `config_json.target_chat`; it is not controlled by the global
+  `TG_EVENT_CHANNEL` runtime setting.
+- `promo_activity.surface='tg_repost'` forwards an already published source
+  channel post, normally `@kldevents -> @kenigevents`. It uses
+  `config_json.source_chat`, `config_json.target_chat`, active-window settings,
+  and `dedup_hours`. If no source post exists yet (`event.tg_event_post_url` or
+  a recent `tg_event_publish` exposure), the activity skips the tick instead of
+  creating a new post in the daily/digest channel.
+- `tg_repost` must preserve the channel-role split: event-flow channels can
+  receive full event posts, while daily/digest channels receive only selected
+  forwards or editorial daily blocks.
+
 ## Формат
 
 - Telegram-пост не наследует VK-капс: заголовок остаётся нормальным регистром и рендерится как `<b>...</b>`.

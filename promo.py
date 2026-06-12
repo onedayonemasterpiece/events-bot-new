@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import os
+import re
 import textwrap
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -43,7 +44,10 @@ PROMO_POLICY_FIRST_SLOT = "first_slot"
 PROMO_POLICY_FIRST_TWO_SLOTS = "first_two_slots"
 PROMO_DAILY_TZ = "Europe/Kaliningrad"
 PROMO_SURFACE_VIDEO_GENERAL = "video_general"
+PROMO_SURFACE_DAILY_RECOMMEND_TODAY = "daily_recommend_today"
 PROMO_SURFACE_VK_PUBLICATION = "vk_publication"
+PROMO_SURFACE_TG_EVENT_PUBLISH = "tg_event_publish"
+PROMO_SURFACE_TG_REPOST = "tg_repost"
 PROMO_SURFACE_VK_REPOST = "vk_repost"
 PROMO_SURFACE_VK_STORY = "vk_story"
 PROMO_SURFACE_AFISHA_ENGAGEMENT = "afishaengagement"
@@ -61,7 +65,15 @@ PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES = {
 }
 VK_SYNC_MISSING_TG_MEDIA_ERROR = "vk_sync_missing_media_for_telegram_event"
 PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
-    {"VK_SCHEDULED", "PUBLISHED", "PUBLISHED_MAIN", "PUBLISHED_TEST"}
+    {
+        "VK_SCHEDULED",
+        "PUBLISHED",
+        "PUBLISHED_MAIN",
+        "PUBLISHED_TEST",
+        "TG_PUBLISHED",
+        "TG_FORWARDED",
+        "DAILY_RECOMMENDED",
+    }
 )
 
 # Target that matches events by their Telegram source chat + post author.
@@ -130,6 +142,14 @@ class PromoVkActionResult:
     source_url: str | None = None
     target_url: str | None = None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class DailyPromoRecommendation:
+    event: Event
+    campaign_id: int
+    activity_id: int
+    target_url: str | None = None
 
 
 def _campaign_end_dt(day: date) -> datetime:
@@ -1359,7 +1379,7 @@ async def _load_public_exposure_stats(
             .where(PromoExposure.campaign_id == campaign_id)
             .where(PromoExposure.activity_id == activity_id)
             .where(PromoExposure.event_id.in_(ids))
-            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST", "VK_SCHEDULED")))
+            .where(PromoExposure.publish_status.in_(PUBLIC_PROMO_EXPOSURE_STATUSES))
             .group_by(PromoExposure.event_id)
         )
         rows = res.all()
@@ -1381,7 +1401,7 @@ async def _count_public_exposures(
         query = (
             select(func.count(PromoExposure.id))
             .where(PromoExposure.campaign_id == campaign_id)
-            .where(PromoExposure.publish_status.in_(("PUBLISHED_MAIN", "PUBLISHED_TEST", "VK_SCHEDULED")))
+            .where(PromoExposure.publish_status.in_(PUBLIC_PROMO_EXPOSURE_STATUSES))
         )
         if activity_id is not None:
             query = query.where(PromoExposure.activity_id == activity_id)
@@ -1575,6 +1595,210 @@ async def resolve_surface_promo_event_ids(
             if ev.id is not None:
                 result.add(int(ev.id))
     return result
+
+
+def _event_occurs_on_date(ev: Event, day: date) -> bool:
+    start = _event_start_date(ev)
+    if start is None:
+        return False
+    raw_end = str(getattr(ev, "end_date", "") or "").split("..", 1)[0].strip()
+    end: date | None = None
+    if raw_end:
+        try:
+            end = date.fromisoformat(raw_end)
+        except ValueError:
+            end = None
+    if end is None:
+        end = start
+    return start <= day <= end
+
+
+def _preferred_event_rank(activity: PromoActivity, local_day: date, event_id: int) -> int:
+    cfg = _activity_config(activity)
+    by_date = cfg.get("preferred_event_ids_by_date")
+    if not isinstance(by_date, dict):
+        return 10_000
+    raw_ids = by_date.get(local_day.isoformat())
+    if not isinstance(raw_ids, list):
+        return 10_000
+    try:
+        return [int(value) for value in raw_ids].index(int(event_id))
+    except (ValueError, TypeError):
+        return 10_000
+
+
+async def resolve_daily_promo_recommendations(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+    profile_key: str | None = None,
+) -> list[DailyPromoRecommendation]:
+    now_utc = now_utc or datetime.now(timezone.utc)
+    local_day = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
+    day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
+
+    async with db.get_session() as session:
+        query = (
+            select(PromoCampaign, PromoActivity, PromoTarget)
+            .join(PromoActivity, PromoActivity.campaign_id == PromoCampaign.id)
+            .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
+            .where(PromoCampaign.status == "active")
+            .where(PromoCampaign.starts_at <= now_utc)
+            .where(or_(PromoCampaign.ends_at.is_(None), PromoCampaign.ends_at >= now_utc))
+            .where(PromoActivity.enabled.is_(True))
+            .where(PromoActivity.surface == PROMO_SURFACE_DAILY_RECOMMEND_TODAY)
+        )
+        if profile_key is not None:
+            query = query.where(or_(PromoActivity.profile_key.is_(None), PromoActivity.profile_key == profile_key))
+        rows = list(
+            (
+                await session.execute(
+                    query.order_by(PromoCampaign.priority, PromoCampaign.created_at, PromoActivity.id)
+                )
+            ).all()
+        )
+
+    recommendations: list[DailyPromoRecommendation] = []
+    used_event_ids: set[int] = set()
+    activity_pick_counts: dict[int, int] = {}
+    for campaign, activity, target in rows:
+        if campaign.id is None or activity.id is None:
+            continue
+        campaign_id = int(campaign.id)
+        activity_id = int(activity.id)
+        max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
+        if activity_pick_counts.get(activity_id, 0) >= max_per_publish:
+            continue
+        if campaign.total_exposure_goal is not None:
+            total_count = await _count_public_exposures(db, campaign_id=campaign_id)
+            if total_count >= max(0, int(campaign.total_exposure_goal)):
+                continue
+        if campaign.daily_exposure_cap is not None:
+            daily_count = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                since_utc=day_start_utc,
+                until_utc=day_end_utc,
+            )
+            if daily_count >= max(0, int(campaign.daily_exposure_cap)):
+                continue
+        if activity.target_exposure_goal is not None:
+            activity_total = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+            )
+            if activity_total >= max(0, int(activity.target_exposure_goal)):
+                continue
+        if activity.daily_cap is not None:
+            activity_daily = await _count_public_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                since_utc=day_start_utc,
+                until_utc=day_end_utc,
+            )
+            if activity_daily >= max(0, int(activity.daily_cap)):
+                continue
+        events = await _events_for_target(
+            db,
+            target=target,
+            campaign=campaign,
+            today=local_day,
+        )
+        events = [
+            ev
+            for ev in events
+            if ev.id is not None
+            and int(ev.id) not in used_event_ids
+            and _event_occurs_on_date(ev, local_day)
+        ]
+        if not events:
+            continue
+        stats = await _load_public_exposure_stats(
+            db,
+            campaign_id=campaign_id,
+            activity_id=activity_id,
+            event_ids=[int(ev.id) for ev in events if ev.id is not None],
+        )
+
+        def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
+            event_id = int(ev.id)
+            count, last_at = stats.get(event_id, (0, None))
+            last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
+            return (
+                _preferred_event_rank(activity, local_day, event_id),
+                count,
+                last_key,
+                str(ev.time or ""),
+                _stable_shuffle_key(campaign_id, activity_id, local_day.isoformat(), event_id),
+                event_id,
+            )
+
+        remaining = max(0, max_per_publish - activity_pick_counts.get(activity_id, 0))
+        for ev in sorted(events, key=sort_key)[:remaining]:
+            event_id = int(ev.id)
+            used_event_ids.add(event_id)
+            activity_pick_counts[activity_id] = activity_pick_counts.get(activity_id, 0) + 1
+            target_url = str(getattr(ev, "telegraph_url", "") or "").strip() or None
+            recommendations.append(
+                DailyPromoRecommendation(
+                    event=ev,
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
+                    target_url=target_url,
+                )
+            )
+    return recommendations
+
+
+async def record_daily_promo_recommendation_exposures(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+) -> int:
+    now_utc = now_utc or datetime.now(timezone.utc)
+    day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
+    recommendations = await resolve_daily_promo_recommendations(db, now_utc=now_utc)
+    recorded = 0
+    for item in recommendations:
+        event_id = int(item.event.id)
+        async with db.get_session() as session:
+            exists = (
+                await session.execute(
+                    select(PromoExposure.id)
+                    .where(PromoExposure.campaign_id == item.campaign_id)
+                    .where(PromoExposure.activity_id == item.activity_id)
+                    .where(PromoExposure.event_id == event_id)
+                    .where(PromoExposure.surface == PROMO_SURFACE_DAILY_RECOMMEND_TODAY)
+                    .where(PromoExposure.published_at >= day_start_utc)
+                    .where(PromoExposure.published_at < day_end_utc)
+                )
+            ).scalars().first()
+            if exists is not None:
+                continue
+            session.add(
+                PromoExposure(
+                    campaign_id=item.campaign_id,
+                    activity_id=item.activity_id,
+                    event_id=event_id,
+                    surface=PROMO_SURFACE_DAILY_RECOMMEND_TODAY,
+                    placement_kind="daily_today_summary",
+                    publish_status="DAILY_RECOMMENDED",
+                    public_target_count=1,
+                    public_targets_json=[
+                        {"type": "telegram_daily", "url": item.target_url}
+                    ],
+                    published_at=now_utc,
+                    details_json={
+                        "target_url": item.target_url,
+                        "local_day": now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date().isoformat(),
+                    },
+                )
+            )
+            await session.commit()
+            recorded += 1
+    return recorded
 
 
 async def resolve_campaign_promo_event_ids(
@@ -1808,6 +2032,92 @@ async def _recent_event_vk_posts(
         if posted_at and since_utc <= posted_at <= until_utc:
             rows.append((ev, url, posted_at))
     return rows
+
+
+def _tg_channel_message_link(target_chat: str, message_id: int) -> str:
+    chat = str(target_chat or "").strip()
+    if chat.startswith("@"):
+        return f"https://t.me/{chat.lstrip('@')}/{message_id}"
+    if re.fullmatch(r"[A-Za-z0-9_]{5,}", chat):
+        return f"https://t.me/{chat}/{message_id}"
+    if chat.startswith("-100"):
+        return f"https://t.me/c/{chat[4:]}/{message_id}"
+    return f"tg:{chat}/{message_id}"
+
+
+def _tg_message_id_from_url(url: str | None) -> int | None:
+    text = str(url or "").strip()
+    match = re.search(r"https?://t\.me/(?:c/\d+|[A-Za-z0-9_]+)/(\d+)(?:\D|$)", text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+async def _recent_event_tg_posts(
+    db: Database,
+    *,
+    campaign_id: int,
+    events: list[Event],
+    source_chat: str,
+    since_utc: datetime,
+    until_utc: datetime,
+) -> list[tuple[Event, str, datetime]]:
+    rows: list[tuple[Event, str, datetime]] = []
+    source_name = str(source_chat or "").strip().lstrip("@").lower()
+    event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+    for ev in events:
+        url = str(getattr(ev, "tg_event_post_url", "") or "").strip()
+        if not url:
+            continue
+        if source_name and f"t.me/{source_name}/" not in url.lower():
+            continue
+        rows.append((ev, url, until_utc))
+
+    publication_exposures = await _recent_activity_exposures(
+        db,
+        campaign_id=campaign_id,
+        activity_id=None,
+        surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+        since_utc=since_utc,
+        until_utc=until_utc,
+    )
+    seen_urls = {url for _ev, url, _dt in rows}
+    for exposure in publication_exposures:
+        ev = event_by_id.get(int(exposure.event_id))
+        if ev is None:
+            continue
+        details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
+        url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        if source_name and f"t.me/{source_name}/" not in url.lower():
+            continue
+        rows.append((ev, url, exposure.published_at or until_utc))
+        seen_urls.add(url)
+    return rows
+
+
+async def _publish_tg_repost(
+    bot: object | None,
+    *,
+    source_chat: str,
+    target_chat: str,
+    source_url: str,
+) -> str | None:
+    if bot is None:
+        return None
+    message_id = _tg_message_id_from_url(source_url)
+    if message_id is None:
+        raise RuntimeError(f"telegram source message id not found: {source_url}")
+    sent = await bot.forward_message(
+        chat_id=target_chat,
+        from_chat_id=source_chat,
+        message_id=message_id,
+    )
+    return _tg_channel_message_link(target_chat, int(sent.message_id))
 
 
 def _post_text_matches_event(text: str | None, ev: Event) -> bool:
@@ -2471,6 +2781,8 @@ async def run_promo_vk_activities(
                         PromoActivity.surface.in_(
                             [
                                 PROMO_SURFACE_VK_PUBLICATION,
+                                PROMO_SURFACE_TG_EVENT_PUBLISH,
+                                PROMO_SURFACE_TG_REPOST,
                                 PROMO_SURFACE_VK_REPOST,
                                 PROMO_SURFACE_VK_STORY,
                             ]
@@ -2649,6 +2961,205 @@ async def run_promo_vk_activities(
                     results.append(
                         PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
                     )
+
+        elif activity.surface == PROMO_SURFACE_TG_EVENT_PUBLISH:
+            cfg = _activity_config(activity)
+            target_chat = str(cfg.get("target_chat") or activity.profile_key or "").strip()
+            if not target_chat:
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "skipped",
+                        reason="target_chat_missing",
+                    )
+                )
+                continue
+            if bot is None:
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "skipped",
+                        reason="bot_missing",
+                    )
+                )
+                continue
+            due_count = _vk_activity_due_count(activity, now_utc)
+            if due_count <= 0:
+                continue
+            recent_exposures = await _activity_day_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+                now_utc=now_utc,
+            )
+            if len(recent_exposures) >= due_count:
+                continue
+            recent_event_ids = {int(exposure.event_id) for exposure in recent_exposures}
+            stats = await _load_public_exposure_stats(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                event_ids=[int(ev.id) for ev in events],
+            )
+
+            def sort_key(ev: Event) -> tuple[int, datetime, str, str, int]:
+                count, last_at = stats.get(int(ev.id), (0, None))
+                last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
+                return (
+                    count,
+                    last_key,
+                    _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
+                    str(ev.date or ""),
+                    int(ev.id),
+                )
+
+            candidates = [ev for ev in sorted(events, key=sort_key) if int(ev.id) not in recent_event_ids]
+            for ev in candidates[:1]:
+                try:
+                    from main import publish_tg_promo_event_publication
+
+                    url = await publish_tg_promo_event_publication(
+                        ev,
+                        db,
+                        bot,
+                        target_chat=target_chat,
+                    )
+                    if not url:
+                        raise RuntimeError("telegram event publish returned no URL")
+                    await _record_vk_promo_exposure(
+                        db,
+                        campaign_id=campaign_id,
+                        activity_id=activity_id,
+                        event_id=int(ev.id),
+                        surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+                        placement_kind="rolling_window_deficit",
+                        status="TG_PUBLISHED",
+                        url=url,
+                        published_at=now_utc,
+                        details={
+                            "target_chat": target_chat,
+                            "target_url": url,
+                            "window_hours": window_hours,
+                        },
+                        target_type="telegram_channel",
+                    )
+                    async with db.get_session() as session:
+                        obj = await session.get(Event, int(ev.id))
+                        if obj is not None:
+                            obj.tg_event_post_url = url
+                            post_id = _tg_message_id_from_url(url)
+                            if post_id is not None:
+                                obj.tg_event_post_id = post_id
+                            obj.tg_event_post_mode = "promo"
+                            session.add(obj)
+                            await session.commit()
+                    results.append(
+                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "published", target_url=url)
+                    )
+                except Exception as exc:
+                    logger.exception("promo.tg publication failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
+                    results.append(
+                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
+                    )
+
+        elif activity.surface == PROMO_SURFACE_TG_REPOST:
+            cfg = _activity_config(activity)
+            source_chat = str(cfg.get("source_chat") or "").strip()
+            target_chat = str(cfg.get("target_chat") or activity.profile_key or "").strip()
+            if not source_chat or not target_chat:
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="source_or_target_chat_missing")
+                )
+                continue
+            if bot is None:
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="bot_missing")
+                )
+                continue
+            due_count = _vk_activity_due_count(activity, now_utc)
+            if due_count <= 0:
+                continue
+            recent_reposts = await _activity_day_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_TG_REPOST,
+                now_utc=now_utc,
+            )
+            if len(recent_reposts) >= due_count:
+                continue
+            source_candidates = await _recent_event_tg_posts(
+                db,
+                campaign_id=campaign_id,
+                events=events,
+                source_chat=source_chat,
+                since_utc=since_utc,
+                until_utc=now_utc,
+            )
+            dedup_since = now_utc - timedelta(hours=int(cfg.get("dedup_hours") or PROMO_VK_REPOST_DEDUP_HOURS))
+            prior = await _recent_activity_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_TG_REPOST,
+                since_utc=dedup_since,
+            )
+            forwarded_source_urls = {
+                str((exposure.details_json or {}).get("source_url") or "").strip()
+                for exposure in prior
+                if isinstance(exposure.details_json, dict)
+            }
+            picked: tuple[Event, str, datetime] | None = None
+            for candidate in sorted(source_candidates, key=lambda item: (item[2], int(item[0].id or 0))):
+                if candidate[1] not in forwarded_source_urls:
+                    picked = candidate
+                    break
+            if picked is None:
+                continue
+            ev, source_url, source_at = picked
+            try:
+                url = await _publish_tg_repost(
+                    bot,
+                    source_chat=source_chat,
+                    target_chat=target_chat,
+                    source_url=source_url,
+                )
+                if not url:
+                    raise RuntimeError("telegram forward returned no URL")
+                await _record_vk_promo_exposure(
+                    db,
+                    campaign_id=campaign_id,
+                    activity_id=activity_id,
+                    event_id=int(ev.id),
+                    surface=PROMO_SURFACE_TG_REPOST,
+                    placement_kind="rolling_window_repost",
+                    status="TG_FORWARDED",
+                    url=url,
+                    published_at=now_utc,
+                    details={
+                        "source_chat": source_chat,
+                        "target_chat": target_chat,
+                        "source_url": source_url,
+                        "source_published_at": source_at.isoformat(),
+                        "target_url": url,
+                    },
+                    target_type="telegram_forward",
+                )
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "published", source_url=source_url, target_url=url)
+                )
+            except Exception as exc:
+                logger.exception("promo.tg repost failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", source_url=source_url, reason=str(exc) or type(exc).__name__)
+                )
 
         elif activity.surface == PROMO_SURFACE_VK_REPOST:
             cfg = _activity_config(activity)

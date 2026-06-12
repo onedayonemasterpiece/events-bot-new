@@ -24,13 +24,17 @@ from models import (
 from promo import (
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_POLICY_FIRST_SLOT,
+    PROMO_SURFACE_DAILY_RECOMMEND_TODAY,
     PROMO_SURFACE_AFISHA_ENGAGEMENT,
+    PROMO_SURFACE_TG_EVENT_PUBLISH,
+    PROMO_SURFACE_TG_REPOST,
     PROMO_SURFACE_VK_PUBLICATION,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
     create_event_promo_campaign,
     create_festival_promo_campaign,
     ensure_initial_80_stories_campaign,
+    record_daily_promo_recommendation_exposures,
     run_promo_vk_activities,
     resolve_video_promo_candidates,
 )
@@ -817,6 +821,151 @@ async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monke
     stories = [exposure for exposure in exposures if exposure.surface == PROMO_SURFACE_VK_STORY]
     assert len(stories) == 4
     assert {story.public_targets_json[0]["type"] for story in stories} == {"vk_story"}
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_daily_recommend_today_appends_summary_block(tmp_path) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 7, 0, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Лекция о Третьякове", "2026-06-13", festival="Кантата")
+        event.time = "13:00"
+        event.telegraph_url = "https://telegra.ph/kantata-lecture"
+        fallback = _event("Общий анонс", "2026-06-13", festival="Кантата")
+        session.add_all([event, fallback])
+        await session.flush()
+        campaign = PromoCampaign(
+            title="Кантата · образование",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(day=16),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_DAILY_RECOMMEND_TODAY,
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "preferred_event_ids_by_date": {
+                    "2026-06-13": [int(event.id), int(fallback.id)]
+                }
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id)))
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(fallback.id)))
+        await session.commit()
+
+    posts = await main.build_daily_posts(
+        db,
+        timezone.utc,
+        now=now_utc,
+    )
+    text = posts[0][0]
+
+    assert "ИТОГО РЕКОМЕНДУЕМ ПОСЕТИТЬ СЕГОДНЯ" in text
+    assert '• <a href="https://telegra.ph/kantata-lecture">Лекция о Третьякове</a> — 13:00, Venue' in text
+    assert text.index("ИТОГО РЕКОМЕНДУЕМ") < text.index("#Афиша_Калининград")
+
+    recorded = await record_daily_promo_recommendation_exposures(db, now_utc=now_utc)
+    assert recorded == 1
+    recorded_again = await record_daily_promo_recommendation_exposures(db, now_utc=now_utc)
+    assert recorded_again == 0
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monkeypatch) -> None:
+    import main
+    from types import SimpleNamespace
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 17, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Кантата лекция", "2026-06-14", festival="Кантата")
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="Кантата · образование",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(day=16),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        publish = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+            profile_key="kldevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "target_chat": "@kldevents",
+                "active_start_hour": 18,
+                "active_end_hour": 20,
+            },
+        )
+        repost = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_REPOST,
+            profile_key="kldevents->kenigevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "source_chat": "@kldevents",
+                "target_chat": "@kenigevents",
+                "active_start_hour": 18,
+                "active_end_hour": 20,
+                "dedup_hours": 72,
+            },
+        )
+        session.add_all([publish, repost])
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=event_id))
+        await session.commit()
+
+    async def fake_publish(ev, db_arg, bot_arg, *, target_chat):
+        assert target_chat == "@kldevents"
+        return f"https://t.me/kldevents/{1000 + int(ev.id)}"
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.forwarded: list[tuple[str, str, int]] = []
+
+        async def forward_message(self, *, chat_id, from_chat_id, message_id):
+            self.forwarded.append((chat_id, from_chat_id, message_id))
+            return SimpleNamespace(message_id=2000 + message_id)
+
+    bot = DummyBot()
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", fake_publish)
+
+    results = await run_promo_vk_activities(db, bot, now_utc=now_utc)
+
+    assert [(item.surface, item.status) for item in results] == [
+        (PROMO_SURFACE_TG_EVENT_PUBLISH, "published"),
+        (PROMO_SURFACE_TG_REPOST, "published"),
+    ]
+    assert bot.forwarded == [("@kenigevents", "@kldevents", 1000 + event_id)]
+    async with db.get_session() as session:
+        exposures = (await session.execute(select(PromoExposure).order_by(PromoExposure.id))).scalars().all()
+        saved = await session.get(Event, event_id)
+    assert [row.surface for row in exposures] == [
+        PROMO_SURFACE_TG_EVENT_PUBLISH,
+        PROMO_SURFACE_TG_REPOST,
+    ]
+    assert exposures[1].details_json["source_url"] == f"https://t.me/kldevents/{1000 + event_id}"
+    assert saved.tg_event_post_url == f"https://t.me/kldevents/{1000 + event_id}"
     await db.close()
 
 
