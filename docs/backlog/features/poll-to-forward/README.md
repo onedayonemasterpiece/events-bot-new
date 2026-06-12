@@ -90,11 +90,15 @@ example:
 - `Сегодня вечером выберу одну рекомендацию на завтра. Какой план вам ближе?`
 - `Сегодня вечером подберу событие, куда можно сходить завтра. На что настроены?`
 - `Выбираем, что рекомендовать сегодня вечером на завтра. Что вам интереснее?`
+- `Сегодня вечером порекомендую, куда сходить завтра. Помогите выбрать тематику.`
+- `Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. This keeps the poll
 from drifting into meta copy such as "choose a topic and we will forward an
-announcement" while the LLM still owns the meaningful option set.
+announcement" while still allowing theme/type wording when it is clearly tied
+to the evening recommendation promise. The LLM still owns the meaningful option
+set.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
