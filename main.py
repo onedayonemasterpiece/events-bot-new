@@ -19667,6 +19667,208 @@ async def publish_event_progress(
                     _EVENT_PROGRESS_KEYS.pop(key, None)
 
 
+def _event_single_day_iso(event: Event) -> str | None:
+    raw = str(getattr(event, "date", "") or "").strip()
+    if not raw or ".." in raw or str(getattr(event, "end_date", "") or "").strip():
+        return None
+    day = parse_iso_date(raw.split("..", 1)[0])
+    return day.isoformat() if day else None
+
+
+def _public_event_time(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == "00:00":
+        return ""
+    return raw
+
+
+def _event_time_sort_key(value: str | None) -> tuple[int, int, int, str]:
+    raw = _public_event_time(value)
+    m = re.match(r"^(\d{1,2}):(\d{2})$", raw)
+    if not m:
+        return (1, 0, 0, raw)
+    try:
+        hh = int(m.group(1))
+        mm = int(m.group(2))
+    except Exception:
+        return (1, 0, 0, raw)
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return (1, 0, 0, raw)
+    return (0, hh, mm, raw)
+
+
+def _format_same_day_times_for_publication(times: Sequence[str]) -> str:
+    clean: list[str] = []
+    seen: set[str] = set()
+    for raw in times:
+        value = _public_event_time(raw)
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        clean.append(value)
+    if len(clean) <= 1:
+        return clean[0] if clean else ""
+    if len(clean) == 2:
+        return f"{clean[0]} и {clean[1]}"
+    return f"{', '.join(clean[:-1])} и {clean[-1]}"
+
+
+async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Event]:
+    event_id = getattr(event, "id", None)
+    if event_id is None:
+        return [event]
+    day = _event_single_day_iso(event)
+    if not day:
+        return [event]
+    raw_ids = getattr(event, "linked_event_ids", None) or []
+    linked_ids: list[int] = []
+    seen: set[int] = {int(event_id)}
+    if isinstance(raw_ids, list):
+        for raw in raw_ids:
+            try:
+                linked_id = int(raw)
+            except Exception:
+                continue
+            if linked_id <= 0 or linked_id in seen:
+                continue
+            linked_ids.append(linked_id)
+            seen.add(linked_id)
+    if not linked_ids:
+        return [event]
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event).where(Event.id.in_([int(event_id), *linked_ids]))
+                )
+            ).scalars().all()
+        )
+    by_id = {
+        int(getattr(row, "id")): row
+        for row in rows
+        if getattr(row, "id", None) is not None
+    }
+    if int(event_id) not in by_id:
+        by_id[int(event_id)] = event
+    group: list[Event] = []
+    for candidate in by_id.values():
+        if _event_single_day_iso(candidate) != day:
+            continue
+        if getattr(candidate, "lifecycle_status", "active") != "active" or getattr(candidate, "silent", False):
+            continue
+        if _event_has_ended_before_today(candidate):
+            continue
+        group.append(candidate)
+    if len(group) <= 1:
+        return [event]
+    group.sort(
+        key=lambda item: (
+            _event_time_sort_key(getattr(item, "time", None)),
+            int(getattr(item, "id", 0) or 0),
+        )
+    )
+    return group
+
+
+async def _prepare_same_day_linked_publish_event(
+    db: Database,
+    event: Event,
+) -> tuple[Event, list[Event]]:
+    group = await _same_day_linked_publish_group(db, event)
+    if len(group) <= 1:
+        return event, [event]
+    anchor = group[0]
+    combined_time = _format_same_day_times_for_publication(
+        [str(getattr(item, "time", "") or "") for item in group]
+    )
+    if combined_time:
+        anchor.time = combined_time
+        anchor.time_is_default = False
+    return anchor, group
+
+
+def _same_day_publish_group_ids(group: Sequence[Event]) -> list[int]:
+    ids: list[int] = []
+    seen: set[int] = set()
+    for item in group:
+        event_id = getattr(item, "id", None)
+        if event_id is None:
+            continue
+        try:
+            clean_id = int(event_id)
+        except Exception:
+            continue
+        if clean_id <= 0 or clean_id in seen:
+            continue
+        seen.add(clean_id)
+        ids.append(clean_id)
+    return ids
+
+
+async def _copy_same_day_linked_vk_publication(
+    db: Database,
+    *,
+    source_event: Event,
+    covered_event_ids: Sequence[int],
+    vk_url: str | None = None,
+    vk_source_hash: str | None = None,
+) -> None:
+    clean_ids = sorted({int(eid) for eid in covered_event_ids if int(eid) > 0})
+    if not clean_ids:
+        return
+    url = (vk_url or getattr(source_event, "source_vk_post_url", None) or "").strip()
+    source_hash = (vk_source_hash or getattr(source_event, "vk_source_hash", None) or "").strip()
+    if not url and not source_hash:
+        return
+    async with db.get_session() as session:
+        rows = list(
+            (await session.execute(select(Event).where(Event.id.in_(clean_ids)))).scalars().all()
+        )
+        for row in rows:
+            if url:
+                row.source_vk_post_url = url
+            if source_hash:
+                row.vk_source_hash = source_hash
+            session.add(row)
+        await session.commit()
+
+
+async def _copy_same_day_linked_tg_publication(
+    db: Database,
+    *,
+    source_event: Event,
+    covered_event_ids: Sequence[int],
+    post_url: str | None = None,
+    post_id: int | None = None,
+    post_mode: str | None = None,
+    source_hash: str | None = None,
+) -> None:
+    clean_ids = sorted({int(eid) for eid in covered_event_ids if int(eid) > 0})
+    if not clean_ids:
+        return
+    url = (post_url or getattr(source_event, "tg_event_post_url", None) or "").strip()
+    mode = (post_mode or getattr(source_event, "tg_event_post_mode", None) or "").strip()
+    hash_value = (source_hash or getattr(source_event, "tg_event_source_hash", None) or "").strip()
+    source_post_id = post_id if post_id is not None else getattr(source_event, "tg_event_post_id", None)
+    if not url and not source_post_id and not mode and not hash_value:
+        return
+    async with db.get_session() as session:
+        rows = list(
+            (await session.execute(select(Event).where(Event.id.in_(clean_ids)))).scalars().all()
+        )
+        for row in rows:
+            if url:
+                row.tg_event_post_url = url
+            if source_post_id:
+                row.tg_event_post_id = int(source_post_id)
+            if mode:
+                row.tg_event_post_mode = mode
+            if hash_value:
+                row.tg_event_source_hash = hash_value
+            session.add(row)
+        await session.commit()
+
+
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
@@ -19688,6 +19890,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             getattr(ev, "end_date", None),
         )
         return False
+    ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
@@ -19727,6 +19930,13 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 exc_info=True,
             )
         if post_exists:
+            await _copy_same_day_linked_vk_publication(
+                db,
+                source_event=ev,
+                covered_event_ids=_same_day_publish_group_ids(same_day_group),
+                vk_url=existing_vk_post_url,
+                vk_source_hash=new_hash,
+            )
             return
         logging.warning(
             "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
@@ -19744,6 +19954,13 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         bot=bot,
     )
     if vk_url:
+        await _copy_same_day_linked_vk_publication(
+            db,
+            source_event=event_for_notice or ev,
+            covered_event_ids=_same_day_publish_group_ids(same_day_group),
+            vk_url=vk_url,
+            vk_source_hash=new_hash,
+        )
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(
@@ -19769,6 +19986,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             getattr(ev, "end_date", None),
         )
         return False
+    ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
 
     promo_highlight = await resolve_tg_event_promo_highlight(ev, db)
     text_for_tg = select_tg_event_text_for_publish(
@@ -19799,6 +20017,15 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
         session.add(obj)
         await session.commit()
     if url:
+        await _copy_same_day_linked_tg_publication(
+            db,
+            source_event=ev,
+            covered_event_ids=_same_day_publish_group_ids(same_day_group),
+            post_url=url,
+            post_id=post_id,
+            post_mode=mode,
+            source_hash=source_hash,
+        )
         logline("TG", event_id, "event done", url=url)
     return True
 

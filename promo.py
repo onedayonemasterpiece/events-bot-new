@@ -1577,6 +1577,55 @@ async def resolve_surface_promo_event_ids(
     return result
 
 
+async def resolve_campaign_promo_event_ids(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+) -> set[int]:
+    """Return events covered by any active promo campaign.
+
+    This is used by channel-specific renderers that should react to the product
+    fact "the event is promoted" without requiring a separate activity/surface
+    toggle per channel.
+    """
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    today = now_utc.date()
+    await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
+
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(PromoCampaign, PromoTarget)
+                    .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
+                    .where(PromoCampaign.status == "active")
+                    .where(PromoCampaign.starts_at <= now_utc)
+                    .where(
+                        or_(
+                            PromoCampaign.ends_at.is_(None),
+                            PromoCampaign.ends_at >= now_utc,
+                        )
+                    )
+                    .order_by(PromoCampaign.created_at, PromoTarget.id)
+                )
+            ).all()
+        )
+
+    result: set[int] = set()
+    for campaign, target in rows:
+        events = await _events_for_target(
+            db,
+            target=target,
+            campaign=campaign,
+            today=today,
+        )
+        for ev in events:
+            if ev.id is not None:
+                result.add(int(ev.id))
+    return result
+
+
 async def record_video_promo_exposures(
     db: Database,
     *,

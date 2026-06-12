@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 import main
+from models import PromoCampaign, PromoTarget
 
 
 class DummyTgBot:
@@ -189,6 +190,44 @@ def test_tg_event_promo_text_for_publish_combines_context_sources():
     assert "Исходный текст: Исходный текст с деталями участников." in text
 
 
+@pytest.mark.asyncio
+async def test_tg_event_promo_highlight_uses_any_active_campaign(tmp_path):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = main.datetime(2026, 6, 12, 10, 0, tzinfo=main.timezone.utc)
+
+    event = _event(date="2026-06-20")
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        campaign = PromoCampaign(
+            title="Любая промо-кампания",
+            status="active",
+            starts_at=now,
+            ends_at=main.datetime(2026, 6, 30, 23, 59, tzinfo=main.timezone.utc),
+        )
+        session.add(campaign)
+        await session.commit()
+        await session.refresh(campaign)
+        session.add(
+            PromoTarget(
+                campaign_id=int(campaign.id),
+                target_type="event",
+                event_id=int(event.id),
+            )
+        )
+        await session.commit()
+        event_id = int(event.id)
+
+    async with db.get_session() as session:
+        stored = await session.get(main.Event, event_id)
+
+    assert stored is not None
+    assert await main.resolve_tg_event_promo_highlight(stored, db) is True
+    await db.close()
+
+
 def test_tg_event_utility_hashtags_ignore_conflicting_description():
     source = (
         "Собранное сырье направят на переработку. От одного физического лица "
@@ -223,6 +262,18 @@ def test_tg_event_utility_fallback_is_practical_not_generic_question():
 
     assert "до 4 чистых шин" in hook
     assert not hook.startswith("Что здесь стоит увидеть?")
+
+
+def test_tg_event_fallback_skips_repetitive_openers():
+    event = _event(
+        short_description="Хотите камерный вечер в музее?",
+        search_digest="Редкая камерная программа в спокойном формате.",
+        source_text="Готовы услышать редкую программу?",
+    )
+
+    hook = main._fallback_tg_event_hook_text(event, event.source_text)
+
+    assert hook == "Редкая камерная программа в спокойном формате."
 
 
 @pytest.mark.asyncio
@@ -289,6 +340,83 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
     )
 
     assert hook.startswith("Редкая камерная программа")
+
+
+def test_tg_event_promo_details_move_to_inline_button():
+    event = _event(ics_post_url="https://t.me/c/asset/42")
+
+    normal = main.build_tg_event_announcement(
+        event,
+        "Описание.",
+        promo_highlight=False,
+    )
+    normal_markup = main.build_tg_event_reply_markup(event, promo_highlight=False)
+    promo = main.build_tg_event_announcement(
+        event,
+        "Описание.",
+        promo_highlight=True,
+    )
+    promo_markup = main.build_tg_event_reply_markup(event, promo_highlight=True)
+
+    assert "🔎 Подробнее" in normal
+    assert normal_markup.inline_keyboard[0][0].text == "📅 20 июня 19:00 · Добавить в календарь"
+    assert "Подробнее" not in promo
+    assert promo_markup.inline_keyboard[0][0].text == "✨ Подробнее"
+    assert promo_markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
+    assert promo_markup.inline_keyboard[1][0].text == "📅 20 июня 19:00 · Добавить в календарь"
+
+
+@pytest.mark.asyncio
+async def test_same_day_linked_events_use_one_publish_anchor(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    first = _event(id=None, title="Аудиоспектакль «Дорога эпох»", date="2026-06-20", time="14:00")
+    second = _event(id=None, title="Аудиоспектакль «Дорога эпох»", date="2026-06-20", time="16:00")
+    async with db.get_session() as session:
+        session.add(first)
+        session.add(second)
+        await session.commit()
+        await session.refresh(first)
+        await session.refresh(second)
+        first.linked_event_ids = [int(second.id)]
+        second.linked_event_ids = [int(first.id)]
+        session.add(first)
+        session.add(second)
+        await session.commit()
+        second_id = int(second.id)
+
+    async with db.get_session() as session:
+        source = await session.get(main.Event, second_id)
+
+    assert source is not None
+    anchor, group = await main._prepare_same_day_linked_publish_event(db, source)
+
+    assert int(anchor.id) == int(first.id)
+    assert anchor.time == "14:00 и 16:00"
+    assert [int(item.id) for item in group] == [int(first.id), int(second.id)]
+
+    published = {}
+
+    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False):
+        published["event_id"] = int(event.id)
+        published["time"] = event.time
+        return "https://t.me/kldevents/999", 999, "text", "same-day-hash"
+
+    monkeypatch.setattr(main, "publish_tg_event_announcement", fake_publish)
+
+    assert await main.job_publish_tg_event_post(second_id, db, bot=object()) is True
+
+    assert published == {"event_id": int(first.id), "time": "14:00 и 16:00"}
+    async with db.get_session() as session:
+        stored_first = await session.get(main.Event, int(first.id))
+        stored_second = await session.get(main.Event, int(second.id))
+
+    assert stored_first.tg_event_post_url == "https://t.me/kldevents/999"
+    assert stored_second.tg_event_post_url == "https://t.me/kldevents/999"
+    assert stored_first.tg_event_source_hash == "same-day-hash"
+    assert stored_second.tg_event_source_hash == "same-day-hash"
+    await db.close()
 
 
 def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():

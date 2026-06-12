@@ -31,6 +31,11 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   activity parameters live in `promo_activity.config_json` (`target_group`,
   `source_group`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
   policy).
+- Telegram event publishing is channel-default behavior, not a separate
+  campaign activity: when an event is covered by any active `promo_target`, the
+  `@kldevents` publisher renders that event with its promo intro/CTA style.
+  Campaign authors must not add a separate `tg_event_publish` activity just to
+  make Telegram copy richer.
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by

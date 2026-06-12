@@ -6,13 +6,14 @@
   `.codex/skills/future-event-quality-audit` as a reusable operator workflow for
   production future-event quality audits, LLM-first prevention, DB repair,
   Telegraph rebuilds, and Telegram/VK duplicate cleanup evidence.
-- **Changed: Telegram event promo captions and quieter footer**: Telegram event
-  posts now support a `tg_event_publish` promo surface with richer intro copy
-  (up to 500 chars, combined editorial/source context, 2-3 concrete
-  reasons/details), put the city hashtag in the location line, stop duplicating
-  the city in the bottom hashtag line, and keep the footer focused on a single
-  `🔎 Подробнее` link instead of repeated subscribe/VK links. Covered by
-  `tests/test_tg_event_publish.py`.
+- **Changed: Telegram event promo captions by default for promoted events**:
+  Telegram event posts now switch to richer promo intro copy whenever the event
+  is covered by any active promo campaign. This does not require a separate
+  `tg_event_publish` activity, channel target, or env toggle per campaign. Promo
+  posts move `Подробнее` into a `✨ Подробнее` inline button, while ordinary
+  non-promo posts keep their existing link/button behavior. The Telegram hook
+  writer also rejects repetitive openings such as `Хотите...`, `Готовы...`, and
+  `Что здесь стоит увидеть?`. Covered by `tests/test_tg_event_publish.py`.
 - **Fixed: Future event quality LLM-first repair guardrails**: added
   `INC-2026-06-12-future-event-quality-llm-first-repair` as the regression
   contract and strengthened Telegram LLM venue-default prompts, source-grounded

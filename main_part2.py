@@ -3842,9 +3842,13 @@ TG_EVENT_ALBUM_SIZE = 10
 TG_EVENT_MAX_MEDIA = 9
 TG_EVENT_DHASH_NEAR_DUP_MAX_DISTANCE = 12
 TG_EVENT_REWRITE_MODEL = os.getenv("TG_EVENT_REWRITE_MODEL", "gemini-3.1-flash-lite")
-TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v5"
+TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v6"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
+_TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
+    r"^\s*(?:хотите|готовы|что\s+здесь\s+стоит\s+увидеть)\b",
+    re.IGNORECASE,
+)
 
 
 def _tg_event_publish_enabled() -> bool:
@@ -4121,13 +4125,9 @@ async def resolve_tg_event_promo_highlight(event: Event, db: Database | None) ->
     if not db or event_id is None:
         return False
     try:
-        from promo import resolve_surface_promo_event_ids
+        from promo import resolve_campaign_promo_event_ids
 
-        promo_ids = await resolve_surface_promo_event_ids(
-            db,
-            surface="tg_event_publish",
-            profile_key="kldevents",
-        )
+        promo_ids = await resolve_campaign_promo_event_ids(db)
     except Exception:
         logging.warning(
             "tg_event: promo resolver failed event_id=%s",
@@ -4144,6 +4144,7 @@ def build_tg_event_announcement(
     festival: Festival | None = None,
     *,
     include_calendar_link: bool = False,
+    promo_highlight: bool = False,
 ) -> str:
     title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
     lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
@@ -4198,8 +4199,10 @@ def build_tg_event_announcement(
     )
     footer_links: list[str] = []
     details_url = _tg_event_details_url(event)
-    if details_url:
+    if details_url and not promo_highlight:
         footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">🔎 Подробнее</a>')
+    elif details_url and include_calendar_link:
+        footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">✨ Подробнее</a>')
     calendar_url = _tg_event_calendar_post_url(event)
     if include_calendar_link and calendar_url and not footer_links:
         footer_links.append(
@@ -4229,11 +4232,13 @@ def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
             sentence = re.sub(r",?\s*подробнее\s*\([^)]+\)\s*$", "", sentence, flags=re.I).strip()
             if not sentence:
                 continue
+            if _TG_EVENT_REPETITIVE_OPENING_RE.match(sentence):
+                continue
             base = sentence.rstrip(".!?").strip()
-            if "?" in sentence:
+            if sentence.endswith("?"):
                 return sentence
             if len(base) > 1:
-                return f"Что здесь стоит увидеть? {base}."
+                return f"{base}."
             return base
     return ""
 
@@ -4262,6 +4267,9 @@ async def build_tg_event_hook_text(
         "Выбери лучший формат под событие: цепляющий вопрос, короткий полезный абзац "
         "или friendly-вступление вроде «Друзья, ...». Вопрос не обязателен, если событие "
         "утилитарное, сервисное или важнее объяснить практическую пользу.\n"
+        "Не используй однотипные обращения в начале: «Хотите...», «Готовы...», "
+        "«Что здесь стоит увидеть?». Если вопрос уместен, он должен быть конкретным "
+        "к этому событию, а не шаблонным.\n"
         "Не повторяй дату, время, место, цену и билетную ссылку: они будут в инфоблоке отдельно.\n"
         "Не добавляй хештеги, эмодзи, ссылки, призыв купить билеты или служебные фразы.\n"
         "Для пунктов приёма, сбора, переработки, волонтёрских и городских полезных акций "
@@ -4299,6 +4307,8 @@ async def build_tg_event_hook_text(
     cleaned = re.sub(r"#[\w\d_]+", "", cleaned, flags=re.UNICODE).strip()
     cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
     if not cleaned:
+        return _fallback_tg_event_hook_text(event, text)
+    if _TG_EVENT_REPETITIVE_OPENING_RE.match(cleaned):
         return _fallback_tg_event_hook_text(event, text)
     if _tg_event_source_is_utility_service(text) and any(
         marker in cleaned.casefold()
@@ -4344,6 +4354,7 @@ async def build_tg_event_announcement_for_publish(
         hook_text,
         festival=festival,
         include_calendar_link=include_calendar_link,
+        promo_highlight=promo_highlight,
     )
     if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
         return message_html, hook_text != text
@@ -4355,6 +4366,7 @@ async def build_tg_event_announcement_for_publish(
         "",
         festival=festival,
         include_calendar_link=include_calendar_link,
+        promo_highlight=promo_highlight,
     )
     room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
     for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
@@ -4364,6 +4376,7 @@ async def build_tg_event_announcement_for_publish(
             trimmed,
             festival=festival,
             include_calendar_link=include_calendar_link,
+            promo_highlight=promo_highlight,
         )
         if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
             return candidate, True
@@ -4467,20 +4480,35 @@ def _tg_event_calendar_button_text(event: Event) -> str:
     return "📅 Добавить в календарь"
 
 
-def build_tg_event_reply_markup(event: Event) -> types.InlineKeyboardMarkup | None:
+def build_tg_event_reply_markup(
+    event: Event,
+    *,
+    promo_highlight: bool = False,
+) -> types.InlineKeyboardMarkup | None:
+    rows: list[list[types.InlineKeyboardButton]] = []
+    details_url = _tg_event_details_url(event)
+    if promo_highlight and details_url:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="✨ Подробнее",
+                    url=details_url,
+                )
+            ]
+        )
     calendar_url = _tg_event_calendar_post_url(event)
-    if not calendar_url:
-        return None
-    return types.InlineKeyboardMarkup(
-        inline_keyboard=[
+    if calendar_url:
+        rows.append(
             [
                 types.InlineKeyboardButton(
                     text=_tg_event_calendar_button_text(event),
                     url=calendar_url,
                 )
             ]
-        ]
-    )
+        )
+    if not rows:
+        return None
+    return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def materialize_tg_event_media_for_upload(url: str, index: int) -> types.BufferedInputFile:
@@ -4560,7 +4588,7 @@ async def publish_tg_event_announcement(
         include_calendar_link=desired_mode == "album_caption",
         promo_highlight=promo_highlight,
     )
-    reply_markup = build_tg_event_reply_markup(event)
+    reply_markup = build_tg_event_reply_markup(event, promo_highlight=promo_highlight)
 
     if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
         try:
