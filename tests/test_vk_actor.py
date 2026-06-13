@@ -237,6 +237,44 @@ def test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval(monkeypatc
     )
 
 
+def test_vk_postponed_next_slot_uses_first_morning_gap_before_promo_anchors(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    monkeypatch.setattr(main, "VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS", 18 * 3600)
+    tz = ZoneInfo("Europe/Kaliningrad")
+
+    now = datetime(2026, 6, 13, 2, 9, tzinfo=tz)
+    promo_anchors = [
+        int(datetime(2026, 6, 13, 10, 40, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 15, 20, tzinfo=tz).timestamp()),
+    ]
+
+    assert main._vk_postponed_next_slot(
+        now,
+        postponed_timestamps=promo_anchors,
+    ) == datetime(2026, 6, 13, 6, 0, tzinfo=tz)
+
+
+def test_vk_postponed_next_slot_steps_through_occupied_morning_slots(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "Europe/Kaliningrad")
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 6)
+    tz = ZoneInfo("Europe/Kaliningrad")
+
+    now = datetime(2026, 6, 13, 2, 9, tzinfo=tz)
+    morning_anchors = [
+        int(datetime(2026, 6, 13, 6, 0, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 6, 10, tzinfo=tz).timestamp()),
+        int(datetime(2026, 6, 13, 15, 20, tzinfo=tz).timestamp()),
+    ]
+
+    assert main._vk_postponed_next_slot(
+        now,
+        postponed_timestamps=morning_anchors,
+    ) == datetime(2026, 6, 13, 6, 20, tzinfo=tz)
+
+
 @pytest.mark.asyncio
 async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")

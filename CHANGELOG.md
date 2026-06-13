@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: VK postponed event slot gap search**: `post_to_vk` now inspects the
+  active postponed queue and reserves the first free morning/day slot at the
+  configured interval instead of appending after the latest postponed post. A
+  late promo anchor at 15:20 can no longer force a fresh VK auto-import event
+  post to 15:30 when 06:00+ slots are free. Tracks
+  `INC-2026-06-13-vk-postponed-event-slot-late-anchor` and is covered by
+  `tests/test_vk_actor.py`.
 - **Fixed: critical scheduler watchdog for Telegram Monitoring and VK auto-import**:
   the `critical_scheduler_watchdog` interval job is now actually registered
   whenever `tg_monitoring`, guide full monitoring, or `vk_auto_import` is

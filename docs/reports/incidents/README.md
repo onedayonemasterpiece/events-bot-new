@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-13-vk-postponed-event-slot-late-anchor.md`
+  - Scope: VK postponed slot reservation for managed event posts, especially
+    `/vk_auto_import` event fanout through shared `post_to_vk`.
+  - Must not regress: late promo/postponed anchors must not force fresh event
+    posts to the tail of the day when morning slots are free; reservation must
+    inspect active postponed timestamps and choose the first free slot at the
+    configured cadence.
 - `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog.md`
   - Scope: Telegram Monitoring scheduled Kaggle handoff, critical scheduler
     watchdog registration, `ops_run` delivery evidence, `/healthz` scheduler

@@ -3363,21 +3363,55 @@ def _vk_postponed_day_start(value: datetime) -> datetime:
     return value.replace(hour=start_hour, minute=0, second=0, microsecond=0)
 
 
+def _vk_postponed_normalize_slot(value: datetime) -> datetime:
+    value = _round_up_to_next_minute(value)
+    if value.hour < min(23, max(0, VK_POSTPONED_START_HOUR)):
+        value = _vk_postponed_day_start(value)
+    return value
+
+
 def _vk_postponed_next_slot(
     now: datetime,
-    latest_postponed_ts: int | None,
+    latest_postponed_ts: int | None = None,
+    *,
+    postponed_timestamps: list[int] | None = None,
 ) -> datetime:
     tz = _vk_postponed_zone()
     now_local = now.astimezone(tz)
     interval = max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)
-    candidate = now_local + timedelta(seconds=interval)
-    if latest_postponed_ts:
-        latest_dt = datetime.fromtimestamp(latest_postponed_ts, tz)
+    if postponed_timestamps is None:
+        candidate = now_local + timedelta(seconds=interval)
+        if latest_postponed_ts:
+            latest_dt = datetime.fromtimestamp(latest_postponed_ts, tz)
+            candidate = max(candidate, latest_dt + timedelta(seconds=interval))
+        return _vk_postponed_normalize_slot(candidate)
+
+    candidate = _vk_postponed_normalize_slot(now_local + timedelta(seconds=interval))
+    anchors = sorted(
+        datetime.fromtimestamp(ts, tz)
+        for ts in postponed_timestamps
+        if isinstance(ts, int)
+    )
+    max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
+    search_horizon = timedelta(seconds=max(max_anchor_ahead, 24 * 3600))
+    search_until = now_local + search_horizon
+    max_iterations = max(1, int(search_horizon.total_seconds() // interval) + 48)
+    for _ in range(max_iterations):
+        candidate = _vk_postponed_normalize_slot(candidate)
+        conflict: datetime | None = None
+        for anchor in anchors:
+            if abs(anchor - candidate) < timedelta(seconds=interval):
+                conflict = anchor
+                break
+        if conflict is None:
+            return candidate
+        candidate = conflict + timedelta(seconds=interval)
+        if candidate > search_until:
+            break
+    if anchors:
+        latest_dt = max(anchors)
         candidate = max(candidate, latest_dt + timedelta(seconds=interval))
-    candidate = _round_up_to_next_minute(candidate)
-    if candidate.hour < min(23, max(0, VK_POSTPONED_START_HOUR)):
-        candidate = _vk_postponed_day_start(candidate)
-    return candidate
+    return _vk_postponed_normalize_slot(candidate)
 
 
 def _vk_postponed_items(response: dict) -> list[dict]:
@@ -3396,12 +3430,12 @@ def _is_afishaengagement_debug_post(item: dict) -> bool:
     return "[AFISHAENGAGEMENT DEBUG COPY" in text or "#afishaengagement" in text
 
 
-async def _fetch_vk_latest_postponed_ts(
+async def _fetch_vk_postponed_anchor_timestamps(
     owner_id: int,
     actors: list[VkActor],
     db: Database | None,
     bot: Bot | None,
-) -> int | None:
+) -> list[int]:
     params = {
         "owner_id": str(owner_id),
         "filter": "postponed",
@@ -3451,8 +3485,18 @@ async def _fetch_vk_latest_postponed_ts(
                     )
                     continue
                 dates.append(value)
-        return max(dates) if dates else None
-    return None
+        return sorted(dates)
+    return []
+
+
+async def _fetch_vk_latest_postponed_ts(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+) -> int | None:
+    dates = await _fetch_vk_postponed_anchor_timestamps(owner_id, actors, db, bot)
+    return max(dates) if dates else None
 
 
 async def _reserve_vk_postponed_publish_date(
@@ -3469,19 +3513,24 @@ async def _reserve_vk_postponed_publish_date(
         tz = _vk_postponed_zone()
         now_local = (now or datetime.now(tz)).astimezone(tz)
         now_ts = int(now_local.timestamp())
-        latest_ts = await _fetch_vk_latest_postponed_ts(owner_id, actors, db, bot)
+        postponed_timestamps = await _fetch_vk_postponed_anchor_timestamps(
+            owner_id, actors, db, bot
+        )
         reserved_ts = _vk_postponed_reserved_until_by_owner.get(owner_id)
         if reserved_ts and reserved_ts > now_ts:
-            latest_ts = max(latest_ts or 0, reserved_ts)
-        publish_dt = _vk_postponed_next_slot(now_local, latest_ts)
+            postponed_timestamps.append(reserved_ts)
+        publish_dt = _vk_postponed_next_slot(
+            now_local,
+            postponed_timestamps=postponed_timestamps,
+        )
         publish_ts = int(publish_dt.timestamp())
         _vk_postponed_reserved_until_by_owner[owner_id] = publish_ts
         logging.info(
-            "vk.postponed reserved owner_id=%s publish_date=%s local=%s latest=%s",
+            "vk.postponed reserved owner_id=%s publish_date=%s local=%s anchors=%s",
             owner_id,
             publish_ts,
             publish_dt.isoformat(),
-            latest_ts,
+            len(postponed_timestamps),
         )
         return publish_ts
 
