@@ -140,17 +140,20 @@ the final Kaggle output download/report failed.
 ## Deployment Evidence
 
 - 2026-06-13: deployed from
-  `hotfix/kaggle-status-framework-main-20260613` at `6671b5f1`, based on
-  `origin/main` `904e0aa9`.
-- Fly release: `events-bot-new-wngqia` machine version `1394`, image
-  `deployment-01KV1FGSQ70WJV1JR3PCYTRH85`.
+  `hotfix/kaggle-status-framework-main-20260613` at `f4727ca0`, based on
+  `origin/main` `f4727ca0`.
+- Fly release: `events-bot-new-wngqia` machine version `1395`, image
+  `deployment-01KV1GH881SED22QQK5HS7FV5C`.
 - Runtime probe confirmed `/app/kaggle_status.py`,
   `/app/kaggle/kaggle_status_client.py`, `preview3d:` status wiring,
   `kenigsberg:` status wiring, and Telegram resource lease wiring are present.
 - `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`.
 - Local focused checks passed: `py_compile`, `git diff --check`, no
-  `story_publish.py` diff, and `10 passed` for
+  `story_publish.py` diff, and `11 passed` for
   `tests/test_kaggle_status.py` plus
   `tests/test_kaggle_notebook_status_instrumentation.py` (pytest still needed a
   manual interrupt after the green summary because the interpreter hung during
   shutdown).
+- Resource lease diagnostics now expire stale active rows during status config
+  creation and callback handling, so an already-expired lease does not continue
+  to look active until another holder tries to acquire the same key.

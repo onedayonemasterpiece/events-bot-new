@@ -70,14 +70,14 @@ Telegram history confirmed two posts for the same scheduled slot.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `6671b5f1` on branch
+- deployed SHA: `f4727ca0` on branch
   `hotfix/kaggle-status-framework-main-20260613`, based on `origin/main`
-  `904e0aa9`.
-- deploy path: Fly app `events-bot-new-wngqia`, machine version `1394`, image
-  `registry.fly.io/events-bot-new-wngqia:deployment-01KV1FGSQ70WJV1JR3PCYTRH85`,
+  `f4727ca0`.
+- deploy path: Fly app `events-bot-new-wngqia`, machine version `1395`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV1GH881SED22QQK5HS7FV5C`,
   machine `48e42d5b714228`, health check passing.
 - regression checks: local focused suite `tests/test_kaggle_status.py`
-  and `tests/test_kaggle_notebook_status_instrumentation.py` passes (`10 passed`;
+  and `tests/test_kaggle_notebook_status_instrumentation.py` passes (`11 passed`;
   pytest still hangs during Python shutdown after the green summary); syntax
   checks pass for the status framework, Kaggle client instrumentation,
   Preview3D, KoenigsbergStories, monitor kernels, and script parser kernels.
@@ -88,12 +88,13 @@ Telegram history confirmed two posts for the same scheduled slot.
   replaced the running image with code that did not contain `kaggle_status.py`,
   `kaggle_status_client.py`, or notebook instrumentation; the 18:10 UTC guide
   run therefore pushed old notebook code without status callbacks.
-- post-v1394 production code probe: `/app/kaggle_status.py`,
+- post-v1395 production code probe: `/app/kaggle_status.py`,
   `/app/kaggle/kaggle_status_client.py`, guide/Telegram monitor helper loading,
   `video_announce/kaggle_client.py` notebook instrumentation, `preview3d:`
   status wiring, and `kenigsberg:` status wiring are present in the running
-  container. `story_publish.py` was not changed by this release.
-- post-deploy verification: pending next real scheduled Kaggle run on the v1394
+  container. `story_publish.py` was not changed by this release. Stale active
+  resource leases are now expired during the next status config/callback flow.
+- post-deploy verification: pending next real scheduled Kaggle run on the v1395
   image (guide light is next scheduled for 2026-06-14 07:05 UTC; video popular
   review is scheduled for 2026-06-14 07:44 UTC; guide full for 2026-06-14
   18:10 UTC; `tg_monitoring` for 2026-06-14 21:40 UTC).
