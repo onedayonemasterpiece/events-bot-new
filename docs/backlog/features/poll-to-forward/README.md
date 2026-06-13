@@ -280,17 +280,48 @@ Poll to Repost should reuse the existing post metrics foundation:
 - `vk_post_metric`;
 - `/popular_posts` ranking principles.
 
-The two owned VK communities, `@kldevents` and
-`https://vk.com/kenigeventsofficial`, should contribute engagement signals
-without becoming event sources for this feature. Their views, likes, and reposts
-should be compared against their own median baseline and weighted `4x` in the
-popularity aggregate used by `popular_posts` and Poll to Repost.
+For Poll to Repost, `source_vk_post_url` is treated as a legacy pointer and is
+not authoritative for engagement. The primary VK stats path is a live published
+wall scan of `kldevents` (`VK_EVENTS_GROUP_ID=231920894`, default scan limit
+`POLL_TO_FORWARD_KLDEVENTS_WALL_SCAN_LIMIT=1000`) before poll creation. Stored
+URLs are used only as a fast direct lookup and diagnostic signal.
 
-Long-term preferred shape:
+Live wall matching requires strict anchors:
 
-- add `reposts` support to VK metric snapshots if missing;
-- add per-source metric weights/config for owned audience channels;
-- keep retention bounded by the existing post metrics cleanup policy.
+- event title and target date must be present;
+- time or venue must also match when the event has that anchor;
+- title-only matches are rejected;
+- duplicate DB events mapped to one live wall post share one popularity group,
+  so they do not inflate poll inventory.
+
+Resolved repeat-publication mappings are stored separately from factual event
+sources in `event_publication`:
+
+- `event_id`;
+- `platform='vk'`;
+- `target='klgdevents'`;
+- `stored_url` / `live_url`;
+- `stored_post_id` / `live_post_id`;
+- `match_method`;
+- `match_confidence`;
+- `status`;
+- `resolved_at`.
+
+The `vk_post_metric` snapshots store `views`, `likes`, `comments`, and
+`reposts`. A live `kldevents` post above its recent median contributes with
+weight `4x`; existing `/popular_posts` source-wall signals remain as a `1x`
+fallback. An event qualifies for Poll to Repost if either signal is above its
+own median. The kldevents median should come from recent resolved event posts;
+during bootstrap the current wall scan may provide a low-confidence baseline,
+which is recorded in diagnostics.
+
+Poll options are built from popularity-qualified events only when a popularity
+surface is available. Each option must contain at least two distinct candidate
+groups (`POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION`, default `2`).
+Single-candidate themes are omitted. A free-events option is allowed only when
+at least two popular free candidates exist. The final recommendation stays
+inside the winning poll option and uses a weighted pick from that option's
+deduplicated TOP-3 candidates.
 
 ## Data Model
 

@@ -439,6 +439,8 @@ async def upsert_vk_post_metric(
     post_ts: int | None,
     views: int | None,
     likes: int | None,
+    comments: int | None = None,
+    reposts: int | None = None,
     collected_ts: int | None = None,
 ) -> None:
     collected_ts = int(collected_ts or _utc_now_ts())
@@ -446,15 +448,17 @@ async def upsert_vk_post_metric(
         await conn.execute(
             """
             INSERT INTO vk_post_metric(
-                group_id, post_id, age_day, source_url, post_ts, collected_ts, views, likes
+                group_id, post_id, age_day, source_url, post_ts, collected_ts, views, likes, comments, reposts
             )
-            VALUES(?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(group_id, post_id, age_day) DO UPDATE SET
                 collected_ts=excluded.collected_ts,
                 source_url=COALESCE(excluded.source_url, vk_post_metric.source_url),
                 post_ts=COALESCE(excluded.post_ts, vk_post_metric.post_ts),
                 views=MAX(COALESCE(vk_post_metric.views, -1), COALESCE(excluded.views, -1)),
-                likes=MAX(COALESCE(vk_post_metric.likes, -1), COALESCE(excluded.likes, -1))
+                likes=MAX(COALESCE(vk_post_metric.likes, -1), COALESCE(excluded.likes, -1)),
+                comments=MAX(COALESCE(vk_post_metric.comments, -1), COALESCE(excluded.comments, -1)),
+                reposts=MAX(COALESCE(vk_post_metric.reposts, -1), COALESCE(excluded.reposts, -1))
             """,
             (
                 int(group_id),
@@ -465,6 +469,8 @@ async def upsert_vk_post_metric(
                 int(collected_ts),
                 int(views) if isinstance(views, int) else None,
                 int(likes) if isinstance(likes, int) else None,
+                int(comments) if isinstance(comments, int) else None,
+                int(reposts) if isinstance(reposts, int) else None,
             ),
         )
         await conn.commit()

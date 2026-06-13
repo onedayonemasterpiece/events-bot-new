@@ -896,5 +896,137 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
         cur = await conn.execute(
             "SELECT status, winner_option_id, chosen_event_id, kldevents_message_id, forwarded_message_id FROM poll_repost_run"
         )
-        assert await cur.fetchone() == (pf.STATUS_FORWARDED, "music", 101, 501, 301)
+    assert await cur.fetchone() == (pf.STATUS_FORWARDED, "music", 101, 501, 301)
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_popularity_inventory_filters_single_candidate_options(monkeypatch):
+    events = [
+        pf.CandidateEvent(
+            id=101,
+            title="Концерт 1",
+            date="2026-06-14",
+            end_date=None,
+            time="19:00",
+            event_type="концерт",
+            festival=None,
+            city="Калининград",
+            location_name="Зал",
+            is_free=False,
+            tg_event_post_id=501,
+            tg_event_post_url="https://t.me/kldevents/501",
+            telegraph_url="https://telegra.ph/101",
+            summary="",
+            popularity_score=10.0,
+            popularity_group_key="kld:1",
+        ),
+        pf.CandidateEvent(
+            id=102,
+            title="Концерт 2",
+            date="2026-06-14",
+            end_date=None,
+            time="20:00",
+            event_type="концерт",
+            festival=None,
+            city="Калининград",
+            location_name="Зал",
+            is_free=False,
+            tg_event_post_id=502,
+            tg_event_post_url="https://t.me/kldevents/502",
+            telegraph_url="https://telegra.ph/102",
+            summary="",
+            popularity_score=8.0,
+            popularity_group_key="kld:2",
+        ),
+        pf.CandidateEvent(
+            id=201,
+            title="Единственная лекция",
+            date="2026-06-14",
+            end_date=None,
+            time="18:00",
+            event_type="лекция",
+            festival=None,
+            city="Калининград",
+            location_name="Библиотека",
+            is_free=True,
+            tg_event_post_id=601,
+            tg_event_post_url="https://t.me/kldevents/601",
+            telegraph_url="https://telegra.ph/201",
+            summary="",
+            popularity_score=9.0,
+            popularity_group_key="kld:3",
+        ),
+    ]
+
+    async def fake_llm(**_kwargs):
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [101, 102]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [201]},
+                {"key": "free", "text": "Куда угодно, только бесплатно", "candidate_event_ids": [201]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    _question, options, strategy = await pf.build_poll_plan(
+        events,
+        min_options=2,
+        run_key="debug:2026-06-13T14",
+    )
+
+    assert strategy == "llm_underfilled"
+    assert options == []
+
+
+@pytest.mark.asyncio
+async def test_popularity_winner_selection_stays_inside_winning_option_top3(monkeypatch):
+    events = [
+        pf.CandidateEvent(
+            id=event_id,
+            title=f"Событие {event_id}",
+            date="2026-06-14",
+            end_date=None,
+            time="19:00",
+            event_type="концерт",
+            festival=None,
+            city="Калининград",
+            location_name="Зал",
+            is_free=False,
+            tg_event_post_id=500 + event_id,
+            tg_event_post_url=f"https://t.me/kldevents/{500 + event_id}",
+            telegraph_url=f"https://telegra.ph/{event_id}",
+            summary="",
+            popularity_score=score,
+            popularity_group_key=f"kld:{event_id}",
+            popularity_trace={
+                "best_signal": {
+                    "source": "kldevents_vk",
+                    "above": ["views", "comments"],
+                }
+            },
+        )
+        for event_id, score in ((101, 12.0), (102, 10.0), (103, 8.0), (104, 1.0), (201, 20.0))
+    ]
+    tied_options = [
+        pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102, 103, 104)),
+    ]
+
+    async def fail_llm(**_kwargs):
+        raise AssertionError("popularity path should not call LLM winner selection")
+
+    monkeypatch.setattr(pf, "_google_generate_json", fail_llm)
+
+    winner_option, chosen_id, reason = await pf._choose_winner_with_llm(
+        tied_options=tied_options,
+        events=events,
+        target_date=datetime(2026, 6, 14, tzinfo=timezone.utc).date(),
+    )
+
+    assert winner_option == tied_options[0]
+    assert chosen_id in {101, 102, 103}
+    assert chosen_id != 104
+    assert chosen_id != 201
+    assert "kldevents" in reason

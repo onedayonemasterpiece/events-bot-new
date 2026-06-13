@@ -1583,6 +1583,8 @@ class Database:
                     collected_ts INTEGER NOT NULL,
                     views INTEGER,
                     likes INTEGER,
+                    comments INTEGER,
+                    reposts INTEGER,
                     UNIQUE(group_id, post_id, age_day)
                 )
                 """
@@ -1592,6 +1594,32 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_vk_metric_group_post ON vk_post_metric(group_id, post_id)"
+            )
+            await _add_column(conn, "vk_post_metric", "comments INTEGER")
+            await _add_column(conn, "vk_post_metric", "reposts INTEGER")
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_publication(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    platform TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    stored_url TEXT,
+                    live_url TEXT,
+                    stored_post_id INTEGER,
+                    live_post_id INTEGER,
+                    match_method TEXT,
+                    match_confidence REAL,
+                    status TEXT NOT NULL DEFAULT 'unknown',
+                    resolved_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(event_id, platform, target),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_publication_target_status ON event_publication(target, status)"
             )
 
             await conn.execute(

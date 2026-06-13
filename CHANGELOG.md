@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Changed: Poll to Repost kldevents popularity preflight**: poll creation now
+  resolves live `kldevents` VK wall posts by strict title/date plus time-or-venue
+  anchors before topic planning, treats stored `source_vk_post_url` as a legacy
+  hint, stores the resolved mapping in `event_publication`, and uses
+  `kldevents` engagement above median as a `4x` signal alongside existing
+  `/popular_posts` source popularity. VK metric snapshots now include
+  `comments` and `reposts`; poll options require at least two distinct popular
+  candidate groups, and the final recommendation stays inside the winning
+  option's deduplicated TOP-3.
 - **Changed: Poll to Repost title-link phrasing**: LLM repost comments now must
   embed the event link into a natural phrase with a generic event word/type
   before the title, and renderer rejects `: {{EVENT_LINK}}` label patterns such

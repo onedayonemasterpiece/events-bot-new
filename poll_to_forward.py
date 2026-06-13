@@ -6,7 +6,7 @@ import os
 import re
 import hashlib
 from html import escape
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Sequence
 from zoneinfo import ZoneInfo
@@ -23,6 +23,7 @@ PROFILE_PROD = "prod"
 PROFILE_DEBUG = "debug"
 STATUS_OPEN = "open"
 STATUS_SKIPPED_LOW_INVENTORY = "skipped_low_inventory"
+STATUS_SKIPPED_LOW_POPULARITY_INVENTORY = "skipped_low_popularity_inventory"
 STATUS_SKIPPED_TOPIC_UNDERFILL = "skipped_topic_underfill"
 STATUS_SKIPPED_NO_VOTES = "skipped_no_votes"
 STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
@@ -69,6 +70,11 @@ class CandidateEvent:
     tg_event_post_url: str | None
     telegraph_url: str | None
     summary: str
+    source_vk_post_url: str | None = None
+    topics: tuple[str, ...] = ()
+    popularity_score: float = 0.0
+    popularity_group_key: str | None = None
+    popularity_trace: dict[str, Any] | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -474,6 +480,19 @@ def _short_summary(event: Event) -> str:
     return text[:500]
 
 
+def _event_topics(event: Event) -> tuple[str, ...]:
+    raw = getattr(event, "topics", None)
+    if isinstance(raw, (list, tuple)):
+        return tuple(str(item).strip() for item in raw if str(item or "").strip())
+    try:
+        data = json.loads(str(raw or "[]"))
+    except Exception:
+        return ()
+    if not isinstance(data, list):
+        return ()
+    return tuple(str(item).strip() for item in data if str(item or "").strip())
+
+
 async def _recent_forwarded_event_ids(
     db: Database,
     *,
@@ -566,9 +585,72 @@ async def load_eligible_events(
                 tg_event_post_url=(str(getattr(event, "tg_event_post_url", "") or "").strip() or None),
                 telegraph_url=_event_telegraph_url(event),
                 summary=_short_summary(event),
+                source_vk_post_url=(str(getattr(event, "source_vk_post_url", "") or "").strip() or None),
+                topics=_event_topics(event),
             )
         )
     return candidates
+
+
+async def _apply_popularity_preflight(
+    db: Database,
+    events: Sequence[CandidateEvent],
+    *,
+    target_date: date,
+    now_utc: datetime | None,
+) -> tuple[list[CandidateEvent], dict[str, Any]]:
+    if not events:
+        return [], {"eligible_before_popularity": 0, "popular_events": 0}
+    if not _env_enabled("POLL_TO_FORWARD_POPULARITY_ENABLED", True):
+        return list(events), {"disabled": True, "eligible_before_popularity": len(events)}
+    try:
+        from poll_to_forward_popularity import build_event_popularity, popularity_trace_for_event
+
+        result = await build_event_popularity(
+            db,
+            events,
+            target_date=target_date,
+            now_utc=now_utc,
+        )
+    except Exception as exc:
+        logger.warning("poll_to_forward: popularity preflight failed: %s", exc, exc_info=True)
+        return list(events), {
+            "error": str(exc) or type(exc).__name__,
+            "eligible_before_popularity": len(events),
+            "popular_events": 0,
+        }
+    enriched: list[CandidateEvent] = []
+    for event in events:
+        popularity = result.by_event_id.get(event.id)
+        if popularity:
+            enriched.append(
+                replace(
+                    event,
+                    popularity_score=float(popularity.score),
+                    popularity_group_key=popularity.group_key,
+                    popularity_trace=popularity_trace_for_event(popularity),
+                )
+            )
+        else:
+            enriched.append(event)
+    popular = [event for event in enriched if float(event.popularity_score or 0.0) > 0]
+    diagnostics = {
+        **result.diagnostics,
+        "eligible_before_popularity": len(events),
+        "popular_events": len(popular),
+    }
+    # Keep old unit/local flows alive when no metric surface is available at all.
+    if not popular and not any(
+        int(diagnostics.get(key, 0) or 0) > 0
+        for key in (
+            "source_metric_rows",
+            "kldevents_direct_found",
+            "kldevents_wall_scan_found",
+            "kldevents_wall_items_scanned",
+        )
+    ):
+        return enriched, diagnostics
+    return popular, diagnostics
 
 
 def _extract_json_object(text: str) -> dict[str, Any] | None:
@@ -676,6 +758,9 @@ async def _call_llm_topic_planner(
             "city": ev.city,
             "location": ev.location_name,
             "is_free": ev.is_free,
+            "topics": list(ev.topics),
+            "popularity_score": round(float(ev.popularity_score or 0.0), 3),
+            "popularity": (ev.popularity_trace or {}).get("best_signal") if ev.popularity_trace else None,
             "summary": ev.summary[:350],
         }
         for ev in events[:40]
@@ -685,6 +770,8 @@ async def _call_llm_topic_planner(
         "какое направление аудитория выберет, чтобы сегодня вечером получить одну рекомендацию "
         "о том, куда можно пойти завтра.\n"
         "Работай только с переданными событиями. Не придумывай темы, под которые нет кандидатов. "
+        "Если в событиях есть popularity, используй её как сигнал аудитории: такие события уже показали "
+        "интерес выше медианы в источниках или на стене kldevents. "
         "Опции должны быть живыми job-to-be-done, а не сухими категориями базы. "
         "Пиши дружелюбно и спокойно, как обращение к подписчикам канала с анонсами. "
         f"{free_instruction}"
@@ -734,14 +821,64 @@ async def _call_llm_topic_planner(
     return question, options[:TELEGRAM_POLL_MAX_OPTIONS]
 
 
+def _popularity_group_count(option: PollOptionPlan, events_by_id: dict[int, CandidateEvent]) -> int:
+    groups: set[str] = set()
+    for event_id in option.candidate_event_ids:
+        event = events_by_id.get(int(event_id))
+        if not event:
+            continue
+        groups.add(event.popularity_group_key or f"event:{event.id}")
+    return len(groups)
+
+
+def _popularity_filter_active(events: Sequence[CandidateEvent]) -> bool:
+    return any(float(event.popularity_score or 0.0) > 0 for event in events)
+
+
+def _filter_options_by_popularity_inventory(
+    options: Sequence[PollOptionPlan],
+    events: Sequence[CandidateEvent],
+) -> list[PollOptionPlan]:
+    if not _popularity_filter_active(events):
+        return list(options)
+    events_by_id = {event.id: event for event in events}
+    min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
+    out: list[PollOptionPlan] = []
+    for option in options:
+        ids = tuple(
+            event_id
+            for event_id in option.candidate_event_ids
+            if events_by_id.get(int(event_id)) and float(events_by_id[int(event_id)].popularity_score or 0.0) > 0
+        )
+        filtered = PollOptionPlan(
+            key=option.key,
+            text=option.text,
+            candidate_event_ids=ids,
+            rationale=option.rationale,
+        )
+        if _popularity_group_count(filtered, events_by_id) < min_candidates:
+            continue
+        out.append(filtered)
+    return out
+
+
+def _effective_min_options(events: Sequence[CandidateEvent], configured_min_options: int) -> int:
+    effective = _topic_plan_min_options(events, configured_min_options)
+    if _popularity_filter_active(events):
+        popularity_min = max(2, _env_int("POLL_TO_FORWARD_POPULAR_MIN_OPTIONS", 2))
+        return max(2, min(effective, popularity_min))
+    return effective
+
+
 async def build_poll_plan(
     events: Sequence[CandidateEvent],
     *,
     min_options: int,
     run_key: str | None = None,
 ) -> tuple[str, list[PollOptionPlan], str]:
-    effective_min_options = _topic_plan_min_options(events, min_options)
+    effective_min_options = _effective_min_options(events, min_options)
     _question, llm_options = await _call_llm_topic_planner(events, min_options=effective_min_options)
+    llm_options = _filter_options_by_popularity_inventory(llm_options, events)
     question = _poll_question_text(run_key)
     if len(llm_options) >= effective_min_options:
         return question, llm_options, "llm"
@@ -903,27 +1040,46 @@ async def create_debug_poll_if_due(
 
     target_date = (now_local.date() + timedelta(days=1))
     events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
+    events, popularity_diag = await _apply_popularity_preflight(
+        db,
+        events,
+        target_date=target_date,
+        now_utc=now_value,
+    )
     min_events = max(1, _env_int("POLL_TO_FORWARD_DEBUG_MIN_ELIGIBLE_EVENTS", 3))
     if len(events) < min_events:
+        has_popularity_surface = any(
+            int(popularity_diag.get(key, 0) or 0) > 0
+            for key in (
+                "source_metric_rows",
+                "kldevents_direct_found",
+                "kldevents_wall_scan_found",
+                "kldevents_wall_items_scanned",
+            )
+        )
+        status = STATUS_SKIPPED_LOW_POPULARITY_INVENTORY if has_popularity_surface else STATUS_SKIPPED_LOW_INVENTORY
+        reason = "low_popularity_inventory" if has_popularity_surface else "low_inventory"
         await _insert_run(
             db,
             profile_key=PROFILE_DEBUG,
             run_key=run_key,
-            status=STATUS_SKIPPED_LOW_INVENTORY,
+            status=status,
             target_event_date=target_date,
-            error={"eligible_events": len(events), "min_events": min_events},
+            error={"eligible_events": len(events), "min_events": min_events, "popularity": popularity_diag},
         )
         logger.info(
-            "poll_to_forward.debug_create skipped low_inventory run_key=%s target_date=%s eligible=%s min=%s",
+            "poll_to_forward.debug_create skipped %s run_key=%s target_date=%s eligible=%s min=%s popularity=%s",
+            reason,
             run_key,
             target_date,
             len(events),
             min_events,
+            popularity_diag,
         )
-        return {"created": False, "reason": "low_inventory", "eligible_events": len(events)}
+        return {"created": False, "reason": reason, "eligible_events": len(events)}
 
     configured_min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
-    min_options = _topic_plan_min_options(events, configured_min_options)
+    min_options = _effective_min_options(events, configured_min_options)
     question, options, strategy = await build_poll_plan(events, min_options=min_options, run_key=run_key)
     if len(options) < min_options:
         await _insert_run(
@@ -932,7 +1088,12 @@ async def create_debug_poll_if_due(
             run_key=run_key,
             status=STATUS_SKIPPED_TOPIC_UNDERFILL,
             target_event_date=target_date,
-            error={"eligible_events": len(events), "options": len(options), "min_options": min_options},
+            error={
+                "eligible_events": len(events),
+                "options": len(options),
+                "min_options": min_options,
+                "popularity": popularity_diag,
+            },
         )
         logger.info(
             "poll_to_forward.debug_create skipped topic_underfill run_key=%s target_date=%s eligible=%s options=%s min=%s strategy=%s",
@@ -968,7 +1129,7 @@ async def create_debug_poll_if_due(
         poll_message_id=int(getattr(sent, "message_id", 0) or 0),
         poll_id=str(getattr(poll, "id", "") or ""),
         resolve_after=resolve_after,
-        error={"strategy": strategy, "eligible_events": len(events)},
+        error={"strategy": strategy, "eligible_events": len(events), "popularity": popularity_diag},
     )
     logger.info(
         "poll_to_forward.debug_create published run_key=%s chat=%s poll_message_id=%s target_date=%s eligible=%s options=%s strategy=%s resolve_after=%s",
@@ -1046,6 +1207,81 @@ def _poll_result_snapshot(poll: Any, fallback_options: Sequence[PollOptionPlan])
     return {"total_voter_count": total_count, "options": rows}
 
 
+def _popularity_reason(event: CandidateEvent) -> str:
+    trace = event.popularity_trace or {}
+    best = trace.get("best_signal") if isinstance(trace, dict) else None
+    source = str((best or {}).get("source") or "")
+    above = (best or {}).get("above") or []
+    if source == "kldevents_vk":
+        if any(metric in above for metric in ("comments", "reposts")):
+            return "у этого анонса заметный живой отклик на стене kldevents"
+        return "у этого анонса отклик на стене kldevents выше обычного"
+    if source == "source_vk":
+        return "у исходного анонса уже есть отклик выше обычного"
+    return "по популярности этот анонс выглядит сильнее внутри выбранной темы"
+
+
+def _weighted_pick_from_top3(
+    events: Sequence[CandidateEvent],
+    *,
+    seed: str,
+) -> CandidateEvent | None:
+    unique_by_group: dict[str, CandidateEvent] = {}
+    for event in sorted(events, key=lambda item: (float(item.popularity_score or 0.0), -item.id), reverse=True):
+        group_key = event.popularity_group_key or f"event:{event.id}"
+        unique_by_group.setdefault(group_key, event)
+    top = list(unique_by_group.values())[:3]
+    if not top:
+        return None
+    weights = [max(0.001, float(event.popularity_score or 0.0)) for event in top]
+    total = sum(weights)
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    point = (int(digest[:12], 16) / float(0xFFFFFFFFFFFF)) * total
+    acc = 0.0
+    for event, weight in zip(top, weights, strict=True):
+        acc += weight
+        if point <= acc:
+            return event
+    return top[-1]
+
+
+def _choose_winner_by_popularity(
+    *,
+    tied_options: Sequence[PollOptionPlan],
+    events: Sequence[CandidateEvent],
+    target_date: date | None = None,
+) -> tuple[PollOptionPlan | None, int | None, str]:
+    if not _popularity_filter_active(events):
+        return None, None, "popularity_inactive"
+    by_id = {event.id: event for event in events}
+    ranked_options: list[tuple[float, str, PollOptionPlan, list[CandidateEvent]]] = []
+    for option in tied_options:
+        option_events = [
+            by_id[event_id]
+            for event_id in option.candidate_event_ids
+            if event_id in by_id and float(by_id[event_id].popularity_score or 0.0) > 0
+        ]
+        top_event = max(option_events, key=lambda event: float(event.popularity_score or 0.0), default=None)
+        if not top_event:
+            continue
+        ranked_options.append((float(top_event.popularity_score or 0.0), option.key, option, option_events))
+    if not ranked_options:
+        return None, None, "popularity_no_candidates"
+    ranked_options.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    _score, _key, option, option_events = ranked_options[0]
+    seed = ":".join(
+        [
+            target_date.isoformat() if target_date else "",
+            option.key,
+            ",".join(str(event.id) for event in sorted(option_events, key=lambda item: item.id)),
+        ]
+    )
+    chosen = _weighted_pick_from_top3(option_events, seed=seed)
+    if not chosen:
+        return None, None, "popularity_no_top3"
+    return option, chosen.id, _popularity_reason(chosen)
+
+
 async def _choose_winner_with_llm(
     *,
     tied_options: Sequence[PollOptionPlan],
@@ -1061,6 +1297,13 @@ async def _choose_winner_with_llm(
     }
     if not tied_options or not candidate_ids:
         return None, None, "no_candidates"
+    popularity_option, popularity_event_id, popularity_reason = _choose_winner_by_popularity(
+        tied_options=tied_options,
+        events=events,
+        target_date=target_date,
+    )
+    if popularity_option and popularity_event_id:
+        return popularity_option, popularity_event_id, popularity_reason
     option_payload = [
         {
             "key": option.key,
@@ -1081,6 +1324,8 @@ async def _choose_winner_with_llm(
             "city": ev.city,
             "location": ev.location_name,
             "is_free": ev.is_free,
+            "popularity_score": round(float(ev.popularity_score or 0.0), 3),
+            "popularity": (ev.popularity_trace or {}).get("best_signal") if ev.popularity_trace else None,
             "summary": ev.summary[:350],
         }
         for ev in events
@@ -1349,21 +1594,36 @@ async def resolve_due_debug_polls(
                 continue
             target_date = _parse_date(run.get("target_event_date")) or now_value.astimezone(_local_tz()).date()
             events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
+            events, popularity_diag = await _apply_popularity_preflight(
+                db,
+                events,
+                target_date=target_date,
+                now_utc=now_value,
+            )
             winner_option, chosen_id, llm_reason = await _choose_winner_with_llm(
                 tied_options=tied_options,
                 events=events,
                 target_date=target_date,
             )
             chosen = next((event for event in events if event.id == chosen_id), None)
+            selection_trace = {
+                "reason": llm_reason,
+                "popularity": popularity_diag,
+                "chosen_event": chosen.popularity_trace if chosen else None,
+            }
+            snapshot_with_trace = {**snapshot, "selection_trace": selection_trace}
             if not winner_option or not chosen:
                 await _update_run(
                     db,
                     run_id,
                     status=STATUS_SKIPPED_NO_CANDIDATE,
-                    result=snapshot,
+                    result=snapshot_with_trace,
                     winner_option_id=winner_option.key if winner_option else None,
                     winner_text=winner_option.text if winner_option else None,
-                    error={"reason": llm_reason or "winner_candidate_unavailable"},
+                    error={
+                        "reason": llm_reason or "winner_candidate_unavailable",
+                        "popularity": popularity_diag,
+                    },
                 )
                 logger.info(
                     "poll_to_forward.debug_resolve skipped llm_or_candidate_unavailable run_id=%s run_key=%s reason=%s tied_options=%s eligible_now=%s",
@@ -1410,7 +1670,7 @@ async def resolve_due_debug_polls(
                 db,
                 run_id,
                 status=STATUS_FORWARDED,
-                result=snapshot,
+                result=snapshot_with_trace,
                 winner_option_id=winner_option.key,
                 winner_text=winner_option.text,
                 chosen_event_id=chosen.id,
@@ -1419,7 +1679,7 @@ async def resolve_due_debug_polls(
                 kldevents_post_url=chosen.tg_event_post_url,
                 reply_message_id=int(getattr(reply, "message_id", 0) or 0) or None,
                 forwarded_message_id=int(getattr(forwarded, "message_id", 0) or 0) or None,
-                error={"llm_reason": llm_reason},
+                error={"llm_reason": llm_reason, "popularity": popularity_diag},
             )
             logger.info(
                 "poll_to_forward.debug_resolve forwarded run_id=%s run_key=%s winner=%s event_id=%s source_message_id=%s target_forward_id=%s reason=%s",

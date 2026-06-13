@@ -597,6 +597,18 @@ async def fetch_vk_post_text_and_photos(
                     m["likes"] = l
             except Exception:
                 pass
+            try:
+                c = (it.get("comments") or {}).get("count")
+                if isinstance(c, int) and c >= 0:
+                    m["comments"] = c
+            except Exception:
+                pass
+            try:
+                r = (it.get("reposts") or {}).get("count")
+                if isinstance(r, int) and r >= 0:
+                    m["reposts"] = r
+            except Exception:
+                pass
             metrics = m or None
         photos.extend(_extract_media_urls(it, limit=limit))
         if text:
@@ -1969,6 +1981,8 @@ async def _process_vk_inbox_row(
             if isinstance(age_day, int) and age_day >= 0:
                 views = metrics.get("views")
                 likes = metrics.get("likes")
+                comments = metrics.get("comments")
+                reposts = metrics.get("reposts")
                 await upsert_vk_post_metric(
                     db,
                     group_id=int(post.group_id),
@@ -1978,6 +1992,8 @@ async def _process_vk_inbox_row(
                     post_ts=published_ts,
                     views=int(views) if isinstance(views, int) else None,
                     likes=int(likes) if isinstance(likes, int) else None,
+                    comments=int(comments) if isinstance(comments, int) else None,
+                    reposts=int(reposts) if isinstance(reposts, int) else None,
                     collected_ts=int(collected_ts),
                 )
                 baseline = await load_vk_popularity_baseline(
