@@ -9,6 +9,14 @@
   post to 15:30 when 06:00+ slots are free. Tracks
   `INC-2026-06-13-vk-postponed-event-slot-late-anchor` and is covered by
   `tests/test_vk_actor.py`.
+- **Fixed: Telegram Monitoring watchdog registry race**: the critical watchdog
+  now defers `tg_monitoring` catch-up while a `tg_monitoring` Kaggle recovery
+  registry entry exists, and applies a short retry hold after
+  `remote_telegram_session_busy` skips. This prevents repeated watchdog ticks
+  from racing a still-running or just-completed Kaggle kernel with a second
+  `TELEGRAM_AUTH_BUNDLE_S22` push. Tracks
+  `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog` and is covered by
+  `tests/test_scheduling.py`.
 - **Fixed: critical scheduler watchdog for Telegram Monitoring and VK auto-import**:
   the `critical_scheduler_watchdog` interval job is now actually registered
   whenever `tg_monitoring`, guide full monitoring, or `vk_auto_import` is

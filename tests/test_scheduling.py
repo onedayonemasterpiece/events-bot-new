@@ -6,6 +6,7 @@ import time
 from types import SimpleNamespace
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -1124,6 +1125,61 @@ async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
     assert dispatched == 1
     assert calls[0] == "tg_monitoring:wait"
     assert calls[1].startswith("catchup-")
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_job_exists(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS", "300")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    crashed_run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 21, 40, tzinfo=timezone.utc),
+        details={"run_id": "deploy-killed"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=crashed_run_id,
+        status="error",
+        finished_at=datetime(2026, 6, 12, 21, 41, tzinfo=timezone.utc),
+        details={"run_id": "deploy-killed", "errors": ["cancelled"]},
+    )
+
+    calls: list[str] = []
+
+    async def fake_telegram_monitor_scheduler(_db, _bot, *, run_id=None):
+        calls.append(run_id or "")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_telegram_monitor_scheduler),
+    )
+    monkeypatch.setattr(scheduling, "_tg_monitoring_recovery_job_exists", AsyncMock(return_value=True))
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 0
+    assert calls == []
+    assert scheduling._critical_catchup_deferred_until
 
 
 @pytest.mark.asyncio
