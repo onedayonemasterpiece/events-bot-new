@@ -98,12 +98,19 @@ unsupported open-air claim and used awkward template-like phrasing.
 
 ### Required evidence
 
-- deployed SHA:
+- deployed SHA: `441c7c8465069e15b6a6167cdc8aaf334e610643`
 - tests/smoke:
+  - `python3 -m py_compile poll_to_forward.py main_part2.py`
+  - `/tmp/events-bot-poll-venv4/bin/python -m pytest tests/test_poll_to_forward.py tests/test_tg_event_publish.py -q` (`61 passed`)
+  - Fly `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, no issues
+  - runtime smoke inside production image:
+    `forward_matches_target=False`, `outdoor_claim_filtered=True`,
+    `date_label='12–15 июня'`
 - production SQL evidence:
   `debug:2026-06-13T11`, target `2026-06-14`, event `5760`,
   `date=2026-06-12`, `end_date=2026-06-15`, `tg_event_post_id=36`.
-- confirmation that the fix is reachable from `origin/main`.
+- confirmation that the fix is reachable from `origin/main`: pushed
+  `441c7c8465069e15b6a6167cdc8aaf334e610643` to `origin/main`.
 
 ## Immediate Mitigation
 
@@ -133,10 +140,19 @@ unsupported open-air claim and used awkward template-like phrasing.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `441c7c8465069e15b6a6167cdc8aaf334e610643`
+- deploy path: manual `fly deploy --remote-only -a events-bot-new-wngqia`
+  from clean worktree; Fly release `v1379`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV069Q54ESQ8YTETWYRAYXC1`
 - regression checks:
-- post-deploy verification:
+  - `tests/test_poll_to_forward.py`
+  - `tests/test_tg_event_publish.py`
+  - targeted production SQL for the bad run
+  - production runtime smoke for date guard, unsupported open-air filtering,
+    and multi-day date label
+- post-deploy verification: Fly status machine `48e42d5b714228`, version
+  `1379`, state `started`, `1 total, 1 passing`; `/healthz` returned
+  `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
 
 ## Prevention
 
