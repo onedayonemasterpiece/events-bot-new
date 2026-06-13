@@ -749,6 +749,43 @@ async def _run_exists(db: Database, *, profile_key: str, run_key: str) -> bool:
     return bool(row)
 
 
+async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, Any] | None:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, run_key, status, poll_message_id, forwarded_message_id,
+                   result_json, error_json, created_at, updated_at
+            FROM poll_repost_run
+            WHERE profile_key=?
+              AND poll_message_id IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (PROFILE_DEBUG,),
+        )
+        row = await cur.fetchone()
+    if not row:
+        return None
+    keys = [
+        "id",
+        "run_key",
+        "status",
+        "poll_message_id",
+        "forwarded_message_id",
+        "result_json",
+        "error_json",
+        "created_at",
+        "updated_at",
+    ]
+    data = dict(zip(keys, row))
+    status = str(data.get("status") or "")
+    if status == STATUS_SKIPPED_NO_VOTES:
+        return None
+    if status == STATUS_FORWARDED and data.get("forwarded_message_id"):
+        return None
+    return data
+
+
 async def _insert_run(
     db: Database,
     *,
@@ -833,6 +870,23 @@ async def create_debug_poll_if_due(
     run_key = f"debug:{now_local.strftime('%Y-%m-%dT%H')}"
     if await _run_exists(db, profile_key=PROFILE_DEBUG, run_key=run_key):
         return {"created": False, "reason": "run_exists", "run_key": run_key}
+    pending_visible = await _latest_visible_debug_poll_without_result(db)
+    if pending_visible:
+        logger.info(
+            "poll_to_forward.debug_create skipped previous_poll_without_result run_key=%s previous_run_id=%s previous_run_key=%s previous_status=%s",
+            run_key,
+            pending_visible.get("id"),
+            pending_visible.get("run_key"),
+            pending_visible.get("status"),
+        )
+        return {
+            "created": False,
+            "reason": "previous_poll_without_result",
+            "run_key": run_key,
+            "previous_run_id": pending_visible.get("id"),
+            "previous_run_key": pending_visible.get("run_key"),
+            "previous_status": pending_visible.get("status"),
+        }
 
     target_date = (now_local.date() + timedelta(days=1))
     events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
@@ -880,6 +934,7 @@ async def create_debug_poll_if_due(
 
     target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
     resolve_after = now_value + timedelta(minutes=max(10, _env_int("POLL_TO_FORWARD_DEBUG_RESOLVE_AFTER_MINUTES", 30)))
+    resolve_after = resolve_after.replace(second=0, microsecond=0)
     sent = await bot.send_poll(
         chat_id=target_chat,
         question=question[:300],
@@ -1137,6 +1192,7 @@ async def _compose_repost_reply_with_llm(
 
 
 async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[str, Any]]:
+    due_cutoff = now_utc + timedelta(seconds=30)
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -1150,7 +1206,7 @@ async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[s
             ORDER BY resolve_after, id
             LIMIT 5
             """,
-            (PROFILE_DEBUG, STATUS_OPEN, _iso_utc(now_utc)),
+            (PROFILE_DEBUG, STATUS_OPEN, _iso_utc(due_cutoff)),
         )
         rows = await cur.fetchall()
     keys = ["id", "run_key", "target_event_date", "poll_chat_id", "poll_message_id", "question_text", "options_json"]

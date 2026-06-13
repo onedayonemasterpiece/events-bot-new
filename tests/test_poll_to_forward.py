@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -471,8 +471,88 @@ async def test_debug_create_uses_llm_plan_and_sends_poll(tmp_path, monkeypatch):
     assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
     assert bot.sent_polls[0]["options"] == ["Вечер с музыкой", "Узнать новое", "С детьми"]
     async with db.raw_conn() as conn:
-        cur = await conn.execute("SELECT status, poll_message_id FROM poll_repost_run")
-        assert await cur.fetchone() == (pf.STATUS_OPEN, 101)
+        cur = await conn.execute("SELECT status, poll_message_id, resolve_after FROM poll_repost_run")
+        status, poll_message_id, resolve_after = await cur.fetchone()
+        assert (status, poll_message_id) == (pf.STATUS_OPEN, 101)
+        assert resolve_after.endswith("08:30:00+00:00")
+    await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "previous_status",
+    [pf.STATUS_OPEN, pf.STATUS_SKIPPED_NO_CANDIDATE, pf.STATUS_FAILED],
+)
+async def test_debug_create_waits_for_previous_visible_poll_result(tmp_path, monkeypatch, previous_status):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_events(db)
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
+    option = pf.PollOptionPlan(key="music", text="Вечер с музыкой", candidate_event_ids=(101,))
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_DEBUG,
+        run_key="debug:2026-06-12T09",
+        status=previous_status,
+        target_event_date=datetime(2026, 6, 13, tzinfo=timezone.utc).date(),
+        question_text="Предыдущий опрос",
+        options=[option],
+        poll_chat_id="@keniggpt",
+        poll_message_id=99,
+        poll_id="poll-99",
+        resolve_after=datetime(2026, 6, 12, 7, 30, tzinfo=timezone.utc),
+        error={"reason": "llm_unavailable"},
+    )
+
+    async def fail_llm(**_kwargs):
+        raise AssertionError("new poll should not call LLM while previous visible poll has no result")
+
+    monkeypatch.setattr(pf, "_google_generate_json", fail_llm)
+    bot = DummyPollBot()
+
+    result = await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert result == {
+        "created": False,
+        "reason": "previous_poll_without_result",
+        "run_key": "debug:2026-06-12T10",
+        "previous_run_id": 1,
+        "previous_run_key": "debug:2026-06-12T09",
+        "previous_status": previous_status,
+    }
+    assert bot.sent_polls == []
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_debug_due_loader_tolerates_scheduler_milliseconds(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    option = pf.PollOptionPlan(key="music", text="Вечер с музыкой", candidate_event_ids=(101,))
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_DEBUG,
+        run_key="debug:2026-06-12T10",
+        status=pf.STATUS_OPEN,
+        target_event_date=datetime(2026, 6, 13, tzinfo=timezone.utc).date(),
+        question_text="Опрос",
+        options=[option],
+        poll_chat_id="@keniggpt",
+        poll_message_id=101,
+        poll_id="poll-101",
+        resolve_after=datetime(2026, 6, 12, 8, 30, 0, 20_000, tzinfo=timezone.utc),
+    )
+
+    runs = await pf._load_open_due_runs(
+        db,
+        now_utc=datetime(2026, 6, 12, 8, 30, 0, tzinfo=timezone.utc),
+    )
+
+    assert [run["run_key"] for run in runs] == ["debug:2026-06-12T10"]
     await db.close()
 
 
@@ -672,14 +752,13 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
             total_voter_count=sum(votes),
             options=[SimpleNamespace(voter_count=count) for count in votes],
         )
+        resolved = await pf.resolve_due_debug_polls(
+            db,
+            bot,
+            now_utc=now_utc + timedelta(minutes=31),
+        )
+        assert resolved["resolved"] == 1
 
-    result = await pf.resolve_due_debug_polls(
-        db,
-        bot,
-        now_utc=datetime(2026, 6, 12, 13, 31, tzinfo=timezone.utc),
-    )
-
-    assert result["resolved"] == 5
     assert len(bot.messages) == 5
     assert len(bot.forwarded) == 5
     async with db.raw_conn() as conn:

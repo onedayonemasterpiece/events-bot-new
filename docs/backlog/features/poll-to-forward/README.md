@@ -326,12 +326,17 @@ Implement as an idempotent state machine:
 
 - `create_poll` creates a run only when no active run exists for the same
   profile and slot;
+- debug `create_poll` also refuses to publish a new visible poll when the latest
+  visible debug poll is still `open`, `failed`, or otherwise ended without a
+  public forwarded result; the next poll should follow the previous public
+  result, not a silent internal skip after votes were collected;
 - `resolve_poll` finds due open runs, stops the Telegram poll, and moves the run
   to `resolved`, `skipped`, or `failed`;
 - scheduler restarts must be able to continue from the persisted run.
 
 The resolver tick can be infrequent. Debug does not need tight polling; every
-30 minutes is enough.
+30 minutes is enough. Debug `resolve_after` is rounded to a whole minute so a
+tick at `HH:30:00` does not miss a due poll because of scheduler milliseconds.
 
 Current debug defaults:
 

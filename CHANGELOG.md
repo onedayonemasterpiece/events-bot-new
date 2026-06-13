@@ -165,6 +165,11 @@
   choice as the mechanism, avoiding meta phrasing like "which topic are we
   taking on tomorrow"; theme/type-event wording is allowed only when it stays
   attached to that evening recommendation promise.
+- **Fixed: Poll to Repost debug lifecycle**: debug mode no longer publishes a
+  new visible poll while the latest visible debug poll is still open or ended
+  without a public forwarded result, and `resolve_after` is rounded to the
+  minute so the half-hour scheduler tick does not miss due polls by
+  milliseconds.
 - **Fixed: Poll to Repost date grounding and fact guardrails**: debug repost
   candidates now require the forwarded `@kldevents` event post to match the
   target recommendation date, so a long-running event's start-date post cannot

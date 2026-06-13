@@ -98,6 +98,11 @@ unsupported open-air claim and used awkward template-like phrasing.
   least two free candidates and at least six eligible events exist, five-option
   LLM topic plans must be rejected and a valid poll should carry six or more
   options.
+- A regression that prevents debug mode from publishing a new visible poll while
+  the latest visible debug poll is still open or ended without a public
+  forwarded result.
+- A regression that stores debug `resolve_after` on a whole-minute boundary so
+  the half-hour scheduler tick does not miss a due poll because of milliseconds.
 - Production SQL evidence for the original bad run or equivalent smoke.
 - Post-deploy `/healthz` and release SHA evidence.
 
@@ -145,6 +150,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - Tightened repost-comment rendering so the event title link must be integrated
   into a sentence via a generic event word/type instead of being dumped after a
   colon.
+- Tightened the debug lifecycle so a new public debug poll follows the previous
+  public result instead of continuing after a silent no-candidate/failed
+  resolution, and rounded `resolve_after` to whole minutes.
 - Updated `@kldevents` event-post date rendering to show `date` + `end_date`
   ranges in the infoblock and calendar button.
 
