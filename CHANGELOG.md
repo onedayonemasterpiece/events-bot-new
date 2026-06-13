@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Changed: Afisha Engagement CTA rollout targets**: `afishaengagement`
+  now supports `tg_chat_author` promo targets, matching Telegram source chat
+  URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as
+  `kraftmarket39 · @LANGEANNA` can opt into public CTA cards without changing
+  the broader campaign resolver.
 - **Fixed: Poll to Repost weak kldevents popularity baseline and question copy**:
   `kldevents` popularity now requires a dedicated resolved-post baseline sample
   (`POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE`, default `30`) before using

@@ -611,6 +611,29 @@ def should_apply_rate(
     return DiceDecision(seed=seed, value=value, apply_rate=apply_rate, applies=value < apply_rate)
 
 
+def _parse_chat_author_query(query_text: str | None) -> tuple[str, str]:
+    raw = str(query_text or "").strip()
+    if ":" not in raw:
+        return "", ""
+    chat, _, author = raw.partition(":")
+    return chat.strip().lstrip("@").lower(), author.strip().lstrip("@").lower()
+
+
+def _event_source_chat_matches(event: Event, chat: str) -> bool:
+    if not chat:
+        return False
+    source_url = str(getattr(event, "source_post_url", "") or "").strip().lower()
+    if not source_url:
+        return False
+    patterns = (
+        f"t.me/{chat}/",
+        f"telegram.me/{chat}/",
+        f"t.me/s/{chat}/",
+        f"telegram.me/s/{chat}/",
+    )
+    return any(pattern in source_url for pattern in patterns)
+
+
 def _target_matches(event: Event, target: PromoTarget) -> bool:
     target_type = (target.target_type or "").strip().lower()
     if target_type == "all":
@@ -619,6 +642,10 @@ def _target_matches(event: Event, target: PromoTarget) -> bool:
         return target.event_id is not None and event.id is not None and int(target.event_id) == int(event.id)
     if target_type == "festival":
         return bool(target.festival_name and event.festival and target.festival_name == event.festival)
+    if target_type == "tg_chat_author":
+        chat, author = _parse_chat_author_query(target.query_text)
+        event_author = str(getattr(event, "tg_source_author", "") or "").strip().lstrip("@").lower()
+        return bool(author and event_author == author and _event_source_chat_matches(event, chat))
     return False
 
 

@@ -119,6 +119,9 @@ Supported target types are the existing promo campaign targets:
 
 - `target_type='event'` with `event_id`;
 - `target_type='festival'` with `festival_name`.
+- `target_type='tg_chat_author'` with `query_text='<chat>:<author>'`; the
+  event must carry matching `tg_source_author` and a Telegram `source_post_url`
+  from that chat.
 
 For bounded debug batches only, `afishaengagement` also accepts
 `target_type='all'`. Use it with `debug_cap` and a temporary marker so the

@@ -112,6 +112,32 @@ def test_target_all_matches_any_event():
     assert aeg._target_matches(event, target) is True
 
 
+def test_tg_chat_author_target_matches_source_url_and_author():
+    event = Event(
+        title="Авторское событие",
+        description="",
+        date="2026-06-20",
+        time="19:00",
+        location_name="Зал",
+        source_text="",
+        source_post_url="https://t.me/kraftmarket39/271",
+        tg_source_author="@LANGEANNA",
+    )
+    target = PromoTarget(
+        campaign_id=1,
+        target_type="tg_chat_author",
+        query_text="kraftmarket39:langeanna",
+    )
+    wrong_author = PromoTarget(
+        campaign_id=1,
+        target_type="tg_chat_author",
+        query_text="kraftmarket39:someone_else",
+    )
+
+    assert aeg._target_matches(event, target) is True
+    assert aeg._target_matches(event, wrong_author) is False
+
+
 def test_event_type_config_filters_lecture_only():
     lecture = Event(
         title="Лекция о городе",
