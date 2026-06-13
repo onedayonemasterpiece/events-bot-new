@@ -283,6 +283,8 @@ def _render_llm_repost_reply(reply_template: str | None, *, event_link_html: str
     before, after = text.split(EVENT_LINK_PLACEHOLDER, 1)
     rendered = f"{escape(before)}{event_link_html}{escape(after)}"
     rendered = re.sub(r"\n{3,}", "\n\n", rendered).strip()
+    rendered = re.sub(r"\n(Сейчас перешлю анонс 👇)$", r"\n\n\1", rendered)
+    rendered = re.sub(r"\n{3,}", "\n\n", rendered).strip()
     return rendered or None
 
 

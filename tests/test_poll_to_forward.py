@@ -103,6 +103,23 @@ def test_repost_intro_falls_back_when_llm_reply_has_no_event_placeholder():
     assert '<a href="https://telegra.ph/music">Камерный концерт</a>' in text
 
 
+def test_repost_intro_separates_forward_line_in_llm_reply():
+    text = pf._repost_intro_text(
+        "Вечер с музыкой",
+        "камерный концерт подходит под выбранную тему",
+        event_title="Камерный концерт",
+        telegraph_url="https://telegra.ph/music",
+        reply_template=(
+            "Спасибо за голоса — берём музыку.\n\n"
+            "Остановился на этом: {{EVENT_LINK}}. Подходит для спокойного вечера.\n\n"
+            "Если попал — 👍, если нет — 👎.\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "👎.\n\nСейчас перешлю анонс 👇" in text
+
+
 class DummyPollBot:
     def __init__(self):
         self.sent_polls = []
