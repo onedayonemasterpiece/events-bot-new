@@ -69,6 +69,7 @@ The same incident also exposed publication duplicates:
 4. AfishaEngagement debug cleanup only matched the current `debug_marker`, not the explicit debug-copy banner, so older debug builds accumulated in postponed queue.
 5. Same-source serial event fanout only coalesced explicit `linked_event_ids`; it did not infer a public schedule from repeated source/photo/location rows. Existing VK edit behavior appended text revisions, which left stale single-event copy above the new schedule when repairing an existing post.
 6. A public AfishaEngagement duplicate could cause the candidate loop to fall through into a shadow/debug candidate, creating a new scheduled debug copy even after the public CTA already existed.
+7. The first AfishaEngagement public duplicate fix only handled events that already had a managed VK post URL. For a brand-new `vk_sync`, the plain `post_to_vk` still ran before CTA generation, so a successful public CTA could still leave a plain postponed post plus a CTA postponed post.
 
 ## Automation Contract
 
@@ -99,15 +100,18 @@ The same incident also exposed publication duplicates:
 - Same-source feeding series now coalesces at publication time when active same-day rows share source URL, exact photo signature, real location key, and feeding-style titles. DB events stay separate; Telegram/VK public surfaces use one schedule post.
 - VK sync for inferred serial schedules replaces existing post text instead of appending a new revision block.
 - AfishaEngagement suppresses shadow/debug fallback candidates after a public duplicate is already detected for the event.
+- Fresh managed VK event posts now run AfishaEngagement public CTA as a preflight before the plain `wall.post`. When CTA generation succeeds, the CTA URL is returned as the event's managed VK post and the plain create is not executed; if the CTA preflight skips/fails, normal VK publication remains the fallback. Existing managed VK URLs stay on the update/repair path and are not retroactively converted into CTA by this fix.
 
 ## Follow-up Actions
 
 - [x] Repair production event `5960` to `2026-06-19 16:00`, `Образовательный центр «ОКЕАНиЯ»`, `наб. Петра Великого, 1Б`.
 - [x] Refresh Telegraph and Telegram post `@kldevents/417`.
 - [x] Verify VK posts `3237/3238`; keep canonical CTA post `3238`, delete duplicate `3237`, and update DB source link.
+- [x] Repair `История становления калининградского здравоохранения`: keep canonical CTA post `3240`, delete duplicate plain post `3239`, and update event `5989` DB source link to `3240`.
 - [x] Repair `Кормление колобусов`: update DB source link `3182 -> 3243`, delete postponed duplicate `3183`.
 - [x] Delete postponed AfishaEngagement debug copies marked with the delete-before-publish banner.
 - [x] Add fanout coalescing guard so CTA public engagement changes edit existing managed VK posts instead of publishing a second post.
+- [x] Add fresh-create preflight guard so a successful public CTA suppresses the plain managed VK create for the same publication pass.
 - [x] Coalesce feeding series `5974..5980` to one public schedule post while preserving separate DB events.
 - [x] Delete fresh individual feeding VK duplicates `3244` and `3245`.
 - [x] Verify VK postponed feed has no remaining feeding duplicates and no AfishaEngagement debug markers.

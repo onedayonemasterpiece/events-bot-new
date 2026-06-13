@@ -4910,6 +4910,8 @@ async def maybe_publish_shadow_debug_copy(
     fetch_image_fn: Callable[[str], Awaitable[bytes]] | None = None,
     edit_vk_post_fn: Callable[..., Awaitable[bool | None]] | None = None,
     existing_vk_post_url: str | None = None,
+    public_only: bool = False,
+    shadow_only: bool = False,
     now_utc: datetime | None = None,
 ) -> str | None:
     started = time.monotonic()
@@ -4979,6 +4981,39 @@ async def maybe_publish_shadow_debug_copy(
         public_mode = _public_publish_enabled(item_config)
         shadow_mode = (not public_mode) and _env_debug_enabled(item_config)
         item_publish_mode = "public" if public_mode else "shadow"
+        if shadow_only and public_mode:
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="shadow_only_public_skipped",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=False,
+                    extra={"publish_mode": item_publish_mode},
+                )
+            )
+            continue
+        if public_only and not public_mode:
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="public_preflight_shadow_skipped",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=shadow_mode,
+                    shadow_marker=item_marker if shadow_mode else None,
+                    extra={"publish_mode": item_publish_mode},
+                )
+            )
+            continue
         if not public_mode and not shadow_mode:
             _json_log(
                 StageLog(
@@ -5293,7 +5328,7 @@ async def maybe_publish_shadow_debug_copy(
         )
         max_publish_attempts = min(6, 1 + _debug_slot_search_limit(config)) if publish_mode == "shadow" else 1
         last_publish_exc: Exception | None = None
-        existing_url = str(existing_vk_post_url or getattr(event, "source_vk_post_url", "") or "").strip()
+        existing_url = str(existing_vk_post_url or "").strip()
         if publish_mode == "public" and existing_url and edit_vk_post_fn is not None:
             publish_attempts.append(None)
             await edit_vk_post_fn(

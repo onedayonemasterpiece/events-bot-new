@@ -839,6 +839,8 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
 
     async def fake_shadow(**kwargs):
         captured.update(kwargs)
+        if kwargs.get("public_only"):
+            return None
         return "https://vk.com/wall-1_999"
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
@@ -857,6 +859,112 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
     assert captured["target_group_id"] == "1"
     assert captured["photo_urls"] == ["http://img1"]
     assert "new text" in str(captured["message"])
+    assert captured["public_only"] is False
+    assert captured["shadow_only"] is True
+    assert captured["existing_vk_post_url"] == "https://vk.com/wall-1_1"
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_uses_afishaengagement_preflight_for_new_public_post(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_TOKEN_AFISHA = "ga"
+
+    event = main.Event(
+        id=44,
+        title="Lecture",
+        description="",
+        date="2026-06-20",
+        time="18:00",
+        location_name="Place",
+        photo_urls=["http://img1"],
+    )
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        return "ph1"
+
+    async def fail_post_to_vk(*args, **kwargs):
+        raise AssertionError("plain VK post must not be created when public CTA preflight succeeds")
+
+    captured: dict[str, object] = {}
+
+    async def fake_engagement(**kwargs):
+        captured.update(kwargs)
+        return "https://vk.com/wall-1_777"
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fail_post_to_vk)
+    monkeypatch.setattr(
+        "afishaengagement.maybe_publish_shadow_debug_copy",
+        fake_engagement,
+    )
+
+    url = await main.sync_vk_source_post(event, "new text", None, None)
+
+    assert url == "https://vk.com/wall-1_777"
+    assert captured["event"] is event
+    assert captured["target_group_id"] == "1"
+    assert captured["photo_urls"] == ["http://img1"]
+    assert "new text" in str(captured["message"])
+    assert captured["public_only"] is True
+    assert captured["existing_vk_post_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_keeps_plain_post_when_only_shadow_applies(monkeypatch):
+    main.VK_AFISHA_GROUP_ID = "1"
+    main.VK_EVENTS_GROUP_ID = "1"
+    main.VK_PHOTOS_ENABLED = True
+    main.VK_TOKEN_AFISHA = "ga"
+
+    event = main.Event(
+        id=45,
+        title="Lecture",
+        description="",
+        date="2026-06-20",
+        time="18:00",
+        location_name="Place",
+        photo_urls=["http://img1"],
+    )
+
+    async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
+        return "ph1"
+
+    calls: list[tuple[str, object, object, object]] = []
+
+    async def fake_post_to_vk(group_id, message, db=None, bot=None, attachments=None, **kwargs):
+        calls.append(("plain", attachments, None, None))
+        return "https://vk.com/wall-1_123"
+
+    async def fake_engagement(**kwargs):
+        calls.append(
+            (
+                "engagement",
+                kwargs.get("public_only"),
+                kwargs.get("shadow_only"),
+                kwargs.get("existing_vk_post_url"),
+            )
+        )
+        if kwargs.get("public_only"):
+            return None
+        return "https://vk.com/wall-1_999"
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
+    monkeypatch.setattr(
+        "afishaengagement.maybe_publish_shadow_debug_copy",
+        fake_engagement,
+    )
+
+    url = await main.sync_vk_source_post(event, "new text", None, None)
+
+    assert url == "https://vk.com/wall-1_123"
+    assert calls == [
+        ("engagement", True, False, None),
+        ("plain", ["ph1"], None, None),
+        ("engagement", False, True, "https://vk.com/wall-1_123"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -901,6 +1009,8 @@ async def test_sync_vk_source_post_passes_same_deduped_photo_list_to_afishaengag
 
     async def fake_shadow(**kwargs):
         captured.update(kwargs)
+        if kwargs.get("public_only"):
+            return None
         return "https://vk.com/wall-1_999"
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)

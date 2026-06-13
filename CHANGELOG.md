@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement public CTA duplicates in VK sync**:
+  `sync_vk_source_post` now chooses the public CTA or plain event variant before
+  the primary fresh-publication VK write. Fresh managed `klgdevents` event posts
+  do one `wall.post` (CTA if generation succeeds, plain fallback otherwise);
+  already-existing managed VK URLs stay on the normal update/repair path and
+  are not retroactively converted into CTA.
 - **Fixed: Telegram Monitoring dropped promoted `@kraftmarket39` events as zero-events**:
   transfer/promo-wrapper festival posts with concrete future title/date/time,
   venue, and registration evidence now stay in the LLM extraction path, and the

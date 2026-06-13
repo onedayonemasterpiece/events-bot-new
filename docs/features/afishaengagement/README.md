@@ -9,9 +9,13 @@
 `Мотивация`. It enhances VK event posts with CTA motivator images for comments,
 likes, and reposts.
 
-Promo campaign/activity rows decide whether the enhancer is eligible. The
-executor runs after a normal event post is prepared both in the Smart Update
-source-post path and in promo `vk_publication`, so additional promo VK
+Promo campaign/activity rows decide whether the enhancer is eligible. The VK
+publication boundary chooses the primary variant before writing to VK:
+public-mode `afishaengagement` or the plain event post. For a fresh event this
+means one `wall.post`: CTA when generation succeeds, plain only as fallback.
+An already managed VK post is not retroactively converted into CTA by this
+path; existing-post edits remain the normal update/repair path. Promo
+`vk_publication` also uses the same enhancer so additional promo VK
 publications do not bypass the `Мотивация` activity.
 
 ## MVP Contract
@@ -23,6 +27,13 @@ publications do not bypass the `Мотивация` activity.
 - The normal Smart Update VK post remains unchanged in debug shadow mode.
 - A separate debug copy is scheduled in VK postponed posts with generated
   afishaengagement media and a cleanup marker.
+- In public mode the CTA version is the event post. The primary VK write must
+  be selected before the write boundary; the system must not create or edit a
+  plain managed VK event post and then create a second CTA variant for the same
+  publication pass.
+- A public CTA edit is allowed only when the caller explicitly passes the
+  existing managed VK URL. `event.source_vk_post_url` is not an implicit edit
+  fallback inside the enhancer; the publication boundary owns that decision.
 - Existing managed VK post edits and promo `vk_publication` runs can create
   shadow copies during the visual debug phase, so `/vk_auto_import` and promo
   deficit publications can produce the normal post plus a marked postponed CTA

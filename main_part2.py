@@ -5300,6 +5300,43 @@ async def sync_vk_source_post(
                 existing_vk_post_url = resolved_vk_post_url
                 event.source_vk_post_url = resolved_vk_post_url
 
+    async def _apply_afishaengagement_variant(
+        *,
+        prepared_message: str,
+        prepared_photo_urls: list[str],
+        phase: str,
+        existing_url: str | None = None,
+        public_only: bool = False,
+        shadow_only: bool = False,
+    ) -> str | None:
+        try:
+            from afishaengagement import maybe_publish_shadow_debug_copy
+
+            return await maybe_publish_shadow_debug_copy(
+                event=event,
+                db=db,
+                bot=bot,
+                target_group_id=str(target_group_id),
+                message=prepared_message,
+                photo_urls=prepared_photo_urls,
+                post_to_vk_fn=post_to_vk,
+                upload_vk_photo_fn=upload_vk_photo,
+                upload_images_fn=upload_images,
+                vk_api_fn=_vk_api,
+                upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
+                edit_vk_post_fn=edit_vk_post,
+                existing_vk_post_url=existing_url,
+                public_only=public_only,
+                shadow_only=shadow_only,
+            )
+        except Exception:
+            logging.exception(
+                "sync_vk_source_post: afishaengagement %s failed event_id=%s",
+                phase,
+                event.id,
+            )
+            return None
+
     attachments: list[str] | None = None
     photo_urls_source: list[str] = list(event.photo_urls or [])
     photo_urls_for_publish: list[str] = []
@@ -5489,29 +5526,13 @@ async def sync_vk_source_post(
         )
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
-        try:
-            from afishaengagement import maybe_publish_shadow_debug_copy
-
-            await maybe_publish_shadow_debug_copy(
-                event=event,
-                db=db,
-                bot=bot,
-                target_group_id=str(target_group_id),
-                message=new_message,
-                photo_urls=photo_urls_for_publish,
-                post_to_vk_fn=post_to_vk,
-                upload_vk_photo_fn=upload_vk_photo,
-                upload_images_fn=upload_images,
-                vk_api_fn=_vk_api,
-                upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
-                edit_vk_post_fn=edit_vk_post,
-                existing_vk_post_url=existing_vk_post_url,
-            )
-        except Exception:
-            logging.exception(
-                "sync_vk_source_post: afishaengagement shadow failed event_id=%s",
-                event.id,
-            )
+        await _apply_afishaengagement_variant(
+            prepared_message=new_message,
+            prepared_photo_urls=photo_urls_for_publish,
+            phase="shadow_after_plain_update",
+            existing_url=existing_vk_post_url,
+            shadow_only=True,
+        )
     else:
         _short_link_result = await ensure_vk_short_ticket_link(
             event, db, vk_api_fn=_vk_api, bot=bot
@@ -5543,39 +5564,34 @@ async def sync_vk_source_post(
             coauthor = select_vk_coauthor_candidate(event)
         except Exception:
             coauthor = None
-        url = await post_to_vk(
-            target_group_id,
-            message,
-            db,
-            bot,
-            attachments,
-            vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
-            vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
+        url = None
+        url = await _apply_afishaengagement_variant(
+            prepared_message=message,
+            prepared_photo_urls=photo_urls_for_publish,
+            phase="public_create_preflight",
+            public_only=True,
         )
+        created_plain_post = False
+        if not url:
+            url = await post_to_vk(
+                target_group_id,
+                message,
+                db,
+                bot,
+                attachments,
+                vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
+                vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
+            )
+            created_plain_post = bool(url)
         if url:
             logging.info("sync_vk_source_post created %s", url)
-            try:
-                from afishaengagement import maybe_publish_shadow_debug_copy
-
-                await maybe_publish_shadow_debug_copy(
-                    event=event,
-                    db=db,
-                    bot=bot,
-                    target_group_id=str(target_group_id),
-                    message=message,
-                    photo_urls=photo_urls_for_publish,
-                    post_to_vk_fn=post_to_vk,
-                    upload_vk_photo_fn=upload_vk_photo,
-                    upload_images_fn=upload_images,
-                    vk_api_fn=_vk_api,
-                    upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
-                    edit_vk_post_fn=edit_vk_post,
-                    existing_vk_post_url=url,
-                )
-            except Exception:
-                logging.exception(
-                    "sync_vk_source_post: afishaengagement shadow failed event_id=%s",
-                    event.id,
+            if created_plain_post:
+                await _apply_afishaengagement_variant(
+                    prepared_message=message,
+                    prepared_photo_urls=photo_urls_for_publish,
+                    phase="shadow_after_plain_create",
+                    existing_url=url,
+                    shadow_only=True,
                 )
     return url
 

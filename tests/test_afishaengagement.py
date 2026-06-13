@@ -2241,6 +2241,85 @@ async def test_public_engagement_copy_edits_existing_managed_post(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_public_engagement_requires_explicit_existing_url_to_edit(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Спектакль",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="спектакль",
+            source_vk_post_url="https://vk.com/wall-231920894_3237",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация public", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "publish_mode": "public",
+                "apply_rate": 1,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+
+    posted = {}
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        raise AssertionError("public create should not call shadow cleanup/slot lookup")
+
+    async def fake_upload_images(images, *args, **kwargs):
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fake_post_to_vk(group_id, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        posted["attachments"] = attachments
+        posted["kwargs"] = kwargs
+        return "https://vk.com/wall-231920894_1004"
+
+    async def fail_edit_vk_post(*args, **kwargs):
+        raise AssertionError("event.source_vk_post_url alone must not trigger public CTA edit")
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fake_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        edit_vk_post_fn=fail_edit_vk_post,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_1004"
+    assert posted["attachments"] == ["photo-231920894_777"]
+    assert posted["kwargs"]["carousel"] is True
+
+
+@pytest.mark.asyncio
 async def test_resolve_candidates_matches_klgdevents_alias_to_numeric_group(tmp_path, monkeypatch):
     monkeypatch.delenv("AFISHAENGAGEMENT_TARGET_GROUP_ID", raising=False)
     monkeypatch.delenv("VK_EVENTS_GROUP_ID", raising=False)
