@@ -87,6 +87,43 @@ async def test_publish_ics_both_channels_success(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_tg_ics_post_stores_public_channel_url_when_asset_has_username(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = DummyBot("123:abc")
+    async with db.get_session() as session:
+        session.add(
+            Channel(
+                channel_id=-1002807919036,
+                title="Calendar",
+                username="kenigeventscalendar",
+                is_admin=True,
+                is_asset=True,
+            )
+        )
+        session.add(
+            Event(
+                id=1,
+                title="Concert",
+                description="desc",
+                source_text="s",
+                date="2025-07-18",
+                time="19:00",
+                location_name="Hall",
+                city="Town",
+            )
+        )
+        await session.commit()
+    monkeypatch.setattr(main, "update_source_post_keyboard", lambda *a, **k: None)
+
+    await main.tg_ics_post(1, db, bot)
+
+    async with db.get_session() as session:
+        ev = await session.get(Event, 1)
+        assert ev.ics_post_url == "https://t.me/kenigeventscalendar/1"
+
+
+@pytest.mark.asyncio
 async def test_ics_skips_when_no_change(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

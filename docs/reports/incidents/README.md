@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-13-tg-calendar-private-link.md`
+  - Scope: Telegram event calendar CTA selection, source-post keyboard
+    calendar links, and service/internal Telegram calendar asset links.
+  - Must not regress: public `@kldevents` calendar buttons must not point to
+    private `https://t.me/c/...` asset-channel links when a public `.ics` URL
+    exists; public `https://t.me/<username>/<id>` calendar-post links may remain
+    preferred.
 - `INC-2026-06-13-poll-repost-wrong-date-and-copy.md`
   - Scope: Poll to Repost candidate eligibility, LLM reply composer guardrails,
     and `@kldevents` Telegram event infoblock date-range rendering.
@@ -128,7 +135,7 @@
   - Must not regress: urgent `@kraftmarket39` monitoring must run through the same Smart Update import path with a one-source Kaggle config; festival VK aggregate posts must stay disabled unless `ENABLE_FESTIVAL_VK_POSTS=1`; ordinary event-level VK/TG fanout remains separate and must not publish whole-festival aggregates to obsolete communities.
 - `INC-2026-06-07-tg-event-publishing-media-calendar-dedup.md`
   - Scope: Telegram event publishing after Smart Update, `tg_event_publish`/`tg_ics_post` dependency order, calendar button target, Telegraph details link, Smart Update persisted poster dedup, and `vk_sync` managed-post idempotency.
-  - Must not regress: a one-image event must publish as a single captioned media post with calendar button pointing to `event.ics_post_url`, not raw `ics_url`; multi-image posts must carry caption on media, not a separate text post unless explicitly redesigned; captions must include `Подробнее` when Telegraph exists and must not invent placeholder price/free information; managed-storage and raw-CDN copies of the same poster must collapse to one `event.photo_urls` entry and one persisted `EventPoster` after missing `phash` backfill; Smart Update acceptance requires both a real `@kldevents` post and a real `klgdevents` wall item (`wall.getById` non-empty), not merely a stale DB URL.
+  - Must not regress: a one-image event must publish as a single captioned media post with a publicly usable calendar button, preferring a public `event.ics_post_url` but falling back to `event.ics_url` when `ics_post_url` is a private `t.me/c` asset link; multi-image posts must carry caption on media, not a separate text post unless explicitly redesigned; captions must include `Подробнее` when Telegraph exists and must not invent placeholder price/free information; managed-storage and raw-CDN copies of the same poster must collapse to one `event.photo_urls` entry and one persisted `EventPoster` after missing `phash` backfill; Smart Update acceptance requires both a real `@kldevents` post and a real `klgdevents` wall item (`wall.getById` non-empty), not merely a stale DB URL.
 - `INC-2026-06-07-guide-remote-session-stale-busy.md`
   - Scope: shared remote Telegram session guard, stale Kaggle registry entries, guide scheduled full monitoring, and `GetKernelSessionStatus` transient failures.
   - Must not regress: fresh `UNKNOWN`/status-lookup-failure Kaggle runs must still block a second `TELEGRAM_AUTH_BUNDLE_S22` session, but stale registry entries older than `REMOTE_TELEGRAM_SESSION_UNKNOWN_STALE_MINUTES` with only transient status lookup failures (`HTTP 5xx`, network, SSL, timeout) must not indefinitely suppress the daily guide full slot; closure requires same-day guide full catch-up/import/digest evidence.

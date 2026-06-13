@@ -117,6 +117,7 @@ def test_build_tg_event_announcement_formats_multiday_range():
         end_date="2026-06-15",
         time="",
         title="Фестиваль Кантата",
+        ics_url="https://example.com/kantata.ics",
         ics_post_url="https://t.me/c/asset/42",
     )
 
@@ -126,6 +127,7 @@ def test_build_tg_event_announcement_formats_multiday_range():
     assert "📅 12–15 июня" in text
     assert "📅 12 июня" not in text
     assert markup.inline_keyboard[0][0].text == "📅 12–15 июня · Добавить в календарь"
+    assert markup.inline_keyboard[0][0].url == "https://example.com/kantata.ics"
 
 
 def test_build_tg_event_announcement_formats_multiday_cross_month_range():
@@ -368,7 +370,10 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
 
 
 def test_tg_event_promo_details_move_to_inline_button():
-    event = _event(ics_post_url="https://t.me/c/asset/42")
+    event = _event(
+        ics_url="https://example.com/event.ics",
+        ics_post_url="https://t.me/c/asset/42",
+    )
 
     normal = main.build_tg_event_announcement(
         event,
@@ -389,6 +394,18 @@ def test_tg_event_promo_details_move_to_inline_button():
     assert promo_markup.inline_keyboard[0][0].text == "✨ Подробнее"
     assert promo_markup.inline_keyboard[0][0].url == "https://telegra.ph/event"
     assert promo_markup.inline_keyboard[1][0].text == "📅 20 июня 19:00 · Добавить в календарь"
+    assert promo_markup.inline_keyboard[1][0].url == "https://example.com/event.ics"
+
+
+def test_tg_event_calendar_url_keeps_public_telegram_post_url():
+    event = _event(
+        ics_url="https://example.com/event.ics",
+        ics_post_url="https://t.me/kenigeventscalendar/42",
+    )
+
+    markup = main.build_tg_event_reply_markup(event)
+
+    assert markup.inline_keyboard[0][0].url == "https://t.me/kenigeventscalendar/42"
 
 
 @pytest.mark.asyncio
@@ -681,7 +698,7 @@ async def test_tg_event_publish_sends_single_photo_caption_with_calendar_button(
     assert "#анонс" not in message_text
     button = message_kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.text == "📅 20 июня 19:00 · Добавить в календарь"
-    assert button.url == "https://t.me/c/asset/42"
+    assert button.url == "https://example.com/event.ics"
     assert not bot.media_groups
 
 

@@ -7930,11 +7930,17 @@ async def update_source_post_keyboard(event_id: int, db: Database, bot: Bot) -> 
                     await session.commit()
 
     rows: list[list[types.InlineKeyboardButton]] = []
-    if ev.ics_post_url:
+    calendar_url_func = globals().get("_tg_event_public_calendar_url")
+    calendar_url = (
+        calendar_url_func(ev)
+        if callable(calendar_url_func)
+        else ((ev.ics_url or "").strip() or (ev.ics_post_url or "").strip())
+    )
+    if calendar_url:
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text="Добавить в календарь", url=ev.ics_post_url
+                    text="Добавить в календарь", url=calendar_url
                 )
             ]
         )
@@ -8472,7 +8478,11 @@ async def tg_ics_post(event_id: int, db: Database, bot: Bot, progress=None) -> b
 
         tg_file_id = msg.document.file_id
         tg_post_id = msg.message_id
-        tg_post_url = message_link(msg.chat.id, msg.message_id)
+        asset_username = (getattr(channel, "username", None) or "").strip().lstrip("@")
+        if asset_username:
+            tg_post_url = f"https://t.me/{asset_username}/{tg_post_id}"
+        else:
+            tg_post_url = message_link(msg.chat.id, msg.message_id)
 
         async with db.get_session() as session:
             obj = await session.get(Event, event_id)

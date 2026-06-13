@@ -4252,9 +4252,33 @@ def _tg_event_details_url(event: Event) -> str | None:
 
 
 def _tg_event_calendar_post_url(event: Event) -> str | None:
-    raw = (getattr(event, "ics_post_url", None) or "").strip()
-    if raw.startswith(("http://", "https://")):
-        return raw
+    return _tg_event_public_calendar_url(event)
+
+
+def _telegram_url_is_private_internal_link(url: str | None) -> bool:
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = urlsplit(raw)
+    except Exception:
+        return False
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").lstrip("/")
+    return host in {"t.me", "telegram.me"} and path.startswith("c/")
+
+
+def _tg_event_public_calendar_url(event: Event) -> str | None:
+    post_url = (getattr(event, "ics_post_url", None) or "").strip()
+    if post_url.startswith(("http://", "https://")) and not _telegram_url_is_private_internal_link(
+        post_url
+    ):
+        return post_url
+    file_url = (getattr(event, "ics_url", None) or "").strip()
+    if file_url.startswith(("http://", "https://")):
+        return file_url
     return None
 
 

@@ -16,7 +16,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 ## User / Business Impact
 
 - The new production channel received a post format that did not match the feature requirements.
-- Calendar click-through went to the file asset instead of the existing Telegram calendar post surface.
+- Calendar click-through went to the file asset instead of the existing Telegram calendar post surface. Later production evidence in `INC-2026-06-13-tg-calendar-private-link` refined this contract: the public CTA must use a calendar URL that ordinary channel readers can open, so private `t.me/c/...` asset links fall back to the public `.ics` URL.
 - Duplicate images made the channel look broken and revealed a Smart Update media dedup gap.
 - A stale/deleted managed VK URL made `vk_sync` look successful in DB while there was no visible VK post.
 
@@ -59,7 +59,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 ## Root Cause
 
 1. The new Telegram event publisher was implemented as text-plus-follow-up-media to preserve an inline calendar button, but this was not in the original requirement and produced the wrong channel format.
-2. The calendar button used `event.ics_url` (raw Supabase `.ics`) instead of the existing project contract `event.ics_post_url` pointing to the Telegram calendar channel post.
+2. The calendar button used `event.ics_url` (raw Supabase `.ics`) instead of the then-existing project contract `event.ics_post_url` pointing to the Telegram calendar channel post. That contract was later narrowed to publicly usable calendar targets: public Telegram calendar-post URLs stay preferred, while private `t.me/c/...` asset links fall back to `event.ics_url`.
 3. Smart Update near-duplicate poster pruning relied on `phash`. A raw VK CDN `EventPoster` row without `phash` survived next to the managed storage row for the same image, so `event.photo_urls` contained both URLs.
 4. `job_sync_vk_source_post` skipped publishing when `vk_source_hash` matched and `source_vk_post_url` looked like a managed `klgdevents` URL, without verifying that `wall.getById` still returned a real VK item.
 5. `_event_has_telegram_origin` treated non-null `source_chat_id` / `source_message_id` as Telegram-origin. VK auto-import stores VK group/post ids in the same columns, so a VK-origin event could be blocked by the Telegram text-only media guard before managed VK publication.
@@ -95,7 +95,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 
 - `tests/test_tg_event_publish.py`
 - `tests/test_genai_dump_and_poster_dedup.py`
-- Live Telegram UI check of event `5776` or equivalent E2E: one captioned media post, no duplicate media, calendar button points to `ics_post_url`, caption includes `Подробнее`, and no placeholder price when price/free status is unknown.
+- Live Telegram UI check of event `5776` or equivalent E2E: one captioned media post, no duplicate media, calendar button is publicly usable, caption includes `Подробнее`, and no placeholder price when price/free status is unknown.
 - Live VK API/UI check of the same Smart Update path: `vk_sync` must produce a managed `klgdevents` URL and `wall.getById` must return a real item with media.
 - Production DB check: event `photo_urls` and `eventposter` rows are deduped; `tg_event_post_mode` is `photo_caption` for a one-image event.
 - Release governance: deployed SHA reachable from `origin/main`, `/healthz` ready.
@@ -118,7 +118,7 @@ The first production Telegram event announcement in `@kldevents` was published a
 
 - Publish one-image events as `sendPhoto` with caption and inline calendar button.
 - Publish multi-image events as `sendMediaGroup` with caption on the first media item and calendar link in caption, because Telegram Bot API does not support inline buttons on media groups.
-- Use `ics_post_url` for calendar actions; make `tg_event_publish` depend on `tg_ics_post` when available.
+- Use a public calendar URL for calendar actions: prefer public `ics_post_url`, but fall back to public `ics_url` when the Telegram asset-post URL is a private `t.me/c/...` link; make `tg_event_publish` depend on `tg_ics_post` when available.
 - Add Telegraph `Подробнее` to the footer.
 - Backfill missing poster `phash` values and prune persisted near-duplicate `EventPoster` rows.
 - Add a TG-side safety-net that collapses near-duplicate Supabase `p/dh16/...` media URLs before choosing single-photo vs album publishing mode.

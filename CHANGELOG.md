@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram event calendar buttons with private asset links**:
+  `@kldevents` event posts and source-post keyboards now avoid private
+  `https://t.me/c/...` calendar asset links for public CTAs, falling back to
+  public `event.ics_url` when the Telegram calendar-post URL is not audience
+  reachable. New Telegram calendar asset posts store
+  `https://t.me/<asset-channel>/<message>` URLs when the asset channel has a
+  username. Tracks `INC-2026-06-13-tg-calendar-private-link` and is covered by
+  `tests/test_tg_event_publish.py`, `tests/test_source_keyboard.py`, and
+  `tests/test_ics_pipeline.py::test_tg_ics_post_stores_public_channel_url_when_asset_has_username`.
 - **Changed: Poll to Repost kldevents popularity preflight**: poll creation now
   resolves live `kldevents` VK wall posts by strict title/date plus time-or-venue
   anchors before topic planning, treats stored `source_vk_post_url` as a legacy
