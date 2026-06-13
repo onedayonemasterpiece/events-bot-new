@@ -111,6 +111,31 @@ def test_build_tg_event_announcement_formats_links_hashtags_and_footer():
     assert "Вконтакте" not in text
 
 
+def test_build_tg_event_announcement_formats_multiday_range():
+    event = _event(
+        date="2026-06-12",
+        end_date="2026-06-15",
+        time="",
+        title="Фестиваль Кантата",
+        ics_post_url="https://t.me/c/asset/42",
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+    markup = main.build_tg_event_reply_markup(event)
+
+    assert "📅 12–15 июня" in text
+    assert "📅 12 июня" not in text
+    assert markup.inline_keyboard[0][0].text == "📅 12–15 июня · Добавить в календарь"
+
+
+def test_build_tg_event_announcement_formats_multiday_cross_month_range():
+    event = _event(date="2026-06-30", end_date="2026-07-02", time="")
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert "📅 30 июня–2 июля" in text
+
+
 
 
 def test_build_tg_event_announcement_uses_original_ticket_link_not_vk_short():

@@ -4374,9 +4374,7 @@ def build_tg_event_announcement(
         else:
             lines.append(f"✨ {fest_name}")
 
-    date_part = str(event.date or "").split("..", 1)[0]
-    d = parse_iso_date(date_part)
-    day = format_day_pretty(d) if d else (event.date or "")
+    day = _tg_event_date_label(event)
     time_part = str(event.time or "").strip()
     if getattr(event, "time_is_default", False):
         time_part = ""
@@ -4428,6 +4426,22 @@ def build_tg_event_announcement(
     if footer_links:
         lines.append(" · ".join(footer_links))
     return "\n".join(lines).strip()
+
+
+def _tg_event_date_label(event: Event) -> str:
+    date_part = str(getattr(event, "date", "") or "").split("..", 1)[0]
+    start = parse_iso_date(date_part)
+    raw_end = str(getattr(event, "end_date", "") or "").strip()
+    end = parse_iso_date(raw_end) if raw_end else None
+    if start and end and end > start:
+        start_text = format_day_pretty(start)
+        end_text = format_day_pretty(end)
+        if start.month == end.month:
+            start_text = str(start.day)
+        return f"{start_text}–{end_text}"
+    if start:
+        return format_day_pretty(start)
+    return str(getattr(event, "date", "") or "")
 
 
 def _fallback_tg_event_hook_text(event: Event, text: str) -> str:
@@ -4685,9 +4699,7 @@ async def _dedupe_event_photo_urls_for_publish(photo_urls: Sequence[str] | None)
 
 
 def _tg_event_calendar_button_text(event: Event) -> str:
-    date_part = str(getattr(event, "date", "") or "").split("..", 1)[0]
-    d = parse_iso_date(date_part)
-    day = format_day_pretty(d) if d else date_part
+    day = _tg_event_date_label(event)
     time_part = str(getattr(event, "time", "") or "").strip()
     if getattr(event, "time_is_default", False):
         time_part = ""

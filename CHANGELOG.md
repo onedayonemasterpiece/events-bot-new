@@ -153,6 +153,19 @@
   choice as the mechanism, avoiding meta phrasing like "which topic are we
   taking on tomorrow"; theme/type-event wording is allowed only when it stays
   attached to that evening recommendation promise.
+- **Fixed: Poll to Repost date grounding and fact guardrails**: debug repost
+  candidates now require the forwarded `@kldevents` event post to match the
+  target recommendation date, so a long-running event's start-date post cannot
+  be forwarded as a "tomorrow" recommendation. The LLM comment composer now
+  rejects unsupported open-air/street-format claims, avoids `на этом:` template
+  phrasing, and asks the topic planner to consider a playful free-events option
+  when enough `is_free=true` candidates exist. Tracks
+  `INC-2026-06-13-poll-repost-wrong-date-and-copy`.
+- **Fixed: Telegram event post date ranges**: `@kldevents` event infoblocks and
+  calendar buttons now render `date` + `end_date` as a visible range for
+  multi-day events, preventing future long-running posts from looking like
+  one-day start-date announcements. Tracks
+  `INC-2026-06-13-poll-repost-wrong-date-and-copy`.
 - **Changed: Poll to Repost audience copy**: poll questions now keep the
   friendlier "choose the event type together" framing while making the real
   flow explicit: subscribers choose tomorrow's theme/type and the channel picks

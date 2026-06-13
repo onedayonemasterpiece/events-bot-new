@@ -54,14 +54,19 @@ Implemented debug entrypoints:
 
 An event can participate only when all conditions hold:
 
-- it is scheduled for tomorrow, or active tomorrow for multi-day events;
+- its repostable `@kldevents` post is for the target recommendation date;
 - it is not cancelled/archived/past;
 - it has a known Telegram post in `@kldevents` that can be forwarded;
 - it was not recently reposted by this same feature;
 - it is suitable for a public recommendation after basic quality checks.
 
-The candidate pool is therefore "tomorrow's DB events that have a repostable
-`@kldevents` message", not every event in the database.
+The candidate pool is therefore "tomorrow's DB events whose `@kldevents` source
+message also reads as tomorrow", not every event in the database. A multi-day
+event can be generally active tomorrow, but Poll to Repost must not forward a
+start-date post if that visible post looks like yesterday/today and does not
+show the active range. In that case the event is eligible only after it has a
+target-date `@kldevents` post, or after the source post itself is repaired to
+show the date range clearly.
 
 If the eligible pool is too small, the poll is skipped:
 
@@ -110,6 +115,8 @@ Good options are audience jobs-to-be-done, not raw database categories. Examples
 - "вечер с музыкой";
 - "с детьми";
 - "бесплатно или почти бесплатно";
+- a playful free-events option when several candidates have `is_free=true`,
+  e.g. "куда угодно, только бесплатно";
 - "у побережья";
 - "фестиваль";
 - "что-то необычное";
@@ -186,15 +193,23 @@ The `{{EVENT_LINK}}` placeholder must appear exactly once and only in
 grammatically neutral positions, for example:
 
 - `выбрал вот что: {{EVENT_LINK}}`;
-- `остановился на этом: {{EVENT_LINK}}`;
+- `вот что выбрал для этой темы: {{EVENT_LINK}}`;
+- `сегодня рекомендация такая: {{EVENT_LINK}}`;
 - `один анонс из этой темы — {{EVENT_LINK}}`.
 
 Avoid constructions that require inflecting the event title around the
 placeholder, such as `я бы предложил {{EVENT_LINK}}`, `сходить на
-{{EVENT_LINK}}`, or `расскажу про {{EVENT_LINK}}`. Avoid marketing reason leads
+{{EVENT_LINK}}`, or `расскажу про {{EVENT_LINK}}`. Also avoid placeholder
+phrasing such as `остановился на этом: {{EVENT_LINK}}` / `на этом:
+{{EVENT_LINK}}`: it reads like a template leak. Avoid marketing reason leads
 such as "отличный вариант" or "интересный вариант"; prefer concrete human
 phrasing like "для тех, кто голосовал за гастро-отдых, на ферме как раз
 праздник".
+
+The composer may only use facts present in the event context or LLM selection
+reason. It must not infer an open-air/street/park format from the word
+"festival"; mixed-format festivals are common, and unsupported claims such as
+"под открытым небом" are rejected by code and replaced with safe fallback copy.
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical
@@ -219,6 +234,13 @@ The prompt may use these signals:
 
 The selected event must be potentially interesting on its own. Popularity should
 help rank strong candidates, not rescue a weak or off-topic event.
+
+For Poll to Repost, repost availability is stricter than general event
+activity. Long-running events with `date < target_date <= end_date` remain valid
+for ordinary event listings, but are not valid repost candidates unless the
+forwarded `@kldevents` message date matches the target date. This prevents a
+"recommendation for tomorrow" from forwarding a post whose visible infoblock
+shows only the start date.
 
 ## Feedback Signals
 

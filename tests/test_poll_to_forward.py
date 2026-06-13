@@ -111,13 +111,50 @@ def test_repost_intro_separates_forward_line_in_llm_reply():
         telegraph_url="https://telegra.ph/music",
         reply_template=(
             "Спасибо за голоса — берём музыку.\n\n"
-            "Остановился на этом: {{EVENT_LINK}}. Подходит для спокойного вечера.\n\n"
+            "Вот что выбрал для этой темы: {{EVENT_LINK}}. Подходит для спокойного вечера.\n\n"
             "Если попал — 👍, если нет — 👎.\n"
             "Сейчас перешлю анонс 👇"
         ),
     )
 
     assert "👎.\n\nСейчас перешлю анонс 👇" in text
+
+
+def test_repost_intro_rejects_unsupported_outdoor_claim():
+    text = pf._repost_intro_text(
+        "Послушать музыку или сходить на фестиваль",
+        "фестиваль продолжается в эти дни",
+        event_title="Фестиваль Кантата",
+        telegraph_url="https://telegra.ph/kantata",
+        fact_context="Фестиваль Кантата\nконцерт\nсмешанная программа",
+        reply_template=(
+            "Спасибо, что проголосовали.\n\n"
+            "Сегодня рекомендация такая: {{EVENT_LINK}}. Формат выступлений под открытым небом хорошо подходит на субботу.\n\n"
+            "Если зашло — 👍, если нет — 👎.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "под открытым небом" not in text
+    assert "Выбрал один анонс из этой темы" in text
+
+
+def test_repost_intro_rejects_on_this_placeholder_pattern():
+    text = pf._repost_intro_text(
+        "Музыка",
+        "подходит под тему",
+        event_title="Фестиваль Кантата",
+        telegraph_url="https://telegra.ph/kantata",
+        reply_template=(
+            "Спасибо, что проголосовали.\n\n"
+            "Большинство выбрало музыку, поэтому остановимся на этом: {{EVENT_LINK}}.\n\n"
+            "Если зашло — 👍, если нет — 👎.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "остановимся на этом" not in text
+    assert "Выбрал один анонс из этой темы" in text
 
 
 class DummyPollBot:
@@ -181,6 +218,21 @@ def _event(event_id: int, *, title: str, post_id: int, event_type: str = "кон
         lifecycle_status="active",
         silent=False,
     )
+
+
+def _event_for_date(
+    event_id: int,
+    *,
+    title: str,
+    post_id: int,
+    date: str,
+    end_date: str | None = None,
+    event_type: str = "концерт",
+) -> Event:
+    event = _event(event_id, title=title, post_id=post_id, event_type=event_type)
+    event.date = date
+    event.end_date = end_date
+    return event
 
 
 async def _seed_events(db: Database) -> None:
@@ -282,6 +334,42 @@ def test_production_min_vote_threshold_grows_weekly(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_load_eligible_events_excludes_ongoing_start_date_posts(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(
+            _event_for_date(
+                101,
+                title="Фестиваль со старым стартовым постом",
+                post_id=501,
+                date="2026-06-12",
+                end_date="2026-06-16",
+                event_type="фестиваль",
+            )
+        )
+        session.add(
+            _event_for_date(
+                102,
+                title="Завтрашний концерт",
+                post_id=502,
+                date="2026-06-13",
+                event_type="концерт",
+            )
+        )
+        await session.commit()
+
+    events = await pf.load_eligible_events(
+        db,
+        target_date=datetime(2026, 6, 13, tzinfo=timezone.utc).date(),
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert [event.id for event in events] == [102]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_debug_create_skips_without_llm_plan(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -343,6 +431,41 @@ async def test_debug_create_uses_llm_plan_and_sends_poll(tmp_path, monkeypatch):
         cur = await conn.execute("SELECT status, poll_message_id FROM poll_repost_run")
         assert await cur.fetchone() == (pf.STATUS_OPEN, 101)
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_topic_planner_prompt_requests_free_option_when_possible(monkeypatch):
+    events = [
+        pf.CandidateEvent(
+            id=101,
+            title="Бесплатная лекция",
+            date="2026-06-13",
+            end_date=None,
+            time="12:00",
+            event_type="лекция",
+            festival=None,
+            city="Калининград",
+            location_name="Библиотека",
+            is_free=True,
+            tg_event_post_id=501,
+            tg_event_post_url="https://t.me/kldevents/501",
+            telegraph_url="https://telegra.ph/free",
+            summary="Вход свободный.",
+        )
+    ]
+    captured = {}
+
+    async def fake_llm(**kwargs):
+        captured["prompt"] = kwargs.get("prompt", "")
+        return {"question_text": "", "options": []}
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    await pf._call_llm_topic_planner(events)
+
+    assert "бесплат" in captured["prompt"].lower()
+    assert "is_free=true" in captured["prompt"]
+    assert "куда угодно, только бесплатно" in captured["prompt"]
 
 
 @pytest.mark.asyncio

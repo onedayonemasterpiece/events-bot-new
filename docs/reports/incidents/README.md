@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-13-poll-repost-wrong-date-and-copy.md`
+  - Scope: Poll to Repost candidate eligibility, LLM reply composer guardrails,
+    and `@kldevents` Telegram event infoblock date-range rendering.
+  - Must not regress: a recommendation for a target date must not forward an
+    older start-date `@kldevents` post for a long-running event unless that
+    post visibly carries the active range; LLM replies must not invent
+    open-air/street format facts or use `на этом:` placeholder phrasing; Telegram
+    event posts with `end_date > date` must render a visible date range in the
+    infoblock and calendar button.
 - `INC-2026-06-13-vk-auto-import-day-month-regex-nameerror.md`
   - Scope: VK auto-import draft extraction and `vk_intake` date-anchor guards.
   - Must not regress: `_source_text_has_absolute_date_anchor` must support both

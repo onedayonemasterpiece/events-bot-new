@@ -195,6 +195,7 @@ def _repost_intro_text(
     telegraph_url: str | None = None,
     tied_texts: Sequence[str] | None = None,
     reply_template: str | None = None,
+    fact_context: str | None = None,
 ) -> str:
     winner = re.sub(r"\s+", " ", str(winner_text or "").strip()).rstrip(".")
     tied = [
@@ -219,6 +220,7 @@ def _repost_intro_text(
     rendered = _render_llm_repost_reply(
         reply_template,
         event_link_html=linked_title,
+        fact_context=fact_context,
     )
     return rendered or fallback
 
@@ -252,7 +254,12 @@ def _fallback_repost_intro_text(
     return "\n\n".join(parts)
 
 
-def _render_llm_repost_reply(reply_template: str | None, *, event_link_html: str) -> str | None:
+def _render_llm_repost_reply(
+    reply_template: str | None,
+    *,
+    event_link_html: str,
+    fact_context: str | None = None,
+) -> str | None:
     text = re.sub(r"[ \t]+\n", "\n", str(reply_template or "").strip())
     text = re.sub(r"\n{3,}", "\n\n", text)
     if not text or text.count(EVENT_LINK_PLACEHOLDER) != 1:
@@ -273,8 +280,13 @@ def _render_llm_repost_reply(reply_template: str | None, *, event_link_html: str
         "https://",
         "<a ",
         "</a>",
+        "на этом:",
+        "остановился на этом:",
+        "остановимся на этом:",
     )
     if any(fragment in lowered for fragment in forbidden):
+        return None
+    if _has_unsupported_outdoor_claim(lowered, fact_context):
         return None
     if "👍" not in text or "👎" not in text:
         return None
@@ -286,6 +298,45 @@ def _render_llm_repost_reply(reply_template: str | None, *, event_link_html: str
     rendered = re.sub(r"\n(Сейчас перешлю анонс 👇)$", r"\n\n\1", rendered)
     rendered = re.sub(r"\n{3,}", "\n\n", rendered).strip()
     return rendered or None
+
+
+def _has_unsupported_outdoor_claim(lowered_reply: str, fact_context: str | None) -> bool:
+    outdoor_claims = (
+        "под открытым небом",
+        "на открытом воздухе",
+        "на свежем воздухе",
+        "open air",
+        "опен-эйр",
+        "опен эйр",
+    )
+    if not any(claim in lowered_reply for claim in outdoor_claims):
+        return False
+    context = str(fact_context or "").lower()
+    outdoor_evidence = outdoor_claims + (
+        "уличн",
+        "на улице",
+        "во дворе",
+        "парк",
+        "сквер",
+        "площад",
+        "сад",
+        "пляж",
+        "набережн",
+    )
+    return not any(marker in context for marker in outdoor_evidence)
+
+
+def _event_reply_fact_context(event: CandidateEvent, reason: str | None) -> str:
+    fields = (
+        event.title,
+        event.event_type,
+        event.festival,
+        event.city,
+        event.location_name,
+        event.summary,
+        reason,
+    )
+    return "\n".join(str(value or "") for value in fields if str(value or "").strip())
 
 
 def _compact_repost_reason(reason: str | None, limit: int = 100) -> str:
@@ -356,6 +407,11 @@ def _event_active_on(event: Event, target: date) -> bool:
     end = _parse_date(getattr(event, "end_date", None))
     if end is not None:
         return end >= target
+    return start == target
+
+
+def _event_forward_matches_target_date(event: Event, target: date) -> bool:
+    start = _parse_date(getattr(event, "date", None))
     return start == target
 
 
@@ -463,6 +519,8 @@ async def load_eligible_events(
         if event_id <= 0 or event_id in recent_ids:
             continue
         if not _event_active_on(event, target_date):
+            continue
+        if not _event_forward_matches_target_date(event, target_date):
             continue
         post_id = _event_kldevents_message_id(event)
         if not post_id:
@@ -574,6 +632,9 @@ async def _call_llm_topic_planner(events: Sequence[CandidateEvent]) -> tuple[str
         "Работай только с переданными событиями. Не придумывай темы, под которые нет кандидатов. "
         "Опции должны быть живыми job-to-be-done, а не сухими категориями базы. "
         "Пиши дружелюбно и спокойно, как обращение к подписчикам канала с анонсами. "
+        "Если среди кандидатов есть несколько бесплатных событий, обязательно рассмотри отдельную живую опцию "
+        "про бесплатность — не сухо «бесплатные мероприятия», а в духе «куда угодно, только бесплатно»; "
+        "в эту опцию включай только события с is_free=true. "
         "Не используй рекламные суперлативы и промо-слоганы вроде «лучшие события», "
         "«на волне драйва», «прикоснуться к прекрасному».\n"
         "Поле question_text можешь оставить пустым: вопрос опроса задаёт продуктовый шаблон.\n"
@@ -1004,10 +1065,15 @@ async def _compose_repost_reply_with_llm(
         "не пиши URL, Markdown или HTML.\n"
         "Ставь плейсхолдер только в грамматически нейтральные позиции, чтобы не ломать склонения: "
         f"«выбрал вот что: {EVENT_LINK_PLACEHOLDER}», "
-        f"«остановился на этом: {EVENT_LINK_PLACEHOLDER}», "
+        f"«вот что выбрал для этой темы: {EVENT_LINK_PLACEHOLDER}», "
+        f"«сегодня рекомендация такая: {EVENT_LINK_PLACEHOLDER}», "
         f"«один анонс из этой темы — {EVENT_LINK_PLACEHOLDER}». "
         f"Нельзя писать: «я бы предложил {EVENT_LINK_PLACEHOLDER}», "
-        f"«сходить на {EVENT_LINK_PLACEHOLDER}», «расскажу про {EVENT_LINK_PLACEHOLDER}».\n"
+        f"«сходить на {EVENT_LINK_PLACEHOLDER}», «расскажу про {EVENT_LINK_PLACEHOLDER}», "
+        f"«остановился на этом: {EVENT_LINK_PLACEHOLDER}».\n"
+        "Не добавляй факты, которых нет в контексте. Особенно не пиши, что событие/фестиваль проходит "
+        "под открытым небом, на свежем воздухе, в парке или на улице, если это прямо не указано в контексте. "
+        "У фестивалей бывает смешанный формат: не угадывай формат площадок по слову «фестиваль».\n"
         "Не делай текст одинаковым от раза к разу, но не теряй смысл. 3–5 коротких абзацев, 180–650 символов. "
         "Не используй слова и смыслы: алгоритм, репост, форвард, подборка, разбор, рекомендательная модель, контент. "
         "Не используй рекламные клише и оценки: отличный вариант, интересный вариант, хороший вариант, лучший, "
@@ -1172,10 +1238,10 @@ async def resolve_due_debug_polls(
                     db,
                     run_id,
                     status=STATUS_SKIPPED_NO_CANDIDATE,
-                result=snapshot,
-                winner_option_id=winner_option.key if winner_option else None,
-                winner_text=winner_option.text if winner_option else None,
-                error={"reason": llm_reason or "winner_candidate_unavailable"},
+                    result=snapshot,
+                    winner_option_id=winner_option.key if winner_option else None,
+                    winner_text=winner_option.text if winner_option else None,
+                    error={"reason": llm_reason or "winner_candidate_unavailable"},
                 )
                 logger.info(
                     "poll_to_forward.debug_resolve skipped llm_or_candidate_unavailable run_id=%s run_key=%s reason=%s tied_options=%s eligible_now=%s",
@@ -1207,6 +1273,7 @@ async def resolve_due_debug_polls(
                     telegraph_url=chosen.telegraph_url,
                     tied_texts=[option.text for option in tied_options],
                     reply_template=llm_reply_text,
+                    fact_context=_event_reply_fact_context(chosen, llm_reason),
                 ),
                 reply_to_message_id=int(run["poll_message_id"]),
                 parse_mode="HTML",
