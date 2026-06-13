@@ -165,6 +165,7 @@ async def create_kaggle_run_config(
     token = generate_callback_token()
     now = utc_now_iso()
     async with db.raw_conn() as conn:
+        await _expire_resource_leases(conn, now=now)
         await conn.execute(
             """
             INSERT INTO kaggle_run_ledger(
@@ -221,6 +222,28 @@ async def validate_run_token(db: Database, run_id: str, token: str) -> bool:
     return bool(row and row[0] and secrets.compare_digest(str(row[0]), hash_token(token)))
 
 
+async def _expire_resource_leases(conn, *, now: str | None = None, resource_key: str | None = None) -> None:
+    now_value = now or utc_now_iso()
+    if resource_key:
+        await conn.execute(
+            """
+            UPDATE kaggle_resource_lease
+            SET status='expired', released_at=?, updated_at=?
+            WHERE resource_key=? AND status='active' AND expires_at < ?
+            """,
+            (now_value, now_value, resource_key, now_value),
+        )
+        return
+    await conn.execute(
+        """
+        UPDATE kaggle_resource_lease
+        SET status='expired', released_at=?, updated_at=?
+        WHERE status='active' AND expires_at < ?
+        """,
+        (now_value, now_value, now_value),
+    )
+
+
 async def _record_resource(conn, *, run_id: str, resource: dict[str, Any]) -> dict[str, Any]:
     key = _clean_text(resource.get("key") or resource.get("resource_key"), limit=300)
     if not key:
@@ -231,10 +254,7 @@ async def _record_resource(conn, *, run_id: str, resource: dict[str, Any]) -> di
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
     expires = datetime.fromtimestamp(now_dt.timestamp() + ttl_seconds, timezone.utc).isoformat()
-    await conn.execute(
-        "UPDATE kaggle_resource_lease SET status='expired', released_at=? WHERE resource_key=? AND status='active' AND expires_at < ?",
-        (now, key, now),
-    )
+    await _expire_resource_leases(conn, now=now, resource_key=key)
     cur = await conn.execute(
         "SELECT run_id, status, expires_at FROM kaggle_resource_lease WHERE resource_key=?",
         (key,),
@@ -292,6 +312,7 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     now = utc_now_iso()
     resource_result: dict[str, Any] = {}
     async with db.raw_conn() as conn:
+        await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):
             resource_result = await _record_resource(conn, run_id=run_id, resource=payload["resource"])
         if event_uid:

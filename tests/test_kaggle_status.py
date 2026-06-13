@@ -237,6 +237,50 @@ async def test_resource_lease_blocks_parallel_holder(tmp_path, monkeypatch):
     assert body["holder_run_id"] == first["run_id"]
 
 
+@pytest.mark.asyncio
+async def test_expired_resource_lease_is_marked_on_next_run_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            )
+            VALUES (
+                'telegram_session:s22',
+                'videoannounce:669',
+                'kaggle',
+                'active',
+                '2026-06-13T17:05:01+00:00',
+                '2026-06-13T20:05:01+00:00',
+                '2026-06-13T17:05:01+00:00'
+            )
+            """,
+        )
+        await conn.commit()
+
+    config = await create_kaggle_run_config(
+        db,
+        run_id="guide-monitor:next",
+        session_id=None,
+        kind="guide_excursions_monitor",
+        notebook="GuideExcursionsMonitor",
+    )
+    assert config
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, released_at FROM kaggle_resource_lease WHERE resource_key=?",
+            ("telegram_session:s22",),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+    assert row[0] == "expired"
+    assert row[1]
+
+
 def test_kaggle_status_client_redacts_token_in_local_jsonl(tmp_path):
     KaggleStatusClient = _load_status_client_class()
     client = KaggleStatusClient(
