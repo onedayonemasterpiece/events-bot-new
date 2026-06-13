@@ -24,7 +24,7 @@ def test_repost_intro_handles_tied_topics_without_preview_link_copy():
     assert text == (
         "Голоса разделились поровну между «Выставки» и «Экскурсии и прогулки». "
         "Беру один из этих вариантов.\n\n"
-        'Я выбрал один вариант из этих тем: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
+        'Выбрал один анонс из этих тем: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
         "как раз открывается выставка, и это хорошо попадает в голосование.\n\n"
         "Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"
@@ -44,7 +44,7 @@ def test_repost_intro_compacts_long_reason():
         telegraph_url="https://telegra.ph/demo",
     )
 
-    recommendation_line = next(line for line in text.splitlines() if line.startswith("Из этой темы"))
+    recommendation_line = next(line for line in text.splitlines() if line.startswith("Выбрал один анонс"))
     reason = recommendation_line.split(" — ", 1)[1]
     assert len(reason) <= 103
     assert " — " not in reason
@@ -62,9 +62,45 @@ def test_repost_intro_softens_marketing_reason_lead():
 
     assert "Отличный вариант" not in text
     assert (
-        'Из этой темы я бы предложил <a href="https://telegra.ph/farm">Фермерский праздник</a> — '
+        'Выбрал один анонс из этой темы: <a href="https://telegra.ph/farm">Фермерский праздник</a> — '
         "для тех, кто проголосовал за гастро-отдых, на ферме как раз праздник."
     ) in text
+
+
+def test_repost_intro_renders_llm_reply_template_with_safe_event_link():
+    text = pf._repost_intro_text(
+        "Узнать новое на лекции или встрече",
+        "для тех, кто голосовал за лекции",
+        event_title="Лекция «Моне / Мане: погружение в мир импрессионизма»",
+        telegraph_url="https://telegra.ph/lecture",
+        reply_template=(
+            "Спасибо за голоса — сегодня берём тему «Узнать новое на лекции или встрече».\n\n"
+            "Для этой темы выбрал {{EVENT_LINK}}: в субботу можно спокойно погрузиться в историю импрессионизма.\n\n"
+            "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "я бы предложил Лекция" not in text
+    assert (
+        'выбрал <a href="https://telegra.ph/lecture">Лекция «Моне / Мане: '
+        'погружение в мир импрессионизма»</a>:'
+    ) in text
+    assert "Если попал с рекомендацией" in text
+    assert "Сейчас перешлю анонс 👇" in text
+
+
+def test_repost_intro_falls_back_when_llm_reply_has_no_event_placeholder():
+    text = pf._repost_intro_text(
+        "Вечер с музыкой",
+        "камерный концерт подходит под выбранную тему",
+        event_title="Камерный концерт",
+        telegraph_url="https://telegra.ph/music",
+        reply_template="Спасибо за голоса. Сейчас перешлю анонс 👇",
+    )
+
+    assert "Спасибо за голоса — берём тему" in text
+    assert '<a href="https://telegra.ph/music">Камерный концерт</a>' in text
 
 
 class DummyPollBot:
@@ -307,6 +343,26 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
 
     async def fake_llm(**kwargs):
         prompt = kwargs.get("prompt", "")
+        if "Ты пишешь публичный комментарий" in prompt:
+            match = re.search(r'"winner_topic":\s*"(?P<topic>[^"]+)"', prompt)
+            topic = match.group("topic") if match else "выбранную тему"
+            if '"is_tie": true' in prompt:
+                return {
+                    "reply_text": (
+                        f"Голоса разделились поровну, поэтому беру один анонс из темы «{topic}».\n\n"
+                        "{{EVENT_LINK}} хорошо ложится в выбранную тему: можно выбраться завтра без ощущения случайного совета.\n\n"
+                        "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+                        "Сейчас перешлю анонс 👇"
+                    )
+                }
+            return {
+                "reply_text": (
+                    f"Спасибо за голоса — берём тему «{topic}».\n\n"
+                    "{{EVENT_LINK}} хорошо ложится в выбранную тему: можно выбраться завтра без ощущения случайного совета.\n\n"
+                    "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+                    "Сейчас перешлю анонс 👇"
+                )
+            }
         if "winner_key" not in prompt:
             return {"question_text": "", "options": option_plan}
         match = re.search(
@@ -389,7 +445,7 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
         text = bot.messages[index]["text"]
         assert winner_text in text
         assert "Подробнее" not in text
-        assert "Если рекомендация зашла" in text
+        assert "Если попал с рекомендацией" in text
         assert "Сейчас перешлю анонс 👇" in text
         assert text.count("\n\n") == 3
         assert bot.messages[index]["parse_mode"] == "HTML"
@@ -407,8 +463,21 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
 
     async def fake_llm(**kwargs):
         prompt = kwargs.get("prompt", "")
+        if "Ты пишешь публичный комментарий" in prompt:
+            return {
+                "reply_text": (
+                    "Спасибо за голоса — сегодня берём «Вечер с музыкой».\n\n"
+                    "Для этой темы выбрал {{EVENT_LINK}}: камерная музыка хорошо попадает в запрос на спокойный вечер.\n\n"
+                    "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+                    "Сейчас перешлю анонс 👇"
+                )
+            }
         if "winner_key" in prompt:
-            return {"winner_key": "music", "event_id": 101, "reason": "самый сильный концерт"}
+            return {
+                "winner_key": "music",
+                "event_id": 101,
+                "reason": "самый сильный концерт",
+            }
         return {
             "question_text": "Что выбрать на завтра?",
             "options": [
@@ -444,9 +513,10 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
-        "Спасибо за голоса — берём тему «Вечер с музыкой».\n\n"
-        'Из этой темы я бы предложил <a href="https://telegra.ph/event-101">Камерный концерт</a> — самый сильный концерт.\n\n'
-        "Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+        "Спасибо за голоса — сегодня берём «Вечер с музыкой».\n\n"
+        'Для этой темы выбрал <a href="https://telegra.ph/event-101">Камерный концерт</a>: '
+        "камерная музыка хорошо попадает в запрос на спокойный вечер.\n\n"
+        "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"
     )
     assert bot.messages[0]["parse_mode"] == "HTML"
