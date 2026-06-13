@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -45,6 +46,29 @@ from promo import (
     resolve_video_promo_candidates,
 )
 from video_announce.popular_review import PopularReviewPick, _merge_promo_and_fresh_picks
+
+
+def test_promo_docs_forbid_event_id_only_live_programme_campaigns() -> None:
+    contract = Path("docs/features/promo-campaigns/README.md").read_text(encoding="utf-8")
+    debt = Path("docs/backlog/features/festival-monitoring-debt/README.md").read_text(
+        encoding="utf-8"
+    )
+    contract_text = " ".join(contract.split())
+    debt_text = " ".join(debt.split())
+
+    assert "Live festival/program campaigns must not be modelled as `event.id`-only" in contract_text
+    assert "A fixed event-id target set is valid only for a closed, already-audited set" in contract_text
+    assert "dynamic anchor (`festival`, `festival_series`, source/author trigger" in contract_text
+    assert "they must not be the only eligibility mechanism for the whole live campaign" in contract_text
+    assert 'event.festival="Кантата"' in contract_text
+    assert "then apply an education" in contract_text
+    assert "separates lectures/talks/education events from concerts" in contract_text
+    assert "frozen list of the event ids known at campaign creation time" in contract_text
+    assert "fixed `event_id`-only target set" in debt_text
+    assert "newly imported event" in debt_text
+    assert 'event.festival="Кантата"' in debt_text
+    assert "lecture/talk under" in debt_text
+    assert "concert under the same festival marker is not selected" in debt_text
 
 
 def _event(title: str, day: str, *, festival: str | None = None) -> Event:

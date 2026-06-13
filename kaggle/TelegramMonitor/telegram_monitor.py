@@ -600,6 +600,25 @@ def is_promo_or_congrats(text: str | None, ocr_text: str | None = None) -> bool:
         return True
     return False
 
+def _has_strong_event_invitation_signal(text: str | None, ocr_text: str | None = None) -> bool:
+    """Route clear event-shaped promo/congrats posts to LLM extraction.
+
+    This is deliberately not an extractor. It only checks whether the post has
+    enough structural evidence to justify an LLM pass even when promo/congrats
+    wording is present.
+    """
+    combined = ((text or '') + '\n' + (ocr_text or '')).strip()
+    if not combined:
+        return False
+    if _looks_like_clear_single_event_invitation(combined):
+        return True
+    date_like = bool(_CLEAR_SINGLE_EVENT_DATE_RE.search(combined))
+    time_like = bool(_CLEAR_SINGLE_EVENT_TIME_RE.search(combined))
+    event_like = bool(_CLEAR_SINGLE_EVENT_INVITE_RE.search(combined))
+    venue_or_ticket = bool(_CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE.search(combined))
+    registration_link = bool(re.search(r'https?://\S+|регистрац\w*|бесплатно,\s*по\s+регистрац', combined, re.IGNORECASE | re.UNICODE))
+    return bool(date_like and time_like and event_like and (venue_or_ticket or registration_link))
+
 def strip_promo_lines(text: str | None) -> str:
     if not text:
         return ''
@@ -2782,6 +2801,10 @@ async def extract_events(
         'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
         'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
         'Use empty string for unknown text fields. Omit numeric and boolean fields when unknown. '
+        'Festival/campaign anchor contract: when the source explicitly says the event is part of a named festival '
+        '(for example "фестиваль «Кантата»", "фестиваля Кантата", "80 историй о главном", or kgd80.ru), '
+        'fill festival with the exact campaign-covering festival name: "Кантата" or "80 историй о главном". '
+        'Do not drop festival merely because the post is a single lecture/talk rather than a whole-festival announcement. '
         'The date field must always be an ISO calendar date (YYYY-MM-DD) or an empty string; never put titles, labels, '
         'ticket text, descriptions, or long source fragments into date/end_date. '
         'Never return whitespace-only strings. '
@@ -2826,6 +2849,9 @@ async def extract_events(
         'do NOT return [] only because some venue, city, or ticket fields remain unresolved; return one best-effort event object and leave unresolved text fields empty. '
         'If one post clearly announces one attendee-facing performance/show/concert/play/film screening with exact future date, start time, and either venue/address or ticket/registration link, '
         'do NOT return [] solely because the wording is short, promotional, or partially in a poster/link; return one best-effort event object. '
+        'Posts that announce a transfer/reschedule ("перенос", "перенесена") of a future lecture/talk with the same date/time are still attendee-facing events; extract the future event and keep transfer details in raw_excerpt/search_digest. '
+        'Posts with giveaway results, winners, repost mechanics, or congratulatory/promo framing still contain an event when they also state a concrete future date/time and venue or registration/ticket URL; ignore the mechanics/winners and extract the underlying event. '
+        'For festival/promo campaign source posts such as @kraftmarket39, a line with exact date/time, event title, venue, and free/paid registration is a concrete event, not merely channel promotion. '
         'For such a clearly invited single lecture/talk, prefer filling date/time from text or OCR rather than leaving them empty. '
         'If only the title is reliable at extraction time, still prefer one best-effort lecture row over [] so downstream OCR/date merge can complete it. '
         'For a clearly invited single lecture/talk with one supported start datetime, return exactly one event row '
@@ -3029,8 +3055,13 @@ async def extract_events(
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
             'Use empty string for unknown text fields. '
+            'If text or ticket URL names a festival campaign context such as "Кантата" or "80 историй о главном"/kgd80.ru, '
+            'set festival exactly to "Кантата" or "80 историй о главном" on the returned event. '
             'This rescue runs only after a structural detector found exact date, exact time, and ticket/venue evidence; '
             'prefer returning one best-effort event over [] when the source clearly invites attendance. '
+            'A transfer/reschedule post with "перенос/перенесена" plus a future date/time is still an event. '
+            'A giveaway-result or congratulatory/promo post with a concrete future event date/time plus venue or registration/ticket URL is still an event; ignore winner names, repost rules, and promo mechanics. '
+            'If the text contains a registration/ticket URL next to a titled lecture/talk, treat that as strong attendance evidence. '
             'Do not invent facts: leave unresolved venue/address/city/ticket fields empty. '
             'Infer missing year from the message date and choose the nearest upcoming date. '
             'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
@@ -3142,9 +3173,13 @@ async def extract_events(
             'ticket_link, ticket_price_min, ticket_price_max, ticket_status, raw_excerpt, '
             'event_type, emoji, is_free, pushkin_card, search_digest, festival. '
             'Use empty string for unknown text fields. '
+            'If the lecture/talk belongs to a named festival campaign context such as "Кантата" or "80 историй о главном"/kgd80.ru, '
+            'set festival exactly to that festival name; this is required for downstream promo campaigns. '
             'If text says "Приглашаем на лекцию/встречу/экскурсию/показ" and OCR gives one explicit date/time, '
             'that is enough to keep one best-effort event row even if venue fields stay empty. '
             'Prefer one row over [] for such a clearly invited single event. '
+            'Also keep one row when the post is a transfer/reschedule notice for a future lecture/talk or when a promo/giveaway-result wrapper repeats a future event date/time with a registration/ticket URL. '
+            'Ignore giveaway winners, repost mechanics, and congratulatory framing; extract the underlying attendee-facing event. '
             'Merge OCR date/time into that row; infer the year from message date when needed. '
             'Do not use message_date itself as the event date unless the text/OCR contains an explicit relative date anchor '
             'such as "сегодня", "завтра", or "послезавтра". '
@@ -3568,8 +3603,10 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             logger.info('message.flag reason=ticket_giveaway username=%s message_id=%s', username, msg.id)
 
         skip_promo = is_promo_or_congrats(text)
-        if skip_promo:
+        if skip_promo and not _has_strong_event_invitation_signal(text):
             logger.info('message.skip reason=promo_or_congrats username=%s message_id=%s', username, msg.id)
+        elif skip_promo:
+            logger.info('message.flag reason=promo_or_congrats_strong_event_signal_pre_ocr username=%s message_id=%s', username, msg.id)
 
         posters = []
         videos = []
@@ -3734,12 +3771,18 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             except Exception as exc:
                 logger.warning('media process failed for %s/%s: %s', username, msg.id, exc)
 
-        if is_promo_or_congrats(text, ocr_text):
+        if is_promo_or_congrats(text, ocr_text) and not _has_strong_event_invitation_signal(text, ocr_text):
             logger.info('message.skip reason=promo_or_congrats_ocr username=%s message_id=%s', username, msg.id)
             skip_promo = True
             events = []
             ocr_date_hint, ocr_time_hint = None, None
         else:
+            if skip_promo:
+                logger.info(
+                    'message.flag reason=promo_or_congrats_strong_event_signal username=%s message_id=%s',
+                    username,
+                    msg.id,
+                )
             # If OCR reveals giveaway terms, keep text intact; LLM should ignore mechanics.
             if is_ticket_giveaway(text, ocr_text):
                 logger.info('message.flag reason=ticket_giveaway_ocr username=%s message_id=%s', username, msg.id)

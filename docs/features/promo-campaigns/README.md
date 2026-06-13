@@ -58,6 +58,26 @@ grounded by an existing `festival` row or by future active event rows whose
 `event.festival` already equals that name. Event/festival rotation uses only
 events whose start date is today or later.
 
+Live festival/program campaigns must not be modelled as `event.id`-only
+campaigns while the programme is still being imported or corrected. A fixed
+event-id target set is valid only for a closed, already-audited set of concrete
+events. For an open educational/festival programme, the campaign needs a
+dynamic anchor (`festival`, `festival_series`, source/author trigger, or another
+explicit semantic programme target) so newly imported programme events become
+eligible without an operator remembering to edit the campaign. Per-surface
+event-id lists such as `preferred_event_ids_by_date`, `carousel_event_ids`, or
+`celebrity_event_ids` may curate a particular publication, but they must not be
+the only eligibility mechanism for the whole live campaign.
+
+For `Кантата`, public/source communication uses the festival marker
+`event.festival="Кантата"`. The educational programme is a segment inside that
+festival, not a replacement festival name. Promo eligibility for that programme
+therefore needs two stages: first anchor on `Кантата`, then apply an education
+programme filter/classifier that separates lectures/talks/education events from
+concerts. Until a structured programme field exists, this filter must still be
+dynamic and auditable; it must not be approximated by a frozen list of the event
+ids known at campaign creation time.
+
 ## Operator Commands
 
 - `/promo` or `/promo list` lists current/future non-archived campaigns
@@ -302,6 +322,10 @@ VK carousel links use VK short links where possible. Event links prefer
 through the existing VK shortener helper; configured per-event URLs are also
 shortened before rendering into VK text. Telegram surfaces must continue using
 the original expanded `event.ticket_link` and must not reuse VK-only shortlinks.
+If a carousel belongs to a live programme campaign, configured event-id lists are
+publication-level curation only. The parent campaign still needs a dynamic
+programme target so new imports are visible to other promo surfaces and future
+carousel revisions.
 
 When `debug_shadow=true`, `vk_festival_carousel` schedules a marked postponed
 copy several days ahead using the same shadow-slot pattern as

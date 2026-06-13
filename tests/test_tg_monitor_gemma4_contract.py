@@ -148,6 +148,13 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert 'must return title "Второй Большой киноквиз", date "2026-04-24", time "19:00"' in source
     assert 'A museum-hosted lecture invitation remains an event even when the venue is only implicit' in source
     assert 'Use source context only as weak hosting context' in source
+    assert 'transfer/reschedule ("перенос", "перенесена") of a future lecture/talk' in source
+    assert 'giveaway results, winners, repost mechanics, or congratulatory/promo framing' in source
+    assert 'For festival/promo campaign source posts such as @kraftmarket39' in source
+    assert 'promo/giveaway-result wrapper repeats a future event date/time' in source
+    assert "Festival/campaign anchor contract" in source
+    assert 'fill festival with the exact campaign-covering festival name: "Кантата" or "80 историй о главном"' in source
+    assert "this is required for downstream promo campaigns" in source
     assert "Institution work-hours notices are NOT events" in source
     assert "do NOT classify a post as a work-hours notice merely because it mentions a museum/library venue" in source
     assert 'a street/address such as "Музейная аллея"' in source
@@ -560,6 +567,81 @@ def test_tg_monitor_sanitizer_keeps_urls_when_stripping_comment_tails() -> None:
     assert clean_value("Название (// leaked reasoning)") == "Название"
     assert clean_value("Название # leaked reasoning") == "Название"
     assert clean_value("Название {// leaked reasoning") == "Название"
+
+
+def _load_tg_monitor_signal_helpers_in_isolation():
+    import ast
+
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    wanted = {
+        "_CLEAR_SINGLE_EVENT_INVITE_RE",
+        "_CLEAR_SINGLE_EVENT_DATE_RE",
+        "_CLEAR_SINGLE_EVENT_TIME_RE",
+        "_CLEAR_SINGLE_EVENT_VENUE_OR_TICKET_RE",
+        "_looks_like_clear_single_event_invitation",
+        "_has_strong_event_invitation_signal",
+    }
+    extracted: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if targets & wanted:
+                extracted.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in wanted:
+            extracted.append(node)
+    namespace: dict = {"re": re}
+    exec(
+        compile(ast.Module(body=extracted, type_ignores=[]), filename="<tg-monitor-signals>", mode="exec"),
+        namespace,
+    )
+    if "_has_strong_event_invitation_signal" not in namespace:
+        pytest.fail("strong event signal helper missing from Telegram monitor source")
+    return namespace
+
+
+def test_tg_monitor_strong_event_signal_keeps_kraftmarket_promo_posts_in_llm_path() -> None:
+    ns = _load_tg_monitor_signal_helpers_in_isolation()
+    strong = ns["_has_strong_event_invitation_signal"]
+    clear = ns["_looks_like_clear_single_event_invitation"]
+
+    kraft_285 = (
+        "Друзья, вы этого просили, мы это сделали!\n\n"
+        "Лекции Дмитрия Манкевича о становлении здравоохранения в первые годы "
+        "становления области перенесена в Историко-художественный музей на ту же дату "
+        "и то же время.\n\n"
+        "О ЧЁМ БУДЕТ ЛЕКЦИЯ\n"
+        "Поговорим о здравоохранении в первые годы.\n\n"
+        "Лекция проходит в рамках фестиваля «80 историй о главном».\n\n"
+        "бесплатно, по регистрации\n\n"
+        "19 июня 18:30\n"
+        "Историко-художественный музей, Клиническая 21, #Калининград\n"
+        "ПЕРЕНОС, билеты действительны\n"
+        "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1"
+    )
+    kraft_287 = (
+        "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
+        "стать великим композитором.\n\n"
+        "В рамках образовательной программы фестиваля Кантата вы сможете послушать "
+        "лекцию о русском композиторе Александре Бородине.\n\n"
+        "15 июня 12:45\n"
+        "Филиал Третьяковской галереи, Парадная наб. 3, #Калининград\n\n"
+        "Бесплатно, по регистрации\n"
+        "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00"
+    )
+    raffle_results_with_event = (
+        "Поздравляем победителей розыгрыша!\n\n"
+        "А тем, кому сегодня чуть-чуть не повезло, не грустите: ждём вас 13 июня "
+        "с 11:00 до 16:00 в деревне Холмогорье. Билеты стоят 800 рублей, впереди "
+        "конкурс костюмов и запуск воздушных змеев."
+    )
+
+    assert strong(kraft_285)
+    assert clear(kraft_285)
+    assert strong(kraft_287)
+    assert clear(kraft_287)
+    assert strong(raffle_results_with_event)
+    assert not strong("Поздравляем победителей конкурса! Итоги уже в комментариях.")
 
 
 def test_tg_monitor_sanitizer_strips_html_tags_and_own_title_meta_leaks() -> None:

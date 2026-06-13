@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram Monitoring dropped promoted `@kraftmarket39` events as zero-events**:
+  transfer/promo-wrapper festival posts with concrete future title/date/time,
+  venue, and registration evidence now stay in the LLM extraction path, and the
+  prompts require `festival` anchors for `80 историй о главном`, `Кантата`, and
+  `kgd80.ru` contexts so active promo campaigns can see newly imported events.
+  The incident also documents the promo-design guardrail that live festival or
+  educational programme campaigns must not rely on fixed `event_id`-only
+  eligibility. Tracks `INC-2026-06-13-kraftmarket-promo-zero-events` and is
+  covered by `tests/test_tg_monitor_gemma4_contract.py`,
+  `tests/test_tg_monitor_reprocess_incomplete_scan.py`, and
+  `tests/test_promo.py`.
 - **Fixed: VK postponed event slot gap search**: `post_to_vk` now inspects the
   active postponed queue and reserves the first free morning/day slot at the
   configured interval instead of appending after the latest postponed post. A

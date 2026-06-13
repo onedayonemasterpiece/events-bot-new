@@ -60,6 +60,100 @@ def _results_path(tmp_path: Path) -> Path:
     return path
 
 
+def _kraftmarket_incident_results_path(tmp_path: Path) -> Path:
+    payload = {
+        "schema_version": 2,
+        "run_id": "INC-2026-06-13-kraftmarket-promo-zero-events-replay",
+        "generated_at": "2026-06-13T07:00:00+00:00",
+        "stats": {
+            "sources_total": 1,
+            "messages_scanned": 2,
+            "messages_with_events": 2,
+            "events_extracted": 2,
+        },
+        "messages": [
+            {
+                "source_username": "kraftmarket39",
+                "source_title": "Полюбить 39 | Маркет",
+                "message_id": 285,
+                "message_date": "2026-06-12T10:58:15+00:00",
+                "source_link": "https://t.me/kraftmarket39/285",
+                "text": (
+                    "Друзья, вы этого просили, мы это сделали!\n\n"
+                    "Лекции Дмитрия Манкевича о становлении здравоохранения в первые годы "
+                    "становления области перенесена в Историко-художественный музей на ту же дату "
+                    "и то же время.\n\n"
+                    "19 июня 18:30\n"
+                    "Историко-художественный музей, Клиническая 21, #Калининград\n"
+                    "Лекция проходит в рамках фестиваля «80 историй о главном».\n"
+                    "ПЕРЕНОС, билеты действительны\n"
+                    "бесплатно, по регистрации"
+                ),
+                "links": [
+                    {
+                        "url": "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+                        "text": "бесплатно, по регистрации",
+                        "source": "entity",
+                    }
+                ],
+                "events": [
+                    {
+                        "title": "Калининградское здравоохранение в период становления области",
+                        "date": "2026-06-19",
+                        "time": "18:30",
+                        "location_name": "Историко-художественный музей",
+                        "location_address": "Клиническая 21",
+                        "city": "Калининград",
+                        "ticket_link": "https://kgd80.ru/sobytiya/kaliningradskoe-zdravoohranenie-v-period-stanovleniya-oblasti-osobennosti-vyzovy-pobedy-i-problemy/?register=1",
+                        "event_type": "лекция",
+                        "is_free": True,
+                        "festival": "80 историй о главном",
+                    }
+                ],
+            },
+            {
+                "source_username": "kraftmarket39",
+                "source_title": "Полюбить 39 | Маркет",
+                "message_id": 287,
+                "message_date": "2026-06-12T16:14:11+00:00",
+                "source_link": "https://t.me/kraftmarket39/287",
+                "text": (
+                    "15.06 • 12:45 «Бородин. Гениальный дилетант» — почему великий учёный смог "
+                    "стать великим композитором.\n\n"
+                    "Событие проходит в рамках образовательной программы фестиваля Кантата.\n\n"
+                    "15 июня 12:45\n"
+                    "Филиал Третьяковской галереи, Парадная наб. 3, #Калининград\n"
+                    "Бесплатно, по регистрации"
+                ),
+                "links": [
+                    {
+                        "url": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+                        "text": "«Бородин. Гениальный дилетант»",
+                        "source": "entity",
+                    }
+                ],
+                "events": [
+                    {
+                        "title": "Бородин. Гениальный дилетант",
+                        "date": "2026-06-15",
+                        "time": "12:45",
+                        "location_name": "Филиал Третьяковской галереи",
+                        "location_address": "Парадная наб. 3",
+                        "city": "Калининград",
+                        "ticket_link": "https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46524/2026-06-15/12:45:00",
+                        "event_type": "лекция",
+                        "is_free": True,
+                        "festival": "Кантата",
+                    }
+                ],
+            },
+        ],
+    }
+    path = tmp_path / "kraftmarket_incident_telegram_results.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
 async def _seed_source(db: Database) -> int:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
@@ -125,6 +219,62 @@ async def test_reprocesses_legacy_skipped_scan_without_reason(tmp_path, monkeypa
         )
         row = await cur.fetchone()
     assert row == ("done", 1, 1, None)
+
+
+@pytest.mark.asyncio
+async def test_reprocesses_kraftmarket_producer_zero_events_after_fixed_producer_payload(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_id = await _seed_source(db)
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO telegram_scanned_message(
+                source_id, message_id, status, events_extracted, events_imported, error
+            )
+            VALUES(?, ?, 'skipped', 0, 0, 'producer_zero_events:clear_event_signals')
+            """,
+            [(source_id, 285), (source_id, 287)],
+        )
+        await conn.commit()
+
+    calls = []
+
+    async def fake_smart_update(db_arg, candidate, **kwargs):
+        calls.append(candidate)
+        return SmartUpdateResult(status="created", event_id=9000 + len(calls))
+
+    monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
+
+    report = await tg_handlers.process_telegram_results(_kraftmarket_incident_results_path(tmp_path), db)
+
+    assert report.events_created == 2
+    assert [c.source_url for c in calls] == [
+        "https://t.me/kraftmarket39/285",
+        "https://t.me/kraftmarket39/287",
+    ]
+    assert calls[0].title == "Калининградское здравоохранение в период становления области"
+    assert calls[0].date == "2026-06-19"
+    assert calls[0].time == "18:30"
+    assert calls[0].festival == "80 историй о главном"
+    assert calls[1].title == "Бородин. Гениальный дилетант"
+    assert calls[1].date == "2026-06-15"
+    assert calls[1].time == "12:45"
+    assert calls[1].festival == "Кантата"
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT message_id, status, events_extracted, events_imported, error
+            FROM telegram_scanned_message
+            WHERE source_id=? AND message_id IN (285, 287)
+            ORDER BY message_id
+            """,
+            (source_id,),
+        )
+        rows = await cur.fetchall()
+    assert rows == [(285, "done", 1, 1, None), (287, "done", 1, 1, None)]
 
 
 @pytest.mark.asyncio
