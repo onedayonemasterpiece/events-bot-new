@@ -74,6 +74,10 @@ If the eligible pool is too small, the poll is skipped:
 - debug default: at least `3` eligible events;
 - after LLM topic generation there must still be enough distinct non-empty
   options, production default `4`, debug default `3`.
+- when a free-events option is possible (at least two `is_free=true` candidates)
+  and the eligible pool has at least six events, the effective minimum becomes
+  `6` options. The free option is an additional axis of choice, not a
+  replacement for one of the ordinary themes.
 
 This avoids asking the audience to choose when the system cannot honestly offer
 varied outcomes.
@@ -126,6 +130,12 @@ Good options are audience jobs-to-be-done, not raw database categories. Examples
 Avoid advertising-style option text and superlatives. The poll should feel like
 the channel asks subscribers what they want the next recommendation to cover,
 not like a generic promo banner.
+
+When the LLM adds a free-events option, it should not compress the whole poll to
+five choices. With enough eligible events, the expected shape is 6-8 options:
+the usual thematic directions plus the extra free axis. Code rejects a
+free-axis plan that comes back under six options, and free-labelled options are
+filtered to `is_free=true` candidate ids only.
 
 Deterministic code may normalize dates, remove empty options, and enforce
 minimum candidate counts. It must not generate semantic poll topics. If the LLM
@@ -329,7 +339,8 @@ Current debug defaults:
   `00:00-08:30`);
 - scheduler checks at minutes `0,30`;
 - debug minimum eligible events: `3`;
-- debug minimum LLM options: `3`;
+- debug minimum LLM options: `3`, raised to `6` when a free-events axis is
+  possible and inventory supports it;
 - LLM model: `gemini-3.1-flash-lite`;
 - anti-repeat window: `7` days.
 

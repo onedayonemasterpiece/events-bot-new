@@ -235,6 +235,31 @@ def _event_for_date(
     return event
 
 
+def _candidate(
+    event_id: int,
+    *,
+    title: str | None = None,
+    event_type: str = "концерт",
+    is_free: bool = False,
+) -> pf.CandidateEvent:
+    return pf.CandidateEvent(
+        id=event_id,
+        title=title or f"Событие {event_id}",
+        date="2026-06-13",
+        end_date=None,
+        time="12:00",
+        event_type=event_type,
+        festival=None,
+        city="Калининград",
+        location_name="Площадка",
+        is_free=is_free,
+        tg_event_post_id=500 + event_id,
+        tg_event_post_url=f"https://t.me/kldevents/{500 + event_id}",
+        telegraph_url=f"https://telegra.ph/event-{event_id}",
+        summary="Короткое описание.",
+    )
+
+
 async def _seed_events(db: Database) -> None:
     async with db.get_session() as session:
         session.add(_event(101, title="Камерный концерт", post_id=501, event_type="концерт"))
@@ -436,22 +461,12 @@ async def test_debug_create_uses_llm_plan_and_sends_poll(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_topic_planner_prompt_requests_free_option_when_possible(monkeypatch):
     events = [
-        pf.CandidateEvent(
-            id=101,
-            title="Бесплатная лекция",
-            date="2026-06-13",
-            end_date=None,
-            time="12:00",
-            event_type="лекция",
-            festival=None,
-            city="Калининград",
-            location_name="Библиотека",
-            is_free=True,
-            tg_event_post_id=501,
-            tg_event_post_url="https://t.me/kldevents/501",
-            telegraph_url="https://telegra.ph/free",
-            summary="Вход свободный.",
-        )
+        _candidate(101, title="Бесплатная лекция", event_type="лекция", is_free=True),
+        _candidate(102, title="Бесплатная экскурсия", event_type="экскурсия", is_free=True),
+        _candidate(103, title="Концерт", event_type="концерт"),
+        _candidate(104, title="Мастер-класс", event_type="мастер-класс"),
+        _candidate(105, title="Кино", event_type="кинопоказ"),
+        _candidate(106, title="Выставка", event_type="выставка"),
     ]
     captured = {}
 
@@ -466,6 +481,97 @@ async def test_topic_planner_prompt_requests_free_option_when_possible(monkeypat
     assert "бесплат" in captured["prompt"].lower()
     assert "is_free=true" in captured["prompt"]
     assert "куда угодно, только бесплатно" in captured["prompt"]
+    assert "минимум 6" in captured["prompt"]
+    assert "не сжимай опрос до 5" in captured["prompt"]
+    assert "Нужно 6-8 опций" in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_build_poll_plan_rejects_five_options_when_free_axis_is_possible(monkeypatch):
+    events = [
+        _candidate(101, is_free=True, event_type="лекция"),
+        _candidate(102, is_free=True, event_type="экскурсия"),
+        _candidate(103, event_type="концерт"),
+        _candidate(104, event_type="мастер-класс"),
+        _candidate(105, event_type="кинопоказ"),
+        _candidate(106, event_type="выставка"),
+    ]
+
+    async def fake_llm(**_kwargs):
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "free", "text": "Куда угодно, только бесплатно", "candidate_event_ids": [101, 102]},
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [103]},
+                {"key": "learn", "text": "Узнать что-то новое", "candidate_event_ids": [101, 104]},
+                {"key": "cinema", "text": "Сходить в кино", "candidate_event_ids": [105]},
+                {"key": "art", "text": "Посмотреть выставку", "candidate_event_ids": [106]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    _question, options, strategy = await pf.build_poll_plan(events, min_options=3, run_key="debug:2026-06-12T10")
+
+    assert options == []
+    assert strategy == "llm_underfilled"
+
+
+@pytest.mark.asyncio
+async def test_debug_create_sends_six_options_when_free_axis_is_possible(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        free_lecture = _event(101, title="Бесплатная лекция", post_id=501, event_type="лекция")
+        free_walk = _event(102, title="Бесплатная прогулка", post_id=502, event_type="экскурсия")
+        free_lecture.is_free = True
+        free_walk.is_free = True
+        session.add_all(
+            [
+                free_lecture,
+                free_walk,
+                _event(103, title="Камерный концерт", post_id=503, event_type="концерт"),
+                _event(104, title="Семейный праздник", post_id=504, event_type="детям"),
+                _event(105, title="Кинопоказ", post_id=505, event_type="кинопоказ"),
+                _event(106, title="Выставка", post_id=506, event_type="выставка"),
+            ]
+        )
+        await session.commit()
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
+
+    async def fake_llm(**kwargs):
+        prompt = kwargs.get("prompt", "")
+        assert "Нужно 6-8 опций" in prompt
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "free", "text": "Куда угодно, только бесплатно", "candidate_event_ids": [101, 102]},
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [103]},
+                {"key": "family", "text": "Выбраться с семьёй", "candidate_event_ids": [104]},
+                {"key": "cinema", "text": "Сходить в кино", "candidate_event_ids": [105]},
+                {"key": "art", "text": "Посмотреть выставку", "candidate_event_ids": [106]},
+                {"key": "learn", "text": "Узнать что-то новое", "candidate_event_ids": [101]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+    bot = DummyPollBot()
+
+    result = await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["created"] is True
+    assert len(bot.sent_polls[0]["options"]) == 6
+    assert "Куда угодно, только бесплатно" in bot.sent_polls[0]["options"]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT options_json, error_json FROM poll_repost_run")
+        options_json, error_json = await cur.fetchone()
+    assert len(json.loads(options_json)) == 6
+    assert json.loads(error_json)["eligible_events"] == 6
+    await db.close()
 
 
 @pytest.mark.asyncio

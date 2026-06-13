@@ -68,7 +68,7 @@ unsupported open-air claim and used awkward template-like phrasing.
 ### Treat as regression guard when
 
 - changing `poll_to_forward.py` candidate eligibility, winner resolution,
-  repost reply composing, or forwarded-source selection;
+  topic planning, repost reply composing, or forwarded-source selection;
 - changing `main_part2.py` Telegram event infoblock date formatting;
 - changing LLM prompts for Poll to Repost topic generation or public comments.
 
@@ -93,6 +93,10 @@ unsupported open-air claim and used awkward template-like phrasing.
   phrasing.
 - A regression that renders Telegram event infoblock and calendar button ranges
   when `end_date > date`.
+- A regression that keeps a free-events topic as an additional option: when at
+  least two free candidates and at least six eligible events exist, five-option
+  LLM topic plans must be rejected and a valid poll should carry six or more
+  options.
 - Production SQL evidence for the original bad run or equivalent smoke.
 - Post-deploy `/healthz` and release SHA evidence.
 
@@ -128,6 +132,9 @@ unsupported open-air claim and used awkward template-like phrasing.
   festivals.
 - Updated topic planning prompt to consider a playful free-events category when
   enough free candidates exist.
+- Tightened topic planning so the free-events option is additive: with enough
+  inventory, Poll to Repost requires at least six options and filters
+  free-labelled options to `is_free=true` event ids.
 - Updated `@kldevents` event-post date rendering to show `date` + `end_date`
   ranges in the infoblock and calendar button.
 

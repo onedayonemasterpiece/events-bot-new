@@ -29,6 +29,10 @@ STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 EVENT_LINK_PLACEHOLDER = "{{EVENT_LINK}}"
+FREE_TOPIC_MIN_FREE_EVENTS = 2
+FREE_TOPIC_MIN_OPTIONS = 6
+TOPIC_PLAN_DEFAULT_MAX_OPTIONS = 8
+TELEGRAM_POLL_MAX_OPTIONS = 10
 DEFAULT_POLL_QUESTION_TEXT = (
     "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе."
 )
@@ -610,7 +614,40 @@ async def _google_generate_json(
     return _extract_json_object(str(raw or ""))
 
 
-async def _call_llm_topic_planner(events: Sequence[CandidateEvent]) -> tuple[str | None, list[PollOptionPlan]]:
+def _free_topic_possible(events: Sequence[CandidateEvent]) -> bool:
+    return sum(1 for event in events if bool(event.is_free)) >= FREE_TOPIC_MIN_FREE_EVENTS
+
+
+def _topic_plan_min_options(events: Sequence[CandidateEvent], base_min_options: int) -> int:
+    base = max(2, int(base_min_options))
+    if _free_topic_possible(events) and len(events) >= FREE_TOPIC_MIN_OPTIONS:
+        return max(base, FREE_TOPIC_MIN_OPTIONS)
+    return base
+
+
+def _option_mentions_free(*values: str | None) -> bool:
+    text = " ".join(str(value or "") for value in values).casefold()
+    return any(marker in text for marker in ("бесплат", "вход свобод", "free", "0 руб"))
+
+
+async def _call_llm_topic_planner(
+    events: Sequence[CandidateEvent],
+    *,
+    min_options: int = 3,
+) -> tuple[str | None, list[PollOptionPlan]]:
+    required_options = _topic_plan_min_options(events, min_options)
+    max_options = min(TELEGRAM_POLL_MAX_OPTIONS, max(TOPIC_PLAN_DEFAULT_MAX_OPTIONS, required_options))
+    free_count = sum(1 for event in events if bool(event.is_free))
+    free_instruction = (
+        f"В списке есть {free_count} бесплатных событий. Если среди кандидатов есть несколько "
+        "бесплатных событий, обязательно рассмотри отдельную живую опцию про бесплатность — не сухо "
+        "«бесплатные мероприятия», а в духе «куда угодно, только бесплатно». Эта опция должна быть "
+        "дополнительной осью выбора, а не заменой одной из обычных тематик. Поэтому при такой опции "
+        f"верни минимум {required_options} вариантов, не сжимай опрос до 5. "
+        "В эту опцию включай только события с is_free=true. "
+        if free_count >= FREE_TOPIC_MIN_FREE_EVENTS
+        else ""
+    )
     items = [
         {
             "id": ev.id,
@@ -632,15 +669,13 @@ async def _call_llm_topic_planner(events: Sequence[CandidateEvent]) -> tuple[str
         "Работай только с переданными событиями. Не придумывай темы, под которые нет кандидатов. "
         "Опции должны быть живыми job-to-be-done, а не сухими категориями базы. "
         "Пиши дружелюбно и спокойно, как обращение к подписчикам канала с анонсами. "
-        "Если среди кандидатов есть несколько бесплатных событий, обязательно рассмотри отдельную живую опцию "
-        "про бесплатность — не сухо «бесплатные мероприятия», а в духе «куда угодно, только бесплатно»; "
-        "в эту опцию включай только события с is_free=true. "
+        f"{free_instruction}"
         "Не используй рекламные суперлативы и промо-слоганы вроде «лучшие события», "
         "«на волне драйва», «прикоснуться к прекрасному».\n"
         "Поле question_text можешь оставить пустым: вопрос опроса задаёт продуктовый шаблон.\n"
         "Верни JSON строго такого вида: "
         "{\"question_text\":\"...\",\"options\":[{\"key\":\"music\",\"text\":\"...\",\"candidate_event_ids\":[1,2],\"rationale\":\"...\"}]}.\n"
-        "Нужно 3-8 опций, текст каждой опции до 100 символов. "
+        f"Нужно {required_options}-{max_options} опций, текст каждой опции до 100 символов. "
         "Каждая опция должна иметь хотя бы один candidate_event_id из списка.\n\n"
         f"События на завтра:\n{json.dumps(items, ensure_ascii=False)}"
     )
@@ -648,6 +683,7 @@ async def _call_llm_topic_planner(events: Sequence[CandidateEvent]) -> tuple[str
     if not data:
         return None, []
     event_ids = {ev.id for ev in events}
+    free_by_id = {ev.id: bool(ev.is_free) for ev in events}
     question = str(data.get("question_text") or "").strip() or None
     options: list[PollOptionPlan] = []
     for idx, item in enumerate(data.get("options") or []):
@@ -656,26 +692,28 @@ async def _call_llm_topic_planner(events: Sequence[CandidateEvent]) -> tuple[str
         text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
         if not text:
             continue
+        key = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(item.get("key") or f"opt{idx+1}")).strip("_")
+        rationale = str(item.get("rationale") or "").strip()[:500]
+        free_only = _option_mentions_free(key, text, rationale)
         ids = []
         for raw_id in item.get("candidate_event_ids") or []:
             try:
                 event_id = int(raw_id)
             except Exception:
                 continue
-            if event_id in event_ids:
+            if event_id in event_ids and (not free_only or free_by_id.get(event_id, False)):
                 ids.append(event_id)
         if not ids:
             continue
-        key = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(item.get("key") or f"opt{idx+1}")).strip("_")
         options.append(
             PollOptionPlan(
                 key=key or f"opt{idx+1}",
                 text=text[:100],
                 candidate_event_ids=tuple(dict.fromkeys(ids)),
-                rationale=str(item.get("rationale") or "").strip()[:500],
+                rationale=rationale,
             )
         )
-    return question, options[:10]
+    return question, options[:TELEGRAM_POLL_MAX_OPTIONS]
 
 
 async def build_poll_plan(
@@ -684,14 +722,15 @@ async def build_poll_plan(
     min_options: int,
     run_key: str | None = None,
 ) -> tuple[str, list[PollOptionPlan], str]:
-    _question, llm_options = await _call_llm_topic_planner(events)
+    effective_min_options = _topic_plan_min_options(events, min_options)
+    _question, llm_options = await _call_llm_topic_planner(events, min_options=effective_min_options)
     question = _poll_question_text(run_key)
-    if len(llm_options) >= min_options:
+    if len(llm_options) >= effective_min_options:
         return question, llm_options, "llm"
     return (
         question,
         [],
-        "llm_unavailable",
+        "llm_underfilled",
     )
 
 
@@ -811,7 +850,8 @@ async def create_debug_poll_if_due(
         )
         return {"created": False, "reason": "low_inventory", "eligible_events": len(events)}
 
-    min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
+    configured_min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
+    min_options = _topic_plan_min_options(events, configured_min_options)
     question, options, strategy = await build_poll_plan(events, min_options=min_options, run_key=run_key)
     if len(options) < min_options:
         await _insert_run(

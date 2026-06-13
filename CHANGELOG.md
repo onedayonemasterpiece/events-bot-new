@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Changed: Poll to Repost free-topic planning**: when at least two
+  `is_free=true` candidates exist and the eligible pool has at least six events,
+  the LLM topic plan now requires at least six poll options so the free-events
+  choice is additive instead of replacing an ordinary theme. Free-labelled
+  options are also filtered to free event ids only. Tracks
+  `INC-2026-06-13-poll-repost-wrong-date-and-copy`.
 - **Fixed: VK auto-import day/month draft extraction crash**:
   `vk_intake` now defines its own numeric and text day/month regex guards used
   by `_source_text_has_absolute_date_anchor`, preventing production
