@@ -78,6 +78,33 @@ def _slugify(value: str, *, max_len: int = 60) -> str:
     return raw[:max_len].rstrip("-") or secrets.token_hex(4)
 
 
+def _status_dataset_title(safe_prefix: str, safe_run: str) -> str:
+    title = f"Status {safe_prefix} {safe_run}".strip()
+    if len(title) <= 50:
+        return title
+    suffix = f" {safe_run}" if safe_run else ""
+    prefix_limit = max(1, 50 - len("Status ") - len(suffix))
+    title = f"Status {safe_prefix[:prefix_limit].rstrip('-')}{suffix}".strip()
+    return title[:50].rstrip("- ")
+
+
+def _is_dataset_exists_error(exc: Exception) -> bool:
+    status_code = getattr(getattr(exc, "response", None), "status_code", None)
+    if status_code == 409:
+        return True
+    message = str(exc).casefold()
+    return any(
+        marker in message
+        for marker in (
+            "already exists",
+            "already been used",
+            "already in use",
+            "duplicate",
+            "conflict",
+        )
+    )
+
+
 def create_kaggle_status_dataset(
     client: Any,
     *,
@@ -91,7 +118,7 @@ def create_kaggle_status_dataset(
     safe_prefix = _slugify(slug_prefix, max_len=36)
     safe_run = _slugify(run_id, max_len=18)
     slug = f"{username}/{safe_prefix}-{safe_run}"[:80].rstrip("-")
-    title = f"Kaggle Status {safe_prefix} {safe_run}"[:100]
+    title = _status_dataset_title(safe_prefix, safe_run)
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -111,8 +138,11 @@ def create_kaggle_status_dataset(
         )
         try:
             client.create_dataset(tmp_path)
-        except Exception:
-            logger.info("kaggle_status: dataset exists or create failed; trying version dataset=%s", slug)
+        except Exception as exc:
+            if not _is_dataset_exists_error(exc):
+                logger.exception("kaggle_status: status dataset create failed dataset=%s", slug)
+                raise
+            logger.info("kaggle_status: dataset exists; trying version dataset=%s", slug)
             try:
                 client.create_dataset_version(
                     tmp_path,

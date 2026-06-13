@@ -11,6 +11,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from db import Database
 from kaggle_status import (
     create_kaggle_run_config,
+    create_kaggle_status_dataset,
     make_kaggle_run_event_handler,
     record_kaggle_run_event,
 )
@@ -23,6 +24,79 @@ def _load_status_client_class():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.KaggleStatusClient
+
+
+def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
+    titles: list[str] = []
+
+    class FakeClient:
+        def create_dataset(self, folder):  # noqa: ANN001
+            metadata = json.loads((Path(folder) / "dataset-metadata.json").read_text(encoding="utf-8"))
+            titles.append(metadata["title"])
+
+        def dataset_status(self, dataset):  # noqa: ANN001
+            return "ready"
+
+        def dataset_list_files(self, dataset, page_size=50):  # noqa: ANN001,ARG002
+            return [{"name": "kaggle_run.json"}, {"name": "kaggle_status_client.py"}]
+
+    dataset = create_kaggle_status_dataset(
+        FakeClient(),
+        username="zigomaro",
+        slug_prefix="status-ParseTheatres",
+        run_id="status-smoke-20260613223955",
+        config={"run_id": "status-smoke-20260613223955"},
+    )
+
+    assert dataset == "zigomaro/status-parsetheatres-status-smoke-20260"
+    assert titles
+    assert 6 <= len(titles[0]) <= 50
+
+
+def test_create_kaggle_status_dataset_does_not_version_after_validation_error():
+    class FakeClient:
+        def create_dataset(self, folder):  # noqa: ANN001,ARG002
+            raise ValueError("The dataset title must be between 6 and 50 characters")
+
+        def create_dataset_version(self, *args, **kwargs):  # noqa: ANN002,ANN003
+            raise AssertionError("validation errors must not fall back to dataset version")
+
+    with pytest.raises(ValueError, match="dataset title"):
+        create_kaggle_status_dataset(
+            FakeClient(),
+            username="zigomaro",
+            slug_prefix="status-ParseTheatres",
+            run_id="status-smoke-20260613223955",
+            config={"run_id": "status-smoke-20260613223955"},
+        )
+
+
+def test_create_kaggle_status_dataset_versions_existing_dataset():
+    calls: list[str] = []
+
+    class FakeClient:
+        def create_dataset(self, folder):  # noqa: ANN001,ARG002
+            calls.append("create")
+            raise RuntimeError("Dataset already exists")
+
+        def create_dataset_version(self, folder, **kwargs):  # noqa: ANN001,ANN003
+            calls.append("version")
+
+        def dataset_status(self, dataset):  # noqa: ANN001
+            return "ready"
+
+        def dataset_list_files(self, dataset, page_size=50):  # noqa: ANN001,ARG002
+            return [{"name": "kaggle_run.json"}, {"name": "kaggle_status_client.py"}]
+
+    create_kaggle_status_dataset(
+        FakeClient(),
+        username="zigomaro",
+        slug_prefix="status-ParseTheatres",
+        run_id="status-smoke-20260613223955",
+        config={"run_id": "status-smoke-20260613223955"},
+    )
+
+    assert calls == ["create", "version"]
 
 
 @pytest.mark.asyncio
