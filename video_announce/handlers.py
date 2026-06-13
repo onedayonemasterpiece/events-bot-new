@@ -253,6 +253,7 @@ async def handle_video_callback(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
             allow_send=True,

@@ -22,7 +22,7 @@ import aiosqlite
 
 from db import Database
 from kaggle_registry import register_job, update_job_meta
-from kaggle_status import create_kaggle_run_config, write_kaggle_status_files
+from kaggle_status import create_kaggle_run_config, format_kaggle_status_label, write_kaggle_status_files
 from source_parsing.telegram.split_secrets import encrypt_secret
 from video_announce.kaggle_client import KaggleClient
 
@@ -1143,9 +1143,7 @@ def format_kaggle_status_message(phase: str, kernel_ref: str, status: dict | Non
         f"Этап: {labels.get(phase, phase)}",
     ]
     if status:
-        state = str(status.get("status") or "UNKNOWN")
-        failure = _extract_failure_message(status)
-        lines.append(f"Статус Kaggle: {html.escape(state if not failure else f'{state} ({failure})')}")
+        lines.append(f"Статус Kaggle: {html.escape(format_kaggle_status_label(status))}")
         timeout_minutes = status.get("_poll_timeout_minutes")
         elapsed_seconds = status.get("_elapsed_seconds")
         if timeout_minutes:

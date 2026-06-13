@@ -4332,7 +4332,14 @@ async def main():
     acquired_resources: list[str] = []
 
     logger.info('tg_monitor.run start run_id=%s sources=%d', run_id, len(sources))
-    STATUS_PROGRESS.update({"phase": "preflight", "run_id": run_id, "sources_total": len(sources)})
+    STATUS_PROGRESS.update({
+        "phase": "preflight",
+        "run_id": run_id,
+        "sources_total": len(sources),
+        "sources_done": 0,
+        "progress_percent": 5,
+        "progress_label": f"источники 0/{len(sources)}",
+    })
     _status_event(
         "kernel_started",
         phase="preflight",
@@ -4359,9 +4366,12 @@ async def main():
                         "source_index": idx,
                         "sources_total": len(sources),
                         "source": source.get('username'),
+                        "sources_done": idx - 1,
                         "messages_scanned": len(all_messages),
+                        "progress_label": f"источники {idx}/{len(sources)} · @{source.get('username')}",
                     }
                 )
+                _status_event("source_started", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
                 try:
                     await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
                     scan_result = await scan_source(client, source)
@@ -4373,7 +4383,12 @@ async def main():
                     logger.info('scanned %s messages for %s', len(msgs), source.get('username'))
                 except Exception as exc:
                     logger.exception('scan failed for %s: %s', source.get('username'), exc)
-                STATUS_PROGRESS.update({"messages_scanned": len(all_messages)})
+                STATUS_PROGRESS.update({
+                    "sources_done": idx,
+                    "messages_scanned": len(all_messages),
+                    "progress_label": f"источники {idx}/{len(sources)} · сообщений {len(all_messages)}",
+                })
+                _status_event("source_done", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
                 await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
     finally:
         for resource_key in acquired_resources:
@@ -4424,6 +4439,8 @@ async def main():
             "messages_with_events": messages_with_events,
             "events_extracted": events_extracted,
             "output": str(out_path),
+            "progress_percent": 100,
+            "progress_label": f"источники {len(sources)}/{len(sources)} · события {events_extracted}",
         }
     )
     _status_event(

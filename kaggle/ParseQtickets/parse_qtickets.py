@@ -74,7 +74,14 @@ load_status_client = _load_status_loader()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("qtickets_parser")
-STATUS_PROGRESS = {"phase": "bootstrap", "urls_total": 0, "url_index": 0, "events_parsed": 0}
+STATUS_PROGRESS = {
+    "phase": "bootstrap",
+    "urls_total": 0,
+    "url_index": 0,
+    "events_parsed": 0,
+    "progress_percent": 0,
+    "progress_label": "подготовка",
+}
 STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
 
 BASE_URL = "https://kaliningrad.qtickets.events"
@@ -191,7 +198,7 @@ def get_event_urls_simple():
     return list(event_urls)
 
 def parse_qtickets_events():
-    STATUS_PROGRESS.update({"phase": "discover"})
+    STATUS_PROGRESS.update({"phase": "discover", "progress_percent": 10, "progress_label": "поиск событий"})
     # Try Playwright first for full list
     if HAS_PLAYWRIGHT:
         event_urls = get_all_event_urls_playwright()
@@ -200,14 +207,28 @@ def parse_qtickets_events():
         event_urls = get_event_urls_simple()
 
     events = []
-    STATUS_PROGRESS.update({"phase": "parse", "urls_total": len(event_urls)})
+    STATUS_PROGRESS.update({
+        "phase": "parse",
+        "urls_total": len(event_urls),
+        "url_index": 0,
+        "progress_label": f"url 0/{len(event_urls)}",
+    })
     for i, url in enumerate(event_urls):
-        STATUS_PROGRESS.update({"url_index": i + 1, "current_url": url})
+        STATUS_PROGRESS.update({
+            "url_index": i + 1,
+            "current_url": url,
+            "progress_label": f"url {i + 1}/{len(event_urls)} · события {len(events)}",
+        })
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("url_started", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
         logger.info(f"Parsing [{i+1}/{len(event_urls)}] {url}")
         event_data = parse_event_detail(url)
         if event_data:
             events.append(event_data)
             STATUS_PROGRESS["events_parsed"] = len(events)
+        STATUS_PROGRESS["progress_label"] = f"url {i + 1}/{len(event_urls)} · события {len(events)}"
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("url_done", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
 
         # Human-like delay
         delay = random.uniform(2.0, 5.0)
@@ -369,10 +390,16 @@ if __name__ == "__main__":
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
         # Save to file for Kaggle output
-        STATUS_PROGRESS.update({"phase": "write_report", "events_parsed": len(result)})
+        STATUS_PROGRESS.update({
+            "phase": "write_report",
+            "events_parsed": len(result),
+            "progress_percent": 95,
+            "progress_label": f"запись отчёта · события {len(result)}",
+        })
         with open("qtickets_events.json", "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_PROGRESS.update({"progress_percent": 100, "progress_label": f"готово · события {len(result)}"})
             STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
 
         logger.info(f"Total events parsed: {len(result)}")

@@ -17,6 +17,7 @@ from typing import Any, Awaitable, Callable, Iterable, Literal
 
 from db import Database
 from heavy_ops import heavy_operation
+from kaggle_status import format_kaggle_status_label
 from kaggle_registry import register_job, remove_job
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import raise_if_remote_telegram_session_busy
@@ -440,17 +441,9 @@ def _extract_kaggle_failure_message(status: dict | None) -> str:
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    if not state:
-        return "неизвестен"
-    failure = _extract_kaggle_failure_message(status)
-    if failure and len(failure) > 400:
-        failure = failure[:397] + "..."
-    result = str(state)
-    if failure:
-        result += f" ({failure})"
+    result = format_kaggle_status_label(status)
+    if len(result) > 450:
+        return result[:447] + "..."
     return result
 
 

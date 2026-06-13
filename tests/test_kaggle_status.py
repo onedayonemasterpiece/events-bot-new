@@ -12,6 +12,7 @@ from db import Database
 from kaggle_status import (
     create_kaggle_run_config,
     create_kaggle_status_dataset,
+    format_kaggle_status_label,
     make_kaggle_run_event_handler,
     record_kaggle_run_event,
 )
@@ -99,6 +100,22 @@ def test_create_kaggle_status_dataset_versions_existing_dataset():
     assert calls == ["create", "version"]
 
 
+def test_kaggle_status_label_includes_percent_and_business_progress():
+    assert (
+        format_kaggle_status_label(
+            {
+                "status": "RUNNING",
+                "progress": {
+                    "sources_done": 5,
+                    "sources_total": 17,
+                    "progress_label": "каналы 5/17",
+                },
+            }
+        )
+        == "RUNNING 29% · каналы 5/17"
+    )
+
+
 @pytest.mark.asyncio
 async def test_kaggle_run_config_and_alive_callback(tmp_path, monkeypatch):
     monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
@@ -145,7 +162,11 @@ async def test_kaggle_run_config_and_alive_callback(tmp_path, monkeypatch):
         await cur.close()
     assert row[0] == "alive"
     assert row[1] == "render"
-    assert json.loads(row[2]) == {"rendered_frames": 120, "total_frames": 300}
+    assert json.loads(row[2]) == {
+        "rendered_frames": 120,
+        "total_frames": 300,
+        "progress_percent": 60,
+    }
     assert row[3]
 
     status, duplicate_body = await record_kaggle_run_event(

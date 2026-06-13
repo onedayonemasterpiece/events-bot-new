@@ -48,7 +48,14 @@ def _load_status_loader():
 
 load_status_client = _load_status_loader()
 
-STATUS_PROGRESS = {"phase": "bootstrap", "urls_total": 0, "url_index": 0, "events_parsed": 0}
+STATUS_PROGRESS = {
+    "phase": "bootstrap",
+    "urls_total": 0,
+    "url_index": 0,
+    "events_parsed": 0,
+    "progress_percent": 0,
+    "progress_label": "подготовка",
+}
 STATUS_CLIENT = load_status_client(log=print) if load_status_client else None
 
 
@@ -440,7 +447,12 @@ async def main():
 
     print(f"📋 Парсинг {len(urls)} URL(s)...")
     print(f"🛡 Режим: с защитой от изменения селекторов")
-    STATUS_PROGRESS.update({"phase": "parse", "urls_total": len(urls)})
+    STATUS_PROGRESS.update({
+        "phase": "parse",
+        "urls_total": len(urls),
+        "url_index": 0,
+        "progress_label": f"url 0/{len(urls)}",
+    })
     all_events = []
 
     try:
@@ -454,7 +466,13 @@ async def main():
             ticket_page = await context.new_page()
 
             for index, url in enumerate(urls, 1):
-                STATUS_PROGRESS.update({"url_index": index, "current_url": url})
+                STATUS_PROGRESS.update({
+                    "url_index": index,
+                    "current_url": url,
+                    "progress_label": f"url {index}/{len(urls)} · события {len(all_events)}",
+                })
+                if STATUS_CLIENT and STATUS_CLIENT.enabled:
+                    STATUS_CLIENT.event("url_started", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
                 events = await parse_special_project_page(page, url)
 
                 for event in events:
@@ -466,6 +484,9 @@ async def main():
 
                 all_events.extend(events)
                 STATUS_PROGRESS["events_parsed"] = len(all_events)
+                STATUS_PROGRESS["progress_label"] = f"url {index}/{len(urls)} · события {len(all_events)}"
+                if STATUS_CLIENT and STATUS_CLIENT.enabled:
+                    STATUS_CLIENT.event("url_done", phase="parse", status="running", progress=dict(STATUS_PROGRESS))
 
             await browser.close()
 
@@ -477,7 +498,12 @@ async def main():
             print(f"   📅 {event['date_raw']} -> {event['parsed_date']} {event['parsed_time']}")
             print(f"   🎫 {event['ticket_status']} | {event['ticket_price_min']}-{event['ticket_price_max']} ₽")
 
-        STATUS_PROGRESS.update({"phase": "write_report", "events_parsed": len(all_events)})
+        STATUS_PROGRESS.update({
+            "phase": "write_report",
+            "events_parsed": len(all_events),
+            "progress_percent": 95,
+            "progress_label": f"запись отчёта · события {len(all_events)}",
+        })
         if all_events:
             df = pd.DataFrame(all_events)
             df.to_json('dom_iskusstv_events.json', orient='records', force_ascii=False, indent=2)
@@ -487,6 +513,7 @@ async def main():
                 json.dump([], f)
             print("⚠️ Создан пустой файл.")
         if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_PROGRESS.update({"progress_percent": 100, "progress_label": f"готово · события {len(all_events)}"})
             STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
     except Exception as exc:
         STATUS_PROGRESS.update({"phase": "failed"})

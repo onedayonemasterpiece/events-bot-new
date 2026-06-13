@@ -2980,8 +2980,11 @@ async def main() -> None:
             "phase": "preflight",
             "run_id": run_id,
             "sources_total": len(sources),
+            "sources_done": 0,
             "limit_per_source": int(config.get("limit_per_source") or 25),
             "days_back": int(config.get("days_back") or 7),
+            "progress_percent": 5,
+            "progress_label": f"источники 0/{len(sources)}",
         }
     )
     _status_event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
@@ -3020,8 +3023,13 @@ async def main() -> None:
                     "sources_total": len(sources),
                     "source": str(source.get("username") or source.get("source_url") or ""),
                     "sources_done": len(sources_output),
+                    "progress_label": (
+                        f"источники {idx}/{len(sources)} · "
+                        f"{source.get('username') or source.get('source_url') or ''}"
+                    ),
                 }
             )
+            _status_event("source_started", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
             try:
                 if client is not None and (collapse_ws(source.get("platform")).lower() or "telegram") == "telegram":
                     await ensure_client_connected(client)
@@ -3046,8 +3054,13 @@ async def main() -> None:
                 {
                     "sources_done": len(sources_output),
                     "posts_scanned": sum(int(item.get("posts_scanned") or 0) for item in sources_output),
+                    "progress_label": (
+                        f"источники {len(sources_output)}/{len(sources)} · "
+                        f"посты {sum(int(item.get('posts_scanned') or 0) for item in sources_output)}"
+                    ),
                 }
             )
+            _status_event("source_done", phase="scan", status="running", progress=dict(STATUS_PROGRESS))
     finally:
         if client is not None:
             await client.disconnect()
@@ -3074,6 +3087,11 @@ async def main() -> None:
             "occurrences_total": stats.get("occurrences_total", 0),
             "partial": partial,
             "output": str(RESULT_PATH),
+            "progress_percent": 100,
+            "progress_label": (
+                f"источники {len(sources_output)}/{len(sources)} · "
+                f"посты {stats.get('posts_total', 0)} · экскурсии {stats.get('occurrences_total', 0)}"
+            ),
         }
     )
     _status_event(

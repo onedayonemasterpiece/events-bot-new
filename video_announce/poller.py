@@ -21,6 +21,7 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from kaggle_status import enrich_kaggle_status_from_ledger, format_kaggle_status_label
 from kaggle_registry import remove_job
 from main import format_day_pretty
 from models import (
@@ -380,16 +381,7 @@ async def _build_video_caption(
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = status.get("failureMessage") or status.get("failure_message")
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _status_text(
@@ -418,11 +410,17 @@ async def update_status_message(
     session_obj: VideoAnnounceSession,
     kaggle_status: dict | None,
     *,
+    db: Database | None = None,
     chat_id: int | None = None,
     message_id: int | None = None,
     allow_send: bool = False,
     note: str | None = None,
 ) -> tuple[int, int] | None:
+    kaggle_status = await enrich_kaggle_status_from_ledger(
+        db,
+        f"videoannounce:{session_obj.id}",
+        kaggle_status,
+    )
     text = _status_text(session_obj, kaggle_status, note=note)
     markup = _status_keyboard(session_obj.id)
     lock = _get_status_lock(session_obj.id)
@@ -920,6 +918,7 @@ async def run_kernel_poller(
         bot,
         session_obj,
         {},
+        db=db,
         chat_id=status_chat_id,
         message_id=status_message_id,
         allow_send=True,
@@ -956,6 +955,7 @@ async def run_kernel_poller(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,
             allow_send=True,
@@ -986,6 +986,7 @@ async def run_kernel_poller(
                     bot,
                     session_obj,
                     status,
+                    db=db,
                     chat_id=status_chat_id,
                     message_id=status_message_id,
                     allow_send=True,
@@ -1127,6 +1128,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1166,6 +1168,7 @@ async def run_kernel_poller(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,
             allow_send=True,
@@ -1239,6 +1242,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1266,6 +1270,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1287,6 +1292,7 @@ async def run_kernel_poller(
             bot,
             session_obj,
             status,
+            db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,
             allow_send=True,
@@ -1306,6 +1312,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1367,6 +1374,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,
@@ -1383,6 +1391,7 @@ async def run_kernel_poller(
                         bot,
                         refreshed,
                         status,
+                        db=db,
                         chat_id=status_chat_id,
                         message_id=status_message_id,
                         allow_send=True,
@@ -1407,6 +1416,7 @@ async def run_kernel_poller(
                 bot,
                 session_obj,
                 status,
+                db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
                 allow_send=True,

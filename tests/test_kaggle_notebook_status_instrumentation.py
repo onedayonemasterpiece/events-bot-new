@@ -108,6 +108,9 @@ def test_real_notebook_kernels_are_status_instrumentable(tmp_path):
         assert len(tagged) >= 3, folder_name
         assert "kernel_started" in "".join(tagged[0]["source"])
         assert "report_written" in "".join(tagged[-1]["source"])
+        source = json.dumps(notebook, ensure_ascii=False)
+        assert "_kaggle_business_progress" in source, folder_name
+        assert "progress_label" in source, folder_name
 
 
 def test_real_script_kernels_are_status_aware():
@@ -123,3 +126,4 @@ def test_real_script_kernels_are_status_aware():
         assert "load_status_client" in source, relative_path
         assert "kernel_started" in source, relative_path
         assert "report_written" in source, relative_path
+        assert "progress_label" in source, relative_path

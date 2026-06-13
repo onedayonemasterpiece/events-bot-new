@@ -76,6 +76,8 @@ STATUS_PROGRESS = {
     "html_size": 0,
     "images_found": 0,
     "llm_calls": 0,
+    "progress_percent": 0,
+    "progress_label": "подготовка",
 }
 STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
 
@@ -107,7 +109,13 @@ async def main():
         return 1
     
     logger.info("Starting parser: url=%s run_id=%s", config.festival_url, config.run_id)
-    STATUS_PROGRESS.update({"phase": "preflight", "run_id": config.run_id, "url": config.festival_url})
+    STATUS_PROGRESS.update({
+        "phase": "preflight",
+        "run_id": config.run_id,
+        "url": config.festival_url,
+        "progress_percent": 10,
+        "progress_label": "preflight",
+    })
     
     # Initialize components
     output_dir = config.output_dir
@@ -128,7 +136,7 @@ async def main():
     
     # Phase 1: RENDER
     logger.info("=== Phase 1: RENDER ===")
-    STATUS_PROGRESS.update({"phase": "render"})
+    STATUS_PROGRESS.update({"phase": "render", "progress_percent": 25, "progress_label": "render page"})
     if STATUS_CLIENT and STATUS_CLIENT.enabled:
         STATUS_CLIENT.event("render_started", phase="render", status="running", progress=dict(STATUS_PROGRESS))
     phase_start = time.perf_counter()
@@ -147,6 +155,7 @@ async def main():
         "html_size": render_result.get("html_size", 0),
     }
     STATUS_PROGRESS["html_size"] = render_result.get("html_size", 0)
+    STATUS_PROGRESS.update({"progress_percent": 40, "progress_label": f"rendered html {STATUS_PROGRESS['html_size']} bytes"})
     
     if not render_result["success"]:
         logger.error("Render failed: %s", render_result.get("error"))
@@ -160,7 +169,7 @@ async def main():
     
     # Phase 2: DISTILL
     logger.info("=== Phase 2: DISTILL ===")
-    STATUS_PROGRESS.update({"phase": "distill"})
+    STATUS_PROGRESS.update({"phase": "distill", "progress_percent": 50, "progress_label": "distill html"})
     phase_start = time.perf_counter()
     
     distill_result = distill_html(
@@ -179,6 +188,7 @@ async def main():
         "images_found": len(images),
     }
     STATUS_PROGRESS["images_found"] = len(images)
+    STATUS_PROGRESS.update({"progress_percent": 65, "progress_label": f"distilled · images {len(images)}"})
     
     if not distill_result["success"]:
         logger.error("Distill failed: %s", distill_result.get("error"))
@@ -208,7 +218,12 @@ async def main():
         metrics["success"] = True
         save_metrics(output_dir, metrics)
         rate_limiter.save_usage(output_dir / "rate_usage.json")
-        STATUS_PROGRESS.update({"phase": "report", "llm_calls": len(llm_logger.interactions)})
+        STATUS_PROGRESS.update({
+            "phase": "report",
+            "llm_calls": len(llm_logger.interactions),
+            "progress_percent": 100,
+            "progress_label": "готово без LLM",
+        })
         if STATUS_CLIENT and STATUS_CLIENT.enabled:
             STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
             STATUS_CLIENT.stop_alive()
@@ -216,7 +231,7 @@ async def main():
     
     # Phase 3: REASON
     logger.info("=== Phase 3: REASON ===")
-    STATUS_PROGRESS.update({"phase": "reason"})
+    STATUS_PROGRESS.update({"phase": "reason", "progress_percent": 75, "progress_label": "LLM extract"})
     phase_start = time.perf_counter()
     
     # Get API key
@@ -288,6 +303,7 @@ async def main():
         "llm_calls": len(llm_logger.interactions),
     }
     STATUS_PROGRESS["llm_calls"] = len(llm_logger.interactions)
+    STATUS_PROGRESS.update({"progress_percent": 90, "progress_label": f"LLM calls {len(llm_logger.interactions)}"})
     
     # Build final UDS output
     logger.info("=== Building UDS Output ===")
@@ -334,7 +350,12 @@ async def main():
     metrics["total_duration_ms"] = (time.perf_counter() - start_time) * 1000
     metrics["success"] = True
     save_metrics(output_dir, metrics)
-    STATUS_PROGRESS.update({"phase": "report", "llm_calls": len(llm_logger.interactions)})
+    STATUS_PROGRESS.update({
+        "phase": "report",
+        "llm_calls": len(llm_logger.interactions),
+        "progress_percent": 100,
+        "progress_label": "готово",
+    })
     if STATUS_CLIENT and STATUS_CLIENT.enabled:
         STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
         STATUS_CLIENT.stop_alive()

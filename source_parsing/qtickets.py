@@ -24,7 +24,7 @@ from video_announce.kaggle_client import (
     KERNELS_ROOT_PATH,
 )
 from kaggle_registry import register_job, remove_job
-from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
 from source_parsing.parser import TheatreEvent, parse_date_raw
 from source_parsing.handlers import (
     SourceParsingStats,
@@ -72,12 +72,14 @@ async def run_qtickets_kaggle_kernel(
     kernel_path = KERNELS_ROOT_PATH / QTICKETS_KERNEL_FOLDER
     kernel_ref = "zigomaro/parse-qtickets"  # Default
     registered = False
+    ledger_run_id: str | None = None
 
     async def _notify(phase: str, status: dict | None = None) -> None:
         if not status_callback:
             return
         try:
-            await status_callback(phase, kernel_ref, status)
+            enriched = await enrich_kaggle_status_from_ledger(db, ledger_run_id, status)
+            await status_callback(phase, kernel_ref, enriched)
         except Exception:
             logger.warning("qtickets_kaggle: status callback failed phase=%s", phase)
     
@@ -113,6 +115,7 @@ async def run_qtickets_kaggle_kernel(
 
     # Create a unique temp directory for this run
     run_id = str(uuid.uuid4())[:8]
+    ledger_run_id = f"parser:{QTICKETS_KERNEL_FOLDER}:{run_id}"
     temp_kernel_dir = Path(tempfile.gettempdir()) / f"qtickets_kernel_{run_id}"
     
     # Copy kernel to temp directory
@@ -121,7 +124,7 @@ async def run_qtickets_kaggle_kernel(
     if db is not None:
         kaggle_run_config = await create_kaggle_run_config(
             db,
-            run_id=f"parser:{QTICKETS_KERNEL_FOLDER}:{run_id}",
+            run_id=ledger_run_id,
             session_id=None,
             kind="parser_kernel",
             notebook=QTICKETS_KERNEL_FOLDER,

@@ -24,7 +24,12 @@ from sqlalchemy.exc import OperationalError
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from kaggle_registry import list_jobs, register_job, remove_job, update_job_meta
-from kaggle_status import create_kaggle_run_config, write_kaggle_status_files
+from kaggle_status import (
+    create_kaggle_run_config,
+    enrich_kaggle_status_from_ledger,
+    format_kaggle_status_label,
+    write_kaggle_status_files,
+)
 from models import TelegramSource, TelegramSourceForceMessage
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
@@ -1588,16 +1593,7 @@ async def _import_results_with_retry(
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = _extract_kaggle_failure_message(status)
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _extract_kaggle_failure_message(status: dict | None) -> str:
@@ -3235,6 +3231,11 @@ async def _run_telegram_monitor_locked(
             return
         if kernel_ref:
             kaggle_kernel_ref = kernel_ref
+        status = await enrich_kaggle_status_from_ledger(
+            db,
+            f"tg_monitor:{run_id}",
+            status,
+        )
         text = _format_kaggle_status_message(phase, kaggle_kernel_ref, status)
         try:
             if kaggle_status_message_id is None:

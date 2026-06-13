@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from kaggle_status import format_kaggle_status_label
 from ops_run import finish_ops_run, start_ops_run
 from source_parsing.kaggle_runner import run_kaggle_kernel
 from source_parsing.parser import (
@@ -1241,16 +1242,7 @@ def escape_md(text: str) -> str:
 
 
 def _format_kaggle_status(status: dict | None) -> str:
-    if not status:
-        return "неизвестен"
-    state = status.get("status")
-    failure_msg = status.get("failureMessage") or status.get("failure_message")
-    if not state:
-        return "неизвестен"
-    result = str(state)
-    if failure_msg:
-        result += f" ({failure_msg})"
-    return result
+    return format_kaggle_status_label(status)
 
 
 def _format_kaggle_phase(phase: str) -> str:

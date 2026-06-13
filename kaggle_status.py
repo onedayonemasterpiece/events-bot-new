@@ -20,6 +20,27 @@ KAGGLE_RUN_FILENAME = "kaggle_run.json"
 KAGGLE_STATUS_CLIENT_FILENAME = "kaggle_status_client.py"
 DEFAULT_CALLBACK_PATH = "/internal/kaggle/run-event"
 TERMINAL_EVENTS = {"render_done", "report_written"}
+TERMINAL_STATUSES = {"complete", "done", "failed", "error", "cancelled", "canceled"}
+PHASE_PROGRESS_PERCENT = {
+    "bootstrap": 0,
+    "created": 0,
+    "prepare": 5,
+    "preflight": 5,
+    "pushed": 10,
+    "kernel_shape_wait": 15,
+    "poll": 20,
+    "run": 50,
+    "parse": 55,
+    "download": 45,
+    "distill": 65,
+    "reason": 80,
+    "render": 60,
+    "publish": 85,
+    "fresh_output_wait": 95,
+    "report": 95,
+    "write_report": 95,
+    "cleanup": 98,
+}
 
 
 def utc_now_iso() -> str:
@@ -55,6 +76,205 @@ def _clean_text(value: Any, *, limit: int = 2000) -> str | None:
     if not text:
         return None
     return text[:limit]
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return number
+
+
+def _bounded_percent(value: Any) -> int | None:
+    number = _as_float(value)
+    if number is None:
+        return None
+    return max(0, min(100, int(round(number))))
+
+
+def estimate_progress_percent(
+    progress: dict[str, Any] | None,
+    *,
+    event: str | None = None,
+    status: str | None = None,
+    phase: str | None = None,
+) -> int | None:
+    data = progress if isinstance(progress, dict) else {}
+    for key in ("progress_percent", "percent", "completion_percent", "pct"):
+        percent = _bounded_percent(data.get(key))
+        if percent is not None:
+            return percent
+
+    status_l = str(status or "").strip().casefold()
+    event_l = str(event or "").strip().casefold()
+    phase_l = str(phase or data.get("phase") or "").strip().casefold()
+    if event_l in TERMINAL_EVENTS and status_l in TERMINAL_STATUSES:
+        return 100
+    if status_l in {"complete", "done"}:
+        return 100
+
+    pairs = (
+        ("cell_index", "cell_total"),
+        ("url_index", "urls_total"),
+        ("source_index", "sources_total"),
+        ("sources_done", "sources_total"),
+        ("post_index", "posts_total"),
+        ("posts_done", "posts_total"),
+        ("event_index", "events_total"),
+        ("events_done", "events_total"),
+        ("scene_index", "scenes_total"),
+        ("scenes_done", "scenes_total"),
+        ("frame_index", "frames_total"),
+        ("frames_done", "frames_total"),
+        ("month_index", "months_total"),
+        ("item_index", "items_total"),
+        ("items_done", "items_total"),
+        ("processed", "total"),
+    )
+    for done_key, total_key in pairs:
+        done = _as_float(data.get(done_key))
+        total = _as_float(data.get(total_key))
+        if done is None or total is None or total <= 0:
+            continue
+        percent = _bounded_percent((done / total) * 100.0)
+        if percent is None:
+            continue
+        if status_l in {"running", "alive", "queued"} and percent >= 100:
+            return 95
+        return percent
+
+    if phase_l in PHASE_PROGRESS_PERCENT:
+        return PHASE_PROGRESS_PERCENT[phase_l]
+    return None
+
+
+def with_progress_percent(
+    progress: dict[str, Any] | None,
+    *,
+    event: str | None = None,
+    status: str | None = None,
+    phase: str | None = None,
+) -> dict[str, Any]:
+    data = dict(progress or {})
+    percent = estimate_progress_percent(data, event=event, status=status, phase=phase)
+    if percent is not None:
+        data["progress_percent"] = percent
+    return data
+
+
+def format_kaggle_status_label(status: dict | None) -> str:
+    if not status:
+        return "неизвестен"
+    state = status.get("status")
+    if not state:
+        return "неизвестен"
+    failure_msg = (
+        status.get("failureMessage")
+        or status.get("failure_message")
+        or status.get("errorMessage")
+        or status.get("error_message")
+        or status.get("error")
+    )
+    progress = status.get("progress") if isinstance(status.get("progress"), dict) else {}
+    percent = _bounded_percent(status.get("progress_percent"))
+    if percent is None:
+        percent = estimate_progress_percent(
+            progress,
+            status=str(state),
+            phase=str(status.get("phase") or status.get("_ledger_phase") or ""),
+        )
+    result = str(state)
+    if percent is not None:
+        result += f" {percent}%"
+    progress_label = _clean_text(progress.get("progress_label") if isinstance(progress, dict) else None, limit=120)
+    if not progress_label and isinstance(progress, dict):
+        for label, done_key, total_key in (
+            ("ячейки", "cell_index", "cell_total"),
+            ("url", "url_index", "urls_total"),
+            ("источники", "source_index", "sources_total"),
+            ("источники", "sources_done", "sources_total"),
+            ("посты", "post_index", "posts_total"),
+            ("посты", "posts_done", "posts_total"),
+            ("события", "event_index", "events_total"),
+            ("события", "events_done", "events_total"),
+            ("сцены", "scene_index", "scenes_total"),
+            ("сцены", "scenes_done", "scenes_total"),
+            ("кадры", "frame_index", "frames_total"),
+            ("кадры", "frames_done", "frames_total"),
+            ("месяцы", "month_index", "months_total"),
+            ("операции", "item_index", "items_total"),
+            ("операции", "items_done", "items_total"),
+        ):
+            done = progress.get(done_key)
+            total = progress.get(total_key)
+            if done is not None and total:
+                progress_label = f"{label} {done}/{total}"
+                break
+    if progress_label:
+        result += f" · {progress_label}"
+    if failure_msg:
+        result += f" ({failure_msg})"
+    return result
+
+
+async def enrich_kaggle_status_from_ledger(
+    db: Database | None,
+    run_id: str | None,
+    status: dict | None,
+) -> dict | None:
+    if db is None or not run_id:
+        return status
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT status, phase, progress_json, updated_at, last_heartbeat_at, terminal_at, error
+                FROM kaggle_run_ledger
+                WHERE run_id=?
+                """,
+                (run_id,),
+            )
+            row = await cur.fetchone()
+            await cur.close()
+    except Exception:
+        logger.exception("kaggle_status: failed to read ledger progress run_id=%s", run_id)
+        return status
+    if not row:
+        return status
+    payload = dict(status or {})
+    progress: dict[str, Any] = {}
+    try:
+        parsed = json.loads(row[2] or "{}")
+        if isinstance(parsed, dict):
+            progress = parsed
+    except Exception:
+        progress = {}
+    ledger_status = str(row[0] or "")
+    ledger_phase = str(row[1] or "")
+    progress = with_progress_percent(
+        progress,
+        status=ledger_status,
+        phase=ledger_phase,
+    )
+    payload["progress"] = progress
+    payload["progress_percent"] = progress.get("progress_percent")
+    payload["_ledger_status"] = ledger_status
+    payload["_ledger_phase"] = ledger_phase
+    payload["_ledger_updated_at"] = row[3]
+    payload["_ledger_last_heartbeat_at"] = row[4]
+    payload["_ledger_terminal_at"] = row[5]
+    if row[6] and not (
+        payload.get("failureMessage") or payload.get("failure_message") or payload.get("error")
+    ):
+        payload["failureMessage"] = row[6]
+    if not payload.get("status") and ledger_status:
+        payload["status"] = ledger_status
+    return payload
 
 
 def write_kaggle_status_files(folder: str | Path, config: dict[str, Any] | None) -> None:
@@ -341,6 +561,7 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     message = _clean_text(payload.get("message"), limit=2000)
     now = utc_now_iso()
     resource_result: dict[str, Any] = {}
+    progress = with_progress_percent(progress, event=event, status=status, phase=phase)
     async with db.raw_conn() as conn:
         await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):

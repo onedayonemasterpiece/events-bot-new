@@ -25,6 +25,7 @@ from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from heavy_ops import heavy_operation
 from kaggle_registry import list_jobs, remove_job
+from kaggle_status import enrich_kaggle_status_from_ledger
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
     RemoteTelegramSessionBusyError,
@@ -3667,6 +3668,11 @@ async def run_guide_monitor(
                         nonlocal kaggle_status_message_id
                         if not (send_progress and bot and chat_id):
                             return
+                        status = await enrich_kaggle_status_from_ledger(
+                            db,
+                            f"guide_monitor:{run_id}",
+                            status,
+                        )
                         text = format_kaggle_status_message(phase, kernel_ref, status)
                         try:
                             if kaggle_status_message_id is None:

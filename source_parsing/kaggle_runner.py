@@ -20,7 +20,7 @@ from video_announce.kaggle_client import (
     LOCAL_KERNEL_PREFIX,
 )
 from kaggle_registry import register_job, remove_job
-from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
 from db import Database
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,7 @@ async def run_kaggle_kernel(
     kernel_path = KERNELS_ROOT_PATH / kernel_folder
     kernel_ref = f"{LOCAL_KERNEL_PREFIX}{kernel_folder}"
     registered = False
+    ledger_run_id: str | None = None
     dataset_sources_clean = [
         str(item).strip() for item in (dataset_sources or []) if str(item).strip()
     ]
@@ -69,7 +70,8 @@ async def run_kaggle_kernel(
         if not status_callback:
             return
         try:
-            await status_callback(phase, kernel_ref, status)
+            enriched = await enrich_kaggle_status_from_ledger(db, ledger_run_id, status)
+            await status_callback(phase, kernel_ref, enriched)
         except Exception:
             logger.exception("theatres_kaggle: status callback failed phase=%s", phase)
     
@@ -97,9 +99,10 @@ async def run_kaggle_kernel(
 
     if db is not None:
         run_token = str((run_config or {}).get("run_id") or f"{kernel_folder}-{int(start_time)}")
+        ledger_run_id = f"parser:{kernel_folder}:{run_token}"
         kaggle_run_config = await create_kaggle_run_config(
             db,
-            run_id=f"parser:{kernel_folder}:{run_token}",
+            run_id=ledger_run_id,
             session_id=None,
             kind="parser_kernel",
             notebook=kernel_folder,
