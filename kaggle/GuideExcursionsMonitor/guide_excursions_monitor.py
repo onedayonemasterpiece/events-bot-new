@@ -39,6 +39,33 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+try:
+    from kaggle_status_client import load_status_client
+except Exception:
+    load_status_client = None
+
+STATUS_PROGRESS: dict[str, object] = {"phase": "bootstrap"}
+STATUS_CLIENT = load_status_client(log=lambda message: print(message, flush=True)) if load_status_client else None
+
+
+def _status_event(event: str, *, phase: str | None = None, status: str | None = None, progress: dict | None = None, message: str | None = None) -> None:
+    if STATUS_CLIENT is None:
+        return
+    try:
+        STATUS_CLIENT.event(
+            event,
+            phase=phase,
+            status=status,
+            progress=progress,
+            message=message,
+        )
+    except Exception:
+        print(f"[kaggle_status] failed to emit {event}", flush=True)
+
+
+def _status_progress() -> dict[str, object]:
+    return dict(STATUS_PROGRESS)
+
 
 def ensure_libs() -> None:
     modules = [
@@ -2921,6 +2948,23 @@ async def main() -> None:
     run_id = str(config.get("run_id") or f"guide_kaggle_{int(datetime.now(timezone.utc).timestamp())}")
     started_at = datetime.now(timezone.utc).isoformat()
     sources = [item for item in (config.get("sources") or []) if isinstance(item, dict)]
+    acquired_resources: list[str] = []
+    STATUS_PROGRESS.update(
+        {
+            "phase": "preflight",
+            "run_id": run_id,
+            "sources_total": len(sources),
+            "limit_per_source": int(config.get("limit_per_source") or 25),
+            "days_back": int(config.get("days_back") or 7),
+        }
+    )
+    _status_event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=_status_progress)
+        for resource_key in STATUS_CLIENT.config.get("resource_leases") or []:
+            if not STATUS_CLIENT.acquire_resource(str(resource_key), ttl_seconds=3 * 60 * 60):
+                raise RuntimeError(f"Required Kaggle resource is busy: {resource_key}")
+            acquired_resources.append(str(resource_key))
     print(
         (
             f"Guide monitor run_id={run_id} mode={config.get('scan_mode') or 'full'} "
@@ -2940,9 +2984,18 @@ async def main() -> None:
     try:
         limit = int(config.get("limit_per_source") or 25)
         days_back = int(config.get("days_back") or 7)
-        for source in sources:
+        for idx, source in enumerate(sources, start=1):
             if not isinstance(source, dict):
                 continue
+            STATUS_PROGRESS.update(
+                {
+                    "phase": "scan",
+                    "source_index": idx,
+                    "sources_total": len(sources),
+                    "source": str(source.get("username") or source.get("source_url") or ""),
+                    "sources_done": len(sources_output),
+                }
+            )
             try:
                 if client is not None and (collapse_ws(source.get("platform")).lower() or "telegram") == "telegram":
                     await ensure_client_connected(client)
@@ -2963,9 +3016,18 @@ async def main() -> None:
             if result.get("source_status") != "ok":
                 partial = True
             sources_output.append(result)
+            STATUS_PROGRESS.update(
+                {
+                    "sources_done": len(sources_output),
+                    "posts_scanned": sum(int(item.get("posts_scanned") or 0) for item in sources_output),
+                }
+            )
     finally:
         if client is not None:
             await client.disconnect()
+        for resource_key in acquired_resources:
+            if STATUS_CLIENT is not None:
+                STATUS_CLIENT.release_resource(resource_key)
     stats = _summarize_run_stats(sources_output)
     payload = {
         "schema_version": 1,
@@ -2978,6 +3040,24 @@ async def main() -> None:
         "sources": sources_output,
     }
     RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    STATUS_PROGRESS.update(
+        {
+            "phase": "report",
+            "sources_done": len(sources_output),
+            "posts_total": stats.get("posts_total", 0),
+            "occurrences_total": stats.get("occurrences_total", 0),
+            "partial": partial,
+            "output": str(RESULT_PATH),
+        }
+    )
+    _status_event(
+        "report_written",
+        phase="report",
+        status="done" if not partial else "partial",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.stop_alive()
     print(
         (
             f"Guide monitor completed partial={partial} "

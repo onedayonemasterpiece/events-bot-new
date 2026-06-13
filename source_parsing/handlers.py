@@ -2004,12 +2004,12 @@ async def run_source_parsing(
         tasks: dict[str, asyncio.Task] = {}
         if need_theatres:
             tasks["theatres"] = asyncio.create_task(
-                run_kaggle_kernel(status_callback=_update_kaggle_status)
+                run_kaggle_kernel(status_callback=_update_kaggle_status, db=db)
             )
         if need_phil:
-            tasks["philharmonia"] = asyncio.create_task(run_philharmonia_kaggle_kernel())
+            tasks["philharmonia"] = asyncio.create_task(run_philharmonia_kaggle_kernel(db=db))
         if need_qtickets:
-            tasks["qtickets"] = asyncio.create_task(run_qtickets_kaggle_kernel())
+            tasks["qtickets"] = asyncio.create_task(run_qtickets_kaggle_kernel(db=db))
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         by_name = dict(zip(tasks.keys(), results))
@@ -2667,11 +2667,13 @@ async def run_diagnostic_parse(
         from source_parsing.philharmonia import run_philharmonia_kaggle_kernel
         status, output_files, duration = await run_philharmonia_kaggle_kernel(
             status_callback=_update_kaggle_status,
+            db=db,
         )
     else:
         status, output_files, duration = await run_kaggle_kernel(
             status_callback=_update_kaggle_status,
-            run_config={"target_source": source}
+            run_config={"target_source": source},
+            db=db,
         )
     
     if status != "complete":

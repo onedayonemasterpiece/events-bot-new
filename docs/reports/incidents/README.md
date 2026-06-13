@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-13-kaggle-duplicate-videoannounce.md`
+  - Scope: CherryFlash/CrumpleVideo/Koenigsberg story-video Kaggle handoff,
+    live Kaggle status callbacks, heartbeat, final report handling, and shared
+    Telegram session resource leases.
+  - Must not regress: scheduled retries must have live evidence showing whether
+    a previous Kaggle run is alive, rendering, publishing, failed, or writing
+    reports before a replacement run is treated as necessary; the status
+    framework must not silently suppress or deduplicate public publication
+    attempts.
 - `INC-2026-06-13-poll-repost-wrong-date-and-copy.md`
   - Scope: Poll to Repost candidate eligibility, LLM reply composer guardrails,
     and `@kldevents` Telegram event infoblock date-range rendering.

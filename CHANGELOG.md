@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Added: Kaggle status framework**: Kaggle launchers now create signed
+  `kaggle_run.json` status inputs, kernels emit callback/JSONL phase events and
+  alive progress, and the server records run/event/resource-lease diagnostics
+  through `/internal/kaggle/run-event`. This is observability and resource
+  coordination only; it does not silently deduplicate or suppress public
+  publication attempts. Tracks
+  `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Changed: Poll to Repost title-link phrasing**: LLM repost comments now must
   embed the event link into a natural phrase with a generic event word/type
   before the title, and renderer rejects `: {{EVENT_LINK}}` label patterns such

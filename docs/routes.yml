@@ -159,6 +159,17 @@ features:
       - video_announce/scenario.py
       - kaggle/execute_crumple_test.py
       - kaggle/CrumpleVideo/crumple_video.ipynb
+  kaggle_status_framework:
+    status: implementing
+    docs: docs/features/kaggle-status-framework/README.md
+    incident: docs/reports/incidents/INC-2026-06-13-kaggle-duplicate-videoannounce.md
+    entrypoints:
+      - kaggle_status.py
+      - kaggle/kaggle_status_client.py
+      - video_announce/kaggle_client.py
+      - video_announce/scenario.py
+      - source_parsing/telegram/service.py
+      - guide_excursions/kaggle_service.py
   source_parsing:
     status: implemented
     docs: docs/features/source-parsing/README.md

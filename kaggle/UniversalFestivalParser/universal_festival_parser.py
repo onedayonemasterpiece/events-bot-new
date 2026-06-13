@@ -23,6 +23,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from kaggle_status_client import load_status_client
+except Exception:
+    load_status_client = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +37,16 @@ logger = logging.getLogger("festival_parser")
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+STATUS_PROGRESS = {
+    "phase": "bootstrap",
+    "run_id": "",
+    "url": "",
+    "html_size": 0,
+    "images_found": 0,
+    "llm_calls": 0,
+}
+STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
 
 
 async def main():
@@ -47,14 +62,21 @@ async def main():
     
     start_time = time.perf_counter()
     
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=lambda: dict(STATUS_PROGRESS))
     # Load configuration
     try:
         config = ParserConfig.from_environment()
     except ValueError as e:
         logger.error("Configuration error: %s", e)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="preflight", status="failed", progress=dict(STATUS_PROGRESS), message=str(e))
+            STATUS_CLIENT.stop_alive()
         return 1
     
     logger.info("Starting parser: url=%s run_id=%s", config.festival_url, config.run_id)
+    STATUS_PROGRESS.update({"phase": "preflight", "run_id": config.run_id, "url": config.festival_url})
     
     # Initialize components
     output_dir = config.output_dir
@@ -75,6 +97,9 @@ async def main():
     
     # Phase 1: RENDER
     logger.info("=== Phase 1: RENDER ===")
+    STATUS_PROGRESS.update({"phase": "render"})
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("render_started", phase="render", status="running", progress=dict(STATUS_PROGRESS))
     phase_start = time.perf_counter()
     
     render_result = await render_page(
@@ -90,14 +115,21 @@ async def main():
         "duration_ms": (time.perf_counter() - phase_start) * 1000,
         "html_size": render_result.get("html_size", 0),
     }
+    STATUS_PROGRESS["html_size"] = render_result.get("html_size", 0)
     
     if not render_result["success"]:
         logger.error("Render failed: %s", render_result.get("error"))
         save_metrics(output_dir, metrics)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("render_done", phase="render", status="failed", progress=dict(STATUS_PROGRESS), message=str(render_result.get("error") or "render failed"))
+            STATUS_CLIENT.stop_alive()
         return 1
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("render_done", phase="render", status="done", progress=dict(STATUS_PROGRESS))
     
     # Phase 2: DISTILL
     logger.info("=== Phase 2: DISTILL ===")
+    STATUS_PROGRESS.update({"phase": "distill"})
     phase_start = time.perf_counter()
     
     distill_result = distill_html(
@@ -115,10 +147,14 @@ async def main():
         "links_found": len(distill_result.get("links", [])),
         "images_found": len(images),
     }
+    STATUS_PROGRESS["images_found"] = len(images)
     
     if not distill_result["success"]:
         logger.error("Distill failed: %s", distill_result.get("error"))
         save_metrics(output_dir, metrics)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="distill", status="failed", progress=dict(STATUS_PROGRESS), message=str(distill_result.get("error") or "distill failed"))
+            STATUS_CLIENT.stop_alive()
         return 1
 
     if config.dry_run or config.no_llm or config.max_llm_calls <= 0:
@@ -141,10 +177,15 @@ async def main():
         metrics["success"] = True
         save_metrics(output_dir, metrics)
         rate_limiter.save_usage(output_dir / "rate_usage.json")
+        STATUS_PROGRESS.update({"phase": "report", "llm_calls": len(llm_logger.interactions)})
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
+            STATUS_CLIENT.stop_alive()
         return 0
     
     # Phase 3: REASON
     logger.info("=== Phase 3: REASON ===")
+    STATUS_PROGRESS.update({"phase": "reason"})
     phase_start = time.perf_counter()
     
     # Get API key
@@ -153,6 +194,9 @@ async def main():
         logger.error("No API key available")
         metrics["phases"]["reason"] = {"error": "No API key"}
         save_metrics(output_dir, metrics)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="reason", status="failed", progress=dict(STATUS_PROGRESS), message="No API key")
+            STATUS_CLIENT.stop_alive()
         return 1
     
     # Prepare LLM context
@@ -168,6 +212,9 @@ async def main():
         metrics["phases"]["reason"] = {"error": error, "guardrail": "max_estimated_tokens_per_call"}
         save_metrics(output_dir, metrics)
         rate_limiter.save_usage(output_dir / "rate_usage.json")
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="reason", status="failed", progress=dict(STATUS_PROGRESS), message=error)
+            STATUS_CLIENT.stop_alive()
         return 1
     
     # Wait for rate limit
@@ -186,6 +233,10 @@ async def main():
         # Save partial results
         llm_logger.save(output_dir / "llm_log.json")
         save_metrics(output_dir, metrics)
+        STATUS_PROGRESS["llm_calls"] = len(llm_logger.interactions)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="reason", status="failed", progress=dict(STATUS_PROGRESS), message=str(error or "reason failed"))
+            STATUS_CLIENT.stop_alive()
         return 1
     
     # Validate and enhance
@@ -205,6 +256,7 @@ async def main():
         "duration_ms": (time.perf_counter() - phase_start) * 1000,
         "llm_calls": len(llm_logger.interactions),
     }
+    STATUS_PROGRESS["llm_calls"] = len(llm_logger.interactions)
     
     # Build final UDS output
     logger.info("=== Building UDS Output ===")
@@ -251,6 +303,10 @@ async def main():
     metrics["total_duration_ms"] = (time.perf_counter() - start_time) * 1000
     metrics["success"] = True
     save_metrics(output_dir, metrics)
+    STATUS_PROGRESS.update({"phase": "report", "llm_calls": len(llm_logger.interactions)})
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
+        STATUS_CLIENT.stop_alive()
     
     logger.info(
         "Parser complete: duration=%.1fs festival=%s",

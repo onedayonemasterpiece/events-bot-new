@@ -22,6 +22,7 @@ import aiosqlite
 
 from db import Database
 from kaggle_registry import register_job, update_job_meta
+from kaggle_status import create_kaggle_run_config, write_kaggle_status_files
 from source_parsing.telegram.split_secrets import encrypt_secret
 from video_announce.kaggle_client import KaggleClient
 
@@ -421,6 +422,7 @@ def _create_dataset(
 
 async def _prepare_kaggle_datasets(
     *,
+    db: Database,
     client: KaggleClient,
     config_payload: dict[str, Any],
     secrets_payload: str,
@@ -429,6 +431,14 @@ async def _prepare_kaggle_datasets(
     encrypted, fernet_key = encrypt_secret(secrets_payload)
     username = _require_kaggle_username()
     slug_suffix = _slugify(run_id, max_len=16)
+    kaggle_run_config = await create_kaggle_run_config(
+        db,
+        run_id=f"guide_monitor:{run_id}",
+        session_id=None,
+        kind="guide_excursions_monitor",
+        notebook="GuideExcursionsMonitor",
+        resource_leases=["telegram_session:s22"],
+    )
 
     def write_cipher(path: Path) -> None:
         (path / "config.json").write_text(
@@ -436,6 +446,7 @@ async def _prepare_kaggle_datasets(
             encoding="utf-8",
         )
         (path / "secrets.enc").write_bytes(encrypted)
+        write_kaggle_status_files(path, kaggle_run_config)
 
     def write_key(path: Path) -> None:
         (path / "fernet.key").write_bytes(fernet_key)
@@ -668,6 +679,9 @@ def _prepared_kernel_path(kernel_path: Path) -> Path:
         prepared = tmp_path / kernel_path.name
         shutil.copytree(kernel_path, prepared)
         stage_repo_bundle(prepared)
+        status_client_src = PROJECT_ROOT / "kaggle" / "kaggle_status_client.py"
+        if status_client_src.exists():
+            shutil.copy2(status_client_src, prepared / "kaggle_status_client.py")
         _apply_kernel_slug_override(prepared)
         _sync_notebook_entrypoint(prepared)
         yield prepared
@@ -1176,6 +1190,7 @@ async def run_guide_monitor_kaggle(
         if status_callback:
             await status_callback("prepare", kernel_ref, None)
         slug_cipher, slug_key = await _prepare_kaggle_datasets(
+            db=db,
             client=client,
             config_payload=config_payload,
             secrets_payload=secrets_payload,
