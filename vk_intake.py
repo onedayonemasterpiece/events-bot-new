@@ -546,6 +546,14 @@ EVENT_ACTION_PREFIXES = (
 )
 DATE_RANGE_RE = re.compile(r"\b(\d{1,2})[–-](\d{1,2})(?:[./](\d{1,2}))\b")
 MONTH_NAME_RE = re.compile(r"\b(\d{1,2})\s+([а-яё.]+)\b", re.I)
+_DAY_MONTH_NUM_RE = re.compile(
+    r"\b\d{1,2}\s*[./-]\s*\d{1,2}(?:\s*[./-]\s*\d{2,4})?\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_DAY_MONTH_WORD_RE = re.compile(
+    rf"\b\d{{1,2}}\s+(?:{MONTH_NAMES_DET})\.?\b",
+    re.IGNORECASE | re.UNICODE,
+)
 TIME_RE = re.compile(r"\b([01]?\d|2[0-3])[:.][0-5]\d\b")
 TIME_H_RE = re.compile(r"\bв\s*([01]?\d|2[0-3])\s*(?:ч|час(?:а|ов)?)\b")
 BARE_TIME_H_RE = re.compile(r"\b([01]?\d|2[0-3])\s*(?:ч|час(?:а|ов)?)\b")

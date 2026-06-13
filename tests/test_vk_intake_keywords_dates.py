@@ -13,6 +13,12 @@ def test_match_keywords_variants():
     assert any("спект" in k for k in kws)
 
 
+def test_source_text_has_absolute_date_anchor_supports_numeric_and_words():
+    assert vk_intake._source_text_has_absolute_date_anchor("Встреча 15.06 в музее")
+    assert vk_intake._source_text_has_absolute_date_anchor("Встреча 15 июня в музее")
+    assert not vk_intake._source_text_has_absolute_date_anchor("Встреча завтра в музее")
+
+
 def test_match_keywords_music_invite_pushkin_card():
     text = "Приглашаем на музыкальный вечер 25 августа, доступно по Пушкинской карте"
     ok, kws = match_keywords(text)

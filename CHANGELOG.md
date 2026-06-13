@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Fixed: VK auto-import day/month draft extraction crash**:
+  `vk_intake` now defines its own numeric and text day/month regex guards used
+  by `_source_text_has_absolute_date_anchor`, preventing production
+  `/vk_auto_import` draft failures with
+  `NameError: name '_DAY_MONTH_NUM_RE' is not defined`.
 - **Fixed: Afisha Engagement public CTA duplicates in VK sync**:
   `sync_vk_source_post` now chooses the public CTA or plain event variant before
   the primary fresh-publication VK write. Fresh managed `klgdevents` event posts

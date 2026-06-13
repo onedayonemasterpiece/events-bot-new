@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-13-vk-auto-import-day-month-regex-nameerror.md`
+  - Scope: VK auto-import draft extraction and `vk_intake` date-anchor guards.
+  - Must not regress: `_source_text_has_absolute_date_anchor` must support both
+    numeric `DD.MM` and text `DD month` anchors without runtime NameError;
+    failed `vk_inbox` rows from a technical draft exception must be catchable by
+    a post-deploy rerun.
 - `INC-2026-06-13-vk-postponed-event-slot-late-anchor.md`
   - Scope: VK postponed slot reservation for managed event posts, especially
     `/vk_auto_import` event fanout through shared `post_to_vk`.

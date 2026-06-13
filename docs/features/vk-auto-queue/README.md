@@ -14,6 +14,10 @@
 
 Gemma 4 migration note: VK auto-import draft extraction — это не бинарная предклассификация “есть событие / нет события”, а полноценное извлечение черновиков событий с датой, временем, площадкой, билетами и служебными полями перед Smart Update. Поэтому production default для этого scoped stage — `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=models/gemma-4-31b-it`; более маленькая `26b` допустима только как явный canary override. Smart Update routing и глобальный `/parse` этим переключателем не меняются.
 
+Draft date-anchor guards live inside `vk_intake.py`: numeric anchors like
+`15.06` and text anchors like `15 июня` must be detected before Smart Update
+post-processing, without importing or relying on Smart Update private regexes.
+
 После `INC-2026-05-02-pre-daily-event-quality` VK draft prompt явно требует event-local venue grounding: для репостов и постов с несколькими блоками площадка/адрес/город берутся из блока конкретного события, а дефолт источника используется только как fallback. Если пост явно говорит, что событие проходит в библиотеке/музее/баре/другой площадке, это важнее дефолтной площадки VK-группы. Literal placeholders (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) вычищаются как syntax-only guardrail и не должны доходить до Smart Update.
 
 После `INC-2026-05-05-kitoboya-garage-date` VK draft prompt также fail-closed для выставок/ярмарок без точной даты: teaser вроде `в мае откроем`, `готовим выставку`, `анонсируем дату позже` должен возвращать `[]`, а не материализоваться как первое число месяца. Смысловое решение остаётся LLM-first; детерминированный слой Smart Update только страхует unsupported teaser date как `skipped_non_event:unsupported_exhibition_teaser_date`.
