@@ -70,17 +70,17 @@ Telegram history confirmed two posts for the same scheduled slot.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `727b13df` on branch
-  `hotfix/kaggle-status-framework-20260613`, rebased on `origin/main`
-  `184c421a`.
-- deploy path: Fly app `events-bot-new-wngqia`, release `v1386`, image
-  `registry.fly.io/events-bot-new-wngqia:deployment-01KV13RN545HN3T9DCN4WBY3C9`,
+- deployed SHA: `6671b5f1` on branch
+  `hotfix/kaggle-status-framework-main-20260613`, based on `origin/main`
+  `904e0aa9`.
+- deploy path: Fly app `events-bot-new-wngqia`, machine version `1394`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV1FGSQ70WJV1JR3PCYTRH85`,
   machine `48e42d5b714228`, health check passing.
 - regression checks: local focused suite `tests/test_kaggle_status.py`
-  and `tests/test_kaggle_notebook_status_instrumentation.py` passes (`8 passed`;
+  and `tests/test_kaggle_notebook_status_instrumentation.py` passes (`10 passed`;
   pytest still hangs during Python shutdown after the green summary); syntax
-  checks pass for the status framework, Kaggle client instrumentation, monitor
-  kernels, and script parser kernels.
+  checks pass for the status framework, Kaggle client instrumentation,
+  Preview3D, KoenigsbergStories, monitor kernels, and script parser kernels.
 - production deployment drift found during verification: releases `v1382` and
   `v1383` initially deployed the status framework, and run `videoannounce:669`
   proved callback delivery (`kernel_started`, `resource_acquire`, `cell_started`,
@@ -88,10 +88,12 @@ Telegram history confirmed two posts for the same scheduled slot.
   replaced the running image with code that did not contain `kaggle_status.py`,
   `kaggle_status_client.py`, or notebook instrumentation; the 18:10 UTC guide
   run therefore pushed old notebook code without status callbacks.
-- post-v1386 production code probe: `/app/kaggle_status.py`,
-  `/app/kaggle/kaggle_status_client.py`, guide monitor helper loading, and
-  `video_announce/kaggle_client.py` notebook instrumentation are present in the
-  running container.
-- post-deploy verification: pending next real scheduled Kaggle run on the v1386
-  image (`tg_monitoring` is scheduled for 2026-06-13 21:40 UTC; guide full is
-  next scheduled for 2026-06-14 18:10 UTC).
+- post-v1394 production code probe: `/app/kaggle_status.py`,
+  `/app/kaggle/kaggle_status_client.py`, guide/Telegram monitor helper loading,
+  `video_announce/kaggle_client.py` notebook instrumentation, `preview3d:`
+  status wiring, and `kenigsberg:` status wiring are present in the running
+  container. `story_publish.py` was not changed by this release.
+- post-deploy verification: pending next real scheduled Kaggle run on the v1394
+  image (guide light is next scheduled for 2026-06-14 07:05 UTC; video popular
+  review is scheduled for 2026-06-14 07:44 UTC; guide full for 2026-06-14
+  18:10 UTC; `tg_monitoring` for 2026-06-14 21:40 UTC).

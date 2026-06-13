@@ -1,6 +1,6 @@
 # Kaggle Status Framework
 
-Status: implementing
+Status: deployed / monitoring
 Owner surface: server Kaggle launchers, Kaggle runtime/notebooks, scheduled recovery
 
 ## Scope
@@ -56,6 +56,13 @@ networking is degraded.
 - Video announcement sessions: `video_announce/scenario.py` writes
   `kaggle_run.json` and status client into CherryFlash/CrumpleVideo/VideoAfisha
   session inputs without changing publication decisions.
+- Preview3D sessions: `preview_3d/handlers.py` writes `kaggle_run.json` into
+  the payload dataset and verifies the payload/status files before pushing the
+  instrumented `Preview3D` notebook.
+- KoenigsbergStories sessions: `handlers/kenigsberg_stories_cmd.py` writes
+  `kaggle_run.json` into the session dataset, uses the actual story auth scope
+  as the Telegram session lease key, and verifies the status file before
+  pushing the instrumented notebook.
 - Telegram session monitors: `TelegramMonitor` and `GuideExcursionsMonitor`
   create signed run configs, acquire `telegram_session:s22`, emit alive
   progress, release leases, and write terminal status events.
@@ -110,8 +117,10 @@ and must be approved explicitly.
 
 Critical resources such as the shared Kaggle Telegram auth session must be leased
 before use. The canonical resource key for the S22 Kaggle session is
-`telegram_session:s22`. A live lease blocks another run from using the same auth
-bundle until it expires or is released.
+`telegram_session:s22`. Story runtimes that use a different configured auth
+scope should derive the key from that scope, for example
+`telegram_session:telegram_auth_bundle_story`. A live lease blocks another run
+from using the same auth bundle until it expires or is released.
 
 ## Diagnostics
 
@@ -127,3 +136,21 @@ This framework is a regression guard for opaque Kaggle runs. A scheduler retry
 must have enough status evidence to show whether a previous attempt was still
 alive, stuck, failed preflight, rendering, publishing, or writing reports before
 the final Kaggle output download/report failed.
+
+## Deployment Evidence
+
+- 2026-06-13: deployed from
+  `hotfix/kaggle-status-framework-main-20260613` at `6671b5f1`, based on
+  `origin/main` `904e0aa9`.
+- Fly release: `events-bot-new-wngqia` machine version `1394`, image
+  `deployment-01KV1FGSQ70WJV1JR3PCYTRH85`.
+- Runtime probe confirmed `/app/kaggle_status.py`,
+  `/app/kaggle/kaggle_status_client.py`, `preview3d:` status wiring,
+  `kenigsberg:` status wiring, and Telegram resource lease wiring are present.
+- `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`.
+- Local focused checks passed: `py_compile`, `git diff --check`, no
+  `story_publish.py` diff, and `10 passed` for
+  `tests/test_kaggle_status.py` plus
+  `tests/test_kaggle_notebook_status_instrumentation.py` (pytest still needed a
+  manual interrupt after the green summary because the interpreter hung during
+  shutdown).
