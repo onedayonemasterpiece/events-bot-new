@@ -293,6 +293,300 @@ def _copy_kernel_tree(src_root: Path, dst_root: Path) -> None:
     _copy_dir(src_root, dst_root, Path())
 
 
+def _copy_status_client_to_kernel(dst_root: Path) -> None:
+    client_src = KERNELS_ROOT_PATH / "kaggle_status_client.py"
+    if not client_src.exists():
+        return
+    client_dst = dst_root / "kaggle_status_client.py"
+    if client_dst.exists():
+        return
+    shutil.copy2(client_src, client_dst)
+
+
+_NOTEBOOK_STATUS_TAG = "events_bot_kaggle_status"
+
+
+def _notebook_code_cell(source: str) -> dict[str, Any]:
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {_NOTEBOOK_STATUS_TAG: True},
+        "outputs": [],
+        "source": [line + "\n" for line in source.rstrip("\n").splitlines()],
+    }
+
+
+def _notebook_cell_source(cell: dict[str, Any]) -> str:
+    raw = cell.get("source") or []
+    if isinstance(raw, str):
+        return raw
+    return "".join(str(part) for part in raw)
+
+
+def _notebook_phase_label(source: str) -> str:
+    lowered = source.casefold()
+    if "publish_story_from_kaggle" in lowered or "story_publish" in lowered:
+        return "publish"
+    if "render_event(" in lowered or "blender" in lowered or "render" in lowered:
+        return "render"
+    if "json.dump" in lowered or ".to_json(" in lowered or "output.json" in lowered:
+        return "report"
+    if "pip install" in lowered or "apt-get" in lowered or "install_libs" in lowered:
+        return "preflight"
+    return "run"
+
+
+def _instrument_notebook_kernel(tmp_path: Path, meta_data: dict[str, Any]) -> None:
+    code_file = str(meta_data.get("code_file") or "").strip()
+    if not code_file.endswith(".ipynb"):
+        return
+    nb_path = tmp_path / code_file
+    if not nb_path.exists():
+        logger.warning("kaggle: notebook code_file not found for status instrumentation path=%s", nb_path)
+        return
+    try:
+        notebook = json.loads(nb_path.read_text(encoding="utf-8"))
+    except Exception:
+        logger.warning("kaggle: failed to parse notebook for status instrumentation path=%s", nb_path, exc_info=True)
+        return
+    cells = [
+        cell
+        for cell in (notebook.get("cells") or [])
+        if not (isinstance(cell, dict) and (cell.get("metadata") or {}).get(_NOTEBOOK_STATUS_TAG))
+    ]
+    code_cells = [cell for cell in cells if isinstance(cell, dict) and cell.get("cell_type") == "code"]
+    if not code_cells:
+        return
+    notebook_name = str(meta_data.get("title") or meta_data.get("slug") or code_file)
+    bootstrap_source = f"""
+# Auto-injected by events-bot Kaggle status framework.
+import atexit as _kaggle_status_atexit
+import os as _kaggle_status_os
+import time as _kaggle_status_time
+
+try:
+    from kaggle_status_client import load_status_client as _load_kaggle_status_client
+except Exception as _kaggle_status_import_error:
+    _load_kaggle_status_client = None
+
+KAGGLE_STATUS_PROGRESS = {{
+    "phase": "bootstrap",
+    "notebook": {notebook_name!r},
+    "cell_index": 0,
+    "cell_total": {len(code_cells)},
+}}
+KAGGLE_STATUS_CLIENT = (
+    _load_kaggle_status_client(log=lambda message: print(message, flush=True))
+    if _load_kaggle_status_client
+    else None
+)
+KAGGLE_STATUS_STARTED_AT = _kaggle_status_time.monotonic()
+KAGGLE_STATUS_TERMINAL_SENT = False
+KAGGLE_STATUS_ACQUIRED_RESOURCES = []
+
+def kaggle_status_update(**items):
+    KAGGLE_STATUS_PROGRESS.update({{k: v for k, v in items.items() if v is not None}})
+    KAGGLE_STATUS_PROGRESS["elapsed_seconds"] = int(_kaggle_status_time.monotonic() - KAGGLE_STATUS_STARTED_AT)
+    return dict(KAGGLE_STATUS_PROGRESS)
+
+def kaggle_status_progress():
+    return kaggle_status_update(working_dir=_kaggle_status_os.getcwd())
+
+def kaggle_status_event(event, *, phase=None, status=None, progress=None, message=None):
+    if KAGGLE_STATUS_CLIENT is None:
+        return {{"ok": False, "error": "status client unavailable"}}
+    merged = kaggle_status_progress()
+    if progress:
+        merged.update(progress)
+    return KAGGLE_STATUS_CLIENT.event(
+        event,
+        phase=phase or str(merged.get("phase") or event),
+        status=status,
+        progress=merged,
+        message=message,
+    )
+
+def _kaggle_status_on_exit():
+    try:
+        if KAGGLE_STATUS_CLIENT is not None and KAGGLE_STATUS_CLIENT.enabled and not KAGGLE_STATUS_TERMINAL_SENT:
+            kaggle_status_event("kernel_exited", phase=str(KAGGLE_STATUS_PROGRESS.get("phase") or "unknown"), status="unknown")
+    finally:
+        if KAGGLE_STATUS_CLIENT is not None:
+            for _kaggle_status_resource in list(KAGGLE_STATUS_ACQUIRED_RESOURCES):
+                try:
+                    KAGGLE_STATUS_CLIENT.release_resource(str(_kaggle_status_resource))
+                except Exception as _kaggle_status_release_error:
+                    print(f"[kaggle_status] resource release failed: {{_kaggle_status_release_error}}", flush=True)
+            KAGGLE_STATUS_CLIENT.stop_alive()
+
+_kaggle_status_atexit.register(_kaggle_status_on_exit)
+if KAGGLE_STATUS_CLIENT is not None and KAGGLE_STATUS_CLIENT.enabled:
+    kaggle_status_event("kernel_started", phase="preflight", status="running")
+    for _kaggle_status_resource in KAGGLE_STATUS_CLIENT.config.get("resource_leases") or []:
+        if not KAGGLE_STATUS_CLIENT.acquire_resource(str(_kaggle_status_resource), ttl_seconds=3 * 60 * 60):
+            raise RuntimeError(f"Required Kaggle resource is busy: {{_kaggle_status_resource}}")
+        KAGGLE_STATUS_ACQUIRED_RESOURCES.append(str(_kaggle_status_resource))
+    KAGGLE_STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=kaggle_status_progress)
+"""
+    new_cells: list[dict[str, Any]] = [_notebook_code_cell(bootstrap_source)]
+    cell_index = 0
+    render_seen = False
+    for cell in cells:
+        if isinstance(cell, dict) and cell.get("cell_type") == "code":
+            cell_index += 1
+            source = _notebook_cell_source(cell)
+            phase = _notebook_phase_label(source)
+            render_seen = render_seen or phase == "render"
+            phase_source = f"""
+# Auto-injected Kaggle status phase marker.
+try:
+    kaggle_status_update(phase={phase!r}, cell_index={cell_index}, cell_total={len(code_cells)})
+    kaggle_status_event("cell_started", phase={phase!r}, status="running")
+except Exception as _kaggle_status_phase_error:
+    print(f"[kaggle_status] phase marker failed: {{_kaggle_status_phase_error}}", flush=True)
+"""
+            new_cells.append(_notebook_code_cell(phase_source))
+        new_cells.append(cell)
+    final_source = f"""
+# Auto-injected Kaggle status terminal marker.
+try:
+    kaggle_status_update(phase="report", cell_index={len(code_cells)}, cell_total={len(code_cells)})
+    if {render_seen!r}:
+        kaggle_status_event("render_done", phase="render", status="done")
+    kaggle_status_event("report_written", phase="report", status="done")
+    KAGGLE_STATUS_TERMINAL_SENT = True
+finally:
+    if KAGGLE_STATUS_CLIENT is not None:
+        for _kaggle_status_resource in list(KAGGLE_STATUS_ACQUIRED_RESOURCES):
+            try:
+                KAGGLE_STATUS_CLIENT.release_resource(str(_kaggle_status_resource))
+                KAGGLE_STATUS_ACQUIRED_RESOURCES.remove(_kaggle_status_resource)
+            except Exception as _kaggle_status_release_error:
+                print(f"[kaggle_status] resource release failed: {{_kaggle_status_release_error}}", flush=True)
+        KAGGLE_STATUS_CLIENT.stop_alive()
+"""
+    new_cells.append(_notebook_code_cell(final_source))
+    notebook["cells"] = new_cells
+    nb_path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    logger.info(
+        "kaggle: instrumented notebook status path=%s original_cells=%d instrumented_cells=%d",
+        nb_path.name,
+        len(cells),
+        len(new_cells),
+    )
+
+
+def _instrument_script_kernel(tmp_path: Path, meta_data: dict[str, Any]) -> None:
+    code_file = str(meta_data.get("code_file") or "").strip()
+    if not code_file.endswith(".py"):
+        return
+    script_path = tmp_path / code_file
+    if not script_path.exists():
+        logger.warning("kaggle: script code_file not found for status instrumentation path=%s", script_path)
+        return
+    try:
+        source = script_path.read_text(encoding="utf-8")
+    except Exception:
+        logger.warning("kaggle: failed to read script for status instrumentation path=%s", script_path, exc_info=True)
+        return
+    if "kaggle_status_client" in source:
+        return
+    original_name = f"_events_bot_original_{script_path.name}"
+    original_path = script_path.with_name(original_name)
+    if original_path.exists():
+        return
+    script_path.rename(original_path)
+    notebook_name = str(meta_data.get("title") or meta_data.get("slug") or code_file)
+    wrapper_source = f"""from __future__ import annotations
+
+# Auto-injected by events-bot Kaggle status framework.
+import os
+import runpy
+import time
+import traceback
+from pathlib import Path
+
+try:
+    from kaggle_status_client import load_status_client
+except Exception:
+    load_status_client = None
+
+KAGGLE_STATUS_PROGRESS = {{
+    "phase": "bootstrap",
+    "notebook": {notebook_name!r},
+    "script": {script_path.name!r},
+}}
+KAGGLE_STATUS_CLIENT = load_status_client(log=lambda message: print(message, flush=True)) if load_status_client else None
+KAGGLE_STATUS_STARTED_AT = time.monotonic()
+KAGGLE_STATUS_ACQUIRED_RESOURCES = []
+ORIGINAL_SCRIPT = Path(__file__).with_name({original_name!r})
+
+def kaggle_status_progress():
+    KAGGLE_STATUS_PROGRESS["elapsed_seconds"] = int(time.monotonic() - KAGGLE_STATUS_STARTED_AT)
+    KAGGLE_STATUS_PROGRESS["working_dir"] = os.getcwd()
+    return dict(KAGGLE_STATUS_PROGRESS)
+
+def kaggle_status_event(event, *, phase=None, status=None, message=None):
+    if KAGGLE_STATUS_CLIENT is None or not KAGGLE_STATUS_CLIENT.enabled:
+        return {{"ok": False, "error": "callbacks disabled"}}
+    return KAGGLE_STATUS_CLIENT.event(
+        event,
+        phase=phase or str(KAGGLE_STATUS_PROGRESS.get("phase") or event),
+        status=status,
+        progress=kaggle_status_progress(),
+        message=message,
+    )
+
+def kaggle_status_release_resources():
+    if KAGGLE_STATUS_CLIENT is None:
+        return
+    for resource_key in list(KAGGLE_STATUS_ACQUIRED_RESOURCES):
+        try:
+            KAGGLE_STATUS_CLIENT.release_resource(str(resource_key))
+            KAGGLE_STATUS_ACQUIRED_RESOURCES.remove(resource_key)
+        except Exception as exc:
+            print(f"[kaggle_status] resource release failed: {{exc}}", flush=True)
+
+try:
+    if KAGGLE_STATUS_CLIENT is not None and KAGGLE_STATUS_CLIENT.enabled:
+        kaggle_status_event("kernel_started", phase="preflight", status="running")
+        for resource_key in KAGGLE_STATUS_CLIENT.config.get("resource_leases") or []:
+            if not KAGGLE_STATUS_CLIENT.acquire_resource(str(resource_key), ttl_seconds=3 * 60 * 60):
+                raise RuntimeError(f"Required Kaggle resource is busy: {{resource_key}}")
+            KAGGLE_STATUS_ACQUIRED_RESOURCES.append(str(resource_key))
+        KAGGLE_STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=kaggle_status_progress)
+    KAGGLE_STATUS_PROGRESS["phase"] = "run"
+    runpy.run_path(str(ORIGINAL_SCRIPT), run_name="__main__")
+except SystemExit as exc:
+    code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+    if code == 0:
+        KAGGLE_STATUS_PROGRESS["phase"] = "report"
+        kaggle_status_event("report_written", phase="report", status="done")
+    else:
+        KAGGLE_STATUS_PROGRESS["phase"] = "failed"
+        kaggle_status_event("report_written", phase="failed", status="failed", message=f"SystemExit: {{exc.code}}")
+    raise
+except Exception as exc:
+    KAGGLE_STATUS_PROGRESS["phase"] = "failed"
+    kaggle_status_event(
+        "report_written",
+        phase="failed",
+        status="failed",
+        message="".join(traceback.format_exception_only(type(exc), exc)).strip(),
+    )
+    raise
+else:
+    KAGGLE_STATUS_PROGRESS["phase"] = "report"
+    kaggle_status_event("report_written", phase="report", status="done")
+finally:
+    kaggle_status_release_resources()
+    if KAGGLE_STATUS_CLIENT is not None:
+        KAGGLE_STATUS_CLIENT.stop_alive()
+"""
+    script_path.write_text(wrapper_source, encoding="utf-8")
+    logger.info("kaggle: instrumented script status path=%s original=%s", script_path.name, original_name)
+
+
 def _push_kernel_request_with_retries(
     api: Any,
     tmp_path: Path,
@@ -652,6 +946,7 @@ class KaggleClient:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             _copy_kernel_tree(base_path, tmp_path)
+            _copy_status_client_to_kernel(tmp_path)
             meta_path = tmp_path / "kernel-metadata.json"
             meta_data = json.loads(meta_path.read_text(encoding="utf-8"))
             username = (os.getenv("KAGGLE_USERNAME") or "").strip()
@@ -675,6 +970,8 @@ class KaggleClient:
                     for item in dataset_sources
                     if str(item).strip()
                 ]
+            _instrument_notebook_kernel(tmp_path, meta_data)
+            _instrument_script_kernel(tmp_path, meta_data)
             files = sorted(
                 (f.relative_to(tmp_path).as_posix(), f.stat().st_size)
                 for f in tmp_path.rglob("*")
@@ -758,6 +1055,7 @@ class KaggleClient:
                 
                 # Copy local kernel files to temp directory
                 _copy_kernel_tree(local_kernel_path, tmp_path)
+                _copy_status_client_to_kernel(tmp_path)
                 logger.info("kaggle: copied local kernel from %s", local_kernel_path)
             else:
                 # Pull from Kaggle (original behavior)
@@ -768,6 +1066,7 @@ class KaggleClient:
                 )
                 api.kernels_pull(kernel_ref, path=str(tmp_path), metadata=True)
                 _prune_kernel_tree(tmp_path)
+                _copy_status_client_to_kernel(tmp_path)
                 logger.info("kaggle: pulled kernel from Kaggle")
             
             meta_path = tmp_path / "kernel-metadata.json"
@@ -836,6 +1135,9 @@ class KaggleClient:
                     meta_data.get("id"),
                     machine_shape,
                 )
+
+            _instrument_notebook_kernel(tmp_path, meta_data)
+            _instrument_script_kernel(tmp_path, meta_data)
 
             logger.info(
                 "kaggle: kernel metadata updated id=%s dataset_sources=%s enable_gpu=%s machine_shape=%s",

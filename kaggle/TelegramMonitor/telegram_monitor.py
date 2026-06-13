@@ -29,6 +29,33 @@ SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py'))
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+try:
+    from kaggle_status_client import load_status_client
+except Exception:
+    load_status_client = None
+
+STATUS_PROGRESS: dict[str, object] = {"phase": "bootstrap"}
+STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
+
+
+def _status_event(event: str, *, phase: str | None = None, status: str | None = None, progress: dict | None = None, message: str | None = None) -> None:
+    if STATUS_CLIENT is None:
+        return
+    try:
+        STATUS_CLIENT.event(
+            event,
+            phase=phase,
+            status=status,
+            progress=progress,
+            message=message,
+        )
+    except Exception:
+        logger.warning("tg_monitor.status_event_failed event=%s", event, exc_info=True)
+
+
+def _status_progress() -> dict[str, object]:
+    return dict(STATUS_PROGRESS)
+
 
 def bootstrap_google_ai_bundle() -> None:
     try:
@@ -4276,27 +4303,56 @@ async def main():
     run_id = config.get('run_id') or f'kaggle_{uuid.uuid4().hex[:8]}'
     all_messages = []
     all_sources_meta = []
+    acquired_resources: list[str] = []
 
     logger.info('tg_monitor.run start run_id=%s sources=%d', run_id, len(sources))
+    STATUS_PROGRESS.update({"phase": "preflight", "run_id": run_id, "sources_total": len(sources)})
+    _status_event(
+        "kernel_started",
+        phase="preflight",
+        status="running",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=_status_progress)
+        for resource_key in STATUS_CLIENT.config.get("resource_leases") or []:
+            if not STATUS_CLIENT.acquire_resource(str(resource_key), ttl_seconds=3 * 60 * 60):
+                raise RuntimeError(f"Required Kaggle resource is busy: {resource_key}")
+            acquired_resources.append(str(resource_key))
     if not sources:
         logger.warning('tg_monitor.run no sources configured')
 
     device_config = DEVICE_CONFIG
 
-    async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH, flood_sleep_threshold=TG_FLOOD_SLEEP_THRESHOLD, **device_config) as client:
-        for source in sources:
-            try:
+    try:
+        async with TelegramClient(StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH, flood_sleep_threshold=TG_FLOOD_SLEEP_THRESHOLD, **device_config) as client:
+            for idx, source in enumerate(sources, start=1):
+                STATUS_PROGRESS.update(
+                    {
+                        "phase": "scan",
+                        "source_index": idx,
+                        "sources_total": len(sources),
+                        "source": source.get('username'),
+                        "messages_scanned": len(all_messages),
+                    }
+                )
+                try:
+                    await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
+                    scan_result = await scan_source(client, source)
+                    msgs = scan_result.get('messages') if isinstance(scan_result, dict) else []
+                    meta = scan_result.get('source_meta') if isinstance(scan_result, dict) else None
+                    if isinstance(meta, dict) and meta.get('username'):
+                        all_sources_meta.append(meta)
+                    all_messages.extend(msgs)
+                    logger.info('scanned %s messages for %s', len(msgs), source.get('username'))
+                except Exception as exc:
+                    logger.exception('scan failed for %s: %s', source.get('username'), exc)
+                STATUS_PROGRESS.update({"messages_scanned": len(all_messages)})
                 await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
-                scan_result = await scan_source(client, source)
-                msgs = scan_result.get('messages') if isinstance(scan_result, dict) else []
-                meta = scan_result.get('source_meta') if isinstance(scan_result, dict) else None
-                if isinstance(meta, dict) and meta.get('username'):
-                    all_sources_meta.append(meta)
-                all_messages.extend(msgs)
-                logger.info('scanned %s messages for %s', len(msgs), source.get('username'))
-            except Exception as exc:
-                logger.exception('scan failed for %s: %s', source.get('username'), exc)
-            await human_sleep(SOURCE_PAUSE_MIN, SOURCE_PAUSE_MAX)
+    finally:
+        for resource_key in acquired_resources:
+            if STATUS_CLIENT is not None:
+                STATUS_CLIENT.release_resource(resource_key)
 
     # Keep one metadata object per source username.
     sources_meta_by_username = {}
@@ -4335,6 +4391,23 @@ async def main():
 
     out_path = Path('telegram_results.json')
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    STATUS_PROGRESS.update(
+        {
+            "phase": "report",
+            "messages_scanned": len(all_messages),
+            "messages_with_events": messages_with_events,
+            "events_extracted": events_extracted,
+            "output": str(out_path),
+        }
+    )
+    _status_event(
+        "report_written",
+        phase="report",
+        status="done",
+        progress=dict(STATUS_PROGRESS),
+    )
+    if STATUS_CLIENT is not None:
+        STATUS_CLIENT.stop_alive()
     logger.info('Saved telegram_results.json with %s messages and %s sources_meta', len(all_messages), len(sources_meta))
 
 try:

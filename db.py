@@ -2104,6 +2104,73 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_promo_vk_repost_job_source ON promo_vk_repost_job(source_owner_id, source_post_id, executed_at)"
             )
 
+            dbg("kaggle_status")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_run_ledger(
+                    run_id TEXT PRIMARY KEY,
+                    session_id INTEGER,
+                    kind TEXT,
+                    notebook TEXT,
+                    kernel_ref TEXT,
+                    dataset_ref TEXT,
+                    status TEXT NOT NULL DEFAULT 'created',
+                    phase TEXT,
+                    token_hash TEXT NOT NULL,
+                    progress_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_heartbeat_at TEXT,
+                    terminal_at TEXT,
+                    error TEXT
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_run_event(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    event_name TEXT NOT NULL,
+                    phase TEXT,
+                    status TEXT,
+                    event_uid TEXT,
+                    progress_json TEXT NOT NULL DEFAULT '{}',
+                    message TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(run_id, seq)
+                )
+                """
+            )
+            await _add_column(conn, "kaggle_run_event", "event_uid TEXT")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_run_event_run_id ON kaggle_run_event(run_id, seq)"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_kaggle_run_event_uid ON kaggle_run_event(run_id, event_uid) WHERE event_uid IS NOT NULL"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_run_event_created_at ON kaggle_run_event(created_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS kaggle_resource_lease(
+                    resource_key TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    holder_kind TEXT,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    released_at TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_kaggle_resource_lease_status ON kaggle_resource_lease(status, expires_at)"
+            )
+
             await conn.commit()
 
     async def _ensure_conn(self) -> aiosqlite.Connection:

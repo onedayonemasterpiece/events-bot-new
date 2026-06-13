@@ -20134,6 +20134,9 @@ def create_app() -> web.Application:
 
     app.router.add_get("/healthz", health_handler)
     app.router.add_get("/metrics", metrics_handler)
+    from kaggle_status import make_kaggle_run_event_handler
+
+    app.router.add_post("/internal/kaggle/run-event", make_kaggle_run_event_handler(db))
 
     async def on_startup(app: web.Application):
         await init_db_and_scheduler(app, db, bot, webhook)

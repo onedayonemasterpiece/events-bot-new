@@ -176,6 +176,7 @@ async def run_festival_parser_kernel(
     timeout_minutes: int = 30,
     poll_interval: int = 30,
     status_callback: Optional[Callable[[str, str], Awaitable[None]]] = None,
+    db: "Database | None" = None,
 ) -> tuple[str, list[str], float]:
     """Run Kaggle kernel for festival parsing.
     
@@ -222,6 +223,7 @@ async def run_festival_parser_kernel(
         status_callback=_notify,
         run_config=run_config,
         dataset_sources=dataset_sources,
+        db=db,
     )
     
     return result
@@ -559,6 +561,7 @@ async def process_festival_url(
         dataset_sources=dataset_sources,
         timeout_minutes=timeout_minutes,
         status_callback=_status_update,
+        db=db,
     )
     
     if final_status != "complete":

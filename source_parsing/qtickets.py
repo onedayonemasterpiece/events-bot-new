@@ -24,6 +24,7 @@ from video_announce.kaggle_client import (
     KERNELS_ROOT_PATH,
 )
 from kaggle_registry import register_job, remove_job
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
 from source_parsing.parser import TheatreEvent, parse_date_raw
 from source_parsing.handlers import (
     SourceParsingStats,
@@ -51,6 +52,7 @@ async def run_qtickets_kaggle_kernel(
     timeout_minutes: int = 20,
     poll_interval: int = 30,
     status_callback: Callable[[str, str, dict | None], Awaitable[None]] | None = None,
+    db: Database | None = None,
 ) -> tuple[str, list[str], float]:
     """Run Kaggle kernel for parsing Qtickets events.
     
@@ -115,11 +117,34 @@ async def run_qtickets_kaggle_kernel(
     
     # Copy kernel to temp directory
     shutil.copytree(kernel_path, temp_kernel_dir)
+    dataset_sources: list[str] = []
+    if db is not None:
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"parser:{QTICKETS_KERNEL_FOLDER}:{run_id}",
+            session_id=None,
+            kind="parser_kernel",
+            notebook=QTICKETS_KERNEL_FOLDER,
+            kernel_ref=kernel_ref,
+        )
+        username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if username and kaggle_run_config:
+            status_dataset = create_kaggle_status_dataset(
+                client,
+                username=username,
+                slug_prefix=f"status-{QTICKETS_KERNEL_FOLDER}",
+                run_id=run_id,
+                config=kaggle_run_config,
+            )
+            if status_dataset:
+                dataset_sources.append(status_dataset)
+        elif kaggle_run_config:
+            logger.warning("qtickets_kaggle: KAGGLE_USERNAME missing; status dataset skipped")
     
     try:
         # Push kernel to Kaggle
         try:
-            client.push_kernel(kernel_path=temp_kernel_dir)
+            client.push_kernel(kernel_path=temp_kernel_dir, dataset_sources=dataset_sources)
         except Exception as e:
             logger.error("qtickets_kaggle: push failed: %s", e)
             await _notify("push_failed")

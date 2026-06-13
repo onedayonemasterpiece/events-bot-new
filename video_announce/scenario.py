@@ -20,6 +20,7 @@ from aiogram import types
 from sqlalchemy import select
 
 from db import Database
+from kaggle_status import KAGGLE_RUN_FILENAME, create_kaggle_run_config, write_kaggle_status_files
 from models import (
     Channel,
     User,
@@ -4023,6 +4024,10 @@ class VideoAnnounceScenario:
                 "kaggle_common/story_publish.py",
             ),
             (
+                project_root / "kaggle" / "kaggle_status_client.py",
+                "kaggle_status_client.py",
+            ),
+            (
                 project_root / "kaggle" / "CherryFlash" / "assets" / "iphone_16_pro_max.glb",
                 "assets/iphone_16_pro_max.glb",
             ),
@@ -4308,6 +4313,18 @@ class VideoAnnounceScenario:
                     raise RuntimeError(
                         "CherryFlash story publish was requested but story_publish.json was not generated"
                     )
+            kaggle_run_config = await create_kaggle_run_config(
+                self.db,
+                run_id=f"videoannounce:{session_obj.id}",
+                session_id=session_obj.id,
+                kind="cherryflash",
+                notebook="CherryFlash",
+                kernel_ref=session_obj.kaggle_kernel_ref,
+                dataset_ref=dataset_id,
+                resource_leases=(["telegram_session:s22"] if story_publish_requested else []),
+            )
+            if kaggle_run_config:
+                write_kaggle_status_files(tmp_path, kaggle_run_config)
             selection_manifest = self._build_cherryflash_selection_manifest(
                 payload_obj,
                 selection_params=selection_params,
@@ -4320,6 +4337,8 @@ class VideoAnnounceScenario:
                 encoding="utf-8",
             )
             bundle_manifest_files = ["payload.json", "assets/cherryflash_selection.json"]
+            if kaggle_run_config:
+                bundle_manifest_files.append(KAGGLE_RUN_FILENAME)
             if story_publish_requested:
                 bundle_manifest_files.extend(
                     [
@@ -4480,6 +4499,22 @@ class VideoAnnounceScenario:
                     encoding="utf-8",
                 )
                 story_dataset_sources = await ensure_story_secret_datasets(client)
+            kind = "crumple_video"
+            kernel_ref_text = str(session_obj.kaggle_kernel_ref or "").lower()
+            if "video-afisha" in kernel_ref_text or "video_afisha" in kernel_ref_text:
+                kind = "video_afisha"
+            kaggle_run_config = await create_kaggle_run_config(
+                self.db,
+                run_id=f"videoannounce:{session_obj.id}",
+                session_id=session_obj.id,
+                kind=kind,
+                notebook="CrumpleVideo" if kind == "crumple_video" else "VideoAfisha",
+                kernel_ref=session_obj.kaggle_kernel_ref,
+                dataset_ref=dataset_id,
+                resource_leases=(["telegram_session:s22"] if story_config else []),
+            )
+            if kaggle_run_config:
+                write_kaggle_status_files(tmp_path, kaggle_run_config)
             # Removed final_texts.json and images as per Requirement 3
             audio_name = self._dataset_audio_name_for_kernel(
                 session_obj.kaggle_kernel_ref,

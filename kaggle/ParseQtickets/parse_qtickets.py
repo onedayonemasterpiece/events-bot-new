@@ -21,8 +21,8 @@ def ensure_playwright():
         subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
         # Install system dependencies
         subprocess.run(["apt-get", "update"], capture_output=True)
-        subprocess.run(["apt-get", "install", "-y", "libglib2.0-0", "libnss3", "libnspr4", "libatk1.0-0", 
-                        "libatk-bridge2.0-0", "libcups2", "libdrm2", "libdbus-1-3", "libxcb1", 
+        subprocess.run(["apt-get", "install", "-y", "libglib2.0-0", "libnss3", "libnspr4", "libatk1.0-0",
+                        "libatk-bridge2.0-0", "libcups2", "libdrm2", "libdbus-1-3", "libxcb1",
                         "libxkbcommon0", "libx11-6", "libxcomposite1", "libxdamage1", "libxext6",
                         "libxfixes3", "libxrandr2", "libgbm1", "libpango-1.0-0", "libcairo2",
                         "libasound2"], capture_output=True)
@@ -37,10 +37,17 @@ HAS_PLAYWRIGHT = ensure_playwright()
 if HAS_PLAYWRIGHT:
     from playwright.sync_api import sync_playwright
 
+try:
+    from kaggle_status_client import load_status_client
+except Exception:
+    load_status_client = None
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("qtickets_parser")
+STATUS_PROGRESS = {"phase": "bootstrap", "urls_total": 0, "url_index": 0, "events_parsed": 0}
+STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
 
 BASE_URL = "https://kaliningrad.qtickets.events"
 
@@ -91,41 +98,41 @@ def get_all_event_urls_playwright():
     if not HAS_PLAYWRIGHT:
         logger.error("Playwright not available!")
         return []
-    
+
     event_urls = set()
-    
+
     with sync_playwright() as p:
         logger.info("Launching browser for infinite scroll...")
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        
+
         page.goto(BASE_URL, timeout=60000)
         page.wait_for_load_state("networkidle")
-        
+
         # Scroll to load all events
         prev_count = 0
         max_scrolls = 50  # Safety limit
         scroll_count = 0
-        
+
         while scroll_count < max_scrolls:
             # Count current event links
             links = page.query_selector_all("a[href*='/']")
             current_count = len([l for l in links if re.search(r'/\d{3,}-[a-zA-Z0-9-]+', l.get_attribute("href") or "")])
-            
+
             logger.info(f"Scroll {scroll_count}: Found {current_count} event links")
-            
+
             if current_count == prev_count and scroll_count > 3:
                 # No new content for several scrolls, we're done
                 logger.info("No more new events loading, stopping scroll")
                 break
-            
+
             prev_count = current_count
-            
+
             # Scroll down
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(random.uniform(1.5, 2.5))  # Human-like pause
             scroll_count += 1
-        
+
         # Extract all event URLs from final page state
         links = page.query_selector_all("a[href*='/']")
         for link in links:
@@ -133,9 +140,9 @@ def get_all_event_urls_playwright():
             if href and re.search(r'/\d{3,}-[a-zA-Z0-9-]+', href):
                 full_url = href if href.startswith("http") else BASE_URL + href
                 event_urls.add(full_url)
-        
+
         browser.close()
-    
+
     logger.info(f"Total unique event URLs found: {len(event_urls)}")
     return list(event_urls)
 
@@ -151,29 +158,33 @@ def get_event_urls_simple():
         if re.search(r'/\d{3,}-[a-zA-Z0-9-]+', href):
             full_url = href if href.startswith("http") else BASE_URL + href
             event_urls.add(full_url)
-            
+
     logger.info(f"Found {len(event_urls)} unique event URLs (simple mode)")
     return list(event_urls)
 
 def parse_qtickets_events():
+    STATUS_PROGRESS.update({"phase": "discover"})
     # Try Playwright first for full list
     if HAS_PLAYWRIGHT:
         event_urls = get_all_event_urls_playwright()
     else:
         logger.warning("Playwright not available, using simple mode (may miss events)")
         event_urls = get_event_urls_simple()
-    
+
     events = []
+    STATUS_PROGRESS.update({"phase": "parse", "urls_total": len(event_urls)})
     for i, url in enumerate(event_urls):
+        STATUS_PROGRESS.update({"url_index": i + 1, "current_url": url})
         logger.info(f"Parsing [{i+1}/{len(event_urls)}] {url}")
         event_data = parse_event_detail(url)
         if event_data:
             events.append(event_data)
-        
+            STATUS_PROGRESS["events_parsed"] = len(events)
+
         # Human-like delay
         delay = random.uniform(2.0, 5.0)
         time.sleep(delay)
-        
+
     return events
 
 def parse_event_detail(url):
@@ -197,21 +208,21 @@ def parse_event_detail(url):
             elif isinstance(data, dict):
                 if data.get("@type") == "Event":
                     json_ld = data
-            
+
             if json_ld:
                 break
         except Exception as e:
             logger.debug(f"JSON-LD parse error: {e}")
             continue
-            
+
     # Fallback to OpenGraph
     og_title = soup.find("meta", property="og:title")
     og_desc = soup.find("meta", property="og:description")
     og_image = soup.find("meta", property="og:image")
-    
+
     title = json_ld.get("name") if json_ld else (og_title["content"] if og_title else None)
     description = json_ld.get("description") if json_ld else (og_desc["content"] if og_desc else None)
-    
+
     # Age restriction
     age_restriction = None
     age_span = soup.find("span", class_=lambda x: x and "age" in x)
@@ -231,24 +242,24 @@ def parse_event_detail(url):
         if len(text) > (len(description) if description else 0) + 50:
             full_desc = text
             break
-            
+
     # Dates
     start_date = json_ld.get("startDate") if json_ld else None
-    
+
     # Location
     location = "Калининград"
     if json_ld and "location" in json_ld:
         loc_data = json_ld["location"]
         if isinstance(loc_data, dict):
             location = loc_data.get("name", location)
-    
+
     location = normalize_location(location)
-            
+
     # Image
     image = json_ld.get("image") if json_ld else (og_image["content"] if og_image else None)
     if isinstance(image, list):
         image = image[0]
-        
+
     # Price
     price_min = None
     price_max = None
@@ -292,12 +303,12 @@ def parse_event_detail(url):
                 if o.get("availability") == "https://schema.org/InStock":
                     availability = "https://schema.org/InStock"
                     break
-        
+
         if availability == "https://schema.org/InStock":
             ticket_status = "available"
         elif availability in ("https://schema.org/OutOfStock", "http://schema.org/SoldOut"):
             ticket_status = "sold_out"
-            
+
     if ticket_status == "unknown":
         if price_min is not None:
              ticket_status = "available"
@@ -309,7 +320,7 @@ def parse_event_detail(url):
         "title": title,
         "description": full_desc,
         "age_restriction": age_restriction,
-        "date_raw": start_date, 
+        "date_raw": start_date,
         "parsed_date": parsed_date,
         "parsed_time": parsed_time,
         "location": location,
@@ -322,11 +333,26 @@ def parse_event_detail(url):
     }
 
 if __name__ == "__main__":
-    result = parse_qtickets_events()
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-    
-    # Save to file for Kaggle output
-    with open("qtickets_events.json", "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
-    
-    logger.info(f"Total events parsed: {len(result)}")
+    if STATUS_CLIENT and STATUS_CLIENT.enabled:
+        STATUS_CLIENT.event("kernel_started", phase="preflight", status="running", progress=dict(STATUS_PROGRESS))
+        STATUS_CLIENT.start_alive(interval_seconds=60, progress_provider=lambda: dict(STATUS_PROGRESS))
+    try:
+        result = parse_qtickets_events()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+        # Save to file for Kaggle output
+        STATUS_PROGRESS.update({"phase": "write_report", "events_parsed": len(result)})
+        with open("qtickets_events.json", "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="report", status="done", progress=dict(STATUS_PROGRESS))
+
+        logger.info(f"Total events parsed: {len(result)}")
+    except Exception as exc:
+        STATUS_PROGRESS.update({"phase": "failed"})
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.event("report_written", phase="failed", status="failed", progress=dict(STATUS_PROGRESS), message=str(exc))
+        raise
+    finally:
+        if STATUS_CLIENT and STATUS_CLIENT.enabled:
+            STATUS_CLIENT.stop_alive()

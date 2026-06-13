@@ -25,6 +25,7 @@ from video_announce.kaggle_client import (
     KaggleClient,
     KERNELS_ROOT_PATH,
 )
+from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset
 from source_parsing.parser import TheatreEvent, parse_date_raw
 from source_parsing.handlers import (
     SourceParsingStats,
@@ -137,6 +138,7 @@ async def run_pyramida_kaggle_kernel(
     timeout_minutes: int = 15,
     poll_interval: int = 20,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    db: Database | None = None,
 ) -> tuple[str, list[str], float]:
     """Run Kaggle kernel for parsing Pyramida URLs.
     
@@ -182,6 +184,30 @@ async def run_pyramida_kaggle_kernel(
         kernel_ref,
         len(urls),
     )
+    dataset_sources: list[str] = []
+    if db is not None:
+        run_token = f"{int(start_time)}-{len(urls)}"
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"parser:{PYRAMIDA_KERNEL_FOLDER}:{run_token}",
+            session_id=None,
+            kind="parser_kernel",
+            notebook=PYRAMIDA_KERNEL_FOLDER,
+            kernel_ref=kernel_ref,
+        )
+        username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if username and kaggle_run_config:
+            status_dataset = create_kaggle_status_dataset(
+                client,
+                username=username,
+                slug_prefix=f"status-{PYRAMIDA_KERNEL_FOLDER}",
+                run_id=run_token,
+                config=kaggle_run_config,
+            )
+            if status_dataset:
+                dataset_sources.append(status_dataset)
+        elif kaggle_run_config:
+            logger.warning("pyramida_kaggle: KAGGLE_USERNAME missing; status dataset skipped")
     
     # Create a temporary script that sets the environment variable
     # Note: Kaggle kernels receive environment through dataset or script modification
@@ -200,7 +226,7 @@ async def run_pyramida_kaggle_kernel(
         
         # Push kernel to Kaggle
         try:
-            client.push_kernel(kernel_path=kernel_path)
+            client.push_kernel(kernel_path=kernel_path, dataset_sources=dataset_sources)
         except Exception as e:
             logger.error("pyramida_kaggle: push failed: %s", e)
             return "push_failed", [], time.time() - start_time
