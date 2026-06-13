@@ -106,10 +106,14 @@ unsupported open-air claim and used awkward template-like phrasing.
 - tests/smoke:
   - `python3 -m py_compile poll_to_forward.py main_part2.py`
   - `/tmp/events-bot-poll-venv4/bin/python -m pytest tests/test_poll_to_forward.py tests/test_tg_event_publish.py -q` (`61 passed`)
+  - `/tmp/events-bot-poll-min-venv/bin/python -m pytest tests/test_poll_to_forward.py -q` (`19 passed`) after the free-axis additive guard
   - Fly `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, no issues
   - runtime smoke inside production image:
     `forward_matches_target=False`, `outdoor_claim_filtered=True`,
     `date_label='12–15 июня'`
+  - free-axis runtime smoke inside production image:
+    `prompt_has_6_8=True`, `prompt_has_no_5=True`, `effective_min=6`,
+    `options=0`, `strategy='llm_underfilled'` for a five-option LLM plan
 - production SQL evidence:
   `debug:2026-06-13T11`, target `2026-06-14`, event `5760`,
   `date=2026-06-12`, `end_date=2026-06-15`, `tg_event_post_id=36`.
@@ -151,12 +155,16 @@ unsupported open-air claim and used awkward template-like phrasing.
 - deploy path: manual `fly deploy --remote-only -a events-bot-new-wngqia`
   from clean worktree; Fly release `v1379`, image
   `registry.fly.io/events-bot-new-wngqia:deployment-01KV069Q54ESQ8YTETWYRAYXC1`
+- follow-up deploy for the free-axis guard: SHA
+  `cde0235b4557162b2f19754f6b13aa83aa05d236`, Fly release `v1380`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV09401B170RZT2PDB49ZXC0`
 - regression checks:
   - `tests/test_poll_to_forward.py`
   - `tests/test_tg_event_publish.py`
   - targeted production SQL for the bad run
   - production runtime smoke for date guard, unsupported open-air filtering,
     and multi-day date label
+  - production runtime smoke for the free-axis minimum-six guard
 - post-deploy verification: Fly status machine `48e42d5b714228`, version
   `1379`, state `started`, `1 total, 1 passing`; `/healthz` returned
   `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
