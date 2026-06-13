@@ -25,7 +25,13 @@
   explains that subscribers can use it when the prepared themes are wrong. If
   that option wins outright, the debug run closes as `skipped_feedback_other`
   with a short reply and no unrelated forward, while the next debug slot remains
-  unblocked.
+  unblocked. The next debug poll now reacts to that feedback in the question and
+  passes the previous option texts to the topic planner so it can regroup
+  categories instead of repeating the same set.
+- **Changed: Poll to Repost TOP-3 selection seed**: popularity-based final
+  selection still stays inside the winning category's deduplicated TOP-3, but
+  now includes the concrete run/poll in the weighted-random seed so repeated
+  debug cycles can rotate between strong candidates.
 - **Changed: Poll to Repost LLM-authored link text**: repost comment generation
   now asks the LLM for both the full reply and `event_link_text`, so the visible
   Telegraph link can be a natural event mention instead of a raw deterministic

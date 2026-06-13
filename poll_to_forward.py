@@ -173,8 +173,20 @@ def _poll_question_text(run_key: str | None = None) -> str:
     return variants[index]
 
 
-def _poll_question_with_feedback_hint(text: str) -> str:
+def _poll_question_with_feedback_hint(
+    text: str,
+    *,
+    previous_feedback_other: bool = False,
+) -> str:
     base = re.sub(r"\s+", " ", str(text or "").strip())
+    if previous_feedback_other:
+        reaction = (
+            "В прошлый раз темы не попали — пробую собрать варианты иначе. "
+            "Если снова мимо, выбирайте «Другое»."
+        )
+        if not base:
+            return reaction
+        return f"{reaction} {base}"[:300].rstrip()
     hint = "Если темы не те — выбирайте «Другое»."
     if not base:
         return hint
@@ -808,10 +820,20 @@ async def _call_llm_topic_planner(
     events: Sequence[CandidateEvent],
     *,
     min_options: int = 3,
+    previous_feedback: dict[str, Any] | None = None,
 ) -> tuple[str | None, list[PollOptionPlan]]:
     required_options = _topic_plan_min_options(events, min_options)
     max_options = min(TELEGRAM_POLL_MAX_OPTIONS, max(TOPIC_PLAN_DEFAULT_MAX_OPTIONS, required_options))
     free_count = sum(1 for event in events if bool(event.is_free))
+    previous_bad_options = list((previous_feedback or {}).get("option_texts") or [])
+    previous_feedback_instruction = ""
+    if previous_bad_options:
+        previous_feedback_instruction = (
+            "В прошлом отладочном опросе аудитория выбрала «Другое», то есть набор тем не попал. "
+            "Не повторяй тот же набор формулировок и не собирай опции тем же разрезом. "
+            "Сделай альтернативную группировку по другим пользовательским сценариям, оставаясь только в переданных событиях. "
+            f"Прошлые темы, которые нужно переосмыслить: {json.dumps(previous_bad_options[:8], ensure_ascii=False)}.\n"
+        )
     free_instruction = (
         f"В списке есть {free_count} бесплатных событий. Если среди кандидатов есть несколько "
         "бесплатных событий, обязательно рассмотри отдельную живую опцию про бесплатность — не сухо "
@@ -848,6 +870,7 @@ async def _call_llm_topic_planner(
         "интерес выше медианы в источниках или на стене kldevents. "
         "Опции должны быть живыми job-to-be-done, а не сухими категориями базы. "
         "Пиши дружелюбно и спокойно, как обращение к подписчикам канала с анонсами. "
+        f"{previous_feedback_instruction}"
         f"{free_instruction}"
         "Не используй рекламные суперлативы и промо-слоганы вроде «лучшие события», "
         "«на волне драйва», «прикоснуться к прекрасному».\n"
@@ -952,11 +975,19 @@ async def build_poll_plan(
     *,
     min_options: int,
     run_key: str | None = None,
+    previous_feedback: dict[str, Any] | None = None,
 ) -> tuple[str, list[PollOptionPlan], str]:
     effective_min_options = _effective_min_options(events, min_options)
-    _question, llm_options = await _call_llm_topic_planner(events, min_options=effective_min_options)
+    _question, llm_options = await _call_llm_topic_planner(
+        events,
+        min_options=effective_min_options,
+        previous_feedback=previous_feedback,
+    )
     llm_options = _filter_options_by_popularity_inventory(llm_options, events)
-    question = _poll_question_with_feedback_hint(_poll_question_text(run_key))
+    question = _poll_question_with_feedback_hint(
+        _poll_question_text(run_key),
+        previous_feedback_other=bool(previous_feedback),
+    )
     content_options = [option for option in llm_options if not _is_feedback_option(option)]
     if len(content_options) >= effective_min_options:
         return question, _with_feedback_option(content_options), "llm"
@@ -1012,6 +1043,36 @@ async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, A
     if status == STATUS_FORWARDED and data.get("forwarded_message_id"):
         return None
     return data
+
+
+async def _latest_debug_feedback_other_context(db: Database) -> dict[str, Any] | None:
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id, run_key, options_json
+            FROM poll_repost_run
+            WHERE profile_key=?
+              AND status=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (PROFILE_DEBUG, STATUS_SKIPPED_FEEDBACK_OTHER),
+        )
+        row = await cur.fetchone()
+        if not row:
+            return None
+        run_id = int(row[0])
+        options = _decode_options(row[2])
+        option_texts = [
+            re.sub(r"\s+", " ", option.text.strip())
+            for option in options
+            if option.key != FEEDBACK_OPTION_KEY and option.text.strip()
+        ]
+    return {
+        "run_id": run_id,
+        "run_key": str(row[1] or ""),
+        "option_texts": option_texts,
+    }
 
 
 async def _insert_run(
@@ -1156,9 +1217,15 @@ async def create_debug_poll_if_due(
         )
         return {"created": False, "reason": reason, "eligible_events": len(events)}
 
+    previous_feedback = await _latest_debug_feedback_other_context(db)
     configured_min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
     min_options = _effective_min_options(events, configured_min_options)
-    question, options, strategy = await build_poll_plan(events, min_options=min_options, run_key=run_key)
+    question, options, strategy = await build_poll_plan(
+        events,
+        min_options=min_options,
+        run_key=run_key,
+        previous_feedback=previous_feedback,
+    )
     if len(options) < min_options:
         await _insert_run(
             db,
@@ -1171,6 +1238,7 @@ async def create_debug_poll_if_due(
                 "options": len(options),
                 "min_options": min_options,
                 "popularity": popularity_diag,
+                "previous_feedback": previous_feedback,
             },
         )
         logger.info(
@@ -1338,6 +1406,7 @@ def _choose_winner_by_popularity(
     tied_options: Sequence[PollOptionPlan],
     events: Sequence[CandidateEvent],
     target_date: date | None = None,
+    selection_seed: str | None = None,
 ) -> tuple[PollOptionPlan | None, int | None, str]:
     if not _popularity_filter_active(events):
         return None, None, "popularity_inactive"
@@ -1360,6 +1429,7 @@ def _choose_winner_by_popularity(
     seed = ":".join(
         [
             target_date.isoformat() if target_date else "",
+            str(selection_seed or ""),
             option.key,
             ",".join(str(event.id) for event in sorted(option_events, key=lambda item: item.id)),
         ]
@@ -1375,6 +1445,7 @@ async def _choose_winner_with_llm(
     tied_options: Sequence[PollOptionPlan],
     events: Sequence[CandidateEvent],
     target_date: date | None = None,
+    selection_seed: str | None = None,
 ) -> tuple[PollOptionPlan | None, int | None, str]:
     by_id = {event.id: event for event in events}
     candidate_ids = {
@@ -1389,6 +1460,7 @@ async def _choose_winner_with_llm(
         tied_options=tied_options,
         events=events,
         target_date=target_date,
+        selection_seed=selection_seed,
     )
     if popularity_option and popularity_event_id:
         return popularity_option, popularity_event_id, popularity_reason
@@ -1735,6 +1807,7 @@ async def resolve_due_debug_polls(
                 tied_options=tied_options,
                 events=events,
                 target_date=target_date,
+                selection_seed=f"{run.get('id')}:{run.get('run_key')}:{run.get('poll_message_id')}",
             )
             chosen = next((event for event in events if event.id == chosen_id), None)
             selection_trace = {

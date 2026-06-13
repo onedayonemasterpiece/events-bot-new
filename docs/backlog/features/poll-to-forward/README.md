@@ -326,7 +326,9 @@ groups (`POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION`, default `2`).
 Single-candidate themes are omitted. A free-events option is allowed only when
 at least two popular free candidates exist. The final recommendation stays
 inside the winning poll option and uses a weighted pick from that option's
-deduplicated TOP-3 candidates.
+deduplicated TOP-3 candidates. The pick seed includes the concrete run/poll, so
+repeated debug cycles with the same category and candidate pool can rotate
+within the TOP-3 instead of always selecting the same event.
 
 The poll always adds a lightweight feedback option
 `Другое — в этот раз темы не попали`
@@ -337,7 +339,10 @@ set. The poll question explicitly mentions that subscribers can pick
 closed as `skipped_feedback_other`: the bot replies under the poll that the
 topics did not land and that the next poll should be assembled differently, but
 it does not forward an unrelated event. This terminal state does not block the
-next debug poll slot.
+next debug poll slot. The next debug poll reads the previous option texts from
+`options_json`, tells subscribers that the previous themes did not land, and
+passes those themes to the LLM topic planner as a set to rethink rather than
+repeat.
 
 ## Data Model
 

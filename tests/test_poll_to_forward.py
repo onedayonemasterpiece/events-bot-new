@@ -406,6 +406,17 @@ def test_poll_question_rotation_does_not_repeat_adjacent_debug_slots():
         previous = text
 
 
+def test_poll_question_reacts_to_previous_feedback_other():
+    text = pf._poll_question_with_feedback_hint(
+        "Сегодня вечером подберу рекомендацию на завтра.",
+        previous_feedback_other=True,
+    )
+
+    lowered = text.casefold()
+    assert "в прошлый раз темы не попали" in lowered
+    assert "другое" in lowered
+
+
 def test_production_min_vote_threshold_grows_weekly(monkeypatch):
     monkeypatch.delenv("POLL_TO_FORWARD_PROD_MIN_VOTES_BASE", raising=False)
     monkeypatch.delenv("POLL_TO_FORWARD_PROD_MIN_VOTES_START_DATE", raising=False)
@@ -718,6 +729,67 @@ async def test_debug_create_sends_six_options_when_free_axis_is_possible(tmp_pat
         options_json, error_json = await cur.fetchone()
     assert len(json.loads(options_json)) == 7
     assert json.loads(error_json)["eligible_events"] == 6
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_topic_planner_reframes_after_feedback_other(monkeypatch):
+    events = [_candidate(101), _candidate(102), _candidate(103)]
+    captured = {}
+
+    async def fake_llm(**kwargs):
+        captured["prompt"] = kwargs["prompt"]
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "one", "text": "Попробовать камерный вечер", "candidate_event_ids": [101]},
+                {"key": "two", "text": "Выбрать что-то познавательное", "candidate_event_ids": [102]},
+                {"key": "three", "text": "Сходить на живую программу", "candidate_event_ids": [103]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    question, options, strategy = await pf.build_poll_plan(
+        events,
+        min_options=3,
+        run_key="debug:2026-06-12T11",
+        previous_feedback={
+            "run_id": 1,
+            "run_key": "debug:2026-06-12T10",
+            "option_texts": ["Послушать музыку", "Узнать новое"],
+        },
+    )
+
+    assert strategy == "llm"
+    assert len(options) == 4
+    assert "В прошлый раз темы не попали" in question
+    assert "аудитория выбрала «Другое»" in captured["prompt"]
+    assert "Послушать музыку" in captured["prompt"]
+    assert "Узнать новое" in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_latest_feedback_other_context_reads_options_json(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_DEBUG,
+        run_key="debug:2026-06-12T10",
+        status=pf.STATUS_SKIPPED_FEEDBACK_OTHER,
+        target_event_date=datetime(2026, 6, 13, tzinfo=timezone.utc).date(),
+        options=[
+            pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102)),
+            pf.PollOptionPlan(key="learn", text="Узнать новое", candidate_event_ids=(201,)),
+            pf.PollOptionPlan(key=pf.FEEDBACK_OPTION_KEY, text=pf.FEEDBACK_OPTION_TEXT, candidate_event_ids=()),
+        ],
+    )
+
+    context = await pf._latest_debug_feedback_other_context(db)
+
+    assert context["run_key"] == "debug:2026-06-12T10"
+    assert context["option_texts"] == ["Послушать музыку", "Узнать новое"]
     await db.close()
 
 
@@ -1143,3 +1215,56 @@ async def test_popularity_winner_selection_stays_inside_winning_option_top3(monk
     assert chosen_id != 104
     assert chosen_id != 201
     assert "kldevents" in reason
+
+
+@pytest.mark.asyncio
+async def test_popularity_top3_pick_varies_by_run_seed(monkeypatch):
+    events = [
+        pf.CandidateEvent(
+            id=event_id,
+            title=f"Событие {event_id}",
+            date="2026-06-14",
+            end_date=None,
+            time="19:00",
+            event_type="концерт",
+            festival=None,
+            city="Калининград",
+            location_name="Зал",
+            is_free=False,
+            tg_event_post_id=500 + event_id,
+            tg_event_post_url=f"https://t.me/kldevents/{500 + event_id}",
+            telegraph_url=f"https://telegra.ph/{event_id}",
+            summary="",
+            popularity_score=score,
+            popularity_group_key=f"kld:{event_id}",
+            popularity_trace={
+                "best_signal": {
+                    "source": "kldevents_vk",
+                    "above": ["likes"],
+                }
+            },
+        )
+        for event_id, score in ((101, 12.0), (102, 10.0), (103, 8.0), (104, 1.0))
+    ]
+    tied_options = [
+        pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102, 103, 104)),
+    ]
+
+    async def fail_llm(**_kwargs):
+        raise AssertionError("popularity path should not call LLM winner selection")
+
+    monkeypatch.setattr(pf, "_google_generate_json", fail_llm)
+
+    chosen_ids = set()
+    for idx in range(20):
+        _option, chosen_id, _reason = await pf._choose_winner_with_llm(
+            tied_options=tied_options,
+            events=events,
+            target_date=datetime(2026, 6, 14, tzinfo=timezone.utc).date(),
+            selection_seed=f"run:{idx}",
+        )
+        chosen_ids.add(chosen_id)
+
+    assert chosen_ids <= {101, 102, 103}
+    assert 104 not in chosen_ids
+    assert len(chosen_ids) >= 2
