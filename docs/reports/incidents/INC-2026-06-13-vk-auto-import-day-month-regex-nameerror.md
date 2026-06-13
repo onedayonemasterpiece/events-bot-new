@@ -1,10 +1,10 @@
 # INC-2026-06-13-vk-auto-import-day-month-regex-nameerror VK auto-import day/month regex NameError
 
-Status: open
+Status: closed
 Severity: sev1
 Service: VK auto-import draft extraction
 Opened: 2026-06-13
-Closed: —
+Closed: 2026-06-13
 Owners: Codex
 Related incidents: `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog`
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/operations/runtime-logs.md`
@@ -39,6 +39,12 @@ reached Gemma draft parsing could fail after spending LLM/OCR time.
 - 2026-06-13 08:50:59 UTC — `vk_auto_queue` logged
   `build_event_drafts failed inbox_id=8597 source=https://vk.com/wall-212760444_5352`.
 - 2026-06-13 08:50:59 UTC — row `8597` finished with `drafts=0 ok=0`.
+- 2026-06-13 09:03 UTC — hotfix SHA `9187dc60` deployed to Fly image
+  `deployment-01KV03GRG4KBAQN7WHVABCA2PX`.
+- 2026-06-13 09:06-09:13 UTC — targeted production catch-up processed rows
+  `8605` and `8597` through the same VK auto-import row processor.
+- 2026-06-13 09:15 UTC — DB verification showed both rows `imported` with
+  locks cleared.
 
 ## Root Cause
 
@@ -105,10 +111,30 @@ reached Gemma draft parsing could fail after spending LLM/OCR time.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `9187dc60` (`origin/main`)
+- deploy path: manual `fly deploy --remote-only -a events-bot-new-wngqia`
+- Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KV03GRG4KBAQN7WHVABCA2PX`
 - regression checks:
+  - `python3 -m py_compile vk_intake.py vk_auto_queue.py tests/test_vk_intake_keywords_dates.py`
+  - production image smoke:
+    `_source_text_has_absolute_date_anchor("15.06") == True`,
+    `_source_text_has_absolute_date_anchor("15 июня") == True`,
+    `_source_text_has_absolute_date_anchor("завтра") == False`
+  - local `pytest` was not available in the hotfix worktree
+    (`No module named pytest`), so the targeted test is committed but was not
+    executed locally.
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`;
+  - runtime logs after deploy showed `smart_update.start` and
+    `persist_event_and_pages` for both failed URLs, with no new
+    `_DAY_MONTH_NUM_RE` NameError;
+  - `vk_inbox.id=8605` is `imported`, `imported_event_id=5991`, lock cleared;
+  - `vk_inbox.id=8597` is `imported`, `imported_event_id=5370`, lock cleared;
+  - `vk_inbox_import_event` maps `8605 -> 5991` and `8597 -> 5370`;
+  - event `5991` has managed VK URL `https://vk.com/wall-231920894_3248`;
+  - event `5370` was updated; `telegraph_build`, `ics_publish`,
+    `tg_ics_post`, and `vk_sync` are `done`, while `tg_event_publish` remains
+    scheduled.
 
 ## Prevention
 
