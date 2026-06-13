@@ -170,8 +170,13 @@ Before the repost, the bot sends a short reply to the original poll message.
 The public reply is LLM-first: after the LLM chooses the final event, a separate
 LLM composer writes the whole comment with a strict `{{EVENT_LINK}}`
 placeholder. Code only validates the contract, escapes text, inserts the HTML
-event-title link, disables web preview, and falls back to a neutral deterministic
-text if the composer fails.
+event link, disables web preview, and falls back to a neutral deterministic text
+if the composer fails. The visible text of that link is also LLM-authored through
+`event_link_text`: it must be a natural mention of the selected event, not a raw
+deterministic DB title. This lets the composer normalize all-caps names (for
+example `ОТКРЫТЫЙ МИКРОФОН` -> `«Открытый микрофон»`) and fit the linked words
+into the sentence organically. Code only validates and wraps that span in safe
+HTML.
 
 Required meaning:
 
@@ -233,9 +238,9 @@ options.
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical
 `forward_message`/repost mechanic to the audience. Telegraph links are attached
-to the event title in HTML and sent with web preview disabled. Separate the
-thanks, recommendation, feedback prompt, and forwarding line with blank lines so
-the Telegram message does not render as one dense block.
+to the LLM-authored event mention in HTML and sent with web preview disabled.
+Separate the thanks, recommendation, feedback prompt, and forwarding line with
+blank lines so the Telegram message does not render as one dense block.
 
 Do not debug this feature by publishing several polls in a burst to the public
 debug channel. Live verification must use one visible cycle at a time unless the

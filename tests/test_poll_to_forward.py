@@ -90,6 +90,25 @@ def test_repost_intro_renders_llm_reply_template_with_safe_event_link():
     assert "Сейчас перешлю анонс 👇" in text
 
 
+def test_repost_intro_uses_llm_generated_event_link_text_not_raw_caps_title():
+    text = pf._repost_intro_text(
+        "Пообщение и смех",
+        "подходит под выбранную тему",
+        event_title="ОТКРЫТЫЙ МИКРОФОН",
+        telegraph_url="https://telegra.ph/open-mic",
+        event_link_text="стендап «Открытый микрофон»",
+        reply_template=(
+            "Спасибо всем, кто проголосовал.\n\n"
+            "Вы выбрали тему про общение и смех, поэтому сегодня взял для вас {{EVENT_LINK}}.\n\n"
+            "Ставьте 👍, если такой формат вам близок, или 👎, если хотелось чего-то другого.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert 'href="https://telegra.ph/open-mic">стендап «Открытый микрофон»</a>' in text
+    assert "ОТКРЫТЫЙ МИКРОФОН" not in text
+
+
 def test_repost_intro_falls_back_when_llm_reply_has_no_event_placeholder():
     text = pf._repost_intro_text(
         "Вечер с музыкой",
@@ -727,7 +746,8 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
                         "{{EVENT_LINK}} хорошо ложится в выбранную тему: можно выбраться завтра без ощущения случайного совета.\n\n"
                         "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
                         "Сейчас перешлю анонс 👇"
-                    )
+                    ),
+                    "event_link_text": "этот анонс",
                 }
             return {
                 "reply_text": (
@@ -735,7 +755,8 @@ async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_p
                     "{{EVENT_LINK}} хорошо ложится в выбранную тему: можно выбраться завтра без ощущения случайного совета.\n\n"
                     "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
                     "Сейчас перешлю анонс 👇"
-                )
+                ),
+                "event_link_text": "этот анонс",
             }
         if "winner_key" not in prompt:
             return {"question_text": "", "options": option_plan}
@@ -843,7 +864,8 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
                     "Для этой темы выбрал {{EVENT_LINK}}: камерная музыка хорошо попадает в запрос на спокойный вечер.\n\n"
                     "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
                     "Сейчас перешлю анонс 👇"
-                )
+                ),
+                "event_link_text": "камерный концерт",
             }
         if "winner_key" in prompt:
             return {
@@ -888,7 +910,7 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
         "Спасибо за голоса — сегодня берём «Вечер с музыкой».\n\n"
-        'Для этой темы выбрал <a href="https://telegra.ph/event-101">Камерный концерт</a>: '
+        'Для этой темы выбрал <a href="https://telegra.ph/event-101">камерный концерт</a>: '
         "камерная музыка хорошо попадает в запрос на спокойный вечер.\n\n"
         "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"

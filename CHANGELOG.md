@@ -17,6 +17,12 @@
   that option wins outright, the debug run closes as `skipped_feedback_other`
   with a short reply and no unrelated forward, while the next debug slot remains
   unblocked.
+- **Changed: Poll to Repost LLM-authored link text**: repost comment generation
+  now asks the LLM for both the full reply and `event_link_text`, so the visible
+  Telegraph link can be a natural event mention instead of a raw deterministic
+  DB title. This prevents all-caps event titles such as `ОТКРЫТЫЙ МИКРОФОН`
+  from leaking into otherwise human copy when the model can phrase the mention
+  organically.
 - **Changed: Poll to Repost title-link phrasing**: LLM repost comments now must
   embed the event link into a natural phrase with a generic event word/type
   before the title, and renderer rejects `: {{EVENT_LINK}}` label patterns such

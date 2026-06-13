@@ -88,6 +88,12 @@ class PollOptionPlan:
     rationale: str = ""
 
 
+@dataclass(slots=True, frozen=True)
+class LlmRepostReply:
+    reply_text: str
+    event_link_text: str
+
+
 def _env_enabled(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -219,6 +225,7 @@ def _repost_intro_text(
     telegraph_url: str | None = None,
     tied_texts: Sequence[str] | None = None,
     reply_template: str | None = None,
+    event_link_text: str | None = None,
     fact_context: str | None = None,
 ) -> str:
     winner = re.sub(r"\s+", " ", str(winner_text or "").strip()).rstrip(".")
@@ -229,11 +236,12 @@ def _repost_intro_text(
     ]
     reason_text = _compact_repost_reason(reason)
     title = re.sub(r"\s+", " ", str(event_title or "").strip()).rstrip(".") or "этот анонс"
+    link_title = _clean_event_link_text(event_link_text, fallback=title)
     link = str(telegraph_url or "").strip()
     linked_title = (
-        f'<a href="{escape(link, quote=True)}">{escape(title)}</a>'
+        f'<a href="{escape(link, quote=True)}">{escape(link_title)}</a>'
         if link
-        else escape(title)
+        else escape(link_title)
     )
     fallback = _fallback_repost_intro_text(
         winner,
@@ -248,6 +256,37 @@ def _repost_intro_text(
         is_tie=len(tied) > 1,
     )
     return rendered or fallback
+
+
+def _clean_event_link_text(value: str | None, *, fallback: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip()).strip(" .")
+    fallback_text = re.sub(r"\s+", " ", str(fallback or "").strip()).strip(" .") or "этот анонс"
+    if not text:
+        return _soften_all_caps_title(fallback_text)
+    lowered = text.lower()
+    if any(fragment in lowered for fragment in ("http://", "https://", "<a ", "</a>", "{{", "}}")):
+        return _soften_all_caps_title(fallback_text)
+    if len(text) > 120:
+        return _soften_all_caps_title(fallback_text)
+    if _is_all_caps_title(text) and _is_all_caps_title(fallback_text):
+        return _soften_all_caps_title(text)
+    return text
+
+
+def _is_all_caps_title(text: str) -> bool:
+    letters = [char for char in str(text or "") if char.isalpha()]
+    if len(letters) < 4:
+        return False
+    upper = sum(1 for char in letters if char.upper() == char and char.lower() != char)
+    return upper / max(1, len(letters)) >= 0.8
+
+
+def _soften_all_caps_title(text: str) -> str:
+    value = re.sub(r"\s+", " ", str(text or "").strip()).strip(" .")
+    if not _is_all_caps_title(value):
+        return value or "этот анонс"
+    lowered = value.lower()
+    return lowered[:1].upper() + lowered[1:]
 
 
 def _fallback_repost_intro_text(
@@ -1437,7 +1476,7 @@ async def _compose_repost_reply_with_llm(
     tied_options: Sequence[PollOptionPlan],
     total_votes: int,
     target_date: date | None = None,
-) -> str | None:
+) -> LlmRepostReply | None:
     tied_texts = [option.text for option in tied_options]
     payload = {
         "winner_topic": winner_option.text,
@@ -1472,8 +1511,14 @@ async def _compose_repost_reply_with_llm(
         "Люди выбрали один вариант опроса; формулируй как «выбрали тему X, поэтому беру анонс Y». "
         "Про равные голоса и несколько тем можно писать только при is_tie=true.\n"
         f"В тексте должен быть плейсхолдер {EVENT_LINK_PLACEHOLDER} ровно один раз. "
-        "Это место, куда код вставит HTML-ссылку с названием события. Не пиши название события отдельно, "
+        "Это место, куда код вставит HTML-ссылку. Не пиши название события отдельно, "
         "не пиши URL, Markdown или HTML.\n"
+        "Отдельно верни event_link_text — видимый текст этой ссылки. Его тоже формулируешь ты: "
+        "можно взять название события из контекста, но приведи его к естественному виду, если в базе оно капсом, "
+        "и можно добавить/убрать родовое слово так, чтобы фраза читалась по-человечески. "
+        "Например для title=ОТКРЫТЫЙ МИКРОФОН уместно event_link_text=\"«Открытый микрофон»\" "
+        "или \"стендап «Открытый микрофон»\" в зависимости от фразы. "
+        "Не меняй смысл события и не выдумывай другое название.\n"
         "Вписывай плейсхолдер в живую фразу через родовое слово/тип события из контекста, "
         "чтобы название не висело после двоеточия и не требовало склонения: "
         f"«поэтому сегодня выбрал турнир {EVENT_LINK_PLACEHOLDER}», "
@@ -1493,13 +1538,17 @@ async def _compose_repost_reply_with_llm(
         "Не используй слова и смыслы: алгоритм, репост, форвард, подборка, разбор, рекомендательная модель, контент. "
         "Не используй рекламные клише и оценки: отличный вариант, интересный вариант, хороший вариант, лучший, "
         "идеальный выбор, уникальные вещи, с пользой, драйв.\n"
-        "Верни JSON строго такого вида: {\"reply_text\":\"текст\"}.\n\n"
+        "Верни JSON строго такого вида: {\"reply_text\":\"текст\", \"event_link_text\":\"видимый текст ссылки\"}.\n\n"
         f"Контекст:\n{json.dumps(payload, ensure_ascii=False)}"
     )
     data = await _google_generate_json(prompt=prompt, max_output_tokens=900, temperature=0.72)
     if not data:
         return None
-    return str(data.get("reply_text") or "").strip() or None
+    reply_text = str(data.get("reply_text") or "").strip()
+    event_link_text = str(data.get("event_link_text") or "").strip()
+    if not reply_text or not event_link_text:
+        return None
+    return LlmRepostReply(reply_text=reply_text, event_link_text=event_link_text)
 
 
 async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[str, Any]]:
@@ -1717,7 +1766,7 @@ async def resolve_due_debug_polls(
                 )
                 resolved += 1
                 continue
-            llm_reply_text = await _compose_repost_reply_with_llm(
+            llm_reply = await _compose_repost_reply_with_llm(
                 winner_option=winner_option,
                 chosen=chosen,
                 reason=llm_reason,
@@ -1736,7 +1785,8 @@ async def resolve_due_debug_polls(
                     event_title=chosen.title,
                     telegraph_url=chosen.telegraph_url,
                     tied_texts=[option.text for option in tied_options],
-                    reply_template=llm_reply_text,
+                    reply_template=llm_reply.reply_text if llm_reply else None,
+                    event_link_text=llm_reply.event_link_text if llm_reply else None,
                     fact_context=_event_reply_fact_context(chosen, llm_reason),
                 ),
                 reply_to_message_id=int(run["poll_message_id"]),
