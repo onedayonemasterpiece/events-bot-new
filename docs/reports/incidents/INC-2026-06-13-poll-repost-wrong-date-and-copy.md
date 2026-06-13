@@ -136,7 +136,8 @@ unsupported open-air claim and used awkward template-like phrasing.
   `date=2026-06-12`, `end_date=2026-06-15`, `tg_event_post_id=36`.
 - confirmation that the fix is reachable from `origin/main`: pushed
   `441c7c8465069e15b6a6167cdc8aaf334e610643` and follow-up hotfix
-  `8bbbc125826f8b7632a78324233d9f02d3d4cc70` to `origin/main`.
+  `8bbbc125826f8b7632a78324233d9f02d3d4cc70`, plus causality hotfix
+  `509ae6ca992e853277064275aafcef1718e55e7b` to `origin/main`.
 
 ## Immediate Mitigation
 
@@ -191,6 +192,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - follow-up deploy for debug lifecycle gating: SHA
   `8bbbc125826f8b7632a78324233d9f02d3d4cc70`, Fly release `v1384`, image
   `registry.fly.io/events-bot-new-wngqia:deployment-01KV0Z773BRQP7RP3VWAB32NZ0`
+- follow-up deploy for causality copy: SHA
+  `509ae6ca992e853277064275aafcef1718e55e7b`, Fly release `v1385`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV10WY426B98TQ0P2EGM281E`
 - regression checks:
   - `tests/test_poll_to_forward.py`
   - `tests/test_tg_event_publish.py`
@@ -204,10 +208,15 @@ unsupported open-air claim and used awkward template-like phrasing.
   - production SQL/log evidence that pre-hotfix run `debug:2026-06-13T19`
     with `resolve_after=2026-06-13T17:30:00.020270+00:00` resolved at
     `2026-06-13T17:30:05Z`, proving the due-run grace works for old rows
+  - production runtime smoke for causality guard:
+    `causality_bad_rejected=True`
 - post-deploy verification: Fly status machine `48e42d5b714228`, version
   `1379`, state `started`, `1 total, 1 passing`; `/healthz` returned
   `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
   Follow-up lifecycle deploy status: same machine version `1384`, state
+  `started`, `1 total, 1 passing`; `/healthz` returned `ok=true`,
+  `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
+  Follow-up causality deploy status: same machine version `1385`, state
   `started`, `1 total, 1 passing`; `/healthz` returned `ok=true`,
   `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
 
