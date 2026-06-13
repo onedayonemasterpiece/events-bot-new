@@ -147,12 +147,26 @@ Rules:
   still-eligible candidate at resolve time, skip the repost and record the
   reason; do not use deterministic fallback.
 
-Before the repost, the bot sends a short reply to the original poll message
-with the winning topic and, when LLM provides it, a compact reason for the final
-event choice. Example:
+Before the repost, the bot sends a short reply to the original poll message.
+The public reply is LLM-first: after the LLM chooses the final event, a separate
+LLM composer writes the whole comment with a strict `{{EVENT_LINK}}`
+placeholder. Code only validates the contract, escapes text, inserts the HTML
+event-title link, disables web preview, and falls back to a neutral deterministic
+text if the composer fails.
+
+Required meaning:
+
+- thank people for voting;
+- say which theme won, or that votes were tied;
+- say that one concrete announcement was chosen inside that theme/tied themes;
+- briefly explain why this event fits;
+- ask for 👍/👎 feedback;
+- end with `Сейчас перешлю анонс 👇`.
+
+Example LLM composer output before link rendering:
 `Спасибо за голоса — берём тему «музыка».
 
-Из этой темы я бы предложил <a href="https://telegra.ph/...">Название события</a> — хорошо подходит под выбранную тему.
+Из этой темы выбрал вот что: {{EVENT_LINK}}. В субботу фестиваль продолжается, можно спокойно зайти на классику в атмосферном месте.
 
 Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.
 
@@ -160,17 +174,27 @@ event choice. Example:
 
 If the poll result is tied, the reply must say so directly instead of naming a
 single false winner, for example: `Голоса разделились поровну между
-«выставки» и «экскурсии». Беру один из этих вариантов.` The LLM reason should
-then explain why the selected event still makes sense as the final
-recommendation. It may mention
+«выставки» и «экскурсии». Беру один конкретный анонс из этих тем.` The LLM
+composer should then explain why the selected event still makes sense as the
+final recommendation. It may mention
 popularity or public interest only when such signals are grounded in passed
 metrics or event text. If an exhibition starts on the target date, natural
 wording such as "как раз открывается выставка" is preferred over generic
-"сходить на выставку". Keep the LLM reason compact, ideally under 90
-characters, and do not repeat the event title in the reason. Avoid marketing
-reason leads such as "отличный вариант" or "интересный вариант"; prefer
-concrete human phrasing like "для тех, кто голосовал за гастро-отдых, на ферме
-как раз праздник".
+"сходить на выставку".
+
+The `{{EVENT_LINK}}` placeholder must appear exactly once and only in
+grammatically neutral positions, for example:
+
+- `выбрал вот что: {{EVENT_LINK}}`;
+- `остановился на этом: {{EVENT_LINK}}`;
+- `один анонс из этой темы — {{EVENT_LINK}}`.
+
+Avoid constructions that require inflecting the event title around the
+placeholder, such as `я бы предложил {{EVENT_LINK}}`, `сходить на
+{{EVENT_LINK}}`, or `расскажу про {{EVENT_LINK}}`. Avoid marketing reason leads
+such as "отличный вариант" or "интересный вариант"; prefer concrete human
+phrasing like "для тех, кто голосовал за гастро-отдых, на ферме как раз
+праздник".
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical

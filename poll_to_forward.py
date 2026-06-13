@@ -28,6 +28,7 @@ STATUS_SKIPPED_NO_VOTES = "skipped_no_votes"
 STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
+EVENT_LINK_PLACEHOLDER = "{{EVENT_LINK}}"
 DEFAULT_POLL_QUESTION_TEXT = (
     "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе."
 )
@@ -193,6 +194,7 @@ def _repost_intro_text(
     event_title: str | None = None,
     telegraph_url: str | None = None,
     tied_texts: Sequence[str] | None = None,
+    reply_template: str | None = None,
 ) -> str:
     winner = re.sub(r"\s+", " ", str(winner_text or "").strip()).rstrip(".")
     tied = [
@@ -208,6 +210,26 @@ def _repost_intro_text(
         if link
         else escape(title)
     )
+    fallback = _fallback_repost_intro_text(
+        winner,
+        reason_text,
+        linked_title=linked_title,
+        tied=tied,
+    )
+    rendered = _render_llm_repost_reply(
+        reply_template,
+        event_link_html=linked_title,
+    )
+    return rendered or fallback
+
+
+def _fallback_repost_intro_text(
+    winner: str,
+    reason_text: str,
+    *,
+    linked_title: str,
+    tied: Sequence[str],
+) -> str:
     if len(tied) > 1:
         shown = tied[:3]
         if len(shown) == 2:
@@ -216,10 +238,10 @@ def _repost_intro_text(
             tied_text = ", ".join(f"«{escape(text)}»" for text in shown[:-1])
             tied_text = f"{tied_text} и «{escape(shown[-1])}»"
         parts = [f"Голоса разделились поровну между {tied_text}. Беру один из этих вариантов."]
-        recommendation_lead = f"Я выбрал один вариант из этих тем: {linked_title}"
+        recommendation_lead = f"Выбрал один анонс из этих тем: {linked_title}"
     else:
         parts = [f"Спасибо за голоса — берём тему «{escape(winner)}»."]
-        recommendation_lead = f"Из этой темы я бы предложил {linked_title}"
+        recommendation_lead = f"Выбрал один анонс из этой темы: {linked_title}"
     if reason_text:
         reason_end = "" if reason_text.endswith((".", "!", "?", "…")) else "."
         parts.append(f"{recommendation_lead} — {escape(reason_text)}{reason_end}")
@@ -228,6 +250,40 @@ def _repost_intro_text(
     parts.append("Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.")
     parts.append("Сейчас перешлю анонс 👇")
     return "\n\n".join(parts)
+
+
+def _render_llm_repost_reply(reply_template: str | None, *, event_link_html: str) -> str | None:
+    text = re.sub(r"[ \t]+\n", "\n", str(reply_template or "").strip())
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    if not text or text.count(EVENT_LINK_PLACEHOLDER) != 1:
+        return None
+    lowered = text.lower()
+    forbidden = (
+        "алгоритм",
+        "репост",
+        "форвард",
+        "контент",
+        "лучшее событие",
+        "идеальный выбор",
+        "отличный вариант",
+        "интересный вариант",
+        "хороший вариант",
+        "подробнее",
+        "http://",
+        "https://",
+        "<a ",
+        "</a>",
+    )
+    if any(fragment in lowered for fragment in forbidden):
+        return None
+    if "👍" not in text or "👎" not in text:
+        return None
+    if "перешлю анонс" not in lowered:
+        return None
+    before, after = text.split(EVENT_LINK_PLACEHOLDER, 1)
+    rendered = f"{escape(before)}{event_link_html}{escape(after)}"
+    rendered = re.sub(r"\n{3,}", "\n\n", rendered).strip()
+    return rendered or None
 
 
 def _compact_repost_reason(reason: str | None, limit: int = 100) -> str:
@@ -864,7 +920,8 @@ async def _choose_winner_with_llm(
         "почему именно этот анонс подходит под выбранную тему. Пиши как человек из локального канала, "
         "не как рекомендательная система. Покажи связь с голосами людей, но не пересказывай весь анонс "
         "и не повторяй название события. "
-        "Если есть ничья между темами, не называй тему победителем: объясни, почему в итоге выбираешь именно это событие. "
+        "Если есть ничья между темами, не называй тему победителем: прямо скажи, что голоса разделились, "
+        "и объясни, почему в итоге выбираешь именно это событие. "
         "Можно ссылаться на популярность/ожидаемость только если это явно видно из переданных метрик или текста события; "
         "если таких данных нет, не утверждай, что событие популярнее в каналах. "
         "Используй конкретику события, если она есть в данных: например, если выставка начинается в целевую дату "
@@ -900,6 +957,66 @@ async def _choose_winner_with_llm(
     if not selected_option or event_id not in selected_option.candidate_event_ids or event_id not in by_id:
         return None, None, "llm_invalid_choice"
     return selected_option, event_id, str(data.get("reason") or "").strip()
+
+
+async def _compose_repost_reply_with_llm(
+    *,
+    winner_option: PollOptionPlan,
+    chosen: CandidateEvent,
+    reason: str | None,
+    tied_options: Sequence[PollOptionPlan],
+    total_votes: int,
+    target_date: date | None = None,
+) -> str | None:
+    tied_texts = [option.text for option in tied_options]
+    payload = {
+        "winner_topic": winner_option.text,
+        "tied_topics": tied_texts,
+        "is_tie": len(tied_options) > 1,
+        "total_votes": total_votes,
+        "target_date": target_date.isoformat() if target_date else "",
+        "event": {
+            "title": chosen.title,
+            "date": chosen.date,
+            "end_date": chosen.end_date,
+            "time": chosen.time,
+            "type": chosen.event_type,
+            "festival": chosen.festival,
+            "city": chosen.city,
+            "location": chosen.location_name,
+            "is_free": chosen.is_free,
+            "summary": chosen.summary[:350],
+        },
+        "selection_reason": _compact_repost_reason(reason, limit=140),
+    }
+    prompt = (
+        "Ты пишешь публичный комментарий в Telegram-канале афиши перед пересылкой выбранного анонса. "
+        "Это не рекламный текст и не отчёт алгоритма: пиши как живой локальный автор канала, дружелюбно, "
+        "немного по-блогерски, но без сюсюканья.\n"
+        "Смысл фиксированный, формулировки свободные: поблагодари за голоса; скажи, какую тему выбрали "
+        "или что голоса разделились поровну; покажи, что автор выбрал один конкретный анонс из этой темы/этих тем; "
+        "коротко объясни почему; попроси поставить 👍, если рекомендация понравилась/зашла, и 👎, если нет; "
+        "последней строкой строго напиши: Сейчас перешлю анонс 👇\n"
+        f"В тексте должен быть плейсхолдер {EVENT_LINK_PLACEHOLDER} ровно один раз. "
+        "Это место, куда код вставит HTML-ссылку с названием события. Не пиши название события отдельно, "
+        "не пиши URL, Markdown или HTML.\n"
+        "Ставь плейсхолдер только в грамматически нейтральные позиции, чтобы не ломать склонения: "
+        f"«выбрал вот что: {EVENT_LINK_PLACEHOLDER}», "
+        f"«остановился на этом: {EVENT_LINK_PLACEHOLDER}», "
+        f"«один анонс из этой темы — {EVENT_LINK_PLACEHOLDER}». "
+        f"Нельзя писать: «я бы предложил {EVENT_LINK_PLACEHOLDER}», "
+        f"«сходить на {EVENT_LINK_PLACEHOLDER}», «расскажу про {EVENT_LINK_PLACEHOLDER}».\n"
+        "Не делай текст одинаковым от раза к разу, но не теряй смысл. 3–5 коротких абзацев, 180–650 символов. "
+        "Не используй слова и смыслы: алгоритм, репост, форвард, подборка, разбор, рекомендательная модель, контент. "
+        "Не используй рекламные клише и оценки: отличный вариант, интересный вариант, хороший вариант, лучший, "
+        "идеальный выбор, уникальные вещи, с пользой, драйв.\n"
+        "Верни JSON строго такого вида: {\"reply_text\":\"текст\"}.\n\n"
+        f"Контекст:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _google_generate_json(prompt=prompt, max_output_tokens=900, temperature=0.72)
+    if not data:
+        return None
+    return str(data.get("reply_text") or "").strip() or None
 
 
 async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[str, Any]]:
@@ -1068,6 +1185,14 @@ async def resolve_due_debug_polls(
                 )
                 resolved += 1
                 continue
+            llm_reply_text = await _compose_repost_reply_with_llm(
+                winner_option=winner_option,
+                chosen=chosen,
+                reason=llm_reason,
+                tied_options=tied_options,
+                total_votes=total_votes,
+                target_date=target_date,
+            )
             target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
             source_chat = _env_str("POLL_TO_FORWARD_SOURCE_CHAT", "@kldevents")
             reply = await bot.send_message(
@@ -1079,6 +1204,7 @@ async def resolve_due_debug_polls(
                     event_title=chosen.title,
                     telegraph_url=chosen.telegraph_url,
                     tied_texts=[option.text for option in tied_options],
+                    reply_template=llm_reply_text,
                 ),
                 reply_to_message_id=int(run["poll_message_id"]),
                 parse_mode="HTML",
