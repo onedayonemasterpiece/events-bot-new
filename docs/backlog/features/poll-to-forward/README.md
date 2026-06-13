@@ -323,6 +323,17 @@ at least two popular free candidates exist. The final recommendation stays
 inside the winning poll option and uses a weighted pick from that option's
 deduplicated TOP-3 candidates.
 
+The poll always adds a lightweight feedback option
+`Другое — в этот раз темы не попали`
+(`POLL_TO_FORWARD_FEEDBACK_OPTION_ENABLED=1` by default). This option has no
+event candidates and exists to measure disagreement with the prepared category
+set. The poll question explicitly mentions that subscribers can pick
+`Другое` if the themes are wrong. If this option wins outright, the run is
+closed as `skipped_feedback_other`: the bot replies under the poll that the
+topics did not land and that the next poll should be assembled differently, but
+it does not forward an unrelated event. This terminal state does not block the
+next debug poll slot.
+
 ## Data Model
 
 Use one lightweight persisted run row per poll slot. Do not store per-user votes.

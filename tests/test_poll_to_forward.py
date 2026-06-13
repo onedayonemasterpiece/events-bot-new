@@ -491,8 +491,14 @@ async def test_debug_create_uses_llm_plan_and_sends_poll(tmp_path, monkeypatch):
 
     assert result["created"] is True
     assert bot.sent_polls[0]["chat_id"] == "@keniggpt"
-    assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
-    assert bot.sent_polls[0]["options"] == ["Вечер с музыкой", "Узнать новое", "С детьми"]
+    assert any(bot.sent_polls[0]["question"].startswith(text) for text in pf.DEFAULT_POLL_QUESTION_VARIANTS)
+    assert "Другое" in bot.sent_polls[0]["question"]
+    assert bot.sent_polls[0]["options"] == [
+        "Вечер с музыкой",
+        "Узнать новое",
+        "С детьми",
+        pf.FEEDBACK_OPTION_TEXT,
+    ]
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status, poll_message_id, resolve_after FROM poll_repost_run")
         status, poll_message_id, resolve_after = await cur.fetchone()
@@ -685,12 +691,13 @@ async def test_debug_create_sends_six_options_when_free_axis_is_possible(tmp_pat
     )
 
     assert result["created"] is True
-    assert len(bot.sent_polls[0]["options"]) == 6
+    assert len(bot.sent_polls[0]["options"]) == 7
     assert "Куда угодно, только бесплатно" in bot.sent_polls[0]["options"]
+    assert pf.FEEDBACK_OPTION_TEXT in bot.sent_polls[0]["options"]
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT options_json, error_json FROM poll_repost_run")
         options_json, error_json = await cur.fetchone()
-    assert len(json.loads(options_json)) == 6
+    assert len(json.loads(options_json)) == 7
     assert json.loads(error_json)["eligible_events"] == 6
     await db.close()
 
@@ -876,7 +883,8 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
     )
 
     assert result["resolved"] == 1
-    assert bot.sent_polls[0]["question"] in pf.DEFAULT_POLL_QUESTION_VARIANTS
+    assert any(bot.sent_polls[0]["question"].startswith(text) for text in pf.DEFAULT_POLL_QUESTION_VARIANTS)
+    assert "Другое" in bot.sent_polls[0]["question"]
     assert bot.messages[0]["reply_to_message_id"] == 101
     assert bot.messages[0]["text"] == (
         "Спасибо за голоса — сегодня берём «Вечер с музыкой».\n\n"
@@ -897,6 +905,89 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
             "SELECT status, winner_option_id, chosen_event_id, kldevents_message_id, forwarded_message_id FROM poll_repost_run"
         )
     assert await cur.fetchone() == (pf.STATUS_FORWARDED, "music", 101, 501, 301)
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_debug_resolve_feedback_other_winner_replies_without_forward(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_events(db)
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
+
+    async def fake_llm(**kwargs):
+        prompt = kwargs.get("prompt", "")
+        if "winner_key" in prompt or "Ты пишешь публичный комментарий" in prompt:
+            raise AssertionError("feedback-only winner should not call winner/repost LLM")
+        return {
+            "question_text": "Что выбрать на завтра?",
+            "options": [
+                {"key": "music", "text": "Вечер с музыкой", "candidate_event_ids": [101]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [102]},
+                {"key": "kids", "text": "С детьми", "candidate_event_ids": [103]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+    bot = DummyPollBot()
+    await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+    feedback_index = bot.sent_polls[0]["options"].index(pf.FEEDBACK_OPTION_TEXT)
+    votes = [0] * len(bot.sent_polls[0]["options"])
+    votes[feedback_index] = 2
+    bot.stop_poll_result = SimpleNamespace(
+        total_voter_count=2,
+        options=[SimpleNamespace(voter_count=count) for count in votes],
+    )
+
+    result = await pf.resolve_due_debug_polls(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 31, tzinfo=timezone.utc),
+    )
+
+    assert result["resolved"] == 1
+    assert bot.forwarded == []
+    assert bot.messages[0]["text"] == pf._feedback_other_reply_text()
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, winner_option_id, winner_text, chosen_event_id, reply_message_id, forwarded_message_id
+            FROM poll_repost_run
+            """
+        )
+        assert await cur.fetchone() == (
+            pf.STATUS_SKIPPED_FEEDBACK_OTHER,
+            pf.FEEDBACK_OPTION_KEY,
+            pf.FEEDBACK_OPTION_TEXT,
+            None,
+            201,
+            None,
+        )
+
+    # A feedback-only terminal result must not block the next hourly debug poll.
+    async def second_llm(**kwargs):
+        if "winner_key" in kwargs.get("prompt", ""):
+            raise AssertionError("not resolving second poll here")
+        return {
+            "question_text": "Что выбрать на завтра?",
+            "options": [
+                {"key": "music", "text": "Вечер с музыкой", "candidate_event_ids": [101]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [102]},
+                {"key": "kids", "text": "С детьми", "candidate_event_ids": [103]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", second_llm)
+    second = await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc),
+    )
+    assert second["created"] is True
     await db.close()
 
 

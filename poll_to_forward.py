@@ -27,9 +27,12 @@ STATUS_SKIPPED_LOW_POPULARITY_INVENTORY = "skipped_low_popularity_inventory"
 STATUS_SKIPPED_TOPIC_UNDERFILL = "skipped_topic_underfill"
 STATUS_SKIPPED_NO_VOTES = "skipped_no_votes"
 STATUS_SKIPPED_NO_CANDIDATE = "skipped_no_candidate"
+STATUS_SKIPPED_FEEDBACK_OTHER = "skipped_feedback_other"
 STATUS_FORWARDED = "forwarded"
 STATUS_FAILED = "failed"
 EVENT_LINK_PLACEHOLDER = "{{EVENT_LINK}}"
+FEEDBACK_OPTION_KEY = "feedback_other"
+FEEDBACK_OPTION_TEXT = "Другое — в этот раз темы не попали"
 FREE_TOPIC_MIN_FREE_EVENTS = 2
 FREE_TOPIC_MIN_OPTIONS = 6
 TOPIC_PLAN_DEFAULT_MAX_OPTIONS = 8
@@ -162,6 +165,17 @@ def _poll_question_text(run_key: str | None = None) -> str:
         if previous_index == index:
             index = (index + 1) % len(variants)
     return variants[index]
+
+
+def _poll_question_with_feedback_hint(text: str) -> str:
+    base = re.sub(r"\s+", " ", str(text or "").strip())
+    hint = "Если темы не те — выбирайте «Другое»."
+    if not base:
+        return hint
+    if "другое" in base.casefold():
+        return base
+    combined = f"{base} {hint}"
+    return combined[:300].rstrip()
 
 
 def _previous_question_run_key(raw_key: str) -> str | None:
@@ -730,6 +744,27 @@ def _option_mentions_free(*values: str | None) -> bool:
     return any(marker in text for marker in ("бесплат", "вход свобод", "free", "0 руб"))
 
 
+def _is_feedback_option(option: PollOptionPlan | None) -> bool:
+    return bool(option and option.key == FEEDBACK_OPTION_KEY)
+
+
+def _with_feedback_option(options: Sequence[PollOptionPlan]) -> list[PollOptionPlan]:
+    if not _env_enabled("POLL_TO_FORWARD_FEEDBACK_OPTION_ENABLED", True):
+        return list(options)
+    out = [option for option in options if not _is_feedback_option(option)]
+    if len(out) >= TELEGRAM_POLL_MAX_OPTIONS:
+        out = out[: TELEGRAM_POLL_MAX_OPTIONS - 1]
+    out.append(
+        PollOptionPlan(
+            key=FEEDBACK_OPTION_KEY,
+            text=FEEDBACK_OPTION_TEXT,
+            candidate_event_ids=(),
+            rationale="Feedback option: categories did not match audience intent.",
+        )
+    )
+    return out
+
+
 async def _call_llm_topic_planner(
     events: Sequence[CandidateEvent],
     *,
@@ -845,6 +880,9 @@ def _filter_options_by_popularity_inventory(
     min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
     out: list[PollOptionPlan] = []
     for option in options:
+        if _is_feedback_option(option):
+            out.append(option)
+            continue
         ids = tuple(
             event_id
             for event_id in option.candidate_event_ids
@@ -879,9 +917,10 @@ async def build_poll_plan(
     effective_min_options = _effective_min_options(events, min_options)
     _question, llm_options = await _call_llm_topic_planner(events, min_options=effective_min_options)
     llm_options = _filter_options_by_popularity_inventory(llm_options, events)
-    question = _poll_question_text(run_key)
-    if len(llm_options) >= effective_min_options:
-        return question, llm_options, "llm"
+    question = _poll_question_with_feedback_hint(_poll_question_text(run_key))
+    content_options = [option for option in llm_options if not _is_feedback_option(option)]
+    if len(content_options) >= effective_min_options:
+        return question, _with_feedback_option(content_options), "llm"
     return (
         question,
         [],
@@ -929,7 +968,7 @@ async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, A
     ]
     data = dict(zip(keys, row))
     status = str(data.get("status") or "")
-    if status == STATUS_SKIPPED_NO_VOTES:
+    if status in {STATUS_SKIPPED_NO_VOTES, STATUS_SKIPPED_FEEDBACK_OTHER}:
         return None
     if status == STATUS_FORWARDED and data.get("forwarded_message_id"):
         return None
@@ -1167,11 +1206,14 @@ def _decode_options(value: Any) -> list[PollOptionPlan]:
             except Exception:
                 continue
         text = str(item.get("text") or "").strip()
-        if not text or not ids:
+        if not text:
+            continue
+        key = str(item.get("key") or f"opt{idx+1}")
+        if not ids and key != FEEDBACK_OPTION_KEY:
             continue
         out.append(
             PollOptionPlan(
-                key=str(item.get("key") or f"opt{idx+1}"),
+                key=key,
                 text=text,
                 candidate_event_ids=tuple(dict.fromkeys(ids)),
                 rationale=str(item.get("rationale") or ""),
@@ -1219,6 +1261,13 @@ def _popularity_reason(event: CandidateEvent) -> str:
     if source == "source_vk":
         return "у исходного анонса уже есть отклик выше обычного"
     return "по популярности этот анонс выглядит сильнее внутри выбранной темы"
+
+
+def _feedback_other_reply_text() -> str:
+    return (
+        "Спасибо, понял: в этот раз темы не попали.\n\n"
+        "Тогда без рекомендации по этому голосованию — в следующий опрос соберу варианты иначе."
+    )
 
 
 def _weighted_pick_from_top3(
@@ -1593,6 +1642,39 @@ async def resolve_due_debug_polls(
                 resolved += 1
                 continue
             target_date = _parse_date(run.get("target_event_date")) or now_value.astimezone(_local_tz()).date()
+            feedback_won = len(tied_options) == 1 and _is_feedback_option(tied_options[0])
+            if feedback_won:
+                target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
+                reply = await bot.send_message(
+                    chat_id=target_chat,
+                    text=_feedback_other_reply_text(),
+                    reply_to_message_id=int(run["poll_message_id"]),
+                    disable_web_page_preview=True,
+                )
+                await _update_run(
+                    db,
+                    run_id,
+                    status=STATUS_SKIPPED_FEEDBACK_OTHER,
+                    result={
+                        **snapshot,
+                        "selection_trace": {
+                            "reason": "feedback_other_won",
+                            "feedback_option": tied_options[0].text,
+                        },
+                    },
+                    winner_option_id=tied_options[0].key,
+                    winner_text=tied_options[0].text,
+                    reply_message_id=int(getattr(reply, "message_id", 0) or 0) or None,
+                    error={"reason": "feedback_other_won"},
+                )
+                logger.info(
+                    "poll_to_forward.debug_resolve skipped feedback_other run_id=%s run_key=%s total_votes=%s",
+                    run_id,
+                    run.get("run_key"),
+                    total_votes,
+                )
+                resolved += 1
+                continue
             events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
             events, popularity_diag = await _apply_popularity_preflight(
                 db,

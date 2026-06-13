@@ -11,6 +11,12 @@
   `comments` and `reposts`; poll options require at least two distinct popular
   candidate groups, and the final recommendation stays inside the winning
   option's deduplicated TOP-3.
+- **Changed: Poll to Repost category-feedback option**: poll plans now always
+  add a `Другое — в этот раз темы не попали` feedback option and the question
+  explains that subscribers can use it when the prepared themes are wrong. If
+  that option wins outright, the debug run closes as `skipped_feedback_other`
+  with a short reply and no unrelated forward, while the next debug slot remains
+  unblocked.
 - **Changed: Poll to Repost title-link phrasing**: LLM repost comments now must
   embed the event link into a natural phrase with a generic event word/type
   before the title, and renderer rejects `: {{EVENT_LINK}}` label patterns such
