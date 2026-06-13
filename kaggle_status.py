@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -123,6 +124,25 @@ def create_kaggle_status_dataset(
             except Exception:
                 logger.exception("kaggle_status: status dataset version failed dataset=%s", slug)
                 raise
+    deadline = time.monotonic() + 180
+    last_error: str | None = None
+    while time.monotonic() < deadline:
+        try:
+            status = str(client.dataset_status(slug))
+            files = client.dataset_list_files(slug, page_size=50)
+            names = {
+                str(item.get("name") if isinstance(item, dict) else getattr(item, "name", item))
+                for item in (files or [])
+            }
+            if status.casefold() == "ready" and KAGGLE_RUN_FILENAME in names and KAGGLE_STATUS_CLIENT_FILENAME in names:
+                logger.info("kaggle_status: dataset ready dataset=%s files=%s", slug, sorted(names))
+                break
+            last_error = f"status={status} files={sorted(names)}"
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(5)
+    else:
+        raise RuntimeError(f"kaggle_status dataset not ready dataset={slug}: {last_error}")
     return slug
 
 

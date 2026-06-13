@@ -37,10 +37,38 @@ HAS_PLAYWRIGHT = ensure_playwright()
 if HAS_PLAYWRIGHT:
     from playwright.sync_api import sync_playwright
 
-try:
-    from kaggle_status_client import load_status_client
-except Exception:
-    load_status_client = None
+def _load_status_loader():
+    try:
+        from kaggle_status_client import load_status_client as loader
+        return loader
+    except Exception as exc:
+        print(f"[kaggle_status] import failed: {exc}", flush=True)
+    import importlib.util
+    from pathlib import Path
+    for root in [Path(__file__).resolve().parent, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("events_bot_kaggle_status_client", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    print(f"[kaggle_status] loaded helper from {candidate}", flush=True)
+                    return module.load_status_client
+            except Exception as path_exc:
+                print(f"[kaggle_status] helper load failed from {candidate}: {path_exc}", flush=True)
+    return None
+
+
+load_status_client = _load_status_loader()
 
 
 # Configure logging
