@@ -24,11 +24,16 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from kaggle_registry import register_job, remove_job, list_jobs
+from kaggle_status import (
+    KAGGLE_RUN_FILENAME,
+    create_kaggle_run_config,
+    write_kaggle_status_files,
+)
 from models import Event, MonthPage, User
 from ops_run import finish_ops_run, start_ops_run
 from source_parsing.telegram.split_secrets import encrypt_secret
 from sqlmodel import select
-from video_announce.kaggle_client import KaggleClient, KERNELS_ROOT_PATH
+from video_announce.kaggle_client import KaggleClient, KERNELS_ROOT_PATH, await_dataset_ready
 
 logger = logging.getLogger(__name__)
 
@@ -989,7 +994,12 @@ def _require_kaggle_username() -> str:
     return username
 
 
-async def _create_preview3d_dataset(payload: dict, session_id: int) -> str:
+async def _create_preview3d_dataset(
+    payload: dict,
+    session_id: int,
+    *,
+    kaggle_run_config: dict | None = None,
+) -> str:
     username = _require_kaggle_username()
     dataset_slug = f"{KAGGLE_DATASET_SLUG_PREFIX}-{session_id}"
     dataset_id = f"{username}/{dataset_slug}"
@@ -1008,6 +1018,7 @@ async def _create_preview3d_dataset(payload: dict, session_id: int) -> str:
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        write_kaggle_status_files(tmp_path, kaggle_run_config)
         client = KaggleClient()
         try:
             await asyncio.to_thread(client.create_dataset, tmp_path)
@@ -1180,17 +1191,40 @@ async def _run_kaggle_render(
             await _set_session_status(
                 session_id, "dataset", bot=bot, chat_id=chat_id, message_id=message_id
             )
-            dataset_id = await _create_preview3d_dataset(payload, session_id)
+            client = KaggleClient()
+            payload_dataset_id = f"{_require_kaggle_username()}/{KAGGLE_DATASET_SLUG_PREFIX}-{session_id}"
+            kaggle_run_config = await create_kaggle_run_config(
+                db,
+                run_id=f"preview3d:{run_id or session_id}",
+                session_id=session_id,
+                kind="preview3d",
+                notebook=KAGGLE_KERNEL_FOLDER,
+                kernel_ref="local:Preview3D",
+                dataset_ref=payload_dataset_id,
+            )
+            dataset_id = await _create_preview3d_dataset(
+                payload,
+                session_id,
+                kaggle_run_config=kaggle_run_config,
+            )
             session["kaggle_dataset"] = dataset_id
             dataset_slugs = [dataset_id]
             await _set_session_status(
                 session_id, "dataset_wait", bot=bot, chat_id=chat_id, message_id=message_id
             )
-            await asyncio.sleep(KAGGLE_DATASET_WAIT_SECONDS)
+            expected_payload_files = ["payload.json"]
+            if kaggle_run_config:
+                expected_payload_files.append(KAGGLE_RUN_FILENAME)
+            await await_dataset_ready(
+                client,
+                dataset_id,
+                timeout_seconds=max(60, KAGGLE_DATASET_WAIT_SECONDS * 4),
+                poll_interval_seconds=5,
+                expected_files=expected_payload_files,
+            )
             await _set_session_status(
                 session_id, "pushing", bot=bot, chat_id=chat_id, message_id=message_id
             )
-            client = KaggleClient()
             runtime_cipher, runtime_key = await _prepare_preview3d_runtime_datasets(
                 client=client,
                 run_id=str(run_id or session_id),

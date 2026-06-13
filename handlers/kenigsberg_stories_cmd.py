@@ -17,6 +17,11 @@ from aiogram.filters import Command, CommandObject
 from sqlalchemy import select
 
 from kaggle_registry import register_job
+from kaggle_status import (
+    KAGGLE_RUN_FILENAME,
+    create_kaggle_run_config,
+    write_kaggle_status_files,
+)
 from kenigsberg_stories.state import (
     KENIGSBERG_PROFILE_KEY,
     apply_generated_timeline_bans,
@@ -74,6 +79,13 @@ KAGGLE_BIND_WAIT_SECONDS = max(
     10,
     int(os.getenv("KENIGSBERG_KAGGLE_BIND_WAIT_SECONDS", "120")),
 )
+
+
+def _telegram_session_resource_key(auth_scope: str | None) -> str:
+    raw = str(auth_scope or "unknown").strip().casefold() or "unknown"
+    safe = re.sub(r"[^a-z0-9_.:-]+", "-", raw).strip("-") or "unknown"
+    return f"telegram_session:{safe}"
+
 
 class StoryTextPreparationError(RuntimeError):
     pass
@@ -812,12 +824,13 @@ async def _create_kenigsberg_dataset(
     session_id: int,
     payload: dict,
     story_config: dict | None = None,
+    kaggle_run_config: dict | None = None,
+    dataset_id: str | None = None,
 ) -> str:
     username = (os.getenv("KAGGLE_USERNAME") or "").strip()
     if not username:
         raise RuntimeError("KAGGLE_USERNAME not set")
-    run_suffix = f"{session_id}-{int(time.time())}"
-    dataset_id = f"{username}/kenigsberg-session-{run_suffix}"
+    dataset_id = dataset_id or f"{username}/kenigsberg-session-{session_id}-{int(time.time())}"
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         (tmp_path / "dataset-metadata.json").write_text(
@@ -837,6 +850,7 @@ async def _create_kenigsberg_dataset(
             encoding="utf-8",
         )
         _copy_required_assets(tmp_path)
+        write_kaggle_status_files(tmp_path, kaggle_run_config)
         if story_config is not None:
             (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
                 json.dumps(story_config, ensure_ascii=False, indent=2),
@@ -1137,13 +1151,31 @@ async def _launch_kaggle_generation(
     client = KaggleClient()
     try:
         obj = await _mark_session_rendering_with_retry(db, obj.id) or obj
+        kaggle_username = (os.getenv("KAGGLE_USERNAME") or "").strip()
+        if not kaggle_username:
+            raise RuntimeError("KAGGLE_USERNAME not set")
+        run_dataset_ref = f"{kaggle_username}/kenigsberg-session-{obj.id}-{int(time.time())}"
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"kenigsberg:{obj.id}",
+            session_id=obj.id,
+            kind=KENIGSBERG_PROFILE_KEY,
+            notebook="KoenigsbergStories",
+            kernel_ref=obj.kaggle_kernel_ref,
+            dataset_ref=run_dataset_ref,
+            resource_leases=[_telegram_session_resource_key(story_auth_scope)],
+        )
         dataset_id = await _create_kenigsberg_dataset(
             db,
             session_id=obj.id,
             payload=payload,
             story_config=story_config,
+            kaggle_run_config=kaggle_run_config,
+            dataset_id=run_dataset_ref,
         )
         expected_files = ["payload.json", "scripts/render_kenigsberg_story.py"]
+        if kaggle_run_config:
+            expected_files.append(KAGGLE_RUN_FILENAME)
         if story_config is not None:
             expected_files.extend(
                 [

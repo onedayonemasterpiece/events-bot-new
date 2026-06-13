@@ -1,6 +1,9 @@
 import json
 
 from video_announce.kaggle_client import (
+    KERNELS_ROOT_PATH,
+    _copy_kernel_tree,
+    _copy_status_client_to_kernel,
     _instrument_notebook_kernel,
     _instrument_script_kernel,
 )
@@ -75,3 +78,48 @@ def test_script_status_instrumentation_skips_status_aware_script(tmp_path):
     _instrument_script_kernel(tmp_path, meta)
 
     assert not (tmp_path / "_events_bot_original_kernel.py").exists()
+
+
+def test_real_notebook_kernels_are_status_instrumentable(tmp_path):
+    for folder_name in (
+        "CherryFlash",
+        "CrumpleVideo",
+        "VideoAfisha",
+        "KoenigsbergStories",
+        "Preview3D",
+        "ParsePhilharmonia",
+        "ParseTheatres",
+    ):
+        src = KERNELS_ROOT_PATH / folder_name
+        dst = tmp_path / folder_name
+        _copy_kernel_tree(src, dst)
+        _copy_status_client_to_kernel(dst)
+        meta = json.loads((dst / "kernel-metadata.json").read_text(encoding="utf-8"))
+
+        _instrument_notebook_kernel(dst, meta)
+
+        notebook = json.loads((dst / meta["code_file"]).read_text(encoding="utf-8"))
+        tagged = [
+            cell
+            for cell in notebook["cells"]
+            if cell.get("metadata", {}).get("events_bot_kaggle_status")
+        ]
+        assert (dst / "kaggle_status_client.py").exists(), folder_name
+        assert len(tagged) >= 3, folder_name
+        assert "kernel_started" in "".join(tagged[0]["source"])
+        assert "report_written" in "".join(tagged[-1]["source"])
+
+
+def test_real_script_kernels_are_status_aware():
+    for relative_path in (
+        "TelegramMonitor/telegram_monitor.py",
+        "GuideExcursionsMonitor/guide_excursions_monitor.py",
+        "ParseQtickets/parse_qtickets.py",
+        "ParsePyramida/parse_pyramida.py",
+        "ParseDomIskusstv/parse_dom_iskusstv.py",
+        "UniversalFestivalParser/universal_festival_parser.py",
+    ):
+        source = (KERNELS_ROOT_PATH / relative_path).read_text(encoding="utf-8")
+        assert "load_status_client" in source, relative_path
+        assert "kernel_started" in source, relative_path
+        assert "report_written" in source, relative_path
