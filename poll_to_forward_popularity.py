@@ -115,6 +115,10 @@ def _vk_group_id() -> int:
         return 231920894
 
 
+def _kldevents_baseline_min_sample() -> int:
+    return max(10, _env_int("POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE", 30))
+
+
 def _vk_token() -> str:
     for name in ("VK_USER_TOKEN", "VK_ACCESS_TOKEN4", "VK_SERVICE_TOKEN", "VK_TOKEN"):
         token = (os.getenv(name) or "").strip()
@@ -562,7 +566,7 @@ async def _kldevents_signals(
     wall_items = await _vk_scan_wall(group_id, limit=wall_limit)
     wall_index = [(item, _normalize_text(str(item.get("text") or ""))) for item in wall_items]
     medians, baseline_sample = await _load_vk_baseline(db, group_id=group_id, now_ts=now_ts)
-    min_sample = max(2, _env_int("POST_POPULARITY_MIN_SAMPLE", 2))
+    min_sample = _kldevents_baseline_min_sample()
     if baseline_sample < min_sample:
         vals: dict[str, list[int]] = {key: [] for key in METRIC_KEYS}
         for item in wall_items:
@@ -572,8 +576,10 @@ async def _kldevents_signals(
         medians = {key: _median(values) for key, values in vals.items()}
         baseline_sample = min((len(values) for values in vals.values() if values), default=0)
         baseline_source = "wall_scan_bootstrap"
+        baseline_confidence = "low"
     else:
         baseline_source = "vk_post_metric"
+        baseline_confidence = "normal"
 
     out: dict[int, list[PopularitySignal]] = {}
     direct_found = 0
@@ -683,7 +689,9 @@ async def _kldevents_signals(
         "changed_id_count": changed_id,
         "unmatched": unmatched,
         "baseline_sample": baseline_sample,
+        "baseline_min_sample": min_sample,
         "baseline_source": baseline_source,
+        "baseline_confidence": baseline_confidence,
         "collapsed_live_posts": sum(1 for count in collapsed_posts.values() if count > 1),
     }
 

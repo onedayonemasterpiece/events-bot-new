@@ -184,6 +184,59 @@ async def test_kldevents_duplicate_events_share_live_post_group(tmp_path, monkey
 
 
 @pytest.mark.asyncio
+async def test_kldevents_tiny_db_baseline_falls_back_to_wall_scan(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    event = _event_model(1, title="Тихий концерт", post_id=501, stored_vk_id=1001)
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+    for post_id in range(1, 5):
+        await upsert_vk_post_metric(
+            db,
+            group_id=231920894,
+            post_id=post_id,
+            age_day=0,
+            source_url=f"https://vk.com/wall-231920894_{post_id}",
+            post_ts=int(NOW.timestamp()) - post_id,
+            views=30,
+            likes=1,
+            comments=0,
+            reposts=0,
+            collected_ts=int(NOW.timestamp()),
+        )
+
+    wall = [_vk_item(2001, title="Тихий концерт", location="Площадка 1", views=33)]
+    wall.extend(
+        _vk_item(3000 + idx, title=f"Фоновый анонс {idx}", location="Другая площадка", views=500)
+        for idx in range(40)
+    )
+
+    async def fake_get_by_ids(_group_id, _post_ids):
+        return {}
+
+    async def fake_scan_wall(_group_id, *, limit):
+        return wall
+
+    monkeypatch.setenv("POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE", "30")
+    monkeypatch.setattr(pfp, "_vk_get_by_ids", fake_get_by_ids)
+    monkeypatch.setattr(pfp, "_vk_scan_wall", fake_scan_wall)
+
+    result = await pfp.build_event_popularity(
+        db,
+        [_candidate(event)],
+        target_date=TARGET_DATE,
+        now_utc=NOW,
+    )
+
+    assert result.diagnostics["kldevents_baseline_source"] == "wall_scan_bootstrap"
+    assert result.diagnostics["kldevents_baseline_confidence"] == "low"
+    assert result.diagnostics["kldevents_baseline_sample"] >= 30
+    assert 1 not in result.by_event_id
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_vk_metric_storage_keeps_comments_and_reposts(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

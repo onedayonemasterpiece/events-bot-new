@@ -363,8 +363,13 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         "искать",
         "по настроению",
         "куда тянет",
+        "что завтра",
+        "завтра подсветить",
+        "завтра показать",
         "что завтра порекомендовать",
         "завтра сделать рекомендацию",
+        "завтра будет рекомендация",
+        "завтра будет один",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()
@@ -393,7 +398,7 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         )
         assert any(
             marker in lowered
-            for marker in ("рекоменд", "посовет", "подбер", "покажу", "выбер", "выбира", "подсвет")
+            for marker in ("рекоменд", "посовет", "подбер", "покажу", "выбер", "выбира")
         )
 
 

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Poll to Repost weak kldevents popularity baseline and question copy**:
+  `kldevents` popularity now requires a dedicated resolved-post baseline sample
+  (`POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE`, default `30`) before using
+  stored VK metrics; smaller samples fall back to the wall-scan bootstrap and
+  are marked low-confidence in diagnostics. Debug resolves now log a compact
+  `poll_to_forward.selection_trace`, and the poll question rotation no longer
+  asks "what to show/highlight tomorrow" when the recommendation is selected
+  and published this evening.
 - **Fixed: Telegram event calendar buttons with private asset links**:
   `@kldevents` event posts and source-post keyboards now avoid private
   `https://t.me/c/...` calendar asset links for public CTAs, falling back to

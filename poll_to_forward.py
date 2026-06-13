@@ -44,14 +44,14 @@ DEFAULT_POLL_QUESTION_VARIANTS = (
     DEFAULT_POLL_QUESTION_TEXT,
     "Давайте выберем тему для завтрашней рекомендации. Вечером я возьму один анонс из варианта, за который будет больше голосов.",
     "Что взять для рекомендации на завтра? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.",
-    "Голосуем за тему завтрашнего события. Вечером покажу один анонс из той темы, которую выберет большинство.",
+    "Голосуем за тему завтрашней рекомендации. Вечером покажу один анонс из той темы, которую выберет большинство.",
     "Давайте вместе решим, из какой темы сделать рекомендацию на завтра. Я вечером выберу один анонс и перешлю его сюда.",
     "Какую тематику взять на завтра? Вы голосуете, я вечером выбираю один анонс внутри победившего варианта.",
     "Помогите выбрать направление для завтрашней рекомендации: выставки, прогулки, музыка, семья или что-то ещё. Вечером покажу один анонс.",
     "Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.",
     "Давайте так: вы голосуете за тематику на завтра, а я вечером выберу из неё один анонс и покажу в канале.",
     "Из какой темы завтра хочется рекомендацию? Голосуйте, а вечером я выберу один конкретный анонс из победившего варианта.",
-    "Что завтра подсветить в канале? Выбирайте тематику, а вечером будет один конкретный анонс по голосам.",
+    "Голосуем за тему завтрашней рекомендации. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.",
 )
 PROD_MIN_VOTES_BASE = 10
 PROD_MIN_VOTES_START_DATE = date(2026, 6, 12)
@@ -1895,6 +1895,30 @@ async def resolve_due_debug_polls(
                 chosen.tg_event_post_id,
                 getattr(forwarded, "message_id", None),
                 llm_reason,
+            )
+            best_signal = ((chosen.popularity_trace or {}).get("best_signal") or {}) if chosen else {}
+            logger.info(
+                "poll_to_forward.selection_trace run_id=%s event_id=%s winner_option=%s popularity=%s",
+                run_id,
+                chosen.id,
+                winner_option.key,
+                json.dumps(
+                    {
+                        "score": (chosen.popularity_trace or {}).get("score"),
+                        "group_key": (chosen.popularity_trace or {}).get("group_key"),
+                        "source": best_signal.get("source"),
+                        "url": best_signal.get("url"),
+                        "weight": best_signal.get("weight"),
+                        "above": best_signal.get("above"),
+                        "metrics": best_signal.get("metrics"),
+                        "medians": best_signal.get("medians"),
+                        "method": best_signal.get("method"),
+                        "confidence": best_signal.get("confidence"),
+                        "reason": llm_reason,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
             )
             resolved += 1
         except Exception as exc:

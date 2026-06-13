@@ -103,6 +103,7 @@ participation frames by slot, for example:
 - `Что взять для рекомендации на завтра? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.`
 - `Давайте вместе решим, из какой темы сделать рекомендацию на завтра. Я вечером выберу один анонс и перешлю его сюда.`
 - `Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.`
+- `Голосуем за тему завтрашней рекомендации. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. The default rotation
@@ -114,7 +115,9 @@ events already stored in the database. Avoid pseudo-personal mood wording such
 as "по вашему настроению", neural clichés such as "завтрашний план звучит",
 and generic marketing phrases. Do not attach `завтра` to the recommendation
 action itself (`что завтра порекомендовать`, `завтра сделать рекомендацию`):
-the recommendation is published today evening and points to tomorrow.
+the recommendation is published today evening and points to tomorrow. Also
+avoid "what to show/highlight tomorrow" frames: the audience chooses the theme
+now, and the channel publishes the resulting recommendation this evening.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
@@ -316,9 +319,14 @@ The `vk_post_metric` snapshots store `views`, `likes`, `comments`, and
 `reposts`. A live `kldevents` post above its recent median contributes with
 weight `4x`; existing `/popular_posts` source-wall signals remain as a `1x`
 fallback. An event qualifies for Poll to Repost if either signal is above its
-own median. The kldevents median should come from recent resolved event posts;
-during bootstrap the current wall scan may provide a low-confidence baseline,
-which is recorded in diagnostics.
+own median. The kldevents median should come from recent resolved event posts,
+but only after a dedicated sample threshold
+(`POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE`, default `30`) is reached. If
+the stored resolved-post metric sample is smaller, the current published wall
+scan becomes the low-confidence bootstrap baseline instead of letting a tiny DB
+sample such as 4 posts make weak engagement look strong. Diagnostics record
+`kldevents_baseline_source`, `kldevents_baseline_sample`,
+`kldevents_baseline_min_sample`, and `kldevents_baseline_confidence`.
 
 Poll options are built from popularity-qualified events only when a popularity
 surface is available. Each option must contain at least two distinct candidate
@@ -329,6 +337,11 @@ inside the winning poll option and uses a weighted pick from that option's
 deduplicated TOP-3 candidates. The pick seed includes the concrete run/poll, so
 repeated debug cycles with the same category and candidate pool can rotate
 within the TOP-3 instead of always selecting the same event.
+
+For audits, the full selection trace is stored in `poll_repost_run.result_json`.
+Successful debug resolves also write a compact `poll_to_forward.selection_trace`
+runtime log line with the chosen popularity source, score, metrics, medians,
+match method, and reason.
 
 The poll always adds a lightweight feedback option
 `Другое — в этот раз темы не попали`
