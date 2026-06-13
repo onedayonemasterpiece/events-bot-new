@@ -100,8 +100,8 @@ participation frames by slot, for example:
 
 - `Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.`
 - `Давайте выберем тему для завтрашней рекомендации. Вечером я возьму один анонс из варианта, за который будет больше голосов.`
-- `Что завтра порекомендовать в канале? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.`
-- `Давайте вместе решим, из какой темы завтра сделать рекомендацию. Я вечером выберу один анонс и перешлю его сюда.`
+- `Что взять для рекомендации на завтра? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.`
+- `Давайте вместе решим, из какой темы сделать рекомендацию на завтра. Я вечером выберу один анонс и перешлю его сюда.`
 - `Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
@@ -112,7 +112,9 @@ The LLM still owns the meaningful option set.
 Avoid false mechanics such as "найду/поищу" when the feature operates on
 events already stored in the database. Avoid pseudo-personal mood wording such
 as "по вашему настроению", neural clichés such as "завтрашний план звучит",
-and generic marketing phrases.
+and generic marketing phrases. Do not attach `завтра` to the recommendation
+action itself (`что завтра порекомендовать`, `завтра сделать рекомендацию`):
+the recommendation is published today evening and points to tomorrow.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
@@ -222,6 +224,11 @@ The composer may only use facts present in the event context or LLM selection
 reason. It must not infer an open-air/street/park format from the word
 "festival"; mixed-format festivals are common, and unsupported claims such as
 "под открытым небом" are rejected by code and replaced with safe fallback copy.
+It also must preserve poll causality: when there is one winning option, the
+reply should treat it as one chosen direction. Do not split a mixed option into
+several supposed audience requests or write that the author "combined these
+requests"; that language is allowed only for a real tie between separate
+options.
 
 The intro copy should make voters feel that the recommendation is a consequence
 of their choice. Avoid generic promo phrasing and avoid exposing the technical

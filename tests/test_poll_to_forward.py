@@ -175,6 +175,27 @@ def test_repost_intro_rejects_on_this_placeholder_pattern():
     assert "Беру в рекомендацию анонс" in text
 
 
+def test_repost_intro_rejects_fake_request_merging_for_single_winner():
+    text = pf._repost_intro_text(
+        "Послушать музыку или узнать новое",
+        "концерт подходит под выбранный вариант",
+        event_title='Литературно-музыкальная программа «Россия в сердце, песня в душе»',
+        telegraph_url="https://telegra.ph/music",
+        tied_texts=["Послушать музыку или узнать новое"],
+        reply_template=(
+            "Спасибо всем, кто проголосовал! Большинство из вас захотело и послушать музыку, "
+            "и узнать что-то новое, поэтому я решил объединить эти запросы.\n\n"
+            "В качестве подходящего варианта выбрал концерт {{EVENT_LINK}}.\n\n"
+            "Ставьте 👍, если вам по душе такой досуг, или 👎, если не зашло.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "объединить эти запросы" not in text
+    assert "Большинство из вас захотело и послушать музыку" not in text
+    assert "Спасибо за голоса — берём тему" in text
+
+
 class DummyPollBot:
     def __init__(self):
         self.sent_polls = []
@@ -323,6 +344,8 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         "искать",
         "по настроению",
         "куда тянет",
+        "что завтра порекомендовать",
+        "завтра сделать рекомендацию",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()

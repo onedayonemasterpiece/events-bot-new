@@ -103,6 +103,9 @@ unsupported open-air claim and used awkward template-like phrasing.
   forwarded result.
 - A regression that stores debug `resolve_after` on a whole-minute boundary so
   the half-hour scheduler tick does not miss a due poll because of milliseconds.
+- A regression that rejects causality-breaking repost replies: for a single
+  winning option, the copy must not say the author combined multiple audience
+  requests or imply a real tie.
 - Production SQL evidence for the original bad run or equivalent smoke.
 - Post-deploy `/healthz` and release SHA evidence.
 
@@ -122,11 +125,18 @@ unsupported open-air claim and used awkward template-like phrasing.
     `options=0`, `strategy='llm_underfilled'` for a five-option LLM plan
   - title-link phrasing runtime smoke inside production image:
     `bad_label_rejected=True`, `good_phrase_kept=True`
+  - debug lifecycle hotfix:
+    `/tmp/events-bot-poll-test-venv/bin/python -m pytest tests/test_poll_to_forward.py tests/test_tg_event_publish.py -q`
+    (`68 passed`)
+  - causality-copy hotfix:
+    `/tmp/events-bot-poll-test-venv/bin/python -m pytest tests/test_poll_to_forward.py tests/test_tg_event_publish.py -q`
+    (`69 passed`)
 - production SQL evidence:
   `debug:2026-06-13T11`, target `2026-06-14`, event `5760`,
   `date=2026-06-12`, `end_date=2026-06-15`, `tg_event_post_id=36`.
 - confirmation that the fix is reachable from `origin/main`: pushed
-  `441c7c8465069e15b6a6167cdc8aaf334e610643` to `origin/main`.
+  `441c7c8465069e15b6a6167cdc8aaf334e610643` and follow-up hotfix
+  `8bbbc125826f8b7632a78324233d9f02d3d4cc70` to `origin/main`.
 
 ## Immediate Mitigation
 
@@ -153,6 +163,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - Tightened the debug lifecycle so a new public debug poll follows the previous
   public result instead of continuing after a silent no-candidate/failed
   resolution, and rounded `resolve_after` to whole minutes.
+- Tightened poll/repost causality copy: questions must say "recommendation for
+  tomorrow" rather than "recommend tomorrow", and single-winner replies cannot
+  invent multiple audience requests from one mixed option.
 - Updated `@kldevents` event-post date rendering to show `date` + `end_date`
   ranges in the infoblock and calendar button.
 
@@ -175,6 +188,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - follow-up deploy for title-link phrasing: SHA
   `0a1fae411937472ed503494a7f05b10fb40f34b1`, Fly release `v1381`, image
   `registry.fly.io/events-bot-new-wngqia:deployment-01KV0AKKNVTZ1TP2QG0ARVGRZE`
+- follow-up deploy for debug lifecycle gating: SHA
+  `8bbbc125826f8b7632a78324233d9f02d3d4cc70`, Fly release `v1384`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV0Z773BRQP7RP3VWAB32NZ0`
 - regression checks:
   - `tests/test_poll_to_forward.py`
   - `tests/test_tg_event_publish.py`
@@ -183,9 +199,17 @@ unsupported open-air claim and used awkward template-like phrasing.
     and multi-day date label
   - production runtime smoke for the free-axis minimum-six guard
   - production runtime smoke for rejecting `: {{EVENT_LINK}}` label phrasing
+  - production SQL/log investigation for `debug:2026-06-13T14` and
+    `debug:2026-06-13T18`
+  - production SQL/log evidence that pre-hotfix run `debug:2026-06-13T19`
+    with `resolve_after=2026-06-13T17:30:00.020270+00:00` resolved at
+    `2026-06-13T17:30:05Z`, proving the due-run grace works for old rows
 - post-deploy verification: Fly status machine `48e42d5b714228`, version
   `1379`, state `started`, `1 total, 1 passing`; `/healthz` returned
   `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
+  Follow-up lifecycle deploy status: same machine version `1384`, state
+  `started`, `1 total, 1 passing`; `/healthz` returned `ok=true`,
+  `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
 
 ## Prevention
 

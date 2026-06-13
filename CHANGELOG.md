@@ -165,6 +165,10 @@
   choice as the mechanism, avoiding meta phrasing like "which topic are we
   taking on tomorrow"; theme/type-event wording is allowed only when it stays
   attached to that evening recommendation promise.
+- **Fixed: Poll to Repost causality copy**: poll questions no longer imply the
+  recommendation action happens tomorrow, and repost comments reject
+  "combined these requests" explanations when there was a single winning poll
+  option rather than a real tie.
 - **Fixed: Poll to Repost debug lifecycle**: debug mode no longer publishes a
   new visible poll while the latest visible debug poll is still open or ended
   without a public forwarded result, and `resolve_after` is rounded to the
