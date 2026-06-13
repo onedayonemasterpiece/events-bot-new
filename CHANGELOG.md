@@ -7,6 +7,10 @@
   URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as
   `kraftmarket39 · @LANGEANNA` can opt into public CTA cards without changing
   the broader campaign resolver.
+- **Fixed: Poll to Repost event-date question framing**: default poll question
+  variants now explicitly ask subscribers to choose the theme of an event that
+  happens tomorrow or can be visited tomorrow, instead of framing the choice as
+  a category of "tomorrow's recommendation".
 - **Fixed: Poll to Repost weak kldevents popularity baseline and question copy**:
   `kldevents` popularity now requires a dedicated resolved-post baseline sample
   (`POLL_TO_FORWARD_KLDEVENTS_BASELINE_MIN_SAMPLE`, default `30`) before using

@@ -352,7 +352,10 @@ async def _seed_many_events(db: Database) -> None:
 
 def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
-    assert "Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе." in pf.DEFAULT_POLL_QUESTION_VARIANTS
+    assert (
+        "Сегодня вечером выберу один анонс события, на которое можно сходить завтра. "
+        "Давайте решим, какая тема вам ближе."
+    ) in pf.DEFAULT_POLL_QUESTION_VARIANTS
     banned = (
         "план звучит",
         "звучит лучше",
@@ -370,12 +373,17 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         "завтра сделать рекомендацию",
         "завтра будет рекомендация",
         "завтра будет один",
+        "завтрашней рекомендации",
+        "для завтрашней рекомендации",
+        "рекомендации на завтра",
+        "рекомендацию на завтра",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()
         assert not any(fragment in lowered for fragment in banned)
         assert "вечером" in lowered
         assert "завтра" in lowered
+        assert "событ" in lowered
         assert any(
             marker in lowered
             for marker in (
@@ -398,7 +406,7 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         )
         assert any(
             marker in lowered
-            for marker in ("рекоменд", "посовет", "подбер", "покажу", "выбер", "выбира")
+            for marker in ("анонс", "покажу", "выбер", "выбира", "возьму")
         )
 
 

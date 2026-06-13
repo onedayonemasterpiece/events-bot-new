@@ -92,18 +92,19 @@ returns a compact poll plan:
 - warnings when the topic set is weak or underfilled.
 
 The poll question itself is product copy, not a semantic topic decision. Its
-primary promise is: today the audience chooses the type/theme of tomorrow's
-event, and in the evening the channel author chooses one concrete announcement
-inside that theme. The copy should feel friendly and a little blogger-like, not
-like an algorithm or a marketing banner. Debug and production rotate several
-participation frames by slot, for example:
+primary promise is: today the audience chooses the type/theme of an event that
+happens tomorrow or can be visited tomorrow, and in the evening the channel
+author chooses one concrete announcement inside that theme. The copy should
+feel friendly and a little blogger-like, not like an algorithm or a marketing
+banner. Debug and production rotate several participation frames by slot, for
+example:
 
-- `Сегодня вечером подберу рекомендацию на завтра. Давайте выберем тип события вместе.`
-- `Давайте выберем тему для завтрашней рекомендации. Вечером я возьму один анонс из варианта, за который будет больше голосов.`
-- `Что взять для рекомендации на завтра? Вы выбираете тематику, а вечером я выберу один конкретный анонс из неё.`
-- `Давайте вместе решим, из какой темы сделать рекомендацию на завтра. Я вечером выберу один анонс и перешлю его сюда.`
-- `Что берём для завтрашней рекомендации? Вы выбираете тему, я вечером выбираю один анонс из неё.`
-- `Голосуем за тему завтрашней рекомендации. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.`
+- `Сегодня вечером выберу один анонс события, на которое можно сходить завтра. Давайте решим, какая тема вам ближе.`
+- `Выбираем тему события на завтра. Вечером я возьму один анонс из варианта, за который будет больше голосов.`
+- `Какая тема событий на завтра вам ближе: музыка, выставки, прогулки или что-то ещё? Вечером выберу один конкретный анонс.`
+- `Голосуем за тип события, которое состоится завтра. Вечером покажу один анонс из темы большинства.`
+- `Что берём из событий на завтра? Вы выбираете тему, я вечером выбираю один анонс из неё.`
+- `Голосуем за тему события на завтра. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. The default rotation
@@ -117,7 +118,10 @@ and generic marketing phrases. Do not attach `завтра` to the recommendatio
 action itself (`что завтра порекомендовать`, `завтра сделать рекомендацию`):
 the recommendation is published today evening and points to tomorrow. Also
 avoid "what to show/highlight tomorrow" frames: the audience chooses the theme
-now, and the channel publishes the resulting recommendation this evening.
+now, and the channel publishes the resulting recommendation this evening. The
+public question should not make subscribers choose a "category of tomorrow's
+recommendation"; it should explicitly say that the category is for tomorrow's
+event itself.
 
 Good options are audience jobs-to-be-done, not raw database categories. Examples:
 
