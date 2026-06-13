@@ -129,10 +129,30 @@ also surfaced through Poll to Repost forwarding of the same event.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `b5dc1f5798ae1530b2cc796b838fa9e6b1997930`
+  (`origin/main` contains it).
+- deploy path: manual `flyctl deploy --remote-only --detach` from clean
+  worktree `codex/poll-debug-window-20260612`; Fly image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV15Q9A7CC8QF137N1TNKQDP`,
+  machine `48e42d5b714228`, version `1388`.
 - regression checks:
+  - `python3 -m py_compile main.py main_part2.py tests/test_tg_event_publish.py tests/test_source_keyboard.py tests/test_ics_pipeline.py`
+  - `PYTHONDONTWRITEBYTECODE=1 /tmp/events-bot-poll-test-venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tg_event_publish.py tests/test_source_keyboard.py tests/test_ics_pipeline.py::test_tg_ics_post_stores_public_channel_url_when_asset_has_username` (`52 passed in 9.63s`; local pytest PTY was interrupted after emitting the success summary because the process kept the terminal open).
+  - Full `tests/test_ics_pipeline.py` was also sampled and exposed two older
+    non-hotfix failures now tracked as follow-up actions:
+    `test_ics_updates_on_change` and
+    `test_ics_coalesced_jobs_and_semaphore`.
 - post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`.
+  - Fly status reported machine `48e42d5b714228` started with `1 total, 1 passing`.
+  - Runtime file mirror was enabled and available at `/data/runtime_logs/events-bot.log`.
+  - Production repair updated event `5858` from
+    `ics_post_url=https://t.me/c/2807919036/6579` to
+    `https://t.me/kenigeventscalendar/6579` and edited `@kldevents/239`
+    reply markup successfully.
+  - Production runtime smoke for event `5858` selected
+    `button_url=https://t.me/kenigeventscalendar/6579` with button text
+    `📅 14 июня 19:30 · Добавить в календарь`.
 
 ## Prevention
 
