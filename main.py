@@ -19872,6 +19872,11 @@ async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Eve
     day = _event_single_day_iso(event)
     if not day:
         return [event]
+
+    async def _auto_serial_group() -> list[Event]:
+        group = await _same_day_serial_schedule_publish_group(db, event, day)
+        return group if len(group) > 1 else [event]
+
     raw_ids = getattr(event, "linked_event_ids", None) or []
     linked_ids: list[int] = []
     seen: set[int] = {int(event_id)}
@@ -19886,7 +19891,7 @@ async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Eve
             linked_ids.append(linked_id)
             seen.add(linked_id)
     if not linked_ids:
-        return [event]
+        return await _auto_serial_group()
     async with db.get_session() as session:
         rows = list(
             (
@@ -19912,7 +19917,7 @@ async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Eve
             continue
         group.append(candidate)
     if len(group) <= 1:
-        return [event]
+        return await _auto_serial_group()
     group.sort(
         key=lambda item: (
             _event_time_sort_key(getattr(item, "time", None)),
@@ -19920,6 +19925,116 @@ async def _same_day_linked_publish_group(db: Database, event: Event) -> list[Eve
         )
     )
     return group
+
+
+_SERIAL_FEEDING_TITLE_RE = re.compile(r"^\s*(?:[^\wа-яё]+)?кормлени[ея]\b", re.IGNORECASE)
+
+
+def _event_photo_signature_for_series(event: Event) -> tuple[str, ...]:
+    raw = getattr(event, "photo_urls", None) or []
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = []
+        raw = parsed if isinstance(parsed, list) else []
+    urls = [str(url or "").strip() for url in raw if str(url or "").strip()]
+    return tuple(sorted(dict.fromkeys(urls)))
+
+
+def _event_is_feeding_series_item(event: Event) -> bool:
+    return bool(_SERIAL_FEEDING_TITLE_RE.search(str(getattr(event, "title", "") or "")))
+
+
+def _series_location_key(event: Event) -> tuple[str, str, str]:
+    def norm(value: str | None) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip().casefold().replace("ё", "е"))
+
+    return (
+        norm(getattr(event, "location_name", None)),
+        norm(getattr(event, "location_address", None)),
+        norm(getattr(event, "city", None)),
+    )
+
+
+async def _same_day_serial_schedule_publish_group(db: Database, event: Event, day: str) -> list[Event]:
+    source_url = str(getattr(event, "source_post_url", "") or "").strip()
+    photo_signature = _event_photo_signature_for_series(event)
+    location_key = _series_location_key(event)
+    if not source_url or not photo_signature or not any(location_key) or not _event_is_feeding_series_item(event):
+        return []
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(Event)
+                    .where(Event.date == day)
+                    .where(Event.source_post_url == source_url)
+                    .where(Event.lifecycle_status == "active")
+                    .where(Event.silent.is_(False))
+                    .order_by(Event.time, Event.id)
+                )
+            ).scalars().all()
+        )
+    group: list[Event] = []
+    for candidate in rows:
+        if _event_has_ended_before_today(candidate):
+            continue
+        if not _event_is_feeding_series_item(candidate):
+            continue
+        if _series_location_key(candidate) != location_key:
+            continue
+        if _event_photo_signature_for_series(candidate) != photo_signature:
+            continue
+        group.append(candidate)
+    if len(group) < 3:
+        return []
+    return group
+
+
+def _series_schedule_item_label(event: Event) -> str:
+    title = re.sub(
+        r"^\s*(?:[^\wа-яё]+)?кормлени[ея]\s*",
+        "",
+        str(getattr(event, "title", "") or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    title = re.sub(r"\s+", " ", title).strip(" .:-")
+    return title or str(getattr(event, "title", "") or "").strip()
+
+
+def _apply_serial_schedule_publish_view(anchor: Event, group: Sequence[Event]) -> Event:
+    if len(group) < 3 or not all(_event_is_feeding_series_item(item) for item in group):
+        return anchor
+    location = str(getattr(anchor, "location_name", "") or "").strip()
+    title = f"Кормления животных: {location}" if location else "Кормления животных"
+    lines = ["Расписание кормлений:"]
+    for item in group:
+        time_value = _public_event_time(getattr(item, "time", None))
+        label = _series_schedule_item_label(item)
+        if time_value:
+            lines.append(f"• {time_value} — {label}")
+        elif label:
+            lines.append(f"• {label}")
+    body = "\n".join(lines)
+    anchor.title = title
+    anchor.short_description = body
+    anchor.description = body
+    anchor.source_text = body
+    anchor.event_type = "кормление"
+    combined_time = _format_same_day_times_for_publication(
+        [str(getattr(item, "time", "") or "") for item in group]
+    )
+    if combined_time:
+        anchor.time = combined_time
+        anchor.time_is_default = False
+    logging.info(
+        "serial schedule publish group anchor=%s ids=%s title=%s",
+        getattr(anchor, "id", None),
+        ",".join(str(getattr(item, "id", "")) for item in group),
+        title,
+    )
+    return anchor
 
 
 async def _prepare_same_day_linked_publish_event(
@@ -19930,12 +20045,15 @@ async def _prepare_same_day_linked_publish_event(
     if len(group) <= 1:
         return event, [event]
     anchor = group[0]
-    combined_time = _format_same_day_times_for_publication(
-        [str(getattr(item, "time", "") or "") for item in group]
-    )
-    if combined_time:
-        anchor.time = combined_time
-        anchor.time_is_default = False
+    if len(group) >= 3 and all(_event_is_feeding_series_item(item) for item in group):
+        anchor = _apply_serial_schedule_publish_view(anchor, group)
+    else:
+        combined_time = _format_same_day_times_for_publication(
+            [str(getattr(item, "time", "") or "") for item in group]
+        )
+        if combined_time:
+            anchor.time = combined_time
+            anchor.time_is_default = False
     return anchor, group
 
 
@@ -20103,7 +20221,17 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         ev.source_vk_post_url = None
         ev.vk_source_hash = None
-    vk_url = await sync_vk_source_post(ev, text_for_vk, db, bot, ics_url=ev.ics_url)
+    replace_existing_text = len(same_day_group) >= 3 and all(
+        _event_is_feeding_series_item(item) for item in same_day_group
+    )
+    vk_url = await sync_vk_source_post(
+        ev,
+        text_for_vk,
+        db,
+        bot,
+        ics_url=ev.ics_url,
+        append_text=not replace_existing_text,
+    )
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,
         db,

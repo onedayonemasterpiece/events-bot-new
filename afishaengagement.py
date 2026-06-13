@@ -28,6 +28,7 @@ DEFAULT_DEBUG_MARKER = "#afishaengagement_shadow"
 DEFAULT_BUILD_TAG_PREFIX = "#aeg_b"
 DEFAULT_TARGET_GROUP_SHORT = "klgdevents"
 DEFAULT_TARGET_GROUP_ID = "231920894"
+DEBUG_COPY_BANNER = "AFISHAENGAGEMENT DEBUG COPY"
 MAX_VK_FEED_PHOTO_ASPECT = 1.45
 CTA_LAYER_SHADOW_ALPHA = 170
 
@@ -4831,7 +4832,7 @@ async def cleanup_debug_posts(
         for item in items or []:
             text = str(item.get("text") or "")
             post_id = item.get("id")
-            if not post_id or marker not in text:
+            if not post_id or (marker not in text and DEBUG_COPY_BANNER not in text):
                 continue
             matched += 1
             if dry_run:
@@ -4907,6 +4908,8 @@ async def maybe_publish_shadow_debug_copy(
     vk_api_fn: Callable[..., Awaitable[dict[str, Any]]],
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     fetch_image_fn: Callable[[str], Awaitable[bytes]] | None = None,
+    edit_vk_post_fn: Callable[..., Awaitable[bool | None]] | None = None,
+    existing_vk_post_url: str | None = None,
     now_utc: datetime | None = None,
 ) -> str | None:
     started = time.monotonic()
@@ -4967,6 +4970,7 @@ async def maybe_publish_shadow_debug_copy(
     campaign_id: int | None = None
     activity_id: int | None = None
     publish_mode = "shadow"
+    public_duplicate_seen = False
     for candidate_item in candidates:
         item_campaign_id = int(candidate_item.campaign.id) if candidate_item.campaign.id is not None else None
         item_activity_id = int(candidate_item.activity.id) if candidate_item.activity.id is not None else None
@@ -4988,6 +4992,23 @@ async def maybe_publish_shadow_debug_copy(
                     vk_group_short=group_short,
                     shadow_mode=False,
                     extra={"publish_mode": "disabled"},
+                )
+            )
+            continue
+        if shadow_mode and public_duplicate_seen:
+            _json_log(
+                StageLog(
+                    stage="eligibility",
+                    decision="skip",
+                    reason="public_duplicate_shadow_suppressed",
+                    event_id=event_id,
+                    campaign_id=item_campaign_id,
+                    activity_id=item_activity_id,
+                    vk_owner_id=owner_id,
+                    vk_group_short=group_short,
+                    shadow_mode=True,
+                    shadow_marker=item_marker,
+                    extra={"publish_mode": item_publish_mode, "candidate_fallback": True},
                 )
             )
             continue
@@ -5016,6 +5037,8 @@ async def maybe_publish_shadow_debug_copy(
             )
         )
         if duplicate:
+            if not shadow_mode:
+                public_duplicate_seen = True
             _json_log(
                 StageLog(
                     stage="eligibility",
@@ -5270,32 +5293,45 @@ async def maybe_publish_shadow_debug_copy(
         )
         max_publish_attempts = min(6, 1 + _debug_slot_search_limit(config)) if publish_mode == "shadow" else 1
         last_publish_exc: Exception | None = None
-        for attempt in range(max_publish_attempts):
-            publish_attempts.append(scheduled_ts)
-            try:
-                vk_url = await post_to_vk_fn(
-                    target_group_id,
-                    outgoing_message,
-                    db,
-                    bot,
-                    generated_attachments,
-                    carousel=True,
-                    publish_date=scheduled_ts,
-                )
-                last_publish_exc = None
-                break
-            except Exception as exc:
-                last_publish_exc = exc
-                if publish_mode != "shadow" or not _looks_like_vk_schedule_collision(exc):
-                    raise
-                if attempt >= max_publish_attempts - 1:
+        existing_url = str(existing_vk_post_url or getattr(event, "source_vk_post_url", "") or "").strip()
+        if publish_mode == "public" and existing_url and edit_vk_post_fn is not None:
+            publish_attempts.append(None)
+            await edit_vk_post_fn(
+                existing_url,
+                outgoing_message,
+                db,
+                bot,
+                generated_attachments,
+                carousel=True,
+            )
+            vk_url = existing_url
+        else:
+            for attempt in range(max_publish_attempts):
+                publish_attempts.append(scheduled_ts)
+                try:
+                    vk_url = await post_to_vk_fn(
+                        target_group_id,
+                        outgoing_message,
+                        db,
+                        bot,
+                        generated_attachments,
+                        carousel=True,
+                        publish_date=scheduled_ts,
+                    )
+                    last_publish_exc = None
                     break
-                scheduled_ts = int(scheduled_ts or 0) + spacing
-                logger.info(
-                    "afishaengagement: debug shadow slot collision; retrying event_id=%s next_ts=%s",
-                    event_id,
-                    scheduled_ts,
-                )
+                except Exception as exc:
+                    last_publish_exc = exc
+                    if publish_mode != "shadow" or not _looks_like_vk_schedule_collision(exc):
+                        raise
+                    if attempt >= max_publish_attempts - 1:
+                        break
+                    scheduled_ts = int(scheduled_ts or 0) + spacing
+                    logger.info(
+                        "afishaengagement: debug shadow slot collision; retrying event_id=%s next_ts=%s",
+                        event_id,
+                        scheduled_ts,
+                    )
         schedule_meta["publish_attempts"] = publish_attempts
         schedule_meta["publish_attempt_count"] = len(publish_attempts)
         if last_publish_exc is not None:

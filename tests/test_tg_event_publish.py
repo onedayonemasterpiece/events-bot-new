@@ -419,6 +419,125 @@ async def test_same_day_linked_events_use_one_publish_anchor(tmp_path, monkeypat
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_same_source_feeding_series_uses_one_schedule_publish_anchor(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    shared = {
+        "date": "2026-06-20",
+        "location_name": "Калининградский зоопарк",
+        "location_address": "пр-т Мира 26",
+        "city": "Калининград",
+        "source_post_url": "https://t.me/kldzoo/7521",
+        "photo_urls": ["https://img.test/a.webp", "https://img.test/b.webp"],
+        "lifecycle_status": "active",
+    }
+    first = _event(id=None, title="Кормление колобусов", time="11:30", **shared)
+    second = _event(id=None, title="Кормление бурого медведя Фимы", time="13:30", **shared)
+    third = _event(id=None, title="кормление рыб в Тропическом доме", time="14:00", **shared)
+    async with db.get_session() as session:
+        session.add_all([first, second, third])
+        await session.commit()
+        await session.refresh(first)
+        await session.refresh(second)
+        await session.refresh(third)
+        ids = [int(first.id), int(second.id), int(third.id)]
+        third_id = int(third.id)
+
+    async with db.get_session() as session:
+        source = await session.get(main.Event, third_id)
+
+    assert source is not None
+    anchor, group = await main._prepare_same_day_linked_publish_event(db, source)
+
+    assert int(anchor.id) == ids[0]
+    assert [int(item.id) for item in group] == ids
+    assert anchor.title == "Кормления животных: Калининградский зоопарк"
+    assert anchor.time == "11:30, 13:30 и 14:00"
+    assert "• 11:30 — колобусов" in anchor.description
+    assert "• 13:30 — бурого медведя Фимы" in anchor.description
+    assert "• 14:00 — рыб в Тропическом доме" in anchor.description
+
+    published = {}
+
+    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False):
+        published["event_id"] = int(event.id)
+        published["title"] = event.title
+        published["text"] = text
+        return "https://t.me/kldevents/1000", 1000, "text", "feeding-series-hash"
+
+    monkeypatch.setattr(main, "publish_tg_event_announcement", fake_publish)
+
+    assert await main.job_publish_tg_event_post(third_id, db, bot=object()) is True
+
+    assert published["event_id"] == ids[0]
+    assert published["title"] == "Кормления животных: Калининградский зоопарк"
+    assert "• 13:30 — бурого медведя Фимы" in published["text"]
+    async with db.get_session() as session:
+        rows = [await session.get(main.Event, event_id) for event_id in ids]
+
+    assert [row.tg_event_post_url for row in rows] == ["https://t.me/kldevents/1000"] * 3
+    assert [row.tg_event_source_hash for row in rows] == ["feeding-series-hash"] * 3
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_same_source_feeding_series_replaces_vk_text_instead_of_appending(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    shared = {
+        "date": "2026-06-20",
+        "location_name": "Калининградский зоопарк",
+        "location_address": "пр-т Мира 26",
+        "city": "Калининград",
+        "source_post_url": "https://t.me/kldzoo/7521",
+        "photo_urls": ["https://img.test/a.webp", "https://img.test/b.webp"],
+        "lifecycle_status": "active",
+    }
+    events = [
+        _event(id=None, title="Кормление колобусов", time="11:30", **shared),
+        _event(id=None, title="Кормление бурого медведя Фимы", time="13:30", **shared),
+        _event(id=None, title="кормление рыб в Тропическом доме", time="14:00", **shared),
+    ]
+    async with db.get_session() as session:
+        session.add_all(events)
+        await session.commit()
+        for item in events:
+            await session.refresh(item)
+        third_id = int(events[-1].id)
+
+    calls = []
+
+    async def fake_sync(event, text, db_arg, bot, **kwargs):
+        calls.append(
+            {
+                "event_id": int(event.id),
+                "title": event.title,
+                "text": text,
+                "append_text": kwargs.get("append_text"),
+            }
+        )
+        return "https://vk.com/wall-231920894_999"
+
+    monkeypatch.setattr(main, "sync_vk_source_post", fake_sync)
+
+    await main.job_sync_vk_source_post(third_id, db, bot=None)
+
+    assert len(calls) == 1
+    assert calls[0]["event_id"] == int(events[0].id)
+    assert calls[0]["title"] == "Кормления животных: Калининградский зоопарк"
+    assert calls[0]["append_text"] is False
+    assert "Расписание кормлений:" in calls[0]["text"]
+    assert "• 13:30 — бурого медведя Фимы" in calls[0]["text"]
+    async with db.get_session() as session:
+        rows = [await session.get(main.Event, int(item.id)) for item in events]
+
+    assert [row.source_vk_post_url for row in rows] == ["https://vk.com/wall-231920894_999"] * 3
+    await db.close()
+
+
 def test_unique_tg_media_urls_dedupes_supabase_dhash_near_duplicates():
     base = (
         "https://storage.yandexcloud.net/kenigevents/p/dh16/0c/"

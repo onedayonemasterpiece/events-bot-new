@@ -2152,6 +2152,95 @@ async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_public_engagement_copy_edits_existing_managed_post(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Спектакль",
+            description="",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Зал",
+            source_text="",
+            event_type="спектакль",
+            source_vk_post_url="https://vk.com/wall-231920894_3237",
+            photo_urls=["https://example.test/poster.jpg"],
+        )
+        campaign = PromoCampaign(title="Мотивация public", status="active", starts_at=now)
+        session.add_all([event, campaign])
+        await session.commit()
+        await session.refresh(event)
+        await session.refresh(campaign)
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=aeg.PROMO_SURFACE_AFISHA_ENGAGEMENT,
+            enabled=True,
+            config_json={
+                "publish_mode": "public",
+                "apply_rate": 1,
+                "palette_ids": ["prussian_cream"],
+            },
+        )
+        target = PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(event.id))
+        session.add_all([activity, target])
+        await session.commit()
+
+    edited = {}
+
+    async def fake_vk_api(method, params, db_arg=None, bot_arg=None, **kwargs):
+        raise AssertionError("public existing-post edit should not call shadow cleanup/slot lookup")
+
+    async def fake_upload_images(images, *args, **kwargs):
+        return ["https://storage.test/generated.png"], "ok"
+
+    async def fake_upload_vk_photo(group_id, url, db_arg=None, bot_arg=None, **kwargs):
+        return "photo-231920894_777"
+
+    async def fail_post_to_vk(*args, **kwargs):
+        raise AssertionError("public CTA must edit the existing managed post, not create a duplicate")
+
+    async def fake_edit_vk_post(url, message, db_arg=None, bot_arg=None, attachments=None, **kwargs):
+        edited["url"] = url
+        edited["message"] = message
+        edited["attachments"] = attachments
+        edited["kwargs"] = kwargs
+        return True
+
+    async def fake_fetch_image(_url):
+        return _poster_bytes()
+
+    url = await aeg.maybe_publish_shadow_debug_copy(
+        event=event,
+        db=db,
+        bot=None,
+        target_group_id="231920894",
+        message="Обычный пост",
+        photo_urls=event.photo_urls,
+        post_to_vk_fn=fail_post_to_vk,
+        upload_vk_photo_fn=fake_upload_vk_photo,
+        upload_images_fn=fake_upload_images,
+        vk_api_fn=fake_vk_api,
+        fetch_image_fn=fake_fetch_image,
+        edit_vk_post_fn=fake_edit_vk_post,
+        existing_vk_post_url=event.source_vk_post_url,
+        now_utc=now,
+    )
+
+    assert url == "https://vk.com/wall-231920894_3237"
+    assert edited["url"] == "https://vk.com/wall-231920894_3237"
+    assert edited["attachments"] == ["photo-231920894_777"]
+    assert edited["kwargs"]["carousel"] is True
+    assert "AFISHAENGAGEMENT DEBUG COPY" not in edited["message"]
+
+    async with db.get_session() as session:
+        row = (await session.execute(select(PromoExposure))).scalar_one()
+    assert row.publish_status == "VK_SCHEDULED"
+    assert row.public_targets_json == [{"type": "vk_wall", "url": "https://vk.com/wall-231920894_3237"}]
+
+
+@pytest.mark.asyncio
 async def test_resolve_candidates_matches_klgdevents_alias_to_numeric_group(tmp_path, monkeypatch):
     monkeypatch.delenv("AFISHAENGAGEMENT_TARGET_GROUP_ID", raising=False)
     monkeypatch.delenv("VK_EVENTS_GROUP_ID", raising=False)
@@ -2723,6 +2812,36 @@ async def test_cleanup_debug_posts_deletes_only_marker_matches():
 
     assert result == {"matched": 1, "deleted": 1, "errors": 0}
     assert calls[-1] == ("wall.delete", {"owner_id": -231920894, "post_id": 11})
+
+
+@pytest.mark.asyncio
+async def test_cleanup_debug_posts_deletes_stale_debug_banner_with_old_marker():
+    calls = []
+
+    async def fake_vk_api(method, params, db=None, bot=None, **kwargs):
+        calls.append((method, params))
+        if method == "wall.get":
+            return {
+                "response": {
+                    "items": [
+                        {"id": 10, "text": "regular"},
+                        {
+                            "id": 12,
+                            "text": "copy\n[AFISHAENGAGEMENT DEBUG COPY — DELETE BEFORE PUBLISH]\n#old_marker",
+                        },
+                    ]
+                }
+            }
+        return {"response": 1}
+
+    result = await aeg.cleanup_debug_posts(
+        group_id="231920894",
+        marker="#current_marker",
+        vk_api_fn=fake_vk_api,
+    )
+
+    assert result == {"matched": 1, "deleted": 1, "errors": 0}
+    assert calls[-1] == ("wall.delete", {"owner_id": -231920894, "post_id": 12})
 
 
 def test_db_cleanup_selector_only_returns_stale_future_debug_rows(tmp_path):

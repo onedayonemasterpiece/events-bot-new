@@ -565,6 +565,146 @@ RECENT_PAST_THRESHOLD = timedelta(days=92)
 processing_time_seconds_total: float = 0.0
 
 
+_POSTER_EXACT_DATETIME_RE = re.compile(
+    rf"\b(?P<day>\d{{1,2}})\s+(?P<month>{MONTH_NAMES_DET})\.?\s+"
+    r"(?P<hour>[01]?\d|2[0-3])[:.](?P<minute>[0-5]\d)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_RELATIVE_TEXT_DATE_RE = re.compile(
+    r"\b("
+    r"сегодня|завтра|послезавтра|"
+    r"в\s+эт(?:от|у|и)\s+"
+    r"(?:понед(?:ельник)?|вторник|сред(?:а)?|четверг|пятниц(?:а)?|суббот(?:а)?|воскресень(?:е|е)|выходные)|"
+    r"в\s+(?:понед(?:ельник)?|вторник|сред(?:а)?|четверг|пятниц(?:а)?|суббот(?:а)?|воскресень(?:е|е)|пн|вт|ср|чт|пт|сб|вс)"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_POSTER_VENUE_RE = re.compile(
+    r"\b("
+    r"образовательн\w+\s+центр|музей|театр|кинотеатр|библиотек|филармони|"
+    r"галере|центр\s+культур|дом\s+культур|дом\s+искусств|пространств|зал|клуб|кирх"
+    r")\b",
+    re.IGNORECASE | re.UNICODE,
+)
+_POSTER_ADDRESS_RE = re.compile(
+    r"\b(ул\.?|улица|пр-?т|проспект|наб\.?|набережн|пер\.?|переулок|пл\.?|площадь|"
+    r"б-?р|бульвар|аллея|шоссе|д\.)\b",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _poster_anchor_date(year_anchor: date, day: int, month: int) -> date | None:
+    candidate = _safe_construct_date(year_anchor.year, month, day)
+    if not candidate:
+        return None
+    # Normal yearly rollover: only jump a year when the date is not just a
+    # nearby recent-past mention around the crawl date.
+    if candidate < year_anchor and (year_anchor - candidate) > RECENT_PAST_THRESHOLD:
+        candidate = _safe_construct_date(year_anchor.year + 1, month, day)
+    return candidate
+
+
+def _clean_poster_line(line: str | None) -> str:
+    raw = unicodedata.normalize("NFKC", str(line or "")).strip()
+    raw = raw.strip("•·-–—|: ")
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
+def _looks_like_poster_address_line(line: str | None) -> bool:
+    raw = _clean_poster_line(line)
+    return bool(raw and _POSTER_ADDRESS_RE.search(raw) and re.search(r"\d", raw))
+
+
+def _looks_like_poster_venue_line(line: str | None) -> bool:
+    raw = _clean_poster_line(line)
+    if not raw or _looks_like_poster_address_line(raw):
+        return False
+    if re.search(r"\d{1,2}\s+[а-яё.]+\s+\d{1,2}[:.]\d{2}", raw, re.IGNORECASE):
+        return False
+    return bool(_POSTER_VENUE_RE.search(raw))
+
+
+def _infer_poster_venue_address(lines: Sequence[str], *, date_line_index: int) -> tuple[str | None, str | None]:
+    venue: str | None = None
+    address: str | None = None
+
+    # Prefer the local block after the date/time line: event posters typically
+    # place title/speaker first and venue/address near the bottom.
+    scan_lines = list(lines[date_line_index + 1 : date_line_index + 8]) + list(lines[:date_line_index])
+    for idx, line in enumerate(scan_lines):
+        clean = _clean_poster_line(line)
+        if not clean:
+            continue
+        if venue is None and _looks_like_poster_venue_line(clean):
+            venue = clean
+            for follow in scan_lines[idx + 1 : idx + 4]:
+                if _looks_like_poster_address_line(follow):
+                    address = _clean_poster_line(follow)
+                    break
+        if address is None and _looks_like_poster_address_line(clean):
+            address = clean
+        if venue and address:
+            break
+    return venue, address
+
+
+def _extract_single_poster_datetime_anchor(
+    poster_texts: Sequence[str] | None,
+    *,
+    anchor_date: date,
+) -> PosterDatetimeAnchor | None:
+    anchors: list[PosterDatetimeAnchor] = []
+    seen: set[tuple[str, str]] = set()
+    for text in poster_texts or []:
+        raw = str(text or "")
+        if not raw.strip():
+            continue
+        lines = [_clean_poster_line(line) for line in raw.splitlines()]
+        for idx, line in enumerate(lines):
+            for match in _POSTER_EXACT_DATETIME_RE.finditer(line):
+                month = MONTHS_RU.get((match.group("month") or "").casefold().replace("ё", "е").strip("."))
+                if not month:
+                    continue
+                try:
+                    day = int(match.group("day"))
+                    hour = int(match.group("hour"))
+                    minute = int(match.group("minute"))
+                except Exception:
+                    continue
+                dt = _poster_anchor_date(anchor_date, day, int(month))
+                if not dt:
+                    continue
+                time_value = f"{hour:02d}:{minute:02d}"
+                key = (dt.isoformat(), time_value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                venue, address = _infer_poster_venue_address(lines, date_line_index=idx)
+                anchors.append(
+                    PosterDatetimeAnchor(
+                        date=dt.isoformat(),
+                        time=time_value,
+                        venue=venue,
+                        address=address,
+                    )
+                )
+    if len(anchors) != 1:
+        return None
+    return anchors[0]
+
+
+def _source_text_has_relative_date_anchor(text: str | None) -> bool:
+    return bool(_RELATIVE_TEXT_DATE_RE.search(str(text or "")))
+
+
+def _source_text_has_absolute_date_anchor(text: str | None) -> bool:
+    raw = str(text or "")
+    if not raw.strip():
+        return False
+    return bool(_DAY_MONTH_NUM_RE.search(raw) or _DAY_MONTH_WORD_RE.search(raw))
+
+
 def match_keywords(text: str) -> tuple[bool, list[str]]:
     """Return True and list of matched keywords or pricing hints."""
 
@@ -1256,6 +1396,14 @@ class EventDraft:
     reject_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class PosterDatetimeAnchor:
+    date: str
+    time: str
+    venue: str | None = None
+    address: str | None = None
+
+
 @dataclass
 class PersistResult:
     event_id: int
@@ -1647,7 +1795,13 @@ async def build_event_drafts_from_vk(
         "или отдельного venue/source anchor. "
         "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
         "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
-        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца."
+        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца. "
+        "Если текст поста даёт относительный или разговорный якорь даты вроде «в этот четверг», "
+        "а OCR афиши даёт точные `DD месяц HH:MM` и площадку/адрес, считай OCR афиши более точным "
+        "источником для date/time/location и обязательно перенеси эти значения в событие. "
+        "Но если сам текст поста явно пишет точную календарную дату (`18 июня`, `18.06`), "
+        "не считай афишу автоматически сильнее этой явной даты. "
+        "Не оставляй time пустым, когда афиша явно содержит время начала."
     )
     try:
         hint_parts: list[str] = [text or ""]
@@ -1883,6 +2037,12 @@ async def build_event_drafts_from_vk(
         return s.casefold().replace("ё", "е")
 
     source_norm = _source_norm_text()
+    poster_datetime_anchor = _extract_single_poster_datetime_anchor(
+        poster_texts,
+        anchor_date=anchor_dt.date(),
+    )
+    source_has_relative_date_anchor = _source_text_has_relative_date_anchor(text)
+    source_has_absolute_date_anchor = _source_text_has_absolute_date_anchor(text)
 
     def _sanitize_false_time_from_date(
         *,
@@ -2089,6 +2249,40 @@ async def build_event_drafts_from_vk(
         if final_date and (not final_time) and default_time:
             final_time = default_time
             time_is_default = True
+        poster_anchor_applied = False
+        if poster_datetime_anchor and len(parsed_events) == 1:
+            poster_date = poster_datetime_anchor.date
+            poster_time = poster_datetime_anchor.time
+            has_poster_date_conflict = bool(final_date and final_date != poster_date)
+            should_apply_poster_anchor = False
+            if not final_date:
+                should_apply_poster_anchor = True
+            elif final_date == poster_date and (not final_time or final_time == poster_time):
+                should_apply_poster_anchor = True
+            elif (
+                has_poster_date_conflict
+                and source_has_relative_date_anchor
+                and not source_has_absolute_date_anchor
+            ):
+                # Text such as "в этот четверг" is often copied before final
+                # poster details are ready. A single poster with exact DD month
+                # HH:MM is stronger than that relative anchor, but not stronger
+                # than an explicit date written in the text.
+                should_apply_poster_anchor = True
+            if should_apply_poster_anchor:
+                logger.warning(
+                    "vk_intake.poster_datetime_anchor_applied old_date=%s old_time=%s new_date=%s new_time=%s source=%s reason=%s",
+                    final_date or "",
+                    final_time or "",
+                    poster_date,
+                    poster_time,
+                    source_name or "vk",
+                    "relative_text_conflict" if has_poster_date_conflict else "missing_or_matching_anchor",
+                )
+                final_date = poster_date
+                final_time = poster_time
+                time_is_default = False
+                poster_anchor_applied = True
 
         title_raw = clean_str(data.get("title")) or ""
         event_type_val = clean_str(data.get("event_type"))
@@ -2110,16 +2304,24 @@ async def build_event_drafts_from_vk(
             )
             title_raw = fallback
 
+        venue_value = _clean_llm_text_field(data.get("location_name"), field_name="location_name")
+        address_value = _clean_llm_text_field(data.get("location_address"), field_name="location_address")
+        if poster_datetime_anchor and len(parsed_events) == 1 and poster_anchor_applied:
+            if poster_datetime_anchor.venue:
+                venue_value = poster_datetime_anchor.venue
+            if poster_datetime_anchor.address:
+                address_value = poster_datetime_anchor.address
+
         drafts.append(
             EventDraft(
                 title=title_raw,
                 date=final_date,
                 time=final_time,
                 time_is_default=time_is_default,
-                venue=_clean_llm_text_field(data.get("location_name"), field_name="location_name"),
+                venue=venue_value,
                 description=data.get("short_description"),
                 festival=clean_str(data.get("festival")),
-                location_address=_clean_llm_text_field(data.get("location_address"), field_name="location_address"),
+                location_address=address_value,
                 city=_clean_llm_text_field(data.get("city"), field_name="city"),
                 ticket_price_min=ticket_price_min,
                 ticket_price_max=ticket_price_max,

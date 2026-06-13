@@ -10,6 +10,7 @@ import main
 import vk_auto_queue
 import vk_intake
 from db import Database
+from poster_media import PosterMedia
 
 
 class DummyBot:
@@ -134,6 +135,114 @@ async def test_vk_intake_parse_model_flows_to_event_parse_gemma(monkeypatch):
 
     assert drafts
     assert captured["gemma_model"] == "models/gemma-4-31b-it"
+
+
+@pytest.mark.asyncio
+async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(monkeypatch):
+    async def fake_parse_event_via_llm(*_args, **_kwargs):
+        class Parsed(list):
+            festival = None
+
+        return Parsed(
+            [
+                {
+                    "title": "Встреча с Константином Бандуриным",
+                    "date": "2026-06-18",
+                    "time": "",
+                    "location_name": "Музей Мирового океана",
+                    "location_address": "наб. Петра Великого 1",
+                    "city": "Калининград",
+                    "event_type": "встреча",
+                    "short_description": "Встреча о Большой Африканской экспедиции.",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+
+    poster = PosterMedia(
+        data=b"",
+        name="poster.jpg",
+        ocr_text=(
+            "ЛЕКТОРИЙ «ОКЕАНиЯ»\n"
+            "19 ИЮНЯ 16:00\n"
+            "ПРЕДВАРИТЕЛЬНЫЕ ИТОГИ БОЛЬШОЙ АФРИКАНСКОЙ ЭКСПЕДИЦИИ\n"
+            "Константин Бандурин – заместитель директора, руководитель Атлантического филиала ВНИРО\n"
+            "ОБРАЗОВАТЕЛЬНЫЙ ЦЕНТР «ОКЕАНиЯ»\n"
+            "наб. Петра Великого, 1Б"
+        ),
+        ocr_title="ЛЕКТОРИЙ «ОКЕАНиЯ»",
+    )
+
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        (
+            "Уже скоро мы узнаем какие открытия и результаты принесла масштабная Африканская экспедиция.\n\n"
+            "В этот четверг приглашаем на встречу с Константином Бандуриным."
+        ),
+        source_name="Музей Мирового океана",
+        publish_ts=datetime(2026, 6, 13, 10, 0, tzinfo=timezone.utc),
+        poster_media=[poster],
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].date == "2026-06-19"
+    assert drafts[0].time == "16:00"
+    assert drafts[0].venue == "ОБРАЗОВАТЕЛЬНЫЙ ЦЕНТР «ОКЕАНиЯ»"
+    assert drafts[0].location_address == "наб. Петра Великого, 1Б"
+
+
+@pytest.mark.asyncio
+async def test_vk_intake_does_not_overwrite_explicit_text_date_with_poster(monkeypatch):
+    async def fake_parse_event_via_llm(*_args, **_kwargs):
+        class Parsed(list):
+            festival = None
+
+        return Parsed(
+            [
+                {
+                    "title": "Встреча с Константином Бандуриным",
+                    "date": "2026-06-18",
+                    "time": "",
+                    "location_name": "Музей Мирового океана",
+                    "location_address": "наб. Петра Великого 1",
+                    "city": "Калининград",
+                    "event_type": "встреча",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+
+    poster = PosterMedia(
+        data=b"",
+        name="poster.jpg",
+        ocr_text=(
+            "ЛЕКТОРИЙ «ОКЕАНиЯ»\n"
+            "19 ИЮНЯ 16:00\n"
+            "ОБРАЗОВАТЕЛЬНЫЙ ЦЕНТР «ОКЕАНиЯ»\n"
+            "наб. Петра Великого, 1Б"
+        ),
+    )
+
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        "18 июня приглашаем на встречу с Константином Бандуриным.",
+        source_name="Музей Мирового океана",
+        publish_ts=datetime(2026, 6, 13, 10, 0, tzinfo=timezone.utc),
+        poster_media=[poster],
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].date == "2026-06-18"
+    assert drafts[0].time == ""
+    assert drafts[0].venue == "Музей Мирового океана"
+
+
+def test_vk_intake_prompt_mentions_poster_datetime_conflict_rule():
+    source = vk_intake.build_event_drafts_from_vk.__code__.co_consts
+    joined = "\n".join(str(item) for item in source if isinstance(item, str))
+    assert "в этот четверг" in joined
+    assert "OCR афиши более точным" in joined
+    assert "не считай афишу автоматически сильнее" in joined
 
 
 @pytest.mark.asyncio
