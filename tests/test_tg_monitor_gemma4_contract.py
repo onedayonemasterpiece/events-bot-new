@@ -771,3 +771,7 @@ def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() 
     assert "key.startswith(\"GOOGLE_API_LOCALNAME\")" in source
     assert "Do not ship unrelated GOOGLE_API_KEY* values" in source
     assert "\"TG_MONITORING_GOOGLE_KEY_ENV\": google_key_env" in source
+    assert "kaggle_status_client.py" in source
+    assert "await_dataset_ready" in source
+    assert "\"kaggle_run.json\"" in source
+    assert "\"kaggle_status_client.py\"" in source

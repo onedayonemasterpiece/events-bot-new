@@ -40,7 +40,7 @@ from source_parsing.telegram.handlers import (
     TelegramMonitorReport,
     process_telegram_results,
 )
-from video_announce.kaggle_client import KaggleClient
+from video_announce.kaggle_client import KaggleClient, await_dataset_ready
 
 from .split_secrets import encrypt_secret
 
@@ -666,6 +666,21 @@ async def _prepare_kaggle_datasets(
         f"Telegram Monitor Key {slug_suffix}",
         write_key,
     )
+    await await_dataset_ready(
+        client,
+        slug_cipher,
+        expected_files=[
+            "config.json",
+            "secrets.enc",
+            "kaggle_run.json",
+            "kaggle_status_client.py",
+        ],
+    )
+    await await_dataset_ready(
+        client,
+        slug_key,
+        expected_files=["fernet.key"],
+    )
     return slug_cipher, slug_key
 
 
@@ -860,9 +875,16 @@ def _prepared_kernel_path(kernel_path: Path) -> Path:
         shutil.copytree(kernel_path, prepared)
         _stage_google_ai_bundle(prepared)
         status_client_src = PROJECT_ROOT / "kaggle" / "kaggle_status_client.py"
-        if status_client_src.exists():
-            shutil.copy2(status_client_src, prepared / "kaggle_status_client.py")
+        if not status_client_src.exists():
+            raise FileNotFoundError(
+                f"Telegram Monitoring status helper missing: {status_client_src}"
+            )
+        shutil.copy2(status_client_src, prepared / "kaggle_status_client.py")
         _sync_notebook_entrypoint(prepared)
+        if not (prepared / "kaggle_status_client.py").exists():
+            raise RuntimeError(
+                f"Telegram Monitoring status helper was not staged: {prepared}"
+            )
         yield prepared
 
 
