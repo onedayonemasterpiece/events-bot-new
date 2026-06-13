@@ -115,6 +115,8 @@ unsupported open-air claim and used awkward template-like phrasing.
   - free-axis runtime smoke inside production image:
     `prompt_has_6_8=True`, `prompt_has_no_5=True`, `effective_min=6`,
     `options=0`, `strategy='llm_underfilled'` for a five-option LLM plan
+  - title-link phrasing runtime smoke inside production image:
+    `bad_label_rejected=True`, `good_phrase_kept=True`
 - production SQL evidence:
   `debug:2026-06-13T11`, target `2026-06-14`, event `5760`,
   `date=2026-06-12`, `end_date=2026-06-15`, `tg_event_post_id=36`.
@@ -162,6 +164,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - follow-up deploy for the free-axis guard: SHA
   `cde0235b4557162b2f19754f6b13aa83aa05d236`, Fly release `v1380`, image
   `registry.fly.io/events-bot-new-wngqia:deployment-01KV09401B170RZT2PDB49ZXC0`
+- follow-up deploy for title-link phrasing: SHA
+  `0a1fae411937472ed503494a7f05b10fb40f34b1`, Fly release `v1381`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV0AKKNVTZ1TP2QG0ARVGRZE`
 - regression checks:
   - `tests/test_poll_to_forward.py`
   - `tests/test_tg_event_publish.py`
@@ -169,6 +174,7 @@ unsupported open-air claim and used awkward template-like phrasing.
   - production runtime smoke for date guard, unsupported open-air filtering,
     and multi-day date label
   - production runtime smoke for the free-axis minimum-six guard
+  - production runtime smoke for rejecting `: {{EVENT_LINK}}` label phrasing
 - post-deploy verification: Fly status machine `48e42d5b714228`, version
   `1379`, state `started`, `1 total, 1 passing`; `/healthz` returned
   `ok=true`, `ready=true`, `db=ok`, scheduler `ok`, `issues=[]`.
