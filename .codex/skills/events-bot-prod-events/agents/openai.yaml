@@ -1,0 +1,4 @@
+interface:
+  display_name: "Events Bot Prod Events"
+  short_description: "Inspect future event inventory in events-bot production."
+  default_prompt: "Find production events for a future date and summarize eligibility, repostability, and poll inventory."

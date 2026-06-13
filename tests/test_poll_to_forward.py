@@ -419,6 +419,34 @@ def test_poll_question_rotation_does_not_repeat_adjacent_debug_slots():
         previous = text
 
 
+def test_popular_rich_inventory_requires_more_topic_options():
+    events = []
+    for idx in range(12):
+        group_idx = min(idx, 9)
+        events.append(
+            pf.CandidateEvent(
+                id=100 + idx,
+                title=f"Событие {idx}",
+                date="2026-06-14",
+                end_date=None,
+                time="12:00",
+                event_type="концерт",
+                festival=None,
+                city="Калининград",
+                location_name="Площадка",
+                is_free=False,
+                tg_event_post_id=500 + idx,
+                tg_event_post_url=f"https://t.me/kldevents/{500 + idx}",
+                telegraph_url=f"https://telegra.ph/{idx}",
+                summary="",
+                popularity_score=5.0,
+                popularity_group_key=f"kld:{group_idx}",
+            )
+        )
+
+    assert pf._effective_min_options(events, 3) == 5
+
+
 def test_poll_question_reacts_to_previous_feedback_other():
     text = pf._poll_question_with_feedback_hint(
         "Сегодня вечером подберу рекомендацию на завтра.",

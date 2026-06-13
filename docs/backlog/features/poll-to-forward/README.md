@@ -336,11 +336,16 @@ Poll options are built from popularity-qualified events only when a popularity
 surface is available. Each option must contain at least two distinct candidate
 groups (`POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION`, default `2`).
 Single-candidate themes are omitted. A free-events option is allowed only when
-at least two popular free candidates exist. The final recommendation stays
-inside the winning poll option and uses a weighted pick from that option's
-deduplicated TOP-3 candidates. The pick seed includes the concrete run/poll, so
-repeated debug cycles with the same category and candidate pool can rotate
-within the TOP-3 instead of always selecting the same event.
+at least two popular free candidates exist. On richer popular inventories, the
+required number of content options grows with distinct popularity groups:
+roughly 4 options for 8+ groups, 5 for 10+ groups and 12+ events, and 6 for
+12+ groups and 18+ events, capped by the "at least two groups per option"
+constraint. This prevents a busy date from being collapsed into a tiny poll.
+The final recommendation stays inside the winning poll option and uses a
+weighted pick from that option's deduplicated TOP-3 candidates. The pick seed
+includes the concrete run/poll, so repeated debug cycles with the same category
+and candidate pool can rotate within the TOP-3 instead of always selecting the
+same event.
 
 For audits, the full selection trace is stored in `poll_repost_run.result_json`.
 Successful debug resolves also write a compact `poll_to_forward.selection_trace`

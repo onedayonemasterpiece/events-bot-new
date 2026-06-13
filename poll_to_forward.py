@@ -965,8 +965,22 @@ def _filter_options_by_popularity_inventory(
 def _effective_min_options(events: Sequence[CandidateEvent], configured_min_options: int) -> int:
     effective = _topic_plan_min_options(events, configured_min_options)
     if _popularity_filter_active(events):
-        popularity_min = max(2, _env_int("POLL_TO_FORWARD_POPULAR_MIN_OPTIONS", 2))
-        return max(2, min(effective, popularity_min))
+        min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
+        groups = {
+            event.popularity_group_key or f"event:{event.id}"
+            for event in events
+            if float(event.popularity_score or 0.0) > 0
+        }
+        group_count = len(groups)
+        inventory_min = max(2, _env_int("POLL_TO_FORWARD_POPULAR_MIN_OPTIONS", 2))
+        if len(events) >= 18 and group_count >= 12:
+            inventory_min = max(inventory_min, 6)
+        elif len(events) >= 12 and group_count >= 10:
+            inventory_min = max(inventory_min, 5)
+        elif len(events) >= 8 and group_count >= 8:
+            inventory_min = max(inventory_min, 4)
+        possible_by_groups = max(effective, group_count // min_candidates)
+        return max(effective, min(inventory_min, possible_by_groups, TELEGRAM_POLL_MAX_OPTIONS - 1))
     return effective
 
 

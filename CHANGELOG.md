@@ -7,6 +7,10 @@
   URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as
   `kraftmarket39 · @LANGEANNA` can opt into public CTA cards without changing
   the broader campaign resolver.
+- **Changed: Poll to Repost rich-inventory topic count**: when popularity
+  preflight leaves many distinct candidate groups, the LLM topic plan now must
+  return more content options instead of collapsing a busy target date into a
+  tiny poll.
 - **Fixed: Poll to Repost event-date question framing**: default poll question
   variants now explicitly ask subscribers to choose the theme of an event that
   happens tomorrow or can be visited tomorrow, instead of framing the choice as
