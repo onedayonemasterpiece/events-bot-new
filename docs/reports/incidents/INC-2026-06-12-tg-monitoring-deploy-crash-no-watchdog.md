@@ -1,6 +1,6 @@
 # INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog
 
-Status: open
+Status: mitigated
 Severity: sev1
 Service: Telegram Monitoring / critical scheduler watchdog / Kaggle handoff
 Opened: 2026-06-12
@@ -32,6 +32,11 @@ The scheduled Telegram Monitoring slot for 2026-06-12 23:40 Europe/Kaliningrad s
 - 2026-06-12 21:41:14 UTC: runtime log contains NUL gap followed by startup logs from the new deployed process.
 - 2026-06-12 21:41:23 UTC: startup cleanup marked one running `ops_run` as `crashed`.
 - 2026-06-12 23:41 UTC: production `/data/kaggle_jobs.json` was empty, confirming no recoverable Kaggle registry entry for this monitoring run.
+- 2026-06-12 23:54 UTC: after deploying the watchdog registration fix, critical watchdog dispatched catch-up `run_id=catchup-tg-monitoring-cf57cdfbf6934f95a34424cba8e041dd`.
+- 2026-06-12 23:55 UTC: catch-up pushed Kaggle kernel `zigomaro/telegram-monitor-bot` and registered it in `/data/kaggle_jobs.json` with `remote_telegram_auth_scope=TELEGRAM_AUTH_BUNDLE_S22`.
+- 2026-06-13 00:19 UTC: a VK slot hotfix deploy cancelled the server-side poller; `ops_run #2355` ended as `error` with `errors=["cancelled"]`, but the Kaggle registry entry remained.
+- 2026-06-13 00:20 UTC: pre-guard watchdog retry `#2358` was safely blocked as `skipped` with `remote_telegram_session_busy`.
+- 2026-06-13 00:26 UTC: after deploying the registry-race guard, watchdog logged `deferring tg_monitoring catch-up while recovery registry exists` instead of creating another catch-up run.
 
 ## Root Cause
 
@@ -77,14 +82,20 @@ The scheduled Telegram Monitoring slot for 2026-06-12 23:40 Europe/Kaliningrad s
 
 ### Required evidence
 
-- deployed SHA: pending
-- deploy path: `origin/main` -> Fly remote deploy
-- regression checks: pending
+- deployed SHA: `664784a99c9bba3ef1ccd038e7acf78288164521`
+- deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
+- regression checks:
+  - `python3 -m py_compile scheduling.py tests/test_scheduling.py main.py main_part2.py tests/test_vk_actor.py`
+  - `pytest -q tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash tests/test_scheduling.py::test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_job_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_vk_auto_import_after_slot_crash tests/test_scheduling.py::test_runtime_health_status_reports_critical_monitoring_jobs tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_first_morning_gap_before_promo_anchors tests/test_vk_actor.py::test_vk_postponed_next_slot_steps_through_occupied_morning_slots tests/test_vk_actor.py::test_fetch_vk_latest_postponed_prefers_user_actor` printed `8 passed in 0.80s`; the process then required Ctrl-C during Python thread shutdown after the pytest summary.
 - runtime evidence:
   - `ops_run #2354` crashed with `run_id=4ea4ccb80bb34788bed18243a6d99da8`
   - runtime log file `events-bot.log.2026-06-12_21` shows deploy restart during the slot
-  - `/data/kaggle_jobs.json` was `{"jobs": []}` after the crash
-- recovery evidence: pending
+  - `/data/kaggle_jobs.json` was `{"jobs": []}` after the original crash
+- recovery evidence:
+  - `ops_run #2355` catch-up pushed `zigomaro/telegram-monitor-bot` with `run_id=catchup-tg-monitoring-cf57cdfbf6934f95a34424cba8e041dd`.
+  - `/data/kaggle_jobs.json` still has exactly one `tg_monitoring` entry for that kernel with `remote_telegram_auth_scope=TELEGRAM_AUTH_BUNDLE_S22`.
+  - Kaggle status check after final deploy returned `{"status": "RUNNING"}`.
+  - Post-final-deploy watchdog log shows defer on recovery registry rather than another catch-up push.
 
 ## Immediate Mitigation
 
@@ -101,20 +112,26 @@ The scheduled Telegram Monitoring slot for 2026-06-12 23:40 Europe/Kaliningrad s
 
 ## Follow-up Actions
 
-- [ ] Codex: deploy the watchdog fix from `origin/main`.
-- [ ] Codex: verify the missed Telegram Monitoring run is running in Kaggle or has completed with import evidence.
-- [ ] Codex: verify video announcements and VK auto-import scheduler health after deploy.
+- [x] Codex: deploy the watchdog fix from `origin/main`.
+- [x] Codex: verify the missed Telegram Monitoring run is running in Kaggle.
+- [ ] Codex: verify final `recovery_import` evidence after Kaggle kernel completes.
+- [x] Codex: verify video announcements and VK auto-import scheduler health after deploy.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy image: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `664784a99c9bba3ef1ccd038e7acf78288164521`
+- deploy image: `registry.fly.io/events-bot-new-wngqia:deployment-01KTZ5VVRNGQYEV17ZJP997C86`
+- deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
+- regression checks: see required evidence above
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `critical_scheduler_watchdog=ok`, `tg_monitoring=ok`, `vk_auto_import=ok`, `video_tomorrow=ok`, and `video_popular_review=ok`.
+  - `tg_monitoring_next_run=2026-06-13T21:40:00+00:00`; the missed 2026-06-12 slot is represented by the still-running recovery kernel.
+  - `vk_auto_import_next_run=2026-06-13T04:15:00+00:00`; catch-up `ops_run #2360` is running after the final deploy.
+  - No new `tg_monitoring` `ops_run` was created after final deploy; the latest remains pre-guard `#2358 skipped remote_telegram_session_busy`.
 
 ## Prevention
 
 - `/healthz` now treats missing critical scheduler watchdog or missing critical jobs as visible health degradation.
 - Critical scheduler tests cover deploy-killed `tg_monitoring` and per-slot `vk_auto_import` recovery.
+- The watchdog now defers `tg_monitoring` catch-up while a `tg_monitoring` Kaggle recovery registry entry exists, preventing a second `TELEGRAM_AUTH_BUNDLE_S22` push while a remote kernel may still own the Telethon session.
 - Incident closure requires catch-up evidence, not only a code deploy.

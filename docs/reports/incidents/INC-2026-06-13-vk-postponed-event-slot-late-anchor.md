@@ -1,10 +1,10 @@
 # INC-2026-06-13-vk-postponed-event-slot-late-anchor
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: VK event publishing / VK auto-import / postponed slot reservation
 Opened: 2026-06-13
-Closed: —
+Closed: 2026-06-13
 Owners: Codex / operator
 Related incidents: `INC-2026-06-12-vk-partial-media-family-cta`, `INC-2026-06-12-raffle-source-publication-false-skip`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/features/vk-auto-queue/README.md`, `docs/operations/runtime-logs.md`
@@ -68,8 +68,10 @@ Manual `/vk_auto_import --limit=1` created event `5958` and a managed `klgdevent
 
 ### Required evidence
 
-- deployed SHA: pending
-- regression checks: pending
+- deployed SHA: `664784a99c9bba3ef1ccd038e7acf78288164521`
+- regression checks:
+  - `python3 -m py_compile scheduling.py tests/test_scheduling.py main.py main_part2.py tests/test_vk_actor.py`
+  - `pytest -q tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash tests/test_scheduling.py::test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_job_exists tests/test_scheduling.py::test_critical_scheduler_watchdog_dispatches_vk_auto_import_after_slot_crash tests/test_scheduling.py::test_runtime_health_status_reports_critical_monitoring_jobs tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_first_morning_gap_before_promo_anchors tests/test_vk_actor.py::test_vk_postponed_next_slot_steps_through_occupied_morning_slots tests/test_vk_actor.py::test_fetch_vk_latest_postponed_prefers_user_actor` printed `8 passed in 0.80s`; the process then required Ctrl-C during Python thread shutdown after the pytest summary.
 - production evidence:
   - `ops_run #2357` created event `5958`
   - event `5958` stored `source_vk_post_url=https://vk.com/wall-231920894_3143`
@@ -92,18 +94,23 @@ Manual `/vk_auto_import --limit=1` created event `5958` and a managed `klgdevent
 
 ## Follow-up Actions
 
-- [ ] Codex: deploy after current Telegram Monitoring catch-up finishes or is otherwise safe to interrupt.
+- [x] Codex: deploy from `origin/main` after adding Telegram Monitoring registry-race protection, so the deploy does not trigger a second `TELEGRAM_AUTH_BUNDLE_S22` push.
 - [x] Codex: reschedule `wall-231920894_3143` away from `15:30` if VK accepts postponed `wall.edit`.
 - [ ] Codex: inspect whether old 2026-06-14/15 postponed backlog should be cleaned separately; this incident fixes selection, not historical cleanup.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `664784a99c9bba3ef1ccd038e7acf78288164521`
+- deploy image: `registry.fly.io/events-bot-new-wngqia:deployment-01KTZ5VVRNGQYEV17ZJP997C86`
+- deploy path: `origin/main` -> `flyctl deploy -a events-bot-new-wngqia --remote-only`
 - regression checks:
-  - `python3 -m py_compile main.py main_part2.py tests/test_vk_actor.py`
-  - `pytest -q tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_kaliningrad_morning_and_interval tests/test_vk_actor.py::test_vk_postponed_next_slot_uses_first_morning_gap_before_promo_anchors tests/test_vk_actor.py::test_vk_postponed_next_slot_steps_through_occupied_morning_slots tests/test_vk_actor.py::test_fetch_vk_latest_postponed_prefers_user_actor`
-- post-deploy verification: pending; deploy is intentionally held while `tg_monitoring` catch-up is still running in Kaggle.
+  - `python3 -m py_compile scheduling.py tests/test_scheduling.py main.py main_part2.py tests/test_vk_actor.py`
+  - targeted pytest command above printed `8 passed in 0.80s`
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `vk_auto_import=ok`, `critical_scheduler_watchdog=ok`, and `tg_monitoring=ok`.
+  - Fly status shows image `events-bot-new-wngqia:deployment-01KTZ5VVRNGQYEV17ZJP997C86`, machine version `1370`, `1 passing` check.
+  - VK postponed queue still has `wall-231920894_3143` at `2026-06-13T06:00:00+02:00`.
+  - `vk_auto_import_next_run=2026-06-13T04:15:00+00:00` (`06:15 Europe/Kaliningrad`), so the next ordinary auto-import is still a morning run, not an evening-only fallback.
 
 ## Prevention
 

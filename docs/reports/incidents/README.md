@@ -34,7 +34,10 @@
     health-visible whenever `tg_monitoring`, guide full monitoring, or
     `vk_auto_import` is enabled; watchdog catch-up must inspect the last local
     scheduled slot even after local midnight, and per-slot VK auto-import
-    recovery must not be masked by an earlier same-day success.
+    recovery must not be masked by an earlier same-day success; Telegram
+    Monitoring catch-up must defer while a `tg_monitoring` Kaggle recovery
+    registry entry exists, instead of pushing a second kernel with
+    `TELEGRAM_AUTH_BUNDLE_S22`.
 - `INC-2026-06-12-kenigsberg-story-media-invalid-catchup-loop.md`
   - Scope: Kenigsberg `/kenigsberg` Kaggle story media profile, startup
     catch-up retry behavior, and Telegram/VK fanout terminal status handling.
