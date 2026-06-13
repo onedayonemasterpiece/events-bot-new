@@ -29,10 +29,36 @@ SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py'))
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-try:
-    from kaggle_status_client import load_status_client
-except Exception:
-    load_status_client = None
+def _load_status_loader():
+    try:
+        from kaggle_status_client import load_status_client as loader
+        return loader
+    except Exception as exc:
+        logger.warning("kaggle_status import failed: %s", exc)
+    for root in [SCRIPT_DIR, Path.cwd(), Path("/kaggle/working"), Path("/kaggle/input")]:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location("events_bot_kaggle_status_client", candidate)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    logger.info("[kaggle_status] loaded helper from %s", candidate)
+                    return module.load_status_client
+            except Exception as exc:
+                logger.warning("kaggle_status helper load failed from %s: %s", candidate, exc)
+    return None
+
+
+load_status_client = _load_status_loader()
 
 STATUS_PROGRESS: dict[str, object] = {"phase": "bootstrap"}
 STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None

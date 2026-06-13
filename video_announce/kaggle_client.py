@@ -8,6 +8,7 @@ import random
 import shutil
 import tempfile
 import time
+import textwrap
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Iterable
@@ -306,6 +307,56 @@ def _copy_status_client_to_kernel(dst_root: Path) -> None:
 _NOTEBOOK_STATUS_TAG = "events_bot_kaggle_status"
 
 
+_STATUS_CLIENT_LOADER_SOURCE = r'''
+def _events_bot_load_status_loader():
+    import importlib.util as _events_bot_importlib_util
+    from pathlib import Path as _EventsBotPath
+
+    try:
+        from kaggle_status_client import load_status_client as _loader
+        return _loader
+    except Exception as _import_error:
+        print(f"[kaggle_status] import failed: {_import_error}", flush=True)
+
+    roots = [
+        _EventsBotPath.cwd(),
+        _EventsBotPath("/kaggle/working"),
+        _EventsBotPath("/kaggle/input"),
+    ]
+    try:
+        roots.append(_EventsBotPath(__file__).resolve().parent)
+    except Exception:
+        pass
+    seen = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        candidates = [root / "kaggle_status_client.py"]
+        try:
+            candidates.extend(sorted(root.rglob("kaggle_status_client.py")))
+        except Exception:
+            pass
+        for candidate in candidates:
+            key = str(candidate)
+            if key in seen or not candidate.exists():
+                continue
+            seen.add(key)
+            try:
+                spec = _events_bot_importlib_util.spec_from_file_location(
+                    "events_bot_kaggle_status_client",
+                    candidate,
+                )
+                if spec and spec.loader:
+                    module = _events_bot_importlib_util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    print(f"[kaggle_status] loaded helper from {candidate}", flush=True)
+                    return module.load_status_client
+            except Exception as _path_error:
+                print(f"[kaggle_status] helper load failed from {candidate}: {_path_error}", flush=True)
+    return None
+'''
+
+
 def _notebook_code_cell(source: str) -> dict[str, Any]:
     return {
         "cell_type": "code",
@@ -358,17 +409,16 @@ def _instrument_notebook_kernel(tmp_path: Path, meta_data: dict[str, Any]) -> No
     if not code_cells:
         return
     notebook_name = str(meta_data.get("title") or meta_data.get("slug") or code_file)
+    loader_source = textwrap.indent(_STATUS_CLIENT_LOADER_SOURCE.strip(), "")
     bootstrap_source = f"""
 # Auto-injected by events-bot Kaggle status framework.
 import atexit as _kaggle_status_atexit
 import os as _kaggle_status_os
 import time as _kaggle_status_time
 
-try:
-    from kaggle_status_client import load_status_client as _load_kaggle_status_client
-except Exception as _kaggle_status_import_error:
-    _load_kaggle_status_client = None
+{loader_source}
 
+_load_kaggle_status_client = _events_bot_load_status_loader()
 KAGGLE_STATUS_PROGRESS = {{
     "phase": "bootstrap",
     "notebook": {notebook_name!r},
@@ -500,16 +550,15 @@ def _instrument_script_kernel(tmp_path: Path, meta_data: dict[str, Any]) -> None
     wrapper_source = f"""from __future__ import annotations
 
 # Auto-injected by events-bot Kaggle status framework.
+{_STATUS_CLIENT_LOADER_SOURCE.strip()}
+
 import os
 import runpy
 import time
 import traceback
 from pathlib import Path
 
-try:
-    from kaggle_status_client import load_status_client
-except Exception:
-    load_status_client = None
+load_status_client = _events_bot_load_status_loader()
 
 KAGGLE_STATUS_PROGRESS = {{
     "phase": "bootstrap",
