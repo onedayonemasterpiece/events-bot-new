@@ -244,10 +244,10 @@ def _fallback_repost_intro_text(
             tied_text = ", ".join(f"«{escape(text)}»" for text in shown[:-1])
             tied_text = f"{tied_text} и «{escape(shown[-1])}»"
         parts = [f"Голоса разделились поровну между {tied_text}. Беру один из этих вариантов."]
-        recommendation_lead = f"Выбрал один анонс из этих тем: {linked_title}"
+        recommendation_lead = f"Беру в рекомендацию один анонс из этих тем — {linked_title}"
     else:
         parts = [f"Спасибо за голоса — берём тему «{escape(winner)}»."]
-        recommendation_lead = f"Выбрал один анонс из этой темы: {linked_title}"
+        recommendation_lead = f"Беру в рекомендацию анонс {linked_title}"
     if reason_text:
         reason_end = "" if reason_text.endswith((".", "!", "?", "…")) else "."
         parts.append(f"{recommendation_lead} — {escape(reason_text)}{reason_end}")
@@ -287,8 +287,13 @@ def _render_llm_repost_reply(
         "на этом:",
         "остановился на этом:",
         "остановимся на этом:",
+        "рекомендация такая:",
+        "выбрал вот что:",
+        "вот что выбрал для этой темы:",
     )
     if any(fragment in lowered for fragment in forbidden):
+        return None
+    if re.search(r":\s*" + re.escape(EVENT_LINK_PLACEHOLDER), text):
         return None
     if _has_unsupported_outdoor_claim(lowered, fact_context):
         return None
@@ -1103,14 +1108,18 @@ async def _compose_repost_reply_with_llm(
         f"В тексте должен быть плейсхолдер {EVENT_LINK_PLACEHOLDER} ровно один раз. "
         "Это место, куда код вставит HTML-ссылку с названием события. Не пиши название события отдельно, "
         "не пиши URL, Markdown или HTML.\n"
-        "Ставь плейсхолдер только в грамматически нейтральные позиции, чтобы не ломать склонения: "
-        f"«выбрал вот что: {EVENT_LINK_PLACEHOLDER}», "
-        f"«вот что выбрал для этой темы: {EVENT_LINK_PLACEHOLDER}», "
-        f"«сегодня рекомендация такая: {EVENT_LINK_PLACEHOLDER}», "
-        f"«один анонс из этой темы — {EVENT_LINK_PLACEHOLDER}». "
+        "Вписывай плейсхолдер в живую фразу через родовое слово/тип события из контекста, "
+        "чтобы название не висело после двоеточия и не требовало склонения: "
+        f"«поэтому сегодня выбрал турнир {EVENT_LINK_PLACEHOLDER}», "
+        f"«для этой темы подходит лекция {EVENT_LINK_PLACEHOLDER}», "
+        f"«можно присмотреться к игре {EVENT_LINK_PLACEHOLDER}», "
+        f"«беру в рекомендацию анонс {EVENT_LINK_PLACEHOLDER}». "
         f"Нельзя писать: «я бы предложил {EVENT_LINK_PLACEHOLDER}», "
         f"«сходить на {EVENT_LINK_PLACEHOLDER}», «расскажу про {EVENT_LINK_PLACEHOLDER}», "
-        f"«остановился на этом: {EVENT_LINK_PLACEHOLDER}».\n"
+        f"«остановился на этом: {EVENT_LINK_PLACEHOLDER}», "
+        f"«сегодня рекомендация такая: {EVENT_LINK_PLACEHOLDER}», "
+        f"«выбрал вот что: {EVENT_LINK_PLACEHOLDER}». "
+        "Вообще не ставь плейсхолдер сразу после двоеточия.\n"
         "Не добавляй факты, которых нет в контексте. Особенно не пиши, что событие/фестиваль проходит "
         "под открытым небом, на свежем воздухе, в парке или на улице, если это прямо не указано в контексте. "
         "У фестивалей бывает смешанный формат: не угадывай формат площадок по слову «фестиваль».\n"

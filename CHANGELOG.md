@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Changed: Poll to Repost title-link phrasing**: LLM repost comments now must
+  embed the event link into a natural phrase with a generic event word/type
+  before the title, and renderer rejects `: {{EVENT_LINK}}` label patterns such
+  as "сегодня рекомендация такая: ...". The deterministic fallback now also
+  says "Беру в рекомендацию анонс ..." instead of dumping the title after a
+  colon. Tracks `INC-2026-06-13-poll-repost-wrong-date-and-copy`.
 - **Changed: Poll to Repost free-topic planning**: when at least two
   `is_free=true` candidates exist and the eligible pool has at least six events,
   the LLM topic plan now requires at least six poll options so the free-events

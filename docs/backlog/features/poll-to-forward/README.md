@@ -183,7 +183,7 @@ Required meaning:
 Example LLM composer output before link rendering:
 `Спасибо за голоса — берём тему «музыка».
 
-Из этой темы выбрал вот что: {{EVENT_LINK}}. В субботу фестиваль продолжается, можно спокойно зайти на классику в атмосферном месте.
+Для этой темы сегодня беру концерт {{EVENT_LINK}}. В субботу фестиваль продолжается, можно спокойно зайти на классику в атмосферном месте.
 
 Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.
 
@@ -200,21 +200,23 @@ wording such as "как раз открывается выставка" is prefe
 "сходить на выставку".
 
 The `{{EVENT_LINK}}` placeholder must appear exactly once and only in
-grammatically neutral positions, for example:
+natural phrases with a generic event word/type before the linked title, for
+example:
 
-- `выбрал вот что: {{EVENT_LINK}}`;
-- `вот что выбрал для этой темы: {{EVENT_LINK}}`;
-- `сегодня рекомендация такая: {{EVENT_LINK}}`;
-- `один анонс из этой темы — {{EVENT_LINK}}`.
+- `поэтому сегодня выбрал турнир {{EVENT_LINK}}`;
+- `для этой темы подходит лекция {{EVENT_LINK}}`;
+- `можно присмотреться к игре {{EVENT_LINK}}`;
+- `беру в рекомендацию анонс {{EVENT_LINK}}`.
 
 Avoid constructions that require inflecting the event title around the
 placeholder, such as `я бы предложил {{EVENT_LINK}}`, `сходить на
-{{EVENT_LINK}}`, or `расскажу про {{EVENT_LINK}}`. Also avoid placeholder
-phrasing such as `остановился на этом: {{EVENT_LINK}}` / `на этом:
-{{EVENT_LINK}}`: it reads like a template leak. Avoid marketing reason leads
-such as "отличный вариант" or "интересный вариант"; prefer concrete human
-phrasing like "для тех, кто голосовал за гастро-отдых, на ферме как раз
-праздник".
+{{EVENT_LINK}}`, or `расскажу про {{EVENT_LINK}}`. Also avoid dumping the event
+title after punctuation, such as `сегодня рекомендация такая: {{EVENT_LINK}}`,
+`выбрал вот что: {{EVENT_LINK}}`, `остановился на этом: {{EVENT_LINK}}`, or any
+other `: {{EVENT_LINK}}` pattern: it reads like a template leak, not a
+blogger-style recommendation. Avoid marketing reason leads such as "отличный
+вариант" or "интересный вариант"; prefer concrete human phrasing like "для тех,
+кто голосовал за гастро-отдых, на ферме как раз праздник".
 
 The composer may only use facts present in the event context or LLM selection
 reason. It must not infer an open-air/street/park format from the word

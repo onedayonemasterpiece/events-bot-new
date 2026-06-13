@@ -54,7 +54,8 @@ unsupported open-air claim and used awkward template-like phrasing.
 3. The LLM comment prompt did not sufficiently forbid unsupported format
    inferences such as "под открытым небом" for mixed-format festivals.
 4. The renderer accepted template-like neutral-link phrasing such as
-   "на этом: {{EVENT_LINK}}".
+   "на этом: {{EVENT_LINK}}" and title-label patterns like
+   "сегодня рекомендация такая: {{EVENT_LINK}}".
 
 ## Contributing Factors
 
@@ -90,7 +91,7 @@ unsupported open-air claim and used awkward template-like phrasing.
 - A regression that rejects unsupported open-air/street claims when the passed
   event context does not support them.
 - A regression that rejects `на этом:` / `остановился на этом:` placeholder
-  phrasing.
+  phrasing and any `: {{EVENT_LINK}}` title-label pattern.
 - A regression that renders Telegram event infoblock and calendar button ranges
   when `end_date > date`.
 - A regression that keeps a free-events topic as an additional option: when at
@@ -126,7 +127,7 @@ unsupported open-air claim and used awkward template-like phrasing.
   repost candidates, so a long-running event's old start-date post is not
   forwarded as tomorrow's recommendation.
 - LLM reply rendering now rejects unsupported open-air/street claims and the
-  awkward `на этом:` placeholder family.
+  awkward `на этом:` / `: {{EVENT_LINK}}` placeholder family.
 
 ## Corrective Actions
 
@@ -139,6 +140,9 @@ unsupported open-air claim and used awkward template-like phrasing.
 - Tightened topic planning so the free-events option is additive: with enough
   inventory, Poll to Repost requires at least six options and filters
   free-labelled options to `is_free=true` event ids.
+- Tightened repost-comment rendering so the event title link must be integrated
+  into a sentence via a generic event word/type instead of being dumped after a
+  colon.
 - Updated `@kldevents` event-post date rendering to show `date` + `end_date`
   ranges in the infoblock and calendar button.
 

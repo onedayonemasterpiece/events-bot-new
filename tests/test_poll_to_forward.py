@@ -24,7 +24,7 @@ def test_repost_intro_handles_tied_topics_without_preview_link_copy():
     assert text == (
         "Голоса разделились поровну между «Выставки» и «Экскурсии и прогулки». "
         "Беру один из этих вариантов.\n\n"
-        'Выбрал один анонс из этих тем: <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
+        'Беру в рекомендацию один анонс из этих тем — <a href="https://telegra.ph/vystavka">Точка и линия</a> — '
         "как раз открывается выставка, и это хорошо попадает в голосование.\n\n"
         "Если рекомендация зашла — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
         "Сейчас перешлю анонс 👇"
@@ -44,7 +44,7 @@ def test_repost_intro_compacts_long_reason():
         telegraph_url="https://telegra.ph/demo",
     )
 
-    recommendation_line = next(line for line in text.splitlines() if line.startswith("Выбрал один анонс"))
+    recommendation_line = next(line for line in text.splitlines() if line.startswith("Беру в рекомендацию"))
     reason = recommendation_line.split(" — ", 1)[1]
     assert len(reason) <= 103
     assert " — " not in reason
@@ -62,7 +62,7 @@ def test_repost_intro_softens_marketing_reason_lead():
 
     assert "Отличный вариант" not in text
     assert (
-        'Выбрал один анонс из этой темы: <a href="https://telegra.ph/farm">Фермерский праздник</a> — '
+        'Беру в рекомендацию анонс <a href="https://telegra.ph/farm">Фермерский праздник</a> — '
         "для тех, кто проголосовал за гастро-отдых, на ферме как раз праздник."
     ) in text
 
@@ -75,7 +75,7 @@ def test_repost_intro_renders_llm_reply_template_with_safe_event_link():
         telegraph_url="https://telegra.ph/lecture",
         reply_template=(
             "Спасибо за голоса — сегодня берём тему «Узнать новое на лекции или встрече».\n\n"
-            "Для этой темы выбрал {{EVENT_LINK}}: в субботу можно спокойно погрузиться в историю импрессионизма.\n\n"
+            "Для этой темы подходит лекция {{EVENT_LINK}}: в субботу можно спокойно погрузиться в историю импрессионизма.\n\n"
             "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
             "Сейчас перешлю анонс 👇"
         ),
@@ -83,7 +83,7 @@ def test_repost_intro_renders_llm_reply_template_with_safe_event_link():
 
     assert "я бы предложил Лекция" not in text
     assert (
-        'выбрал <a href="https://telegra.ph/lecture">Лекция «Моне / Мане: '
+        'подходит лекция <a href="https://telegra.ph/lecture">Лекция «Моне / Мане: '
         'погружение в мир импрессионизма»</a>:'
     ) in text
     assert "Если попал с рекомендацией" in text
@@ -111,7 +111,7 @@ def test_repost_intro_separates_forward_line_in_llm_reply():
         telegraph_url="https://telegra.ph/music",
         reply_template=(
             "Спасибо за голоса — берём музыку.\n\n"
-            "Вот что выбрал для этой темы: {{EVENT_LINK}}. Подходит для спокойного вечера.\n\n"
+            "Для этой темы беру анонс {{EVENT_LINK}}. Подходит для спокойного вечера.\n\n"
             "Если попал — 👍, если нет — 👎.\n"
             "Сейчас перешлю анонс 👇"
         ),
@@ -136,7 +136,25 @@ def test_repost_intro_rejects_unsupported_outdoor_claim():
     )
 
     assert "под открытым небом" not in text
-    assert "Выбрал один анонс из этой темы" in text
+    assert "Беру в рекомендацию анонс" in text
+
+
+def test_repost_intro_rejects_event_link_after_colon_label():
+    text = pf._repost_intro_text(
+        "Бесплатно или спокойно отдохнуть",
+        "турнир в баре подходит под выбранные темы",
+        event_title="Шахматы в Краны и стаканы",
+        telegraph_url="https://telegra.ph/chess",
+        reply_template=(
+            "Спасибо всем, кто проголосовал.\n\n"
+            "Сегодня рекомендация такая: {{EVENT_LINK}}.\n\n"
+            "Если зашло — 👍, если нет — 👎.\n\n"
+            "Сейчас перешлю анонс 👇"
+        ),
+    )
+
+    assert "Сегодня рекомендация такая" not in text
+    assert "Беру в рекомендацию анонс" in text
 
 
 def test_repost_intro_rejects_on_this_placeholder_pattern():
@@ -154,7 +172,7 @@ def test_repost_intro_rejects_on_this_placeholder_pattern():
     )
 
     assert "остановимся на этом" not in text
-    assert "Выбрал один анонс из этой темы" in text
+    assert "Беру в рекомендацию анонс" in text
 
 
 class DummyPollBot:
