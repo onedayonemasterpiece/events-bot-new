@@ -1,6 +1,6 @@
 # INC-2026-06-14 Festival Recap / Logistics False Events
 
-Status: mitigated
+Status: mitigated (deployed; pending operator confirmation)
 Severity: sev2
 Service: Telegram Monitoring -> Smart Update -> managed VK/TG event fanout
 Opened: 2026-06-14
@@ -125,13 +125,20 @@ Telegram Monitoring imported two non-event Telegram posts as active future event
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `cb19486c` (`fix(tg): skip festival recap false events`)
+- deploy path: pushed `cb19486c` to `origin/main`, then `flyctl deploy --remote-only --app events-bot-new-wngqia`
+  - Fly image: `registry.fly.io/events-bot-new-wngqia:deployment-01KV1RQ5Z0Z71TBYB5FWXQRB9H`
+  - Fly machine: `48e42d5b714228`, version `1399`, health check passing
 - regression checks:
   - `.venv/bin/python -m pytest tests/test_tg_candidate_location_grounding.py tests/test_smart_event_update_non_event_guards.py tests/test_tg_monitor_gemma4_contract.py -q` -> `75 passed in 4.83s`
   - `.venv/bin/python -m pytest tests/test_bot.py::test_festival_vk_sync_disabled_by_default -q` -> `1 passed in 2.12s`
   - `.venv/bin/python -m py_compile source_parsing/telegram/handlers.py smart_event_update.py kaggle/TelegramMonitor/telegram_monitor.py tests/test_tg_candidate_location_grounding.py tests/test_smart_event_update_non_event_guards.py tests/test_tg_monitor_gemma4_contract.py` -> passed
 - post-deploy verification:
+  - `https://events-bot-new-wngqia.fly.dev/healthz` -> `ok=true`, `ready=true`, scheduler/tasks `ok`, no health issues.
+  - Container source contains `_CITY_SALUTATION_LOCATION_RE`, `_UNKNOWN_LOCATION_LINE_RE`, `_EVENT_LOGISTICS_NOTICE_RE`, and `_COMPLETED_FESTIVAL_TEASER_UNCONFIRMED_RE`.
+  - Production DB: `event` rows for `6000`/`6002` absent; related `joboutbox`, `event_source`, `event_source_fact`, `eventposter`, and `promo_exposure` counts are `0`.
+  - Production backup tables remain present with counts: events `2`, sources `4`, source facts `22`, posters `7`, joboutbox `10`, promo exposure `2`.
+  - VK API `wall.getById` for `-231920894_3307,-231920894_3310` returned `items=[]`.
 
 ## Prevention
 
