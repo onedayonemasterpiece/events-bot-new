@@ -535,6 +535,12 @@ finally:
 
 
 def _instrument_script_kernel(tmp_path: Path, meta_data: dict[str, Any]) -> None:
+    if bool(meta_data.get("events_bot_disable_status_instrumentation")):
+        logger.info(
+            "kaggle: script status instrumentation disabled by metadata id=%s",
+            meta_data.get("id") or meta_data.get("slug"),
+        )
+        return
     code_file = str(meta_data.get("code_file") or "").strip()
     if not code_file.endswith(".py"):
         return
