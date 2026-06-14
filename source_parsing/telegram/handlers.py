@@ -2729,6 +2729,21 @@ def _event_local_location_candidate_ok(location_name: str | None, location_addre
     )
 
 
+_CITY_SALUTATION_LOCATION_RE = re.compile(
+    r"(?iu)^\s*"
+    r"(?:калининград|светлогорск|зеленоградск|советск|гусев|черняховск|балтийск|пионерский|янтарный)"
+    r"\s*,\s*"
+    r"(?:спасибо|благодарим|любим|до\s+встречи|мы\s+вернулись|это\s+было)"
+    r"\b"
+)
+
+_UNKNOWN_LOCATION_LINE_RE = re.compile(
+    r"(?iu)^\s*(?:локаци[яю]|место|адрес)\s*(?:[:\-–—]\s*)?"
+    r"(?:уточняется|сообщим|объявим|будет\s+позже|позже|tba|to\s+be\s+announced)"
+    r"[.!?\s]*$"
+)
+
+
 def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]:
     raw = str(text or "").strip()
     if not raw:
@@ -2768,6 +2783,8 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
         if "," in cleaned:
             left, right = (part.strip() for part in cleaned.split(",", 1))
             if left and right:
+                if _CITY_SALUTATION_LOCATION_RE.search(cleaned):
+                    continue
                 inline_venue = re.search(
                     r"(?iu)(?:^|\s)(?:в|на)\s+([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 &'’._-]{1,50})$",
                     left,
@@ -2862,7 +2879,12 @@ def _looks_like_location_person_name_fragment(value: str | None) -> bool:
 
 
 def _known_venue_payload_from_text(text: str | None, *, city: str | None = None) -> tuple[str | None, str | None, str | None]:
-    venue = find_known_venue_in_text(text, city=city)
+    probe = "\n".join(
+        line
+        for line in str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if not _UNKNOWN_LOCATION_LINE_RE.match(line.strip())
+    )
+    venue = find_known_venue_in_text(probe, city=city)
     if venue is None:
         return None, None, None
     return venue.name or None, venue.address or None, venue.city or None

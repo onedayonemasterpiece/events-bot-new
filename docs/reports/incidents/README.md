@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-14-festival-recap-logistics-false-events.md`
+  - Scope: Telegram Monitoring / Smart Update non-event guards for festival recaps, attendee logistics notices, and managed VK/TG event fanout.
+  - Must not regress: a post-event recap that only says the next festival dates while location/place/address is still unknown must not create an event with a fabricated venue; an operational notice for existing guests about entry/navigation/parking/queue/cloakroom must not become a new event; real future festival announcements with grounded location and invitation/ticket signals must stay importable.
 - `INC-2026-06-13-tg-calendar-private-link.md`
   - Scope: Telegram event calendar CTA selection, source-post keyboard
     calendar links, and service/internal Telegram calendar asset links.

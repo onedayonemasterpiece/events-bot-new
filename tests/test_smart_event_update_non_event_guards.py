@@ -154,6 +154,195 @@ def test_museum_work_hours_still_skip_as_work_schedule() -> None:
     assert su._looks_like_work_schedule_notice("График работы музея", text) is True
 
 
+def test_completed_festival_recap_with_unconfirmed_next_location_is_non_event() -> None:
+    source_text = (
+        "Калининград, спасибо!\n"
+        "Было классно\n\n"
+        "Стояли солнечные выходные, но все кто пришёл на Гаражку — лучшие.\n\n"
+        "Спасибо мастерам — что не уехали на море, а радовали нас своим творчеством.\n"
+        "Спасибо гостям — что вы с нами!\n\n"
+        "Следующий фестиваль:\n"
+        "5–6 сентября\n"
+        "Локация уточняется!\n"
+        "До сентября."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/garazhka_kld/1505",
+        source_text=source_text,
+        title="Гаражка",
+        date="2026-09-05",
+        end_date="2026-09-06",
+        location_name="спасибо!",
+        location_address="Мира 9",
+        city="Калининград",
+        festival="Гаражка",
+        festival_source=True,
+        festival_series="Гаражка",
+    )
+
+    assert (
+        su._looks_like_completed_event_report_not_event(
+            "Гаражка",
+            source_text,
+            candidate=candidate,
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_garazhka_recap_replay_skips_before_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Калининград, спасибо!\n"
+            "Было классно\n\n"
+            "Стояли солнечные выходные — половина города уехала на море, "
+            "но все кто пришёл на Гаражку в любимую локацию ПОНАРТ — лучшие.\n\n"
+            "Спасибо мастерам — что не уехали на море, а радовали нас своим творчеством.\n"
+            "Спасибо гостям — что вы с нами!\n\n"
+            "Следующий фестиваль:\n"
+            "5–6 сентября\n"
+            "Локация уточняется!\n"
+            "До сентября."
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/garazhka_kld/1505",
+            source_text=source_text,
+            title="Гаражка",
+            date="2026-09-05",
+            end_date="2026-09-06",
+            location_name="спасибо!",
+            location_address="Мира 9",
+            city="Калининград",
+            festival="Гаражка",
+            festival_source=True,
+            festival_series="Гаражка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "completed_event_report"
+    finally:
+        await db.close()
+
+
+def test_future_festival_announcement_with_grounded_location_is_not_recap_skip() -> None:
+    source_text = (
+        "Следующая Гаражка пройдет 5–6 сентября в пространстве Понарт.\n"
+        "Ждём гостей и участников на маркете, мастер-классах и кинопоказах.\n"
+        "Адрес: Судостроительная 6, Калининград."
+    )
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/garazhka_kld/1510",
+        source_text=source_text,
+        title="Гаражка",
+        date="2026-09-05",
+        end_date="2026-09-06",
+        location_name="Понарт",
+        location_address="Судостроительная 6",
+        city="Калининград",
+        festival="Гаражка",
+        festival_source=True,
+        festival_series="Гаражка",
+    )
+
+    assert (
+        su._looks_like_completed_event_report_not_event(
+            "Гаражка",
+            source_text,
+            candidate=candidate,
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_festdir_entry_notice_replay_skips_before_create(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        source_text = (
+            "Важная информация для гостей концерта 14 июня в арт-пространстве «Понарт».\n\n"
+            "Обращаем внимание, что вход на концертную площадку будет организован "
+            "не через привычный вход на территорию арт-пространства.\n\n"
+            "В связи с особенностями размещения сцены проход для зрителей будет "
+            "осуществляться через другой вход. Пожалуйста, ориентируйтесь на навигацию на месте.\n\n"
+            "До встречи!\n\n"
+            "Проект реализуется при поддержке Президентского фонда культурных инициатив.\n"
+            "АНО «Фестивальная дирекция» Кантата"
+        )
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/festdir/4673",
+            source_text=source_text,
+            title="Концерт",
+            date="2026-09-04",
+            time="14:00",
+            location_name="Понарт",
+            location_address="Судостроительная 6",
+            city="Калининград",
+            festival="Кантата",
+            event_type="концерт",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "skipped_non_event"
+        assert result.reason == "event_logistics_notice"
+    finally:
+        await db.close()
+
+
+def test_event_logistics_notice_for_existing_concert_is_non_event() -> None:
+    source_text = (
+        "Важная информация для гостей концерта 14 июня в арт-пространстве «Понарт».\n\n"
+        "Обращаем внимание, что вход на концертную площадку будет организован "
+        "не через привычный вход на территорию арт-пространства.\n\n"
+        "В связи с особенностями размещения сцены проход для зрителей будет "
+        "осуществляться через другой вход. Пожалуйста, ориентируйтесь на навигацию на месте.\n\n"
+        "До встречи!\n\n"
+        "Проект реализуется при поддержке Президентского фонда культурных инициатив.\n"
+        "АНО «Фестивальная дирекция» Кантата"
+    )
+
+    assert (
+        su._looks_like_event_logistics_notice_not_event(
+            "Концерт",
+            source_text,
+        )
+        is True
+    )
+
+
+def test_new_concert_invite_with_entry_details_is_not_logistics_skip() -> None:
+    source_text = (
+        "Приглашаем на концерт 4 сентября в 19:00 в арт-пространстве «Понарт».\n"
+        "Билеты по ссылке. Вход на площадку будет организован через центральные ворота."
+    )
+
+    assert (
+        su._looks_like_event_logistics_notice_not_event(
+            "Концерт в Понарте",
+            source_text,
+        )
+        is False
+    )
+
+
 def test_weekend_wording_without_work_hours_headline_stays_llm_owned() -> None:
     text = (
         "В выходные дни в библиотеке пройдут лекции и мастер-классы.\n"

@@ -4017,6 +4017,17 @@ _TOO_SOON_NOTICE_RE = re.compile(
     r"начинаем\s+через\s+\d{1,3}\s+минут"
     r")\b"
 )
+_EVENT_LOGISTICS_NOTICE_RE = re.compile(
+    r"(?ius)\b("
+    r"важн\w+\s+информаци\w+\s+для\s+(?:гостей|посетител\w*|зрител\w*)|"
+    r"информаци\w+\s+для\s+(?:гостей|посетител\w*|зрител\w*)|"
+    r"обраща(?:ем|йте)\s+внимани\w+"
+    r")\b"
+    r"[\s\S]{0,600}\b("
+    r"вход|проход|въезд|парковк\w*|гардероб|рассадк\w*|очеред\w*|"
+    r"навигаци\w*|организован|осуществляться|перенес[её]н\s+вход"
+    r")\b"
+)
 _ONLINE_EVENT_RE = re.compile(
     r"(?iu)\b("
     r"онлайн(?![-\s]*(?:регистрац\w*|запис\w*|форм\w*|анкет\w*))|"
@@ -4082,6 +4093,10 @@ _COMPLETED_EVENT_REPORT_CONTINUATION_RE = re.compile(
     r"мастер-?класс\w*|игр\w*|мероприяти\w*|программ\w*)"
     r")\b"
 )
+_COMPLETED_FESTIVAL_TEASER_UNCONFIRMED_RE = re.compile(
+    r"(?ius)\bследующ\w+\s+фестивал\w*[:\s\S]{0,180}"
+    r"\b(?:локаци\w*|место|площадк\w*|адрес)\s+уточня\w*"
+)
 _COMPLETED_EVENT_REPORT_MARKERS = (
     re.compile(r"(?iu)\b(?:встреча|игра|урок|лекция|концерт|экскурсия|мероприятие|мастер-?класс)\s+прош(?:ел|ла|ло|ли)\b"),
     re.compile(r"(?iu)\b(?:прош(?:ел|ла|ло|ли)|состоял(?:ся|ась|ось|ись))\b"),
@@ -4092,9 +4107,10 @@ _COMPLETED_EVENT_REPORT_MARKERS = (
         r"(?iu)\b(?:мы|участники|ребята)\s+"
         r"(?:отправили(?:сь)?|провели|сделали|исследовали|решали|работали|обсудили|поговорили)\b"
     ),
-    re.compile(r"(?iu)\b(?:было\s+(?:здорово|интересно|ценно)|горящие\s+глаза|неподдельн\w+\s+интерес)\b"),
+    re.compile(r"(?iu)\b(?:было\s+(?:здорово|интересно|ценно|классно)|горящие\s+глаза|неподдельн\w+\s+интерес)\b"),
     re.compile(
-        r"(?iu)\b(?:огромное\s+спасибо|спасибо\s+(?:администрац\w*|педагог\w*|организатор\w*)|"
+        r"(?iu)\b(?:огромное\s+спасибо|спасибо\s+(?:администрац\w*|педагог\w*|организатор\w*|"
+        r"мастер\w*|гост\w*|партн[её]р\w*)|"
         r"скоро\s+увидимся\s+вновь|не\s+последняя\s+наша\s+встреча)\b"
     ),
     re.compile(
@@ -4110,6 +4126,24 @@ def _looks_like_too_soon_notice(title: str | None, text: str | None) -> bool:
     if not combined:
         return False
     return bool(_TOO_SOON_NOTICE_RE.search(combined))
+
+
+def _looks_like_event_logistics_notice_not_event(title: str | None, text: str | None) -> bool:
+    """Detect operational updates for attendees of an already-announced event."""
+    combined = "\n".join([str(title or ""), str(text or "")]).strip()
+    if not combined:
+        return False
+    if not _EVENT_LOGISTICS_NOTICE_RE.search(combined):
+        return False
+    # A real standalone announcement should have a clear invite/sale action, not
+    # only entry-route or navigation instructions for people already attending.
+    if re.search(
+        r"(?iu)\b(приглаша(?:ем|ю|ет)|жд[её]м\s+вас|приходите|открыта\s+регистраци\w*|"
+        r"купить\s+билет|билеты\s+(?:в\s+продаже|здесь|по\s+ссылке))\b",
+        combined,
+    ):
+        return False
+    return True
 
 
 def _looks_like_online_event(title: str | None, text: str | None) -> bool:
@@ -4389,13 +4423,16 @@ def _looks_like_completed_event_report_not_event(
     low = combined.casefold()
     if _COMPLETED_EVENT_REPORT_KEEP_RE.search(low):
         return False
-    if _COMPLETED_EVENT_REPORT_CONTINUATION_RE.search(low):
+    unconfirmed_next_festival = bool(
+        _COMPLETED_FESTIVAL_TEASER_UNCONFIRMED_RE.search(combined)
+    )
+    if _COMPLETED_EVENT_REPORT_CONTINUATION_RE.search(low) and not unconfirmed_next_festival:
         return False
     if candidate is not None:
         time_raw = str(getattr(candidate, "time", "") or "").strip().replace(".", ":")
         if time_raw and time_raw not in {"00:00", "0:00"}:
             return False
-        if str(getattr(candidate, "end_date", "") or "").strip():
+        if str(getattr(candidate, "end_date", "") or "").strip() and not unconfirmed_next_festival:
             return False
         if str(getattr(candidate, "ticket_link", "") or "").strip():
             return False
@@ -12168,6 +12205,17 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="too_soon")
+        if _looks_like_event_logistics_notice_not_event(clean_title, combined_text):
+            logger.info(
+                "smart_update.skip reason=event_logistics_notice source_type=%s source_url=%s title=%s",
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+            )
+            return SmartUpdateResult(
+                status="skipped_non_event",
+                reason="event_logistics_notice",
+            )
         # Project policy: auto-ingestion should not create online-only events.
         if _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate):
             logger.info(

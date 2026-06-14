@@ -315,6 +315,9 @@ def test_tg_monitor_extract_prompt_blocks_gemma4_known_leaks() -> None:
     assert 'Never emit English event_type tokens like "exhibition"' in source
     assert "Fundraising-only posts" in source
     assert "Pure retrospective reports of completed events" in source
+    assert 'only says "следующий фестиваль" with dates but "локация/место/адрес уточняется"' in source
+    assert "Operational updates for people already attending an event" in source
+    assert '"важная информация для гостей/зрителей", entry route, navigation, parking, queue, cloakroom' in source
 
 
 def test_tg_monitor_general_extract_failure_falls_through_to_rescue_prompts() -> None:

@@ -132,8 +132,16 @@ If an array of events is returned, `search_digest` must be present in every obje
 - If the text is mainly a post-event report / recap about something that already happened, return no events.
 - Typical clues: past-tense narrative ("мы провели/исследовали/работали"), after-the-fact summary ("было здорово"),
   gratitude/wrap-up ("спасибо ...", "увидимся вновь"), but no concrete attendable future anchor.
+- A recap that only says "следующий фестиваль" with dates while the location/place/address is "уточняется" is not
+  a concrete future event; return no events instead of inventing a venue from gratitude text or source context.
 - If a post mixes recap/background about past meetings with a real future invite, ignore the recap part and extract
   only the future attendable event with its explicit future anchor (date/venue/time/registration/ticket).
+
+**logistics update rule:**
+- Operational updates for people already attending an event are not standalone new events: "важная информация для
+  гостей/зрителей", changed entry route, navigation, parking, queue, cloakroom, seating, or similar instructions.
+- Return no events unless the same post is also a full new invitation with a concrete future date, title, venue,
+  and ticket/registration signal.
 ```
 
 Examples of the desired venue formatting:

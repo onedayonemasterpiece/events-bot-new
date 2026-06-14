@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram Monitoring false events from festival recaps and logistics notices**:
+  tightened the TelegramMonitor prompt and Smart Update safety-net guards so a
+  recap that only says the next festival dates while location/place/address is
+  still unknown returns `skipped_non_event:completed_event_report`, and attendee
+  logistics notices about entry/navigation/parking/queues for an already
+  announced event return `skipped_non_event:event_logistics_notice`. Added
+  replay coverage for `garazhka_kld/1505` and `festdir/4673` plus a positive
+  control for a real future festival announcement. Telegram producer location
+  recovery now also rejects `City, спасибо` salutation lines and ignores
+  `локация/место/адрес уточняется` lines before known-venue matching, so
+  deterministic repair cannot turn unknown-location recap text into a venue.
+  Tracks
+  `INC-2026-06-14-festival-recap-logistics-false-events`.
 - **Changed: Afisha Engagement CTA rollout targets**: `afishaengagement`
   now supports `tg_chat_author` promo targets, matching Telegram source chat
   URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as

@@ -1,0 +1,60 @@
+{
+  "incident_id": "INC-2026-06-14-festival-recap-logistics-false-events",
+  "cases": [
+    {
+      "source_type": "telegram",
+      "source_url": "https://t.me/garazhka_kld/1505",
+      "reported_vk_post_url": "https://vk.com/wall-231920894_3307",
+      "expected_status": "skipped_non_event",
+      "expected_reason": "completed_event_report",
+      "candidate": {
+        "title": "Гаражка",
+        "date": "2026-09-05",
+        "end_date": "2026-09-06",
+        "location_name": "спасибо!",
+        "location_address": "Мира 9",
+        "city": "Калининград",
+        "festival": "Гаражка",
+        "festival_source": true,
+        "festival_series": "Гаражка"
+      },
+      "source_text": "Калининград, спасибо!\nБыло классно\n\nСтояли солнечные выходные — половина города уехала на море, но все кто пришёл на Гаражку в любимую локацию ПОНАРТ — лучшие.\n\nСпасибо мастерам — что не уехали на море, а радовали нас своим творчеством.\nСпасибо гостям — что вы с нами!\n\nСледующий фестиваль:\n5–6 сентября\nЛокация уточняется!\nДо сентября."
+    },
+    {
+      "source_type": "telegram",
+      "source_url": "https://t.me/festdir/4673",
+      "reported_vk_post_url": "https://vk.com/wall-231920894_3310",
+      "expected_status": "skipped_non_event",
+      "expected_reason": "event_logistics_notice",
+      "candidate": {
+        "title": "Концерт",
+        "date": "2026-09-04",
+        "time": "14:00",
+        "location_name": "Понарт",
+        "location_address": "Судостроительная 6",
+        "city": "Калининград",
+        "festival": "Кантата",
+        "event_type": "концерт"
+      },
+      "source_text": "Важная информация для гостей концерта 14 июня в арт-пространстве «Понарт».\n\nОбращаем внимание, что вход на концертную площадку будет организован не через привычный вход на территорию арт-пространства.\n\nВ связи с особенностями размещения сцены проход для зрителей будет осуществляться через другой вход. Пожалуйста, ориентируйтесь на навигацию на месте.\n\nДо встречи!\n\nПроект реализуется при поддержке Президентского фонда культурных инициатив.\nАНО «Фестивальная дирекция» Кантата"
+    },
+    {
+      "source_type": "telegram",
+      "source_url": "https://t.me/garazhka_kld/1510",
+      "expected_status": "not_skipped_by_completed_event_report",
+      "control": true,
+      "candidate": {
+        "title": "Гаражка",
+        "date": "2026-09-05",
+        "end_date": "2026-09-06",
+        "location_name": "Понарт",
+        "location_address": "Судостроительная 6",
+        "city": "Калининград",
+        "festival": "Гаражка",
+        "festival_source": true,
+        "festival_series": "Гаражка"
+      },
+      "source_text": "Следующая Гаражка пройдет 5–6 сентября в пространстве Понарт.\nЖдём гостей и участников на маркете, мастер-классах и кинопоказах.\nАдрес: Судостроительная 6, Калининград."
+    }
+  ]
+}
