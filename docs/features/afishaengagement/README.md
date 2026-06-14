@@ -16,7 +16,12 @@ means one `wall.post`: CTA when generation succeeds, plain only as fallback.
 An already managed VK post is not retroactively converted into CTA by this
 path; existing-post edits remain the normal update/repair path. Promo
 `vk_publication` also uses the same enhancer so additional promo VK
-publications do not bypass the `Мотивация` activity.
+publications do not bypass the `Мотивация` activity. It uses the same one-write
+boundary: public CTA preflight runs before the plain `vk_publication` wall
+post. A successful CTA preflight becomes the scheduled VK publication and
+suppresses the plain post; a plain fallback may only run debug/shadow
+Afisha Engagement checks with `shadow_only=True`, so public CTA activities
+cannot create a second wall post after the fallback.
 
 ## MVP Contract
 

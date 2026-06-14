@@ -536,6 +536,8 @@ async def test_promo_vk_publication_runs_afishaengagement_shadow(tmp_path, monke
 
     async def fake_shadow(**kwargs):
         shadow_calls.append(kwargs)
+        if kwargs.get("public_only"):
+            return None
         return "https://vk.com/wall-231920894_142"
 
     monkeypatch.setattr(main, "post_to_vk", fake_post_to_vk)
@@ -556,13 +558,72 @@ async def test_promo_vk_publication_runs_afishaengagement_shadow(tmp_path, monke
     )
 
     assert url == "https://vk.com/wall-231920894_42"
-    assert len(shadow_calls) == 1
-    call = shadow_calls[0]
+    assert len(shadow_calls) == 2
+    assert shadow_calls[0]["public_only"] is True
+    call = shadow_calls[1]
+    assert call["shadow_only"] is True
     assert call["event"] is ev
     assert call["target_group_id"] == "231920894"
     assert call["message"] == "SOURCE Фестиваль 1"
     assert call["photo_urls"] == ["https://example.com/promo-poster.jpg"]
     assert call["post_to_vk_fn"] is fake_post_to_vk
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_vk_publication_uses_public_afishaengagement_as_primary_post(
+    tmp_path, monkeypatch
+) -> None:
+    import main
+    from promo import _build_promo_vk_source_post
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_MAX_ATTACHMENTS", 10)
+    monkeypatch.setattr(main, "build_vk_source_message", lambda ev, text, festival=None: f"SOURCE {ev.title}")
+
+    async def fake_upload(group_id, photo_url, db_arg=None, bot_arg=None):
+        assert photo_url == "https://example.com/promo-poster.jpg"
+        return "photo-231920894_1"
+
+    async def fail_plain_post(*args, **kwargs):
+        raise AssertionError("plain VK post must not be created after public CTA succeeds")
+
+    engagement_calls: list[dict] = []
+
+    async def fake_engagement(**kwargs):
+        engagement_calls.append(kwargs)
+        assert kwargs["public_only"] is True
+        assert not kwargs.get("shadow_only")
+        return "https://vk.com/wall-231920894_3369"
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fail_plain_post)
+    monkeypatch.setattr("afishaengagement.maybe_publish_shadow_debug_copy", fake_engagement)
+
+    ev = _event("Великие учителя", "2026-07-04", festival="80 историй о главном")
+    ev.id = 5783
+    ev.source_post_url = "https://t.me/kraftmarket39/274"
+    ev.photo_urls = ["https://example.com/promo-poster.jpg"]
+    ev.photo_count = 1
+
+    url = await _build_promo_vk_source_post(
+        db,
+        None,
+        ev,
+        campaign_id=1,
+        activity_id=8,
+        target_group_id=231920894,
+    )
+
+    assert url == "https://vk.com/wall-231920894_3369"
+    assert len(engagement_calls) == 1
+    call = engagement_calls[0]
+    assert call["event"] is ev
+    assert call["target_group_id"] == "231920894"
+    assert call["message"] == "SOURCE Великие учителя"
+    assert call["photo_urls"] == ["https://example.com/promo-poster.jpg"]
     await db.close()
 
 

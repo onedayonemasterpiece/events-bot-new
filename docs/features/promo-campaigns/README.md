@@ -206,9 +206,17 @@ For each active campaign/activity the scheduler:
   activity's current local calendar day, not in a rolling 24-hour window, so an
   evening exposure from yesterday cannot suppress today's 15:00 local slot;
 - if the count is below the number of slots due by the current local time,
-  publishes one missing post as a postponed community wall post through the
-  standard VK wall contract (`post_to_vk`, community author, postponed queue),
-  using the same source-style event message format as Smart Update;
+  first lets public `afishaengagement` preflight choose a CTA variant for that
+  exact publication pass. If the CTA preflight succeeds, that CTA wall post is
+  the `vk_publication` result and the plain `post_to_vk` call is skipped. If it
+  misses or fails, the runner publishes one missing plain post as a postponed
+  community wall post through the standard VK wall contract (`post_to_vk`,
+  community author, postponed queue), using the same source-style event message
+  format as Smart Update;
+- after a plain `vk_publication` fallback, only explicit debug/shadow
+  `afishaengagement` activities may run (`shadow_only=True`). Public CTA
+  activities must not create a second wall post after the plain post already
+  exists;
 - treats missing media for Telegram-origin events, and empty VK upload for any
   event that already has media URLs, as a promo data incident rather than a
   reason to silently degrade reach. The runner first tries to recover renderable

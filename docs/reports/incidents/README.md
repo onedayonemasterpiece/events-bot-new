@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-14-vk-publication-cta-plain-duplicate.md`
+  - Scope: promo `vk_publication` and Afisha Engagement public CTA one-write
+    boundary for `klgdevents` VK wall posts.
+  - Must not regress: promo VK publication must choose one production variant
+    before writing to VK. If public Afisha Engagement CTA preflight succeeds,
+    it is the scheduled wall post and the plain `post_to_vk` call is skipped;
+    if the plain fallback posts, later Afisha Engagement checks must be
+    `shadow_only=True` so public CTA activities cannot create a second wall
+    post for the same publication pass.
 - `INC-2026-06-14-morning-import-quality-and-outbox-stale.md`
   - Scope: Telegram Monitoring location/city handoff, Smart Update unsupported-location guard, event `JobOutbox` stale handling, managed VK/TG fanout reconciliation, and Afisha Engagement CTA/plain public rollout evidence.
   - Must not regress: temporal/date words such as `Завтра`, `Сегодня`, or `14 июня` must not persist as `location_name`; inflected settlement city strings such as `посёлке Железнодорожный` must route to LLM venue-review rather than regex replacement; event-pipeline `running` jobs must retry with bounded backoff after stale runtime expiry instead of becoming 10-year dependency blockers; CTA/plain VK publication remains a single production-path decision.

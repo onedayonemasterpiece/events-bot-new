@@ -2323,6 +2323,44 @@ async def _build_promo_vk_source_post(
             VK_SYNC_MISSING_TG_MEDIA_ERROR,
         )
         raise RuntimeError(VK_SYNC_MISSING_TG_MEDIA_ERROR)
+    try:
+        from afishaengagement import maybe_publish_shadow_debug_copy
+
+        public_url = await maybe_publish_shadow_debug_copy(
+            event=ev,
+            db=db,
+            bot=bot,
+            target_group_id=str(target_group_id),
+            message=message,
+            photo_urls=photo_urls[:VK_MAX_ATTACHMENTS],
+            post_to_vk_fn=post_to_vk,
+            upload_vk_photo_fn=upload_vk_photo,
+            upload_images_fn=upload_images,
+            vk_api_fn=_vk_api,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
+            public_only=True,
+        )
+        if public_url:
+            logger.info(
+                "promo.vk publication afishaengagement public selected campaign_id=%s activity_id=%s "
+                "event_id=%s target_group_id=%s url=%s",
+                campaign_id,
+                activity_id,
+                getattr(ev, "id", None),
+                target_group_id,
+                public_url,
+            )
+            return public_url
+    except Exception:
+        logger.exception(
+            "promo.vk publication afishaengagement public preflight failed campaign_id=%s activity_id=%s "
+            "event_id=%s target_group_id=%s",
+            campaign_id,
+            activity_id,
+            getattr(ev, "id", None),
+            target_group_id,
+        )
+
     url = await post_to_vk(
         str(target_group_id),
         message,
@@ -2332,8 +2370,6 @@ async def _build_promo_vk_source_post(
     )
     if url:
         try:
-            from afishaengagement import maybe_publish_shadow_debug_copy
-
             shadow_url = await maybe_publish_shadow_debug_copy(
                 event=ev,
                 db=db,
@@ -2346,6 +2382,7 @@ async def _build_promo_vk_source_post(
                 upload_images_fn=upload_images,
                 vk_api_fn=_vk_api,
                 upload_vk_photo_bytes_fn=upload_vk_photo_bytes,
+                shadow_only=True,
             )
             logger.info(
                 "promo.vk publication afishaengagement checked campaign_id=%s activity_id=%s event_id=%s "

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Promo VK public CTA/plain duplicate posts**: `vk_publication`
+  now runs Afisha Engagement public CTA preflight before the plain VK post and
+  returns the CTA URL when it wins. If the plain fallback posts, the later
+  Afisha Engagement check is `shadow_only=True`, preventing public CTA
+  activities from creating a second wall post for the same promo publication.
+  Tracks `INC-2026-06-14-vk-publication-cta-plain-duplicate`.
 - **Changed: Poll to Repost question clarity loop**: production now enables an
   LLM writer/reviewer loop for poll questions. The reviewer rejects wording
   unless it is clear that subscribers choose today a category of events to go
