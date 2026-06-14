@@ -4325,7 +4325,7 @@ class VideoAnnounceScenario:
                 session_id=session_obj.id,
                 kind="cherryflash",
                 notebook="CherryFlash",
-                kernel_ref=session_obj.kaggle_kernel_ref,
+                kernel_ref=getattr(session_obj, "kaggle_kernel_ref", None),
                 dataset_ref=dataset_id,
                 resource_leases=(["telegram_session:s22"] if story_publish_requested else []),
             )
@@ -4490,6 +4490,11 @@ class VideoAnnounceScenario:
                     encoding="utf-8",
                 )
 
+            kind = "crumple_video"
+            kernel_ref_text = str(session_obj.kaggle_kernel_ref or "").lower()
+            if "video-afisha" in kernel_ref_text or "video_afisha" in kernel_ref_text:
+                kind = "video_afisha"
+
             selected_event_dates = await self._selected_event_dates(session_obj.id)
             selected_event_cities = await self._selected_event_cities(session_obj.id)
             story_config = await build_story_publish_config(
@@ -4505,10 +4510,14 @@ class VideoAnnounceScenario:
                     encoding="utf-8",
                 )
                 story_dataset_sources = await ensure_story_secret_datasets(client)
-            kind = "crumple_video"
-            kernel_ref_text = str(session_obj.kaggle_kernel_ref or "").lower()
-            if "video-afisha" in kernel_ref_text or "video_afisha" in kernel_ref_text:
-                kind = "video_afisha"
+                if kind == "crumple_video":
+                    project_root = Path(__file__).resolve().parent.parent
+                    helper_src = project_root / "kaggle" / "CrumpleVideo" / "story_publish.py"
+                    helper_dest = tmp_path / "kaggle_common" / "story_publish.py"
+                    if not helper_src.exists():
+                        raise RuntimeError(f"Missing CrumpleVideo story helper: {helper_src}")
+                    helper_dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(helper_src, helper_dest)
             kaggle_run_config = await create_kaggle_run_config(
                 self.db,
                 run_id=f"videoannounce:{session_obj.id}",

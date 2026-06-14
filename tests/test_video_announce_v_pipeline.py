@@ -1043,6 +1043,86 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
 
 
 @pytest.mark.asyncio
+async def test_create_crumple_dataset_bundles_current_story_helper_when_story_enabled(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    snapshot_dir = tmp_path / "snapshot"
+    calls: list[tuple[str, Path]] = []
+
+    async def _fake_selected_event_dates(session_id):  # noqa: ARG001
+        return ["2026-06-15"]
+
+    async def _fake_selected_event_cities(session_id):  # noqa: ARG001
+        return ["Калининград"]
+
+    async def _fake_build_story_publish_config(*args, **kwargs):  # noqa: ANN002,ANN003
+        return {
+            "version": 1,
+            "mode": "video",
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "mode": "upload",
+                    "required": True,
+                }
+            ],
+        }
+
+    class _DummyClient:
+        def create_dataset(self, path):  # noqa: ANN001
+            calls.append(("create_dataset", Path(path)))
+            shutil.copytree(path, snapshot_dir, dirs_exist_ok=True)
+
+        def delete_dataset(self, *args, **kwargs):  # noqa: ANN002,ANN003
+            raise AssertionError("delete_dataset should not be called")
+
+    monkeypatch.setattr(scenario, "_selected_event_dates", _fake_selected_event_dates)
+    monkeypatch.setattr(scenario, "_selected_event_cities", _fake_selected_event_cities)
+    monkeypatch.setattr(scenario, "_copy_assets", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "video_announce.scenario.build_story_publish_config",
+        _fake_build_story_publish_config,
+    )
+    monkeypatch.setattr(
+        "video_announce.scenario.ensure_story_secret_datasets",
+        AsyncMock(return_value=["zigomaro/story-secret"]),
+    )
+
+    session_obj = SimpleNamespace(
+        id=676,
+        kaggle_kernel_ref="zigomaro/crumple-video",
+        selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        main_chat_id=-100123,
+    )
+
+    dataset_id, story_sources = await scenario._create_dataset(
+        session_obj,
+        json.dumps({"scenes": []}, ensure_ascii=False),
+        [],
+        client=_DummyClient(),
+    )
+
+    assert dataset_id == "zigomaro/video-afisha-session-676"
+    assert story_sources == ["zigomaro/story-secret"]
+    assert len(calls) == 1
+    assert calls[0][0] == "create_dataset"
+    bundled_helper = snapshot_dir / "kaggle_common" / "story_publish.py"
+    assert bundled_helper.exists()
+    assert bundled_helper.read_text(encoding="utf-8") == (
+        Path("kaggle/CrumpleVideo/story_publish.py").read_text(encoding="utf-8")
+    )
+    assert (snapshot_dir / "story_publish.json").exists()
+
+
+@pytest.mark.asyncio
 async def test_create_cherryflash_dataset_retries_dataset_create_after_invalid_token(
     monkeypatch,
     tmp_path,

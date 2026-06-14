@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-14-crumple-vk-transport-drift.md`
+  - Scope: CrumpleVideo scheduled `/v tomorrow` VK wall fanout, Kaggle
+    notebook embedded story helper, story-enabled session dataset helper
+    bundling, and `vk:kenigeventsofficial:wall`.
+  - Must not regress: CrumpleVideo VK community targets must be handled through
+    the same explicit VK transports as CherryFlash (`vk_wall`/`vk_wall_story`)
+    and must never fall through to Telethon username resolution; the notebook
+    must prefer bundled `kaggle_common/story_publish.py` and keep embedded
+    fallback in sync.
 - `INC-2026-06-14-vk-publication-cta-plain-duplicate.md`
   - Scope: promo `vk_publication` and Afisha Engagement public CTA one-write
     boundary for `klgdevents` VK wall posts.

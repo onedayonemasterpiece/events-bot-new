@@ -85,6 +85,10 @@ def test_embedded_helpers_match_repo_sources():
     assert embedded_poster == POSTER_MODULE_PATH.read_text(encoding="utf-8").rstrip("\n")
     assert embedded_story == STORY_MODULE_PATH.read_text(encoding="utf-8").rstrip("\n")
     assert embedded_gesture == GESTURE_MODULE_PATH.read_text(encoding="utf-8").rstrip("\n")
+    assert "SOURCE_FOLDER / 'kaggle_common' / 'story_publish.py'" in source
+    assert "Copied story_publish.py from bundled helper" in source
+    assert 'transport in {"vk_story", "vk_wall", "vk_wall_story"}' in embedded_story
+    assert "_publish_vk_wall_video" in embedded_story
     assert "from story_gesture_overlay import GESTURE_STEP_COUNT, apply_story_gesture_frame" in source
     assert "pending_gesture_step" in source
     assert "gesture_fold_lead_frames = 8" in source

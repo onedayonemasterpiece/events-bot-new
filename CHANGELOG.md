@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: CrumpleVideo VK wall fanout drift**: scheduled `/v tomorrow`
+  now bundles the current `kaggle_common/story_publish.py` into the Kaggle
+  session dataset and the notebook prefers that shared helper before its
+  embedded fallback. The embedded Crumple fallback is regenerated from the repo
+  helper and guarded so `vk:kenigeventsofficial:wall` is handled by VK
+  `transport="vk_wall"` instead of Telethon username resolution. Tracks
+  `INC-2026-06-14-crumple-vk-transport-drift`.
 - **Fixed: Promo VK public CTA/plain duplicate posts**: `vk_publication`
   now runs Afisha Engagement public CTA preflight before the plain VK post and
   returns the CTA URL when it wins. If the plain fallback posts, the later

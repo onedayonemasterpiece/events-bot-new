@@ -33,6 +33,22 @@ CrumpleVideo/Blender. Этот документ собирает требова�
 - Этот флаг отключает только LLM-дозаполнение `about` на критическом пути `start_render()` и fail-open возвращает пустой результат вместо блокировки pre-Kaggle handoff.
 - Использовать только как временный аварийный рычаг для восстановления сегодняшнего слота; после успешного rerun флаг нужно снять.
 
+### Kaggle story helper contract
+
+- `CrumpleVideo` использует тот же Kaggle-side story helper contract, что и
+  CherryFlash: каждый VK target обязан иметь явный `transport="vk_wall"`,
+  `transport="vk_wall_story"` или legacy `transport="vk_story"`, иначе plain
+  screen name вроде `kenigeventsofficial` будет ошибочно обработан Telethon как
+  Telegram peer.
+- Dataset для scheduled `/v tomorrow` при включённом story publish должен
+  включать свежий `kaggle_common/story_publish.py`; notebook сначала копирует
+  этот helper из session dataset и только если его нет использует embedded
+  fallback. Это защищает CrumpleVideo от drift относительно CherryFlash при
+  изменениях VK fanout.
+- Release gate для изменений в `kaggle/CrumpleVideo/story_publish.py`:
+  `tests/test_crumple_build_notebook.py` должен подтверждать, что embedded
+  fallback синхронизирован с repo helper и содержит VK transport branch.
+
 ## Проблемы и наблюдения (последний тестовый прогон)
 
 - Рендер занял `7314.6s` (ускорение требуется только для тестового запуска).
