@@ -1,6 +1,6 @@
 # INC-2026-06-14 VK Publication CTA/Plain Duplicate
 
-Status: mitigated
+Status: monitoring
 Severity: sev2
 Service: promo VK publication / Afisha Engagement public CTA rollout
 Opened: 2026-06-14
@@ -141,15 +141,15 @@ generation wins.
 
 ## Follow-up Actions
 
-- [ ] Deploy fix to production from clean worktree and record SHA/image.
+- [x] Deploy fix to production from clean worktree and record SHA/image.
 - [ ] Re-check the next `promo_vk` run for CTA/plain one-write behavior.
 - [ ] Consider adding a reconciliation job that resolves stored postponed ids to
   live ids before duplicate cleanup/reporting.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `af95f85d` (reachable from `origin/main`)
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KV3G81B8MNGSFAXRK6R397HP`; machine `48e42d5b714228` version `1407`
 - regression checks:
   - `python3 -m py_compile promo.py tests/test_promo.py`
   - `../events-bot-new-inc-20260614-garazhka/.venv/bin/python -m pytest tests/test_promo.py -q` → `45 passed`
@@ -158,7 +158,10 @@ generation wins.
   - artifact `artifacts/codex/INC-2026-06-14-vk-cta-duplicate/cleanup_delete_3370.json` shows `wall.delete response=1` and `db_exposure_359_updated=true`;
   - artifact `artifacts/codex/INC-2026-06-14-vk-cta-duplicate/find_cta_live_after_publish.json` shows live CTA `wall-231920894_3372` with postponed id `3369`;
   - artifact `artifacts/codex/INC-2026-06-14-vk-cta-duplicate/update_plain_exposure_incident.json` shows `id=358` reconciled to `3372` and `id=359` as `VK_DELETED_DUPLICATE`.
-- post-deploy verification: pending
+- post-deploy verification:
+  - `curl https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `db=ok`, no issues;
+  - `flyctl status` showed machine `48e42d5b714228` started with `1 total, 1 passing`;
+  - Fly logs showed `BOOT_OK pid=647`, `Running on http://0.0.0.0:8080`, and health check `servicecheck-00-http-8080` passing.
 
 ## Prevention
 
