@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Changed: VK auto-import daytime cadence and queue summary**:
+  `VK_AUTO_IMPORT_TIMES_LOCAL` now defaults to
+  `06:15,10:15,12:00,13:15,18:30` so pending VK inbox items can be drained
+  once more after the daytime crawl before the evening slot. `/vk` queue summary
+  now shows VK crawl/base refresh times separately from VK auto-import times,
+  avoiding the old ambiguous "Обновление базы" line.
+- **Changed: Repository branch/worktree discipline**: canonical workflow now
+  treats `feature/<topic>` as the default for planned tuning, UX, schedule and
+  documentation work, reserves `hotfix/<topic>` for active production incidents,
+  and requires moving post-mitigation follow-up into a fresh feature worktree
+  from current `origin/main`.
 - **Fixed: Afisha Engagement shadow fallback after production CTA rollout**:
   normal Smart Update VK sync now makes one publication-boundary choice:
   public CTA preflight creates the CTA post when it wins, otherwise the path

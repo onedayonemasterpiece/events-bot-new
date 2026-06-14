@@ -180,7 +180,7 @@ Scheduler job: `vk_auto_queue.vk_auto_import_scheduler` (`scheduling.py`).
 
 ENV:
 - `ENABLE_VK_AUTO_IMPORT=1` включает job.
-- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:30,18:30`) локальные времена запуска.
+- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:15,10:15,12:00,13:15,18:30`) локальные времена запуска.
 - `VK_AUTO_IMPORT_TZ` (по умолчанию `Europe/Kaliningrad`) таймзона расписания.
 - `VK_AUTO_IMPORT_LIMIT` (по умолчанию `15`) сколько постов обработать за один запуск.
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` (по умолчанию `models/gemma-4-31b-it`) scoped model override только для VK auto-import draft extraction. Он передаётся в `event_parse` через `vk_intake`, но не меняет Smart Update и не меняет глобальный `/parse`.
@@ -198,7 +198,7 @@ ENV:
 
 Рекомендация по эксплуатации: для live очереди безопаснее частые меньшие батчи, чем редкие большие. Такой режим лучше переживает `SCHED_HEAVY_GUARD_MODE=skip`, быстрее подбирает свежие посты после crawl и реже создаёт длинные окна, где один пропущенный запуск мгновенно превращается в суточный backlog.
 
-Подбор дефолтных окон делался с запасом относительно типовых соседних задач в `Europe/Kaliningrad`: утренний run не ставится вплотную к `daily` на `08:00`, поздний run не ставится рядом с вечерним `tg_monitoring`, а дневные окна держат отступ от `VK_CRAWL_TIMES_LOCAL` и midday jobs.
+Подбор дефолтных окон делался с запасом относительно типовых соседних задач в `Europe/Kaliningrad`: утренний run не ставится вплотную к `daily` на `08:00`, поздний run не ставится рядом с вечерним `tg_monitoring`, а дневные окна держат очередь более ровной. Слот `13:15` намеренно совпадает с дневным `VK_CRAWL_TIMES_LOCAL`, чтобы свежие `pending` посты не ждали до вечернего auto-import.
 
 Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие дольше lock timeout, автоматически возвращаются в `pending` на следующем run/выборе очереди. Иначе такие строки не видны текущему auto-import flow, который использует `locked` как рабочий статус.
 

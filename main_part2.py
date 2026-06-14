@@ -12893,16 +12893,34 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
         f"imported: {counts.get('imported', 0)}",
         f"rejected: {counts.get('rejected', 0)}",
     ]
-    schedule_raw = os.getenv(
+    crawl_schedule_raw = os.getenv(
         "VK_CRAWL_TIMES_LOCAL", "05:15,09:15,13:15,17:15,21:15,22:45"
     )
-    schedule_times = [part.strip() for part in schedule_raw.split(",") if part.strip()]
-    schedule_line = ", ".join(schedule_times)
-    schedule_tz = os.getenv("VK_CRAWL_TZ")
-    if schedule_tz:
-        schedule_line = f"{schedule_line} ({schedule_tz})"
-    if schedule_line:
-        lines.insert(0, f"Обновление базы: {schedule_line}")
+    crawl_schedule_times = [
+        part.strip() for part in crawl_schedule_raw.split(",") if part.strip()
+    ]
+    crawl_schedule_line = ", ".join(crawl_schedule_times)
+    crawl_schedule_tz = os.getenv("VK_CRAWL_TZ")
+    if crawl_schedule_tz:
+        crawl_schedule_line = f"{crawl_schedule_line} ({crawl_schedule_tz})"
+    if crawl_schedule_line:
+        lines.insert(0, f"Обновление базы VK: {crawl_schedule_line}")
+
+    auto_schedule_raw = os.getenv(
+        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,13:15,18:30"
+    )
+    auto_schedule_times = [
+        part.strip() for part in auto_schedule_raw.split(",") if part.strip()
+    ]
+    auto_schedule_line = ", ".join(auto_schedule_times)
+    auto_schedule_tz = os.getenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    if auto_schedule_tz:
+        auto_schedule_line = f"{auto_schedule_line} ({auto_schedule_tz})"
+    if auto_schedule_line:
+        lines.insert(
+            1 if crawl_schedule_line else 0,
+            f"Авторазбор очереди: {auto_schedule_line}",
+        )
     markup = types.ReplyKeyboardMarkup(
         keyboard=[[types.KeyboardButton(text=VK_BTN_CHECK_EVENTS)]],
         resize_keyboard=True,
