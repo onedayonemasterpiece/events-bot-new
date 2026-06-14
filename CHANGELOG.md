@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **Contour SVG generator / neural branch v0.2 line-art batch**: added a
+  guide-only multi-mask ControlNet experiment for raster line-art research.
+  New `contour_svg.guide_bank` builds role-separated `G*` and `CG*` guides
+  from source photos, including `edge_mask.png`, object/occluder masks,
+  silhouette, structure, detail and fused guides. New
+  `contour_svg.line_art_experiments`, `kaggle/ContourSvgLineArtBatch`, and
+  `scripts/run_contour_svg_line_art_batch_kaggle.py` run Lineart/Scribble
+  ControlNet control-only and line-init branches across all images in
+  `docs/features/countur_svg_generator/to_do`, with the prepared guide as the
+  default generation input/control image instead of source-photo init. Each
+  candidate now exports raw PNG, black-on-white line mask, cleaned mask,
+  burgundy preview, JSON metrics/gates and contact sheets; SVG finalization is
+  explicitly out of scope for this experiment.
 - **Contour SVG generator / tower Kaggle run controls**: the stable
   `ContourSvgGenerator` Kaggle launcher now writes an explicit
   `contour_run_config.json`, so benchmark runs can select configs such as

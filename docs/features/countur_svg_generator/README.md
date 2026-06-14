@@ -159,6 +159,32 @@ python scripts/run_contour_svg_neural_branch_kaggle.py \
   --seeds 92
 ```
 
+The current v0.2 neural experiment adds a batchable guide-only ControlNet
+line-art workflow for fast visual research before SVG reconstruction. It takes
+source photos directly, builds a role-separated guide bank (`G1_edge_raw`,
+`G3_edge_thickened`, `G4_edge_cleaned`, `G7_silhouette_outline`,
+`G10_fused_guide` plus composite `CG*` guides), then runs Lineart/Scribble
+ControlNet candidates without using the source photo as default img2img init.
+Every candidate writes raw, black-on-white line mask, cleaned mask, burgundy
+preview, JSON metrics and contact sheets. The canonical target remains a clean
+raster architectural line-art PNG similar in approach to
+`samples/output/IMG_20260614_115550.webp`; SVG is still a later stage.
+
+Batch Kaggle probe for all images in `to_do/`:
+
+```bash
+python scripts/run_contour_svg_line_art_batch_kaggle.py \
+  --source-dir docs/features/countur_svg_generator/to_do \
+  --branches E1_lineart_control_only,E2_lineart_line_init,E3_scribble_control_only,E4_scribble_line_init \
+  --guide-ids G3_edge_thickened,G4_edge_cleaned,CG1_silhouette_plus_structure,CG3_fused_balanced,CG4_minimal_clean \
+  --seeds 42
+```
+
+The stable Kaggle notebook slug is `zigomaro/contour-svg-line-art-batch`.
+Per-image output folders contain `edge_mask.png`, `guides/`,
+`composite_guides/`, `candidates/`, `contact_sheets/`, `reports/` and
+`result.png` / `result_burgundy_preview.png` for the best line-mask candidate.
+
 Full Kaggle runs can select a non-default feature config through the local
 launcher without changing the stable notebook slug. For the tower benchmark:
 
