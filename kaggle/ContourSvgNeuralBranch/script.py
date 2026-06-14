@@ -41,6 +41,7 @@ def _find_repo_root() -> Path:
 
 
 ROOT = _find_repo_root()
+_NEURAL_RUN_CONFIG_CACHE: dict | None = None
 
 
 def _load_status_client():
@@ -106,12 +107,50 @@ def _torch_cuda_probe() -> dict:
     return info
 
 
+def _find_first_input(filename: str) -> Path | None:
+    roots = [KAGGLE_INPUT, Path("/kaggle/working"), ROOT]
+    for root in roots:
+        if not root.exists():
+            continue
+        direct = root / filename
+        if direct.exists():
+            return direct
+        matches = sorted(path for path in root.rglob(filename) if path.is_file())
+        if matches:
+            return matches[0]
+    return None
+
+
+def _load_neural_run_config() -> dict:
+    global _NEURAL_RUN_CONFIG_CACHE
+    if _NEURAL_RUN_CONFIG_CACHE is not None:
+        return _NEURAL_RUN_CONFIG_CACHE
+    path = _find_first_input("neural_run_config.json")
+    if path is None:
+        _NEURAL_RUN_CONFIG_CACHE = {}
+        return _NEURAL_RUN_CONFIG_CACHE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Invalid neural_run_config.json at {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Invalid neural_run_config.json at {path}: expected object")
+    _NEURAL_RUN_CONFIG_CACHE = data
+    return data
+
+
+def _resolve_repo_path(raw: str) -> Path:
+    path = Path(raw)
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
 def _resolve_artifact_dir() -> Path:
-    raw = os.getenv("CONTOUR_NEURAL_ARTIFACT_DIR", "").strip()
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_ARTIFACT_DIR", "").strip() or str(run_config.get("artifact_dir") or "").strip()
     if raw:
-        path = Path(raw)
-        if not path.is_absolute():
-            path = ROOT / path
+        path = _resolve_repo_path(raw)
         if path.exists():
             return path
         raise RuntimeError(f"CONTOUR_NEURAL_ARTIFACT_DIR does not exist: {path}")
@@ -126,11 +165,10 @@ def _resolve_artifact_dir() -> Path:
 
 
 def _style_reference_path() -> Path | None:
-    raw = os.getenv("CONTOUR_NEURAL_STYLE_REFERENCE", "").strip()
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_STYLE_REFERENCE", "").strip() or str(run_config.get("style_reference") or "").strip()
     if raw:
-        path = Path(raw)
-        if not path.is_absolute():
-            path = ROOT / path
+        path = _resolve_repo_path(raw)
         if not path.exists():
             raise RuntimeError(f"CONTOUR_NEURAL_STYLE_REFERENCE does not exist: {path}")
         return path
@@ -139,11 +177,10 @@ def _style_reference_path() -> Path | None:
 
 
 def _source_image_path() -> Path:
-    raw = os.getenv("CONTOUR_NEURAL_SOURCE_IMAGE", "").strip()
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_SOURCE_IMAGE", "").strip() or str(run_config.get("source_image") or "").strip()
     if raw:
-        path = Path(raw)
-        if not path.is_absolute():
-            path = ROOT / path
+        path = _resolve_repo_path(raw)
         if not path.exists():
             raise RuntimeError(f"CONTOUR_NEURAL_SOURCE_IMAGE does not exist: {path}")
         return path
@@ -159,17 +196,20 @@ def _source_image_path() -> Path:
 
 
 def _variants() -> tuple[str, ...]:
-    raw = os.getenv("CONTOUR_NEURAL_VARIANTS", "A1,A3,C2,D1,E1")
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_VARIANTS", "").strip() or str(run_config.get("variants") or "").strip() or "A1,A3,C2,D1,E1"
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
 def _init_modes() -> tuple[str, ...]:
-    raw = os.getenv("CONTOUR_NEURAL_INIT_MODES", "line_init")
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_INIT_MODES", "").strip() or str(run_config.get("init_modes") or "").strip() or "line_init"
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
 def _seeds() -> tuple[int, ...]:
-    raw = os.getenv("CONTOUR_NEURAL_SEEDS", "42")
+    run_config = _load_neural_run_config()
+    raw = os.getenv("CONTOUR_NEURAL_SEEDS", "").strip() or str(run_config.get("seeds") or "").strip() or "42"
     return tuple(int(item.strip()) for item in raw.split(",") if item.strip())
 
 

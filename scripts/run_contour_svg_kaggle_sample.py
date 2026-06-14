@@ -28,6 +28,7 @@ logger = logging.getLogger("contour_svg_kaggle_sample")
 
 DEFAULT_KERNEL_PATH = PROJECT_ROOT / "kaggle" / "ContourSvgGenerator"
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "artifacts" / "codex" / "contour-svg-sample"
+DEFAULT_CONFIG = "docs/features/countur_svg_generator/examples/sample_building.yaml"
 DEFAULT_ENV_FILE = PROJECT_ROOT / ".env"
 PAYLOAD_PREFIX = "csv-payload"
 SECRET_PREFIX = "csv-secrets"
@@ -61,6 +62,15 @@ def apply_env_file(path: Path) -> None:
 def slugify(value: str, *, max_len: int = 48) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return (slug or uuid.uuid4().hex[:8])[:max_len].rstrip("-")
+
+
+def compact_unique_slug(value: str, *, max_len: int = 32, suffix_len: int = 13) -> str:
+    slug = slugify(value, max_len=256)
+    if len(slug) <= max_len:
+        return slug
+    suffix = slug[-suffix_len:].strip("-")
+    prefix = slug[: max(1, max_len - len(suffix) - 1)].rstrip("-")
+    return f"{prefix}-{suffix}".strip("-")[:max_len].rstrip("-")
 
 
 def require_kaggle_username() -> str:
@@ -138,6 +148,26 @@ def copy_tree(src: Path, dst: Path) -> None:
     shutil.copytree(src, dst, ignore=ignore)
 
 
+def project_relative(path: str | Path) -> str:
+    raw = Path(path).expanduser()
+    if raw.is_absolute():
+        try:
+            return str(raw.resolve().relative_to(PROJECT_ROOT))
+        except ValueError:
+            return str(raw)
+    return str(raw)
+
+
+def build_run_config(*, run_id: str, config_path: str | Path, output_dir: str | None = None) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "run_id": run_id,
+        "config_path": project_relative(config_path),
+    }
+    if output_dir:
+        data["output_dir"] = output_dir
+    return data
+
+
 def ensure_sam2_vendor() -> Path:
     package_dir = SAM2_VENDOR_ROOT / "sam2"
     if (package_dir / "__init__.py").exists():
@@ -158,7 +188,13 @@ def ensure_sam2_vendor() -> Path:
     return package_dir
 
 
-def write_payload_dataset(path: Path, *, run_id: str) -> None:
+def write_payload_dataset(
+    path: Path,
+    *,
+    run_id: str,
+    config_path: str | Path = DEFAULT_CONFIG,
+    output_dir: str | None = None,
+) -> None:
     repo = path / "repo_bundle"
     copy_tree(PROJECT_ROOT / "contour_svg", repo / "contour_svg")
     copy_tree(PROJECT_ROOT / "google_ai", repo / "google_ai")
@@ -182,6 +218,14 @@ def write_payload_dataset(path: Path, *, run_id: str) -> None:
         ),
         encoding="utf-8",
     )
+    (path / "contour_run_config.json").write_text(
+        json.dumps(
+            build_run_config(run_id=run_id, config_path=config_path, output_dir=output_dir),
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def build_secret_payload() -> str:
@@ -189,6 +233,7 @@ def build_secret_payload() -> str:
         "GOOGLE_API_KEY",
         "GOOGLE_API_KEY2",
         "GOOGLE_API_KEY3",
+        "GOOGLE_API_KEY4",
         "GOOGLE_API_LOCALNAME",
         "GOOGLE_API_LOCALNAME_CONTOUR",
         "SUPABASE_URL",
@@ -200,7 +245,7 @@ def build_secret_payload() -> str:
     ]
     payload = {name: os.getenv(name) for name in names if (os.getenv(name) or "").strip()}
     if not payload.get("GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"):
-        overflow_envs = [name for name in ("GOOGLE_API_KEY2", "GOOGLE_API_KEY3") if payload.get(name)]
+        overflow_envs = [name for name in ("GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4") if payload.get(name)]
         if overflow_envs:
             payload["GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS"] = ",".join(overflow_envs)
     missing = [name for name in ["GOOGLE_API_KEY", "SUPABASE_URL"] if not payload.get(name)]
@@ -356,6 +401,9 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--accelerator", default=os.getenv("CONTOUR_KAGGLE_ACCELERATOR", "NvidiaTeslaT4"))
     parser.add_argument("--kernel-slug", default=os.getenv("CONTOUR_KAGGLE_KERNEL_SLUG", "contour-svg-generator"))
+    parser.add_argument("--config", default=os.getenv("CONTOUR_KAGGLE_CONFIG", DEFAULT_CONFIG))
+    parser.add_argument("--kaggle-output-dir", default=os.getenv("CONTOUR_KAGGLE_OUTPUT_DIR"))
+    parser.add_argument("--run-label", default=os.getenv("CONTOUR_KAGGLE_RUN_LABEL", "contour-svg-sample"))
     parser.add_argument("--session-timeout-seconds", type=int, default=7200)
     parser.add_argument("--keep-datasets", action="store_true")
     args = parser.parse_args()
@@ -363,8 +411,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     apply_env_file(DEFAULT_ENV_FILE)
 
-    run_id = f"contour-svg-sample-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
-    run_slug = slugify(run_id, max_len=32)
+    run_id = f"{slugify(args.run_label, max_len=32)}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    run_slug = compact_unique_slug(run_id, max_len=32)
     username = require_kaggle_username()
     api = get_kaggle_api()
 
@@ -373,13 +421,18 @@ def main() -> None:
         username,
         f"{PAYLOAD_PREFIX}-{run_slug}",
         f"CSV payload {run_slug[:24]}",
-        lambda path: write_payload_dataset(path, run_id=run_id),
+        lambda path: write_payload_dataset(
+            path,
+            run_id=run_id,
+            config_path=args.config,
+            output_dir=args.kaggle_output_dir,
+        ),
     )
     secret_ref, key_ref = write_secret_datasets(api, username, run_slug, build_secret_payload())
     dataset_sources = [payload_ref, secret_ref, key_ref]
 
     for dataset_ref, expected in [
-        (payload_ref, ["kaggle_run.json"]),
+        (payload_ref, ["kaggle_run.json", "contour_run_config.json"]),
         (secret_ref, ["secrets.enc"]),
         (key_ref, ["fernet.key"]),
     ]:
@@ -406,6 +459,8 @@ def main() -> None:
         "run_id": run_id,
         "kernel_ref": kernel_ref,
         "kernel_slug": slugify(args.kernel_slug, max_len=48),
+        "config": project_relative(args.config),
+        "kaggle_output_dir": args.kaggle_output_dir,
         "kernel_status": status,
         "accelerator": args.accelerator,
         "session_timeout_seconds": args.session_timeout_seconds,

@@ -51,9 +51,25 @@ def build_guides(image, primary_mask_path: Path, occluder_mask_path: Path | None
     blur = cv2.bilateralFilter(clahe, 7, 45, 45)
 
     edges = cv2.Canny(blur, 65, 150)
-    edges = cv2.bitwise_and(edges, primary)
+    edges_primary = cv2.bitwise_and(edges, primary)
+    edges = edges_primary.copy()
     edges[occluder > 32] = 0
     edge_path = _save_pil_from_array(edges, debug / "edge_map.png")
+    # Keep root-level line artifacts for downstream neural/style probes and
+    # operator review. `edge_map.png` remains the occluder-subtracted pipeline
+    # guide; `edge_mask.png` is a primary-object edge mask before occluder
+    # subtraction, which is often the better source for line-to-line neural
+    # cleanup when occluder segmentation is over-aggressive. The misspelled
+    # alias is intentional for robust ad-hoc checks against the common
+    # "egde_mask" typo.
+    _save_pil_from_array(edges, out_dir / "edge_map.png")
+    for alias in [
+        out_dir / "edge_mask.png",
+        out_dir / "egde_mask.png",
+        debug / "edge_mask.png",
+        debug / "egde_mask.png",
+    ]:
+        _save_pil_from_array(edges_primary, alias)
 
     lines: list[LinePrimitive] = []
     warnings: list[str] = []

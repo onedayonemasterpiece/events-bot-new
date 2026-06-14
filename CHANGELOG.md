@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- **Contour SVG generator / tower Kaggle run controls**: the stable
+  `ContourSvgGenerator` Kaggle launcher now writes an explicit
+  `contour_run_config.json`, so benchmark runs can select configs such as
+  `examples/tower_92_11_16.yaml` without renaming the notebook. The launcher
+  also includes registered `GOOGLE_API_KEY4` in the encrypted key payload and
+  derived shared-limiter overflow pool. Full runs now export root/debug
+  `edge_mask.png` (primary-object edges before occluder subtraction) plus
+  typo-compatible `egde_mask.png` aliases next to the canonical
+  occluder-subtracted `edge_map.png` for downstream neural probes and operator
+  review; guide extraction now uses the primary object mask as its base instead
+  of the already occluder-subtracted visible mask so over-aggressive occluder
+  segmentation does not erase the architectural structure. The neural-branch
+  Kaggle launcher can now mount a freshly downloaded artifact directory through
+  `--artifacts` instead of being locked to the bundled sample, and the neural
+  input preparation prefers `edge_mask.png` when available. Run slugs now keep
+  the timestamp/UUID suffix even with long labels to avoid local artifact-folder
+  collisions.
 - **Contour SVG generator / neural branch line-init fix**: changed the separate
   neural branch default from source-photo img2img to line-to-line img2img:
   prepared edge/mask/feature line maps are now both init image and ControlNet

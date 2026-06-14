@@ -121,6 +121,19 @@ def _find_first_input(filename: str) -> Path | None:
     return None
 
 
+def _load_contour_run_config() -> dict:
+    path = _find_first_input("contour_run_config.json")
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Invalid contour_run_config.json at {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Invalid contour_run_config.json at {path}: expected object")
+    return data
+
+
 def _repo_relative_path(path: str | Path) -> str:
     raw = Path(os.path.expandvars(str(path))).expanduser()
     if raw.is_absolute():
@@ -543,21 +556,31 @@ def main() -> None:
     from contour_svg import ContourGenerator, load_config
     from contour_svg.status import ContourStatus
 
-    config_path = Path(os.getenv("CONTOUR_CONFIG", str(DEFAULT_CONFIG)))
+    run_config = _load_contour_run_config()
+    raw_config_path = (
+        os.getenv("CONTOUR_CONFIG")
+        or str(run_config.get("config_path") or "").strip()
+        or str(DEFAULT_CONFIG)
+    )
+    config_path = Path(raw_config_path)
+    if not config_path.is_absolute():
+        config_path = ROOT / config_path
     overrides = {}
-    if os.getenv("CONTOUR_INPUT"):
-        overrides.setdefault("input", {})["image_path"] = os.environ["CONTOUR_INPUT"]
-    elif DEFAULT_CONFIG.exists():
-        with DEFAULT_CONFIG.open("r", encoding="utf-8") as fh:
+    input_override = os.getenv("CONTOUR_INPUT") or str(run_config.get("input_path") or "").strip()
+    if input_override:
+        overrides.setdefault("input", {})["image_path"] = input_override
+    elif config_path.exists():
+        with config_path.open("r", encoding="utf-8") as fh:
             import yaml
 
-            default_config_data = yaml.safe_load(fh) or {}
-        input_path = ((default_config_data.get("input") or {}).get("image_path") or "").strip()
+            selected_config_data = yaml.safe_load(fh) or {}
+        input_path = ((selected_config_data.get("input") or {}).get("image_path") or "").strip()
         if input_path:
             overrides.setdefault("input", {})["image_path"] = _repo_relative_path(input_path)
-    if os.getenv("CONTOUR_OUTPUT_DIR"):
-        overrides.setdefault("output", {})["output_dir"] = os.environ["CONTOUR_OUTPUT_DIR"]
-    else:
+    output_override = os.getenv("CONTOUR_OUTPUT_DIR") or str(run_config.get("output_dir") or "").strip()
+    if output_override:
+        overrides.setdefault("output", {})["output_dir"] = output_override
+    elif config_path == DEFAULT_CONFIG:
         overrides.setdefault("output", {})["output_dir"] = str(DEFAULT_OUT)
     overrides.setdefault("runtime", {})["hf_cache_dir"] = os.getenv("CONTOUR_HF_CACHE_DIR", "/tmp/contour_hf_cache")
     if os.getenv("CONTOUR_SAM2_CHECKPOINT"):

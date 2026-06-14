@@ -236,7 +236,7 @@ class ContourGenerator:
         )
 
         self.status.stage("guides", step_index=9, step_total=STEP_TOTAL, label="structural guide extraction")
-        guides = build_guides(image, mask_bundle.object_visible, mask_bundle.occluder, out_dir, config)
+        guides = build_guides(image, primary_artifact.path, mask_bundle.occluder, out_dir, config)
         warnings.extend(guides.warnings)
         self.status.stage(
             "guides",

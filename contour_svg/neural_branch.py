@@ -159,7 +159,9 @@ def prepare_neural_inputs(config: NeuralBranchConfig, *, input_dir: Path) -> lis
     ImageFilter = require_module("PIL.ImageFilter", "Pillow")
 
     artifact_dir = config.artifact_dir
-    edge_path = _require_artifact(artifact_dir, "edge_map.png")
+    edge_path = artifact_dir / "edge_mask.png"
+    if not edge_path.exists():
+        edge_path = _require_artifact(artifact_dir, "edge_map.png")
     edge = Image.open(edge_path).convert("L")
     edge_control = _black_lines_on_white(edge)
     edge_mask = _line_mask_from_control(edge_control)

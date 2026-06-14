@@ -96,12 +96,12 @@ Useful env overrides for Kaggle:
   otherwise the Kaggle entrypoint downloads `deeplsd_md.tar`.
 - `CONTOUR_HAWP_CHECKPOINT` — optional attached HAWP checkpoint path; otherwise
   the Kaggle entrypoint downloads `hawpv3-imagenet-03a84.pth`.
-- `GOOGLE_API_KEY` / `GOOGLE_API_KEY2` / `GOOGLE_API_KEY3` — registered Google
+- `GOOGLE_API_KEY` / `GOOGLE_API_KEY2` / `GOOGLE_API_KEY3` / `GOOGLE_API_KEY4` — registered Google
   AI key envs used by the shared limiter. `gemini.api_key_env` should point to
   one of these registered env names unless a local-only experiment is intended.
 - `GOOGLE_AI_RESERVE_OVERFLOW_KEY_ENVS` — optional comma-separated spare key
   env names for the shared limiter when the scoped lane is out of daily budget.
-  The local Kaggle launcher derives `GOOGLE_API_KEY2,GOOGLE_API_KEY3` when
+  The local Kaggle launcher derives `GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY4` when
   those keys are present and the variable is unset.
 - `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` or `SUPABASE_KEY` — enable shared
   Google AI reserve/finalize RPCs inside `GoogleAIClient`.
@@ -145,7 +145,30 @@ That launcher keeps the Kaggle kernel slug stable:
 `zigomaro/contour-svg-neural-branch`. Per-run payload datasets are unique.
 The probe emits stage statuses for `preflight`, `neural_inputs`,
 `neural_img2img`, `neural_report`, and writes `neural_branch/*.png` plus
-`neural_branch_report.json`.
+`neural_branch_report.json`. It can also take a freshly downloaded full-pipeline
+artifact directory, which is the intended way to test a new benchmark image after
+mask/edge extraction:
+
+```bash
+python scripts/run_contour_svg_neural_branch_kaggle.py \
+  --run-label contour-svg-tower-neural \
+  --output-root artifacts/codex/contour-svg-tower-neural \
+  --artifacts artifacts/codex/contour-svg-tower/<run>/contour_svg_tower_92_11_16 \
+  --variants A1,A3,C2,D1,E1 \
+  --init-modes line_init \
+  --seeds 92
+```
+
+Full Kaggle runs can select a non-default feature config through the local
+launcher without changing the stable notebook slug. For the tower benchmark:
+
+```bash
+python scripts/run_contour_svg_kaggle_sample.py \
+  --run-label contour-svg-tower \
+  --output-root artifacts/codex/contour-svg-tower \
+  --config docs/features/countur_svg_generator/examples/tower_92_11_16.yaml \
+  --kaggle-output-dir /kaggle/working/contour_svg_tower_92_11_16
+```
 
 ## Output Contract
 
@@ -155,6 +178,10 @@ Each run writes:
 - `top_alternatives/`;
 - `candidates/*.svg`, previews and metadata;
 - `leaderboard.csv`, `ranking_report.json`;
+- root-level `edge_map.png` (occluder-subtracted), `edge_mask.png`
+  (primary-object Canny before occluder subtraction) and typo-compatible
+  `egde_mask.png` line-mask review artifacts, plus the same mask aliases under
+  `debug/`;
 - `debug/input_normalized.png`, `semantic_plan.json`, detector box JSON files,
   masks, CMP facade element masks/overlay, edge maps, M-LSD guide,
   DeepLSD/HAWP line JSON/overlays, guide source counts,
