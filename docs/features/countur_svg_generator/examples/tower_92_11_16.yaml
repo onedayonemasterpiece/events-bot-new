@@ -1,0 +1,81 @@
+runtime:
+  device: auto
+  dtype: float16
+  seed: 92
+  internet_allowed: true
+  hf_cache_dir: /kaggle/working/hf_cache
+  fail_on_neural_unavailable: true
+
+gemini:
+  enabled: true
+  model: gemini-2.5-flash-lite
+  api_key_env: GOOGLE_API_KEY
+
+input:
+  image_path: docs/features/countur_svg_generator/to_do/92-11-16.jpg
+  object_prompt: main brick water tower with dome and balcony
+  bbox_hint_xyxy: [190, 120, 845, 1510]
+  max_side: 1536
+
+style:
+  preset: geometric_lineart
+  background: transparent
+  stroke_color: "#FFFFFF"
+  stroke_width: 5
+  viewbox: [1024, 1024]
+  max_paths: 260
+  min_line_length: 14
+
+segmentation:
+  backend: groundingdino_sam2
+  grounding_model: IDEA-Research/grounding-dino-tiny
+  architecture_priority: true
+  primary_prompts:
+    - water tower
+    - brick tower
+    - architecture
+    - dome
+    - balcony
+    - main object
+  occluder_prompts:
+    - foreground leaves
+    - tree foliage
+    - branch
+    - sky
+    - roof foreground
+
+geometry:
+  use_canny: true
+  use_lsd: true
+  use_hough: true
+  use_mlsd: true
+  snap_architecture_angles: true
+  merge_angle_deg: 7
+  max_bridge_gap_px: 65
+  simplify_tolerance: 2.4
+  max_paths_per_candidate: 300
+
+diffusion:
+  enabled: true
+  backend: sd15_controlnet
+  base_model: runwayml/stable-diffusion-v1-5
+  lineart_controlnet: lllyasviel/control_v11p_sd15_lineart
+  mlsd_controlnet: lllyasviel/sd-controlnet-mlsd
+  steps: 26
+  guidance_scale: 7.2
+  control_scale: 1.0
+  seeds: [92, 93]
+  output_size: [768, 768]
+
+candidate_search:
+  variants: [B1, B2, E1]
+  final_top_k: 3
+  cv_shortlist_size: 8
+  allow_gemini_review: true
+  allow_gemini_line_review: true
+  max_gemini_line_groups: 75
+  final_min_structure_score: 3.0
+
+output:
+  output_dir: /kaggle/working/contour_svg_tower_92_11_16
+  keep_debug: true

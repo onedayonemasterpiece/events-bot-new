@@ -1,0 +1,470 @@
+[
+  {
+    "id": "E_balcony_000_238_343",
+    "element_type": "balcony",
+    "bbox_xyxy": [
+      238.0,
+      343.0,
+      257.0,
+      351.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:balcony"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/balcony.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_balcony_001_838_429",
+    "element_type": "balcony",
+    "bbox_xyxy": [
+      838.0,
+      429.0,
+      1098.0,
+      514.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:balcony"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/balcony.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_door_000_614_407",
+    "element_type": "door",
+    "bbox_xyxy": [
+      614.0,
+      407.0,
+      628.0,
+      425.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:door"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/door.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_door_001_1021_582",
+    "element_type": "door",
+    "bbox_xyxy": [
+      1021.0,
+      582.0,
+      1048.0,
+      623.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:door"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/door.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_door_002_892_613",
+    "element_type": "door",
+    "bbox_xyxy": [
+      892.0,
+      613.0,
+      928.0,
+      649.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:door"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/door.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_pilaster_000_554_301",
+    "element_type": "pilaster",
+    "bbox_xyxy": [
+      554.0,
+      301.0,
+      572.0,
+      393.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:pilaster"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/pilaster.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_pilaster_002_673_412",
+    "element_type": "pilaster",
+    "bbox_xyxy": [
+      673.0,
+      412.0,
+      711.0,
+      489.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:pilaster"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/pilaster.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_pilaster_001_964_310",
+    "element_type": "pilaster",
+    "bbox_xyxy": [
+      964.0,
+      310.0,
+      991.0,
+      433.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:pilaster"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/pilaster.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_wall_plane_002_379_497",
+    "element_type": "wall_plane",
+    "bbox_xyxy": [
+      379.0,
+      497.0,
+      436.0,
+      582.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:wall_plane"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/wall_plane.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_wall_plane_001_456_476",
+    "element_type": "wall_plane",
+    "bbox_xyxy": [
+      456.0,
+      476.0,
+      507.0,
+      575.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:wall_plane"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/wall_plane.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_wall_plane_000_201_39",
+    "element_type": "wall_plane",
+    "bbox_xyxy": [
+      201.0,
+      39.0,
+      1099.0,
+      672.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:wall_plane"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/wall_plane.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_011_511_439",
+    "element_type": "window",
+    "bbox_xyxy": [
+      511.0,
+      439.0,
+      529.0,
+      463.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_006_1002_367",
+    "element_type": "window",
+    "bbox_xyxy": [
+      1002.0,
+      367.0,
+      1019.0,
+      394.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_013_1022_538",
+    "element_type": "window",
+    "bbox_xyxy": [
+      1022.0,
+      538.0,
+      1044.0,
+      561.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_014_1054_542",
+    "element_type": "window",
+    "bbox_xyxy": [
+      1054.0,
+      542.0,
+      1082.0,
+      561.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_010_856_408",
+    "element_type": "window",
+    "bbox_xyxy": [
+      856.0,
+      408.0,
+      887.0,
+      438.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_003_776_265",
+    "element_type": "window",
+    "bbox_xyxy": [
+      776.0,
+      265.0,
+      807.0,
+      326.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_007_1004_377",
+    "element_type": "window",
+    "bbox_xyxy": [
+      1004.0,
+      377.0,
+      1048.0,
+      423.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_002_715_242",
+    "element_type": "window",
+    "bbox_xyxy": [
+      715.0,
+      242.0,
+      747.0,
+      306.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_009_784_399",
+    "element_type": "window",
+    "bbox_xyxy": [
+      784.0,
+      399.0,
+      817.0,
+      469.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_008_718_388",
+    "element_type": "window",
+    "bbox_xyxy": [
+      718.0,
+      388.0,
+      756.0,
+      453.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_000_601_170",
+    "element_type": "window",
+    "bbox_xyxy": [
+      601.0,
+      170.0,
+      652.0,
+      224.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_004_489_281",
+    "element_type": "window",
+    "bbox_xyxy": [
+      489.0,
+      281.0,
+      532.0,
+      352.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_012_291_530",
+    "element_type": "window",
+    "bbox_xyxy": [
+      291.0,
+      530.0,
+      361.0,
+      586.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_001_378_243",
+    "element_type": "window",
+    "bbox_xyxy": [
+      378.0,
+      243.0,
+      451.0,
+      313.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  },
+  {
+    "id": "E_window_005_852_317",
+    "element_type": "window",
+    "bbox_xyxy": [
+      852.0,
+      317.0,
+      925.0,
+      407.0
+    ],
+    "confidence": 0.72,
+    "source": "cmp_facade_segformer",
+    "evidence": [
+      "semantic_mask_evidence",
+      "class:window"
+    ],
+    "mask_path": "/kaggle/working/contour_svg_run/debug/facade_classes/window.png",
+    "completion_status": "visible"
+  }
+]

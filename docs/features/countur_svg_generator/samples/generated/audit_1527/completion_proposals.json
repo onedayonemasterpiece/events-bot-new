@@ -1,0 +1,670 @@
+[
+  {
+    "id": "C_gap_000",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          461.0,
+          239.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_024"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_001",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          686.0,
+          102.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_111"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_002",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          391.2024841308594,
+          223.75375366210938
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_585"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_003",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          425.91290283203125,
+          221.09971618652344
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_570"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_004",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          691.3320922851562,
+          105.257568359375
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_565"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_005",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          626.0,
+          68.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_018"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_006",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          401.0,
+          183.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_067"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_007",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          434.3523864746094,
+          250.96142578125
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_144"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_008",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          663.2096557617188,
+          246.80111694335938
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_089"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_009",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          688.5601806640625,
+          137.8307342529297
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_267"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_010",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          662.5774536132812,
+          216.61898803710938
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_078"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_011",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          473.0,
+          309.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_129"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_013",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          374.0,
+          323.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_163"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_014",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          663.0,
+          62.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_072"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_015",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          367.0,
+          254.0
+        ],
+        [
+          430.0,
+          258.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_076"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_016",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          645.0,
+          176.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_216"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_017",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          685.9434814453125,
+          38.89591598510742
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_491"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_018",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          659.400634765625,
+          210.69985961914062
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_277"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_020",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          684.0,
+          141.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_190"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_021",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          689.0,
+          117.0
+        ],
+        [
+          625.0,
+          73.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_012",
+      "G_roof_edge_200"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_gap_023",
+    "completion_type": "roof_edge_gap",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          461.0,
+          239.0
+        ],
+        [
+          363.0,
+          239.0
+        ]
+      ]
+    },
+    "confidence": 0.42,
+    "source_group_ids": [
+      "G_roof_edge_024",
+      "G_roof_edge_111"
+    ],
+    "source_element_ids": [],
+    "evidence": [
+      "completion_evidence:two_sided_line_gap",
+      "perspective_evidence:angle_match"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_repeated_window_000",
+    "completion_type": "repeated_window_placeholder",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          744.0,
+          332.75
+        ],
+        [
+          789.0,
+          332.75
+        ],
+        [
+          789.0,
+          391.25
+        ],
+        [
+          744.0,
+          391.25
+        ],
+        [
+          744.0,
+          332.75
+        ]
+      ]
+    },
+    "confidence": 0.38,
+    "source_group_ids": [],
+    "source_element_ids": [
+      "E_window_005_852_317",
+      "E_window_006_1002_367"
+    ],
+    "evidence": [
+      "completion_evidence:two_confirmed_neighbors",
+      "repetition_evidence:window_row"
+    ],
+    "accepted": true
+  },
+  {
+    "id": "C_repeated_window_001",
+    "completion_type": "repeated_window_placeholder",
+    "geometry": {
+      "type": "polyline",
+      "points": [
+        [
+          585.25,
+          396.75
+        ],
+        [
+          619.75,
+          396.75
+        ],
+        [
+          619.75,
+          444.25
+        ],
+        [
+          585.25,
+          444.25
+        ],
+        [
+          585.25,
+          396.75
+        ]
+      ]
+    },
+    "confidence": 0.38,
+    "source_group_ids": [],
+    "source_element_ids": [
+      "E_window_008_718_388",
+      "E_window_010_856_408"
+    ],
+    "evidence": [
+      "completion_evidence:two_confirmed_neighbors",
+      "repetition_evidence:window_row"
+    ],
+    "accepted": true
+  }
+]

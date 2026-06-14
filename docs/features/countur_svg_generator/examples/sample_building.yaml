@@ -1,0 +1,100 @@
+runtime:
+  device: auto
+  dtype: float16
+  seed: 42
+  internet_allowed: true
+  hf_cache_dir: /kaggle/working/hf_cache
+  fail_on_neural_unavailable: true
+
+gemini:
+  enabled: true
+  model: gemini-2.5-flash-lite
+  api_key_env: GOOGLE_API_KEY
+
+input:
+  image_path: docs/features/countur_svg_generator/samples/input/image - 2026-06-14T115705.752.png
+  object_prompt: main building, yellow neoclassical corner facade
+  style_reference_path: docs/features/countur_svg_generator/samples/output/IMG_20260614_115550.webp
+  # Calibration/focus hint only: GroundingDINO/SAM2 must still return neural detections.
+  # The sample target intentionally keeps the central-right architectural mass
+  # and rejects the tree-covered left wing/background.
+  bbox_hint_xyxy: [350, 25, 1125, 680]
+  max_side: 1536
+
+style:
+  preset: geometric_lineart
+  stroke_style: sketch
+  background: transparent
+  stroke_color: "#FFFFFF"
+  stroke_width: 5
+  viewbox: [1024, 1024]
+  max_paths: 240
+  min_line_length: 16
+
+segmentation:
+  backend: groundingdino_sam2
+  grounding_model: IDEA-Research/grounding-dino-tiny
+  architecture_priority: true
+  primary_prompts:
+    - building
+    - architecture
+    - building corner facade
+    - yellow facade
+    - neoclassical building
+    - main object
+  occluder_prompts:
+    - tree
+    - foliage
+    - leaves
+    - fence
+    - wire
+    - pole
+    - sky
+    - road
+
+geometry:
+  use_canny: true
+  use_lsd: true
+  use_hough: true
+  use_mlsd: true
+  snap_architecture_angles: true
+  merge_angle_deg: 6
+  max_bridge_gap_px: 80
+  simplify_tolerance: 2.0
+  max_paths_per_candidate: 280
+
+diffusion:
+  enabled: true
+  backend: sd15_controlnet_img2img
+  base_model: runwayml/stable-diffusion-v1-5
+  lineart_controlnet: lllyasviel/control_v11p_sd15_lineart
+  mlsd_controlnet: lllyasviel/control_v11p_sd15_mlsd
+  depth_controlnet: lllyasviel/control_v11f1p_sd15_depth
+  depth_model: depth-anything/Depth-Anything-V2-Small-hf
+  steps: 30
+  guidance_scale: 5.0
+  control_scale: 1.15
+  depth_control_scale: 0.80
+  strength: 0.40
+  control_guidance_end: 0.85
+  style_reference_adapter_enabled: true
+  style_reference_adapter_model: h94/IP-Adapter
+  style_reference_adapter_subfolder: models
+  style_reference_adapter_weight_name: ip-adapter_sd15.bin
+  style_reference_adapter_scale: 0.35
+  style_reference_strength: 0.34
+  seeds: [42, 43, 44, 45]
+  output_size: [768, 768]
+
+candidate_search:
+  variants: [B1, B2, B3, B4, E1]
+  final_top_k: 3
+  cv_shortlist_size: 8
+  allow_gemini_review: true
+  allow_gemini_line_review: true
+  max_gemini_line_groups: 75
+  final_min_structure_score: 3.0
+
+output:
+  output_dir: /kaggle/working/contour_svg_sample_building
+  keep_debug: true

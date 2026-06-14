@@ -1,0 +1,97 @@
+{
+  "primary_object": {
+    "label": "building",
+    "visual_summary": "A large, yellow, multi-story building with white trim and columns, featuring a prominent entrance with stairs and a balcony.",
+    "bbox_hint_xyxy": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "confidence": 0.9
+  },
+  "style_relevant_features": [
+    {
+      "name": "building facade",
+      "geometry_type": "polygon",
+      "location_hint": "the main yellow and white exterior walls of the building",
+      "importance": 0.9,
+      "line_art_instruction": "Outline the main rectangular and square shapes of the facade, including the prominent vertical white columns and horizontal trim. Detail the window frames and the arched recess above the central windows on the second floor. Include the triangular pediments at the top of some sections."
+    },
+    {
+      "name": "balcony railing",
+      "geometry_type": "line",
+      "location_hint": "the railing on the balcony on the right side of the building",
+      "importance": 0.7,
+      "line_art_instruction": "Draw the intricate pattern of the balcony railing, emphasizing its curves and vertical supports."
+    },
+    {
+      "name": "columns at entrance",
+      "geometry_type": "polygon",
+      "location_hint": "the large grey columns supporting the balcony at the main entrance",
+      "importance": 0.8,
+      "line_art_instruction": "Outline the rectangular shape of the columns and the base they stand on. Indicate the steps leading up to the entrance."
+    },
+    {
+      "name": "roofline",
+      "geometry_type": "line",
+      "location_hint": "the top edges of the building",
+      "importance": 0.6,
+      "line_art_instruction": "Trace the distinct horizontal and angled lines of the roof, including the cornices and any visible overhangs."
+    },
+    {
+      "name": "windows",
+      "geometry_type": "rectangle",
+      "location_hint": "all visible windows on the building",
+      "importance": 0.5,
+      "line_art_instruction": "Draw simple rectangular outlines for each window, showing their placement and proportion on the facade."
+    }
+  ],
+  "occluders": [
+    {
+      "name": "trees",
+      "location_hint": "the green trees in front of the building",
+      "mask_prompt": "the foliage and trunks of the trees obscuring the building",
+      "priority": 0.7
+    },
+    {
+      "name": "tree branches",
+      "location_hint": "the branches and leaves in the upper right corner",
+      "mask_prompt": "the leafy branches in the top right of the image",
+      "priority": 0.4
+    }
+  ],
+  "should_ignore": [
+    "sky",
+    "ground",
+    "fence",
+    "benches",
+    "street lamp",
+    "distant trees",
+    "plaque on the wall"
+  ],
+  "completion_policy": {
+    "preserve": [
+      "building facade",
+      "balcony railing",
+      "columns at entrance",
+      "roofline",
+      "windows"
+    ],
+    "complete_conservatively": [
+      "building facade",
+      "roofline"
+    ],
+    "reject_as_background": [
+      "sky",
+      "ground",
+      "fence",
+      "benches",
+      "street lamp",
+      "distant trees",
+      "plaque on the wall"
+    ]
+  },
+  "notes_for_generation": "Focus on the architectural details of the building. The trees should be rendered as occluders, not as part of the primary object. Ensure the lines are clean and represent the geometric forms of the architecture.",
+  "source": "gemini"
+}

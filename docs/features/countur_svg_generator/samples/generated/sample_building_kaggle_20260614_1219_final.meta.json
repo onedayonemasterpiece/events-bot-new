@@ -1,0 +1,333 @@
+{
+  "winner": {
+    "candidate_id": "B2_structural_primitives_02",
+    "variant": "B2",
+    "family": "NEURAL_MASK_STRUCTURAL_PRIMITIVES",
+    "path_count": 248,
+    "raster_path": null,
+    "svg_path": "/kaggle/working/contour_svg_run/candidates/B2_structural_primitives_02.svg",
+    "preview_path": "/kaggle/working/contour_svg_run/candidates/B2_structural_primitives_02_preview.png",
+    "cv_score": 7.336,
+    "gemini_score": 7.0,
+    "accepted": true,
+    "failure_flags": [],
+    "warnings": [],
+    "parameters": {
+      "coarse_to_fine": true,
+      "stroke_width_scale": 0.62,
+      "silhouette_paths": 1,
+      "roofline_paths": 40,
+      "global_structure_score": 9.446
+    }
+  },
+  "ranked_candidate_ids": [
+    "B2_structural_primitives_02",
+    "B2_guide1_stroke_04",
+    "B2_guide0_stroke_03",
+    "B1_seed42_stroke_00",
+    "B1_seed43_stroke_01"
+  ],
+  "semantic_plan": {
+    "primary_object": {
+      "label": "building",
+      "visual_summary": "A large, yellow, multi-story building with white trim, columns, and a balcony, set against a blue sky with some trees in the foreground.",
+      "bbox_hint_xyxy": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "confidence": 0.9
+    },
+    "style_relevant_features": [
+      {
+        "name": "building facade",
+        "geometry_type": "polygon",
+        "location_hint": "The main yellow and white exterior of the building.",
+        "importance": 0.9,
+        "line_art_instruction": "Outline the main structure, including the roofline, walls, and distinct architectural elements like cornices and window frames. Emphasize the contrast between the yellow walls and white trim."
+      },
+      {
+        "name": "windows",
+        "geometry_type": "rectangle",
+        "location_hint": "All visible windows on the building.",
+        "importance": 0.7,
+        "line_art_instruction": "Draw simple rectangular outlines for each window. Indicate the glass panes with a single horizontal or vertical line if appropriate."
+      },
+      {
+        "name": "columns",
+        "geometry_type": "rectangle",
+        "location_hint": "The large columns supporting the balcony and entrance.",
+        "importance": 0.8,
+        "line_art_instruction": "Render as thick vertical rectangles, showing their full height and width. Suggest the stone texture with subtle shading or line work if possible."
+      },
+      {
+        "name": "balcony railing",
+        "geometry_type": "line",
+        "location_hint": "The railing on the balcony.",
+        "importance": 0.6,
+        "line_art_instruction": "Draw a thin, repeating pattern for the railing, suggesting the metal bars."
+      },
+      {
+        "name": "roofline",
+        "geometry_type": "polygon",
+        "location_hint": "The top edges of the building.",
+        "importance": 0.7,
+        "line_art_instruction": "Trace the distinct horizontal and angled lines of the roof, including any gables or overhangs."
+      },
+      {
+        "name": "decorative elements",
+        "geometry_type": "polygon",
+        "location_hint": "The architectural details like the arched recess and the rectangular inset.",
+        "importance": 0.5,
+        "line_art_instruction": "Outline these recessed areas and any decorative moldings or frames."
+      }
+    ],
+    "occluders": [
+      {
+        "name": "trees",
+        "location_hint": "The foliage obscuring parts of the building and the sky.",
+        "mask_prompt": "Green leafy trees with visible branches.",
+        "priority": 0.7
+      },
+      {
+        "name": "tree branches",
+        "location_hint": "The branches and leaves in the upper right corner.",
+        "mask_prompt": "Dark tree branches with green leaves against the sky.",
+        "priority": 0.6
+      }
+    ],
+    "should_ignore": [
+      "sky",
+      "ground",
+      "fence",
+      "benches",
+      "street lamp",
+      "distant trees",
+      "distant building fragment on the left"
+    ],
+    "completion_policy": {
+      "preserve": [
+        "building facade",
+        "windows",
+        "columns",
+        "balcony railing",
+        "roofline",
+        "decorative elements"
+      ],
+      "complete_conservatively": [
+        "building facade",
+        "windows",
+        "columns",
+        "balcony railing",
+        "roofline",
+        "decorative elements"
+      ],
+      "reject_as_background": [
+        "sky",
+        "ground",
+        "fence",
+        "benches",
+        "street lamp",
+        "distant trees",
+        "distant building fragment on the left"
+      ]
+    },
+    "notes_for_generation": "Focus on the architectural details of the building. The trees should be rendered as occluders, with their outlines clearly defined where they overlap the building. The sky and ground should be minimal or absent.",
+    "source": "gemini"
+  },
+  "warnings": [],
+  "config": {
+    "runtime": {
+      "device": "auto",
+      "dtype": "float16",
+      "seed": 42,
+      "internet_allowed": true,
+      "hf_cache_dir": "/tmp/contour_hf_cache",
+      "fail_on_neural_unavailable": true
+    },
+    "gemini": {
+      "enabled": true,
+      "model": "gemini-2.5-flash-lite",
+      "api_key_env": "GOOGLE_API_KEY",
+      "max_retries": 2
+    },
+    "input": {
+      "image_path": "/kaggle/input/csv-payload-contour-svg-sample-20260614-1219/repo_bundle/docs/features/countur_svg_generator/samples/input/image - 2026-06-14T115705.752.png",
+      "object_prompt": "main building, yellow neoclassical corner facade",
+      "bbox_hint_xyxy": [
+        350,
+        25,
+        1125,
+        680
+      ],
+      "max_side": 1536
+    },
+    "style": {
+      "preset": "geometric_lineart",
+      "background": "transparent",
+      "stroke_color": "#FFFFFF",
+      "stroke_width": 5,
+      "viewbox": [
+        1024,
+        1024
+      ],
+      "max_paths": 240,
+      "min_line_length": 16
+    },
+    "segmentation": {
+      "backend": "groundingdino_sam2",
+      "grounding_model": "IDEA-Research/grounding-dino-tiny",
+      "box_threshold": 0.28,
+      "text_threshold": 0.25,
+      "sam2_checkpoint": "/kaggle/working/checkpoints/sam2.1_hiera_tiny.pt",
+      "sam2_model_cfg": "configs/sam2.1/sam2.1_hiera_t.yaml",
+      "architecture_priority": true,
+      "primary_prompts": [
+        "building",
+        "architecture",
+        "building corner facade",
+        "yellow facade",
+        "neoclassical building",
+        "main object"
+      ],
+      "occluder_prompts": [
+        "tree",
+        "foliage",
+        "leaves",
+        "fence",
+        "wire",
+        "pole",
+        "sky",
+        "road"
+      ]
+    },
+    "geometry": {
+      "use_canny": true,
+      "use_lsd": true,
+      "use_hough": true,
+      "use_mlsd": true,
+      "snap_architecture_angles": true,
+      "merge_angle_deg": 6,
+      "max_bridge_gap_px": 80,
+      "simplify_tolerance": 2.0,
+      "max_paths_per_candidate": 280
+    },
+    "diffusion": {
+      "enabled": true,
+      "backend": "sd15_controlnet",
+      "base_model": "runwayml/stable-diffusion-v1-5",
+      "lineart_controlnet": "lllyasviel/control_v11p_sd15_lineart",
+      "mlsd_controlnet": "lllyasviel/sd-controlnet-mlsd",
+      "steps": 24,
+      "guidance_scale": 7.0,
+      "control_scale": 0.95,
+      "seeds": [
+        42,
+        43
+      ],
+      "output_size": [
+        768,
+        768
+      ]
+    },
+    "candidate_search": {
+      "variants": [
+        "B1",
+        "B2",
+        "E1"
+      ],
+      "final_top_k": 3,
+      "cv_shortlist_size": 8,
+      "allow_gemini_review": true
+    },
+    "output": {
+      "output_dir": "/kaggle/working/contour_svg_run",
+      "keep_debug": true
+    }
+  },
+  "dependency_report": {
+    "PIL": {
+      "module": "PIL",
+      "available": true,
+      "version": "11.3.0",
+      "error": null
+    },
+    "cv2": {
+      "module": "cv2",
+      "available": true,
+      "version": "4.13.0",
+      "error": null
+    },
+    "numpy": {
+      "module": "numpy",
+      "available": true,
+      "version": "2.4.6",
+      "error": null
+    },
+    "skimage": {
+      "module": "skimage",
+      "available": true,
+      "version": "0.25.2",
+      "error": null
+    },
+    "svgwrite": {
+      "module": "svgwrite",
+      "available": false,
+      "version": null,
+      "error": "ModuleNotFoundError: No module named 'svgwrite'"
+    },
+    "cairosvg": {
+      "module": "cairosvg",
+      "available": true,
+      "version": "2.9.0",
+      "error": null
+    },
+    "torch": {
+      "module": "torch",
+      "available": true,
+      "version": "2.10.0+cu128",
+      "error": null
+    },
+    "transformers": {
+      "module": "transformers",
+      "available": true,
+      "version": "5.0.0",
+      "error": null
+    },
+    "diffusers": {
+      "module": "diffusers",
+      "available": true,
+      "version": "0.37.1",
+      "error": null
+    },
+    "controlnet_aux": {
+      "module": "controlnet_aux",
+      "available": false,
+      "version": null,
+      "error": "ModuleNotFoundError: No module named 'controlnet_aux'"
+    },
+    "google_ai": {
+      "module": "google_ai",
+      "available": true,
+      "version": null,
+      "error": null
+    },
+    "sam2": {
+      "module": "sam2",
+      "available": true,
+      "version": null,
+      "error": null
+    }
+  },
+  "llm_gateway": {
+    "google_ai_client": true,
+    "supabase_limiter": true,
+    "default_env_var_name": "GOOGLE_API_KEY",
+    "provider_sdk_google_genai": true,
+    "registered_default_env_key_count": 1,
+    "reserve_fallback_enabled": false,
+    "local_limiter_fallback_enabled": false,
+    "local_limiter_on_reserve_error_enabled": false
+  }
+}
