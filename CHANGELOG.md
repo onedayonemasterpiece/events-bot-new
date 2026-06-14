@@ -9,7 +9,8 @@
   helper and guarded so `vk:kenigeventsofficial:wall` is handled by VK
   `transport="vk_wall"` instead of Telethon username resolution. A штатный
   publish-only Kaggle recovery now republishes failed VK targets from the
-  already-rendered mp4 without rerendering, prunes stale per-session Kaggle
+  already-rendered mp4 without rerendering, takes a per-session file lock to
+  prevent duplicate compensation pushes, prunes stale per-session Kaggle
   datasets before kernel push, and VK-only recovery skips Telethon session
   creation. The lightweight publish-only script opts out of the generic script
   wrapper because Kaggle executes script kernels from `/kaggle/src/script.py`.

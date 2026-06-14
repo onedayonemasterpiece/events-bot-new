@@ -1534,3 +1534,18 @@ async def test_show_kernel_selection_blocks_when_ready_items_exceed_limit(tmp_pa
         "Выбрано 13 событий, а текущий рендер поддерживает максимум 12. "
         "Снимите лишние в SELECTED перед запуском."
     )
+
+
+def test_story_publish_only_lock_prevents_concurrent_session(monkeypatch, tmp_path):
+    monkeypatch.setattr(poller_module, "STORY_PUBLISH_ONLY_LOCK_DIR", tmp_path)
+
+    first = poller_module._acquire_story_publish_only_lock(676)
+    assert first is not None
+    try:
+        assert poller_module._acquire_story_publish_only_lock(676) is None
+    finally:
+        poller_module._release_story_publish_only_lock(first)
+
+    second = poller_module._acquire_story_publish_only_lock(676)
+    assert second is not None
+    poller_module._release_story_publish_only_lock(second)

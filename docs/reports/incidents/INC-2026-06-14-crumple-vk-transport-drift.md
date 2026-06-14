@@ -154,6 +154,9 @@ path.
   `crumple-story-publish-session-*` as ephemeral Kaggle dataset sources for
   Crumple kernels, so each push drops stale per-run datasets before attaching
   the current compensation dataset.
+- Guard publish-only recovery with a per-session file lock so watchdog and
+  manual compensation cannot concurrently push the shared Kaggle kernel with
+  different dataset sources.
 - Let VK-only story configs skip Telethon client creation in the Kaggle helper,
   so publish-only VK wall recovery does not compete for the shared Telegram
   auth bundle.

@@ -104,6 +104,10 @@ STORY_PUBLISH_ONLY_RECOVERY_ENABLED = (
     os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_RECOVERY", "1").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+STORY_PUBLISH_ONLY_LOCK_DIR = Path(
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_LOCK_DIR")
+    or "/tmp/events-bot-locks"
+)
 
 logger.info(
     "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s",
@@ -657,6 +661,48 @@ def _vk_failed_target_labels(report: dict | None) -> set[str]:
     return labels
 
 
+def _acquire_story_publish_only_lock(session_id: int):
+    import fcntl
+
+    STORY_PUBLISH_ONLY_LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = STORY_PUBLISH_ONLY_LOCK_DIR / f"crumple-story-publish-only-{session_id}.lock"
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    handle.seek(0)
+    handle.truncate()
+    handle.write(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "pid": os.getpid(),
+                "acquired_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+    )
+    handle.flush()
+    return handle
+
+
+def _release_story_publish_only_lock(handle) -> None:
+    if handle is None:
+        return
+    try:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        logger.debug("video_announce: failed to unlock publish-only lock", exc_info=True)
+    try:
+        handle.close()
+    except Exception:
+        logger.debug("video_announce: failed to close publish-only lock", exc_info=True)
+
+
 def _filter_story_config_for_publish_only_recovery(
     config: dict,
     *,
@@ -863,6 +909,18 @@ async def run_story_publish_only_recovery(
 
     if not STORY_PUBLISH_ONLY_RECOVERY_ENABLED:
         return False
+    lock_handle = _acquire_story_publish_only_lock(session_obj.id)
+    if lock_handle is None:
+        logger.warning(
+            "video_announce: publish-only recovery already running session=%s",
+            session_obj.id,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                f"⚠️ Сессия #{session_obj.id}: publish-only компенсация уже выполняется",
+            )
+        return False
     source_video = video_path
     output_dir: Path | None = None
     if source_video is None:
@@ -981,6 +1039,7 @@ async def run_story_publish_only_recovery(
     finally:
         if dataset_slug:
             await _cleanup_dataset(client, dataset_slug)
+        _release_story_publish_only_lock(lock_handle)
 
 
 def _expand_output_paths(paths: Iterable[Path]) -> list[Path]:

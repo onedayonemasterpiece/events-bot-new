@@ -55,7 +55,9 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   `crumple_video_final.mp4` из output исходной Kaggle-сессии, собирает
   отдельный session-dataset с этим mp4, текущим `story_publish.json` и
   `kaggle_common/story_publish.py`, фильтрует targets до упавших VK transport
-  targets и запускает lightweight kernel `CrumpleStoryPublishOnly`.
+  targets и запускает lightweight kernel `CrumpleStoryPublishOnly`. Перед
+  запуском берётся per-session file lock, чтобы watchdog и ручной скрипт не
+  перетёрли один и тот же Kaggle kernel разными dataset sources.
 - Publish-only recovery не использует Telethon, если в отфильтрованном
   `story_publish.json` остались только VK/Telegram Business transports; VK wall
   post должен идти через тот же helper (`video.save` + `wall.post`), что и
