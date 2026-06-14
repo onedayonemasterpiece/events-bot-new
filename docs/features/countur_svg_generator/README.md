@@ -178,6 +178,9 @@ Current research notes:
 - `research/neural_branch_img2img_decision_20260614.md` — source-preserving
   ControlNet img2img and IP-Adapter style-reference proposal strategy.
 - `research/tool_docs_audit_20260614.md` — external tool documentation audit.
+- `requirements/contour_svg_generator_audit_and_recovery_plan_20260614.md` —
+  external implementation audit and recovery plan; the next milestone is a
+  clean `BuildingShell`/shell-only SVG before adding feature detail.
 
 ## Folders
 

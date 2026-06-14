@@ -46,6 +46,7 @@ Start here:
 - [`README.md`](../README.md) — current feature summary and output contract.
 - [`requirements/requirements.md`](../requirements/requirements.md) — user-facing goal and requirements index.
 - [`requirements/user_audit_1.md`](../requirements/user_audit_1.md) — human visual audit of previous debug artifacts.
+- [`requirements/contour_svg_generator_audit_and_recovery_plan_20260614.md`](../requirements/contour_svg_generator_audit_and_recovery_plan_20260614.md) — external implementation audit and recovery plan; treats the next milestone as a clean building shell before rich detail.
 - [`research/evidence_fusion_pipeline_design_20260614.md`](evidence_fusion_pipeline_design_20260614.md) — most important current design correction.
 
 Core specifications:
