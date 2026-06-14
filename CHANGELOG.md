@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Changed: Poll to Repost question clarity loop**: production now enables an
+  LLM writer/reviewer loop for poll questions. The reviewer rejects wording
+  unless it is clear that subscribers choose today a category of events to go
+  to tomorrow, and ambiguous phrases such as "разберусь с выбором" are guarded
+  by deterministic safety checks.
 - **Fixed: Poll to Repost production free-axis underfill**: the free-events
   six-option guard now applies only when popularity filtering leaves more than
   six candidates, so a small but publishable production inventory is not skipped

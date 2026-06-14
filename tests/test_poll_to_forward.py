@@ -353,8 +353,8 @@ async def _seed_many_events(db: Database) -> None:
 def test_default_question_variants_frame_real_tomorrow_plan():
     assert len(pf.DEFAULT_POLL_QUESTION_VARIANTS) >= 6
     assert (
-        "Сегодня вечером выберу один анонс события, на которое можно сходить завтра. "
-        "Давайте решим, какая тема вам ближе."
+        "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+        "Вечером возьму один анонс из варианта, за который будет больше голосов."
     ) in pf.DEFAULT_POLL_QUESTION_VARIANTS
     banned = (
         "план звучит",
@@ -377,6 +377,7 @@ def test_default_question_variants_frame_real_tomorrow_plan():
         "для завтрашней рекомендации",
         "рекомендации на завтра",
         "рекомендацию на завтра",
+        "разберусь с выбором",
     )
     for text in pf.DEFAULT_POLL_QUESTION_VARIANTS:
         lowered = text.lower()
@@ -408,6 +409,56 @@ def test_default_question_variants_frame_real_tomorrow_plan():
             marker in lowered
             for marker in ("анонс", "покажу", "выбер", "выбира", "возьму")
         )
+        assert pf._question_guard_rejection_reason(text) is None
+
+
+def test_question_guard_rejects_current_ambiguous_prod_phrase():
+    assert pf._question_guard_rejection_reason(
+        "Голосуем за тему события на завтра. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором."
+    )
+
+
+@pytest.mark.asyncio
+async def test_validated_question_regenerates_until_llm_reviewer_accepts(monkeypatch):
+    monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", "1")
+    monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ATTEMPTS", "3")
+    writer_calls = 0
+    reviewer_questions = []
+
+    async def fake_llm(**kwargs):
+        nonlocal writer_calls
+        prompt = kwargs.get("prompt", "")
+        if "Ты пишешь вопрос для Telegram-опроса" in prompt:
+            writer_calls += 1
+            if writer_calls == 1:
+                return {
+                    "question_text": (
+                        "Голосуем за тему события на завтра. Если варианты не те — "
+                        "выбирайте «Другое», вечером разберусь с выбором."
+                    )
+                }
+            assert "ambiguous_or_banned_phrase" in prompt
+            return {
+                "question_text": (
+                    "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+                    "Вечером покажу один анонс из темы, за которую будет больше голосов. "
+                    "Если темы не те — выбирайте «Другое»."
+                )
+            }
+        if "Ты проверяешь вопрос Telegram-опроса" in prompt:
+            reviewer_questions.append(prompt)
+            return {"accepted": True, "reason": "понятно"}
+        raise AssertionError(f"unexpected prompt: {prompt[:120]}")
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    question = await pf._validated_poll_question(run_key="prod:2026-06-15")
+
+    assert writer_calls == 2
+    assert len(reviewer_questions) == 1
+    assert "куда можно сходить завтра" in question
+    assert "Другое" in question
+    assert "разберусь с выбором" not in question
 
 
 def test_poll_question_rotation_does_not_repeat_adjacent_debug_slots():

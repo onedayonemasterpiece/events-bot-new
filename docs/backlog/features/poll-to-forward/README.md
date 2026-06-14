@@ -101,19 +101,30 @@ returns a compact poll plan:
 - warnings when the topic set is weak or underfilled.
 
 The poll question itself is product copy, not a semantic topic decision. Its
-primary promise is: today the audience chooses the type/theme of an event that
-happens tomorrow or can be visited tomorrow, and in the evening the channel
-author chooses one concrete announcement inside that theme. The copy should
-feel friendly and a little blogger-like, not like an algorithm or a marketing
-banner. Debug and production rotate several participation frames by slot, for
+primary promise is: today the audience chooses the type/theme/category of
+events where they can go tomorrow, and in the evening the channel author
+chooses one concrete announcement inside that theme. The copy should feel
+friendly and a little blogger-like, not like an algorithm or a marketing banner.
+
+When `POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED=1`, question copy goes through
+a writer/reviewer LLM loop before publication. The reviewer must accept only
+wording where it is clear that the choice happens today, the choice is a
+category/theme of events, the event is for tomorrow, and the evening result is
+one concrete announcement from the winning category. Rejected variants are fed
+back into the next writer attempt; after the configured attempts the code falls
+back to an explicit safe question. Deterministic guardrails still reject known
+ambiguous phrases such as "что завтра подсветить", "рекомендация на завтра",
+"завтрашней рекомендации" and "разберусь с выбором".
+
+Debug and production otherwise rotate several participation frames by slot, for
 example:
 
-- `Сегодня вечером выберу один анонс события, на которое можно сходить завтра. Давайте решим, какая тема вам ближе.`
-- `Выбираем тему события на завтра. Вечером я возьму один анонс из варианта, за который будет больше голосов.`
-- `Какая тема событий на завтра вам ближе: музыка, выставки, прогулки или что-то ещё? Вечером выберу один конкретный анонс.`
-- `Голосуем за тип события, которое состоится завтра. Вечером покажу один анонс из темы большинства.`
-- `Что берём из событий на завтра? Вы выбираете тему, я вечером выбираю один анонс из неё.`
-- `Голосуем за тему события на завтра. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.`
+- `Сегодня выбираем категорию событий, куда можно сходить завтра. Вечером возьму один анонс из варианта, за который будет больше голосов.`
+- `Давайте выберем тему событий, куда завтра можно пойти. Вечером покажу один конкретный анонс из варианта с большинством голосов.`
+- `Помогите выбрать категорию событий для завтрашнего выхода: музыка, выставки, прогулки или что-то ещё. Вечером возьму один анонс из победившей темы.`
+- `Голосуем за тип событий, на которые можно сходить завтра. Вечером выберу один анонс внутри темы, где будет больше голосов.`
+- `Куда завтра хочется выбраться? Голосуйте за категорию событий, а вечером я покажу один анонс из варианта большинства.`
+- `Голосуем за категорию событий на завтра. Вечером будет один конкретный анонс из темы, за которую проголосует большинство.`
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. The default rotation

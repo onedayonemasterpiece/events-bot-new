@@ -38,20 +38,19 @@ FREE_TOPIC_MIN_OPTIONS = 6
 TOPIC_PLAN_DEFAULT_MAX_OPTIONS = 8
 TELEGRAM_POLL_MAX_OPTIONS = 10
 DEFAULT_POLL_QUESTION_TEXT = (
-    "Сегодня вечером выберу один анонс события, на которое можно сходить завтра. Давайте решим, какая тема вам ближе."
+    "Сегодня выбираем категорию событий, куда можно сходить завтра. Вечером возьму один анонс из варианта, за который будет больше голосов."
 )
 DEFAULT_POLL_QUESTION_VARIANTS = (
     DEFAULT_POLL_QUESTION_TEXT,
-    "Выбираем тему события на завтра. Вечером я возьму один анонс из варианта, за который будет больше голосов.",
-    "Какая тема событий на завтра вам ближе: музыка, выставки, прогулки или что-то ещё? Вечером выберу один конкретный анонс.",
-    "Голосуем за тип события, которое состоится завтра. Вечером покажу один анонс из темы большинства.",
-    "Давайте вместе решим, из какой темы взять событие на завтра. Вечером выберу один анонс и перешлю его сюда.",
-    "Какая тема событий на завтра ближе? Вы голосуете, я вечером выбираю один анонс внутри победившего варианта.",
-    "Помогите выбрать направление событий на завтра: выставки, прогулки, музыка, семья или что-то ещё. Вечером покажу один анонс.",
-    "Что берём из событий на завтра? Вы выбираете тему, я вечером выбираю один анонс из неё.",
-    "Давайте так: вы голосуете за тематику события на завтра, а я вечером выберу из неё один анонс и покажу в канале.",
-    "Из какой темы выбрать событие на завтра? Голосуйте, а вечером я возьму один конкретный анонс из победившего варианта.",
-    "Голосуем за тему события на завтра. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором.",
+    "Давайте выберем тему событий, куда завтра можно пойти. Вечером покажу один конкретный анонс из варианта с большинством голосов.",
+    "Помогите выбрать категорию событий для завтрашнего выхода: музыка, выставки, прогулки или что-то ещё. Вечером возьму один анонс из победившей темы.",
+    "Голосуем за тип событий, на которые можно сходить завтра. Вечером выберу один анонс внутри темы, где будет больше голосов.",
+    "Вы сегодня выбираете тему, а я вечером беру один анонс события на завтра из победившего варианта.",
+    "Что из событий на завтра ближе: музыка, выставки, прогулки, семья или что-то ещё? Вечером покажу один анонс из темы большинства.",
+    "Выбираем не один конкретный анонс, а категорию событий для завтрашнего выхода. Вечером возьму один вариант из темы, где будет больше голосов.",
+    "Куда завтра хочется выбраться? Голосуйте за категорию событий, а вечером я покажу один анонс из варианта большинства.",
+    "Сегодня решаем, из какой темы взять событие на завтра. Вечером выберу один анонс из варианта, который наберёт больше голосов.",
+    "Голосуем за категорию событий на завтра. Вечером будет один конкретный анонс из темы, за которую проголосует большинство.",
 )
 PROD_MIN_VOTES_BASE = 10
 PROD_MIN_VOTES_START_DATE = date(2026, 6, 12)
@@ -194,6 +193,165 @@ def _poll_question_with_feedback_hint(
         return base
     combined = f"{base} {hint}"
     return combined[:300].rstrip()
+
+
+def _question_llm_review_enabled() -> bool:
+    return _env_enabled("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", False)
+
+
+def _question_clear_fallback(*, previous_feedback_other: bool = False) -> str:
+    base = (
+        "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+        "Вечером возьму один анонс из варианта, за который будет больше голосов."
+    )
+    return _poll_question_with_feedback_hint(base, previous_feedback_other=previous_feedback_other)
+
+
+def _question_guard_rejection_reason(question: str) -> str | None:
+    text = re.sub(r"\s+", " ", str(question or "").strip())
+    lowered = text.casefold()
+    if not text:
+        return "empty"
+    if len(text) > 300:
+        return "too_long"
+    banned = (
+        "завтра подсветить",
+        "что завтра подсветить",
+        "что завтра показать",
+        "что завтра порекомендовать",
+        "завтрашней рекомендации",
+        "рекомендации на завтра",
+        "рекомендацию на завтра",
+        "разберусь с выбором",
+        "план звучит",
+        "звучит лучше",
+        "общему выбору",
+    )
+    for fragment in banned:
+        if fragment in lowered:
+            return f"ambiguous_or_banned_phrase:{fragment}"
+    if "завтра" not in lowered:
+        return "missing_tomorrow"
+    if not any(marker in lowered for marker in ("категор", "тем", "тип", "направлен")):
+        return "missing_category_choice"
+    if not any(marker in lowered for marker in ("сходить", "пойти", "выбраться", "выход", "событ")):
+        return "missing_go_to_event_context"
+    if not any(marker in lowered for marker in ("вечером", "сегодня")):
+        return "missing_today_evening_flow"
+    if not any(marker in lowered for marker in ("анонс", "вариант", "тема", "категор")):
+        return "missing_result_from_category"
+    return None
+
+
+async def _call_llm_poll_question_writer(
+    *,
+    run_key: str | None,
+    previous_feedback: dict[str, Any] | None,
+    rejected: Sequence[dict[str, str]],
+) -> str | None:
+    prompt = (
+        "Ты пишешь вопрос для Telegram-опроса афиши Калининграда. "
+        "Нужно дружелюбно и по-блогерски, но без рекламности.\n"
+        "Смысл должен быть предельно понятен читателю: СЕГОДНЯ подписчики выбирают категорию/тему событий, "
+        "КУДА МОЖНО ПОЙТИ ЗАВТРА; сегодня вечером автор канала выберет один конкретный анонс "
+        "из категории, за которую будет больше голосов.\n"
+        "Обязательно убери двусмысленность: нельзя, чтобы читалось как ‘что завтра показать/порекомендовать’; "
+        "рекомендация будет сегодня вечером, а событие — на завтра.\n"
+        "Упомяни, что если темы не подходят, можно выбрать «Другое».\n"
+        "Не используй: алгоритм, подборка, завтрашняя рекомендация, рекомендация на завтра, "
+        "что завтра подсветить, что завтра показать, разберусь с выбором, план звучит, звучит лучше.\n"
+        "До 300 символов. Верни JSON строго: {\"question_text\":\"...\"}.\n"
+        f"run_key={run_key or ''}\n"
+        f"previous_feedback_other={bool(previous_feedback)}\n"
+        f"Отклонённые прошлые варианты и причины: {json.dumps(list(rejected), ensure_ascii=False)}"
+    )
+    data = await _google_generate_json(prompt=prompt, max_output_tokens=350, temperature=0.75)
+    if not data:
+        return None
+    candidate = re.sub(r"\s+", " ", str(data.get("question_text") or "").strip())
+    return candidate[:300].rstrip() or None
+
+
+async def _call_llm_poll_question_reviewer(question: str) -> tuple[bool, str]:
+    prompt = (
+        "Ты проверяешь вопрос Telegram-опроса перед публикацией. Ответь строго JSON.\n"
+        "Критерий принятия: обычному читателю должно быть понятно, что речь не о том, "
+        "что завтра выйдет пост, а о том, что СЕГОДНЯ выбирают категорию/тему событий, "
+        "КУДА ПОЙТИ ЗАВТРА; сегодня вечером автор выберет один конкретный анонс из победившей категории.\n"
+        "Отклони вопрос, если он двусмысленный, звучит как ‘что завтра показать/подсветить/порекомендовать’, "
+        "если не ясно, что событие должно быть завтра, или если не ясно, что выбирается категория, а не один анонс.\n"
+        "Верни: {\"accepted\":true/false, \"reason\":\"коротко почему\"}.\n"
+        f"Вопрос: {json.dumps(question, ensure_ascii=False)}"
+    )
+    data = await _google_generate_json(prompt=prompt, max_output_tokens=250, temperature=0.1)
+    if not data:
+        return False, "reviewer_unavailable"
+    accepted = bool(data.get("accepted"))
+    reason = re.sub(r"\s+", " ", str(data.get("reason") or "").strip())[:250]
+    return accepted, reason or ("accepted" if accepted else "rejected")
+
+
+async def _validated_poll_question(
+    *,
+    run_key: str | None,
+    previous_feedback: dict[str, Any] | None = None,
+) -> str:
+    previous_feedback_other = bool(previous_feedback)
+    if not _question_llm_review_enabled():
+        question = _poll_question_with_feedback_hint(
+            _poll_question_text(run_key),
+            previous_feedback_other=previous_feedback_other,
+        )
+        reason = _question_guard_rejection_reason(question)
+        return question if reason is None else _question_clear_fallback(previous_feedback_other=previous_feedback_other)
+
+    attempts = max(1, _env_int("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ATTEMPTS", 3))
+    rejected: list[dict[str, str]] = []
+    for attempt in range(1, attempts + 1):
+        candidate = await _call_llm_poll_question_writer(
+            run_key=run_key,
+            previous_feedback=previous_feedback,
+            rejected=rejected,
+        )
+        if not candidate:
+            rejected.append({"question": "", "reason": "writer_unavailable"})
+            continue
+        guard_reason = _question_guard_rejection_reason(candidate)
+        if guard_reason:
+            rejected.append({"question": candidate, "reason": guard_reason})
+            logger.info(
+                "poll_to_forward.question_rejected attempt=%s run_key=%s reason=%s question=%s",
+                attempt,
+                run_key,
+                guard_reason,
+                candidate,
+            )
+            continue
+        accepted, review_reason = await _call_llm_poll_question_reviewer(candidate)
+        if accepted:
+            logger.info(
+                "poll_to_forward.question_accepted attempt=%s run_key=%s question=%s",
+                attempt,
+                run_key,
+                candidate,
+            )
+            return candidate
+        rejected.append({"question": candidate, "reason": review_reason})
+        logger.info(
+            "poll_to_forward.question_rejected attempt=%s run_key=%s reason=%s question=%s",
+            attempt,
+            run_key,
+            review_reason,
+            candidate,
+        )
+    fallback = _question_clear_fallback(previous_feedback_other=previous_feedback_other)
+    logger.warning(
+        "poll_to_forward.question_fallback run_key=%s rejected=%s fallback=%s",
+        run_key,
+        json.dumps(rejected, ensure_ascii=False),
+        fallback,
+    )
+    return fallback
 
 
 def _previous_question_run_key(raw_key: str) -> str | None:
@@ -1024,9 +1182,9 @@ async def build_poll_plan(
         previous_feedback=previous_feedback,
     )
     llm_options = _filter_options_by_popularity_inventory(llm_options, events)
-    question = _poll_question_with_feedback_hint(
-        _poll_question_text(run_key),
-        previous_feedback_other=bool(previous_feedback),
+    question = await _validated_poll_question(
+        run_key=run_key,
+        previous_feedback=previous_feedback,
     )
     content_options = [option for option in llm_options if not _is_feedback_option(option)]
     if len(content_options) >= effective_min_options:
