@@ -1,10 +1,10 @@
 # INC-2026-06-14 CrumpleVideo VK transport drift
 
-Status: open
+Status: closed
 Severity: sev2
 Service: CrumpleVideo scheduled `/v tomorrow` social fanout
 Opened: 2026-06-14
-Closed: —
+Closed: 2026-06-14
 Owners: events-bot maintainer
 Related incidents: `INC-2026-06-09-social-video-tg-publishing`, `INC-2026-06-05-vk-story-forward-wall-first`, `INC-2026-06-13-kaggle-duplicate-videoannounce`, `INC-2026-04-26-crumple-story-required-channel-fanout`, `INC-2026-04-24-crumple-story-channel-boosts-required`
 Related docs: `docs/features/crumple-video/README.md`, `docs/features/cherryflash/README.md`, `docs/features/vk-publishing/README.md`, `docs/operations/release-governance.md`
@@ -55,6 +55,12 @@ path.
 - 2026-06-14 18:59 UTC: session `#676` finished with the same VK-as-Telegram
   error because its Kaggle dataset had been created before the deployed
   helper-bundling fix and did not contain `kaggle_common/story_publish.py`.
+- 2026-06-14 19:40 UTC: штатный `CrumpleStoryPublishOnly` publish-only
+  recovery ran for session `#676` from the already-rendered mp4 without
+  rerendering and published VK wall post `https://vk.com/wall-231828790_1140`.
+- 2026-06-14 19:45 UTC: duplicate-recovery guard was deployed so a recovered
+  session is skipped after restart/deploy if its durable DB status is already
+  published.
 
 ## Root Cause
 
@@ -177,10 +183,33 @@ path.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `29d76209232e3da35ecd16b55d1efda08c9a4e30`, pushed to
+  `origin/main`.
+- deploy path: clean hotfix worktree from `origin/main`, `flyctl deploy
+  -a events-bot-new-wngqia --local-only`, Fly image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV3TM3KZCTGEAB0KSZB45E83`,
+  machine `683961db016e28` version `1417`, `1 total, 1 passing`.
+- regression checks: `76 passed in 7.38s` for
+  `tests/test_video_announce_v_pipeline.py`,
+  `tests/test_kaggle_notebook_status_instrumentation.py`,
+  `tests/test_kaggle_client.py`, `tests/test_crumple_build_notebook.py`,
+  `tests/test_kaggle_story_publish.py`, and
+  `tests/test_video_announce_story_publish.py`; `py_compile` for the touched
+  publish-only/runtime modules passed earlier in the release sequence.
+- post-deploy verification: `/healthz` returned HTTP `200`, `ok=true`,
+  `ready=true`, `video_tomorrow=ok`, next scheduled `video_tomorrow` is
+  `2026-06-15T14:45:00+00:00`.
+- compensation evidence: publish-only Kaggle kernel
+  `zigomaro/crumple-story-publish-only` completed with
+  `story_publish_report.json` `ok=true`, target
+  `vk:kenigeventsofficial:wall` `transport=vk_wall`, `post_id=1140`, URL
+  `https://vk.com/wall-231828790_1140`, attachment
+  `video-231828790_456239091_488bcee4858915295d`.
+- production DB evidence: `videoannounce_session #676` is
+  `status=PUBLISHED_TEST`, `error=null`, `video_url=crumple_video_final.mp4`.
+- duplicate cleanup evidence: earlier manual non-canonical VK post
+  `https://vk.com/wall-231828790_1138` is deleted (`is_deleted=true` in
+  `wall.getById`); it is not counted as incident recovery.
 
 ## Prevention
 
