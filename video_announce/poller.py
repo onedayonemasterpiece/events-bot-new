@@ -49,9 +49,11 @@ from .kaggle_client import (
     resolve_kaggle_slug as _accel_pref_resolve_slug,
 )
 from .story_publish import (
+    STORY_PUBLISH_CIPHER_FILENAME,
     STORY_PUBLISH_CONFIG_FILENAME,
+    STORY_PUBLISH_KEY_FILENAME,
     build_story_publish_config,
-    ensure_story_secret_datasets,
+    encrypt_secret,
 )
 
 logger = logging.getLogger(__name__)
@@ -834,7 +836,15 @@ async def _create_story_publish_only_dataset(
     if not story_config:
         raise RuntimeError("publish-only recovery has no failed VK targets")
 
-    story_dataset_sources = await ensure_story_secret_datasets(client)
+    vk_access_token = str(os.getenv("VK_ACCESS_TOKEN5") or "").strip()
+    if not vk_access_token:
+        raise RuntimeError("publish-only recovery requires VK_ACCESS_TOKEN5")
+    auth_payload = json.dumps({"vk_access_token": vk_access_token}, ensure_ascii=False)
+    encrypted_auth, auth_key = encrypt_secret(auth_payload)
+    if not encrypted_auth or not auth_key:
+        raise RuntimeError("publish-only recovery could not encrypt VK auth")
+
+    story_dataset_sources: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         (tmp_path / "dataset-metadata.json").write_text(
@@ -846,6 +856,8 @@ async def _create_story_publish_only_dataset(
             json.dumps(story_config, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        (tmp_path / STORY_PUBLISH_CIPHER_FILENAME).write_bytes(encrypted_auth)
+        (tmp_path / STORY_PUBLISH_KEY_FILENAME).write_bytes(auth_key)
         project_root = Path(__file__).resolve().parent.parent
         helper_src = project_root / "kaggle" / "CrumpleVideo" / "story_publish.py"
         helper_dest = tmp_path / "kaggle_common" / "story_publish.py"
@@ -875,6 +887,8 @@ async def _create_story_publish_only_dataset(
                     "files": [
                         "crumple_video_final.mp4",
                         STORY_PUBLISH_CONFIG_FILENAME,
+                        STORY_PUBLISH_CIPHER_FILENAME,
+                        STORY_PUBLISH_KEY_FILENAME,
                         "kaggle_common/story_publish.py",
                         KAGGLE_RUN_FILENAME,
                     ],
@@ -965,6 +979,8 @@ async def run_story_publish_only_recovery(
                 "crumple_video_final.mp4",
                 STORY_PUBLISH_CONFIG_FILENAME,
                 "kaggle_common/story_publish.py",
+                STORY_PUBLISH_CIPHER_FILENAME,
+                STORY_PUBLISH_KEY_FILENAME,
             ],
         )
         dataset_sources = [dataset_slug, *extra_sources]

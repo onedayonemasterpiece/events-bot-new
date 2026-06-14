@@ -157,6 +157,9 @@ path.
 - Guard publish-only recovery with a per-session file lock so watchdog and
   manual compensation cannot concurrently push the shared Kaggle kernel with
   different dataset sources.
+- Put encrypted VK auth directly into the temporary private publish-only
+  dataset, avoiding stale shared story-secret dataset versions during urgent
+  compensation.
 - Let VK-only story configs skip Telethon client creation in the Kaggle helper,
   so publish-only VK wall recovery does not compete for the shared Telegram
   auth bundle.

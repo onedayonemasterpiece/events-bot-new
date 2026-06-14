@@ -989,6 +989,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
     tmp_path,
 ):
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -1129,6 +1130,7 @@ async def test_create_story_publish_only_dataset_filters_failed_vk_target(
     tmp_path,
 ):
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -1174,11 +1176,6 @@ async def test_create_story_publish_only_dataset_filters_failed_vk_target(
     )
     monkeypatch.setattr(
         poller_module,
-        "ensure_story_secret_datasets",
-        AsyncMock(return_value=["zigomaro/crumple-video-story-secrets-cipher"]),
-    )
-    monkeypatch.setattr(
-        poller_module,
         "create_kaggle_run_config",
         AsyncMock(return_value=None),
     )
@@ -1205,8 +1202,10 @@ async def test_create_story_publish_only_dataset_filters_failed_vk_target(
     )
 
     assert dataset_id.startswith("zigomaro/crumple-story-publish-session-676-")
-    assert story_sources == ["zigomaro/crumple-video-story-secrets-cipher"]
+    assert story_sources == []
     assert (snapshot_dir / "crumple_video_final.mp4").read_bytes() == b"video"
+    assert (snapshot_dir / "story_publish.enc").exists()
+    assert (snapshot_dir / "story_publish.key").exists()
     assert (snapshot_dir / "kaggle_common" / "story_publish.py").exists()
     story_config = json.loads((snapshot_dir / "story_publish.json").read_text(encoding="utf-8"))
     assert story_config["publish_only_recovery"] is True

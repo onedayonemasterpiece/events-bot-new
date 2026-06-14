@@ -53,7 +53,8 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   скрипт `scripts/run_crumple_story_publish_only_recovery.py <session_id>`
   запускает publish-only recovery: скачивает уже готовый
   `crumple_video_final.mp4` из output исходной Kaggle-сессии, собирает
-  отдельный session-dataset с этим mp4, текущим `story_publish.json` и
+  отдельный private session-dataset с этим mp4, текущим `story_publish.json`,
+  per-run encrypted VK auth (`story_publish.enc`/`story_publish.key`) и
   `kaggle_common/story_publish.py`, фильтрует targets до упавших VK transport
   targets и запускает lightweight kernel `CrumpleStoryPublishOnly`. Перед
   запуском берётся per-session file lock, чтобы watchdog и ручной скрипт не
