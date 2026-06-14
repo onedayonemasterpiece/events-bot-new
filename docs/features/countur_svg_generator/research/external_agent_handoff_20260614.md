@@ -17,9 +17,9 @@ Status:
 - Recovery Sprints 1-3 are now implemented: typed `EvidenceInventory`,
   `BuildingShell`, `PlaneGraph`, `FeatureGraph`, hard gates, and shell/plane/
   feature diagnostic SVG/PNG candidates.
-- A separate neural-branch Kaggle probe now exists for source-photo +
-  mask/edge/control-map line-art PNG generation. It is proposal/comparison-only
-  and does not replace `PrimitiveScene`/SVG hard gates.
+- A separate neural-branch Kaggle probe now exists for mask/edge/control-map
+  line-art PNG generation. It is proposal/comparison-only and does not replace
+  `PrimitiveScene`/SVG hard gates.
 - The latest full run with useful debug artifacts is the curated `audit_1527`
   pack below.
 - Later attempts hit shared Gemini RPD through the required
@@ -174,18 +174,27 @@ What exists:
   neural drift.
 - The separate neural-branch probe completed on Kaggle under stable kernel
   `zigomaro/contour-svg-neural-branch` and produced 5 real ControlNet img2img
-  PNG candidates from the original source photo plus `audit_1527` edge/mask/
-  feature controls. It writes a concrete `result.png`, `result_raw.png`,
-  `result_thresholded.png`, candidate reports and contact sheets.
+  PNG candidates. The 18:49 run used the original source photo as init and is
+  now treated as a negative probe: it wrote concrete `result.png`,
+  `result_raw.png`, `result_thresholded.png`, candidate reports and contact
+  sheets, but proved that photo-init anchors the model in photo/render mode.
+- The corrected branch is line-to-line by default: prepared `audit_1527`
+  edge/mask/feature line maps are both img2img init image and ControlNet image.
+  The source photo is not mentioned in main prompts and is only allowed in an
+  explicit `photo_assisted` research mode.
+- The corrected 19:23 Kaggle run completed with `source_photo_init_used=false`
+  and produced strict line-mask artifacts: `result.png`,
+  `result_transparent.png`, `result_burgundy_preview.png`, raw candidates,
+  normalized line masks and per-candidate line-only gate reports.
 - The E1 style-reference variant now loads SD1.5 IP-Adapter and passes
   `samples/output/IMG_20260614_115550.webp` as style reference. One failed run
   exposed a Diffusers attention-slicing/IP-Adapter conflict; the completed run
   fixed it by not enabling attention slicing before IP-Adapter loading.
-- The current `result.png` is not accepted quality: it is black lines on white
-  and does preserve the building directionally, but it remains too photo-like
-  before thresholding and too noisy after thresholding, especially around
-  foliage. Treat it as evidence for prompt/model redesign, not as a solved
-  neural renderer.
+- The current `result.png` from 18:49 is not accepted quality: it is black lines
+  on white and does preserve the building directionally, but it remains too
+  photo-like before thresholding and too noisy after thresholding, especially
+  around foliage. Treat it as evidence for the line-init redesign, not as a
+  solved neural renderer.
 
 Suggested direction:
 
@@ -198,7 +207,16 @@ Suggested direction:
 
 Local neural probe output to inspect:
 
-- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result.png`
+- Corrected line-init run:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/contour_svg_neural_branch/neural_branch/result.png`
+- Corrected burgundy preview:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/contour_svg_neural_branch/neural_branch/result_burgundy_preview.png`
+- Corrected report:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/contour_svg_neural_branch/neural_branch/neural_branch_report.json`
+- Corrected review strip:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/contour_svg_neural_branch/neural_branch/review_strip_line_init.png`
+- Negative photo-init run, retained for comparison:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result.png`
 - `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result_raw.png`
 - `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result_thresholded.png`
 - `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/contact_sheet.png`

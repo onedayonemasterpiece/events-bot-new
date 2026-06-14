@@ -24,14 +24,15 @@ def main(argv: list[str] | None = None) -> None:
     neural.add_argument("--out", required=True, help="Output directory")
     neural.add_argument("--variants", default="A1,A3,C2,D1,E1", help="Comma-separated variants, e.g. A1,A3,C2,D1,E1")
     neural.add_argument("--seeds", default="42", help="Comma-separated integer seeds")
-    neural.add_argument("--source-image", help="Original source photo used as img2img init")
+    neural.add_argument("--init-modes", default="line_init", help="Comma-separated init modes: line_init or photo_assisted")
+    neural.add_argument("--source-image", help="Original source photo; required only for photo_assisted mode")
     neural.add_argument("--style-reference", help="Style reference image for E1")
     neural.add_argument("--run-neural", action="store_true", help="Actually run CUDA Diffusers img2img")
     neural.add_argument("--steps", type=int, default=24)
-    neural.add_argument("--strength", type=float, default=0.93)
-    neural.add_argument("--style-rewrite-strength", type=float, default=0.95)
-    neural.add_argument("--guidance-scale", type=float, default=8.5)
-    neural.add_argument("--control-scale", type=float, default=1.35)
+    neural.add_argument("--strength", type=float, default=0.60)
+    neural.add_argument("--style-rewrite-strength", type=float, default=0.65)
+    neural.add_argument("--guidance-scale", type=float, default=9.0)
+    neural.add_argument("--control-scale", type=float, default=0.75)
     neural.add_argument("--style-reference-adapter-scale", type=float, default=0.55)
     args = parser.parse_args(argv)
 
@@ -43,6 +44,7 @@ def main(argv: list[str] | None = None) -> None:
                 source_image=Path(args.source_image) if args.source_image else None,
                 style_reference=Path(args.style_reference) if args.style_reference else None,
                 variants=tuple(v.strip() for v in args.variants.split(",") if v.strip()),
+                init_modes=tuple(v.strip() for v in args.init_modes.split(",") if v.strip()),
                 seeds=tuple(int(v.strip()) for v in args.seeds.split(",") if v.strip()),
                 run_neural=bool(args.run_neural),
                 steps=args.steps,

@@ -2,17 +2,24 @@
 
 ## [Unreleased]
 
+- **Contour SVG generator / neural branch line-init fix**: changed the separate
+  neural branch default from source-photo img2img to line-to-line img2img:
+  prepared edge/mask/feature line maps are now both init image and ControlNet
+  condition, source-photo init is allowed only in explicit `photo_assisted`
+  research mode, and positive prompts no longer mention photos. Added strict
+  line-mask outputs plus transparent/burgundy previews and hard gates for
+  photo/color leakage, line density and foliage-line overlap so bad
+  thresholded-photo outputs cannot be selected as `result.png`.
 - **Contour SVG generator / neural branch probe**: added a separate
-  source-photo + control-map neural line-art probe (`contour_svg.neural_branch`,
+  neural line-art probe (`contour_svg.neural_branch`,
   `python -m contour_svg neural-branch`, `kaggle/ContourSvgNeuralBranch`, and
   `scripts/run_contour_svg_neural_branch_kaggle.py`) that reuses the existing
   Kaggle status pattern under stable kernel `zigomaro/contour-svg-neural-branch`.
-  The latest T4 run completed with five proposal-only PNG candidates,
+  The initial T4 run completed with five proposal-only PNG candidates,
   `result.png`, `result_raw.png`, `result_thresholded.png`, contact sheets and
-  stage status events. The branch now keeps the original photo as img2img init,
-  uses `audit_1527` edge/mask/features as ControlNet inputs, supports an
-  IP-Adapter style-reference variant, and records that the current visual result
-  is still below the bold two-color postcard target.
+  stage status events. That photo-init run is kept as a negative probe because
+  it remained below the bold two-color postcard target; the follow-up line-init
+  fix above is the current policy.
 
 - **Contour SVG generator / recovery graph milestones**: added typed
   `EvidenceInventory`, `BuildingShell`, `PlaneGraph`, and `FeatureGraph` hard

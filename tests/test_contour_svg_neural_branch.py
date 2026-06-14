@@ -27,6 +27,8 @@ def test_neural_branch_prepares_mask_edge_inputs_without_running_diffusion(tmp_p
     assert report["neural_executed"] is False
     assert report["accepted_as_final"] is False
     assert report["source_image"] == str(SOURCE_IMAGE)
+    assert report["source_photo_init_used"] is False
+    assert report["init_modes"] == ["line_init"]
     assert (branch_dir / "N0_inputs_contact_sheet.png").exists()
     assert (branch_dir / "contact_sheet.png").exists()
     assert (branch_dir / "neural_branch_report.json").exists()
@@ -36,7 +38,7 @@ def test_neural_branch_prepares_mask_edge_inputs_without_running_diffusion(tmp_p
         "edge_plus_shell.png",
         "edge_plus_occluder_mask.png",
         "edge_plus_features.png",
-        "photo_plus_edge_style_reference.png",
+        "edge_plus_style_reference.png",
         "style_reference.png",
     ]:
         assert (input_dir / name).exists()

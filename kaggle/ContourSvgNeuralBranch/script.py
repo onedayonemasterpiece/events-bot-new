@@ -163,6 +163,11 @@ def _variants() -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
+def _init_modes() -> tuple[str, ...]:
+    raw = os.getenv("CONTOUR_NEURAL_INIT_MODES", "line_init")
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
+
+
 def _seeds() -> tuple[int, ...]:
     raw = os.getenv("CONTOUR_NEURAL_SEEDS", "42")
     return tuple(int(item.strip()) for item in raw.split(",") if item.strip())
@@ -189,7 +194,8 @@ def main() -> None:
         )
         cuda_info = _torch_cuda_probe()
         artifact_dir = _resolve_artifact_dir()
-        source_image = _source_image_path()
+        init_modes = _init_modes()
+        source_image = _source_image_path() if "photo_assisted" in set(init_modes) else None
         style_reference = _style_reference_path()
         _status_event(
             status_client,
@@ -200,7 +206,8 @@ def main() -> None:
                 "progress_percent": 12,
                 "progress_label": "preflight ok",
                 "artifact_dir": str(artifact_dir),
-                "source_image": str(source_image),
+                "init_modes": list(init_modes),
+                "source_image": str(source_image) if source_image else None,
                 "style_reference": str(style_reference) if style_reference else None,
                 "cuda": cuda_info,
             },
@@ -220,13 +227,14 @@ def main() -> None:
             source_image=source_image,
             style_reference=style_reference,
             variants=_variants(),
+            init_modes=init_modes,
             seeds=_seeds(),
             run_neural=True,
             steps=int(os.getenv("CONTOUR_NEURAL_STEPS", "24")),
-            strength=float(os.getenv("CONTOUR_NEURAL_STRENGTH", "0.93")),
-            style_rewrite_strength=float(os.getenv("CONTOUR_NEURAL_STYLE_REWRITE_STRENGTH", "0.95")),
-            guidance_scale=float(os.getenv("CONTOUR_NEURAL_GUIDANCE_SCALE", "8.5")),
-            control_scale=float(os.getenv("CONTOUR_NEURAL_CONTROL_SCALE", "1.35")),
+            strength=float(os.getenv("CONTOUR_NEURAL_STRENGTH", "0.60")),
+            style_rewrite_strength=float(os.getenv("CONTOUR_NEURAL_STYLE_REWRITE_STRENGTH", "0.65")),
+            guidance_scale=float(os.getenv("CONTOUR_NEURAL_GUIDANCE_SCALE", "9.0")),
+            control_scale=float(os.getenv("CONTOUR_NEURAL_CONTROL_SCALE", "0.75")),
             style_reference_adapter_scale=float(os.getenv("CONTOUR_NEURAL_STYLE_REFERENCE_ADAPTER_SCALE", "0.55")),
         )
         _status_event(
@@ -235,8 +243,9 @@ def main() -> None:
             phase="neural_img2img",
             progress={
                 "progress_percent": 35,
-                "progress_label": "run neural img2img candidates",
+                "progress_label": "run line-init neural simplification candidates",
                 "variants": list(config.variants),
+                "init_modes": list(config.init_modes),
                 "seeds": list(config.seeds),
             },
         )

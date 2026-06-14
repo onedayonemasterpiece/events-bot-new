@@ -121,13 +121,16 @@ identity. The final postcard/sketch look is produced by primitive SVG rendering
 There is also a separate neural-branch probe for the research question "can a
 model turn prepared masks/edge maps into a useful line-art PNG?". It is not a
 replacement for the final SVG path. It prepares edge/mask/facade composites
-from an existing artifact pack and optionally runs CUDA Diffusers img2img:
+from an existing artifact pack and optionally runs CUDA Diffusers img2img in
+line-to-line mode: the prepared line map is both `image` init and ControlNet
+condition. The original source photo is not used by default and is allowed only
+in the explicit `photo_assisted` research mode.
 
 ```bash
 python -m contour_svg neural-branch \
   --artifacts docs/features/countur_svg_generator/samples/generated/audit_1527 \
   --out artifacts/codex/contour-svg-neural-branch-local \
-  --source-image "docs/features/countur_svg_generator/samples/input/image - 2026-06-14T115705.752.png" \
+  --init-modes line_init \
   --variants A1,A3,C2,D1,E1 \
   --style-reference docs/features/countur_svg_generator/samples/output/IMG_20260614_115550.webp
 ```
@@ -201,10 +204,17 @@ raster/vectorized proposal candidates may remain under `candidates/` and
 - `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/`
   — completed neural-branch probe on Kaggle. It writes `result.png`,
   `result_raw.png`, `result_thresholded.png`, candidate contact sheets and a
-  report from the original source photo plus `audit_1527` edge/mask/feature
-  control maps. The current result is concrete but not visually accepted: it is
-  still too photo-like before thresholding and too foliage-noisy after
-  thresholding.
+  report from the older photo-init experiment. That run is now retained as a
+  negative result: it proved photo init makes outputs too photo-like before
+  thresholding and too foliage-noisy after thresholding. Current policy is
+  line-to-line by default.
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/`
+  — first completed line-init neural branch run. `source_photo_init_used=false`;
+  prepared `edge_*` line maps are both img2img init and ControlNet condition.
+  It writes strict `result.png`, `result_transparent.png`,
+  `result_burgundy_preview.png`, raw candidates, line masks and per-candidate
+  gate reports. The visual result is a real line-art proposal, though still not
+  final target quality.
 - `to_do/92-11-16.jpg` — second benchmark for tower geometry, leaf occlusion,
   arches, dome, balcony ellipses, and cylindrical perspective.
 

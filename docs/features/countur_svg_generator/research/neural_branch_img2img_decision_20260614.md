@@ -15,29 +15,47 @@ to preserve the source building identity.
 This does not prove the neural branch is useless. It proves the current recipe
 was wrong for identity preservation.
 
+## Override — 2026-06-14 late iteration
+
+The earlier source-photo img2img decision is now explicitly overridden for the
+separate neural branch. The 18:49 Kaggle run proved the failure mode: using the
+source photo as the init image anchors Stable Diffusion in photo/render mode,
+and thresholding that output produces noisy foliage-heavy edge maps rather than
+designer line art.
+
+Current policy:
+
+- default neural branch is **line-to-line**;
+- prepared `edge_map`/cleaned line maps are both img2img `image` init and
+  ControlNet condition;
+- the source photo is not mentioned in positive prompts;
+- source-photo init is allowed only in explicit `photo_assisted` research mode;
+- style reference `samples/output/IMG_20260614_115550.webp` may be used only as
+  style/reference conditioning, not geometry or identity.
+
 ## Working Decision
 
 Keep the neural branch, but constrain it to proposal/evidence roles:
 
 - never directly write `final.svg`;
 - never become the final winning family without primitive rendering;
-- use the source photo as img2img init image;
-- neutralize occluders before diffusion;
-- condition on lineart or M-LSD plus depth;
-- use style-only positive prompts and identity-defense negative prompts;
+- use prepared line maps as img2img init image by default;
+- use the same prepared line maps as ControlNet lineart condition;
+- use style-only positive prompts that do not mention photos;
+- keep `photo_assisted` as explicit research mode only, never default;
 - keep all neural artifacts in `candidates/` and `debug/neural_branch_raw/`.
 
 ## Implementation Recipe
 
 ```text
-source photo
-→ crop by primary object mask + margin
-→ neutralize occluders using multi-state masks
-→ lineart / M-LSD guide with occluder regions erased
-→ Depth Anything V2 depth guide from neutralized source image
+edge_map.png / cleaned line map
+→ optional occluder erasure and facade feature hints
+→ prepared black-line-on-white structural line map
 → SD1.5 StableDiffusionControlNetImg2ImgPipeline
-   with ControlNet(lineart or MLSD) + ControlNet(depth)
-→ optional IP-Adapter image prompt from the style reference for B3/B4
+   image=prepared line map
+   control_image=prepared line map
+   ControlNet(lineart)
+→ optional IP-Adapter image prompt from the style reference for E1
 → proposal-only raster artifacts
 → optional vectorization / line-evidence experiments
 ```
@@ -51,19 +69,18 @@ lineart: lllyasviel/control_v11p_sd15_lineart
 mlsd: lllyasviel/control_v11p_sd15_mlsd
 depth: lllyasviel/control_v11f1p_sd15_depth
 depth model: depth-anything/Depth-Anything-V2-Small-hf
-strength: 0.40
-guidance_scale: 5.0
-controlnet_conditioning_scale: [1.15, 0.80]
-control_guidance_end: 0.85
+strength: 0.60
+guidance_scale: 9.0
+controlnet_conditioning_scale: 0.75
 style reference adapter: h94/IP-Adapter / models / ip-adapter_sd15.bin
-style_reference_adapter_scale: 0.35
-style_reference_strength: 0.34
+style_reference_adapter_scale: 0.55
+style_reference_strength: 0.65
 ```
 
 Positive prompt is style-only:
 
 ```text
-clean minimal monoline contour drawing, white ink on dark background, even line weight, transparent-style line art, vector poster aesthetic, geometric perspective lines, calm composition
+clean black-ink architectural contour line art on pure white background, bold confident strokes, simplified geometry, recognizable building silhouette, roofline, corners, cornices, windows, arches, base, no shading, no fill, no texture
 ```
 
 Negative prompt defends identity:
@@ -147,6 +164,8 @@ neural hypothesis, a separate Kaggle probe was added:
   `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1816/`
 - latest completed output:
   `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/`
+- corrected line-init output:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1923/`
 
 The probe used the existing `audit_1527` evidence pack and produced:
 
@@ -172,27 +191,34 @@ Status evidence from the completed 18:49 run:
 
 Visual result:
 
-- `result.png` now exists and is a concrete black-line-on-white output selected
-  from the thresholded neural candidates.
-- `result_raw.png` shows the underlying neural image before thresholding.
-- The branch now uses the original source photo as img2img init and uses
-  `edge_only`, `edge_thickened`, `edge_minus_occluders`, `edge_plus_features`,
-  and `photo_plus_edge_style_reference` as ControlNet inputs.
-- `photo_plus_edge_style_reference` now loads SD1.5 IP-Adapter style-reference
-  weights. The first attempt failed on Diffusers `SlicedAttnProcessor` after
-  attention slicing; the completed run fixed this by not enabling attention
-  slicing before IP-Adapter loading.
-- The completed output is still visually below target: the raw image remains too
-  close to photo mode, and thresholding preserves too much tree/foliage noise
-  while losing some facade clarity. It is a useful concrete probe, not an
-  accepted target-quality result.
+- `result.png` from the 18:49 run exists, but it is now classified as a
+  negative photo-init probe rather than the desired neural branch output.
+- `result.png` from the 19:23 run is the first corrected line-init output:
+  `source_photo_init_used=false`, all candidates use `init_mode=line_init`, and
+  the output pack includes raw candidates, strict black-on-white line masks,
+  transparent line PNGs, burgundy previews and per-candidate line-only gates.
+- The branch now switches default policy to line-to-line: `edge_only`,
+  `edge_thickened`, `edge_minus_occluders`, `edge_plus_features`, and
+  `edge_plus_style_reference` become prepared line-init/control maps.
+- `edge_plus_style_reference` loads SD1.5 IP-Adapter style-reference weights.
+  The reference defines line economy and target look only; it must not define
+  geometry or identity.
+- A failed attempt exposed a Diffusers `SlicedAttnProcessor` conflict after
+  attention slicing; the completed code avoids enabling attention slicing before
+  IP-Adapter loading.
+- The previous completed output is still visually below target because the raw
+  image remained too close to photo mode. That is the reason for the line-init
+  override.
+- The corrected line-init result is materially closer to the intended family
+  because it no longer returns color/photo renderings. It is still a proposal:
+  lines remain noisy and the geometry/detail balance needs further model/input
+  cleanup before it can be called target-quality.
 
 Conclusion:
 
 - The neural branch is viable as a visible proposal/comparison path.
-- The latest probe did produce the requested concrete PNG artifact path, but not
+- The latest photo-init probe did produce a concrete PNG artifact path, but not
   the requested bold two-color postcard quality.
-- Next neural run should increase style-rewrite strength, shorten prompts to fit
-  CLIP, suppress photo/shading/color mode harder, and test mask/inpaint or
-  reference-conditioning variants that remove foliage as content rather than
-  merely thresholding it afterward.
+- Next neural run should validate the corrected line-init default, reject
+  photo-like/color candidates through hard gates, and use the target reference
+  only as style guidance.

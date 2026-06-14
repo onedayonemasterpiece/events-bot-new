@@ -11,16 +11,17 @@ from .dependencies import MissingDependencyError, has_cuda, require_module
 
 
 PROMPT_P1_SIMPLIFICATION = (
-    "Black ink architectural contour drawing on white background. Keep source "
-    "building identity, perspective, roofline, corner, windows, arches and base. "
-    "Follow the control map. Make bold clean straight postcard lines. "
-    "Complete tree-hidden roof, cornice and facade rhythm conservatively."
+    "You are given a structural architectural line map, not a photo. Transform "
+    "it into cleaner bolder simplified black contour line art on white. Preserve "
+    "building perspective, roofline, corner, cornices, windows, arches and base. "
+    "Use fewer larger strokes. Remove foliage, fence, road texture and shadows."
 )
 
 NEGATIVE_IDENTITY_DRIFT = (
-    "photo, photorealistic, color, grey paper, shading, texture, filled drawing, "
-    "watercolor, pencil sketch, black background, white ink, trees, foliage, "
-    "fence, road, cars, people, different building, extra wing, watermark, text"
+    "photo, photorealistic, realistic render, color facade, blue sky, trees, "
+    "foliage, fence, road, pavement, people, cars, shadows, gradients, wall "
+    "texture, bricks, dense tiny details, scribble, crosshatching, blurry, "
+    "watermark, text, different building, extra floors, extra wings"
 )
 
 
@@ -31,14 +32,15 @@ class NeuralBranchConfig:
     source_image: Path | None = None
     style_reference: Path | None = None
     variants: tuple[str, ...] = ("A1", "A3", "C2", "D1")
+    init_modes: tuple[str, ...] = ("line_init",)
     seeds: tuple[int, ...] = (42,)
     run_neural: bool = False
     output_size: tuple[int, int] = (768, 768)
     steps: int = 24
-    guidance_scale: float = 8.5
-    control_scale: float = 1.35
-    strength: float = 0.93
-    style_rewrite_strength: float = 0.95
+    guidance_scale: float = 9.0
+    control_scale: float = 0.75
+    strength: float = 0.60
+    style_rewrite_strength: float = 0.65
     base_model: str = "runwayml/stable-diffusion-v1-5"
     lineart_controlnet: str = "lllyasviel/control_v11p_sd15_lineart"
     style_reference_adapter_model: str = "h94/IP-Adapter"
@@ -98,8 +100,10 @@ def run_neural_branch(config: NeuralBranchConfig) -> dict[str, Any]:
         best = _select_best_candidate(candidates)
         if best is None:
             raise RuntimeError("Neural branch produced candidates but no result candidate could be selected")
-        shutil.copy2(best["thresholded_path"], branch_dir / "result.png")
-        shutil.copy2(best["thresholded_path"], branch_dir / "result_thresholded.png")
+        shutil.copy2(best["line_mask_path"], branch_dir / "result.png")
+        shutil.copy2(best["line_mask_path"], branch_dir / "result_thresholded.png")
+        shutil.copy2(best["transparent_path"], branch_dir / "result_transparent.png")
+        shutil.copy2(best["burgundy_preview_path"], branch_dir / "result_burgundy_preview.png")
         shutil.copy2(best["candidate_path"], branch_dir / "result_raw.png")
         _write_contact_sheet(
             [(Path(item["candidate_path"]).stem, Path(item["candidate_path"])) for item in candidates],
@@ -107,9 +111,14 @@ def run_neural_branch(config: NeuralBranchConfig) -> dict[str, Any]:
             title="Neural Branch Candidates",
         )
         _write_contact_sheet(
-            [(Path(item["thresholded_path"]).stem, Path(item["thresholded_path"])) for item in candidates[:3]],
+            [(Path(item["line_mask_path"]).stem, Path(item["line_mask_path"])) for item in candidates[:3]],
             branch_dir / "top3_contact_sheet.png",
-            title="Neural Branch Top Thresholded",
+            title="Neural Branch Top Line Masks",
+        )
+        _write_contact_sheet(
+            [(Path(item["burgundy_preview_path"]).stem, Path(item["burgundy_preview_path"])) for item in candidates[:3]],
+            branch_dir / "top3_burgundy_contact_sheet.png",
+            title="Neural Branch Top Burgundy Previews",
         )
     else:
         _write_contact_sheet([], branch_dir / "contact_sheet.png", title="Neural Branch Not Executed")
@@ -123,17 +132,21 @@ def run_neural_branch(config: NeuralBranchConfig) -> dict[str, Any]:
         "model": config.base_model if config.run_neural else None,
         "lineart_controlnet": config.lineart_controlnet if config.run_neural else None,
         "variants": list(config.variants),
+        "init_modes": list(config.init_modes),
         "seeds": list(config.seeds),
         "style_rewrite_strength": config.style_rewrite_strength,
         "style_reference_adapter_scale": config.style_reference_adapter_scale,
-        "source_image": str(_resolve_source_image(config)) if config.source_image or config.artifact_dir else None,
+        "source_image": str(_resolve_source_image(config)) if config.source_image else None,
+        "source_photo_init_used": "photo_assisted" in set(config.init_modes),
         "modes": ["neural_raw_mode", "neural_normalized_mode"],
         "prepared_inputs": [item.to_dict() for item in prepared],
         "candidates": candidates,
         "result_png": str(branch_dir / "result.png") if config.run_neural else None,
         "result_thresholded_png": str(branch_dir / "result_thresholded.png") if config.run_neural else None,
+        "result_transparent_png": str(branch_dir / "result_transparent.png") if config.run_neural else None,
+        "result_burgundy_preview_png": str(branch_dir / "result_burgundy_preview.png") if config.run_neural else None,
         "result_raw_png": str(branch_dir / "result_raw.png") if config.run_neural else None,
-        "result_png_policy": "best thresholded black-line-on-white neural style rewrite",
+        "result_png_policy": "best strict line-mask candidate from neural line-to-line simplification",
         "accepted_as_final": False,
         "final_policy": "PNG style-rewrite proposal only; final SVG still requires PrimitiveScene/vectorization hard gates",
     }
@@ -205,7 +218,7 @@ def prepare_neural_inputs(config: NeuralBranchConfig, *, input_dir: Path) -> lis
             raise RuntimeError(f"style reference does not exist: {ref_path}")
         shutil.copy2(ref_path, input_dir / "style_reference.png")
         save(
-            "photo_plus_edge_style_reference",
+            "edge_plus_style_reference",
             edge_control,
             variant="E1",
             metadata={"style_reference": str(input_dir / "style_reference.png")},
@@ -249,16 +262,16 @@ def _run_diffusion_candidates(
     style_adapter_loaded = False
     if config.style_reference is not None and config.style_reference.exists():
         style_reference_image = _fit_pad_rgb(Image.open(config.style_reference).convert("RGB"), size=config.output_size, fill=(255, 255, 255))
-    source_init = _source_photo_init(config)
+    source_init = _source_photo_init(config) if _uses_photo_assisted(config) else None
     init_debug = raw_dir.parent / "source_photo_init.png"
-    source_init.save(init_debug)
+    if source_init is not None:
+        source_init.save(init_debug)
 
     candidates: list[dict[str, Any]] = []
     for item in prepared:
         if item.variant not in set(config.variants):
             continue
         control_source = _fit_pad_rgb(Image.open(item.path).convert("RGB"), size=config.output_size, fill=(255, 255, 255))
-        init = source_init
         condition = _controlnet_condition(control_source)
         kwargs = {}
         if item.variant == "E1":
@@ -277,72 +290,109 @@ def _run_diffusion_candidates(
             kwargs["ip_adapter_image"] = style_reference_image
         elif style_adapter_loaded:
             pipe.set_ip_adapter_scale(0.0)
-        for seed in config.seeds:
-            generator = torch.Generator(device="cuda").manual_seed(int(seed))
-            result = pipe(
-                prompt=item.prompt,
-                negative_prompt=NEGATIVE_IDENTITY_DRIFT,
-                image=init,
-                control_image=condition,
-                num_inference_steps=int(config.steps),
-                guidance_scale=float(config.guidance_scale),
-                controlnet_conditioning_scale=float(config.control_scale),
-                strength=float(config.style_rewrite_strength if item.variant == "E1" else config.strength),
-                generator=generator,
-                **kwargs,
-            ).images[0]
-            candidate_path = raw_dir / f"N_{item.name}_seed{seed}.png"
-            result.save(candidate_path)
-            thresholded_path = normalized_dir / f"N_{item.name}_seed{seed}_thresholded.png"
-            thresholded = _threshold_line_art(result)
-            thresholded.save(thresholded_path)
-            overlay_path = normalized_dir / f"N_{item.name}_seed{seed}_overlay_vs_edge.png"
-            _overlay_vs_input(init, thresholded).save(overlay_path)
-            metrics = _line_art_metrics(thresholded)
-            report_path = normalized_dir / f"N_{item.name}_seed{seed}_report.json"
-            candidate_report = {
-                "branch_name": f"N_{item.name}",
-                "variant": item.variant,
-                "mode": item.mode,
-                "model": config.base_model,
-                "controlnet": config.lineart_controlnet,
-                "source_image": str(_resolve_source_image(config)),
-                "source_init_path": str(init_debug),
-                "style_reference_adapter": config.style_reference_adapter_model if item.variant == "E1" else None,
-                "style_reference_adapter_scale": config.style_reference_adapter_scale if item.variant == "E1" else None,
-                "seed": seed,
-                "candidate_path": str(candidate_path),
-                "thresholded_path": str(thresholded_path),
-                "overlay_vs_edge_path": str(overlay_path),
-                "identity_score": None,
-                "postcardness_score": metrics["postcardness_proxy"],
-                "structure_score": metrics["structure_proxy"],
-                "line_simplicity_score": metrics["line_simplicity_proxy"],
-                "vectorization_readiness": metrics["vectorization_readiness_proxy"],
-                "accepted_for_fusion": metrics["line_density"] >= 0.01 and metrics["line_density"] <= 0.34,
-                "accepted_as_final": False,
-                "rejection_reason": "final SVG requires PrimitiveScene; neural raster is proposal evidence only",
-                "metrics": metrics,
-            }
-            report_path.write_text(json.dumps(candidate_report, ensure_ascii=False, indent=2), encoding="utf-8")
-            candidates.append({**candidate_report, "candidate_report": str(report_path)})
+        for init_mode in config.init_modes:
+            init = _init_image_for_mode(init_mode, control_source, source_init)
+            mode_strength = _strength_for_mode(config, init_mode, item.variant)
+            for seed in config.seeds:
+                generator = torch.Generator(device="cuda").manual_seed(int(seed))
+                result = pipe(
+                    prompt=_prompt_for_variant(item.variant, init_mode=init_mode),
+                    negative_prompt=NEGATIVE_IDENTITY_DRIFT,
+                    image=init,
+                    control_image=condition,
+                    num_inference_steps=int(config.steps),
+                    guidance_scale=float(config.guidance_scale),
+                    controlnet_conditioning_scale=float(config.control_scale),
+                    strength=float(mode_strength),
+                    generator=generator,
+                    **kwargs,
+                ).images[0]
+                stem = f"N_{init_mode}_{item.name}_seed{seed}"
+                candidate_path = raw_dir / f"{stem}.png"
+                result.save(candidate_path)
+                line_mask_path = normalized_dir / f"{stem}_line_mask.png"
+                line_mask = _threshold_line_art(result)
+                line_mask.save(line_mask_path)
+                transparent_path = normalized_dir / f"{stem}_transparent.png"
+                _transparent_lines(line_mask).save(transparent_path)
+                burgundy_path = normalized_dir / f"{stem}_burgundy_preview.png"
+                _burgundy_preview(line_mask).save(burgundy_path)
+                overlay_path = normalized_dir / f"{stem}_overlay_vs_input.png"
+                _overlay_vs_input(init, line_mask).save(overlay_path)
+                metrics = _line_art_metrics(line_mask)
+                gate = _line_only_gate(result, line_mask, metrics, config.artifact_dir)
+                accepted = bool(gate["line_only_gate_passed"])
+                report_path = normalized_dir / f"{stem}_report.json"
+                candidate_report = {
+                    "branch_name": stem,
+                    "variant": item.variant,
+                    "mode": item.mode,
+                    "init_mode": init_mode,
+                    "model": config.base_model,
+                    "controlnet": config.lineart_controlnet,
+                    "source_image": str(_resolve_source_image(config)) if init_mode == "photo_assisted" else None,
+                    "source_init_path": str(init_debug) if init_mode == "photo_assisted" else None,
+                    "style_reference_adapter": config.style_reference_adapter_model if item.variant == "E1" else None,
+                    "style_reference_adapter_scale": config.style_reference_adapter_scale if item.variant == "E1" else None,
+                    "seed": seed,
+                    "candidate_path": str(candidate_path),
+                    "line_mask_path": str(line_mask_path),
+                    "thresholded_path": str(line_mask_path),
+                    "transparent_path": str(transparent_path),
+                    "burgundy_preview_path": str(burgundy_path),
+                    "overlay_vs_edge_path": str(overlay_path),
+                    "identity_score": None,
+                    "postcardness_score": metrics["postcardness_proxy"],
+                    "structure_score": metrics["structure_proxy"],
+                    "line_simplicity_score": metrics["line_simplicity_proxy"],
+                    "vectorization_readiness": metrics["vectorization_readiness_proxy"],
+                    "accepted_for_fusion": accepted,
+                    "accepted_as_final": False,
+                    "rejection_reason": None if accepted else gate["rejection_reason"],
+                    "metrics": {**metrics, **gate},
+                }
+                report_path.write_text(json.dumps(candidate_report, ensure_ascii=False, indent=2), encoding="utf-8")
+                candidates.append({**candidate_report, "candidate_report": str(report_path)})
     return candidates
 
 
-def _prompt_for_variant(variant: str) -> str:
+def _prompt_for_variant(variant: str, *, init_mode: str = "line_init") -> str:
+    if init_mode == "photo_assisted":
+        return (
+            "Redraw the depicted building as strict two-color black architectural line art on white. "
+            "Preserve massing, perspective, roofline, windows and arches. Remove color, sky, foliage, road."
+        )
     if variant.startswith("C"):
         return (
-            "Black ink architectural contour drawing on white background. Use cleaned guide and source photo. "
-            "Keep real shell and perspective. Complete hidden roof, cornice, facade and window rhythm. "
-            "Bold clean straight lines."
+            "Clean architectural line map into bold black contour art on white. Keep shell and perspective. "
+            "Complete hidden roof, cornice, facade and window rhythm. Remove tree, fence and road lines."
         )
     if variant.startswith("E"):
         return (
-            "Match reference style: strict two-color black architectural line art on white background. "
-            "Source photo keeps identity. Control keeps structure. Bold clean roofline, corner, cornices, "
-            "windows and arches. Complete hidden rhythm conservatively."
+            "Match reference line economy: strict two-color black architectural line art on white. "
+            "The line map keeps geometry. Make bold clean roofline, corner, cornices, windows and arches."
         )
     return PROMPT_P1_SIMPLIFICATION
+
+
+def _uses_photo_assisted(config: NeuralBranchConfig) -> bool:
+    return "photo_assisted" in set(config.init_modes)
+
+
+def _init_image_for_mode(init_mode: str, control_source, source_init):
+    if init_mode == "line_init":
+        return _line_init_from_control(control_source)
+    if init_mode == "photo_assisted":
+        if source_init is None:
+            raise RuntimeError("photo_assisted init mode requires source photo init")
+        return source_init
+    raise RuntimeError(f"Unsupported neural init mode: {init_mode}")
+
+
+def _strength_for_mode(config: NeuralBranchConfig, init_mode: str, variant: str) -> float:
+    if init_mode == "photo_assisted":
+        return max(float(config.style_rewrite_strength if variant == "E1" else config.strength), 0.85)
+    return float(config.style_rewrite_strength if variant == "E1" else config.strength)
 
 
 def _resolve_source_image(config: NeuralBranchConfig) -> Path:
@@ -368,7 +418,7 @@ def _resolve_source_image(config: NeuralBranchConfig) -> Path:
         images = sorted([*input_dir.glob("*.png"), *input_dir.glob("*.jpg"), *input_dir.glob("*.jpeg"), *input_dir.glob("*.webp")])
         if images:
             return images[0]
-    raise RuntimeError("Neural branch requires the original source photo; pass --source-image or include samples/input")
+    raise RuntimeError("photo_assisted neural init requires the original source photo; pass --source-image or include samples/input")
 
 
 def _fit_pad_rgb(image, *, size: tuple[int, int], fill: tuple[int, int, int]):
@@ -389,6 +439,10 @@ def _source_photo_init(config: NeuralBranchConfig):
     Image = require_module("PIL.Image", "Pillow")
     source = Image.open(_resolve_source_image(config)).convert("RGB")
     return _fit_pad_rgb(source, size=config.output_size, fill=(255, 255, 255))
+
+
+def _line_init_from_control(control_source):
+    return _controlnet_condition(control_source).convert("RGB")
 
 
 def _require_artifact(artifact_dir: Path, name: str) -> Path:
@@ -536,6 +590,24 @@ def _threshold_line_art(image):
     return binary.convert("RGB")
 
 
+def _transparent_lines(line_mask):
+    Image = require_module("PIL.Image", "Pillow")
+    gray = line_mask.convert("L")
+    out = Image.new("RGBA", gray.size, (0, 0, 0, 0))
+    out.putdata([(0, 0, 0, 255) if p < 128 else (0, 0, 0, 0) for p in gray.getdata()])
+    return out
+
+
+def _burgundy_preview(line_mask):
+    Image = require_module("PIL.Image", "Pillow")
+    gray = line_mask.convert("L")
+    bg = (92, 26, 19)
+    fg = (246, 239, 224)
+    out = Image.new("RGB", gray.size, bg)
+    out.putdata([fg if p < 128 else bg for p in gray.getdata()])
+    return out
+
+
 def _adaptive_dark_threshold(gray):
     hist = gray.histogram()
     total = max(1, sum(hist))
@@ -583,11 +655,62 @@ def _line_art_metrics(image) -> dict[str, float]:
     }
 
 
+def _line_only_gate(raw_image, line_mask, metrics: dict[str, float], artifact_dir: Path) -> dict[str, Any]:
+    saturation = _saturation_score(raw_image)
+    foliage_overlap = _foliage_overlap(line_mask, artifact_dir)
+    density = float(metrics["line_density"])
+    reasons: list[str] = []
+    if saturation > 0.10:
+        reasons.append(f"photo_or_color_mode_leak:saturation={saturation:.3f}")
+    if density < 0.025:
+        reasons.append(f"line_density_too_low:{density:.3f}")
+    if density > 0.12:
+        reasons.append(f"line_density_too_high:{density:.3f}")
+    if foliage_overlap > 0.25:
+        reasons.append(f"foliage_traced_as_line:{foliage_overlap:.3f}")
+    return {
+        "raw_saturation_score": round(saturation, 4),
+        "foliage_line_overlap": round(foliage_overlap, 4),
+        "line_only_gate_passed": not reasons,
+        "rejection_reason": ";".join(reasons) if reasons else None,
+    }
+
+
+def _saturation_score(image) -> float:
+    hsv = image.convert("HSV")
+    pixels = list(hsv.getdata())
+    if not pixels:
+        return 0.0
+    # Sample at most ~50k pixels to keep reports cheap on Kaggle.
+    step = max(1, len(pixels) // 50000)
+    sample = pixels[::step]
+    return sum(pixel[1] for pixel in sample) / (255.0 * max(1, len(sample)))
+
+
+def _foliage_overlap(line_mask, artifact_dir: Path) -> float:
+    path = artifact_dir / "mask_occluder.png"
+    if not path.exists():
+        return 0.0
+    Image = require_module("PIL.Image", "Pillow")
+    mask = Image.open(path).convert("L").resize(line_mask.size)
+    line = line_mask.convert("L")
+    line_pixels = 0
+    overlap = 0
+    for p, m in zip(line.getdata(), mask.getdata()):
+        if p < 128:
+            line_pixels += 1
+            if m > 24:
+                overlap += 1
+    return overlap / max(1, line_pixels)
+
+
 def _select_best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not candidates:
         return None
     gated = [item for item in candidates if item.get("accepted_for_fusion")]
-    pool = gated or candidates
+    if not gated:
+        return None
+    pool = gated
     return max(
         pool,
         key=lambda item: (
