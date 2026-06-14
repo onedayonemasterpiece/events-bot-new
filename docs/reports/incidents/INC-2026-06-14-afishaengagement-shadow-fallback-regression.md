@@ -1,6 +1,6 @@
 # INC-2026-06-14-afishaengagement-shadow-fallback-regression Afisha Engagement Shadow Fallback Regression
 
-Status: open
+Status: monitoring
 Severity: sev3
 Service: Afisha Engagement / VK event publishing
 Opened: 2026-06-14
@@ -50,6 +50,13 @@ posts and violating the production contract of one chosen publication variant.
   copies instead of production CTA posts.
 - 2026-06-14: investigation confirmed normal `sync_vk_source_post` still called
   `shadow_after_plain_create` and `shadow_after_plain_update`.
+- 2026-06-14 01:36 UTC: production debug-shadow activities `13`, `14`, and
+  `15` were disabled; public activities `25`, `26`, `27`, `28`, and `29`
+  remained enabled.
+- 2026-06-14 01:40 UTC: 17 postponed VK posts with Afisha Engagement debug
+  markers were deleted; a follow-up VK postponed scan returned zero debug
+  marker candidates and 15 remaining ordinary postponed posts.
+- 2026-06-14 01:44 UTC: fix deployed to Fly machine version `1400`.
 
 ## Root Cause
 
@@ -109,8 +116,10 @@ posts and violating the production contract of one chosen publication variant.
 
 ## Immediate Mitigation
 
-- Disable legacy debug-shadow Afisha Engagement activities in production.
-- Delete only postponed VK posts containing Afisha Engagement debug markers.
+- Disabled legacy debug-shadow Afisha Engagement activities `13`, `14`, and
+  `15` in production.
+- Deleted 17 postponed VK posts containing Afisha Engagement debug markers.
+- Verified VK postponed debug-marker candidates: `0`.
 
 ## Corrective Actions
 
@@ -129,10 +138,22 @@ posts and violating the production contract of one chosen publication variant.
 
 ## Release And Closure Evidence
 
-- deployed SHA:
-- deploy path:
+- deployed SHA: `db7a85ba`, reachable from `origin/main`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; image
+  `events-bot-new-wngqia:deployment-01KV1WS0HM0R77MXS7M9C668ZV`, machine
+  version `1400`
 - regression checks:
+  - `python3 -m py_compile main_part2.py tests/test_vk_source.py afishaengagement.py`
+  - `git diff --check`
+  - targeted pytest was not runnable in this worktree because `pytest` was not
+    installed (`python3: No module named pytest`)
 - post-deploy verification:
+  - `/healthz`: `ok=true`, `ready=true`, `db=ok`, scheduler critical jobs `ok`
+  - `fly status`: machine `48e42d5b714228` started, `1 total, 1 passing`
+  - Fly logs: `BOOT_OK pid=644` and `Running on http://0.0.0.0:8080`
+  - production DB: debug-shadow activities `(13, 14, 15)` disabled and public
+    activities `(25, 26, 27, 28, 29)` enabled
+  - VK postponed queue: `postponed_count=15`, debug-marker candidates `0`
 
 ## Prevention
 
