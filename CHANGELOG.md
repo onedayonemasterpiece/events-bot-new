@@ -12,8 +12,10 @@
   already-rendered mp4 without rerendering, takes a per-session file lock to
   prevent duplicate compensation pushes, carries a per-run encrypted VK token
   inside the temporary private dataset instead of relying on eventually
-  consistent shared secret datasets, prunes stale per-session Kaggle datasets
-  before kernel push, and VK-only recovery skips Telethon session creation. The
+  consistent shared secret datasets, re-checks durable session status before
+  compensation to avoid duplicate VK posts after restarts, prunes stale
+  per-session Kaggle datasets before kernel push, and VK-only recovery skips
+  Telethon session creation. The
   lightweight publish-only script opts out of the generic script
   wrapper because Kaggle executes script kernels from `/kaggle/src/script.py`.
   It also installs the missing Telethon dependency before loading the shared

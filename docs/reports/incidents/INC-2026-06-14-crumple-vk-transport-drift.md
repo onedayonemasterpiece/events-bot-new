@@ -160,6 +160,9 @@ path.
 - Put encrypted VK auth directly into the temporary private publish-only
   dataset, avoiding stale shared story-secret dataset versions during urgent
   compensation.
+- Re-check durable session status immediately before publish-only dataset
+  creation so a recovered session is not published twice after a deploy/restart
+  drops the temporary filesystem lock.
 - Let VK-only story configs skip Telethon client creation in the Kaggle helper,
   so publish-only VK wall recovery does not compete for the shared Telegram
   auth bundle.

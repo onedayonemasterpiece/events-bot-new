@@ -1548,3 +1548,30 @@ def test_story_publish_only_lock_prevents_concurrent_session(monkeypatch, tmp_pa
     second = poller_module._acquire_story_publish_only_lock(676)
     assert second is not None
     poller_module._release_story_publish_only_lock(second)
+
+
+@pytest.mark.asyncio
+async def test_story_publish_only_recovery_skips_already_published_session(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(
+            VideoAnnounceSession(
+                id=676,
+                status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            )
+        )
+        session.add(
+            VideoAnnounceSession(
+                id=677,
+                status=VideoAnnounceSessionStatus.FAILED,
+            )
+        )
+        await session.commit()
+
+    assert await poller_module._load_session_if_publish_only_allowed(db, 676) is None
+
+    recoverable = await poller_module._load_session_if_publish_only_allowed(db, 677)
+    assert recoverable is not None
+    assert recoverable.id == 677

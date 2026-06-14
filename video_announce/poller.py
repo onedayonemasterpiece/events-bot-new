@@ -534,6 +534,37 @@ def _load_story_report(path: Path | None) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+async def _load_session_if_publish_only_allowed(
+    db: Database,
+    session_id: int,
+) -> VideoAnnounceSession | None:
+    """Return a fresh session unless publish-only recovery is already moot.
+
+    Publish-only recovery can be invoked both by the standard poller and by the
+    operator catch-up script.  The filesystem lock prevents concurrent work in a
+    single machine lifetime, but Fly deploy/restart can drop /tmp locks while a
+    second recovery is being scheduled.  Re-check the durable DB state before
+    creating a new Kaggle publish-only dataset so a session already recovered by
+    another invocation is not published to VK twice.
+    """
+
+    async with db.get_session() as session:
+        obj = await session.get(VideoAnnounceSession, session_id)
+        if not obj:
+            return None
+        if obj.status in {
+            VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+        }:
+            logger.info(
+                "video_announce: publish-only recovery skipped; session already published session=%s status=%s",
+                session_id,
+                obj.status,
+            )
+            return None
+        return obj
+
+
 async def _maybe_register_kenigsberg_manifest(
     db: Database,
     session_obj: VideoAnnounceSession,
@@ -935,34 +966,40 @@ async def run_story_publish_only_recovery(
                 f"⚠️ Сессия #{session_obj.id}: publish-only компенсация уже выполняется",
             )
         return False
-    source_video = video_path
-    output_dir: Path | None = None
-    if source_video is None:
-        kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip()
-        if not kernel_ref:
-            return False
-        tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
-        output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        files = await asyncio.to_thread(
-            client.download_kernel_output,
-            kernel_ref,
-            path=output_dir,
-            force=True,
-            quiet=True,
-        )
-        output_files = _expand_output_paths([output_dir / item for item in files])
-        source_video = _find_video(output_files)
-        if story_report is None:
-            story_report = _load_story_report(_find_story_report(output_files))
-    if not _vk_failed_target_labels(story_report):
+    fresh_session = await _load_session_if_publish_only_allowed(db, session_obj.id)
+    if fresh_session is None:
+        _release_story_publish_only_lock(lock_handle)
         return False
-    if source_video is None or not source_video.exists():
-        return False
+    session_obj = fresh_session
 
     dataset_slug: str | None = None
     kernel_ref = STORY_PUBLISH_ONLY_KERNEL_REF
     try:
+        source_video = video_path
+        output_dir: Path | None = None
+        if source_video is None:
+            source_kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip()
+            if not source_kernel_ref:
+                return False
+            tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+            output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            files = await asyncio.to_thread(
+                client.download_kernel_output,
+                source_kernel_ref,
+                path=output_dir,
+                force=True,
+                quiet=True,
+            )
+            output_files = _expand_output_paths([output_dir / item for item in files])
+            source_video = _find_video(output_files)
+            if story_report is None:
+                story_report = _load_story_report(_find_story_report(output_files))
+        if not _vk_failed_target_labels(story_report):
+            return False
+        if source_video is None or not source_video.exists():
+            return False
+
         dataset_slug, extra_sources = await _create_story_publish_only_dataset(
             db,
             client,
