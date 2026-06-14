@@ -9,6 +9,8 @@ import asyncio
 import importlib.util
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 WORKING_DIR = Path('/kaggle/working')
@@ -47,6 +49,18 @@ def _load_story_publish_module(helper_path: Path):
     return module
 
 
+def _ensure_runtime_dependencies() -> None:
+    try:
+        import telethon  # noqa: F401
+    except ModuleNotFoundError:
+        log('▶️ Installing missing Kaggle dependency: telethon')
+        subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', 'telethon>=1.34.0'],
+            check=True,
+        )
+
+
+_ensure_runtime_dependencies()
 helper_path = _copy_helper()
 story_publish = _load_story_publish_module(helper_path)
 
