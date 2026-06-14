@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- **Contour SVG generator / neural branch probe**: added a separate
+  source-photo + control-map neural line-art probe (`contour_svg.neural_branch`,
+  `python -m contour_svg neural-branch`, `kaggle/ContourSvgNeuralBranch`, and
+  `scripts/run_contour_svg_neural_branch_kaggle.py`) that reuses the existing
+  Kaggle status pattern under stable kernel `zigomaro/contour-svg-neural-branch`.
+  The latest T4 run completed with five proposal-only PNG candidates,
+  `result.png`, `result_raw.png`, `result_thresholded.png`, contact sheets and
+  stage status events. The branch now keeps the original photo as img2img init,
+  uses `audit_1527` edge/mask/features as ControlNet inputs, supports an
+  IP-Adapter style-reference variant, and records that the current visual result
+  is still below the bold two-color postcard target.
+
 - **Contour SVG generator / recovery graph milestones**: added typed
   `EvidenceInventory`, `BuildingShell`, `PlaneGraph`, and `FeatureGraph` hard
   gates with JSON/overlay/score artifacts plus shell-only, plane-scaffold and

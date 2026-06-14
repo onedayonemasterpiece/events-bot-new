@@ -118,6 +118,32 @@ economy, contrast and simplification, but it must not define the object
 identity. The final postcard/sketch look is produced by primitive SVG rendering
 (`style.stroke_style=sketch`), not by accepting a neural raster as final truth.
 
+There is also a separate neural-branch probe for the research question "can a
+model turn prepared masks/edge maps into a useful line-art PNG?". It is not a
+replacement for the final SVG path. It prepares edge/mask/facade composites
+from an existing artifact pack and optionally runs CUDA Diffusers img2img:
+
+```bash
+python -m contour_svg neural-branch \
+  --artifacts docs/features/countur_svg_generator/samples/generated/audit_1527 \
+  --out artifacts/codex/contour-svg-neural-branch-local \
+  --source-image "docs/features/countur_svg_generator/samples/input/image - 2026-06-14T115705.752.png" \
+  --variants A1,A3,C2,D1,E1 \
+  --style-reference docs/features/countur_svg_generator/samples/output/IMG_20260614_115550.webp
+```
+
+Real Kaggle probe:
+
+```bash
+python scripts/run_contour_svg_neural_branch_kaggle.py
+```
+
+That launcher keeps the Kaggle kernel slug stable:
+`zigomaro/contour-svg-neural-branch`. Per-run payload datasets are unique.
+The probe emits stage statuses for `preflight`, `neural_inputs`,
+`neural_img2img`, `neural_report`, and writes `neural_branch/*.png` plus
+`neural_branch_report.json`.
+
 ## Output Contract
 
 Each run writes:
@@ -172,6 +198,13 @@ raster/vectorized proposal candidates may remain under `candidates/` and
   third recovery milestone: shell + plane scaffold + simplified windows, arches,
   balcony/pilaster evidence from `FeatureGraph`; still a diagnostic candidate,
   not the final polished postcard output.
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/`
+  — completed neural-branch probe on Kaggle. It writes `result.png`,
+  `result_raw.png`, `result_thresholded.png`, candidate contact sheets and a
+  report from the original source photo plus `audit_1527` edge/mask/feature
+  control maps. The current result is concrete but not visually accepted: it is
+  still too photo-like before thresholding and too foliage-noisy after
+  thresholding.
 - `to_do/92-11-16.jpg` — second benchmark for tower geometry, leaf occlusion,
   arches, dome, balcony ellipses, and cylindrical perspective.
 

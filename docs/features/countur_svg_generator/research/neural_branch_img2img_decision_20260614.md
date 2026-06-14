@@ -133,3 +133,66 @@ Current implementation:
 - `B3_ref_lineart_depth` and `B4_ref_mlsd_depth` load SD1.5 IP-Adapter weights
   through Diffusers, pass the style reference via `ip_adapter_image`, and keep a
   lower img2img strength than the base branch to reduce identity drift.
+
+## Separate Neural Branch Probe — 2026-06-14 18:16 UTC / 18:49 UTC
+
+To avoid running the whole SVG pipeline while testing the user's mask/edge
+neural hypothesis, a separate Kaggle probe was added:
+
+- kernel: `zigomaro/contour-svg-neural-branch`
+- local launcher: `scripts/run_contour_svg_neural_branch_kaggle.py`
+- package helper/CLI: `contour_svg.neural_branch` and
+  `python -m contour_svg neural-branch ...`
+- downloaded output:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1816/`
+- latest completed output:
+  `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/`
+
+The probe used the existing `audit_1527` evidence pack and produced:
+
+```text
+neural_branch/
+  N0_inputs_contact_sheet.png
+  contact_sheet.png
+  top3_contact_sheet.png
+  input_maps/
+  raw_candidates/
+  normalized_candidates/
+  neural_branch_report.json
+```
+
+Status evidence from the completed 18:49 run:
+
+- `preflight_ok` saw a Tesla T4 and CUDA-enabled torch.
+- `neural_inputs_started` prepared edge/mask/feature composites.
+- `neural_img2img_started` generated 5 real ControlNet lineart candidates.
+- `alive` heartbeat events were emitted during the neural step.
+- `neural_report_written` and `report_written` completed with
+  `candidate_count=5`.
+
+Visual result:
+
+- `result.png` now exists and is a concrete black-line-on-white output selected
+  from the thresholded neural candidates.
+- `result_raw.png` shows the underlying neural image before thresholding.
+- The branch now uses the original source photo as img2img init and uses
+  `edge_only`, `edge_thickened`, `edge_minus_occluders`, `edge_plus_features`,
+  and `photo_plus_edge_style_reference` as ControlNet inputs.
+- `photo_plus_edge_style_reference` now loads SD1.5 IP-Adapter style-reference
+  weights. The first attempt failed on Diffusers `SlicedAttnProcessor` after
+  attention slicing; the completed run fixed this by not enabling attention
+  slicing before IP-Adapter loading.
+- The completed output is still visually below target: the raw image remains too
+  close to photo mode, and thresholding preserves too much tree/foliage noise
+  while losing some facade clarity. It is a useful concrete probe, not an
+  accepted target-quality result.
+
+Conclusion:
+
+- The neural branch is viable as a visible proposal/comparison path.
+- The latest probe did produce the requested concrete PNG artifact path, but not
+  the requested bold two-color postcard quality.
+- Next neural run should increase style-rewrite strength, shorten prompts to fit
+  CLIP, suppress photo/shading/color mode harder, and test mask/inpaint or
+  reference-conditioning variants that remove foliage as content rather than
+  merely thresholding it afterward.

@@ -13,6 +13,24 @@ def test_contour_svg_kaggle_runner_uses_status_framework() -> None:
     assert "progress_label" in source
 
 
+def test_contour_svg_neural_branch_kaggle_runner_uses_stage_statuses() -> None:
+    source = Path("kaggle/ContourSvgNeuralBranch/script.py").read_text(encoding="utf-8")
+
+    assert "from kaggle_status_client import load_status_client" in source
+    assert "start_alive" in source
+    for event in [
+        "kernel_started",
+        "preflight_ok",
+        "neural_inputs_started",
+        "neural_img2img_started",
+        "neural_report_written",
+        "report_written",
+    ]:
+        assert event in source
+    assert "progress_percent" in source
+    assert "progress_label" in source
+
+
 def test_contour_svg_pipeline_emits_domain_stage_progress() -> None:
     source = Path("contour_svg/pipeline.py").read_text(encoding="utf-8")
 
@@ -28,7 +46,10 @@ def test_contour_svg_pipeline_emits_domain_stage_progress() -> None:
         "building_shell",
         "plane_graph",
         "feature_graph",
+        "rhythm_graph",
+        "feature_graph_refined",
         "line_graph",
+        "primitive_scene",
         "controlnet",
         "primitive_renderer",
         "ranking",

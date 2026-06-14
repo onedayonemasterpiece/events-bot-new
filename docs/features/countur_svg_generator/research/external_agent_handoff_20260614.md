@@ -17,6 +17,9 @@ Status:
 - Recovery Sprints 1-3 are now implemented: typed `EvidenceInventory`,
   `BuildingShell`, `PlaneGraph`, `FeatureGraph`, hard gates, and shell/plane/
   feature diagnostic SVG/PNG candidates.
+- A separate neural-branch Kaggle probe now exists for source-photo +
+  mask/edge/control-map line-art PNG generation. It is proposal/comparison-only
+  and does not replace `PrimitiveScene`/SVG hard gates.
 - The latest full run with useful debug artifacts is the curated `audit_1527`
   pack below.
 - Later attempts hit shared Gemini RPD through the required
@@ -88,18 +91,22 @@ Package:
 - [`contour_svg/completion.py`](../../../../contour_svg/completion.py)
 - [`contour_svg/primitive_renderer.py`](../../../../contour_svg/primitive_renderer.py)
 - [`contour_svg/diffusion_controlnet.py`](../../../../contour_svg/diffusion_controlnet.py)
+- [`contour_svg/neural_branch.py`](../../../../contour_svg/neural_branch.py)
 - [`contour_svg/gemini_judge.py`](../../../../contour_svg/gemini_judge.py)
 
 Kaggle:
 
 - [`kaggle/ContourSvgGenerator/script.py`](../../../../kaggle/ContourSvgGenerator/script.py)
+- [`kaggle/ContourSvgNeuralBranch/script.py`](../../../../kaggle/ContourSvgNeuralBranch/script.py)
 - [`scripts/run_contour_svg_kaggle_sample.py`](../../../../scripts/run_contour_svg_kaggle_sample.py)
+- [`scripts/run_contour_svg_neural_branch_kaggle.py`](../../../../scripts/run_contour_svg_neural_branch_kaggle.py)
 
 Focused tests:
 
 - [`tests/test_contour_svg_config.py`](../../../../tests/test_contour_svg_config.py)
 - [`tests/test_contour_svg_llm_gateway_contract.py`](../../../../tests/test_contour_svg_llm_gateway_contract.py)
 - [`tests/test_contour_svg_kaggle_launcher.py`](../../../../tests/test_contour_svg_kaggle_launcher.py)
+- [`tests/test_contour_svg_neural_branch.py`](../../../../tests/test_contour_svg_neural_branch.py)
 - [`tests/test_contour_svg_ranking.py`](../../../../tests/test_contour_svg_ranking.py)
 - [`tests/test_contour_svg_svg_contract.py`](../../../../tests/test_contour_svg_svg_contract.py)
 - [`tests/test_contour_svg_v03_contract.py`](../../../../tests/test_contour_svg_v03_contract.py)
@@ -165,9 +172,20 @@ What exists:
 - The code now includes a source-preserving ControlNet img2img setup and B3/B4
   IP-Adapter style-reference branches. These were added after the observed
   neural drift.
-- The B3/B4 style-reference branch has not yet completed a full Kaggle sample
-  run because subsequent attempts hit shared Gemini RPD before reaching
-  diffusion.
+- The separate neural-branch probe completed on Kaggle under stable kernel
+  `zigomaro/contour-svg-neural-branch` and produced 5 real ControlNet img2img
+  PNG candidates from the original source photo plus `audit_1527` edge/mask/
+  feature controls. It writes a concrete `result.png`, `result_raw.png`,
+  `result_thresholded.png`, candidate reports and contact sheets.
+- The E1 style-reference variant now loads SD1.5 IP-Adapter and passes
+  `samples/output/IMG_20260614_115550.webp` as style reference. One failed run
+  exposed a Diffusers attention-slicing/IP-Adapter conflict; the completed run
+  fixed it by not enabling attention slicing before IP-Adapter loading.
+- The current `result.png` is not accepted quality: it is black lines on white
+  and does preserve the building directionally, but it remains too photo-like
+  before thresholding and too noisy after thresholding, especially around
+  foliage. Treat it as evidence for prompt/model redesign, not as a solved
+  neural renderer.
 
 Suggested direction:
 
@@ -177,6 +195,16 @@ Suggested direction:
 - extract repair instructions into the graph;
 - final SVG should still be editable primitive output unless the project later
   defines a separate raster-only deliverable.
+
+Local neural probe output to inspect:
+
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result.png`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result_raw.png`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/result_thresholded.png`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/contact_sheet.png`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/top3_contact_sheet.png`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/neural_branch/neural_branch_report.json`
+- `artifacts/codex/contour-svg-neural-branch-kaggle/contour-svg-neural-20260614-1849/contour_svg_neural_branch/kaggle_status_events.jsonl`
 
 ## Curated Result Pack In Git
 
