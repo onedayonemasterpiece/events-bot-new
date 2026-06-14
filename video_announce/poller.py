@@ -6,6 +6,8 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -21,7 +23,13 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
-from kaggle_status import enrich_kaggle_status_from_ledger, format_kaggle_status_label
+from kaggle_status import (
+    KAGGLE_RUN_FILENAME,
+    create_kaggle_run_config,
+    enrich_kaggle_status_from_ledger,
+    format_kaggle_status_label,
+    write_kaggle_status_files,
+)
 from kaggle_registry import remove_job
 from main import format_day_pretty
 from models import (
@@ -33,7 +41,18 @@ from models import (
     VideoAnnounceSessionStatus,
 )
 from promo import record_video_promo_exposures
-from .kaggle_client import LOCAL_KERNEL_PREFIX, KaggleClient, resolve_kaggle_slug as _accel_pref_resolve_slug
+from .kaggle_client import (
+    LOCAL_KERNEL_PREFIX,
+    KaggleClient,
+    await_dataset_ready,
+    await_kernel_dataset_sources,
+    resolve_kaggle_slug as _accel_pref_resolve_slug,
+)
+from .story_publish import (
+    STORY_PUBLISH_CONFIG_FILENAME,
+    build_story_publish_config,
+    ensure_story_secret_datasets,
+)
 
 logger = logging.getLogger(__name__)
 KENIGSBERG_REMOTE_TELEGRAM_JOB_TYPE = "kenigsberg_story"
@@ -72,6 +91,18 @@ VIDEO_KAGGLE_TIMEOUT_MINUTES = _read_positive_int("VIDEO_KAGGLE_TIMEOUT_MINUTES"
 VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES = _read_positive_int(
     "VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES",
     10,
+)
+STORY_PUBLISH_ONLY_TIMEOUT_MINUTES = _read_positive_int(
+    "VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_TIMEOUT_MINUTES",
+    45,
+)
+STORY_PUBLISH_ONLY_KERNEL_REF = (
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_KERNEL_REF")
+    or "local:CrumpleStoryPublishOnly"
+).strip()
+STORY_PUBLISH_ONLY_RECOVERY_ENABLED = (
+    os.getenv("VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_RECOVERY", "1").strip().lower()
+    in {"1", "true", "yes", "on"}
 )
 
 logger.info(
@@ -610,6 +641,348 @@ def _story_failure_message(report: dict | None) -> str | None:
     return "story publish failed"
 
 
+def _vk_failed_target_labels(report: dict | None) -> set[str]:
+    labels: set[str] = set()
+    if not isinstance(report, dict):
+        return labels
+    for item in report.get("targets") or []:
+        if not isinstance(item, dict) or bool(item.get("ok")):
+            continue
+        transport = str(item.get("transport") or "").strip().lower()
+        if transport not in {"vk_story", "vk_wall", "vk_wall_story"}:
+            continue
+        label = str(item.get("label") or item.get("peer") or "").strip()
+        if label:
+            labels.add(label)
+    return labels
+
+
+def _filter_story_config_for_publish_only_recovery(
+    config: dict,
+    *,
+    story_report: dict | None,
+) -> dict | None:
+    failed_vk_labels = _vk_failed_target_labels(story_report)
+    targets: list[dict] = []
+    for raw in config.get("targets") or []:
+        if not isinstance(raw, dict):
+            continue
+        transport = str(raw.get("transport") or "").strip().lower()
+        if transport not in {"vk_story", "vk_wall", "vk_wall_story"}:
+            continue
+        label = str(raw.get("label") or raw.get("peer") or "").strip()
+        if failed_vk_labels and label not in failed_vk_labels:
+            continue
+        target = dict(raw)
+        target["delay_seconds"] = 0
+        target["required"] = True
+        target.setdefault("blocking", False)
+        targets.append(target)
+    if not targets:
+        return None
+    filtered = dict(config)
+    filtered["targets"] = targets
+    filtered["publish_only_recovery"] = True
+    return filtered
+
+
+async def _selected_event_dates_for_session(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+) -> list[str]:
+    limit = _selection_render_limit(session_obj)
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(VideoAnnounceItem)
+            .where(VideoAnnounceItem.session_id == session_obj.id)
+            .where(VideoAnnounceItem.status == VideoAnnounceItemStatus.READY)
+            .order_by(VideoAnnounceItem.position)
+        )
+        items = res.scalars().all()
+        if limit:
+            items = items[:limit]
+        event_ids = [item.event_id for item in items]
+        if not event_ids:
+            return []
+        ev_res = await session.execute(select(Event).where(Event.id.in_(event_ids)))
+        events = ev_res.scalars().all()
+    by_id = {ev.id: ev for ev in events}
+    dates: list[str] = []
+    for item in items:
+        ev = by_id.get(item.event_id)
+        if ev and ev.date:
+            dates.append(str(ev.date).split("..", 1)[0])
+    return dates
+
+
+async def _selected_event_cities_for_session(
+    db: Database,
+    session_obj: VideoAnnounceSession,
+) -> list[str]:
+    limit = _selection_render_limit(session_obj)
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(VideoAnnounceItem)
+            .where(VideoAnnounceItem.session_id == session_obj.id)
+            .where(VideoAnnounceItem.status == VideoAnnounceItemStatus.READY)
+            .order_by(VideoAnnounceItem.position)
+        )
+        items = res.scalars().all()
+        if limit:
+            items = items[:limit]
+        event_ids = [item.event_id for item in items]
+        if not event_ids:
+            return []
+        ev_res = await session.execute(select(Event).where(Event.id.in_(event_ids)))
+        events = ev_res.scalars().all()
+    by_id = {ev.id: ev for ev in events}
+    cities: list[str] = []
+    for item in items:
+        ev = by_id.get(item.event_id)
+        city = str(getattr(ev, "city", "") or "").strip() if ev else ""
+        if city and city not in cities:
+            cities.append(city)
+    return cities
+
+
+async def _create_story_publish_only_dataset(
+    db: Database,
+    client: KaggleClient,
+    session_obj: VideoAnnounceSession,
+    *,
+    video_path: Path,
+    story_report: dict | None,
+) -> tuple[str, list[str]]:
+    username = os.getenv("KAGGLE_USERNAME", "").strip()
+    if not username:
+        raise RuntimeError("KAGGLE_USERNAME not set")
+    if not video_path.exists():
+        raise RuntimeError(f"publish-only source video missing: {video_path}")
+
+    run_suffix = f"{session_obj.id}-{int(time.time())}"
+    dataset_id = f"{username}/crumple-story-publish-session-{run_suffix}"
+    meta = {
+        "title": f"Crumple Story Publish Session {session_obj.id} {run_suffix}",
+        "id": dataset_id,
+        "licenses": [{"name": "CC0-1.0"}],
+    }
+
+    selection_params = (
+        dict(session_obj.selection_params)
+        if isinstance(session_obj.selection_params, dict)
+        else {}
+    )
+    story_config = await build_story_publish_config(
+        db,
+        main_chat_id=session_obj.main_chat_id,
+        selection_params=selection_params,
+        selected_event_dates=await _selected_event_dates_for_session(db, session_obj),
+        selected_event_cities=await _selected_event_cities_for_session(db, session_obj),
+    )
+    if not story_config:
+        raise RuntimeError("publish-only recovery could not build story_publish.json")
+    story_config = _filter_story_config_for_publish_only_recovery(
+        story_config,
+        story_report=story_report,
+    )
+    if not story_config:
+        raise RuntimeError("publish-only recovery has no failed VK targets")
+
+    story_dataset_sources = await ensure_story_secret_datasets(client)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        (tmp_path / "dataset-metadata.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        shutil.copy2(video_path, tmp_path / "crumple_video_final.mp4")
+        (tmp_path / STORY_PUBLISH_CONFIG_FILENAME).write_text(
+            json.dumps(story_config, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        project_root = Path(__file__).resolve().parent.parent
+        helper_src = project_root / "kaggle" / "CrumpleVideo" / "story_publish.py"
+        helper_dest = tmp_path / "kaggle_common" / "story_publish.py"
+        if not helper_src.exists():
+            raise RuntimeError(f"Missing CrumpleVideo story helper: {helper_src}")
+        helper_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(helper_src, helper_dest)
+        kaggle_run_config = await create_kaggle_run_config(
+            db,
+            run_id=f"videoannounce:{session_obj.id}:publish-only:{int(time.time())}",
+            session_id=session_obj.id,
+            kind="crumple_story_publish_only",
+            notebook="CrumpleStoryPublishOnly",
+            kernel_ref=STORY_PUBLISH_ONLY_KERNEL_REF,
+            dataset_ref=dataset_id,
+            resource_leases=[],
+        )
+        if kaggle_run_config:
+            write_kaggle_status_files(tmp_path, kaggle_run_config)
+        (tmp_path / "publish_only_manifest.json").write_text(
+            json.dumps(
+                {
+                    "session_id": session_obj.id,
+                    "source_session_id": session_obj.id,
+                    "source_video": video_path.name,
+                    "targets": story_config.get("targets") or [],
+                    "files": [
+                        "crumple_video_final.mp4",
+                        STORY_PUBLISH_CONFIG_FILENAME,
+                        "kaggle_common/story_publish.py",
+                        KAGGLE_RUN_FILENAME,
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        await asyncio.to_thread(client.create_dataset, tmp_path)
+    logger.warning(
+        "video_announce: publish-only dataset created session=%s dataset=%s sources=%s",
+        session_obj.id,
+        dataset_id,
+        story_dataset_sources,
+    )
+    return dataset_id, story_dataset_sources
+
+
+async def run_story_publish_only_recovery(
+    db: Database,
+    client: KaggleClient,
+    session_obj: VideoAnnounceSession,
+    *,
+    bot,
+    notify_chat_id: int,
+    video_path: Path | None = None,
+    story_report: dict | None = None,
+    download_dir: Path | None = None,
+) -> bool:
+    """Republish failed CrumpleVideo VK story/wall targets without rerendering."""
+
+    if not STORY_PUBLISH_ONLY_RECOVERY_ENABLED:
+        return False
+    source_video = video_path
+    output_dir: Path | None = None
+    if source_video is None:
+        kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip()
+        if not kernel_ref:
+            return False
+        tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+        output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        files = await asyncio.to_thread(
+            client.download_kernel_output,
+            kernel_ref,
+            path=output_dir,
+            force=True,
+            quiet=True,
+        )
+        output_files = _expand_output_paths([output_dir / item for item in files])
+        source_video = _find_video(output_files)
+        if story_report is None:
+            story_report = _load_story_report(_find_story_report(output_files))
+    if not _vk_failed_target_labels(story_report):
+        return False
+    if source_video is None or not source_video.exists():
+        return False
+
+    dataset_slug: str | None = None
+    kernel_ref = STORY_PUBLISH_ONLY_KERNEL_REF
+    try:
+        dataset_slug, extra_sources = await _create_story_publish_only_dataset(
+            db,
+            client,
+            session_obj,
+            video_path=source_video,
+            story_report=story_report,
+        )
+        await await_dataset_ready(
+            client,
+            dataset_slug,
+            timeout_seconds=180,
+            poll_interval_seconds=5,
+            expected_files=[
+                "crumple_video_final.mp4",
+                STORY_PUBLISH_CONFIG_FILENAME,
+                "kaggle_common/story_publish.py",
+            ],
+        )
+        dataset_sources = [dataset_slug, *extra_sources]
+        kernel_ref = await asyncio.to_thread(
+            client.deploy_kernel_update,
+            kernel_ref,
+            dataset_sources,
+        )
+        await await_kernel_dataset_sources(
+            client,
+            kernel_ref,
+            dataset_sources,
+            timeout_seconds=120,
+            poll_interval_seconds=10,
+        )
+        deadline = datetime.now(timezone.utc) + timedelta(
+            minutes=STORY_PUBLISH_ONLY_TIMEOUT_MINUTES
+        )
+        while datetime.now(timezone.utc) < deadline:
+            status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
+            state = str(status.get("status") or "").lower()
+            if state == "complete":
+                break
+            if state in {"error", "failed", "cancelled", "canceled"}:
+                raise RuntimeError(f"publish-only Kaggle failed: {status}")
+            await asyncio.sleep(30)
+        else:
+            raise RuntimeError("publish-only Kaggle timeout")
+
+        tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+        recovery_output_dir = tmp_dir / f"videoannounce-publish-only-{session_obj.id}"
+        recovery_output_dir.mkdir(parents=True, exist_ok=True)
+        files = await asyncio.to_thread(
+            client.download_kernel_output,
+            kernel_ref,
+            path=recovery_output_dir,
+            force=True,
+            quiet=True,
+        )
+        output_files = _expand_output_paths([recovery_output_dir / item for item in files])
+        recovery_report = _load_story_report(_find_story_report(output_files))
+        recovery_failure = _story_failure_message(recovery_report)
+        if recovery_failure:
+            raise RuntimeError(recovery_failure)
+        session_obj = await _update_status(
+            db,
+            session_obj.id,
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            error=None,
+            video_url=session_obj.video_url or source_video.name,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                (
+                    f"✅ Сессия #{session_obj.id if session_obj else '?'}: "
+                    "publish-only компенсация без ререндера завершена"
+                ),
+            )
+        return True
+    except Exception as exc:
+        logger.exception(
+            "video_announce: publish-only recovery failed session=%s",
+            session_obj.id,
+        )
+        if bot is not None:
+            await bot.send_message(
+                notify_chat_id,
+                f"⚠️ Сессия #{session_obj.id}: publish-only компенсация не удалась: {exc}",
+            )
+        return False
+    finally:
+        if dataset_slug:
+            await _cleanup_dataset(client, dataset_slug)
+
+
 def _expand_output_paths(paths: Iterable[Path]) -> list[Path]:
     files: list[Path] = []
     seen: set[Path] = set()
@@ -665,6 +1038,14 @@ async def _update_status(
     if last_exc:
         raise last_exc
     return None
+
+
+async def _load_session_for_status(
+    db: Database,
+    session_id: int,
+) -> VideoAnnounceSession | None:
+    async with db.get_session() as session:
+        return await session.get(VideoAnnounceSession, session_id)
 
 
 async def _mark_published_main(db: Database, session_obj: VideoAnnounceSession) -> None:
@@ -1300,55 +1681,79 @@ async def run_kernel_poller(
         caption = await _build_video_caption(db, session_obj)
         story_failure = _story_failure_message(story_report)
         if story_failure:
-            session_obj = await _update_status(
+            recovered = await run_story_publish_only_recovery(
                 db,
-                session_obj.id,
-                status=VideoAnnounceSessionStatus.FAILED,
-                error=story_failure,
-            )
-            if not session_obj:
-                return
-            await update_status_message(
-                bot,
+                client,
                 session_obj,
-                status,
-                db=db,
-                chat_id=status_chat_id,
-                message_id=status_message_id,
-                allow_send=True,
-                note="Story publish завершился ошибкой",
+                bot=bot,
+                notify_chat_id=notify_chat_id,
+                video_path=video_path,
+                story_report=story_report,
+                download_dir=download_dir,
             )
-            await bot.send_message(
-                notify_chat_id,
-                f"⚠️ Сессия #{session_obj.id}: {story_failure}",
-            )
-            try:
-                await _send_video_with_preview(
+            if recovered:
+                refreshed = await _load_session_for_status(db, session_obj.id)
+                if refreshed:
+                    await update_status_message(
+                        bot,
+                        refreshed,
+                        status,
+                        db=db,
+                        chat_id=status_chat_id,
+                        message_id=status_message_id,
+                        allow_send=True,
+                        note="Story publish восстановлен без ререндера",
+                    )
+            else:
+                session_obj = await _update_status(
+                    db,
+                    session_obj.id,
+                    status=VideoAnnounceSessionStatus.FAILED,
+                    error=story_failure,
+                )
+                if not session_obj:
+                    return
+                await update_status_message(
                     bot,
-                    notify_chat_id,
-                    video_path,
-                    caption=f"{caption}\n\n⚠️ Story publish failed",
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Story publish завершился ошибкой",
                 )
-            except Exception:
-                logger.warning(
-                    "video_announce: failed to send failed-story video to notify chat %s",
+                await bot.send_message(
                     notify_chat_id,
-                    exc_info=True,
+                    f"⚠️ Сессия #{session_obj.id}: {story_failure}",
                 )
-            report_and_logs = []
-            if story_report_path:
-                report_and_logs.append(story_report_path)
-            report_and_logs.extend(
-                file for file in log_files if story_report_path is None or file != story_report_path
-            )
-            if report_and_logs:
-                await _send_logs(
-                    bot,
-                    notify_chat_id,
-                    report_and_logs,
-                    caption=f"⚠️ Story publish report сессии #{session_obj.id}",
+                try:
+                    await _send_video_with_preview(
+                        bot,
+                        notify_chat_id,
+                        video_path,
+                        caption=f"{caption}\n\n⚠️ Story publish failed",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send failed-story video to notify chat %s",
+                        notify_chat_id,
+                        exc_info=True,
+                    )
+                report_and_logs = []
+                if story_report_path:
+                    report_and_logs.append(story_report_path)
+                report_and_logs.extend(
+                    file for file in log_files if story_report_path is None or file != story_report_path
                 )
-            return
+                if report_and_logs:
+                    await _send_logs(
+                        bot,
+                        notify_chat_id,
+                        report_and_logs,
+                        caption=f"⚠️ Story publish report сессии #{session_obj.id}",
+                    )
+                return
         await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         target_test = test_chat_id or notify_chat_id
         try:

@@ -48,6 +48,18 @@ CrumpleVideo/Blender. Этот документ собирает требова�
 - Release gate для изменений в `kaggle/CrumpleVideo/story_publish.py`:
   `tests/test_crumple_build_notebook.py` должен подтверждать, что embedded
   fallback синхронизирован с repo helper и содержит VK transport branch.
+- Если render уже завершился, но story/VK fanout упал на VK target, штатная
+  компенсация не должна запускать Blender заново. Poller или операторский
+  скрипт `scripts/run_crumple_story_publish_only_recovery.py <session_id>`
+  запускает publish-only recovery: скачивает уже готовый
+  `crumple_video_final.mp4` из output исходной Kaggle-сессии, собирает
+  отдельный session-dataset с этим mp4, текущим `story_publish.json` и
+  `kaggle_common/story_publish.py`, фильтрует targets до упавших VK transport
+  targets и запускает lightweight kernel `CrumpleStoryPublishOnly`.
+- Publish-only recovery не использует Telethon, если в отфильтрованном
+  `story_publish.json` остались только VK/Telegram Business transports; VK wall
+  post должен идти через тот же helper (`video.save` + `wall.post`), что и
+  CherryFlash, без преобразования `kenigeventsofficial` в Telegram username.
 
 ## Проблемы и наблюдения (последний тестовый прогон)
 
@@ -439,6 +451,10 @@ color: #100E0E;
   - story lifetime зависит от охвата дат: `12h`, если выбранные события покрывают только одну дату (`завтра`), и `24h`, если ролик охватывает две и более дат;
   - для story-video действует отдельный guard `30 MB`: если финальный mp4 больше, notebook считает story publish failed и пишет это в report;
   - notebook пишет `story_publish_report.json` в output и считает run failed, если story publish был включён, но blocking target завершился ошибкой или required fanout target не получил story на publish phase.
+- Если publish phase завершился ошибкой только на VK transport target, poller
+  обязан сначала попробовать publish-only recovery через
+  `CrumpleStoryPublishOnly` и после успешной компенсации продолжить обычную
+  post-download доставку mp4/логов без повторного рендера.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
 - Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path.
 - Live evidence on `2026-04-26` showed `@kenigevents` can still return `BOOSTS_REQUIRED`; production keeps the Premium self-account as the render blocking target, but treats channel fanout as required delivery so a missing channel story cannot finish green.

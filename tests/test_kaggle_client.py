@@ -488,3 +488,70 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
         "zigomaro/koenigsberg-music",
         "zigomaro/kenigsberg-session-100-1777298000",
     ]
+
+
+def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CrumpleStoryPublishOnly"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/crumple-story-publish-only",
+  "title": "Crumple Story Publish Only",
+  "code_file": "publish_only.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/crumple-story-publish-session-676-1777189467",
+    "zigomaro/crumple-video-story-secrets-cipher"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "publish_only.py").write_text("print('ok')\n", encoding="utf-8")
+    pushed_sources: list[str] = []
+
+    class Response:
+        ref = "/code/zigomaro/crumple-story-publish-only"
+        versionNumber = 8
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            meta = module.json.loads((Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8"))
+            pushed_sources.extend(meta["dataset_sources"])
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {
+            "path": str(kernel_dir),
+            "slug": "crumple-story-publish-only",
+            "id": kernel_ref,
+        },
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "zigomaro/crumple-story-publish-only",
+        ["zigomaro/crumple-story-publish-session-677-1777298000"],
+    )
+
+    assert result == "zigomaro/crumple-story-publish-only"
+    assert pushed_sources == [
+        "zigomaro/crumple-video-story-secrets-cipher",
+        "zigomaro/crumple-story-publish-session-677-1777298000",
+    ]

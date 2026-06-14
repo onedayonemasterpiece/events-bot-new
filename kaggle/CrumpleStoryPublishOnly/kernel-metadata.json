@@ -1,0 +1,11 @@
+{
+  "id": "zigomaro/crumple-story-publish-only",
+  "title": "Crumple Story Publish Only",
+  "code_file": "publish_only.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": []
+}

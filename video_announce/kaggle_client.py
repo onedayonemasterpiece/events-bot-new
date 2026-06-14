@@ -91,14 +91,22 @@ def _dataset_slug_tail(dataset_slug: str) -> str:
 
 def _is_ephemeral_session_dataset(dataset_slug: str) -> bool:
     tail = _dataset_slug_tail(dataset_slug)
-    return tail.startswith("cherryflash-session-") or tail.startswith(
-        "kenigsberg-session-"
-    )
+    return tail.startswith((
+        "cherryflash-session-",
+        "kenigsberg-session-",
+        "video-afisha-session-",
+        "crumple-story-publish-session-",
+    ))
 
 
 def _is_session_kernel_id(kernel_id: str | None) -> bool:
     lowered = str(kernel_id or "").strip().casefold()
-    return lowered.endswith("/cherryflash") or lowered.endswith("/koenigsberg-stories")
+    return lowered.endswith((
+        "/cherryflash",
+        "/koenigsberg-stories",
+        "/crumple-video",
+        "/crumple-story-publish-only",
+    ))
 
 
 def _is_gpu_quota_error(message: str) -> bool:

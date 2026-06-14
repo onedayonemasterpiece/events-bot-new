@@ -286,6 +286,21 @@ def _story_upload_profile(config: dict[str, Any]) -> str:
     return STORY_UPLOAD_PROFILE_LEGACY_H264
 
 
+def _config_requires_telegram_client(config: dict[str, Any]) -> bool:
+    for target_cfg in config.get("targets") or []:
+        if not isinstance(target_cfg, dict):
+            continue
+        transport = str(target_cfg.get("transport") or "telethon").strip().lower()
+        if transport not in {
+            "vk_story",
+            "vk_wall",
+            "vk_wall_story",
+            "telegram_business",
+        }:
+            return True
+    return False
+
+
 def _validate_native_story_video(path: Path, *, log) -> Path:
     if not path.exists():
         raise RuntimeError("Story video publish requested but final video is missing")
@@ -1378,7 +1393,11 @@ async def preflight_story_publish_from_kaggle(
 
     config = runtime["config"]
     auth = runtime["auth"]
-    client, telegram_auth_error = await _try_create_client(auth)
+    if _config_requires_telegram_client(config):
+        client, telegram_auth_error = await _try_create_client(auth)
+    else:
+        client, telegram_auth_error = None, None
+        log("Story preflight has no Telethon targets; skipping Telegram client.")
     try:
         report = await _story_targets_report(
             client,
@@ -1432,7 +1451,11 @@ async def publish_story_from_kaggle(
                 output_dir=output_dir,
                 log=log,
             )
-    client, telegram_auth_error = await _try_create_client(auth)
+    if _config_requires_telegram_client(config):
+        client, telegram_auth_error = await _try_create_client(auth)
+    else:
+        client, telegram_auth_error = None, None
+        log("Story publish has no Telethon targets; skipping Telegram client.")
     try:
         report = await _story_targets_report(
             client,

@@ -52,6 +52,9 @@ path.
   channel story reposts also reported `BOOSTS_REQUIRED`.
 - 2026-06-14 16:52 UTC: session `#676` catch-up started while the incident was
   being investigated.
+- 2026-06-14 18:59 UTC: session `#676` finished with the same VK-as-Telegram
+  error because its Kaggle dataset had been created before the deployed
+  helper-bundling fix and did not contain `kaggle_common/story_publish.py`.
 
 ## Root Cause
 
@@ -95,6 +98,7 @@ path.
 - Fly env `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`;
 - production sessions `#668`, `#669`, `#675`, and catch-up session `#676`;
 - `vk.com/kenigeventsofficial` wall publication evidence.
+- publish-only compensation path for already-rendered failed sessions.
 
 ### Mandatory checks before closure or deploy
 
@@ -110,6 +114,9 @@ path.
 - Production preflight must show runtime `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`
   carries `transport="vk_wall"` for `kenigeventsofficial` and the deployed
   app is healthy.
+- `tests/test_video_announce_v_pipeline.py` must prove publish-only recovery
+  creates a Kaggle dataset from an existing mp4, filters to failed VK targets,
+  and bundles current `kaggle_common/story_publish.py`.
 - Closure requires compensating rerun/catch-up for the current day unless it is
   externally blocked by Kaggle/VK/Telegram capability evidence.
 
@@ -138,6 +145,18 @@ path.
   dataset before the embedded fallback, matching the CherryFlash pattern.
 - Add regression coverage for notebook helper parity, explicit VK transport
   branch presence, and CrumpleVideo dataset helper bundling.
+- Add a штатный publish-only recovery path for completed renders: when the
+  final mp4 exists but story/VK fanout failed, create a separate Kaggle dataset
+  with the existing mp4, fresh `story_publish.json`, and current helper, then
+  run `CrumpleStoryPublishOnly` to publish only failed VK targets without
+  rerendering.
+- Treat `video-afisha-session-*` and
+  `crumple-story-publish-session-*` as ephemeral Kaggle dataset sources for
+  Crumple kernels, so each push drops stale per-run datasets before attaching
+  the current compensation dataset.
+- Let VK-only story configs skip Telethon client creation in the Kaggle helper,
+  so publish-only VK wall recovery does not compete for the shared Telegram
+  auth bundle.
 
 ## Follow-up Actions
 

@@ -28,6 +28,7 @@ from video_announce.custom_types import RankedEvent
 from video_announce.handlers import handle_video_callback
 from video_announce.popular_review import PopularReviewPick, PopularReviewSelection
 import video_announce.scenario as scenario_module
+import video_announce.poller as poller_module
 from video_announce.scenario import TOMORROW_TEST_MIN_POSTERS, VideoAnnounceScenario
 
 
@@ -1120,6 +1121,107 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
         Path("kaggle/CrumpleVideo/story_publish.py").read_text(encoding="utf-8")
     )
     assert (snapshot_dir / "story_publish.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_create_story_publish_only_dataset_filters_failed_vk_target(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    video_path = tmp_path / "crumple_video_final.mp4"
+    video_path.write_bytes(b"video")
+    snapshot_dir = tmp_path / "publish_only_snapshot"
+
+    async def _fake_build_story_publish_config(*args, **kwargs):  # noqa: ANN002,ANN003
+        return {
+            "version": 1,
+            "mode": "video",
+            "targets": [
+                {
+                    "peer": "me",
+                    "label": "me",
+                    "mode": "upload",
+                },
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "delay_seconds": 300,
+                    "mode": "upload",
+                    "caption": "События на завтра",
+                },
+                {
+                    "peer": "@kenigevents",
+                    "label": "@kenigevents",
+                    "mode": "repost_previous",
+                    "required": True,
+                },
+            ],
+        }
+
+    class _DummyClient:
+        def create_dataset(self, path):  # noqa: ANN001
+            shutil.copytree(path, snapshot_dir, dirs_exist_ok=True)
+
+    monkeypatch.setattr(
+        poller_module,
+        "build_story_publish_config",
+        _fake_build_story_publish_config,
+    )
+    monkeypatch.setattr(
+        poller_module,
+        "ensure_story_secret_datasets",
+        AsyncMock(return_value=["zigomaro/crumple-video-story-secrets-cipher"]),
+    )
+    monkeypatch.setattr(
+        poller_module,
+        "create_kaggle_run_config",
+        AsyncMock(return_value=None),
+    )
+
+    dataset_id, story_sources = await poller_module._create_story_publish_only_dataset(
+        db,
+        _DummyClient(),
+        SimpleNamespace(
+            id=676,
+            main_chat_id=None,
+            selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
+        ),
+        video_path=video_path,
+        story_report={
+            "targets": [
+                {
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                    "ok": False,
+                    "error": 'ValueError: No user has "kenigeventsofficial" as username',
+                }
+            ]
+        },
+    )
+
+    assert dataset_id.startswith("zigomaro/crumple-story-publish-session-676-")
+    assert story_sources == ["zigomaro/crumple-video-story-secrets-cipher"]
+    assert (snapshot_dir / "crumple_video_final.mp4").read_bytes() == b"video"
+    assert (snapshot_dir / "kaggle_common" / "story_publish.py").exists()
+    story_config = json.loads((snapshot_dir / "story_publish.json").read_text(encoding="utf-8"))
+    assert story_config["publish_only_recovery"] is True
+    assert story_config["targets"] == [
+        {
+            "peer": "kenigeventsofficial",
+            "label": "vk:kenigeventsofficial:wall",
+            "transport": "vk_wall",
+            "delay_seconds": 0,
+            "mode": "upload",
+            "caption": "События на завтра",
+            "required": True,
+            "blocking": False,
+        }
+    ]
 
 
 @pytest.mark.asyncio

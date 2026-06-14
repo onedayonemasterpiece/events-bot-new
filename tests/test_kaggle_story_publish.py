@@ -121,6 +121,32 @@ def test_story_report_includes_media_probe(monkeypatch, tmp_path: Path) -> None:
     assert report["media"] == {"path": str(src), "width": 720}
 
 
+def test_vk_only_config_does_not_require_telegram_client() -> None:
+    assert helper._config_requires_telegram_client(
+        {
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                }
+            ]
+        }
+    ) is False
+    assert helper._config_requires_telegram_client(
+        {
+            "targets": [
+                {
+                    "peer": "kenigeventsofficial",
+                    "label": "vk:kenigeventsofficial:wall",
+                    "transport": "vk_wall",
+                },
+                {"peer": "@kenigevents", "mode": "repost_previous"},
+            ]
+        }
+    ) is True
+
+
 def test_validate_native_story_video_accepts_hevc_render(monkeypatch, tmp_path: Path) -> None:
     src = tmp_path / "final.mp4"
     src.write_bytes(b"video")
