@@ -11,8 +11,21 @@ def rank_candidates(candidates: list[Candidate]) -> list[Candidate]:
         structure = float(candidate.parameters.get("global_structure_score") or 0.0)
         diagonal_noise = float(candidate.parameters.get("diagonal_noise_ratio") or 0.0)
         path_count = len([line for line in candidate.lines if line.length > 0])
-        simplicity = max(0.0, 10.0 - abs(path_count - 92) / 16.0)
+        target_path_count = {
+            "SHELL_ONLY": 30,
+            "PLANE_SCAFFOLD": 48,
+            "FEATURE_SCAFFOLD": 82,
+        }.get(candidate.family, 92)
+        simplicity_band = {
+            "SHELL_ONLY": 9.0,
+            "PLANE_SCAFFOLD": 14.0,
+            "FEATURE_SCAFFOLD": 18.0,
+        }.get(candidate.family, 16.0)
+        simplicity = max(0.0, 10.0 - abs(path_count - target_path_count) / simplicity_band)
         family_bonus = {
+            "SHELL_ONLY": 0.05,
+            "PLANE_SCAFFOLD": 0.12,
+            "FEATURE_SCAFFOLD": 0.18,
             "POSTCARD_MINIMAL": 0.35,
             "CONSERVATIVE_COMPLETION": 0.25,
             "FEATURE_EMPHASIS_OPENINGS": 0.18,

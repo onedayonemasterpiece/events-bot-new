@@ -14,6 +14,9 @@ Status:
 - The pipeline has produced complete SVG/PNG runs, but the current best output
   is still a partial architectural interpretation, not the requested
   high-similarity final result.
+- Recovery Sprints 1-3 are now implemented: typed `EvidenceInventory`,
+  `BuildingShell`, `PlaneGraph`, `FeatureGraph`, hard gates, and shell/plane/
+  feature diagnostic SVG/PNG candidates.
 - The latest full run with useful debug artifacts is the curated `audit_1527`
   pack below.
 - Later attempts hit shared Gemini RPD through the required
@@ -111,6 +114,10 @@ input image
 → multi-state masks: object_visible / occluder / background / object_unknown
 → CMP Facade SegFormer element parsing
 → Canny / Hough / LSD / M-LSD / DeepLSD / HAWP guide extraction
+→ EvidenceInventory
+→ BuildingShell hard gate and shell-only diagnostic candidate
+→ PlaneGraph hard gate and plane-scaffold diagnostic candidate
+→ FeatureGraph hard gate and feature-scaffold diagnostic candidate
 → line candidates and line groups
 → Gemini line-group editor
 → conservative completion proposals
@@ -121,9 +128,11 @@ input image
 → final.svg / preview.png / metadata / alternatives
 ```
 
-The important known flaw: this is still too much like
-`many evidence layers → many candidates → ranking`. The next design should be
-`many evidence layers → one fused architectural scene graph → candidate families`.
+The important remaining flaw: the scene graph is now present only through
+`BuildingShell → PlaneGraph → FeatureGraph`. The next design steps should be
+`OccluderAwareCompletionGraph → Gemini/neural fusion editor → PrimitiveScene`,
+so candidate families become different renderings of one repaired fused scene
+rather than separate raw-source interpretations.
 
 ## Role Of The Architecture Elements Library
 
@@ -137,10 +146,12 @@ should be:
 4. constrain conservative completion under occlusion;
 5. prevent raw edge/texture/fence/tree lines from masquerading as architecture.
 
-Current implementation only uses this idea shallowly: facade elements become
-rect/arch primitives in `primitive_renderer.py`, but there is no explicit
-`FeatureGraph` or `BuildingShell`/`PlaneGraph` yet. This is probably the main
-architectural gap.
+Current implementation now uses the idea at three levels: `BuildingShell`
+establishes the mass, `PlaneGraph` assigns facade planes/bands/vertical edges,
+and `FeatureGraph` assigns facade elements to planes and opening rows before
+rendering a diagnostic feature scaffold. The remaining gap is completion/repair:
+there is still no explicit occluder-aware completion graph, Gemini/neural fusion
+editor over graph nodes, or final polished `PrimitiveScene` renderer.
 
 ## Neural Renderer Status
 
@@ -202,6 +213,32 @@ Structured debug JSON:
 - [`samples/generated/audit_1527/semantic_plan.json`](../samples/generated/audit_1527/semantic_plan.json)
 - [`samples/generated/audit_1527/facade_elements.json`](../samples/generated/audit_1527/facade_elements.json)
 - [`samples/generated/audit_1527/completion_proposals.json`](../samples/generated/audit_1527/completion_proposals.json)
+
+Recovery Sprint 1 shell artifacts:
+
+- [`samples/generated/audit_1527/sprint1_shell/shell_only_preview.png`](../samples/generated/audit_1527/sprint1_shell/shell_only_preview.png) — clean shell-only diagnostic preview; not final postcard output.
+- [`samples/generated/audit_1527/sprint1_shell/shell_only.svg`](../samples/generated/audit_1527/sprint1_shell/shell_only.svg)
+- [`samples/generated/audit_1527/sprint1_shell/debug/evidence_inventory.json`](../samples/generated/audit_1527/sprint1_shell/debug/evidence_inventory.json)
+- [`samples/generated/audit_1527/sprint1_shell/debug/evidence_contact_sheet.png`](../samples/generated/audit_1527/sprint1_shell/debug/evidence_contact_sheet.png)
+- [`samples/generated/audit_1527/sprint1_shell/debug/building_shell.json`](../samples/generated/audit_1527/sprint1_shell/debug/building_shell.json)
+- [`samples/generated/audit_1527/sprint1_shell/debug/building_shell_overlay.png`](../samples/generated/audit_1527/sprint1_shell/debug/building_shell_overlay.png)
+- [`samples/generated/audit_1527/sprint1_shell/debug/building_shell_score.json`](../samples/generated/audit_1527/sprint1_shell/debug/building_shell_score.json)
+
+Recovery Sprint 2 plane artifacts:
+
+- [`samples/generated/audit_1527/sprint2_plane/plane_scaffold_preview.png`](../samples/generated/audit_1527/sprint2_plane/plane_scaffold_preview.png) — clean shell + perspective/facade band scaffold; diagnostic, not final output.
+- [`samples/generated/audit_1527/sprint2_plane/plane_scaffold.svg`](../samples/generated/audit_1527/sprint2_plane/plane_scaffold.svg)
+- [`samples/generated/audit_1527/sprint2_plane/debug/plane_graph.json`](../samples/generated/audit_1527/sprint2_plane/debug/plane_graph.json)
+- [`samples/generated/audit_1527/sprint2_plane/debug/plane_graph_overlay.png`](../samples/generated/audit_1527/sprint2_plane/debug/plane_graph_overlay.png)
+- [`samples/generated/audit_1527/sprint2_plane/debug/plane_graph_score.json`](../samples/generated/audit_1527/sprint2_plane/debug/plane_graph_score.json)
+
+Recovery Sprint 3 feature artifacts:
+
+- [`samples/generated/audit_1527/sprint3_feature/feature_scaffold_preview.png`](../samples/generated/audit_1527/sprint3_feature/feature_scaffold_preview.png) — shell + plane scaffold + simplified windows/arches/balcony/pilaster evidence from FeatureGraph; diagnostic, not final polished postcard output.
+- [`samples/generated/audit_1527/sprint3_feature/feature_scaffold.svg`](../samples/generated/audit_1527/sprint3_feature/feature_scaffold.svg)
+- [`samples/generated/audit_1527/sprint3_feature/debug/feature_graph.json`](../samples/generated/audit_1527/sprint3_feature/debug/feature_graph.json)
+- [`samples/generated/audit_1527/sprint3_feature/debug/feature_graph_overlay.png`](../samples/generated/audit_1527/sprint3_feature/debug/feature_graph_overlay.png)
+- [`samples/generated/audit_1527/sprint3_feature/debug/feature_graph_score.json`](../samples/generated/audit_1527/sprint3_feature/debug/feature_graph_score.json)
 
 Earlier curated baseline:
 

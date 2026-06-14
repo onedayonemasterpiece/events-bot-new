@@ -6,19 +6,23 @@ from pathlib import Path
 
 import yaml
 
+from .building_shell import build_building_shell, building_shell_to_candidate
 from .config import RunConfig
 from .contact_sheet import make_contact_sheet
 from .contracts import Candidate
 from .detection_grounding import choose_primary_bbox, detect_open_vocabulary_boxes
 from .diffusion_controlnet import generate_controlnet_rasters
 from .completion import build_completion_proposals
+from .evidence_inventory import build_evidence_inventory
 from .facade_parser import parse_facade_elements
+from .feature_graph import build_feature_graph, feature_graph_to_candidate
 from .gemini_judge import judge_candidates_with_gemini
 from .gemini_line_editor import review_line_groups_with_gemini
 from .guides import build_guides
 from .image_io import normalize_image
 from .line_graph import apply_line_group_actions, build_line_graph
 from .masks import build_mask_bundle, combine_masks
+from .plane_graph import build_plane_graph, plane_graph_to_candidate
 from .primitive_renderer import primitive_candidates_from_groups
 from .ranking import rank_candidates
 from .report import export_final, write_candidate_meta, write_leaderboard
@@ -30,7 +34,7 @@ from .svg_export import render_preview, write_svg
 from .vectorize import guide_lines_to_candidate, raster_to_candidate
 
 
-STEP_TOTAL = 15
+STEP_TOTAL = 19
 
 
 @dataclass
@@ -244,7 +248,92 @@ class ContourGenerator:
             edge_map=str(guides.edge_map) if guides.edge_map else None,
         )
 
-        self.status.stage("line_graph", step_index=10, step_total=STEP_TOTAL, label="line graph and Gemini pruning")
+        self.status.stage("evidence_inventory", step_index=10, step_total=STEP_TOTAL, label="typed evidence inventory")
+        evidence_inventory = build_evidence_inventory(
+            image=image,
+            masks=mask_bundle,
+            guides=guides,
+            facade_elements=facade_elements,
+            semantic_plan=semantic_plan,
+            out_dir=out_dir,
+        )
+        self.status.stage(
+            "evidence_inventory",
+            step_index=10,
+            step_total=STEP_TOTAL,
+            label="typed evidence inventory done",
+            status="done",
+            evidence_items=len(evidence_inventory.items),
+            evidence_contact_sheet=str(evidence_inventory.contact_sheet) if evidence_inventory.contact_sheet else None,
+        )
+
+        self.status.stage("building_shell", step_index=11, step_total=STEP_TOTAL, label="BuildingShell coarse object graph")
+        building_shell = build_building_shell(
+            image=image,
+            masks=mask_bundle,
+            guides=guides,
+            facade_elements=facade_elements,
+            evidence=evidence_inventory,
+            out_dir=out_dir,
+            config=config,
+        )
+        self.status.stage(
+            "building_shell",
+            step_index=11,
+            step_total=STEP_TOTAL,
+            label="BuildingShell coarse object graph done",
+            status="done",
+            shell_confidence=building_shell.shell_confidence,
+            roof_segments=len(building_shell.roof_segments),
+            base_segments=len(building_shell.base_segments),
+            facade_corner_segments=len(building_shell.facade_corner_segments),
+        )
+
+        self.status.stage("plane_graph", step_index=12, step_total=STEP_TOTAL, label="PlaneGraph perspective scaffold")
+        plane_graph = build_plane_graph(
+            image=image,
+            masks=mask_bundle,
+            guides=guides,
+            facade_elements=facade_elements,
+            evidence=evidence_inventory,
+            shell=building_shell,
+            out_dir=out_dir,
+            config=config,
+        )
+        self.status.stage(
+            "plane_graph",
+            step_index=12,
+            step_total=STEP_TOTAL,
+            label="PlaneGraph perspective scaffold done",
+            status="done",
+            plane_graph_confidence=plane_graph.graph_confidence,
+            facade_planes=len(plane_graph.planes),
+            plane_bands=len(plane_graph.bands),
+            vertical_edges=len(plane_graph.vertical_edges),
+        )
+
+        self.status.stage("feature_graph", step_index=13, step_total=STEP_TOTAL, label="FeatureGraph facade elements")
+        feature_graph = build_feature_graph(
+            image=image,
+            masks=mask_bundle,
+            facade_elements=facade_elements,
+            shell=building_shell,
+            plane_graph=plane_graph,
+            out_dir=out_dir,
+            config=config,
+        )
+        self.status.stage(
+            "feature_graph",
+            step_index=13,
+            step_total=STEP_TOTAL,
+            label="FeatureGraph facade elements done",
+            status="done",
+            feature_graph_confidence=feature_graph.graph_confidence,
+            feature_count=len(feature_graph.features),
+            feature_rows=len(feature_graph.rows),
+        )
+
+        self.status.stage("line_graph", step_index=14, step_total=STEP_TOTAL, label="line graph and Gemini pruning")
         line_candidates, line_groups, line_overlay = build_line_graph(guides, mask_bundle, out_dir, config)
         actions = review_line_groups_with_gemini(
             line_groups,
@@ -262,7 +351,7 @@ class ContourGenerator:
         )
         self.status.stage(
             "line_graph",
-            step_index=10,
+            step_index=14,
             step_total=STEP_TOTAL,
             label="line graph and Gemini pruning done",
             status="done",
@@ -270,7 +359,7 @@ class ContourGenerator:
             line_groups=len(line_groups),
         )
 
-        self.status.stage("completion", step_index=11, step_total=STEP_TOTAL, label="conservative architectural completion")
+        self.status.stage("completion", step_index=15, step_total=STEP_TOTAL, label="conservative architectural completion")
         completion_proposals, completion_warnings = build_completion_proposals(
             line_groups,
             facade_elements,
@@ -280,20 +369,24 @@ class ContourGenerator:
         warnings.extend(completion_warnings)
         self.status.stage(
             "completion",
-            step_index=11,
+            step_index=15,
             step_total=STEP_TOTAL,
             label="conservative architectural completion done",
             status="done",
             completion_proposals=len(completion_proposals),
         )
 
-        candidates: list[Candidate] = []
-        self.status.stage("controlnet", step_index=12, step_total=STEP_TOTAL, label="ControlNet proposal candidates")
+        candidates: list[Candidate] = [
+            building_shell_to_candidate(building_shell, config),
+            plane_graph_to_candidate(building_shell, plane_graph, config),
+            feature_graph_to_candidate(building_shell, plane_graph, feature_graph, config),
+        ]
+        self.status.stage("controlnet", step_index=16, step_total=STEP_TOTAL, label="ControlNet proposal candidates")
         rasters, diffusion_warnings = generate_controlnet_rasters(image, guides, mask_bundle, out_dir, config)
         warnings.extend(diffusion_warnings)
         self.status.stage(
             "controlnet",
-            step_index=12,
+            step_index=16,
             step_total=STEP_TOTAL,
             label="ControlNet proposal candidates done",
             status="done",
@@ -301,7 +394,7 @@ class ContourGenerator:
         )
         self.status.stage(
             "primitive_renderer",
-            step_index=13,
+            step_index=17,
             step_total=STEP_TOTAL,
             label="primitive renderer and proposal vectorization",
             raster_candidates=len(rasters),
@@ -318,7 +411,7 @@ class ContourGenerator:
         candidates.extend(primitive_candidates)
         self.status.stage(
             "primitive_renderer",
-            step_index=13,
+            step_index=17,
             step_total=STEP_TOTAL,
             label="primitive renderer final candidates",
             primitive_candidates=len(primitive_candidates),
@@ -336,7 +429,7 @@ class ContourGenerator:
             )
             self.status.stage(
                 "primitive_renderer",
-                step_index=13,
+                step_index=17,
                 step_total=STEP_TOTAL,
                 label=f"proposal vectorization {idx + 1}/{len(rasters)}",
                 vectorized_candidates=idx + 1,
@@ -353,7 +446,7 @@ class ContourGenerator:
         )
         self.status.stage(
             "primitive_renderer",
-            step_index=13,
+            step_index=17,
             step_total=STEP_TOTAL,
             label="B2 structural guide proposal vectorization",
             vectorized_candidates=len(candidates),
@@ -374,7 +467,7 @@ class ContourGenerator:
             )
             self.status.stage(
                 "primitive_renderer",
-                step_index=13,
+                step_index=17,
                 step_total=STEP_TOTAL,
                 label=f"B2 structural-guide vectorization {guide_idx + 1}/{len(structural_guides)}",
                 vectorized_candidates=len(candidates),
@@ -397,7 +490,7 @@ class ContourGenerator:
             write_candidate_meta(candidate)
         self.status.stage(
             "primitive_renderer",
-            step_index=13,
+            step_index=17,
             step_total=STEP_TOTAL,
             label="primitive renderer and proposal vectorization done",
             status="done",
@@ -405,7 +498,7 @@ class ContourGenerator:
             final_eligible_candidates=sum(1 for c in candidates if c.final_eligible and c.accepted),
         )
 
-        self.status.stage("ranking", step_index=14, step_total=STEP_TOTAL, label="CV shortlist and Gemini ranking")
+        self.status.stage("ranking", step_index=18, step_total=STEP_TOTAL, label="CV shortlist and Gemini ranking")
         all_ranked = rank_candidates(candidates)
         final_pool = [candidate for candidate in all_ranked if candidate.accepted and candidate.final_eligible]
         if not final_pool:
@@ -425,7 +518,7 @@ class ContourGenerator:
         write_leaderboard(rank_candidates(candidates), out_dir / "leaderboard.csv")
         self.status.stage(
             "ranking",
-            step_index=14,
+            step_index=18,
             step_total=STEP_TOTAL,
             label="CV shortlist and Gemini ranking done",
             status="done",
@@ -436,11 +529,11 @@ class ContourGenerator:
 
         if not ranked:
             raise RuntimeError("No contour SVG candidates were generated")
-        self.status.stage("export", step_index=15, step_total=STEP_TOTAL, label="export final SVG")
+        self.status.stage("export", step_index=19, step_total=STEP_TOTAL, label="export final SVG")
         exported = export_final(ranked[0], ranked, config, semantic_plan, warnings)
         self.status.stage(
             "export",
-            step_index=15,
+            step_index=19,
             step_total=STEP_TOTAL,
             label="export final SVG done",
             status="done",

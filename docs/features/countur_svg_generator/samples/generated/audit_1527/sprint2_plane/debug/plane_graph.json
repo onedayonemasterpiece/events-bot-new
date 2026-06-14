@@ -1,0 +1,462 @@
+{
+  "planes": [
+    {
+      "id": "plane.front",
+      "plane_type": "front_facade",
+      "polygon": [
+        [
+          200.0,
+          39.0
+        ],
+        [
+          692.5,
+          39.0
+        ],
+        [
+          692.5,
+          674.0
+        ],
+        [
+          200.0,
+          674.0
+        ],
+        [
+          200.0,
+          39.0
+        ]
+      ],
+      "bbox_xyxy": [
+        200.0,
+        39.0,
+        692.5,
+        674.0
+      ],
+      "confidence": 0.72,
+      "evidence_ids": [
+        "fixture_wall_plane",
+        "E_mask_object_visible",
+        "E_facade_0000",
+        "E_line_00000",
+        "E_line_00001",
+        "E_line_00002",
+        "E_line_00003",
+        "E_line_00004",
+        "E_line_00005",
+        "E_line_00006",
+        "E_line_00007",
+        "E_line_00008",
+        "E_line_00009",
+        "E_line_00010",
+        "E_line_00011",
+        "E_guide_mlsd"
+      ],
+      "vanishing_group": "left_vp"
+    },
+    {
+      "id": "plane.side",
+      "plane_type": "side_facade",
+      "polygon": [
+        [
+          692.5,
+          39.0
+        ],
+        [
+          1100.0,
+          84.0
+        ],
+        [
+          1100.0,
+          674.0
+        ],
+        [
+          692.5,
+          674.0
+        ],
+        [
+          692.5,
+          39.0
+        ]
+      ],
+      "bbox_xyxy": [
+        692.5,
+        39.0,
+        1100.0,
+        674.0
+      ],
+      "confidence": 0.66,
+      "evidence_ids": [
+        "fixture_wall_plane",
+        "E_mask_object_visible",
+        "E_facade_0000",
+        "E_line_00000",
+        "E_line_00001",
+        "E_line_00002",
+        "E_line_00003",
+        "E_line_00004",
+        "E_line_00005",
+        "E_line_00006",
+        "E_line_00007",
+        "E_line_00008",
+        "E_line_00009",
+        "E_line_00010",
+        "E_line_00011",
+        "E_guide_mlsd"
+      ],
+      "vanishing_group": "right_vp"
+    }
+  ],
+  "bands": [
+    {
+      "id": "plane.shell.004",
+      "segment_type": "base_band",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            708,
+            525
+          ],
+          [
+            1100,
+            505
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:mlsd",
+        "confidence": 0.82,
+        "length": 392.50987248730445
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00005"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.000",
+      "segment_type": "roof_band",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            365,
+            260
+          ],
+          [
+            680,
+            125
+          ]
+        ],
+        "role": "roofline",
+        "priority": 9,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.78,
+        "length": 342.70978976387585
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00002"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.005",
+      "segment_type": "base_band",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350,
+            510
+          ],
+          [
+            710,
+            525
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.8,
+        "length": 360.3123644839294
+      },
+      "confidence": 0.9146,
+      "source_evidence_ids": [
+        "E_line_00004"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.001",
+      "segment_type": "roof_band",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            690,
+            115
+          ],
+          [
+            1015,
+            285
+          ]
+        ],
+        "role": "roofline",
+        "priority": 9,
+        "source": "building_shell:mlsd",
+        "confidence": 0.76,
+        "length": 366.7764987018661
+      },
+      "confidence": 0.9027,
+      "source_evidence_ids": [
+        "E_line_00003"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.006",
+      "segment_type": "base_band",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            700,
+            675
+          ],
+          [
+            1090,
+            640
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:hough",
+        "confidence": 0.72,
+        "length": 391.56736329781114
+      },
+      "confidence": 0.8819,
+      "source_evidence_ids": [
+        "E_line_00007"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.002",
+      "segment_type": "roof_band",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1043.0,
+            250.0
+          ],
+          [
+            864.0,
+            197.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 186.6815470259447
+      },
+      "confidence": 0.6675,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "plane.shell.003",
+      "segment_type": "roof_band",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            697.0,
+            32.0
+          ],
+          [
+            379.0,
+            182.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 351.60204777560665
+      },
+      "confidence": 0.645,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    }
+  ],
+  "vertical_edges": [
+    {
+      "id": "plane.shell.008",
+      "segment_type": "vertical_edge",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            685,
+            66
+          ],
+          [
+            700,
+            675
+          ]
+        ],
+        "role": "structure",
+        "priority": 9,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.84,
+        "length": 609.1847010554352
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00008"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.009",
+      "segment_type": "vertical_edge",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            900,
+            235
+          ],
+          [
+            905,
+            650
+          ]
+        ],
+        "role": "structure",
+        "priority": 9,
+        "source": "building_shell:hawp",
+        "confidence": 0.72,
+        "length": 415.03011938894264
+      },
+      "confidence": 0.9048,
+      "source_evidence_ids": [
+        "E_line_00011"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.010",
+      "segment_type": "vertical_edge",
+      "plane_id": "plane.side",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1082.0,
+            649.0
+          ],
+          [
+            1043.0,
+            250.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 400.90148415789133
+      },
+      "confidence": 0.7624,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "plane.shell.011",
+      "segment_type": "vertical_edge",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350.0,
+            523.0
+          ],
+          [
+            370.0,
+            644.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 122.64175471673585
+      },
+      "confidence": 0.7013,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "plane.shell.012",
+      "segment_type": "vertical_edge",
+      "plane_id": "plane.front",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            379.0,
+            182.0
+          ],
+          [
+            350.0,
+            327.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 147.87156589419075
+      },
+      "confidence": 0.6758,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    }
+  ],
+  "perspective_groups": {
+    "horizontal": 3,
+    "vertical": 2,
+    "left_vp": 1,
+    "right_vp": 1
+  },
+  "graph_confidence": 0.87,
+  "passed": true,
+  "failure_flags": []
+}

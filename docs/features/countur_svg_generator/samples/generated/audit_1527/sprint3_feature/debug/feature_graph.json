@@ -1,0 +1,565 @@
+{
+  "features": [
+    {
+      "id": "F_door_001",
+      "feature_type": "door",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        614.0,
+        407.0,
+        628.0,
+        425.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_door_000_614_407"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:door",
+        "plane:plane.front",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_door_002",
+      "feature_type": "door",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        1021.0,
+        582.0,
+        1048.0,
+        623.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_door_001_1021_582"
+      ],
+      "row_id": "R_plane_side_004",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:door",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_door_003",
+      "feature_type": "door",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        892.0,
+        613.0,
+        928.0,
+        649.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_door_002_892_613"
+      ],
+      "row_id": "R_plane_side_004",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:door",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_014",
+      "feature_type": "arched_window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        715.0,
+        242.0,
+        747.0,
+        306.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_002_715_242"
+      ],
+      "row_id": "R_plane_side_001",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_012",
+      "feature_type": "arched_window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        776.0,
+        265.0,
+        807.0,
+        326.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_003_776_265"
+      ],
+      "row_id": "R_plane_side_001",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_018",
+      "feature_type": "arched_window",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        489.0,
+        281.0,
+        532.0,
+        352.0
+      ],
+      "confidence": 0.664,
+      "source_element_ids": [
+        "E_window_004_489_281"
+      ],
+      "row_id": "R_plane_front_000",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.front",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_008",
+      "feature_type": "arched_window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        1002.0,
+        367.0,
+        1019.0,
+        394.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_006_1002_367"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_016",
+      "feature_type": "arched_window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        718.0,
+        388.0,
+        756.0,
+        453.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_008_718_388"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_arched_window_015",
+      "feature_type": "arched_window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        784.0,
+        399.0,
+        817.0,
+        469.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_009_784_399"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_017",
+      "feature_type": "window",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        601.0,
+        170.0,
+        652.0,
+        224.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_000_601_170"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.front",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_window_019",
+      "feature_type": "window",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        378.0,
+        243.0,
+        451.0,
+        313.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_001_378_243"
+      ],
+      "row_id": "R_plane_front_000",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.front",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_020",
+      "feature_type": "window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        852.0,
+        317.0,
+        925.0,
+        407.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_005_852_317"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_013",
+      "feature_type": "window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        1004.0,
+        377.0,
+        1048.0,
+        423.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_007_1004_377"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_011",
+      "feature_type": "window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        856.0,
+        408.0,
+        887.0,
+        438.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_010_856_408"
+      ],
+      "row_id": "R_plane_side_002",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_007",
+      "feature_type": "window",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        511.0,
+        439.0,
+        529.0,
+        463.0
+      ],
+      "confidence": 0.6184,
+      "source_element_ids": [
+        "E_window_011_511_439"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.front",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_window_009",
+      "feature_type": "window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        1022.0,
+        538.0,
+        1044.0,
+        561.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_013_1022_538"
+      ],
+      "row_id": "R_plane_side_003",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_window_010",
+      "feature_type": "window",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        1054.0,
+        542.0,
+        1082.0,
+        561.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_window_014_1054_542"
+      ],
+      "row_id": "R_plane_side_003",
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:window",
+        "plane:plane.side",
+        "feature_graph:facade_parser",
+        "repetition_evidence:opening_row"
+      ]
+    },
+    {
+      "id": "F_balcony_000",
+      "feature_type": "balcony",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        838.0,
+        429.0,
+        1098.0,
+        514.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_balcony_001_838_429"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:balcony",
+        "plane:plane.side",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_pilaster_004",
+      "feature_type": "pilaster",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        554.0,
+        301.0,
+        572.0,
+        393.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_pilaster_000_554_301"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:pilaster",
+        "plane:plane.front",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_pilaster_006",
+      "feature_type": "pilaster",
+      "plane_id": "plane.side",
+      "bbox_xyxy": [
+        964.0,
+        310.0,
+        991.0,
+        433.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_pilaster_001_964_310"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:pilaster",
+        "plane:plane.side",
+        "feature_graph:facade_parser"
+      ]
+    },
+    {
+      "id": "F_pilaster_005",
+      "feature_type": "pilaster",
+      "plane_id": "plane.front",
+      "bbox_xyxy": [
+        673.0,
+        412.0,
+        711.0,
+        489.0
+      ],
+      "confidence": 0.6984,
+      "source_element_ids": [
+        "E_pilaster_002_673_412"
+      ],
+      "row_id": null,
+      "completion_status": "visible",
+      "evidence": [
+        "semantic_mask_evidence",
+        "class:pilaster",
+        "plane:plane.front",
+        "feature_graph:facade_parser"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "R_plane_front_000",
+      "plane_id": "plane.front",
+      "feature_type": "opening_row",
+      "member_ids": [
+        "F_window_019",
+        "F_arched_window_018"
+      ],
+      "y_center": 297.25,
+      "confidence": 0.6812
+    },
+    {
+      "id": "R_plane_side_001",
+      "plane_id": "plane.side",
+      "feature_type": "opening_row",
+      "member_ids": [
+        "F_arched_window_014",
+        "F_arched_window_012"
+      ],
+      "y_center": 284.75,
+      "confidence": 0.6984
+    },
+    {
+      "id": "R_plane_side_002",
+      "plane_id": "plane.side",
+      "feature_type": "opening_row",
+      "member_ids": [
+        "F_window_020",
+        "F_arched_window_008",
+        "F_window_013",
+        "F_arched_window_016",
+        "F_window_011",
+        "F_arched_window_015"
+      ],
+      "y_center": 403.33,
+      "confidence": 0.6984
+    },
+    {
+      "id": "R_plane_side_003",
+      "plane_id": "plane.side",
+      "feature_type": "opening_row",
+      "member_ids": [
+        "F_window_009",
+        "F_window_010"
+      ],
+      "y_center": 550.5,
+      "confidence": 0.6984
+    },
+    {
+      "id": "R_plane_side_004",
+      "plane_id": "plane.side",
+      "feature_type": "opening_row",
+      "member_ids": [
+        "F_door_002",
+        "F_door_003"
+      ],
+      "y_center": 616.75,
+      "confidence": 0.6984
+    }
+  ],
+  "graph_confidence": 0.9294,
+  "passed": true,
+  "failure_flags": []
+}

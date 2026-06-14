@@ -1,0 +1,16 @@
+{
+  "graph_confidence": 0.87,
+  "passed": true,
+  "failure_flags": [],
+  "segment_counts": {
+    "planes": 2,
+    "bands": 7,
+    "vertical_edges": 5
+  },
+  "perspective_groups": {
+    "horizontal": 3,
+    "vertical": 2,
+    "left_vp": 1,
+    "right_vp": 1
+  }
+}

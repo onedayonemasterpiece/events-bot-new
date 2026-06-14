@@ -62,7 +62,17 @@ def score_candidate(candidate: Candidate, *, expected_stroke: str) -> float:
         if diagonal_noise > 0.16:
             candidate.failure_flags.append("cross_face_diagonal_noise")
             candidate.accepted = False
-    count_score = max(0.0, 10.0 - abs(path_count - 92) / 20.0)
+    target_path_count = {
+        "SHELL_ONLY": 30,
+        "PLANE_SCAFFOLD": 48,
+        "FEATURE_SCAFFOLD": 82,
+    }.get(candidate.family, 92)
+    count_band = {
+        "SHELL_ONLY": 9.0,
+        "PLANE_SCAFFOLD": 14.0,
+        "FEATURE_SCAFFOLD": 18.0,
+    }.get(candidate.family, 20.0)
+    count_score = max(0.0, 10.0 - abs(path_count - target_path_count) / count_band)
     line_economy = max(0.0, 10.0 * long_ratio - 8.0 * short_noise_ratio)
     diagonal_score = max(0.0, 10.0 - diagonal_noise * 38.0)
     svg_score = 10.0 if validation.valid else max(0.0, 7.0 - len(validation.flags))

@@ -31,6 +31,10 @@ image
 → multi-state masks: object_visible / occluder / background / object_unknown
 → CMP Facade SegFormer facade elements
 → silhouette / Canny / Hough / LSD / M-LSD / DeepLSD / HAWP / arc guides
+→ typed EvidenceInventory from masks, facade elements, guides and semantic plan
+→ BuildingShell hard gate and shell-only diagnostic SVG candidate
+→ PlaneGraph hard gate and plane-scaffold diagnostic SVG candidate
+→ FeatureGraph hard gate for facade elements, rows and simplified openings
 → candidate line graph + Gemini line-group pruning
 → conservative completion proposals from masks, repeated openings and line gaps
 → primitive-rendered final candidates with line budgets
@@ -59,7 +63,9 @@ The Kaggle entrypoint is status-aware. It loads `kaggle_run.json` via
 `preflight_ok` and terminal `report_written` events, and reports domain stages
 with `progress_percent` / `progress_label`: input normalization, Gemini semantic
 plan, GroundingDINO primary/occluder detection, SAM2 masks, guide extraction,
-multi-state masks, facade parsing, line graph pruning, conservative completion,
+multi-state masks, facade parsing, typed evidence inventory, BuildingShell
+coarse object graph, PlaneGraph perspective scaffold, FeatureGraph facade
+elements/rows, line graph pruning, conservative completion,
 source-preserving ControlNet img2img proposal generation,
 IP-Adapter style-reference proposal generation when B3/B4 are enabled,
 primitive rendering/proposal vectorization,
@@ -122,7 +128,12 @@ Each run writes:
 - `leaderboard.csv`, `ranking_report.json`;
 - `debug/input_normalized.png`, `semantic_plan.json`, detector box JSON files,
   masks, CMP facade element masks/overlay, edge maps, M-LSD guide,
-  DeepLSD/HAWP line JSON/overlays, guide source counts, completion proposals,
+  DeepLSD/HAWP line JSON/overlays, guide source counts,
+  `evidence_inventory.json`, `evidence_contact_sheet.png`,
+  `building_shell.json`, `building_shell_overlay.png`,
+  `building_shell_score.json`, `plane_graph.json`, `plane_graph_overlay.png`,
+  `plane_graph_score.json`, `feature_graph.json`, `feature_graph_overlay.png`,
+  `feature_graph_score.json`, completion proposals,
   line overlays, `line_candidates.jsonl`, `line_groups.json`,
   `arch_primitives.json`, ControlNet img2img init/control images,
   optional `style_reference_adapter_image.png`,
@@ -151,6 +162,16 @@ raster/vectorized proposal candidates may remain under `candidates/` and
   noisier than the reference.
 - `samples/generated/sample_building_kaggle_20260614_1219_final.svg` and
   `.meta.json` — matching generated SVG and metadata.
+- `samples/generated/audit_1527/sprint1_shell/shell_only_preview.png` — first
+  recovery-plan milestone artifact: a clean BuildingShell-only SVG/PNG
+  diagnostic with roofline, main facade corner and base, before windows/details.
+- `samples/generated/audit_1527/sprint2_plane/plane_scaffold_preview.png` —
+  second recovery milestone: shell + facade planes/bands/corner scaffold without
+  drawing the wall-plane evidence rectangle as final geometry.
+- `samples/generated/audit_1527/sprint3_feature/feature_scaffold_preview.png` —
+  third recovery milestone: shell + plane scaffold + simplified windows, arches,
+  balcony/pilaster evidence from `FeatureGraph`; still a diagnostic candidate,
+  not the final polished postcard output.
 - `to_do/92-11-16.jpg` — second benchmark for tower geometry, leaf occlusion,
   arches, dome, balcony ellipses, and cylindrical perspective.
 

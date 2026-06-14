@@ -1,0 +1,702 @@
+{
+  "items": [
+    {
+      "id": "E_mask_object_visible",
+      "kind": "mask_region",
+      "source": "sam2_primary_minus_occluders",
+      "role_hint": "shell",
+      "semantic_hint": "object_visible",
+      "bbox_xyxy": [
+        54.0,
+        39.0,
+        1099.0,
+        683.0
+      ],
+      "geometry": null,
+      "confidence": 0.82,
+      "object_visible_overlap": 1.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/mask_object_visible.png",
+      "metadata": {
+        "area_ratio": 0.38846897845159833
+      }
+    },
+    {
+      "id": "E_mask_background",
+      "kind": "mask_region",
+      "source": "multi_state_masks",
+      "role_hint": "negative_space",
+      "semantic_hint": "background",
+      "bbox_xyxy": [
+        0.0,
+        0.0,
+        1154.0,
+        706.0
+      ],
+      "geometry": null,
+      "confidence": 0.72,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 1.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/mask_background.png",
+      "metadata": {
+        "area_ratio": 0.10218675281445004
+      }
+    },
+    {
+      "id": "E_mask_object_unknown",
+      "kind": "mask_region",
+      "source": "sam2_primary_dilated_occluder_intersection",
+      "role_hint": "completion_zone",
+      "semantic_hint": "object_unknown",
+      "bbox_xyxy": [
+        47.0,
+        32.0,
+        1106.0,
+        657.0
+      ],
+      "geometry": null,
+      "confidence": 0.6,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/mask_object_unknown.png",
+      "metadata": {}
+    },
+    {
+      "id": "E_mask_occluder",
+      "kind": "occluder_region",
+      "source": "open_vocab_detector_sam2",
+      "role_hint": "occlusion",
+      "semantic_hint": "tree_foliage_fence_or_foreground",
+      "bbox_xyxy": [
+        0.0,
+        0.0,
+        1154.0,
+        706.0
+      ],
+      "geometry": null,
+      "confidence": 0.72,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 1.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/mask_occluder.png",
+      "metadata": {
+        "area_ratio": 0.5093442687339517
+      }
+    },
+    {
+      "id": "E_facade_0000",
+      "kind": "wall_plane",
+      "source": "audit_1527_fixture",
+      "role_hint": "plane",
+      "semantic_hint": "wall_plane",
+      "bbox_xyxy": [
+        200.0,
+        39.0,
+        1100.0,
+        674.0
+      ],
+      "geometry": null,
+      "confidence": 0.7,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/wall_plane.png",
+      "metadata": {
+        "element_id": "fixture_wall_plane",
+        "evidence": []
+      }
+    },
+    {
+      "id": "E_line_00000",
+      "kind": "line_segment",
+      "source": "mlsd",
+      "role_hint": "roof",
+      "semantic_hint": "roofline",
+      "bbox_xyxy": [
+        350,
+        40,
+        690,
+        180
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350,
+            180
+          ],
+          [
+            690,
+            40
+          ]
+        ],
+        "role": "roofline",
+        "priority": 5,
+        "source": "mlsd",
+        "confidence": 0.86,
+        "length": 367.6955262170047
+      },
+      "confidence": 0.86,
+      "object_visible_overlap": 0.1304,
+      "occluder_overlap": 0.7609,
+      "background_overlap": 0.1087,
+      "debug_image": null,
+      "metadata": {
+        "length": 367.6955262170047,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00001",
+      "kind": "line_segment",
+      "source": "deeplsd",
+      "role_hint": "roof",
+      "semantic_hint": "roofline",
+      "bbox_xyxy": [
+        690,
+        40,
+        1060,
+        262
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            690,
+            40
+          ],
+          [
+            1060,
+            262
+          ]
+        ],
+        "role": "roofline",
+        "priority": 5,
+        "source": "deeplsd",
+        "confidence": 0.82,
+        "length": 431.49044021855224
+      },
+      "confidence": 0.82,
+      "object_visible_overlap": 0.0556,
+      "occluder_overlap": 0.6852,
+      "background_overlap": 0.2593,
+      "debug_image": null,
+      "metadata": {
+        "length": 431.49044021855224,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00002",
+      "kind": "line_segment",
+      "source": "deeplsd",
+      "role_hint": "roof",
+      "semantic_hint": "roofline",
+      "bbox_xyxy": [
+        365,
+        125,
+        680,
+        260
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            365,
+            260
+          ],
+          [
+            680,
+            125
+          ]
+        ],
+        "role": "roofline",
+        "priority": 5,
+        "source": "deeplsd",
+        "confidence": 0.78,
+        "length": 342.70978976387585
+      },
+      "confidence": 0.78,
+      "object_visible_overlap": 0.9767,
+      "occluder_overlap": 0.0233,
+      "background_overlap": 0.0,
+      "debug_image": null,
+      "metadata": {
+        "length": 342.70978976387585,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00003",
+      "kind": "line_segment",
+      "source": "mlsd",
+      "role_hint": "roof",
+      "semantic_hint": "roofline",
+      "bbox_xyxy": [
+        690,
+        115,
+        1015,
+        285
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            690,
+            115
+          ],
+          [
+            1015,
+            285
+          ]
+        ],
+        "role": "roofline",
+        "priority": 5,
+        "source": "mlsd",
+        "confidence": 0.76,
+        "length": 366.7764987018661
+      },
+      "confidence": 0.76,
+      "object_visible_overlap": 0.8043,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.1957,
+      "debug_image": null,
+      "metadata": {
+        "length": 366.7764987018661,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00004",
+      "kind": "line_segment",
+      "source": "deeplsd",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        350,
+        510,
+        710,
+        525
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350,
+            510
+          ],
+          [
+            710,
+            525
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "deeplsd",
+        "confidence": 0.8,
+        "length": 360.3123644839294
+      },
+      "confidence": 0.8,
+      "object_visible_overlap": 0.7826,
+      "occluder_overlap": 0.1522,
+      "background_overlap": 0.0652,
+      "debug_image": null,
+      "metadata": {
+        "length": 360.3123644839294,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00005",
+      "kind": "line_segment",
+      "source": "mlsd",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        708,
+        505,
+        1100,
+        525
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            708,
+            525
+          ],
+          [
+            1100,
+            505
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "mlsd",
+        "confidence": 0.82,
+        "length": 392.50987248730445
+      },
+      "confidence": 0.82,
+      "object_visible_overlap": 0.98,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.02,
+      "debug_image": null,
+      "metadata": {
+        "length": 392.50987248730445,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00006",
+      "kind": "line_segment",
+      "source": "hough",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        380,
+        635,
+        700,
+        675
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            380,
+            635
+          ],
+          [
+            700,
+            675
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "hough",
+        "confidence": 0.72,
+        "length": 322.49030993194197
+      },
+      "confidence": 0.72,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.7561,
+      "background_overlap": 0.2439,
+      "debug_image": null,
+      "metadata": {
+        "length": 322.49030993194197,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00007",
+      "kind": "line_segment",
+      "source": "hough",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        700,
+        640,
+        1090,
+        675
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            700,
+            675
+          ],
+          [
+            1090,
+            640
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "hough",
+        "confidence": 0.72,
+        "length": 391.56736329781114
+      },
+      "confidence": 0.72,
+      "object_visible_overlap": 0.7143,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.2857,
+      "debug_image": null,
+      "metadata": {
+        "length": 391.56736329781114,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00008",
+      "kind": "line_segment",
+      "source": "deeplsd",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        685,
+        66,
+        700,
+        675
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            685,
+            66
+          ],
+          [
+            700,
+            675
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "deeplsd",
+        "confidence": 0.84,
+        "length": 609.1847010554352
+      },
+      "confidence": 0.84,
+      "object_visible_overlap": 0.8701,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.1299,
+      "debug_image": null,
+      "metadata": {
+        "length": 609.1847010554352,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00009",
+      "kind": "line_segment",
+      "source": "mlsd",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        1085,
+        294,
+        1092,
+        650
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1085,
+            294
+          ],
+          [
+            1092,
+            650
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "mlsd",
+        "confidence": 0.78,
+        "length": 356.0688135740057
+      },
+      "confidence": 0.78,
+      "object_visible_overlap": 0.1556,
+      "occluder_overlap": 0.5778,
+      "background_overlap": 0.2667,
+      "debug_image": null,
+      "metadata": {
+        "length": 356.0688135740057,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00010",
+      "kind": "line_segment",
+      "source": "hawp",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        360,
+        185,
+        365,
+        630
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            365,
+            185
+          ],
+          [
+            360,
+            630
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "hawp",
+        "confidence": 0.75,
+        "length": 445.0280890011326
+      },
+      "confidence": 0.75,
+      "object_visible_overlap": 0.0893,
+      "occluder_overlap": 0.7143,
+      "background_overlap": 0.1964,
+      "debug_image": null,
+      "metadata": {
+        "length": 445.0280890011326,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_line_00011",
+      "kind": "line_segment",
+      "source": "hawp",
+      "role_hint": "structure",
+      "semantic_hint": "structure",
+      "bbox_xyxy": [
+        900,
+        235,
+        905,
+        650
+      ],
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            900,
+            235
+          ],
+          [
+            905,
+            650
+          ]
+        ],
+        "role": "structure",
+        "priority": 5,
+        "source": "hawp",
+        "confidence": 0.72,
+        "length": 415.03011938894264
+      },
+      "confidence": 0.72,
+      "object_visible_overlap": 1.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": null,
+      "metadata": {
+        "length": 415.03011938894264,
+        "priority": 5
+      }
+    },
+    {
+      "id": "E_guide_edge_map",
+      "kind": "guide_image",
+      "source": "edge_map.png",
+      "role_hint": "detail_confirmation",
+      "semantic_hint": "edge_map",
+      "bbox_xyxy": null,
+      "geometry": null,
+      "confidence": 0.7,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/edge_map.png",
+      "metadata": {}
+    },
+    {
+      "id": "E_guide_mlsd",
+      "kind": "guide_image",
+      "source": "mlsd_guide.png",
+      "role_hint": "structure",
+      "semantic_hint": "mlsd",
+      "bbox_xyxy": null,
+      "geometry": null,
+      "confidence": 0.7,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/mlsd_guide.png",
+      "metadata": {}
+    },
+    {
+      "id": "E_guide_line_overlay",
+      "kind": "guide_image",
+      "source": "deeplsd_lines_overlay.png",
+      "role_hint": "structure_overlay",
+      "semantic_hint": "line_overlay",
+      "bbox_xyxy": null,
+      "geometry": null,
+      "confidence": 0.7,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": "docs/features/countur_svg_generator/samples/generated/audit_1527/deeplsd_lines_overlay.png",
+      "metadata": {}
+    },
+    {
+      "id": "E_semantic_plan",
+      "kind": "semantic_plan",
+      "source": "curated_audit_1527",
+      "role_hint": "semantic_prior",
+      "semantic_hint": "yellow neoclassical corner building",
+      "bbox_xyxy": null,
+      "geometry": null,
+      "confidence": 0.75,
+      "object_visible_overlap": 0.0,
+      "occluder_overlap": 0.0,
+      "background_overlap": 0.0,
+      "debug_image": null,
+      "metadata": {
+        "primary_object": {
+          "label": "yellow neoclassical corner building"
+        },
+        "style_relevant_features": [
+          {
+            "feature": "roofline"
+          },
+          {
+            "feature": "facade corner"
+          },
+          {
+            "feature": "base volume"
+          }
+        ],
+        "occluders": [
+          {
+            "label": "tree"
+          },
+          {
+            "label": "fence"
+          }
+        ],
+        "should_ignore": [],
+        "completion_policy": {},
+        "notes_for_generation": "",
+        "source": "curated_audit_1527"
+      }
+    }
+  ],
+  "contact_sheet": "docs/features/countur_svg_generator/samples/generated/audit_1527/sprint2_plane/debug/evidence_contact_sheet.png",
+  "warnings": [],
+  "counts_by_kind": {
+    "mask_region": 3,
+    "occluder_region": 1,
+    "wall_plane": 1,
+    "line_segment": 12,
+    "guide_image": 3,
+    "semantic_plan": 1
+  },
+  "counts_by_role": {
+    "shell": 1,
+    "negative_space": 1,
+    "completion_zone": 1,
+    "occlusion": 1,
+    "plane": 1,
+    "roof": 4,
+    "structure": 9,
+    "detail_confirmation": 1,
+    "structure_overlay": 1,
+    "semantic_prior": 1
+  }
+}

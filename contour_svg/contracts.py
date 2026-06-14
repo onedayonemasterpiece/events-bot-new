@@ -86,6 +86,17 @@ class LinePrimitive:
             total += ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
         return total
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "polyline",
+            "points": self.points,
+            "role": self.role,
+            "priority": self.priority,
+            "source": self.source,
+            "confidence": self.confidence,
+            "length": self.length,
+        }
+
 
 @dataclass
 class LineCandidate:
@@ -212,6 +223,238 @@ class CompletionProposal:
 
 
 @dataclass
+class EvidenceItem:
+    id: str
+    kind: str
+    source: str
+    role_hint: str | None = None
+    semantic_hint: str | None = None
+    bbox_xyxy: tuple[float, float, float, float] | None = None
+    geometry: LinePrimitive | None = None
+    confidence: float = 0.0
+    object_visible_overlap: float = 0.0
+    occluder_overlap: float = 0.0
+    background_overlap: float = 0.0
+    debug_image: Path | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "source": self.source,
+            "role_hint": self.role_hint,
+            "semantic_hint": self.semantic_hint,
+            "bbox_xyxy": list(self.bbox_xyxy) if self.bbox_xyxy else None,
+            "geometry": self.geometry.to_dict() if self.geometry else None,
+            "confidence": self.confidence,
+            "object_visible_overlap": self.object_visible_overlap,
+            "occluder_overlap": self.occluder_overlap,
+            "background_overlap": self.background_overlap,
+            "debug_image": str(self.debug_image) if self.debug_image else None,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class EvidenceInventory:
+    items: list[EvidenceItem]
+    contact_sheet: Path | None = None
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "items": [item.to_dict() for item in self.items],
+            "contact_sheet": str(self.contact_sheet) if self.contact_sheet else None,
+            "warnings": self.warnings,
+            "counts_by_kind": _counts(item.kind for item in self.items),
+            "counts_by_role": _counts((item.role_hint or "unknown") for item in self.items),
+        }
+
+
+@dataclass
+class ShellSegment:
+    id: str
+    segment_type: str
+    geometry: LinePrimitive
+    confidence: float
+    source_evidence_ids: list[str] = field(default_factory=list)
+    completion_status: str = "visible"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "segment_type": self.segment_type,
+            "geometry": self.geometry.to_dict(),
+            "confidence": self.confidence,
+            "source_evidence_ids": self.source_evidence_ids,
+            "completion_status": self.completion_status,
+        }
+
+
+@dataclass
+class BuildingShell:
+    hull_polygon: list[tuple[float, float]]
+    visible_hull_segments: list[ShellSegment]
+    completed_hull_segments: list[ShellSegment]
+    roof_segments: list[ShellSegment]
+    base_segments: list[ShellSegment]
+    facade_corner_segments: list[ShellSegment]
+    bbox_xyxy: tuple[float, float, float, float]
+    shell_confidence: float
+    occlusion_zones: list[tuple[float, float, float, float]] = field(default_factory=list)
+    evidence_ids: list[str] = field(default_factory=list)
+    passed: bool = True
+    failure_flags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "hull_polygon": self.hull_polygon,
+            "visible_hull_segments": [segment.to_dict() for segment in self.visible_hull_segments],
+            "completed_hull_segments": [segment.to_dict() for segment in self.completed_hull_segments],
+            "roof_segments": [segment.to_dict() for segment in self.roof_segments],
+            "base_segments": [segment.to_dict() for segment in self.base_segments],
+            "facade_corner_segments": [segment.to_dict() for segment in self.facade_corner_segments],
+            "bbox_xyxy": list(self.bbox_xyxy),
+            "shell_confidence": self.shell_confidence,
+            "occlusion_zones": [list(zone) for zone in self.occlusion_zones],
+            "evidence_ids": self.evidence_ids,
+            "passed": self.passed,
+            "failure_flags": self.failure_flags,
+        }
+
+
+@dataclass
+class PlaneSegment:
+    id: str
+    segment_type: str
+    plane_id: str
+    geometry: LinePrimitive
+    confidence: float
+    source_evidence_ids: list[str] = field(default_factory=list)
+    completion_status: str = "visible"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "segment_type": self.segment_type,
+            "plane_id": self.plane_id,
+            "geometry": self.geometry.to_dict(),
+            "confidence": self.confidence,
+            "source_evidence_ids": self.source_evidence_ids,
+            "completion_status": self.completion_status,
+        }
+
+
+@dataclass
+class FacadePlane:
+    id: str
+    plane_type: str
+    polygon: list[tuple[float, float]]
+    bbox_xyxy: tuple[float, float, float, float]
+    confidence: float
+    evidence_ids: list[str] = field(default_factory=list)
+    vanishing_group: str = "unknown"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "plane_type": self.plane_type,
+            "polygon": self.polygon,
+            "bbox_xyxy": list(self.bbox_xyxy),
+            "confidence": self.confidence,
+            "evidence_ids": self.evidence_ids,
+            "vanishing_group": self.vanishing_group,
+        }
+
+
+@dataclass
+class PlaneGraph:
+    planes: list[FacadePlane]
+    bands: list[PlaneSegment]
+    vertical_edges: list[PlaneSegment]
+    perspective_groups: dict[str, int]
+    graph_confidence: float
+    passed: bool = True
+    failure_flags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "planes": [plane.to_dict() for plane in self.planes],
+            "bands": [segment.to_dict() for segment in self.bands],
+            "vertical_edges": [segment.to_dict() for segment in self.vertical_edges],
+            "perspective_groups": self.perspective_groups,
+            "graph_confidence": self.graph_confidence,
+            "passed": self.passed,
+            "failure_flags": self.failure_flags,
+        }
+
+
+@dataclass
+class FeatureNode:
+    id: str
+    feature_type: str
+    plane_id: str
+    bbox_xyxy: tuple[float, float, float, float]
+    confidence: float
+    source_element_ids: list[str] = field(default_factory=list)
+    row_id: str | None = None
+    completion_status: str = "visible"
+    evidence: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "feature_type": self.feature_type,
+            "plane_id": self.plane_id,
+            "bbox_xyxy": list(self.bbox_xyxy),
+            "confidence": self.confidence,
+            "source_element_ids": self.source_element_ids,
+            "row_id": self.row_id,
+            "completion_status": self.completion_status,
+            "evidence": self.evidence,
+        }
+
+
+@dataclass
+class FeatureRow:
+    id: str
+    plane_id: str
+    feature_type: str
+    member_ids: list[str]
+    y_center: float
+    confidence: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "plane_id": self.plane_id,
+            "feature_type": self.feature_type,
+            "member_ids": self.member_ids,
+            "y_center": self.y_center,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass
+class FeatureGraph:
+    features: list[FeatureNode]
+    rows: list[FeatureRow]
+    graph_confidence: float
+    passed: bool = True
+    failure_flags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "features": [feature.to_dict() for feature in self.features],
+            "rows": [row.to_dict() for row in self.rows],
+            "graph_confidence": self.graph_confidence,
+            "passed": self.passed,
+            "failure_flags": self.failure_flags,
+        }
+
+
+@dataclass
 class ArchPrimitive:
     id: str
     primitive_type: str
@@ -310,3 +553,10 @@ class Candidate:
             "warnings": self.warnings,
             "parameters": self.parameters,
         }
+
+
+def _counts(values) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for value in values:
+        out[str(value)] = out.get(str(value), 0) + 1
+    return out

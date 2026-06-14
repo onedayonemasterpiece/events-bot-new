@@ -1,0 +1,13 @@
+{
+  "graph_confidence": 0.9294,
+  "passed": true,
+  "failure_flags": [],
+  "feature_counts": {
+    "door": 3,
+    "arched_window": 6,
+    "window": 8,
+    "balcony": 1,
+    "pilaster": 3
+  },
+  "rows": 5
+}

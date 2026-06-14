@@ -1,0 +1,874 @@
+{
+  "hull_polygon": [
+    [
+      379.0,
+      182.0
+    ],
+    [
+      350.0,
+      327.0
+    ],
+    [
+      468.0,
+      316.0
+    ],
+    [
+      528.0,
+      418.0
+    ],
+    [
+      350.0,
+      523.0
+    ],
+    [
+      370.0,
+      644.0
+    ],
+    [
+      512.0,
+      580.0
+    ],
+    [
+      551.0,
+      656.0
+    ],
+    [
+      698.0,
+      601.0
+    ],
+    [
+      705.0,
+      679.0
+    ],
+    [
+      1082.0,
+      649.0
+    ],
+    [
+      1043.0,
+      250.0
+    ],
+    [
+      864.0,
+      197.0
+    ],
+    [
+      697.0,
+      32.0
+    ],
+    [
+      379.0,
+      182.0
+    ]
+  ],
+  "visible_hull_segments": [
+    {
+      "id": "shell.hull.09",
+      "segment_type": "base",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            705.0,
+            679.0
+          ],
+          [
+            1082.0,
+            649.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 378.1917503066401
+      },
+      "confidence": 0.78,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.08",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            698.0,
+            601.0
+          ],
+          [
+            705.0,
+            679.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 78.31347265956222
+      },
+      "confidence": 0.78,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.10",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1082.0,
+            649.0
+          ],
+          [
+            1043.0,
+            250.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 400.90148415789133
+      },
+      "confidence": 0.7624,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    }
+  ],
+  "completed_hull_segments": [
+    {
+      "id": "shell.hull.06",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            512.0,
+            580.0
+          ],
+          [
+            551.0,
+            656.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 85.42247947700886
+      },
+      "confidence": 0.7145,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.04",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350.0,
+            523.0
+          ],
+          [
+            370.0,
+            644.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 122.64175471673585
+      },
+      "confidence": 0.7013,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.12",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            864.0,
+            197.0
+          ],
+          [
+            697.0,
+            32.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 234.76371099469355
+      },
+      "confidence": 0.696,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.00",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            379.0,
+            182.0
+          ],
+          [
+            350.0,
+            327.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 147.87156589419075
+      },
+      "confidence": 0.6758,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.01",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350.0,
+            327.0
+          ],
+          [
+            468.0,
+            316.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 118.51160280748886
+      },
+      "confidence": 0.672,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.11",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1043.0,
+            250.0
+          ],
+          [
+            864.0,
+            197.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 186.6815470259447
+      },
+      "confidence": 0.6675,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.13",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            697.0,
+            32.0
+          ],
+          [
+            379.0,
+            182.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 351.60204777560665
+      },
+      "confidence": 0.645,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.07",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            551.0,
+            656.0
+          ],
+          [
+            698.0,
+            601.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 156.95222202950808
+      },
+      "confidence": 0.645,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.05",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            370.0,
+            644.0
+          ],
+          [
+            512.0,
+            580.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 155.7562197795003
+      },
+      "confidence": 0.618,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.03",
+      "segment_type": "shell_edge",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            528.0,
+            418.0
+          ],
+          [
+            350.0,
+            523.0
+          ]
+        ],
+        "role": "silhouette",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 206.66155907667007
+      },
+      "confidence": 0.6069,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    }
+  ],
+  "roof_segments": [
+    {
+      "id": "shell.guide.0002",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            365,
+            260
+          ],
+          [
+            680,
+            125
+          ]
+        ],
+        "role": "roofline",
+        "priority": 9,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.78,
+        "length": 342.70978976387585
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00002"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.guide.0003",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            690,
+            115
+          ],
+          [
+            1015,
+            285
+          ]
+        ],
+        "role": "roofline",
+        "priority": 9,
+        "source": "building_shell:mlsd",
+        "confidence": 0.76,
+        "length": 366.7764987018661
+      },
+      "confidence": 0.9027,
+      "source_evidence_ids": [
+        "E_line_00003"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.11",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1043.0,
+            250.0
+          ],
+          [
+            864.0,
+            197.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 186.6815470259447
+      },
+      "confidence": 0.6675,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.13",
+      "segment_type": "roofline",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            697.0,
+            32.0
+          ],
+          [
+            379.0,
+            182.0
+          ]
+        ],
+        "role": "roofline",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 351.60204777560665
+      },
+      "confidence": 0.645,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    }
+  ],
+  "base_segments": [
+    {
+      "id": "shell.guide.0005",
+      "segment_type": "base",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            708,
+            525
+          ],
+          [
+            1100,
+            505
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:mlsd",
+        "confidence": 0.82,
+        "length": 392.50987248730445
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00005"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.guide.0004",
+      "segment_type": "base",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350,
+            510
+          ],
+          [
+            710,
+            525
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.8,
+        "length": 360.3123644839294
+      },
+      "confidence": 0.9146,
+      "source_evidence_ids": [
+        "E_line_00004"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.guide.0007",
+      "segment_type": "base",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            700,
+            675
+          ],
+          [
+            1090,
+            640
+          ]
+        ],
+        "role": "structure",
+        "priority": 8,
+        "source": "building_shell:hough",
+        "confidence": 0.72,
+        "length": 391.56736329781114
+      },
+      "confidence": 0.8819,
+      "source_evidence_ids": [
+        "E_line_00007"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.09",
+      "segment_type": "base",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            705.0,
+            679.0
+          ],
+          [
+            1082.0,
+            649.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 378.1917503066401
+      },
+      "confidence": 0.78,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    }
+  ],
+  "facade_corner_segments": [
+    {
+      "id": "shell.guide.0008",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            685,
+            66
+          ],
+          [
+            700,
+            675
+          ]
+        ],
+        "role": "structure",
+        "priority": 9,
+        "source": "building_shell:deeplsd",
+        "confidence": 0.84,
+        "length": 609.1847010554352
+      },
+      "confidence": 0.92,
+      "source_evidence_ids": [
+        "E_line_00008"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.guide.0011",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            900,
+            235
+          ],
+          [
+            905,
+            650
+          ]
+        ],
+        "role": "structure",
+        "priority": 9,
+        "source": "building_shell:hawp",
+        "confidence": 0.72,
+        "length": 415.03011938894264
+      },
+      "confidence": 0.9048,
+      "source_evidence_ids": [
+        "E_line_00011"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.10",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            1082.0,
+            649.0
+          ],
+          [
+            1043.0,
+            250.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 400.90148415789133
+      },
+      "confidence": 0.7624,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "visible"
+    },
+    {
+      "id": "shell.hull.04",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            350.0,
+            523.0
+          ],
+          [
+            370.0,
+            644.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 122.64175471673585
+      },
+      "confidence": 0.7013,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    },
+    {
+      "id": "shell.hull.00",
+      "segment_type": "facade_corner",
+      "geometry": {
+        "type": "polyline",
+        "points": [
+          [
+            379.0,
+            182.0
+          ],
+          [
+            350.0,
+            327.0
+          ]
+        ],
+        "role": "structure",
+        "priority": 10,
+        "source": "building_shell_mask",
+        "confidence": 0.74,
+        "length": 147.87156589419075
+      },
+      "confidence": 0.6758,
+      "source_evidence_ids": [
+        "E_mask_object_visible",
+        "E_mask_object_unknown"
+      ],
+      "completion_status": "interpolated_shell"
+    }
+  ],
+  "bbox_xyxy": [
+    350.0,
+    32.0,
+    1082.0,
+    679.0
+  ],
+  "shell_confidence": 0.9189,
+  "occlusion_zones": [
+    [
+      0.0,
+      0.0,
+      758.0,
+      463.0
+    ],
+    [
+      0.0,
+      298.0,
+      541.0,
+      673.0
+    ],
+    [
+      770.0,
+      47.0,
+      1154.0,
+      543.0
+    ],
+    [
+      695.0,
+      0.0,
+      1154.0,
+      267.0
+    ],
+    [
+      0.0,
+      601.0,
+      650.0,
+      706.0
+    ],
+    [
+      658.0,
+      594.0,
+      683.0,
+      683.0
+    ],
+    [
+      826.0,
+      0.0,
+      878.0,
+      19.0
+    ],
+    [
+      1083.0,
+      549.0,
+      1098.0,
+      598.0
+    ]
+  ],
+  "evidence_ids": [
+    "E_facade_0008",
+    "E_facade_0009",
+    "E_facade_0010",
+    "E_guide_mlsd",
+    "E_line_00004",
+    "E_line_00005",
+    "E_line_00006",
+    "E_line_00007",
+    "E_line_00008",
+    "E_line_00009",
+    "E_line_00010",
+    "E_line_00011",
+    "E_mask_background",
+    "E_mask_object_unknown",
+    "E_mask_object_visible",
+    "E_wall_plane_000_201_39",
+    "E_wall_plane_001_456_476",
+    "E_wall_plane_002_379_497"
+  ],
+  "passed": true,
+  "failure_flags": []
+}

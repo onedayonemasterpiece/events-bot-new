@@ -1,0 +1,12 @@
+{
+  "shell_confidence": 0.9189,
+  "passed": true,
+  "failure_flags": [],
+  "segment_counts": {
+    "visible_hull": 3,
+    "completed_hull": 10,
+    "roof": 4,
+    "base": 4,
+    "facade_corner": 5
+  }
+}

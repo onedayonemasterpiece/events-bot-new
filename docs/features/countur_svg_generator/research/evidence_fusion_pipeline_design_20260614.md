@@ -246,6 +246,13 @@ What is already present:
 
 - most evidence layers from the audit are produced and saved;
 - multi-state masks exist;
+- typed `EvidenceInventory` exists and writes JSON/contact-sheet artifacts;
+- `BuildingShell` exists and writes shell JSON/overlay/score plus a
+  `shell_only` diagnostic SVG/PNG candidate;
+- `PlaneGraph` exists and writes plane JSON/overlay/score plus a
+  `plane_scaffold` diagnostic SVG/PNG candidate;
+- `FeatureGraph` exists and writes feature JSON/overlay/score plus a
+  `feature_scaffold` diagnostic SVG/PNG candidate;
 - line graph exists;
 - facade parser exists;
 - completion proposals exist;
@@ -255,22 +262,20 @@ What is already present:
 
 What requires serious redesign before expecting sample-quality output:
 
-- no explicit `BuildingShell` object;
-- no explicit `PlaneGraph`;
-- no evidence inventory that declares which layer is shell/plane/detail/style;
-- raw line groups and facade elements enter primitive rendering too directly;
+- completion still works mostly from raw line groups and facade elements instead
+  of a graph-level `OccluderAwareCompletionGraph`;
 - neural branch does not yet operate as a structured fusion/repair loop;
-- ranking can still pick the least-bad candidate instead of requiring a coherent
-  global shell first;
-- current candidates are different partial interpretations, not different
-  renderings of one fused scene graph.
+- ranking has shell/primitive hard gates but still lacks recognizability and
+  repair-plan gates;
+- final polished candidates are not yet all renderings of one repaired
+  `PrimitiveScene`.
 
 ## Implementation Order
 
-1. Add `EvidenceInventory` and record all user-audited layers with roles.
-2. Add `BuildingShell` from masks + wall_plane + dominant structural lines.
-3. Add `PlaneGraph` from M-LSD / DeepLSD / HAWP with edge-map support.
-4. Attach facade elements to planes; reject orphan details outside planes.
+1. Done: add `EvidenceInventory` and record all user-audited layers with roles.
+2. Done: add `BuildingShell` from masks + wall_plane + dominant structural lines.
+3. Done: add `PlaneGraph` from M-LSD / DeepLSD / HAWP with edge-map support.
+4. Done: attach facade elements to planes/rows and reject orphan details outside the shell.
 5. Move completion to shell/plane/feature graph, not raw line fragments.
 6. Add Gemini fusion editor over graph components, chunked through the shared
    limiter.
