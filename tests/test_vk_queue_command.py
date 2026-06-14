@@ -68,7 +68,7 @@ async def test_handle_vk_queue_shows_counts_and_button(tmp_path):
     assert lines[0].startswith("Обновление базы VK: ")
     assert lines[1].startswith("Авторазбор очереди: ")
     assert "05:15, 09:15, 13:15, 17:15, 21:15, 22:45" in sent.text
-    assert "06:15, 10:15, 12:00, 13:15, 18:30" in sent.text
+    assert "06:15, 10:15, 12:00, 15:30, 18:30" in sent.text
     assert "pending: 2" in sent.text
     assert "locked: 1" in sent.text
     assert sent.reply_markup.keyboard[0][0].text == main.VK_BTN_CHECK_EVENTS

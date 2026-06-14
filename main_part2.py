@@ -12907,7 +12907,7 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
         lines.insert(0, f"Обновление базы VK: {crawl_schedule_line}")
 
     auto_schedule_raw = os.getenv(
-        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,13:15,18:30"
+        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,15:30,18:30"
     )
     auto_schedule_times = [
         part.strip() for part in auto_schedule_raw.split(",") if part.strip()

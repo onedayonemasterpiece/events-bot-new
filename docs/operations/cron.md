@@ -41,7 +41,7 @@ Defaults were adjusted to reduce overlaps between the most common heavy jobs:
 
 - nightly source parsing: `SOURCE_PARSING_TIME_LOCAL=04:30` (was `02:15`)
 - `/3di` morning run: `THREEDI_TIMES_LOCAL=07:15,15:15,17:15` (was `05:30,15:15,17:15`; older default `03:15,15:15,17:15`)
-- VK auto-import: `VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,13:15,18:30` with `VK_AUTO_IMPORT_LIMIT=15` by default, so queue draining relies on cadence instead of oversized single runs, picks up fresh daytime `pending` items after the `13:15` VK crawl, and stays away from the `08:00` daily announcement window and late-evening monitoring.
+- VK auto-import: `VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,15:30,18:30` with `VK_AUTO_IMPORT_LIMIT=15` by default, so queue draining relies on cadence instead of oversized single runs, picks up fresh daytime `pending` items after the `13:15` VK crawl, avoids the `/3di` `15:15` slot, and stays away from the `08:00` daily announcement window and late-evening monitoring.
 
 If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool.
 

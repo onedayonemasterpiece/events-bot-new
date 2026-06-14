@@ -1996,7 +1996,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
 
 def _last_vk_auto_import_slot(now_utc: datetime) -> tuple[datetime, datetime, datetime] | None:
     times_raw = os.getenv(
-        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,13:15,18:30"
+        "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,15:30,18:30"
     ).strip()
     tz_name = os.getenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad").strip()
     candidates: list[tuple[datetime, datetime, datetime]] = []
@@ -3398,7 +3398,7 @@ def startup(
         from vk_auto_queue import vk_auto_import_scheduler
 
         vk_auto_times = os.getenv(
-            "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,13:15,18:30"
+            "VK_AUTO_IMPORT_TIMES_LOCAL", "06:15,10:15,12:00,15:30,18:30"
         ).strip()
         vk_auto_tz = os.getenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad").strip()
         for idx, t in enumerate(vk_auto_times.split(",")):
