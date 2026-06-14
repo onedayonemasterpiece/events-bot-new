@@ -127,3 +127,16 @@ def test_real_script_kernels_are_status_aware():
         assert "kernel_started" in source, relative_path
         assert "report_written" in source, relative_path
         assert "progress_label" in source, relative_path
+
+
+def test_crumple_publish_only_kernel_is_self_contained_not_wrapped(tmp_path):
+    src = KERNELS_ROOT_PATH / "CrumpleStoryPublishOnly"
+    dst = tmp_path / "CrumpleStoryPublishOnly"
+    _copy_kernel_tree(src, dst)
+    _copy_status_client_to_kernel(dst)
+    meta = json.loads((dst / "kernel-metadata.json").read_text(encoding="utf-8"))
+
+    _instrument_script_kernel(dst, meta)
+
+    assert not (dst / "_events_bot_original_publish_only.py").exists()
+    assert "Publish-only story publish completed" in (dst / "publish_only.py").read_text(encoding="utf-8")

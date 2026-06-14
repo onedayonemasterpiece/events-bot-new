@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+# kaggle_status_client: keep this script self-contained. Kaggle script kernels
+# execute the code_file as /kaggle/src/script.py and do not expose renamed
+# sibling files reliably, so the generic status wrapper must not rename this
+# file. The publish-only runner still writes story_publish_report.json.
+
 import asyncio
 import importlib.util
 import json
