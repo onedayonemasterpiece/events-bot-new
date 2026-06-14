@@ -1,7 +1,7 @@
 # Afisha Engagement
 
-> **Status:** Public canary rollout supported; shadow fallback remains enabled
-> for visual audit.
+> **Status:** Public CTA rollout supported; debug shadow fallback is disabled
+> for the normal Smart Update VK publication path.
 > **Confirmation:** Not confirmed by user after VK visual review.
 > **Canonical requirements snapshot:** [requirements.md](requirements.md).
 
@@ -24,9 +24,9 @@ publications do not bypass the `Мотивация` activity.
 - First rollout target: VK `klgdevents` (`VK_EVENTS_GROUP_ID`).
 - Telegram adaptation is out of scope for the first stage.
 - Posts without illustrations are skipped before any LLM/Vision work.
-- The normal Smart Update VK post remains unchanged in debug shadow mode.
-- A separate debug copy is scheduled in VK postponed posts with generated
-  afishaengagement media and a cleanup marker.
+- Debug shadow mode is a manual/debug-only audit path. The normal Smart Update
+  VK post path must not schedule a separate debug copy after choosing a plain
+  post fallback.
 - In public mode the CTA version is the event post. The primary VK write must
   be selected before the write boundary; the system must not create or edit a
   plain managed VK event post and then create a second CTA variant for the same
@@ -34,10 +34,9 @@ publications do not bypass the `Мотивация` activity.
 - A public CTA edit is allowed only when the caller explicitly passes the
   existing managed VK URL. `event.source_vk_post_url` is not an implicit edit
   fallback inside the enhancer; the publication boundary owns that decision.
-- Existing managed VK post edits and promo `vk_publication` runs can create
-  shadow copies during the visual debug phase, so `/vk_auto_import` and promo
-  deficit publications can produce the normal post plus a marked postponed CTA
-  copy for every applicable post.
+- Existing managed VK post edits keep the normal update/repair behavior unless
+  the publication boundary explicitly chooses a public CTA edit. They must not
+  create a marked postponed CTA copy as a post-write side effect.
 - Smart Update passes the exact deduped media URL list used for the normal VK
   photo attachments into the shadow renderer. This keeps the CTA text, event
   metadata, and generated poster media bound to the same event/photo set.
@@ -89,31 +88,27 @@ activity to public mode:
 
 Public mode does not append a debug marker, does not run marker cleanup, posts
 through the normal VK postponed-publication path, and records
-`placement_kind='vk_engagement'` with target type `vk_wall`. To keep a visual
-audit stream while exposing only a fraction publicly, create a higher-priority
-public campaign/activity followed by a lower-priority shadow activity for the
-same target:
+`placement_kind='vk_engagement'` with target type `vk_wall`. For production
+rollout, create public activities with `publish_mode="public"` and the desired
+`apply_rate`.
 
-1. Public activity: `publish_mode="public"`, desired `apply_rate`, no
-   `debug_marker`.
-2. Shadow fallback activity: `debug_shadow=true`, `apply_rate=1.0`, marker and
-   future postponed debug scheduling.
-
-Because candidate evaluation is ordered by promo campaign priority, public
-canary rows should live in a campaign with a smaller `priority` value than the
-matching shadow fallback campaign. A public dice miss, duplicate, disabled
-activity, or cap on an earlier candidate falls through to the next matching
-activity.
+Because candidate evaluation is ordered by promo campaign priority, more
+specific public rows should live in campaigns with smaller `priority` values
+than broader public fallback campaigns. A public dice miss means the normal VK
+publication boundary writes the plain event post and stops. Lower-priority
+`debug_shadow` activities are legacy visual-audit config and must stay disabled
+for normal production sync.
 For the default events VK community, `target_group="klgdevents"` is treated as
 an alias for numeric group id `231920894`, so old human-readable 80-stories
 configs still match Smart Update calls that pass `VK_EVENTS_GROUP_ID`.
 
-Initial production canary rates on 2026-06-12:
+Production public CTA rates after the 2026-06-13 rollout:
 
-- `80 историй о главном`: public `apply_rate=0.5`, shadow fallback `1.0`;
-- educational program of `Кантата`: public `apply_rate=0.3`, shadow fallback
-  `1.0`;
-- all other events: public `apply_rate=0.1`, shadow fallback `1.0`.
+- `80 историй о главном`: public `apply_rate=0.65`;
+- `Кантата`: public `apply_rate=0.45`;
+- selected `Кантата` educational-program events: public `apply_rate=0.45`;
+- `kraftmarket39 · @LANGEANNA`: public `apply_rate=0.4`;
+- all other events: public `apply_rate=0.1`.
 
 Supported target types are the existing promo campaign targets:
 

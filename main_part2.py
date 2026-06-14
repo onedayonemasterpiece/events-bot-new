@@ -5562,13 +5562,6 @@ async def sync_vk_source_post(
         )
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
-        await _apply_afishaengagement_variant(
-            prepared_message=new_message,
-            prepared_photo_urls=photo_urls_for_publish,
-            phase="shadow_after_plain_update",
-            existing_url=existing_vk_post_url,
-            shadow_only=True,
-        )
     else:
         _short_link_result = await ensure_vk_short_ticket_link(
             event, db, vk_api_fn=_vk_api, bot=bot
@@ -5607,7 +5600,6 @@ async def sync_vk_source_post(
             phase="public_create_preflight",
             public_only=True,
         )
-        created_plain_post = False
         if not url:
             url = await post_to_vk(
                 target_group_id,
@@ -5618,17 +5610,8 @@ async def sync_vk_source_post(
                 vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
                 vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
             )
-            created_plain_post = bool(url)
         if url:
             logging.info("sync_vk_source_post created %s", url)
-            if created_plain_post:
-                await _apply_afishaengagement_variant(
-                    prepared_message=message,
-                    prepared_photo_urls=photo_urls_for_publish,
-                    phase="shadow_after_plain_create",
-                    existing_url=url,
-                    shadow_only=True,
-                )
     return url
 
 

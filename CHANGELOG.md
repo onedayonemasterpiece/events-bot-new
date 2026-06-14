@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Afisha Engagement shadow fallback after production CTA rollout**:
+  normal Smart Update VK sync now makes one publication-boundary choice:
+  public CTA preflight creates the CTA post when it wins, otherwise the path
+  creates or edits only the plain event post. The old visual-audit
+  `shadow_after_plain_create` / `shadow_after_plain_update` hooks are no longer
+  run after production plain posts, and the docs/tests now treat debug shadows
+  as explicit manual/debug batches. Tracks
+  `INC-2026-06-14-afishaengagement-shadow-fallback-regression`.
 - **Fixed: Telegram Monitoring false events from festival recaps and logistics notices**:
   tightened the TelegramMonitor prompt and Smart Update safety-net guards so a
   recap that only says the next festival dates while location/place/address is

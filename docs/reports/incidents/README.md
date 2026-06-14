@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-14-afishaengagement-shadow-fallback-regression`
+  - Scope: Afisha Engagement public CTA/plain selection at the VK publication
+    boundary, legacy debug-shadow activity enablement, and VK postponed cleanup.
+  - Must not regress: normal Smart Update VK sync must choose exactly one
+    production variant per publication pass. If public CTA preflight wins, it
+    creates the CTA post; if it misses or fails, the path creates only the plain
+    post/update and must not schedule a marked debug-shadow copy as a side
+    effect. Broad debug-shadow activities must stay disabled unless an explicit
+    manual debug batch is being run.
 - `INC-2026-06-14-festival-recap-logistics-false-events.md`
   - Scope: Telegram Monitoring / Smart Update non-event guards for festival recaps, attendee logistics notices, and managed VK/TG event fanout.
   - Must not regress: a post-event recap that only says the next festival dates while location/place/address is still unknown must not create an event with a fabricated venue; an operational notice for existing guests about entry/navigation/parking/queue/cloakroom must not become a new event; real future festival announcements with grounded location and invitation/ticket signals must stay importable.
@@ -96,8 +105,9 @@
     matching, and production public canary rates for `80 историй о главном`.
   - Must not regress: `target_group="klgdevents"` must match numeric
     `VK_EVENTS_GROUP_ID=231920894`; the 80-stories public activity at
-    `apply_rate=0.5` must be evaluated before the all-events 0.1 fallback, with
-    dice misses falling through to the shadow debug activity.
+    its configured public rate must be evaluated before the all-events 0.1
+    fallback. The old shadow fallback requirement was superseded by
+    `INC-2026-06-14-afishaengagement-shadow-fallback-regression`.
 - `INC-2026-06-12-vk-partial-media-family-cta.md`
   - Scope: managed VK event media upload/parity and Afisha Engagement CTA
     selection for family fairs/markets.

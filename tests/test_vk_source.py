@@ -806,7 +806,7 @@ async def test_sync_vk_source_post_updates_attachments(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkeypatch):
+async def test_sync_vk_source_post_does_not_run_afishaengagement_shadow_on_update(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True
@@ -835,13 +835,11 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
     async def fake_edit(url, message, db=None, bot=None, attachments=None):
         return None
 
-    captured: dict[str, object] = {}
+    calls: list[dict[str, object]] = []
 
     async def fake_shadow(**kwargs):
-        captured.update(kwargs)
-        if kwargs.get("public_only"):
-            return None
-        return "https://vk.com/wall-1_999"
+        calls.append(kwargs)
+        raise AssertionError("existing post update must not create a shadow CTA copy")
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
@@ -855,13 +853,7 @@ async def test_sync_vk_source_post_runs_afishaengagement_shadow_on_update(monkey
     url = await main.sync_vk_source_post(event, "new text", None, None)
 
     assert url == "https://vk.com/wall-1_1"
-    assert captured["event"] is event
-    assert captured["target_group_id"] == "1"
-    assert captured["photo_urls"] == ["http://img1"]
-    assert "new text" in str(captured["message"])
-    assert captured["public_only"] is False
-    assert captured["shadow_only"] is True
-    assert captured["existing_vk_post_url"] == "https://vk.com/wall-1_1"
+    assert calls == []
 
 
 @pytest.mark.asyncio
@@ -912,7 +904,7 @@ async def test_sync_vk_source_post_uses_afishaengagement_preflight_for_new_publi
 
 
 @pytest.mark.asyncio
-async def test_sync_vk_source_post_keeps_plain_post_when_only_shadow_applies(monkeypatch):
+async def test_sync_vk_source_post_keeps_plain_post_after_public_cta_miss(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True
@@ -963,12 +955,11 @@ async def test_sync_vk_source_post_keeps_plain_post_when_only_shadow_applies(mon
     assert calls == [
         ("engagement", True, False, None),
         ("plain", ["ph1"], None, None),
-        ("engagement", False, True, "https://vk.com/wall-1_123"),
     ]
 
 
 @pytest.mark.asyncio
-async def test_sync_vk_source_post_passes_same_deduped_photo_list_to_afishaengagement(monkeypatch):
+async def test_sync_vk_source_post_dedupes_photo_list_on_update_without_shadow(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_EVENTS_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True
@@ -1005,13 +996,11 @@ async def test_sync_vk_source_post_passes_same_deduped_photo_list_to_afishaengag
     async def fake_edit(url, message, db=None, bot=None, attachments=None):
         edited["attachments"] = attachments
 
-    captured: dict[str, object] = {}
+    calls: list[dict[str, object]] = []
 
     async def fake_shadow(**kwargs):
-        captured.update(kwargs)
-        if kwargs.get("public_only"):
-            return None
-        return "https://vk.com/wall-1_999"
+        calls.append(kwargs)
+        raise AssertionError("existing post update must not create a shadow CTA copy")
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
@@ -1027,7 +1016,7 @@ async def test_sync_vk_source_post_passes_same_deduped_photo_list_to_afishaengag
 
     assert url == "https://vk.com/wall-1_1"
     assert edited["attachments"] == ["photo-1_actual"]
-    assert captured["photo_urls"] == ["http://actual-poster"]
+    assert calls == []
 
 
 @pytest.mark.asyncio

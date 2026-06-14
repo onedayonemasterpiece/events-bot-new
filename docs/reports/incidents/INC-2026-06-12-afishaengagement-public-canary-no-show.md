@@ -6,7 +6,7 @@ Service: Afisha Engagement / VK event publishing
 Opened: 2026-06-12
 Closed: 2026-06-12
 Owners: events-bot
-Related incidents: `INC-2026-06-12-vk-partial-media-family-cta`
+Related incidents: `INC-2026-06-12-vk-partial-media-family-cta`, `INC-2026-06-14-afishaengagement-shadow-fallback-regression`
 Related docs: `docs/features/afishaengagement/README.md`, `docs/features/promo-campaigns/README.md`, `docs/operations/runtime-logs.md`
 
 ## Summary
@@ -44,10 +44,11 @@ festival event because its activity used the human-readable
   in production.
 - 2026-06-12 17:15-17:38 UTC: events `5953`-`5957` matched the all-events
   public activity but missed dice at `apply_rate=0.1`, then fell through to
-  shadow fallback.
+  the then-enabled shadow fallback. This fallback behavior was later superseded
+  by `INC-2026-06-14-afishaengagement-shadow-fallback-regression`.
 - 2026-06-12 18:41 UTC: event `4759` (`80 историй о главном`) also matched only
   the all-events public activity, missed dice at `apply_rate=0.1`, and fell
-  through to shadow fallback.
+  through to the then-enabled shadow fallback.
 - 2026-06-12: investigation found `_group_matches` compared `klgdevents`
   literally with `231920894`, so the 80-stories public campaign was skipped.
 
@@ -74,22 +75,22 @@ festival event because its activity used the human-readable
 ### Treat as regression guard when
 
 - Changing `afishaengagement.py::resolve_candidates`,
-  `afishaengagement.py::_group_matches`, Afisha Engagement public/shadow
-  fallback ordering, or production promo activity target-group config.
+  `afishaengagement.py::_group_matches`, Afisha Engagement public candidate
+  ordering, or production promo activity target-group config.
 
 ### Affected surfaces
 
 - `afishaengagement.py::_group_matches`
 - `afishaengagement.py::resolve_candidates`
 - `promo_activity.config_json.target_group`
-- Afisha Engagement public canary and shadow fallback scheduling
+- Afisha Engagement public canary scheduling
 - Runtime logs under `/data/runtime_logs`
 
 ### Mandatory checks before closure or deploy
 
 - `tests/test_afishaengagement.py::test_resolve_candidates_matches_klgdevents_alias_to_numeric_group`
 - `tests/test_afishaengagement.py::test_public_engagement_copy_schedules_without_debug_marker`
-- `tests/test_afishaengagement.py::test_shadow_debug_copy_falls_through_after_candidate_dice_miss`
+- `tests/test_vk_source.py::test_sync_vk_source_post_keeps_plain_post_after_public_cta_miss`
 - Full `tests/test_afishaengagement.py`
 - Production candidate/config verification that campaign `8` / activity `25`
   can match `event_id=4759` when called with target group `231920894`, or an
@@ -104,8 +105,11 @@ festival event because its activity used the human-readable
 
 ## Immediate Mitigation
 
-- Keep the shadow fallback active at `apply_rate=1.0` so all missed or skipped
-  public candidates continue to create debug audit copies.
+- 2026-06-12 mitigation kept the shadow fallback active at `apply_rate=1.0` so
+  missed or skipped public candidates continued to create debug audit copies.
+  This was valid for the visual-audit phase only and was superseded on
+  2026-06-14 by the requirement that normal Smart Update VK sync creates one
+  production post, either CTA or plain.
 
 ## Corrective Actions
 
