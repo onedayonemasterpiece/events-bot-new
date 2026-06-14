@@ -11,7 +11,9 @@
   publish-only Kaggle recovery now republishes failed VK targets from the
   already-rendered mp4 without rerendering, prunes stale per-session Kaggle
   datasets before kernel push, and VK-only recovery skips Telethon session
-  creation. Tracks
+  creation. The lightweight publish-only script opts out of the generic script
+  wrapper because Kaggle executes script kernels from `/kaggle/src/script.py`.
+  Tracks
   `INC-2026-06-14-crumple-vk-transport-drift`.
 - **Fixed: Promo VK public CTA/plain duplicate posts**: `vk_publication`
   now runs Afisha Engagement public CTA preflight before the plain VK post and
