@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Changed: Same-source event publication cadence**: when one source post or
+  weekly poster creates several separate events, managed VK and Telegram event
+  posts are now spaced by `SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS` (default
+  `12`) while still participating in the normal VK postponed / Telegram
+  `JobOutbox` queues.
 - **Changed: VK auto-import daytime cadence and queue summary**:
   `VK_AUTO_IMPORT_TIMES_LOCAL` now defaults to
   `06:15,10:15,12:00,15:30,18:30` so pending VK inbox items can be drained
