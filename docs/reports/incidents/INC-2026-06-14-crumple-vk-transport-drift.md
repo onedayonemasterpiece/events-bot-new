@@ -207,9 +207,13 @@ path.
   `video-231828790_456239091_488bcee4858915295d`.
 - production DB evidence: `videoannounce_session #676` is
   `status=PUBLISHED_TEST`, `error=null`, `video_url=crumple_video_final.mp4`.
-- duplicate cleanup evidence: earlier manual non-canonical VK post
-  `https://vk.com/wall-231828790_1138` is deleted (`is_deleted=true` in
-  `wall.getById`); it is not counted as incident recovery.
+- duplicate cleanup evidence: earlier non-canonical VK wall posts
+  `https://vk.com/wall-231828790_1138` and
+  `https://vk.com/wall-231828790_1139` are deleted (`is_deleted=true` in
+  `wall.getById`), and orphan duplicate VK video objects
+  `video-231828790_456239089` and `video-231828790_456239090` were deleted
+  with `video.delete`. Canonical remaining wall/video pair is
+  `https://vk.com/wall-231828790_1140` with `video-231828790_456239091`.
 
 ## Prevention
 
