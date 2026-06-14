@@ -491,6 +491,32 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
+def _parse_hhmm(value: str | None, *, default: str) -> tuple[int, int]:
+    raw = str(value or default).strip() or default
+    try:
+        hour_raw, minute_raw = raw.split(":", 1)
+        hour = int(hour_raw)
+        minute = int(minute_raw)
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return hour, minute
+    except Exception:
+        pass
+    hour_raw, minute_raw = default.split(":", 1)
+    return int(hour_raw), int(minute_raw)
+
+
+def _local_datetime_for_time(day: date, *, time_raw: str | None, default: str) -> datetime:
+    hour, minute = _parse_hhmm(time_raw, default=default)
+    return datetime(
+        int(day.year),
+        int(day.month),
+        int(day.day),
+        hour,
+        minute,
+        tzinfo=_local_tz(),
+    )
+
+
 def _event_active_on(event: Event, target: date) -> bool:
     start = _parse_date(getattr(event, "date", None))
     if start is None:
@@ -785,7 +811,7 @@ def _free_topic_possible(events: Sequence[CandidateEvent]) -> bool:
 
 def _topic_plan_min_options(events: Sequence[CandidateEvent], base_min_options: int) -> int:
     base = max(2, int(base_min_options))
-    if _free_topic_possible(events) and len(events) >= FREE_TOPIC_MIN_OPTIONS:
+    if _free_topic_possible(events) and len(events) > FREE_TOPIC_MIN_OPTIONS:
         return max(base, FREE_TOPIC_MIN_OPTIONS)
     return base
 
@@ -1022,7 +1048,7 @@ async def _run_exists(db: Database, *, profile_key: str, run_key: str) -> bool:
     return bool(row)
 
 
-async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, Any] | None:
+async def _latest_visible_poll_without_result(db: Database, *, profile_key: str) -> dict[str, Any] | None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -1034,7 +1060,7 @@ async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, A
             ORDER BY id DESC
             LIMIT 1
             """,
-            (PROFILE_DEBUG,),
+            (profile_key,),
         )
         row = await cur.fetchone()
     if not row:
@@ -1059,7 +1085,7 @@ async def _latest_visible_debug_poll_without_result(db: Database) -> dict[str, A
     return data
 
 
-async def _latest_debug_feedback_other_context(db: Database) -> dict[str, Any] | None:
+async def _latest_feedback_other_context(db: Database, *, profile_key: str) -> dict[str, Any] | None:
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -1070,7 +1096,7 @@ async def _latest_debug_feedback_other_context(db: Database) -> dict[str, Any] |
             ORDER BY id DESC
             LIMIT 1
             """,
-            (PROFILE_DEBUG, STATUS_SKIPPED_FEEDBACK_OTHER),
+            (profile_key, STATUS_SKIPPED_FEEDBACK_OTHER),
         )
         row = await cur.fetchone()
         if not row:
@@ -1155,28 +1181,31 @@ def _debug_create_slot(now_local: datetime) -> bool:
     return _debug_publish_window_contains(now_local) and int(now_local.minute) < 15
 
 
-async def create_debug_poll_if_due(
+async def _create_poll_if_due(
     db: Database,
     bot: Any,
     *,
-    now_utc: datetime | None = None,
+    profile_key: str,
+    run_key: str,
+    target_chat: str,
+    target_date: date,
+    resolve_after: datetime,
+    min_events: int,
+    min_options: int,
+    log_label: str,
+    now_utc: datetime,
+    previous_feedback: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not _env_enabled("ENABLE_POLL_TO_FORWARD_DEBUG", False):
-        return {"created": False, "reason": "disabled"}
     if bot is None:
-        logger.warning("poll_to_forward.debug_create skipped: missing bot")
+        logger.warning("poll_to_forward.%s_create skipped: missing bot", log_label)
         return {"created": False, "reason": "missing_bot"}
-    now_value = now_utc or _now_utc()
-    now_local = now_value.astimezone(_local_tz())
-    if not _debug_create_slot(now_local):
-        return {"created": False, "reason": "outside_create_slot"}
-    run_key = f"debug:{now_local.strftime('%Y-%m-%dT%H')}"
-    if await _run_exists(db, profile_key=PROFILE_DEBUG, run_key=run_key):
+    if await _run_exists(db, profile_key=profile_key, run_key=run_key):
         return {"created": False, "reason": "run_exists", "run_key": run_key}
-    pending_visible = await _latest_visible_debug_poll_without_result(db)
+    pending_visible = await _latest_visible_poll_without_result(db, profile_key=profile_key)
     if pending_visible:
         logger.info(
-            "poll_to_forward.debug_create skipped previous_poll_without_result run_key=%s previous_run_id=%s previous_run_key=%s previous_status=%s",
+            "poll_to_forward.%s_create skipped previous_poll_without_result run_key=%s previous_run_id=%s previous_run_key=%s previous_status=%s",
+            log_label,
             run_key,
             pending_visible.get("id"),
             pending_visible.get("run_key"),
@@ -1191,15 +1220,19 @@ async def create_debug_poll_if_due(
             "previous_status": pending_visible.get("status"),
         }
 
-    target_date = (now_local.date() + timedelta(days=1))
-    events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
+    events = await load_eligible_events(
+        db,
+        target_date=target_date,
+        profile_key=profile_key,
+        now_utc=now_utc,
+    )
     events, popularity_diag = await _apply_popularity_preflight(
         db,
         events,
         target_date=target_date,
-        now_utc=now_value,
+        now_utc=now_utc,
     )
-    min_events = max(1, _env_int("POLL_TO_FORWARD_DEBUG_MIN_ELIGIBLE_EVENTS", 3))
+    min_events = max(1, int(min_events))
     if len(events) < min_events:
         has_popularity_surface = any(
             int(popularity_diag.get(key, 0) or 0) > 0
@@ -1214,91 +1247,95 @@ async def create_debug_poll_if_due(
         reason = "low_popularity_inventory" if has_popularity_surface else "low_inventory"
         await _insert_run(
             db,
-            profile_key=PROFILE_DEBUG,
+            profile_key=profile_key,
             run_key=run_key,
             status=status,
             target_event_date=target_date,
             error={"eligible_events": len(events), "min_events": min_events, "popularity": popularity_diag},
         )
         logger.info(
-            "poll_to_forward.debug_create skipped %s run_key=%s target_date=%s eligible=%s min=%s popularity=%s",
+            "poll_to_forward.%s_create skipped %s run_key=%s profile=%s target_date=%s eligible=%s min=%s popularity=%s",
+            log_label,
             reason,
             run_key,
+            profile_key,
             target_date,
             len(events),
             min_events,
             popularity_diag,
         )
-        return {"created": False, "reason": reason, "eligible_events": len(events)}
+        return {"created": False, "reason": reason, "eligible_events": len(events), "run_key": run_key}
 
-    previous_feedback = await _latest_debug_feedback_other_context(db)
-    configured_min_options = max(2, _env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3))
-    min_options = _effective_min_options(events, configured_min_options)
+    configured_min_options = max(2, int(min_options))
+    effective_min_options = _effective_min_options(events, configured_min_options)
     question, options, strategy = await build_poll_plan(
         events,
-        min_options=min_options,
+        min_options=effective_min_options,
         run_key=run_key,
         previous_feedback=previous_feedback,
     )
-    if len(options) < min_options:
+    content_option_count = sum(1 for option in options if option.key != FEEDBACK_OPTION_KEY)
+    if content_option_count < effective_min_options:
         await _insert_run(
             db,
-            profile_key=PROFILE_DEBUG,
+            profile_key=profile_key,
             run_key=run_key,
             status=STATUS_SKIPPED_TOPIC_UNDERFILL,
             target_event_date=target_date,
             error={
                 "eligible_events": len(events),
-                "options": len(options),
-                "min_options": min_options,
+                "options": content_option_count,
+                "options_with_feedback": len(options),
+                "min_options": effective_min_options,
                 "popularity": popularity_diag,
                 "previous_feedback": previous_feedback,
             },
         )
         logger.info(
-            "poll_to_forward.debug_create skipped topic_underfill run_key=%s target_date=%s eligible=%s options=%s min=%s strategy=%s",
+            "poll_to_forward.%s_create skipped topic_underfill run_key=%s profile=%s target_date=%s eligible=%s options=%s min=%s strategy=%s",
+            log_label,
             run_key,
+            profile_key,
             target_date,
             len(events),
-            len(options),
-            min_options,
+            content_option_count,
+            effective_min_options,
             strategy,
         )
-        return {"created": False, "reason": "topic_underfill", "eligible_events": len(events)}
+        return {"created": False, "reason": "topic_underfill", "eligible_events": len(events), "run_key": run_key}
 
-    target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
-    resolve_after = now_value + timedelta(minutes=max(10, _env_int("POLL_TO_FORWARD_DEBUG_RESOLVE_AFTER_MINUTES", 30)))
-    resolve_after = resolve_after.replace(second=0, microsecond=0)
     sent = await bot.send_poll(
         chat_id=target_chat,
         question=question[:300],
-        options=[option.text for option in options[:10]],
+        options=[option.text for option in options[:TELEGRAM_POLL_MAX_OPTIONS]],
         is_anonymous=True,
         allows_multiple_answers=False,
     )
     poll = getattr(sent, "poll", None)
     await _insert_run(
         db,
-        profile_key=PROFILE_DEBUG,
+        profile_key=profile_key,
         run_key=run_key,
         status=STATUS_OPEN,
         target_event_date=target_date,
         question_text=question,
-        options=options[:10],
+        options=options[:TELEGRAM_POLL_MAX_OPTIONS],
         poll_chat_id=target_chat,
         poll_message_id=int(getattr(sent, "message_id", 0) or 0),
         poll_id=str(getattr(poll, "id", "") or ""),
-        resolve_after=resolve_after,
+        resolve_after=resolve_after.replace(second=0, microsecond=0),
         error={"strategy": strategy, "eligible_events": len(events), "popularity": popularity_diag},
     )
     logger.info(
-        "poll_to_forward.debug_create published run_key=%s chat=%s poll_message_id=%s target_date=%s eligible=%s options=%s strategy=%s resolve_after=%s",
+        "poll_to_forward.%s_create published run_key=%s profile=%s chat=%s poll_message_id=%s target_date=%s eligible=%s options=%s strategy=%s resolve_after=%s",
+        log_label,
         run_key,
+        profile_key,
         target_chat,
         getattr(sent, "message_id", None),
         target_date,
         len(events),
-        len(options[:10]),
+        len(options[:TELEGRAM_POLL_MAX_OPTIONS]),
         strategy,
         _iso_utc(resolve_after),
     )
@@ -1307,9 +1344,86 @@ async def create_debug_poll_if_due(
         "run_key": run_key,
         "strategy": strategy,
         "eligible_events": len(events),
-        "options": len(options[:10]),
+        "options": len(options[:TELEGRAM_POLL_MAX_OPTIONS]),
+        "profile_key": profile_key,
     }
 
+
+async def create_debug_poll_if_due(
+    db: Database,
+    bot: Any,
+    *,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    if not _env_enabled("ENABLE_POLL_TO_FORWARD_DEBUG", False):
+        return {"created": False, "reason": "disabled"}
+    now_value = now_utc or _now_utc()
+    now_local = now_value.astimezone(_local_tz())
+    if not _debug_create_slot(now_local):
+        return {"created": False, "reason": "outside_create_slot"}
+    run_key = f"debug:{now_local.strftime('%Y-%m-%dT%H')}"
+    resolve_after = now_value + timedelta(minutes=max(10, _env_int("POLL_TO_FORWARD_DEBUG_RESOLVE_AFTER_MINUTES", 30)))
+    return await _create_poll_if_due(
+        db,
+        bot,
+        profile_key=PROFILE_DEBUG,
+        run_key=run_key,
+        target_chat=_env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt"),
+        target_date=now_local.date() + timedelta(days=1),
+        resolve_after=resolve_after,
+        min_events=_env_int("POLL_TO_FORWARD_DEBUG_MIN_ELIGIBLE_EVENTS", 3),
+        min_options=_env_int("POLL_TO_FORWARD_DEBUG_MIN_OPTIONS", 3),
+        log_label="debug",
+        now_utc=now_value,
+        previous_feedback=await _latest_feedback_other_context(db, profile_key=PROFILE_DEBUG),
+    )
+
+
+def _prod_create_slot(now_local: datetime) -> bool:
+    scheduled = _local_datetime_for_time(
+        now_local.date(),
+        time_raw=os.getenv("POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL"),
+        default="16:00",
+    )
+    grace_minutes = max(1, _env_int("POLL_TO_FORWARD_PROD_CREATE_GRACE_MINUTES", 15))
+    return scheduled <= now_local < scheduled + timedelta(minutes=grace_minutes)
+
+
+async def create_prod_poll_if_due(
+    db: Database,
+    bot: Any,
+    *,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    if not _env_enabled("ENABLE_POLL_TO_FORWARD_PROD", False):
+        return {"created": False, "reason": "disabled"}
+    now_value = now_utc or _now_utc()
+    now_local = now_value.astimezone(_local_tz())
+    if not _prod_create_slot(now_local):
+        return {"created": False, "reason": "outside_create_slot"}
+    target_date = now_local.date() + timedelta(days=1)
+    resolve_local = _local_datetime_for_time(
+        now_local.date(),
+        time_raw=os.getenv("POLL_TO_FORWARD_PROD_RESULT_TIME_LOCAL"),
+        default="19:55",
+    )
+    if resolve_local <= now_local:
+        resolve_local = resolve_local + timedelta(days=1)
+    run_key = f"prod:{target_date.isoformat()}"
+    return await _create_poll_if_due(
+        db,
+        bot,
+        profile_key=PROFILE_PROD,
+        run_key=run_key,
+        target_chat=_env_str("POLL_TO_FORWARD_PROD_TARGET_CHAT", "@kenigevents"),
+        target_date=target_date,
+        resolve_after=resolve_local.astimezone(timezone.utc),
+        min_events=_env_int("POLL_TO_FORWARD_PROD_MIN_ELIGIBLE_EVENTS", 5),
+        min_options=_env_int("POLL_TO_FORWARD_PROD_MIN_OPTIONS", 4),
+        log_label="prod",
+        now_utc=now_value,
+        previous_feedback=None,
+    )
 
 def _decode_options(value: Any) -> list[PollOptionPlan]:
     try:
@@ -1637,12 +1751,12 @@ async def _compose_repost_reply_with_llm(
     return LlmRepostReply(reply_text=reply_text, event_link_text=event_link_text)
 
 
-async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[str, Any]]:
+async def _load_open_due_runs(db: Database, *, now_utc: datetime, profile_key: str) -> list[dict[str, Any]]:
     due_cutoff = now_utc + timedelta(seconds=30)
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT id, run_key, target_event_date, poll_chat_id, poll_message_id,
+            SELECT id, profile_key, run_key, target_event_date, poll_chat_id, poll_message_id,
                    question_text, options_json
             FROM poll_repost_run
             WHERE profile_key=?
@@ -1652,10 +1766,19 @@ async def _load_open_due_runs(db: Database, *, now_utc: datetime) -> list[dict[s
             ORDER BY resolve_after, id
             LIMIT 5
             """,
-            (PROFILE_DEBUG, STATUS_OPEN, _iso_utc(due_cutoff)),
+            (profile_key, STATUS_OPEN, _iso_utc(due_cutoff)),
         )
         rows = await cur.fetchall()
-    keys = ["id", "run_key", "target_event_date", "poll_chat_id", "poll_message_id", "question_text", "options_json"]
+    keys = [
+        "id",
+        "profile_key",
+        "run_key",
+        "target_event_date",
+        "poll_chat_id",
+        "poll_message_id",
+        "question_text",
+        "options_json",
+    ]
     return [dict(zip(keys, row)) for row in rows]
 
 
@@ -1712,43 +1835,66 @@ async def _update_run(
         await conn.commit()
 
 
-async def resolve_due_debug_polls(
+def _low_votes_reply_text(*, total_votes: int, min_votes: int) -> str:
+    votes_word = "голос" if total_votes == 1 else "голоса" if 2 <= total_votes <= 4 else "голосов"
+    return (
+        "Спасибо всем, кто проголосовал.\n\n"
+        f"Сегодня набралось {total_votes} {votes_word}, а для уверенной рекомендации нужно минимум {min_votes}. "
+        "В этот раз без анонса — не хочу выдавать случайный выбор за общий."
+    )
+
+
+async def _resolve_due_polls(
     db: Database,
     bot: Any,
     *,
+    profile_key: str,
+    log_label: str,
     now_utc: datetime | None = None,
 ) -> dict[str, Any]:
-    if not _env_enabled("ENABLE_POLL_TO_FORWARD_DEBUG", False):
-        return {"resolved": 0, "reason": "disabled"}
     if bot is None:
-        logger.warning("poll_to_forward.debug_resolve skipped: missing bot")
+        logger.warning("poll_to_forward.%s_resolve skipped: missing bot", log_label)
         return {"resolved": 0, "reason": "missing_bot"}
     now_value = now_utc or _now_utc()
-    runs = await _load_open_due_runs(db, now_utc=now_value)
+    runs = await _load_open_due_runs(db, now_utc=now_value, profile_key=profile_key)
     resolved = 0
     for run in runs:
         run_id = int(run["id"])
         options = _decode_options(run.get("options_json"))
+        target_chat = str(run.get("poll_chat_id") or _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt"))
         try:
+            target_date = _parse_date(run.get("target_event_date")) or now_value.astimezone(_local_tz()).date()
             poll = await bot.stop_poll(
-                chat_id=run["poll_chat_id"],
+                chat_id=target_chat,
                 message_id=int(run["poll_message_id"]),
             )
             snapshot = _poll_result_snapshot(poll, options)
             total_votes = int(snapshot.get("total_voter_count", 0) or 0)
-            min_votes = min_vote_threshold_for_profile(PROFILE_DEBUG, now_value)
+            min_votes = min_vote_threshold_for_profile(profile_key, target_date)
             if total_votes < min_votes:
+                reply_message_id: int | None = None
+                if profile_key == PROFILE_PROD:
+                    reply = await bot.send_message(
+                        chat_id=target_chat,
+                        text=_low_votes_reply_text(total_votes=total_votes, min_votes=min_votes),
+                        reply_to_message_id=int(run["poll_message_id"]),
+                        disable_web_page_preview=True,
+                    )
+                    reply_message_id = int(getattr(reply, "message_id", 0) or 0) or None
                 await _update_run(
                     db,
                     run_id,
                     status=STATUS_SKIPPED_NO_VOTES,
                     result=snapshot,
+                    reply_message_id=reply_message_id,
                     error={"total_votes": total_votes, "min_votes": min_votes},
                 )
                 logger.info(
-                    "poll_to_forward.debug_resolve skipped low_votes run_id=%s run_key=%s total_votes=%s min_votes=%s",
+                    "poll_to_forward.%s_resolve skipped low_votes run_id=%s run_key=%s profile=%s total_votes=%s min_votes=%s",
+                    log_label,
                     run_id,
                     run.get("run_key"),
+                    profile_key,
                     total_votes,
                     min_votes,
                 )
@@ -1769,17 +1915,17 @@ async def resolve_due_debug_polls(
             if not tied_options:
                 await _update_run(db, run_id, status=STATUS_SKIPPED_NO_CANDIDATE, result=snapshot)
                 logger.info(
-                    "poll_to_forward.debug_resolve skipped no_tied_options run_id=%s run_key=%s total_votes=%s",
+                    "poll_to_forward.%s_resolve skipped no_tied_options run_id=%s run_key=%s profile=%s total_votes=%s",
+                    log_label,
                     run_id,
                     run.get("run_key"),
+                    profile_key,
                     total_votes,
                 )
                 resolved += 1
                 continue
-            target_date = _parse_date(run.get("target_event_date")) or now_value.astimezone(_local_tz()).date()
             feedback_won = len(tied_options) == 1 and _is_feedback_option(tied_options[0])
             if feedback_won:
-                target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
                 reply = await bot.send_message(
                     chat_id=target_chat,
                     text=_feedback_other_reply_text(),
@@ -1803,14 +1949,21 @@ async def resolve_due_debug_polls(
                     error={"reason": "feedback_other_won"},
                 )
                 logger.info(
-                    "poll_to_forward.debug_resolve skipped feedback_other run_id=%s run_key=%s total_votes=%s",
+                    "poll_to_forward.%s_resolve skipped feedback_other run_id=%s run_key=%s profile=%s total_votes=%s",
+                    log_label,
                     run_id,
                     run.get("run_key"),
+                    profile_key,
                     total_votes,
                 )
                 resolved += 1
                 continue
-            events = await load_eligible_events(db, target_date=target_date, now_utc=now_value)
+            events = await load_eligible_events(
+                db,
+                target_date=target_date,
+                profile_key=profile_key,
+                now_utc=now_value,
+            )
             events, popularity_diag = await _apply_popularity_preflight(
                 db,
                 events,
@@ -1844,9 +1997,11 @@ async def resolve_due_debug_polls(
                     },
                 )
                 logger.info(
-                    "poll_to_forward.debug_resolve skipped llm_or_candidate_unavailable run_id=%s run_key=%s reason=%s tied_options=%s eligible_now=%s",
+                    "poll_to_forward.%s_resolve skipped llm_or_candidate_unavailable run_id=%s run_key=%s profile=%s reason=%s tied_options=%s eligible_now=%s",
+                    log_label,
                     run_id,
                     run.get("run_key"),
+                    profile_key,
                     llm_reason,
                     [option.text for option in tied_options],
                     len(events),
@@ -1861,7 +2016,6 @@ async def resolve_due_debug_polls(
                 total_votes=total_votes,
                 target_date=target_date,
             )
-            target_chat = _env_str("POLL_TO_FORWARD_DEBUG_TARGET_CHAT", "@keniggpt")
             source_chat = _env_str("POLL_TO_FORWARD_SOURCE_CHAT", "@kldevents")
             reply = await bot.send_message(
                 chat_id=target_chat,
@@ -1901,9 +2055,12 @@ async def resolve_due_debug_polls(
                 error={"llm_reason": llm_reason, "popularity": popularity_diag},
             )
             logger.info(
-                "poll_to_forward.debug_resolve forwarded run_id=%s run_key=%s winner=%s event_id=%s source_message_id=%s target_forward_id=%s reason=%s",
+                "poll_to_forward.%s_resolve forwarded run_id=%s run_key=%s profile=%s chat=%s winner=%s event_id=%s source_message_id=%s target_forward_id=%s reason=%s",
+                log_label,
                 run_id,
                 run.get("run_key"),
+                profile_key,
+                target_chat,
                 winner_option.text,
                 chosen.id,
                 chosen.tg_event_post_id,
@@ -1912,8 +2069,9 @@ async def resolve_due_debug_polls(
             )
             best_signal = ((chosen.popularity_trace or {}).get("best_signal") or {}) if chosen else {}
             logger.info(
-                "poll_to_forward.selection_trace run_id=%s event_id=%s winner_option=%s popularity=%s",
+                "poll_to_forward.selection_trace run_id=%s profile=%s event_id=%s winner_option=%s popularity=%s",
                 run_id,
+                profile_key,
                 chosen.id,
                 winner_option.key,
                 json.dumps(
@@ -1936,7 +2094,7 @@ async def resolve_due_debug_polls(
             )
             resolved += 1
         except Exception as exc:
-            logger.exception("poll_to_forward: failed to resolve debug run id=%s", run_id)
+            logger.exception("poll_to_forward: failed to resolve %s run id=%s", log_label, run_id)
             await _update_run(
                 db,
                 run_id,
@@ -1944,11 +2102,61 @@ async def resolve_due_debug_polls(
                 error={"error": str(exc) or type(exc).__name__},
             )
             resolved += 1
-    return {"resolved": resolved, "due": len(runs)}
+    return {"resolved": resolved, "due": len(runs), "profile_key": profile_key}
 
+
+async def resolve_due_debug_polls(
+    db: Database,
+    bot: Any,
+    *,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    if not _env_enabled("ENABLE_POLL_TO_FORWARD_DEBUG", False):
+        return {"resolved": 0, "reason": "disabled"}
+    return await _resolve_due_polls(
+        db,
+        bot,
+        profile_key=PROFILE_DEBUG,
+        log_label="debug",
+        now_utc=now_utc,
+    )
+
+
+async def resolve_due_prod_polls(
+    db: Database,
+    bot: Any,
+    *,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    if not _env_enabled("ENABLE_POLL_TO_FORWARD_PROD", False):
+        return {"resolved": 0, "reason": "disabled"}
+    return await _resolve_due_polls(
+        db,
+        bot,
+        profile_key=PROFILE_PROD,
+        log_label="prod",
+        now_utc=now_utc,
+    )
 
 async def run_debug_tick(db: Database, bot: Any, *, now_utc: datetime | None = None) -> dict[str, Any]:
     now_value = now_utc or _now_utc()
     resolved = await resolve_due_debug_polls(db, bot, now_utc=now_value)
     created = await create_debug_poll_if_due(db, bot, now_utc=now_value)
+    return {"resolved": resolved, "created": created}
+
+
+async def run_prod_create_tick(db: Database, bot: Any, *, now_utc: datetime | None = None) -> dict[str, Any]:
+    created = await create_prod_poll_if_due(db, bot, now_utc=now_utc)
+    return {"created": created}
+
+
+async def run_prod_resolve_tick(db: Database, bot: Any, *, now_utc: datetime | None = None) -> dict[str, Any]:
+    resolved = await resolve_due_prod_polls(db, bot, now_utc=now_utc)
+    return {"resolved": resolved}
+
+
+async def run_prod_tick(db: Database, bot: Any, *, now_utc: datetime | None = None) -> dict[str, Any]:
+    now_value = now_utc or _now_utc()
+    resolved = await resolve_due_prod_polls(db, bot, now_utc=now_value)
+    created = await create_prod_poll_if_due(db, bot, now_utc=now_value)
     return {"resolved": resolved, "created": created}

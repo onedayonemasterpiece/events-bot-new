@@ -1,6 +1,6 @@
 # Poll to Repost
 
-> Status: debug mode implemented, production mode still backlog  
+> Status: hybrid debug + production rollout  
 > Source requirements: `docs/backlog/features/poll-to-forward/requirements.md`
 
 ## Product Goal
@@ -20,7 +20,10 @@ Telegram message in `@kldevents`.
 Production:
 
 - publish one poll per day in `@kenigevents`;
-- resolve it at the evening slot, for example `19:30 Europe/Kaliningrad`;
+- default production poll time is `16:00 Europe/Kaliningrad`
+  (`POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL`);
+- default production result time is `19:55 Europe/Kaliningrad`
+  (`POLL_TO_FORWARD_PROD_RESULT_TIME_LOCAL`);
 - require a production-only minimum answer threshold before publishing a
   recommendation: `10` at rollout start, then `+1` every full week from
   `2026-06-12`;
@@ -41,14 +44,20 @@ Debug:
 The public repost must use Telegram `forward_message` so the repost carries the
 source header. `copy_message` is not a normal success path for this product.
 
-Implemented debug entrypoints:
+Implemented entrypoints:
 
 - `poll_to_forward.py`;
 - `db.py` table bootstrap for `poll_repost_run`;
 - `scheduling.py` job `poll_to_forward_debug`, enabled by
-  `ENABLE_POLL_TO_FORWARD_DEBUG=1`;
-- production Fly debug target: poll/repost test surface `@keniggpt`, source
-  forward chat `@kldevents`.
+  `ENABLE_POLL_TO_FORWARD_DEBUG=1`, running at minutes `0,30`;
+- `scheduling.py` jobs `poll_to_forward_prod_create` and
+  `poll_to_forward_prod_resolve`, enabled by `ENABLE_POLL_TO_FORWARD_PROD=1`;
+- production Fly hybrid targets: debug poll/repost surface `@keniggpt`,
+  production surface `@kenigevents`, source forward chat `@kldevents`.
+
+Run identity is profile-scoped: debug uses `debug:YYYY-MM-DDTHH`, production
+uses `prod:YYYY-MM-DD` for the target event date. The resolver reads only runs
+from its own profile, so debug and production cannot consume each other's polls.
 
 ## Eligibility
 
@@ -75,7 +84,7 @@ If the eligible pool is too small, the poll is skipped:
 - after LLM topic generation there must still be enough distinct non-empty
   options, production default `4`, debug default `3`.
 - when a free-events option is possible (at least two `is_free=true` candidates)
-  and the eligible pool has at least six events, the effective minimum becomes
+  and the eligible pool has more than six events, the effective minimum becomes
   `6` options. The free option is an additional axis of choice, not a
   replacement for one of the ordinary themes.
 
@@ -141,7 +150,7 @@ the channel asks subscribers what they want the next recommendation to cover,
 not like a generic promo banner.
 
 When the LLM adds a free-events option, it should not compress the whole poll to
-five choices. With enough eligible events, the expected shape is 6-8 options:
+five choices. With enough eligible events (more than six after popularity filtering), the expected shape is 6-8 options:
 the usual thematic directions plus the extra free axis. Code rejects a
 free-axis plan that comes back under six options, and free-labelled options are
 filtered to `is_free=true` candidate ids only.

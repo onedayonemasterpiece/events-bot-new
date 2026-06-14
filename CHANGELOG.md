@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **Fixed: Poll to Repost production free-axis underfill**: the free-events
+  six-option guard now applies only when popularity filtering leaves more than
+  six candidates, so a small but publishable production inventory is not skipped
+  solely because exactly six events included two free options.
 - **Changed: VK auto-import daytime cadence and queue summary**:
   `VK_AUTO_IMPORT_TIMES_LOCAL` now defaults to
   `06:15,10:15,12:00,15:30,18:30` so pending VK inbox items can be drained
@@ -35,6 +39,11 @@
   deterministic repair cannot turn unknown-location recap text into a venue.
   Tracks
   `INC-2026-06-14-festival-recap-logistics-false-events`.
+- **Changed: Poll to Repost hybrid rollout**: production mode is now schedulable
+  alongside hourly debug mode. Fly enables production polls in `@kenigevents`
+  at `16:00 Europe/Kaliningrad` with results at `19:55`, keeps debug in
+  `@keniggpt`, isolates run profiles, and posts a public low-vote result in
+  production instead of silently skipping the result slot.
 - **Changed: Afisha Engagement CTA rollout targets**: `afishaengagement`
   now supports `tg_chat_author` promo targets, matching Telegram source chat
   URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as

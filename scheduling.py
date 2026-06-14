@@ -197,6 +197,20 @@ async def _run_poll_to_forward_debug_tick(db, bot, run_id: str | None = None) ->
     logging.info("SCHED poll_to_forward_debug run_id=%s result=%s", run_id, result)
 
 
+async def _run_poll_to_forward_prod_create_tick(db, bot, run_id: str | None = None) -> None:
+    from poll_to_forward import create_prod_poll_if_due
+
+    result = await create_prod_poll_if_due(db, bot)
+    logging.info("SCHED poll_to_forward_prod_create run_id=%s result=%s", run_id, result)
+
+
+async def _run_poll_to_forward_prod_resolve_tick(db, bot, run_id: str | None = None) -> None:
+    from poll_to_forward import resolve_due_prod_polls
+
+    result = await resolve_due_prod_polls(db, bot)
+    logging.info("SCHED poll_to_forward_prod_resolve run_id=%s result=%s", run_id, result)
+
+
 async def _run_scheduled_video_tomorrow_test(
     db,
     bot,
@@ -3931,6 +3945,59 @@ def startup(
         )
     else:
         logging.info("SCHED skipping poll_to_forward_debug (ENABLE_POLL_TO_FORWARD_DEBUG!=1)")
+
+    if _env_enabled("ENABLE_POLL_TO_FORWARD_PROD", default=False):
+        poll_tz = os.getenv("POLL_TO_FORWARD_TZ", "Europe/Kaliningrad")
+        create_hour, create_minute = _cron_from_local(
+            os.getenv("POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL", "16:00"),
+            poll_tz,
+            default_hour="14",
+            default_minute="00",
+            label="POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL",
+        )
+        result_hour, result_minute = _cron_from_local(
+            os.getenv("POLL_TO_FORWARD_PROD_RESULT_TIME_LOCAL", "19:55"),
+            poll_tz,
+            default_hour="17",
+            default_minute="55",
+            label="POLL_TO_FORWARD_PROD_RESULT_TIME_LOCAL",
+        )
+        _register_job(
+            "poll_to_forward_prod_create",
+            _job_wrapper(
+                "poll_to_forward_prod_create",
+                _run_poll_to_forward_prod_create_tick,
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id="poll_to_forward_prod_create",
+            hour=create_hour,
+            minute=create_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=900,
+        )
+        _register_job(
+            "poll_to_forward_prod_resolve",
+            _job_wrapper(
+                "poll_to_forward_prod_resolve",
+                _run_poll_to_forward_prod_resolve_tick,
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id="poll_to_forward_prod_resolve",
+            hour=result_hour,
+            minute=result_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=1200,
+        )
+    else:
+        logging.info("SCHED skipping poll_to_forward_prod (ENABLE_POLL_TO_FORWARD_PROD!=1)")
 
     # CherryFlash partner tracks. Intentionally always on:
     # the user asked NOT to gate this behind a feature flag. Times still
