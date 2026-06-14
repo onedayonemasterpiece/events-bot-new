@@ -916,7 +916,7 @@ async def test_schedule_event_update_tasks_enqueues_tg_publish(tmp_path, monkeyp
     monkeypatch.setattr(
         main,
         "next_tg_event_publish_run_at",
-        lambda db_obj: main.asyncio.sleep(0, result=deferred_at),
+        lambda db_obj, **_kwargs: main.asyncio.sleep(0, result=deferred_at),
     )
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
 
@@ -957,7 +957,7 @@ async def test_schedule_event_update_tasks_skips_calendar_dependency_without_tim
     monkeypatch.setattr(
         main,
         "next_tg_event_publish_run_at",
-        lambda db_obj: main.asyncio.sleep(0, result=deferred_at),
+        lambda db_obj, **_kwargs: main.asyncio.sleep(0, result=deferred_at),
     )
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
 
@@ -997,7 +997,7 @@ async def test_schedule_event_update_tasks_skips_calendar_dependency_for_bad_tim
     monkeypatch.setattr(
         main,
         "next_tg_event_publish_run_at",
-        lambda db_obj: main.asyncio.sleep(0, result=deferred_at),
+        lambda db_obj, **_kwargs: main.asyncio.sleep(0, result=deferred_at),
     )
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
 
@@ -1133,6 +1133,48 @@ async def test_next_tg_event_publish_run_at_defers_night_and_spaces_jobs(tmp_pat
 
     second = await main.next_tg_event_publish_run_at(db, now=night_utc)
     assert second == first + main.timedelta(minutes=10)
+
+
+@pytest.mark.asyncio
+async def test_next_tg_event_publish_run_at_spreads_same_source_afisha(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("TG_EVENT_PUBLISH_START_HOUR", "0")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_END_HOUR", "23")
+    monkeypatch.setenv("TG_EVENT_PUBLISH_INTERVAL_MINUTES", "10")
+    monkeypatch.setenv("SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS", "12")
+    original_tz = main.LOCAL_TZ
+    main.LOCAL_TZ = main.timezone.utc
+    try:
+        now = main.datetime(2026, 6, 14, 8, 0, tzinfo=main.timezone.utc)
+        source_url = "https://vk.com/wall-194927034_4698"
+        existing = _event(id=None, source_post_url=source_url)
+        async with db.get_session() as session:
+            session.add(existing)
+            await session.commit()
+            await session.refresh(existing)
+            session.add(
+                main.JobOutbox(
+                    event_id=int(existing.id),
+                    task=main.JobTask.tg_event_publish,
+                    status=main.JobStatus.pending,
+                    updated_at=now,
+                    next_run_at=now,
+                )
+            )
+            await session.commit()
+
+        scheduled = await main.next_tg_event_publish_run_at(
+            db,
+            now=now,
+            source_url=source_url,
+        )
+
+        assert scheduled == now + main.timedelta(hours=12)
+    finally:
+        main.LOCAL_TZ = original_tz
 
 
 @pytest.mark.asyncio

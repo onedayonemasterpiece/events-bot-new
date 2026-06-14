@@ -14315,6 +14315,161 @@ def _tg_event_publish_spacing_horizon() -> timedelta:
     return timedelta(hours=max(1, hours))
 
 
+def _same_source_event_publish_interval() -> timedelta:
+    """Minimum gap between event posts created from the same source post."""
+
+    raw = (
+        os.getenv("SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS")
+        or os.getenv("AFISHA_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS")
+        or "12"
+    )
+    try:
+        hours = float(str(raw).strip())
+    except (TypeError, ValueError):
+        hours = 12.0
+    if hours <= 0:
+        return timedelta(0)
+    return timedelta(hours=hours)
+
+
+def _same_source_event_publish_spacing_horizon() -> timedelta:
+    raw = (
+        os.getenv("SAME_SOURCE_EVENT_PUBLISH_SPACING_HORIZON_HOURS")
+        or os.getenv("AFISHA_SOURCE_EVENT_PUBLISH_SPACING_HORIZON_HOURS")
+        or "168"
+    )
+    try:
+        hours = int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        hours = 168
+    return timedelta(hours=max(1, hours))
+
+
+def _normalize_publish_source_url(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        ids = _vk_owner_and_post_id(raw)  # type: ignore[name-defined]
+    except Exception:
+        ids = None
+    if ids:
+        return f"vk:{ids[0]}_{ids[1]}"
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        path = parsed.path.rstrip("/")
+        return parsed._replace(
+            scheme=parsed.scheme.lower(),
+            netloc=parsed.netloc.lower(),
+            path=path,
+            params="",
+            query="",
+            fragment="",
+        ).geturl()
+    return raw.casefold()
+
+
+def _event_source_url_is_managed_output(url: str | None) -> bool:
+    raw = str(url or "").strip()
+    if not raw:
+        return False
+    try:
+        ids = _vk_owner_and_post_id(raw)  # type: ignore[name-defined]
+    except Exception:
+        ids = None
+    if not ids:
+        return False
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not target_group_id:
+        return False
+    try:
+        return str(abs(int(ids[0]))) == target_group_id
+    except (TypeError, ValueError):
+        return False
+
+
+async def _event_primary_publish_source_url(db: Database | None, ev: Event | None) -> str:
+    """Return the external source-post URL used for same-afisha publish cadence."""
+
+    if not ev:
+        return ""
+    primary = str(getattr(ev, "source_post_url", None) or "").strip()
+    if primary and not _event_source_url_is_managed_output(primary):
+        return primary
+    event_id = getattr(ev, "id", None)
+    if not db or not event_id:
+        return ""
+    try:
+        from models import EventSource
+
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    select(EventSource.source_url)
+                    .where(EventSource.event_id == int(event_id))
+                    .order_by(EventSource.id)
+                    .limit(20)
+                )
+            ).scalars().all()
+        for source_url in rows:
+            source_url = str(source_url or "").strip()
+            if source_url and not _event_source_url_is_managed_output(source_url):
+                return source_url
+    except Exception:
+        logging.warning(
+            "same-source cadence: failed to inspect source URLs event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+    return ""
+
+
+async def _same_publish_source_event_ids(
+    db: Database,
+    source_url: str | None,
+    *,
+    exclude_event_id: int | None = None,
+) -> list[int]:
+    raw_source = str(source_url or "").strip()
+    normalized = _normalize_publish_source_url(raw_source)
+    if not raw_source or not normalized:
+        return []
+    from models import EventSource
+
+    event_ids: set[int] = set()
+    async with db.get_session() as session:
+        direct_rows = (
+            await session.execute(
+                select(Event.id, Event.source_post_url)
+                .where(Event.source_post_url.is_not(None))
+                .where(Event.source_post_url != "")
+                .order_by(Event.id.desc())
+                .limit(500)
+            )
+        ).all()
+        for event_id, candidate_url in direct_rows:
+            if _normalize_publish_source_url(candidate_url) == normalized:
+                event_ids.add(int(event_id))
+        source_rows = (
+            await session.execute(
+                select(EventSource.event_id, EventSource.source_url)
+                .where(EventSource.source_url.is_not(None))
+                .where(EventSource.source_url != "")
+                .order_by(EventSource.id.desc())
+                .limit(1000)
+            )
+        ).all()
+        for event_id, candidate_url in source_rows:
+            if (
+                _normalize_publish_source_url(candidate_url) == normalized
+                and not _event_source_url_is_managed_output(candidate_url)
+            ):
+                event_ids.add(int(event_id))
+    if exclude_event_id is not None:
+        event_ids.discard(int(exclude_event_id))
+    return sorted(event_ids)
+
+
 def _normalize_tg_event_publish_run_at(candidate: datetime) -> datetime:
     start_hour, end_hour = _tg_event_publish_window_hours()
     local = candidate.astimezone(LOCAL_TZ)
@@ -14401,12 +14556,17 @@ async def next_tg_event_publish_run_at(
     db: Database,
     *,
     now: datetime | None = None,
+    source_url: str | None = None,
+    exclude_event_id: int | None = None,
 ) -> datetime:
     now_utc = _ensure_utc(now or datetime.now(timezone.utc))
     candidate = _normalize_tg_event_publish_run_at(now_utc)
     interval = _tg_event_publish_interval()
     spacing_horizon = _tg_event_publish_spacing_horizon()
+    source_interval = _same_source_event_publish_interval()
+    source_spacing_horizon = _same_source_event_publish_spacing_horizon()
     max_spacing_anchor = now_utc + spacing_horizon
+    max_source_anchor = now_utc + source_spacing_horizon
     async with db.get_session() as session:
         rows = (
             await session.execute(
@@ -14416,7 +14576,13 @@ async def next_tg_event_publish_run_at(
                 .limit(200)
             )
         ).all()
+    source_event_ids = (
+        set(await _same_publish_source_event_ids(db, source_url, exclude_event_id=exclude_event_id))
+        if source_url and source_interval > interval
+        else set()
+    )
     anchors: list[datetime] = []
+    source_anchors: list[datetime] = []
     now_local_date = now_utc.astimezone(LOCAL_TZ).date()
     candidate_local = candidate.astimezone(LOCAL_TZ)
     backlog_gap_threshold = _tg_event_publish_backlog_gap_threshold(interval)
@@ -14471,23 +14637,46 @@ async def next_tg_event_publish_run_at(
             )
             continue
         anchors.append(anchor)
+        if _event_id in source_event_ids:
+            if anchor > max_source_anchor:
+                logging.warning(
+                    "TG_EVENT same-source spacing ignoring far-future anchor event_id=%s anchor=%s now=%s horizon=%s source_url=%s",
+                    _event_id,
+                    anchor.isoformat(),
+                    now_utc.isoformat(),
+                    source_spacing_horizon,
+                    source_url,
+                )
+                continue
+            source_anchors.append(anchor)
     anchors.sort()
-    max_iterations = max(1, int(spacing_horizon / interval) + 10)
+    source_anchors.sort()
+    search_horizon = max(spacing_horizon, source_spacing_horizon if source_anchors else spacing_horizon)
+    min_step = min(interval, source_interval) if source_interval > timedelta(0) else interval
+    max_iterations = max(1, int(search_horizon / min_step) + 20)
     for _ in range(max_iterations):
         candidate = _normalize_tg_event_publish_run_at(candidate)
-        conflict: datetime | None = None
+        next_candidate: datetime | None = None
         for anchor in anchors:
             if abs(anchor - candidate) < interval:
-                conflict = anchor
-                break
-        if conflict is None:
+                proposed = anchor + interval
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        for anchor in source_anchors:
+            if abs(anchor - candidate) < source_interval:
+                proposed = anchor + source_interval
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        if next_candidate is None:
             return candidate
-        candidate = conflict + interval
+        candidate = next_candidate
     logging.warning(
-        "TG_EVENT spacing fallback after exhausted search now=%s candidate=%s anchors=%s",
+        "TG_EVENT spacing fallback after exhausted search now=%s candidate=%s anchors=%s source_anchors=%s source_url=%s",
         now_utc.isoformat(),
         candidate.isoformat(),
         len(anchors),
+        len(source_anchors),
+        source_url,
     )
     return _normalize_tg_event_publish_run_at(candidate)
 
@@ -14694,7 +14883,12 @@ async def schedule_event_update_tasks(
             tg_event_deps.append(tg_ics_dep_key)
         if vk_dep:
             tg_event_deps.append(vk_dep)
-        tg_event_next_run_at = await next_tg_event_publish_run_at(db)
+        publish_source_url = await _event_primary_publish_source_url(db, ev)
+        tg_event_next_run_at = await next_tg_event_publish_run_at(
+            db,
+            source_url=publish_source_url,
+            exclude_event_id=eid,
+        )
         results[JobTask.tg_event_publish] = await enqueue_job(
             db,
             eid,

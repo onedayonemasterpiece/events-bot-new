@@ -3339,6 +3339,7 @@ except ValueError:
 
 _vk_postponed_schedule_lock = asyncio.Lock()
 _vk_postponed_reserved_until_by_owner: dict[int, int] = {}
+_vk_postponed_reserved_until_by_source: dict[tuple[int, str], int] = {}
 
 
 def _vk_postponed_zone() -> timezone:
@@ -3375,10 +3376,17 @@ def _vk_postponed_next_slot(
     latest_postponed_ts: int | None = None,
     *,
     postponed_timestamps: list[int] | None = None,
+    source_timestamps: list[int] | None = None,
+    source_interval_seconds: int | None = None,
 ) -> datetime:
     tz = _vk_postponed_zone()
     now_local = now.astimezone(tz)
     interval = max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)
+    source_interval = (
+        max(interval, int(source_interval_seconds or 0))
+        if source_interval_seconds
+        else 0
+    )
     if postponed_timestamps is None:
         candidate = now_local + timedelta(seconds=interval)
         if latest_postponed_ts:
@@ -3392,25 +3400,47 @@ def _vk_postponed_next_slot(
         for ts in postponed_timestamps
         if isinstance(ts, int)
     )
+    source_anchors = sorted(
+        datetime.fromtimestamp(ts, tz)
+        for ts in (source_timestamps or [])
+        if isinstance(ts, int)
+    )
     max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
-    search_horizon = timedelta(seconds=max(max_anchor_ahead, 24 * 3600))
+    source_horizon = _same_source_event_publish_spacing_horizon() if source_anchors else timedelta(0)
+    search_horizon = max(
+        timedelta(seconds=max(max_anchor_ahead, 24 * 3600)),
+        source_horizon,
+    )
     search_until = now_local + search_horizon
-    max_iterations = max(1, int(search_horizon.total_seconds() // interval) + 48)
+    min_step = min(interval, source_interval) if source_interval else interval
+    max_iterations = max(1, int(search_horizon.total_seconds() // min_step) + 48)
     for _ in range(max_iterations):
         candidate = _vk_postponed_normalize_slot(candidate)
-        conflict: datetime | None = None
+        next_candidate: datetime | None = None
         for anchor in anchors:
             if abs(anchor - candidate) < timedelta(seconds=interval):
-                conflict = anchor
-                break
-        if conflict is None:
+                proposed = anchor + timedelta(seconds=interval)
+                if next_candidate is None or proposed > next_candidate:
+                    next_candidate = proposed
+        if source_interval:
+            source_delta = timedelta(seconds=source_interval)
+            for anchor in source_anchors:
+                if abs(anchor - candidate) < source_delta:
+                    proposed = anchor + source_delta
+                    if next_candidate is None or proposed > next_candidate:
+                        next_candidate = proposed
+        if next_candidate is None:
             return candidate
-        candidate = conflict + timedelta(seconds=interval)
+        candidate = next_candidate
         if candidate > search_until:
             break
+    fallback_candidates: list[datetime] = []
     if anchors:
-        latest_dt = max(anchors)
-        candidate = max(candidate, latest_dt + timedelta(seconds=interval))
+        fallback_candidates.append(max(anchors) + timedelta(seconds=interval))
+    if source_anchors and source_interval:
+        fallback_candidates.append(max(source_anchors) + timedelta(seconds=source_interval))
+    if fallback_candidates:
+        candidate = max([candidate, *fallback_candidates])
     return _vk_postponed_normalize_slot(candidate)
 
 
@@ -3436,12 +3466,40 @@ async def _fetch_vk_postponed_anchor_timestamps(
     db: Database | None,
     bot: Bot | None,
 ) -> list[int]:
+    items = await _fetch_vk_postponed_items_for_owner(owner_id, actors, db, bot)
+    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+    dates: list[int] = []
+    max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
+    max_anchor_ts = now_ts + max_anchor_ahead if max_anchor_ahead else None
+    for item in items:
+        if _is_afishaengagement_debug_post(item):
+            continue
+        value = item.get("date") or item.get("publish_date")
+        if isinstance(value, int) and value > now_ts:
+            if max_anchor_ts is not None and value > max_anchor_ts:
+                logging.warning(
+                    "vk.postponed ignoring far-future anchor owner_id=%s post_id=%s date=%s max_ahead_sec=%s",
+                    owner_id,
+                    item.get("id") or item.get("postponed_id"),
+                    value,
+                    max_anchor_ahead,
+                )
+                continue
+            dates.append(value)
+    return sorted(dates)
+
+
+async def _fetch_vk_postponed_items_for_owner(
+    owner_id: int,
+    actors: list[VkActor],
+    db: Database | None,
+    bot: Bot | None,
+) -> list[dict]:
     params = {
         "owner_id": str(owner_id),
         "filter": "postponed",
         "count": 100,
     }
-    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
     lookup_actors = [actor for actor in actors if actor.kind == "user"] + [
         actor for actor in actors if actor.kind != "user"
     ]
@@ -3466,27 +3524,106 @@ async def _fetch_vk_postponed_anchor_timestamps(
                 exc.message,
             )
             continue
-        dates: list[int] = []
-        max_anchor_ahead = max(0, VK_POSTPONED_MAX_ANCHOR_AHEAD_SECONDS)
-        max_anchor_ts = now_ts + max_anchor_ahead if max_anchor_ahead else None
-        for item in _vk_postponed_items(response):
-            if _is_afishaengagement_debug_post(item):
-                continue
-            value = item.get("date") or item.get("publish_date")
-            if isinstance(value, int) and value > now_ts:
-                if max_anchor_ts is not None and value > max_anchor_ts:
-                    logging.warning(
-                        "vk.postponed ignoring far-future anchor owner_id=%s actor=%s post_id=%s date=%s max_ahead_sec=%s",
-                        owner_id,
-                        actor.label,
-                        item.get("id") or item.get("postponed_id"),
-                        value,
-                        max_anchor_ahead,
-                    )
-                    continue
-                dates.append(value)
-        return sorted(dates)
+        return _vk_postponed_items(response)
     return []
+
+
+async def _fetch_same_source_vk_publish_timestamps(
+    *,
+    db: Database | None,
+    owner_id: int,
+    actors: list[VkActor],
+    bot: Bot | None,
+    source_url: str | None,
+    exclude_event_id: int | None = None,
+) -> list[int]:
+    if not db or not source_url:
+        return []
+    try:
+        source_event_ids = await _same_publish_source_event_ids(
+            db,
+            source_url,
+            exclude_event_id=exclude_event_id,
+        )
+    except Exception:
+        logging.warning(
+            "vk.postponed same-source lookup failed source_url=%s",
+            source_url,
+            exc_info=True,
+        )
+        return []
+    if not source_event_ids:
+        return []
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(Event.id, Event.source_vk_post_url)
+                .where(Event.id.in_(source_event_ids))
+                .where(Event.source_vk_post_url.is_not(None))
+                .where(Event.source_vk_post_url != "")
+            )
+        ).all()
+    target_posts: dict[int, int] = {}
+    for event_id, post_url in rows:
+        ids = _vk_owner_and_post_id(str(post_url or ""))
+        if not ids:
+            continue
+        try:
+            post_owner_id = int(ids[0])
+            post_id = int(ids[1])
+        except (TypeError, ValueError):
+            continue
+        if post_owner_id != owner_id:
+            continue
+        target_posts[post_id] = int(event_id)
+    if not target_posts:
+        return []
+
+    now_ts = int(datetime.now(_vk_postponed_zone()).timestamp())
+    source_horizon = _same_source_event_publish_spacing_horizon()
+    max_source_ts = now_ts + int(source_horizon.total_seconds())
+    timestamps: list[int] = []
+
+    try:
+        postponed_items = await _fetch_vk_postponed_items_for_owner(owner_id, actors, db, bot)
+    except Exception:
+        postponed_items = []
+    matched_postponed_ids: set[int] = set()
+    for item in postponed_items:
+        try:
+            item_id = int(item.get("id") or 0)
+            postponed_id = int(item.get("postponed_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        matched_id = item_id if item_id in target_posts else postponed_id
+        if matched_id not in target_posts:
+            continue
+        value = item.get("date") or item.get("publish_date")
+        if isinstance(value, int) and value > now_ts and value <= max_source_ts:
+            timestamps.append(value)
+            matched_postponed_ids.add(matched_id)
+
+    missing_ids = [post_id for post_id in target_posts if post_id not in matched_postponed_ids]
+    if missing_ids:
+        posts = ",".join(f"{owner_id}_{post_id}" for post_id in missing_ids[:100])
+        try:
+            response = await vk_api("wall.getById", posts=posts)
+            for item in _vk_wall_get_by_id_items(response):
+                try:
+                    item_id = int(item.get("id") or 0)
+                    value = int(item.get("date") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if item_id in target_posts and value > 0 and value <= max_source_ts:
+                    timestamps.append(value)
+        except Exception:
+            logging.info(
+                "vk.postponed same-source wall.getById probe failed owner_id=%s source_url=%s",
+                owner_id,
+                source_url,
+                exc_info=True,
+            )
+    return sorted(set(timestamps))
 
 
 async def _fetch_vk_latest_postponed_ts(
@@ -3506,6 +3643,8 @@ async def _reserve_vk_postponed_publish_date(
     bot: Bot | None,
     *,
     now: datetime | None = None,
+    source_url: str | None = None,
+    event_id: int | None = None,
 ) -> int | None:
     if not VK_POSTPONED_ENABLED:
         return None
@@ -3519,18 +3658,39 @@ async def _reserve_vk_postponed_publish_date(
         reserved_ts = _vk_postponed_reserved_until_by_owner.get(owner_id)
         if reserved_ts and reserved_ts > now_ts:
             postponed_timestamps.append(reserved_ts)
+        source_timestamps: list[int] = []
+        source_interval = _same_source_event_publish_interval()
+        source_key = _normalize_publish_source_url(source_url)
+        if source_key and source_interval > timedelta(seconds=max(60, VK_POSTPONED_MIN_INTERVAL_SECONDS)):
+            source_timestamps = await _fetch_same_source_vk_publish_timestamps(
+                db=db,
+                owner_id=owner_id,
+                actors=actors,
+                bot=bot,
+                source_url=source_url,
+                exclude_event_id=event_id,
+            )
+            reserved_source_ts = _vk_postponed_reserved_until_by_source.get((owner_id, source_key))
+            if reserved_source_ts and reserved_source_ts > now_ts:
+                source_timestamps.append(reserved_source_ts)
         publish_dt = _vk_postponed_next_slot(
             now_local,
             postponed_timestamps=postponed_timestamps,
+            source_timestamps=source_timestamps,
+            source_interval_seconds=int(source_interval.total_seconds()) if source_timestamps else None,
         )
         publish_ts = int(publish_dt.timestamp())
         _vk_postponed_reserved_until_by_owner[owner_id] = publish_ts
+        if source_key:
+            _vk_postponed_reserved_until_by_source[(owner_id, source_key)] = publish_ts
         logging.info(
-            "vk.postponed reserved owner_id=%s publish_date=%s local=%s anchors=%s",
+            "vk.postponed reserved owner_id=%s publish_date=%s local=%s anchors=%s source_anchors=%s source_url=%s",
             owner_id,
             publish_ts,
             publish_dt.isoformat(),
             len(postponed_timestamps),
+            len(source_timestamps),
+            source_url,
         )
         return publish_ts
 
@@ -3684,6 +3844,8 @@ async def post_to_vk(
     vk_coauthor_url: str | None = None,
     vk_coauthor_screen_name: str | None = None,
     publish_date: int | None = None,
+    source_publish_url: str | None = None,
+    source_event_id: int | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -3743,7 +3905,14 @@ async def post_to_vk(
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
     if publish_date is None:
-        publish_date = await _reserve_vk_postponed_publish_date(owner_id, actors, db, bot)
+        publish_date = await _reserve_vk_postponed_publish_date(
+            owner_id,
+            actors,
+            db,
+            bot,
+            source_url=source_publish_url,
+            event_id=source_event_id,
+        )
     if publish_date:
         params_base["publish_date"] = publish_date
     for idx, actor in enumerate(actors, start=1):
@@ -5318,6 +5487,7 @@ async def sync_vk_source_post(
         return None
     logging.info("sync_vk_source_post start for event %s", event.id)
     festival = await _resolve_event_festival(db, event)
+    publish_source_url = await _event_primary_publish_source_url(db, event)
 
     existing_vk_post_url = (event.source_vk_post_url or "").strip()
     if existing_vk_post_url:
@@ -5364,6 +5534,8 @@ async def sync_vk_source_post(
                 existing_vk_post_url=existing_url,
                 public_only=public_only,
                 shadow_only=shadow_only,
+                source_publish_url=publish_source_url,
+                source_event_id=int(event.id) if event.id is not None else None,
             )
         except Exception:
             logging.exception(
@@ -5609,6 +5781,8 @@ async def sync_vk_source_post(
                 attachments,
                 vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
                 vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
+                source_publish_url=publish_source_url,
+                source_event_id=int(event.id) if event.id is not None else None,
             )
         if url:
             logging.info("sync_vk_source_post created %s", url)

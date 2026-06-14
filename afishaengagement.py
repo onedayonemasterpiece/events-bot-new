@@ -4940,6 +4940,8 @@ async def maybe_publish_shadow_debug_copy(
     public_only: bool = False,
     shadow_only: bool = False,
     now_utc: datetime | None = None,
+    source_publish_url: str | None = None,
+    source_event_id: int | None = None,
 ) -> str | None:
     started = time.monotonic()
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -5379,6 +5381,8 @@ async def maybe_publish_shadow_debug_copy(
                         generated_attachments,
                         carousel=True,
                         publish_date=scheduled_ts,
+                        source_publish_url=source_publish_url,
+                        source_event_id=source_event_id,
                     )
                     last_publish_exc = None
                     break

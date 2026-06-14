@@ -516,6 +516,49 @@ async def test_post_to_vk_sends_coauthor_params_and_retries_without_rejected_par
 
 
 @pytest.mark.asyncio
+async def test_vk_postponed_reservation_spreads_same_source_afisha(monkeypatch):
+    monkeypatch.setattr(main, "VK_POSTPONED_ENABLED", True)
+    monkeypatch.setattr(main, "VK_POSTPONED_TZ", "UTC")
+    monkeypatch.setattr(main, "VK_POSTPONED_START_HOUR", 0)
+    monkeypatch.setattr(main, "VK_POSTPONED_MIN_INTERVAL_SECONDS", 600)
+    monkeypatch.setenv("SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS", "12")
+    main._vk_postponed_reserved_until_by_owner.clear()
+    main._vk_postponed_reserved_until_by_source.clear()
+
+    async def fake_fetch_anchors(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(main, "_fetch_vk_postponed_anchor_timestamps", fake_fetch_anchors)
+    actors = [main.VkActor("group", "token", "group:test")]
+    now = main.datetime(2026, 6, 14, 8, 0, tzinfo=main.timezone.utc)
+    source_url = "https://vk.com/wall-194927034_4698"
+
+    first = await main._reserve_vk_postponed_publish_date(
+        -231920894,
+        actors,
+        None,
+        None,
+        now=now,
+        source_url=source_url,
+        event_id=1,
+    )
+    second = await main._reserve_vk_postponed_publish_date(
+        -231920894,
+        actors,
+        None,
+        None,
+        now=now,
+        source_url=source_url,
+        event_id=2,
+    )
+
+    assert first == int((now + main.timedelta(minutes=10)).timestamp())
+    assert second == first + 12 * 3600
+    main._vk_postponed_reserved_until_by_owner.clear()
+    main._vk_postponed_reserved_until_by_source.clear()
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_captcha_pauses_before_text_only_post(monkeypatch):
     main.VK_AFISHA_GROUP_ID = "1"
     main.VK_PHOTOS_ENABLED = True
@@ -1456,7 +1499,7 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
 
     calls = []
 
-    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None, **kwargs):
         calls.append((ev.title, text_for_vk))
         return "https://vk.com/wall-1_1"
 
@@ -1506,7 +1549,7 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
 
     calls = []
 
-    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None, **kwargs):
         calls.append((ev.source_vk_post_url, text_for_vk))
         return "https://vk.com/wall-231920894_2389"
 
@@ -1550,7 +1593,7 @@ async def test_job_sync_vk_source_post_skips_past_event(tmp_path, monkeypatch):
 
     calls = []
 
-    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None):
+    async def fake_sync_vk_source_post(ev, text_for_vk, db_arg, bot, ics_url=None, **kwargs):
         calls.append((ev.id, text_for_vk))
         return "https://vk.com/wall-1_1"
 
