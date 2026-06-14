@@ -177,6 +177,41 @@ async def test_tg_build_candidate_drops_reaction_text_location_without_default()
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_drops_temporal_location_without_default_repair():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Барн, Каштановая аллея 1а, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "barn_kaliningrad",
+        "message_id": 1058,
+        "source_link": "https://t.me/barn_kaliningrad/1058",
+        "text": (
+            "Завтра, 14 июня, в 12:00 в рамках ОП!ФЕСТА "
+            "состоится экспериментальный пленэр."
+        ),
+    }
+    event_data = {
+        "title": "Экспериментальный пленэр",
+        "date": "2026-06-14",
+        "time": "12:00",
+        "location_name": "Завтра",
+        "location_address": "Каштановая аллея 1а",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name is None
+    assert cand.location_address is None
+    assert cand.city == "Калининград"
+    assert cand.metrics["tg_location_temporal_rejected"] is True
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_does_not_infer_city_thanks_as_location():
     from source_parsing.telegram.handlers import _build_candidate
 

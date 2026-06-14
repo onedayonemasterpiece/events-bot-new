@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-14-morning-import-quality-and-outbox-stale.md`
+  - Scope: Telegram Monitoring location/city handoff, Smart Update unsupported-location guard, event `JobOutbox` stale handling, managed VK/TG fanout reconciliation, and Afisha Engagement CTA/plain public rollout evidence.
+  - Must not regress: temporal/date words such as `Завтра`, `Сегодня`, or `14 июня` must not persist as `location_name`; inflected settlement city strings such as `посёлке Железнодорожный` must route to LLM venue-review rather than regex replacement; event-pipeline `running` jobs must retry with bounded backoff after stale runtime expiry instead of becoming 10-year dependency blockers; CTA/plain VK publication remains a single production-path decision.
 - `INC-2026-06-14-afishaengagement-shadow-fallback-regression`
   - Scope: Afisha Engagement public CTA/plain selection at the VK publication
     boundary, legacy debug-shadow activity enablement, and VK postponed cleanup.

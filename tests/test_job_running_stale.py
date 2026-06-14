@@ -112,3 +112,43 @@ async def test_running_telegraph_build_with_result_is_marked_done(tmp_path):
     assert job.status == JobStatus.done
     assert job.last_error is None
     assert job.last_result == "https://telegra.ph/event-ready"
+
+
+@pytest.mark.asyncio
+async def test_running_vk_sync_stale_retries_instead_of_terminal_dependency_block(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    started_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    async with db.get_session() as session:
+        ev = Event(
+            title="VK pipeline event",
+            description="d",
+            date="2026-06-14",
+            time="12:00",
+            location_name="x",
+            source_text="s",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.vk_sync,
+                status=JobStatus.running,
+                updated_at=started_at,
+                next_run_at=started_at,
+            )
+        )
+        await session.commit()
+
+    before = datetime.now(timezone.utc)
+    await main._run_due_jobs_once(db, bot=None)
+
+    async with db.get_session() as session:
+        job = (await session.execute(select(JobOutbox))).scalar_one()
+
+    assert job.status == JobStatus.error
+    assert job.last_error == "stale"
+    assert job.attempts == 1
+    assert before < job.next_run_at < before + timedelta(minutes=2)

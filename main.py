@@ -16648,10 +16648,21 @@ async def _run_due_jobs_once_locked(
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
+                retry_event_pipeline = (
+                    rjob.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                    and rjob.event_id is not None
+                )
                 rjob.status = JobStatus.error
                 rjob.last_error = "stale"
                 rjob.updated_at = now
-                rjob.next_run_at = now + timedelta(days=3650)
+                if retry_event_pipeline:
+                    rjob.attempts += 1
+                    delay = BACKOFF_SCHEDULE[
+                        min(rjob.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
+                    ]
+                    rjob.next_run_at = now + timedelta(seconds=delay)
+                else:
+                    rjob.next_run_at = now + timedelta(days=3650)
                 session.add(rjob)
                 stale.append(
                     rjob.coalesce_key or f"{rjob.task.value}:{rjob.event_id}"

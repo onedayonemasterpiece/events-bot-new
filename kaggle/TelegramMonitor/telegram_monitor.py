@@ -1315,6 +1315,7 @@ EVENT_ARRAY_SCHEMA = {
                 'Venue name where the event takes place; empty string if unknown. '
                 'Must be a venue/place name, not a nearby content fragment. Never copy descriptive prose, '
                 'speaker biographies, schedule commentary, film metadata, ticket instructions, or narrative sentences. '
+                'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name. '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
                 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
@@ -1328,6 +1329,8 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'city': _string_schema(
                 'City of the venue where attendees physically go; empty string if not grounded in the text/OCR. '
+                'Return the place name itself in nominative form; do not include prepositions or locality words like '
+                '"в посёлке", "посёлке", "городе", "селе", or "деревне". '
                 'Never copy a city that appears only as (a) a parenthetical origin/collection note, or '
                 '(b) a biographical/affiliation mention of a speaker/author/curator/institution '
                 '(e.g. "лектор — X, сотрудник Российской национальной библиотеки" does not put the event in '
@@ -1433,7 +1436,10 @@ LOCATION_REVIEW_SCHEMA = {
                 'Never descriptive prose, schedule commentary, a service heading, a ticket instruction, or film metadata.'
             ),
             'location_address': _string_schema('Corrected venue street address, or empty string if not grounded.'),
-            'city': _string_schema('Corrected venue city, or empty string if not grounded.'),
+            'city': _string_schema(
+                'Corrected venue city, or empty string if not grounded. Use the place name itself, '
+                'not an inflected phrase like "посёлке Железнодорожный".'
+            ),
         },
         'required': ['location_name', 'location_address', 'city'],
     },
@@ -2225,6 +2231,18 @@ _LOCATION_REVIEW_DATE_RE = re.compile(
     r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_TEMPORAL_LOCATION_RE = re.compile(
+    r"^\s*(?:"
+    r"сегодня|завтра|послезавтра|вчера|"
+    r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\s*[.!?]?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE = re.compile(
+    r"^\s*(?:в\s+)?(?:городе|пос[её]лке|селе|деревне|пгт|микрорайоне|мкр\.?)\s+\S+",
+    re.IGNORECASE | re.UNICODE,
+)
 _LOCATION_REVIEW_ADDRESS_HINT_RE = re.compile(
     r"\b(?:ул\.?|улица|проспект|пр-т|пер\.?|переулок|площадь|пл\.?|наб\.?|набережная|"
     r"шоссе|бульвар|аллея|проезд|д\.|дом)\b",
@@ -2513,6 +2531,9 @@ def _needs_llm_location_review(
         if not isinstance(ev, dict):
             continue
         raw = str(ev.get('location_name') or '').strip()
+        city_raw = str(ev.get('city') or '').strip()
+        if city_raw and _LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE.search(city_raw):
+            return True
         if not raw:
             if evidence_text and _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text):
                 return True
@@ -2528,6 +2549,8 @@ def _needs_llm_location_review(
         if compact.endswith(":") and len(words) <= 4:
             return True
         if _LOCATION_REVIEW_TIME_RANGE_RE.search(compact):
+            return True
+        if _LOCATION_REVIEW_TEMPORAL_LOCATION_RE.fullmatch(compact):
             return True
         if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
             return True
@@ -2574,6 +2597,8 @@ async def _repair_suspicious_locations(
         'Use the original message text, OCR, source title, source username, and source default location as evidence. '
         'location_name must be a real venue/place name where attendees go. '
         'A curator/speaker/artist/person name such as "ТАТЬЯНА БОРИСОВА" is not a venue unless the source explicitly says the place is named that way. '
+        'A temporal/date fragment such as "Завтра", "Сегодня", "в пятницу", or "14 июня" is not a venue. '
+        'city must be the place name itself, not an inflected phrase: output "Железнодорожный", not "посёлке Железнодорожный". '
         'If current venue fields are not grounded in the source text/OCR/source context, replace them with the '
         'grounded venue from the source or return empty strings. Do not preserve a plausible but ungrounded venue. '
         'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '

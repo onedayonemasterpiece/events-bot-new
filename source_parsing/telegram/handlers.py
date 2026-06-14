@@ -2828,6 +2828,22 @@ def _infer_location_from_poster_payloads(payload: list[dict[str, Any]] | None) -
     return None, None
 
 
+_LOCATION_TEMPORAL_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*(?:"
+    r"сегодня|завтра|послезавтра|вчера|"
+    r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\s*[.!?]?\s*$"
+)
+
+
+def _looks_like_location_temporal_fragment(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    return bool(_LOCATION_TEMPORAL_FRAGMENT_RE.fullmatch(raw))
+
+
 def _looks_like_location_prose_fragment(value: str | None) -> bool:
     raw = str(value or "").strip()
     if not raw:
@@ -2836,6 +2852,8 @@ def _looks_like_location_prose_fragment(value: str | None) -> bool:
         return True
     compact = re.sub(r"\s+", " ", raw)
     words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
+    if _looks_like_location_temporal_fragment(compact):
+        return True
     if _LOCATION_LABEL_FRAGMENT_RE.match(compact):
         return True
     if _LOCATION_SCHEDULE_FRAGMENT_RE.search(compact):
@@ -3784,6 +3802,7 @@ def _build_candidate(
         city=str(extracted_city or "").strip() or None,
     )
     location_address_was_prose = False
+    location_had_temporal_fragment = False
     if location_address and _looks_like_location_prose_fragment(location_address):
         logger.warning(
             "telegram: dropped prose-like extracted location_address source=%s message_id=%s title=%r address=%r",
@@ -3795,6 +3814,19 @@ def _build_candidate(
         location_address = None
         extracted_location_address = None
         location_address_was_prose = True
+    if location_name and _looks_like_location_temporal_fragment(location_name):
+        logger.warning(
+            "telegram: dropped temporal extracted location source=%s message_id=%s title=%r location=%r",
+            username,
+            message_id,
+            title,
+            location_name,
+        )
+        location_name = None
+        location_address = None
+        extracted_location = None
+        extracted_location_address = None
+        location_had_temporal_fragment = True
     if location_name and (
         _looks_like_location_prose_fragment(location_name)
         or _looks_like_location_person_name_fragment(location_name)
@@ -3890,7 +3922,7 @@ def _build_candidate(
             location_address = None
             location_from_source_default = False
 
-    if not location_name:
+    if not location_name and not location_had_temporal_fragment:
         fallback_loc = inferred_loc or poster_loc or known_loc
         fallback_addr = inferred_addr or poster_addr or known_addr
         if fallback_loc and _event_local_location_candidate_ok(fallback_loc, fallback_addr):
@@ -4428,6 +4460,7 @@ def _build_candidate(
             else None,
             "tg_location_overridden_by_default": bool(location_overridden_by_default),
             "tg_location_kept_extracted": kept_explicit_location,
+            "tg_location_temporal_rejected": bool(location_had_temporal_fragment),
             "tg_city_overridden_by_default": bool(city_overridden_by_default),
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
             "tg_time_is_default": bool(time_is_default),

@@ -309,6 +309,42 @@ async def test_smart_update_rejects_unmatched_prose_location_candidate(
 
 
 @pytest.mark.asyncio
+async def test_smart_update_rejects_temporal_location_candidate(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/barn_kaliningrad/1058",
+            source_text=(
+                "Завтра, 14 июня, в 12:00 в рамках ОП!ФЕСТА "
+                "состоится экспериментальный пленэр."
+            ),
+            title="Экспериментальный пленэр",
+            date="2026-06-14",
+            time="12:00",
+            location_name="Завтра",
+            location_address="Каштановая аллея 1а",
+            city="Калининград",
+            event_type="выставка",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "invalid"
+        assert result.reason == "prose_location"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_smart_update_rejects_reaction_text_location_candidate(
     tmp_path,
     monkeypatch,

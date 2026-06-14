@@ -5607,6 +5607,13 @@ _LOCATION_VALUE_PROSE_VERB_RE = re.compile(
     r"пройд[её]т|состоится|будут|можно|созда\w*|жд\w*"
     r")\b"
 )
+_LOCATION_VALUE_TEMPORAL_RE = re.compile(
+    r"(?iu)^\s*(?:"
+    r"сегодня|завтра|послезавтра|вчера|"
+    r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
+    r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+    r")\s*[.!?]?\s*$"
+)
 
 
 def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
@@ -5616,6 +5623,8 @@ def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
     compact = re.sub(r"\s+", " ", raw)
     words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
     if "\n" in raw:
+        return True
+    if _LOCATION_VALUE_TEMPORAL_RE.fullmatch(compact):
         return True
     if len(compact) > 90:
         return True

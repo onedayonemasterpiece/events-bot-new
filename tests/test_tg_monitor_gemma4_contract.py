@@ -120,6 +120,7 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Prefer filling location_name and location_address" in source
     assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
+    assert 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name' in source
     assert "never copy a descriptive sentence" in source
     assert "each event must use venue/address/city facts" in source
     assert "the event-local venue wins" in source
@@ -189,6 +190,9 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "single-event rescue failed" in source
     assert "A curator/speaker/artist/person name" in source
     assert "_location_review_looks_like_person_name" in source
+    assert "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE" in source
+    assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
+    assert "city must be the place name itself, not an inflected phrase" in source
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:
@@ -485,6 +489,87 @@ def _load_sanitizer_in_isolation():
     if "_sanitize_extracted_events" not in namespace:
         pytest.fail("safety-net helper _sanitize_extracted_events missing from source")
     return namespace
+
+
+def _load_location_review_helpers_in_isolation():
+    import ast
+
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    wanted = {
+        "_LOCATION_REVIEW_TIME_RANGE_RE",
+        "_LOCATION_REVIEW_DATE_RE",
+        "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE",
+        "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE",
+        "_LOCATION_REVIEW_ADDRESS_HINT_RE",
+        "_LOCATION_REVIEW_VENUE_CUE_RE",
+        "_LOCATION_REVIEW_GENERIC_ROOM_RE",
+        "_location_review_looks_like_person_name",
+        "_location_review_norm",
+        "_location_review_value_grounded",
+        "_event_needs_location_grounding_review",
+        "_needs_llm_location_review",
+    }
+    extracted: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if targets & wanted:
+                extracted.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in wanted:
+            extracted.append(node)
+    namespace: dict = {"re": re}
+    exec(
+        compile(ast.Module(body=extracted, type_ignores=[]), filename="<location-review>", mode="exec"),
+        namespace,
+    )
+    if "_needs_llm_location_review" not in namespace:
+        pytest.fail("location-review helper _needs_llm_location_review missing from source")
+    return namespace
+
+
+def test_tg_monitor_location_review_triggers_on_temporal_location_name() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Экспериментальный пленэр",
+                "date": "2026-06-14",
+                "time": "12:00",
+                "location_name": "Завтра",
+                "location_address": "Каштановая аллея 1а",
+                "city": "Калининград",
+            }
+        ],
+        source_default_location="Барн, Каштановая аллея 1а, Калининград",
+        message_text="Завтра, 14 июня, в 12:00 в рамках ОП!ФЕСТА состоится экспериментальный пленэр.",
+        ocr_text="",
+        source_context_line="source_username=barn_kaliningrad",
+    )
+
+
+def test_tg_monitor_location_review_triggers_on_inflected_city_phrase() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Концерт VI Международного фестиваля классической музыки",
+                "date": "2026-06-14",
+                "time": "",
+                "location_name": "Кирха Гердауэн",
+                "location_address": "Первомайская 1",
+                "city": "посёлке Железнодорожный",
+            }
+        ],
+        source_default_location=None,
+        message_text="14 июня в кирхе Гердауэн в посёлке Железнодорожный пройдёт концерт.",
+        ocr_text="",
+        source_context_line="source_username=festdir",
+    )
 
 
 def test_tg_monitor_sanitizer_drops_gemma4_ghost_rows_and_strips_leaks() -> None:
