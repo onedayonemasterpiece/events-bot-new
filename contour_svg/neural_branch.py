@@ -660,6 +660,7 @@ def _line_art_metrics(image) -> dict[str, float]:
 def _line_only_gate(raw_image, line_mask, metrics: dict[str, float], artifact_dir: Path) -> dict[str, Any]:
     saturation = _saturation_score(raw_image)
     foliage_overlap = _foliage_overlap(line_mask, artifact_dir)
+    object_line_overlap, background_line_overlap = _object_background_overlap(line_mask, artifact_dir)
     density = float(metrics["line_density"])
     reasons: list[str] = []
     if saturation > 0.10:
@@ -670,9 +671,13 @@ def _line_only_gate(raw_image, line_mask, metrics: dict[str, float], artifact_di
         reasons.append(f"line_density_too_high:{density:.3f}")
     if foliage_overlap > 0.25:
         reasons.append(f"foliage_traced_as_line:{foliage_overlap:.3f}")
+    if background_line_overlap > 0.55 and object_line_overlap < 0.50:
+        reasons.append(f"background_line_leak:{background_line_overlap:.3f}")
     return {
         "raw_saturation_score": round(saturation, 4),
         "foliage_line_overlap": round(foliage_overlap, 4),
+        "object_line_overlap": round(object_line_overlap, 4),
+        "background_line_overlap": round(background_line_overlap, 4),
         "line_only_gate_passed": not reasons,
         "rejection_reason": ";".join(reasons) if reasons else None,
     }
@@ -704,6 +709,27 @@ def _foliage_overlap(line_mask, artifact_dir: Path) -> float:
             if m > 24:
                 overlap += 1
     return overlap / max(1, line_pixels)
+
+
+def _object_background_overlap(line_mask, artifact_dir: Path) -> tuple[float, float]:
+    path = artifact_dir / "mask_object_visible.png"
+    if not path.exists():
+        return 1.0, 0.0
+    Image = require_module("PIL.Image", "Pillow")
+    mask = Image.open(path).convert("L").resize(line_mask.size)
+    line = line_mask.convert("L")
+    line_pixels = 0
+    object_overlap = 0
+    background_overlap = 0
+    for p, m in zip(line.getdata(), mask.getdata()):
+        if p < 128:
+            line_pixels += 1
+            if m > 24:
+                object_overlap += 1
+            else:
+                background_overlap += 1
+    denominator = max(1, line_pixels)
+    return object_overlap / denominator, background_overlap / denominator
 
 
 def _select_best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:

@@ -151,11 +151,13 @@ def run_line_art_experiment_batch(config: LineArtExperimentConfig, *, progress: 
         report = _run_single_image(config, source, image_dir, guide_bank, progress=progress, source_index=index)
         all_reports.append(report)
 
+    gallery = _write_result_gallery(config.out_dir, all_reports)
     batch_report = {
         "status": "ok",
         "workflow": "guide_only_multi_mask_controlnet_line_art_v0_2",
         "source_photo_used_as_init": False,
         "sources": all_reports,
+        "result_gallery": gallery,
         "output_dir": str(config.out_dir),
     }
     reports_dir = config.out_dir / "reports"
@@ -163,6 +165,52 @@ def run_line_art_experiment_batch(config: LineArtExperimentConfig, *, progress: 
     (reports_dir / "line_art_batch_report.json").write_text(json.dumps(batch_report, ensure_ascii=False, indent=2), encoding="utf-8")
     (reports_dir / "line_art_batch_report.md").write_text(_batch_markdown(batch_report), encoding="utf-8")
     return batch_report
+
+
+def _write_result_gallery(out_dir: Path, reports: list[dict[str, Any]]) -> dict[str, str]:
+    Image = require_module("PIL.Image", "Pillow")
+    ImageDraw = require_module("PIL.ImageDraw", "Pillow")
+
+    gallery_dir = out_dir / "000_result_gallery"
+    gallery_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[tuple[str, Path, Path, Path | None]] = []
+    for report in reports:
+        image_dir = Path(str(report["output_dir"]))
+        stem = _safe_stem(Path(str(report["source_image"])))
+        edge = image_dir / "edge_mask.png"
+        result = image_dir / "result.png"
+        preview = image_dir / "result_burgundy_preview.png"
+        if edge.exists():
+            shutil.copy2(edge, gallery_dir / f"{stem}_edge_mask.png")
+        if result.exists():
+            shutil.copy2(result, gallery_dir / f"{stem}_result.png")
+        if preview.exists():
+            shutil.copy2(preview, gallery_dir / f"{stem}_burgundy_preview.png")
+        rows.append((stem, edge, result, preview if preview.exists() else None))
+
+    thumb = (260, 260)
+    label_h = 34
+    cols = [("edge_mask", 1), ("result", 2), ("preview", 3)]
+    sheet = Image.new("RGB", (len(cols) * thumb[0], len(rows) * (thumb[1] + label_h) + label_h), (245, 247, 250))
+    draw = ImageDraw.Draw(sheet)
+    for col, (label, _) in enumerate(cols):
+        draw.text((col * thumb[0] + 8, 8), label, fill=(20, 24, 32))
+    for row, item in enumerate(rows):
+        name = item[0]
+        y = label_h + row * (thumb[1] + label_h)
+        draw.text((8, y + thumb[1] + 6), name[:42], fill=(20, 24, 32))
+        for col, (_, idx) in enumerate(cols):
+            path = item[idx]
+            x = col * thumb[0]
+            if path is None or not path.exists():
+                draw.text((x + 8, y + 8), "missing", fill=(180, 40, 40))
+                continue
+            img = Image.open(path).convert("RGB")
+            img.thumbnail((thumb[0] - 12, thumb[1] - 12))
+            sheet.paste(img, (x + (thumb[0] - img.width) // 2, y + (thumb[1] - img.height) // 2))
+    overview_path = gallery_dir / "line_art_results_overview.png"
+    sheet.save(overview_path)
+    return {"dir": str(gallery_dir), "overview": str(overview_path)}
 
 
 def _run_single_image(
