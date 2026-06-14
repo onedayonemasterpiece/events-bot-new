@@ -35,6 +35,11 @@
   deterministic repair cannot turn unknown-location recap text into a venue.
   Tracks
   `INC-2026-06-14-festival-recap-logistics-false-events`.
+- **Changed: Poll to Repost hybrid rollout**: production mode is now schedulable
+  alongside hourly debug mode. Fly enables production polls in `@kenigevents`
+  at `16:00 Europe/Kaliningrad` with results at `19:55`, keeps debug in
+  `@keniggpt`, isolates run profiles, and posts a public low-vote result in
+  production instead of silently skipping the result slot.
 - **Changed: Afisha Engagement CTA rollout targets**: `afishaengagement`
   now supports `tg_chat_author` promo targets, matching Telegram source chat
   URLs plus `Event.tg_source_author`, so author-scoped promo campaigns such as

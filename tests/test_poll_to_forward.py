@@ -650,6 +650,7 @@ async def test_debug_due_loader_tolerates_scheduler_milliseconds(tmp_path):
     runs = await pf._load_open_due_runs(
         db,
         now_utc=datetime(2026, 6, 12, 8, 30, 0, tzinfo=timezone.utc),
+        profile_key=pf.PROFILE_DEBUG,
     )
 
     assert [run["run_key"] for run in runs] == ["debug:2026-06-12T10"]
@@ -827,7 +828,7 @@ async def test_latest_feedback_other_context_reads_options_json(tmp_path):
         ],
     )
 
-    context = await pf._latest_debug_feedback_other_context(db)
+    context = await pf._latest_feedback_other_context(db, profile_key=pf.PROFILE_DEBUG)
 
     assert context["run_key"] == "debug:2026-06-12T10"
     assert context["option_texts"] == ["Послушать музыку", "Узнать новое"]
@@ -1309,3 +1310,164 @@ async def test_popularity_top3_pick_varies_by_run_seed(monkeypatch):
     assert chosen_ids <= {101, 102, 103}
     assert 104 not in chosen_ids
     assert len(chosen_ids) >= 2
+
+
+@pytest.mark.asyncio
+async def test_prod_create_uses_kenigevents_and_1955_result_slot(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        for idx, (event_type, title) in enumerate(
+            [
+                ("концерт", "Концерт у моря"),
+                ("лекция", "Лекция о городе"),
+                ("мастер-класс", "Керамическая мастерская"),
+                ("экскурсия", "Прогулка по району"),
+                ("выставка", "Новая выставка"),
+            ],
+            start=1,
+        ):
+            session.add(
+                _event_for_date(
+                    900 + idx,
+                    title=title,
+                    post_id=1900 + idx,
+                    date="2026-06-15",
+                    event_type=event_type,
+                )
+            )
+        await session.commit()
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_PROD", "1")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_TARGET_CHAT", "@kenigevents")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL", "16:00")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_RESULT_TIME_LOCAL", "19:55")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_MIN_ELIGIBLE_EVENTS", "5")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_MIN_OPTIONS", "4")
+
+    async def fake_llm(**kwargs):
+        if "winner_key" in kwargs.get("prompt", ""):
+            raise AssertionError("only creating poll")
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [901]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [902]},
+                {"key": "hands", "text": "Сделать что-то руками", "candidate_event_ids": [903]},
+                {"key": "walk", "text": "Погулять и посмотреть город", "candidate_event_ids": [904]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+    bot = DummyPollBot()
+
+    result = await pf.create_prod_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 14, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["created"] is True
+    assert result["profile_key"] == pf.PROFILE_PROD
+    assert bot.sent_polls[0]["chat_id"] == "@kenigevents"
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT profile_key, run_key, target_event_date, poll_chat_id, resolve_after FROM poll_repost_run"
+        )
+        row = await cur.fetchone()
+    assert row == (
+        pf.PROFILE_PROD,
+        "prod:2026-06-15",
+        "2026-06-15",
+        "@kenigevents",
+        "2026-06-14T17:55:00+00:00",
+    )
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_prod_resolve_low_votes_posts_public_result_without_forward(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_PROD", "1")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_MIN_VOTES_BASE", "10")
+    option = pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101,))
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_PROD,
+        run_key="prod:2026-06-15",
+        status=pf.STATUS_OPEN,
+        target_event_date=datetime(2026, 6, 15, tzinfo=timezone.utc).date(),
+        question_text="Опрос",
+        options=[option],
+        poll_chat_id="@kenigevents",
+        poll_message_id=101,
+        poll_id="poll-101",
+        resolve_after=datetime(2026, 6, 14, 17, 55, tzinfo=timezone.utc),
+    )
+    bot = DummyPollBot()
+    bot.stop_poll_result = SimpleNamespace(
+        total_voter_count=3,
+        options=[SimpleNamespace(voter_count=3)],
+    )
+
+    result = await pf.resolve_due_prod_polls(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 14, 17, 55, tzinfo=timezone.utc),
+    )
+
+    assert result["resolved"] == 1
+    assert bot.forwarded == []
+    assert bot.messages[0]["chat_id"] == "@kenigevents"
+    assert bot.messages[0]["reply_to_message_id"] == 101
+    assert "голос" in bot.messages[0]["text"]
+    assert "без анонса" in bot.messages[0]["text"]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT status, reply_message_id, forwarded_message_id FROM poll_repost_run")
+        row = await cur.fetchone()
+    assert row == (pf.STATUS_SKIPPED_NO_VOTES, 201, None)
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_due_loader_keeps_debug_and_prod_profiles_isolated(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    option = pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101,))
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_DEBUG,
+        run_key="debug:2026-06-14T16",
+        status=pf.STATUS_OPEN,
+        target_event_date=datetime(2026, 6, 15, tzinfo=timezone.utc).date(),
+        options=[option],
+        poll_chat_id="@keniggpt",
+        poll_message_id=101,
+        resolve_after=datetime(2026, 6, 14, 14, 30, tzinfo=timezone.utc),
+    )
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_PROD,
+        run_key="prod:2026-06-15",
+        status=pf.STATUS_OPEN,
+        target_event_date=datetime(2026, 6, 15, tzinfo=timezone.utc).date(),
+        options=[option],
+        poll_chat_id="@kenigevents",
+        poll_message_id=201,
+        resolve_after=datetime(2026, 6, 14, 17, 55, tzinfo=timezone.utc),
+    )
+
+    debug_runs = await pf._load_open_due_runs(
+        db,
+        now_utc=datetime(2026, 6, 14, 18, 0, tzinfo=timezone.utc),
+        profile_key=pf.PROFILE_DEBUG,
+    )
+    prod_runs = await pf._load_open_due_runs(
+        db,
+        now_utc=datetime(2026, 6, 14, 18, 0, tzinfo=timezone.utc),
+        profile_key=pf.PROFILE_PROD,
+    )
+
+    assert [run["run_key"] for run in debug_runs] == ["debug:2026-06-14T16"]
+    assert [run["run_key"] for run in prod_runs] == ["prod:2026-06-15"]
+    await db.close()
