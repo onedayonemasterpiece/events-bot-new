@@ -15,7 +15,9 @@
   creation. The lightweight publish-only script opts out of the generic script
   wrapper because Kaggle executes script kernels from `/kaggle/src/script.py`.
   It also installs the missing Telethon dependency before loading the shared
-  helper when Kaggle's base image does not include it.
+  helper when Kaggle's base image does not include it, and story secret
+  datasets are now updated with dataset versions instead of accidentally
+  leaving an old encrypted payload mounted.
   Tracks
   `INC-2026-06-14-crumple-vk-transport-drift`.
 - **Fixed: Promo VK public CTA/plain duplicate posts**: `vk_publication`

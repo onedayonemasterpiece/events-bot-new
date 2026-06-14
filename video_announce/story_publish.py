@@ -315,13 +315,13 @@ def _create_or_update_dataset(
             ),
             encoding="utf-8",
         )
+        exists = False
         try:
-            client.create_dataset(tmp_path)
+            client.dataset_status(dataset_slug)
+            exists = True
         except Exception:
-            logger.exception(
-                "video_announce.story dataset create failed, trying version update dataset=%s",
-                dataset_slug,
-            )
+            exists = False
+        if exists:
             client.create_dataset_version(
                 tmp_path,
                 version_notes="refresh story secrets",
@@ -329,6 +329,8 @@ def _create_or_update_dataset(
                 convert_to_csv=False,
                 dir_mode="zip",
             )
+        else:
+            client.create_dataset(tmp_path)
     return dataset_slug
 
 

@@ -39,6 +39,34 @@ def test_story_remote_auth_scope_prefers_bundle_env(monkeypatch):
     assert story_publish.story_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_STORY"
 
 
+def test_create_or_update_story_dataset_versions_existing_dataset() -> None:
+    calls: list[tuple[str, str]] = []
+
+    class Client:
+        def dataset_status(self, dataset_slug: str) -> str:
+            calls.append(("status", dataset_slug))
+            return "ready"
+
+        def create_dataset(self, path):  # noqa: ANN001
+            calls.append(("create", str(path)))
+
+        def create_dataset_version(self, path, **kwargs):  # noqa: ANN001,ANN003
+            calls.append(("version", kwargs["version_notes"]))
+
+    story_publish._create_or_update_dataset(
+        Client(),
+        "zigomaro/crumple-video-story-secrets-cipher",
+        title="Secrets",
+        filename="story_publish.enc",
+        data=b"encrypted",
+    )
+
+    assert calls == [
+        ("status", "zigomaro/crumple-video-story-secrets-cipher"),
+        ("version", "refresh story secrets"),
+    ]
+
+
 def test_popular_review_selection_params_enable_story_publish_with_repost_target():
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
