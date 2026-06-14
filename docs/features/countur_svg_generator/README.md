@@ -185,6 +185,40 @@ Per-image output folders contain `edge_mask.png`, `guides/`,
 `composite_guides/`, `candidates/`, `contact_sheets/`, `reports/` and
 `result.png` / `result_burgundy_preview.png` for the best line-mask candidate.
 
+There is also a heavier FLUX probe for checking whether a stronger image model
+improves the raster line-art candidate quality. It is intentionally a research
+probe, not the final SVG path. The default backend uses the public non-gated `ModelsLab/flux.1-dev` mirror
+through `FluxImg2ImgPipeline` with bitsandbytes NF4 quantization of the large
+FLUX transformer and T5 encoder, so it can be tested on Kaggle T4 without a
+Hugging Face gated-model token. It compares direct source-photo img2img against
+guide-bank/mask img2img:
+
+```bash
+python scripts/run_contour_svg_flux_probe_kaggle.py \
+  --source-dir docs/features/countur_svg_generator/to_do \
+  --backend flux_img2img_bnb4 \
+  --model-id ModelsLab/flux.1-dev \
+  --variants direct_photo,edge_mask,CG3_fused_balanced,CG4_minimal_clean \
+  --steps 4 \
+  --output-size 512,512 \
+  --guidance-scale 3.5
+```
+
+The stable Kaggle notebook slug is `zigomaro/contour-svg-flux-probe`. The probe
+compares direct source-photo conditioning against the existing guide-bank masks
+and saves `edge_mask.png`, raw FLUX output, normalized black-on-white line
+masks, burgundy previews and `flux_contact_sheet_all.png`. Official BFL repositories such as `FLUX.1-schnell` and `FLUX.1-Canny-dev` are license-gated on Hugging Face; the `--backend flux_control_canny` route is available but must fail loudly unless `HF_TOKEN`/`HUGGINGFACE_TOKEN` has accepted access to the gated Black Forest Labs model.
+
+Observed on the 2026-06-14 Kaggle T4 probe: `mit-han-lab/svdq-int4-flux.1-canny-dev`
+is not a standard Diffusers pipeline repo (`model_index.json` is absent), and
+official BFL repos fail without accepted Hugging Face credentials. The public
+`ModelsLab/flux.1-dev` + NF4 route runs end-to-end, but the first visual pass is
+not yet an accepted final line-art solution: direct-photo and over-minimal guide
+variants drift toward a generic facade, while `edge_mask` / `CG3_fused_balanced`
+preserve the current image structure but remain too mask-like and blocky. Keep
+this branch as a research/proposal path until prompt/control tuning or a true
+Canny-Control FLUX checkpoint with accepted credentials is available.
+
 Full Kaggle runs can select a non-default feature config through the local
 launcher without changing the stable notebook slug. For the tower benchmark:
 

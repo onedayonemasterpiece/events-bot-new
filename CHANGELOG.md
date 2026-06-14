@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
+  research probe for FLUX raster line-art experiments. The default path uses
+  public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with
+  bitsandbytes NF4 quantization on Kaggle T4, while official BFL gated backends such as
+  `FLUX.1-schnell` / `FLUX.1-Canny-dev` are explicit and fail-loud without
+  accepted HF credentials. The probe can run
+  `direct_photo`, `edge_mask`, `CG3_fused_balanced`, and `CG4_minimal_clean`
+  variants from the same source-photo/guide-bank inputs, saving `edge_mask.png`,
+  raw FLUX outputs, normalized black-on-white line masks, burgundy previews,
+  contact sheet and JSON report under a stable Kaggle notebook slug
+  `zigomaro/contour-svg-flux-probe`.
 - **Contour SVG generator / neural branch v0.2 line-art batch**: added a
   guide-only multi-mask ControlNet experiment for raster line-art research.
   New `contour_svg.guide_bank` builds role-separated `G*` and `CG*` guides
