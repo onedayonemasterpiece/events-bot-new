@@ -1,10 +1,10 @@
 # INC-2026-06-15-tg-promo-media-drop-and-bullet-copy
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Telegram promo publication (`promo_activity.surface='tg_event_publish'`)
 Opened: 2026-06-15
-Closed: —
+Closed: 2026-06-15
 Owners: Codex / events-bot
 Related incidents: `INC-2026-06-15-tg-promo-markdown-leak.md`
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/promo-campaigns/README.md`, `docs/operations/release-governance.md`
@@ -102,10 +102,37 @@ than a crafted promo caption.
 
 ## Corrective Actions
 
-- Pending: make media mandatory for promo activity posts with `event.photo_urls`.
-- Pending: add concise media-caption builder for overlong promo bodies.
-- Pending: add regression tests and deploy.
+- `publish_tg_promo_event_publication()` now treats `event.photo_urls` as a
+  media-required surface for explicit promo activity posts. The old
+  `len(message) <= 1024` gate no longer falls through to `sendMessage`.
+- Added `build_tg_promo_event_publication_media_caption()` for overlong media
+  captions. It keeps the event infoblock, prefers prose-like body lines, skips
+  heading/bullet dumps, and points readers to the `Подробнее` button for the
+  full Telegraph body.
+- Fixed the media-group reply-markup edit call to pass `chat_id` and
+  `message_id` as Bot API keyword parameters.
+- Added unit coverage for overlong media-backed promo posts and concise caption
+  generation.
+
+## Existing Public Posts
+
+`@kldevents/565` and `@kldevents/566` were left in place. Telegram Bot API can
+edit the text of a text message, but it cannot transform an already published
+text message into a photo/media-group post. Repairing the missing image would
+require deleting and reposting those messages, which would change the public
+URLs already used in the incident report and any downstream references.
 
 ## Release And Closure Evidence
 
-Pending.
+- fixed SHA: `a1a3b5c3` (`fix(tg): keep promo media for long captions`), pushed
+  to `origin/main` and `origin/hotfix/tg-promo-media-20260615`.
+- regression checks: `.venv/bin/pytest -q tests/test_tg_event_publish.py tests/test_promo.py::test_tg_event_publish_honors_preferred_ids_by_date tests/test_promo.py::test_promo_vk_runner_schedules_publications_and_repost` — 51 passed.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only`
+  from clean hotfix worktree; Fly image
+  `deployment-01KV5J1K3G6SZ6B6PP5TDV1ZGD`, machine `683961db016e28` version
+  `1420`.
+- post-deploy health: `/healthz` returned `ok=true`, `ready=true`, all
+  scheduler checks OK.
+- post-deploy smoke: production caption helper for event `#5885` returned
+  `caption_len=892` with media present; event `#5900` returned
+  `caption_len=345`, no `<b>Что важно</b>` and no long bullet-list content.
