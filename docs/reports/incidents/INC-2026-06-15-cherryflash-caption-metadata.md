@@ -1,10 +1,10 @@
 # INC-2026-06-15 CherryFlash caption metadata missing
 
-Status: open
+Status: closed
 Severity: sev3
 Service: CherryFlash / Telegram channel video post fanout
 Opened: 2026-06-15
-Closed: —
+Closed: 2026-06-15
 Owners: events-bot
 Related incidents: `INC-2026-06-13-kaggle-duplicate-videoannounce`
 Related docs: `docs/features/cherryflash/README.md`, `docs/operations/cron.md`
@@ -109,10 +109,22 @@ new caption is visible for message `4029`.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `7cb55bfadb6f577dd74f4536e53e546083436cad`, reachable from
+  `origin/main`.
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; Fly
+  release `v1419`, image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV5D4F9MPF9WHMX5FZGQKV7D`.
+- regression checks:
+  - `.venv/bin/python -m pytest tests/test_video_announce_story_publish.py -q`
+    → `17 passed`;
+  - `.venv/bin/python -m py_compile video_announce/scenario.py video_announce/story_publish.py`;
+  - `git diff --check`.
+- production mitigation evidence: Bot API `editMessageCaption` returned `ok=true`
+  for `@kenigevents/4029`; public `t.me/s/kenigevents` scrape showed
+  `Видеоанонс #677 · 15 июня` on message `4029`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`,
+  `db=ok`, no issues; Fly SSH code probe confirmed
+  `build_popular_review_story_caption` is present in `/app/video_announce/scenario.py`.
 
 ## Prevention
 
