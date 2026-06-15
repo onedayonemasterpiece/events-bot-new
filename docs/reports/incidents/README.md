@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-15-konb-room-location-and-future-audit.md`
+  - Scope: VK auto-import/Smart Update venue extraction for stable source-location sources, KОНБ `konb39`/`kaliningradlibrary` defaults, and future-event duplicate/generic-title audit.
+  - Must not regress: room/floor labels such as `лекционный зал`, `аудитория`, or `4 этаж` must not become public venues when source context identifies a real building; KОНБ VK imports must carry `Научная библиотека, Мира 9, Калининград`; future active listings must not keep generic duplicate rows such as duplicate `Музыкальный фестиваль` donor/map notices or duplicate 80th-region concert rows.
 - `INC-2026-06-15-poll-repost-missing-slots.md`
   - Scope: `poll_to_forward.py`, production/debug poll creation, popularity underfill, topic-planner fallback, question guardrails, and Fly scheduler evidence.
   - Must not regress: a sufficient raw event inventory must not disappear solely because sparse popularity coverage underfills; after an LLM planner attempt, usable inventory must fall back to bounded multi-candidate topics; full LLM unavailability must still skip rather than publish a fully deterministic poll; debug must remain a reliable visible smoke surface.

@@ -434,18 +434,25 @@ async def test_db_init_repairs_known_vk_source_location_defaults(tmp_path):
             "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
             (149955604, "bar_bastion", "БАСТИОН. Калининград", "Калининград Сити Джаз Клуб"),
         )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (30777579, "konb39", "Калининградская областная научная библиотека", None),
+        )
         await conn.commit()
 
     await db.init()
 
     async with db.raw_conn() as conn:
         rows = await conn.execute_fetchall(
-            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?) ORDER BY group_id",
-            (149955604, 214027639),
+            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?, ?) ORDER BY group_id",
+            (149955604, 214027639, 30777579),
         )
     locations = {int(row[0]): row[1] for row in rows}
     assert locations[149955604] == "Бар Бастион, Судостроительная 6/1, Калининград"
     assert locations[214027639] == "Стендап клуб Локация, Юбилейная 18, Калининград"
+    assert locations[30777579] == "Научная библиотека, Мира 9, Калининград"
+
+
 @pytest.mark.asyncio
 async def test_build_event_payload_includes_default_time(monkeypatch):
     captured = {}

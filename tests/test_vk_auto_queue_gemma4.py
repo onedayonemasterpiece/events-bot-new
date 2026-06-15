@@ -171,6 +171,7 @@ async def test_vk_intake_prompt_treats_room_floor_as_non_venue(monkeypatch):
     assert drafts
     prompt = str(captured["prompt_text"])
     assert "Room/floor is not venue" in prompt
+    assert "source_location/location hint" in prompt
     assert "location_name=Научная библиотека" in prompt
 
 

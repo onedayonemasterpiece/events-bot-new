@@ -1823,7 +1823,10 @@ async def build_event_drafts_from_vk(
     if re.search(r"\b(?:лекционн\w*\s+зал|конференц[-\s]?зал|аудитори\w*|4\s*этаж)\b", room_probe):
         llm_text += (
             "\nRoom/floor is not venue: `лекционный зал`/`4 этаж` -> infer building. "
-            "КОНБ+Мира9 => location_name=Научная библиотека."
+            "If the explicit place is only a room, hall, audience room, or floor, treat venue "
+            "as missing and use the source organization/source_location/location hint as the "
+            "building when source text/OCR supports it. КОНБ+Мира9 => "
+            "location_name=Научная библиотека."
         )
     try:
         hint_parts: list[str] = [text or ""]

@@ -5,9 +5,12 @@
 - **Fixed: LLM-first room/floor venue extraction and repost lead time**: VK
   auto-import prompts now instruct the LLM to treat room/floor strings such as
   `лекционный зал, 4 этаж` as non-venue details and recover the actual
-  building/organization from source context (for example Научная библиотека,
-  Мира 9). Telegram/VK promo reposts and Poll to Repost now skip events that
-  have already started or are inside the default 4-hour lead-time cutoff.
+  building/organization from source context/source-location hints (for example
+  Научная библиотека, Мира 9). DB init also repairs the `konb39` VK source
+  default to `Научная библиотека, Мира 9, Калининград`, matching the Telegram
+  source default. Telegram/VK promo reposts and Poll to Repost now skip events
+  that have already started or are inside the default 4-hour lead-time cutoff.
+  Tracks `INC-2026-06-15-konb-room-location-and-future-audit`.
 - **Fixed: Poll to Repost missing production/debug slots**: poll creation now
   relaxes strict popularity filtering when raw eligible inventory is sufficient,
   and uses a bounded multi-candidate fallback topic builder only for coherent

@@ -1517,6 +1517,23 @@ class Database:
                     """,
                     ("Бар Бастион, Судостроительная 6/1, Калининград", 149955604),
                 )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR UPPER(TRIM(location)) IN (
+                            'ЛЕКЦИОННЫЙ ЗАЛ',
+                            '4 ЭТАЖ ЛЕКЦИОННЫЙ ЗАЛ',
+                            'ЛЕКЦИОННЫЙ ЗАЛ, 4 ЭТАЖ'
+                        )
+                      )
+                    """,
+                    ("Научная библиотека, Мира 9, Калининград", 30777579),
+                )
                 skip_vk_source_seed = (
                     (os.getenv("DB_INIT_SKIP_VK_SOURCES_SEED") or "").strip().lower()
                     in {"1", "true", "yes", "on"}
