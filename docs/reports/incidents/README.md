@@ -157,7 +157,7 @@
     matching, and production public canary rates for `80 историй о главном`.
   - Must not regress: `target_group="klgdevents"` must match numeric
     `VK_EVENTS_GROUP_ID=231920894`; the 80-stories public activity at
-    its configured public rate must be evaluated before the all-events 0.1
+    its configured public rate must be evaluated before the all-events 0.15
     fallback. The old shadow fallback requirement was superseded by
     `INC-2026-06-14-afishaengagement-shadow-fallback-regression`.
 - `INC-2026-06-12-vk-partial-media-family-cta.md`

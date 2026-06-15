@@ -113,7 +113,7 @@ Production public CTA rates after the 2026-06-13 rollout:
 - `Кантата`: public `apply_rate=0.45`;
 - selected `Кантата` educational-program events: public `apply_rate=0.45`;
 - `kraftmarket39 · @LANGEANNA`: public `apply_rate=0.4`;
-- all other events: public `apply_rate=0.1`.
+- all other events: public `apply_rate=0.15`.
 
 Supported target types are the existing promo campaign targets:
 

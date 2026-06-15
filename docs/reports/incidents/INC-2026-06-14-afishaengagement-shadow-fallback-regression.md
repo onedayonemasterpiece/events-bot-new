@@ -133,8 +133,8 @@ posts and violating the production contract of one chosen publication variant.
 
 - [ ] Capture post-deploy evidence from the next Telegram Monitoring batch that
   public dice misses leave only plain VK event posts.
-- [ ] Revisit the global all-events public `apply_rate=0.1` after enough public
-  CTA examples have been reviewed.
+- [ ] Keep the global all-events public `apply_rate=0.15`; it was restored on
+  2026-06-15 after the CTA format audit found production had drifted to 0.1.
 
 ## Release And Closure Evidence
 
