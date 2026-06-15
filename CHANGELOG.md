@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram promo activity media drop on long captions**: explicit
+  `tg_event_publish` promo posts with `event.photo_urls` now always publish
+  the photo/album surface. When the full promo body exceeds Telegram's caption
+  limit, the publisher sends a concise media caption with the `Подробнее`
+  button instead of silently falling back to a text-only post or dumping a long
+  Smart Update bullet list. Tracks
+  `INC-2026-06-15-tg-promo-media-drop-and-bullet-copy`. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: CherryFlash public video caption metadata**: scheduled
   `popular_review` runs now stamp story-publish params with
   `Видеоанонс #<session_id> · <D month>`, so the public Telegram post and the

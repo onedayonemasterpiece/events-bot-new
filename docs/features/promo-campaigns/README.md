@@ -365,7 +365,10 @@ records `promo_exposure.surface='tg_event_publish'` with
 on the event for downstream reposts. Full-body text is sanitized for Telegram
 HTML: Markdown section headings become bold headings, bullets are normalized,
 and raw service markers such as `###`, `**`, or list `*` must not leak to the
-public post.
+public post. If promoted event media exists, the media is mandatory for the
+public surface: overlong full text is reduced to a concise media caption with
+the `Подробнее` button instead of falling back to a text-only post or exposing a
+long Smart Update bullet dump as the primary public copy.
 
 `tg_repost` forwards an existing source-channel post, normally
 `@kldevents -> @kenigevents`, instead of rendering a new text post in the

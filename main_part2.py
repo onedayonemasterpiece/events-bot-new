@@ -4180,7 +4180,7 @@ def _tg_promo_plain_location(event: Event) -> str:
     )
 
 
-def build_tg_promo_event_publication_message(event: Event) -> str:
+def _tg_promo_message_sections(event: Event) -> tuple[list[str], list[str], str | None]:
     title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
     title = f"{emoji_part}{title_text}".strip()
     date_part = str(event.date or "").split("..", 1)[0]
@@ -4189,16 +4189,16 @@ def build_tg_promo_event_publication_message(event: Event) -> str:
     time_part = str(getattr(event, "time", "") or "").strip()
     when = f"{day} {time_part}".strip()
 
-    lines = [f"<b>{html.escape(title)}</b>", "", f"📅 {html.escape(when)}"]
+    header = [f"<b>{html.escape(title)}</b>", "", f"📅 {html.escape(when)}"]
     loc = _tg_promo_plain_location(event)
     if loc:
-        lines.append(f"📍 {html.escape(loc)}")
+        header.append(f"📍 {html.escape(loc)}")
     if getattr(event, "pushkin_card", False):
-        lines.append(html.escape("✅ Пушкинская карта"))
+        header.append(html.escape("✅ Пушкинская карта"))
     if getattr(event, "is_free", False):
-        lines.append(html.escape("🟡 Бесплатно"))
+        header.append(html.escape("🟡 Бесплатно"))
     elif getattr(event, "ticket_status", None) == "sold_out":
-        lines.append(html.escape("❌ Билеты все проданы"))
+        header.append(html.escape("❌ Билеты все проданы"))
     elif getattr(event, "ticket_price_min", None) is not None or getattr(event, "ticket_price_max", None) is not None:
         if event.ticket_price_min is not None and event.ticket_price_max is not None and event.ticket_price_min != event.ticket_price_max:
             price = f"от {event.ticket_price_min} до {event.ticket_price_max} руб."
@@ -4206,15 +4206,85 @@ def build_tg_promo_event_publication_message(event: Event) -> str:
             value = event.ticket_price_min if event.ticket_price_min is not None else event.ticket_price_max
             price = f"{value} руб." if value is not None else ""
         if price:
-            lines.append(html.escape(f"🎟 Билеты {price}"))
+            header.append(html.escape(f"🎟 Билеты {price}"))
 
     body = _tg_promo_body_to_html(_tg_promo_text_source(event)).strip()
-    if body:
-        lines.extend(["", body])
+    body_lines = body.splitlines() if body else []
     hashtag_line = _tg_event_hashtag_line(event)
+    return header, body_lines, html.escape(hashtag_line) if hashtag_line else None
+
+
+def build_tg_promo_event_publication_message(event: Event) -> str:
+    lines, body_lines, hashtag_line = _tg_promo_message_sections(event)
+    if body_lines:
+        lines.extend(["", "\n".join(body_lines)])
     if hashtag_line:
-        lines.extend(["", html.escape(hashtag_line)])
+        lines.extend(["", hashtag_line])
     return "\n".join(lines).strip()
+
+
+def _tg_promo_caption_body_lines(body_lines: list[str]) -> list[str]:
+    """Pick prose-like body lines for a media caption.
+
+    Full promo bodies can exceed Telegram's 1024-character caption limit. When
+    media exists, the photo is the public surface; avoid falling back to a
+    text-only post and keep the caption concise instead of dumping long
+    Smart-Update bullet lists.
+    """
+
+    selected: list[str] = []
+    for line in body_lines:
+        stripped = line.strip()
+        if not stripped:
+            if selected and selected[-1] != "":
+                selected.append("")
+            continue
+        if stripped.startswith("• "):
+            continue
+        if stripped.startswith("<b>") and stripped.endswith("</b>"):
+            continue
+        selected.append(stripped)
+        if len(" ".join(selected)) >= 420:
+            break
+    while selected and selected[-1] == "":
+        selected.pop()
+    return selected
+
+
+def build_tg_promo_event_publication_media_caption(
+    event: Event,
+    *,
+    limit: int = 1024,
+) -> str:
+    full = build_tg_promo_event_publication_message(event)
+    if len(full) <= limit:
+        return full
+
+    header, body_lines, hashtag_line = _tg_promo_message_sections(event)
+    lines = list(header)
+    caption_body = _tg_promo_caption_body_lines(body_lines)
+    if caption_body:
+        lines.extend(["", "\n".join(caption_body)])
+    if getattr(event, "telegraph_url", None) or getattr(event, "telegraph_path", None):
+        lines.extend(["", html.escape("Полный текст — по кнопке «Подробнее».")])
+
+    def joined(candidate: list[str]) -> str:
+        return "\n".join(candidate).strip()
+
+    with_hashtags = [*lines, "", hashtag_line] if hashtag_line else lines
+    if len(joined(with_hashtags)) <= limit:
+        return joined(with_hashtags)
+
+    if len(joined(lines)) <= limit:
+        return joined(lines)
+
+    # Last-resort deterministic trim that only cuts escaped prose, not HTML tags.
+    compact = list(header)
+    remaining = limit - len(joined(compact)) - len("\n\n…")
+    if remaining > 80 and caption_body:
+        plain = html.unescape(re.sub(r"<[^>]+>", "", " ".join(caption_body)))
+        compact.extend(["", html.escape(plain[:remaining].rsplit(" ", 1)[0].rstrip()) + "…"])
+    return joined(compact)[:limit].rstrip()
 
 
 async def publish_tg_promo_event_publication(
@@ -4234,12 +4304,13 @@ async def publish_tg_promo_event_publication(
 
     photo_urls = [str(url).strip() for url in (getattr(event, "photo_urls", None) or []) if str(url).strip()]
     async with TG_SEND_SEMAPHORE:
-        if photo_urls and len(message) <= 1024:
+        if photo_urls:
+            caption = build_tg_promo_event_publication_media_caption(event)
             if len(photo_urls) == 1:
                 sent = await bot.send_photo(
                     target_chat,
                     photo_urls[0],
-                    caption=message,
+                    caption=caption,
                     parse_mode="HTML",
                     reply_markup=markup,
                 )
@@ -4247,7 +4318,7 @@ async def publish_tg_promo_event_publication(
                 media = [
                     types.InputMediaPhoto(
                         media=url,
-                        caption=message if idx == 0 else None,
+                        caption=caption if idx == 0 else None,
                         parse_mode="HTML" if idx == 0 else None,
                     )
                     for idx, url in enumerate(photo_urls[:TG_EVENT_ALBUM_SIZE])
@@ -4256,8 +4327,8 @@ async def publish_tg_promo_event_publication(
                 sent = group[0]
                 if markup:
                     await bot.edit_message_reply_markup(
-                        target_chat,
-                        sent.message_id,
+                        chat_id=target_chat,
+                        message_id=sent.message_id,
                         reply_markup=markup,
                     )
         else:

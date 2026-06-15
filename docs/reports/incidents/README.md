@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-15-tg-promo-media-drop-and-bullet-copy.md`
+  - Scope: explicit Telegram promo activity posts
+    (`promo_activity.surface='tg_event_publish'`) with event media and long full
+    promo bodies.
+  - Must not regress: media-backed promo activity posts must not become
+    text-only solely because the full body exceeds Telegram's caption limit;
+    the publisher should send the image/album with a concise caption and avoid
+    dumping long Smart Update bullet lists as the primary caption.
+
 - `INC-2026-06-15-cherryflash-caption-metadata.md`
   - Scope: CherryFlash `popular_review` public Telegram/VK story-video captions
     generated from `videoannounce_session.selection_params`.

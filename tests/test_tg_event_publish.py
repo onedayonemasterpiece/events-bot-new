@@ -12,6 +12,7 @@ class DummyTgBot:
         self.photos = []
         self.media_groups = []
         self.deleted = []
+        self.reply_markup_edits = []
         self._next_id = 100
 
     async def send_message(self, chat_id, text, **kwargs):
@@ -48,6 +49,9 @@ class DummyTgBot:
 
     async def edit_message_caption(self, **_kwargs):
         raise AssertionError("edit should not be called in first publish")
+
+    async def edit_message_reply_markup(self, *args, **kwargs):
+        self.reply_markup_edits.append((args, kwargs))
 
     async def delete_message(self, **kwargs):
         self.deleted.append(kwargs)
@@ -394,6 +398,69 @@ def test_build_tg_promo_event_publication_formats_markdown_body():
     assert "<b>Формат и темы</b>" in text
     assert "• Роль дирижёра как регулятора эмоционального поля." in text
     assert "Гость — Иван Никифорчин." in text
+
+
+def test_build_tg_promo_media_caption_prefers_media_over_bullet_dump():
+    event = _event(
+        title="Народные художественные промыслы",
+        description=(
+            "Событие представляет собой показ документального сериала-путешествия "
+            "«Народные художественные промыслы».\n\n"
+            "### Что важно\n"
+            + "\n".join(f"- Факт программы номер {idx}" for idx in range(1, 40))
+        ),
+        is_free=True,
+        photo_urls=["https://example.com/poster.webp"],
+    )
+
+    full = main.build_tg_promo_event_publication_message(event)
+    caption = main.build_tg_promo_event_publication_media_caption(event)
+
+    assert len(full) > 1024
+    assert len(caption) <= 1024
+    assert "Событие представляет собой показ" in caption
+    assert "Полный текст — по кнопке" in caption
+    assert "<b>Что важно</b>" not in caption
+    assert "Факт программы номер 25" not in caption
+
+
+@pytest.mark.asyncio
+async def test_tg_promo_event_publish_sends_media_when_full_text_exceeds_caption_limit():
+    event = _event(
+        title="Длинный промо-пост",
+        description=(
+            "Короткое вступление для подписи.\n\n"
+            "### Что важно\n"
+            + "\n".join(f"- Подробность номер {idx}" for idx in range(1, 80))
+        ),
+        photo_urls=[
+            "https://example.com/one.webp",
+            "https://example.com/two.webp",
+        ],
+        telegraph_url="https://telegra.ph/full",
+    )
+    bot = DummyTgBot()
+
+    url = await main.publish_tg_promo_event_publication(
+        event,
+        db=None,
+        bot=bot,
+        target_chat="@kldevents",
+    )
+
+    assert url == "https://t.me/kldevents/101"
+    assert bot.messages == []
+    assert bot.photos == []
+    assert len(bot.media_groups) == 1
+    chat_id, media = bot.media_groups[0]
+    assert chat_id == "@kldevents"
+    assert len(media) == 2
+    assert len(media[0].caption) <= 1024
+    assert "Короткое вступление для подписи." in media[0].caption
+    assert "Подробность номер 60" not in media[0].caption
+    assert bot.reply_markup_edits
+    assert bot.reply_markup_edits[0][1]["chat_id"] == "@kldevents"
+    assert bot.reply_markup_edits[0][1]["message_id"] == 101
 
 
 def test_tg_event_promo_details_move_to_inline_button():
