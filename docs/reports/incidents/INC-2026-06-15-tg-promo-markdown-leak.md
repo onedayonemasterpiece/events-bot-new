@@ -1,10 +1,10 @@
 # INC-2026-06-15-tg-promo-markdown-leak
 
-Status: monitoring
+Status: closed
 Severity: sev3
 Service: Telegram promo publication (`promo_activity.surface='tg_event_publish'`)
 Opened: 2026-06-15
-Closed: —
+Closed: 2026-06-15
 Owners: Codex / events-bot
 Related incidents: —
 Related docs: `docs/features/tg-publishing/README.md`, `docs/features/promo-campaigns/README.md`, `docs/operations/release-governance.md`
@@ -121,10 +121,10 @@ body were escaped as plain text instead of being formatted.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `260502ca` (`fix(tg): sanitize promo activity markdown`), reachable from `origin/main`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree; Fly image `deployment-01KV5CF8Q21BX9G9XM9PYPEASS`, machine `683961db016e28` version `1418`
 - regression checks: `pytest -q tests/test_tg_event_publish.py::test_build_tg_promo_event_publication_formats_markdown_body tests/test_promo.py::test_tg_event_publish_honors_preferred_ids_by_date tests/test_promo.py::test_promo_vk_runner_schedules_publications_and_repost` — 3 passed pre-deploy
-- post-deploy verification: pending
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, scheduler checks OK; public Telegram embed for `https://t.me/kldevents/565` returned `raw_heading_markers=False`, `raw_star_bullets=False`, `bold_headings_html=True`
 
 ## Prevention
 
