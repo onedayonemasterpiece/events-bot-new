@@ -109,10 +109,14 @@ The same audit found active future rows with generic/duplicate records: two gene
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending manual Fly deploy from clean worktree
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `e6713833` (`fix(vk-intake): seed konb source location`)
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `deployment-01KV6AB81SAJ2RRBJB3SFRFMTQ`, machine version `1424`
+- regression checks:
+  - `tests/test_vk_auto_queue_gemma4.py::test_vk_intake_prompt_treats_room_floor_as_non_venue`
+  - `tests/test_vk_default_time.py::test_db_init_repairs_known_vk_source_location_defaults`
+  - `tests/test_promo.py::test_promo_tg_repost_skips_event_inside_four_hour_lead_time`
+  - `tests/test_poll_to_forward.py::test_load_eligible_events_skips_started_or_near_start_events`
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`; production SQL audit confirmed KОНБ VK/TG defaults, repaired `6041`/`6042`, no active room/floor-only locations, and no active generic `Музыкальный фестиваль` / `Концерт к 80-летию региона` rows.
 
 ## Prevention
 
