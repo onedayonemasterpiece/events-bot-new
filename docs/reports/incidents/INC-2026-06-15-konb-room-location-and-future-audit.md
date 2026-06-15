@@ -156,6 +156,10 @@ The same audit found active future rows with generic/duplicate records: two gene
   `3918`; `vk_source.location` was set for
   `amberarena39` and `mbkaliningrad39`; Telegraph/month/TG/VK refresh jobs were
   enqueued for affected rows.
+- location-prevention deploy: `280afc18`
+  (`fix(locations): add future audit defaults`) deployed manually to Fly as
+  `deployment-01KV6CZP3EG16T1PSJFVG0EDHY`, machine version `1425`; `/healthz`
+  returned `ok=true`, `ready=true`.
 
 ## Prevention
 
