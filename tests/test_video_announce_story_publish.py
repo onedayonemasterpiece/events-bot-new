@@ -5,7 +5,11 @@ from datetime import datetime
 
 import pytest
 
-from video_announce.scenario import VideoAnnounceScenario
+from video_announce.scenario import (
+    VideoAnnounceScenario,
+    apply_popular_review_story_caption,
+    build_popular_review_story_caption,
+)
 from video_announce import story_publish
 from video_announce.partner_tracks import PARTNER_KONB_LIBRARY
 from telegram_business import cache_business_connection
@@ -65,6 +69,30 @@ def test_create_or_update_story_dataset_versions_existing_dataset() -> None:
         ("status", "zigomaro/crumple-video-story-secrets-cipher"),
         ("version", "refresh story secrets"),
     ]
+
+
+def test_popular_review_story_caption_uses_session_number_and_day_month():
+    assert (
+        build_popular_review_story_caption(677, "2026-06-15")
+        == "Видеоанонс #677 · 15 июня"
+    )
+
+
+def test_apply_popular_review_story_caption_fills_public_telegram_post_only():
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+
+    selection_params = scenario._popular_review_selection_params()
+    selection_params["target_date"] = "2026-06-15"
+    params = apply_popular_review_story_caption(
+        selection_params, session_id=677
+    )
+
+    assert params["story_caption"] == "Видеоанонс #677 · 15 июня"
+    targets = params["story_targets_override"]
+    assert targets[1]["transport"] == "telegram_chat"
+    assert targets[1]["caption"] == "Видеоанонс #677 · 15 июня"
+    assert targets[2]["transport"] == "vk_wall"
+    assert targets[2]["caption"] == "Видеоанонс"
 
 
 def test_popular_review_selection_params_enable_story_publish_with_repost_target():
@@ -127,10 +155,16 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
+    selection_params = scenario._popular_review_selection_params()
+    selection_params["target_date"] = "2026-05-17"
+    selection_params = apply_popular_review_story_caption(
+        selection_params, session_id=677
+    )
+
     config = await story_publish.build_story_publish_config(
         None,
         main_chat_id=None,
-        selection_params=scenario._popular_review_selection_params(),
+        selection_params=selection_params,
         selected_event_dates=["2026-05-17"],
         selected_event_cities=["Калининград", "Светлогорск"],
     )
@@ -139,9 +173,10 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     assert "auth_source" in config
     assert config["targets"][0]["blocking"] is False
     assert config["targets"][1]["transport"] == "telegram_chat"
-    assert config["targets"][1]["caption"] == "Видеоанонс"
+    assert config["caption"] == "Видеоанонс #677 · 17 мая"
+    assert config["targets"][1]["caption"] == "Видеоанонс #677 · 17 мая"
     vk_wall_target = config["targets"][2]
-    assert vk_wall_target["caption"].startswith("Видеоанонс\n\n")
+    assert vk_wall_target["caption"].startswith("Видеоанонс #677 · 17 мая\n\n")
     assert "#Калининград" in vk_wall_target["caption"]
     assert "#Светлогорск" in vk_wall_target["caption"]
     assert "#17мая" in vk_wall_target["caption"]

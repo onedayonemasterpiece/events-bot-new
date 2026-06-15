@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-15-cherryflash-caption-metadata.md`
+  - Scope: CherryFlash `popular_review` public Telegram/VK story-video captions
+    generated from `videoannounce_session.selection_params`.
+  - Must not regress: scheduled CherryFlash public posts must include the
+    release/session number and target date title
+    `Видеоанонс #<session_id> · <D month>`; Telegram `telegram_chat` targets
+    get this exact caption and VK wall captions keep it as the title before
+    the hashtag/date block.
 - `INC-2026-06-15-tg-promo-markdown-leak.md`
   - Scope: explicit Telegram promo activity posts
     (`promo_activity.surface='tg_event_publish'`), full event body formatting

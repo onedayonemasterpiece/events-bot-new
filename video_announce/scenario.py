@@ -119,6 +119,55 @@ from .pattern_preview import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def build_popular_review_story_caption(
+    session_id: int, target_date: date | str | None = None
+) -> str:
+    """Viewer-facing CherryFlash caption for public story/video fanout."""
+
+    parsed_date: date | None = None
+    if isinstance(target_date, date):
+        parsed_date = target_date
+    elif isinstance(target_date, str) and target_date.strip():
+        try:
+            parsed_date = date.fromisoformat(target_date.strip())
+        except ValueError:
+            parsed_date = None
+    if parsed_date is None:
+        parsed_date = datetime.now(LOCAL_TZ).date()
+    return f"Видеоанонс #{int(session_id)} · {format_day_pretty(parsed_date)}"
+
+
+def apply_popular_review_story_caption(
+    selection_params: dict[str, Any], *, session_id: int
+) -> dict[str, Any]:
+    """Attach the session/date caption to CherryFlash public post targets.
+
+    The VK wall target intentionally keeps its placeholder caption so
+    build_story_publish_config() can expand it into the richer VK caption with
+    hashtags while using ``story_caption`` as the title. Telegram chat posts do
+    not have such an expansion layer, so their target caption is filled here.
+    """
+
+    params = dict(selection_params)
+    caption = build_popular_review_story_caption(
+        session_id, params.get("target_date")
+    )
+    params["story_caption"] = caption
+    targets: list[Any] = []
+    for raw_target in params.get("story_targets_override") or []:
+        if not isinstance(raw_target, dict):
+            targets.append(raw_target)
+            continue
+        target = dict(raw_target)
+        if target.get("transport") == "telegram_chat":
+            target["caption"] = caption
+        targets.append(target)
+    params["story_targets_override"] = targets
+    return params
+
+
 CHANNEL_SETTING_KEY = "videoannounce_channels"
 DEFAULT_PRIMARY_WINDOW_DAYS = 3
 DEFAULT_FALLBACK_WINDOW_DAYS = 10
@@ -2125,6 +2174,11 @@ class VideoAnnounceScenario:
                 test_chat_id=test_chat_id,
                 main_chat_id=main_chat_id,
                 kaggle_kernel_ref=kernel_ref,
+            )
+            session.add(obj)
+            await session.flush()
+            obj.selection_params = apply_popular_review_story_caption(
+                params, session_id=int(obj.id)
             )
             session.add(obj)
             await session.commit()

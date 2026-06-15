@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **Fixed: CherryFlash public video caption metadata**: scheduled
+  `popular_review` runs now stamp story-publish params with
+  `Видеоанонс #<session_id> · <D month>`, so the public Telegram post and the
+  VK wall caption title include the release number and viewer-facing date
+  instead of the bare `Видеоанонс`. Tracks
+  `INC-2026-06-15-cherryflash-caption-metadata`. Covered by
+  `tests/test_video_announce_story_publish.py`.
 - **Fixed: Telegram promo activity Markdown leak**: explicit `tg_event_publish`
   promo posts now normalize Markdown-rich Smart Update descriptions before
   sending to Telegram, rendering section headings as bold HTML and bullets as
