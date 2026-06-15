@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -299,13 +300,16 @@ def _candidate(
     title: str | None = None,
     event_type: str = "концерт",
     is_free: bool = False,
+    time: str = "12:00",
+    popularity_score: float = 0.0,
+    popularity_group_key: str | None = None,
 ) -> pf.CandidateEvent:
     return pf.CandidateEvent(
         id=event_id,
         title=title or f"Событие {event_id}",
         date="2026-06-13",
         end_date=None,
-        time="12:00",
+        time=time,
         event_type=event_type,
         festival=None,
         city="Калининград",
@@ -315,6 +319,8 @@ def _candidate(
         tg_event_post_url=f"https://t.me/kldevents/{500 + event_id}",
         telegraph_url=f"https://telegra.ph/event-{event_id}",
         summary="Короткое описание.",
+        popularity_score=popularity_score,
+        popularity_group_key=popularity_group_key,
     )
 
 
@@ -415,6 +421,12 @@ def test_default_question_variants_frame_real_tomorrow_plan():
 def test_question_guard_rejects_current_ambiguous_prod_phrase():
     assert pf._question_guard_rejection_reason(
         "Голосуем за тему события на завтра. Если варианты не те — выбирайте «Другое», вечером разберусь с выбором."
+    )
+    assert pf._question_guard_rejection_reason(
+        "Куда отправимся завтра? Голосуйте за категорию, а вечером я найду для вас одно классное мероприятие."
+    )
+    assert pf._question_guard_rejection_reason(
+        "Голосуйте за категорию событий, а вечером я выберу самое крутое событие из лидирующей темы."
     )
 
 
@@ -738,7 +750,7 @@ async def test_topic_planner_prompt_requests_free_option_when_possible(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_build_poll_plan_rejects_five_options_when_free_axis_is_possible(monkeypatch):
+async def test_build_poll_plan_repairs_five_option_free_axis_underfill_with_fallback(monkeypatch):
     events = [
         _candidate(101, is_free=True, event_type="лекция"),
         _candidate(102, is_free=True, event_type="экскурсия"),
@@ -765,8 +777,136 @@ async def test_build_poll_plan_rejects_five_options_when_free_axis_is_possible(m
 
     _question, options, strategy = await pf.build_poll_plan(events, min_options=3, run_key="debug:2026-06-12T10")
 
-    assert options == []
-    assert strategy == "llm_underfilled"
+    assert strategy == "fallback_topics"
+    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
+    assert len(content_options) >= 6
+    assert "Куда угодно, только бесплатно" in [option.text for option in content_options]
+    assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
+
+
+@pytest.mark.asyncio
+async def test_build_poll_plan_uses_fallback_topics_when_llm_underfills_popular_inventory(monkeypatch):
+    events = [
+        _candidate(
+            5749,
+            title="Заключительный гала-концерт фестиваля «Кантата»",
+            event_type="концерт",
+            popularity_score=9.6,
+            popularity_group_key="kld:5749",
+        ),
+        _candidate(
+            6041,
+            title="Лекция «Кант о нравственности, вере и религии»",
+            event_type="лекция",
+            is_free=True,
+            time="18:30",
+            popularity_score=1.0,
+            popularity_group_key="src:6041",
+        ),
+        _candidate(
+            5843,
+            title='Концерт "Музыка Времён"',
+            event_type="кинопоказ",
+            time="19:00",
+            popularity_score=8.0,
+            popularity_group_key="kld:5843",
+        ),
+        _candidate(
+            6023,
+            title="Открытая встреча Ассоциации сообществ КлубОК",
+            event_type="встреча",
+            time="19:00",
+            popularity_score=8.0,
+            popularity_group_key="kld:6023",
+        ),
+        _candidate(
+            6031,
+            title="Заключительная игра интеллектуального клуба",
+            event_type="встреча",
+            time="19:00",
+            popularity_score=2.0,
+            popularity_group_key="src:6031",
+        ),
+    ]
+
+    async def fake_llm(**kwargs):
+        if "Ты пишешь вопрос для Telegram-опроса" in kwargs.get("prompt", ""):
+            return {
+                "question_text": (
+                    "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+                    "Вечером возьму один анонс из варианта, за который будет больше голосов."
+                )
+            }
+        if "Ты проверяешь вопрос Telegram-опроса" in kwargs.get("prompt", ""):
+            return {"accepted": True, "reason": "понятно"}
+        return {"question_text": "", "options": []}
+
+    monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", "1")
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    question, options, strategy = await pf.build_poll_plan(
+        events,
+        min_options=3,
+        run_key="debug:2026-06-15T20",
+    )
+
+    assert strategy == "fallback_topics"
+    assert "куда можно сходить завтра" in question
+    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
+    assert len(content_options) >= 3
+    assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
+    assert pf.FEEDBACK_OPTION_TEXT in [option.text for option in options]
+
+
+@pytest.mark.asyncio
+async def test_create_poll_relaxes_popularity_filter_when_raw_inventory_is_sufficient(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        for idx, event_type in enumerate(("концерт", "лекция", "встреча", "кинопоказ", "экскурсия"), start=101):
+            session.add(_event(idx, title=f"Событие {idx}", post_id=500 + idx, event_type=event_type))
+        await session.commit()
+
+    async def fake_popularity(_db, events, **_kwargs):
+        popular = [
+            replace(events[0], popularity_score=10.0, popularity_group_key="kld:101"),
+            replace(events[1], popularity_score=8.0, popularity_group_key="kld:102"),
+        ]
+        return popular, {"source_metric_rows": 2, "popular_events": 2, "eligible_before_popularity": len(events)}
+
+    async def fake_llm(**kwargs):
+        prompt = kwargs.get("prompt", "")
+        if "Ты пишешь вопрос для Telegram-опроса" in prompt:
+            return {
+                "question_text": (
+                    "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+                    "Вечером возьму один анонс из варианта, за который будет больше голосов."
+                )
+            }
+        if "Ты проверяешь вопрос Telegram-опроса" in prompt:
+            return {"accepted": True, "reason": "понятно"}
+        return {"question_text": "", "options": []}
+
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
+    monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", "1")
+    monkeypatch.setattr(pf, "_apply_popularity_preflight", fake_popularity)
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+    bot = DummyPollBot()
+
+    result = await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["created"] is True
+    assert bot.sent_polls
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT error_json FROM poll_repost_run")
+        error = json.loads((await cur.fetchone())[0])
+    assert error["popularity"]["popularity_filter_relaxed"] is True
+    assert error["strategy"] == "fallback_topics"
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -1290,8 +1430,11 @@ async def test_popularity_inventory_filters_single_candidate_options(monkeypatch
         run_key="debug:2026-06-13T14",
     )
 
-    assert strategy == "llm_underfilled"
-    assert options == []
+    assert strategy == "fallback_topics"
+    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
+    assert len(content_options) >= 2
+    assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
+    assert all(option.text != "Куда угодно, только бесплатно" for option in content_options)
 
 
 @pytest.mark.asyncio

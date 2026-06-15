@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-15-poll-repost-missing-slots.md`
+  - Scope: `poll_to_forward.py`, production/debug poll creation, popularity underfill, topic-planner fallback, question guardrails, and Fly scheduler evidence.
+  - Must not regress: a sufficient raw event inventory must not disappear solely because sparse popularity coverage underfills; after an LLM planner attempt, usable inventory must fall back to bounded multi-candidate topics; full LLM unavailability must still skip rather than publish a fully deterministic poll; debug must remain a reliable visible smoke surface.
 - `INC-2026-06-15-tg-promo-media-drop-and-bullet-copy.md`
   - Scope: explicit Telegram promo activity posts
     (`promo_activity.surface='tg_event_publish'`) with event media and long full

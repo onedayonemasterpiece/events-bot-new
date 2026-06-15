@@ -8,6 +8,15 @@
   building/organization from source context (for example Научная библиотека,
   Мира 9). Telegram/VK promo reposts and Poll to Repost now skip events that
   have already started or are inside the default 4-hour lead-time cutoff.
+- **Fixed: Poll to Repost missing production/debug slots**: poll creation now
+  relaxes strict popularity filtering when raw eligible inventory is sufficient,
+  and uses a bounded multi-candidate fallback topic builder after an LLM planner
+  underfill instead of silently skipping usable debug/prod inventories. Full LLM
+  unavailability still skips, and question guards now reject off-tone phrases
+  such as `найду`, `самое крутое`, and `классное мероприятие`. Tracks
+  `INC-2026-06-15-poll-repost-missing-slots`. Covered by
+  `tests/test_poll_to_forward.py` and `tests/test_poll_to_forward_popularity.py`.
+
 - **Fixed: Telegram promo activity media drop on long captions**: explicit
   `tg_event_publish` promo posts with `event.photo_urls` now always publish
   the photo/album surface. When the full promo body exceeds Telegram's caption

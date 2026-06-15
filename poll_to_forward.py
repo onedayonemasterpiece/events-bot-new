@@ -215,6 +215,13 @@ def _question_guard_rejection_reason(question: str) -> str | None:
     if len(text) > 300:
         return "too_long"
     banned = (
+        "найду",
+        "самое крутое",
+        "крутое событие",
+        "крутое мероприятие",
+        "самое интересное",
+        "классное событие",
+        "классное мероприятие",
         "завтра подсветить",
         "что завтра подсветить",
         "что завтра показать",
@@ -1113,7 +1120,7 @@ async def _call_llm_topic_planner(
         return None, []
     event_ids = {ev.id for ev in events}
     free_by_id = {ev.id: bool(ev.is_free) for ev in events}
-    question = str(data.get("question_text") or "").strip() or None
+    question = str(data.get("question_text") or "").strip()
     options: list[PollOptionPlan] = []
     for idx, item in enumerate(data.get("options") or []):
         if not isinstance(item, dict):
@@ -1211,20 +1218,202 @@ def _effective_min_options(events: Sequence[CandidateEvent], configured_min_opti
     return effective
 
 
+def _event_text_for_topic(event: CandidateEvent) -> str:
+    return " ".join(
+        str(value or "")
+        for value in (
+            event.title,
+            event.event_type,
+            event.festival,
+            event.location_name,
+            " ".join(event.topics),
+            event.summary,
+        )
+    ).casefold()
+
+
+def _event_matches_any_topic_marker(event: CandidateEvent, markers: Sequence[str]) -> bool:
+    text = _event_text_for_topic(event)
+    return any(marker in text for marker in markers)
+
+
+def _event_starts_in_evening(event: CandidateEvent) -> bool:
+    match = re.match(r"\s*(\d{1,2})(?::|\.)?(\d{2})?", str(event.time or ""))
+    if not match:
+        return False
+    try:
+        return int(match.group(1)) >= 18
+    except Exception:
+        return False
+
+
+def _dedupe_option_ids(events: Sequence[CandidateEvent]) -> tuple[int, ...]:
+    return tuple(dict.fromkeys(int(event.id) for event in events if int(event.id) > 0))
+
+
+def _build_fallback_topic_options(
+    events: Sequence[CandidateEvent],
+    *,
+    min_options: int,
+    strict_popularity_inventory: bool = True,
+) -> list[PollOptionPlan]:
+    """Build a bounded deterministic safety net when the LLM planner underfills.
+
+    This is intentionally a fallback, not the primary editor. It prevents a
+    healthy inventory from becoming an invisible poll just because the LLM split
+    events into one-candidate options and the popularity inventory filter then
+    removed them all.
+    """
+
+    ordered = sorted(
+        events,
+        key=lambda event: (
+            float(event.popularity_score or 0.0),
+            bool(event.is_free),
+            str(event.time or ""),
+            -int(event.id),
+        ),
+        reverse=True,
+    )
+    specs: list[tuple[str, str, list[CandidateEvent], str]] = [
+        (
+            "music_stage",
+            "Послушать музыку или сходить на сценическую программу",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(
+                    event,
+                    (
+                        "концерт",
+                        "музык",
+                        "театр",
+                        "спектак",
+                        "сцена",
+                        "фестивал",
+                        "кинопоказ",
+                        "кино",
+                    ),
+                )
+            ],
+            "Fallback topic from music/stage/cinema markers.",
+        ),
+        (
+            "learn_talk",
+            "Узнать новое на лекции, встрече или игре",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(
+                    event,
+                    (
+                        "лекц",
+                        "встреч",
+                        "диалог",
+                        "обсуд",
+                        "экскурс",
+                        "игра",
+                        "интеллект",
+                        "клуб",
+                    ),
+                )
+            ],
+            "Fallback topic from learning/talk/game markers.",
+        ),
+        (
+            "evening",
+            "Выбраться вечером куда-то живьём",
+            [event for event in ordered if _event_starts_in_evening(event)],
+            "Fallback topic from evening start time.",
+        ),
+        (
+            "free",
+            "Куда угодно, только бесплатно",
+            [event for event in ordered if bool(event.is_free)],
+            "Fallback topic from is_free=true.",
+        ),
+        (
+            "hands_family_walk",
+            "Сделать что-то руками или выбраться с семьёй",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(
+                    event,
+                    (
+                        "мастер",
+                        "твор",
+                        "дет",
+                        "сем",
+                        "прогул",
+                        "экскурс",
+                        "зоопарк",
+                    ),
+                )
+            ],
+            "Fallback topic from hands/family/walk markers.",
+        ),
+    ]
+    min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
+    options: list[PollOptionPlan] = []
+    for key, text, option_events, rationale in specs:
+        ids = _dedupe_option_ids(option_events)
+        if len(ids) < min_candidates:
+            continue
+        options.append(PollOptionPlan(key=key, text=text[:100], candidate_event_ids=ids, rationale=rationale))
+    if strict_popularity_inventory:
+        options = _filter_options_by_popularity_inventory(options, events)
+    content = [option for option in options if not _is_feedback_option(option)]
+    if len(content) >= max(2, int(min_options)):
+        return content[: TELEGRAM_POLL_MAX_OPTIONS - 1]
+
+    # Last-resort overlapping windows from the strongest events. This still
+    # keeps at least two candidates per option, but does not invent semantic
+    # claims beyond broad user jobs.
+    windows: list[tuple[str, str, Sequence[CandidateEvent]]] = [
+        ("choice_top", "Выбрать из самых заметных анонсов", ordered[: max(2, min_candidates + 1)]),
+        ("choice_evening_or_day", "Сравнить дневной и вечерний варианты", ordered[:2] + ordered[-1:]),
+        ("choice_other", "Взять спокойный формат без лишнего шума", ordered[1 : 1 + max(2, min_candidates)]),
+    ]
+    for key, text, option_events in windows:
+        ids = _dedupe_option_ids(option_events)
+        if len(ids) < min_candidates:
+            continue
+        if any(existing.key == key for existing in options):
+            continue
+        options.append(
+            PollOptionPlan(
+                key=key,
+                text=text[:100],
+                candidate_event_ids=ids,
+                rationale="Fallback topic from ranked overlapping candidate windows.",
+            )
+        )
+    if strict_popularity_inventory:
+        options = _filter_options_by_popularity_inventory(options, events)
+    return [option for option in options if not _is_feedback_option(option)][: TELEGRAM_POLL_MAX_OPTIONS - 1]
+
+
 async def build_poll_plan(
     events: Sequence[CandidateEvent],
     *,
     min_options: int,
     run_key: str | None = None,
     previous_feedback: dict[str, Any] | None = None,
+    strict_popularity_inventory: bool = True,
 ) -> tuple[str, list[PollOptionPlan], str]:
-    effective_min_options = _effective_min_options(events, min_options)
+    effective_min_options = (
+        _effective_min_options(events, min_options)
+        if strict_popularity_inventory
+        else _topic_plan_min_options(events, min_options)
+    )
     _question, llm_options = await _call_llm_topic_planner(
         events,
         min_options=effective_min_options,
         previous_feedback=previous_feedback,
     )
-    llm_options = _filter_options_by_popularity_inventory(llm_options, events)
+    if strict_popularity_inventory:
+        llm_options = _filter_options_by_popularity_inventory(llm_options, events)
     question = await _validated_poll_question(
         run_key=run_key,
         previous_feedback=previous_feedback,
@@ -1232,6 +1421,15 @@ async def build_poll_plan(
     content_options = [option for option in llm_options if not _is_feedback_option(option)]
     if len(content_options) >= effective_min_options:
         return question, _with_feedback_option(content_options), "llm"
+    if _question is not None:
+        fallback_options = _build_fallback_topic_options(
+            events,
+            min_options=effective_min_options,
+            strict_popularity_inventory=strict_popularity_inventory,
+        )
+        fallback_content_options = [option for option in fallback_options if not _is_feedback_option(option)]
+        if len(fallback_content_options) >= effective_min_options:
+            return question, _with_feedback_option(fallback_content_options), "fallback_topics"
     return (
         question,
         [],
@@ -1421,7 +1619,7 @@ async def _create_poll_if_due(
             "previous_status": pending_visible.get("status"),
         }
 
-    events = await load_eligible_events(
+    raw_events = await load_eligible_events(
         db,
         target_date=target_date,
         profile_key=profile_key,
@@ -1429,10 +1627,11 @@ async def _create_poll_if_due(
     )
     events, popularity_diag = await _apply_popularity_preflight(
         db,
-        events,
+        raw_events,
         target_date=target_date,
         now_utc=now_utc,
     )
+    strict_popularity_inventory = True
     min_events = max(1, int(min_events))
     if len(events) < min_events:
         has_popularity_surface = any(
@@ -1444,28 +1643,60 @@ async def _create_poll_if_due(
                 "kldevents_wall_items_scanned",
             )
         )
-        status = STATUS_SKIPPED_LOW_POPULARITY_INVENTORY if has_popularity_surface else STATUS_SKIPPED_LOW_INVENTORY
-        reason = "low_popularity_inventory" if has_popularity_surface else "low_inventory"
-        await _insert_run(
-            db,
-            profile_key=profile_key,
-            run_key=run_key,
-            status=status,
-            target_event_date=target_date,
-            error={"eligible_events": len(events), "min_events": min_events, "popularity": popularity_diag},
-        )
-        logger.info(
-            "poll_to_forward.%s_create skipped %s run_key=%s profile=%s target_date=%s eligible=%s min=%s popularity=%s",
-            log_label,
-            reason,
-            run_key,
-            profile_key,
-            target_date,
-            len(events),
-            min_events,
-            popularity_diag,
-        )
-        return {"created": False, "reason": reason, "eligible_events": len(events), "run_key": run_key}
+        if (
+            has_popularity_surface
+            and _env_enabled("POLL_TO_FORWARD_RELAX_POPULARITY_ON_UNDERFILL", True)
+            and len(raw_events) >= min_events
+        ):
+            popular_by_id = {event.id: event for event in events}
+            events = [popular_by_id.get(event.id, event) for event in raw_events]
+            strict_popularity_inventory = False
+            popularity_diag = {
+                **popularity_diag,
+                "popularity_filter_relaxed": True,
+                "popular_events_before_relax": len(popular_by_id),
+                "eligible_after_relax": len(events),
+                "relax_reason": "raw_inventory_meets_min_events_but_popular_inventory_underfilled",
+            }
+            logger.warning(
+                "poll_to_forward.%s_create relaxing popularity filter run_key=%s profile=%s target_date=%s raw=%s popular=%s min=%s",
+                log_label,
+                run_key,
+                profile_key,
+                target_date,
+                len(raw_events),
+                len(popular_by_id),
+                min_events,
+            )
+        else:
+            status = STATUS_SKIPPED_LOW_POPULARITY_INVENTORY if has_popularity_surface else STATUS_SKIPPED_LOW_INVENTORY
+            reason = "low_popularity_inventory" if has_popularity_surface else "low_inventory"
+            await _insert_run(
+                db,
+                profile_key=profile_key,
+                run_key=run_key,
+                status=status,
+                target_event_date=target_date,
+                error={
+                    "eligible_events": len(events),
+                    "raw_eligible_events": len(raw_events),
+                    "min_events": min_events,
+                    "popularity": popularity_diag,
+                },
+            )
+            logger.info(
+                "poll_to_forward.%s_create skipped %s run_key=%s profile=%s target_date=%s eligible=%s raw=%s min=%s popularity=%s",
+                log_label,
+                reason,
+                run_key,
+                profile_key,
+                target_date,
+                len(events),
+                len(raw_events),
+                min_events,
+                popularity_diag,
+            )
+            return {"created": False, "reason": reason, "eligible_events": len(events), "run_key": run_key}
 
     configured_min_options = max(2, int(min_options))
     effective_min_options = _effective_min_options(events, configured_min_options)
@@ -1474,6 +1705,7 @@ async def _create_poll_if_due(
         min_options=effective_min_options,
         run_key=run_key,
         previous_feedback=previous_feedback,
+        strict_popularity_inventory=strict_popularity_inventory,
     )
     content_option_count = sum(1 for option in options if option.key != FEEDBACK_OPTION_KEY)
     if content_option_count < effective_min_options:
@@ -1490,6 +1722,7 @@ async def _create_poll_if_due(
                 "min_options": effective_min_options,
                 "popularity": popularity_diag,
                 "previous_feedback": previous_feedback,
+                "strict_popularity_inventory": strict_popularity_inventory,
             },
         )
         logger.info(

@@ -355,15 +355,34 @@ sample such as 4 posts make weak engagement look strong. Diagnostics record
 `kldevents_baseline_source`, `kldevents_baseline_sample`,
 `kldevents_baseline_min_sample`, and `kldevents_baseline_confidence`.
 
-Poll options are built from popularity-qualified events only when a popularity
+Poll options are built from popularity-qualified events when a popularity
 surface is available. Each option must contain at least two distinct candidate
 groups (`POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION`, default `2`).
 Single-candidate themes are omitted. A free-events option is allowed only when
-at least two popular free candidates exist. On richer popular inventories, the
-required number of content options grows with distinct popularity groups:
-roughly 4 options for 8+ groups, 5 for 10+ groups and 12+ events, and 6 for
-12+ groups and 18+ events, capped by the "at least two groups per option"
-constraint. This prevents a busy date from being collapsed into a tiny poll.
+at least two free candidates exist in the active planning inventory. On richer
+popular inventories, the required number of content options grows with distinct
+popularity groups: roughly 4 options for 8+ groups, 5 for 10+ groups and 12+
+events, and 6 for 12+ groups and 18+ events, capped by the "at least two groups
+per option" constraint. This prevents a busy date from being collapsed into a
+tiny poll.
+
+Popularity is a ranking and quality signal, not a single point of failure for
+poll visibility. If popularity-qualified events underfill but the raw eligible
+repost inventory still meets the profile minimum, creation relaxes the strict
+popularity filter (`POLL_TO_FORWARD_RELAX_POPULARITY_ON_UNDERFILL=1` by
+default) and records `popularity_filter_relaxed=true` in diagnostics. Popular
+events keep their scores for final ranking; non-popular eligible events can
+participate in topic options so a day with partial metric coverage does not
+silently lose the whole poll.
+
+The LLM topic planner remains primary. If it is unavailable, the poll is skipped
+instead of publishing a fully deterministic topic set. If the LLM planner is
+available but returns an underfilled/over-fragmented plan, code may apply a
+bounded fallback topic builder: broad user-job options such as music/stage,
+learn/talk, evening, family/hands, or free, each still requiring at least two
+candidates. This fallback exists only to keep a usable inventory visible; it must
+not select the final event and must keep the final recommendation inside the
+winning option.
 The final recommendation stays inside the winning poll option and uses a
 weighted pick from that option's deduplicated TOP-3 candidates. The pick seed
 includes the concrete run/poll, so repeated debug cycles with the same category
