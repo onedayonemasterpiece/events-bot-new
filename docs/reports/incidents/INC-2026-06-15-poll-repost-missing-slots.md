@@ -64,6 +64,10 @@ options.
 4. Observability recorded skipped reasons in DB/logs, but there was no public or
    operator-facing guarantee that debug would degrade into a testable poll after
    repeated underfill.
+5. The first mitigation over-corrected by using a too-broad deterministic topic
+   fallback: it merged unrelated formats and created weak buckets such as
+   "evening" to satisfy the option count. That preserved visibility but violated
+   the product bar for a friendly editorial poll.
 
 ## Contributing Factors
 
@@ -96,7 +100,10 @@ options.
 ### Mandatory checks before closure or deploy
 
 - Regression test: LLM topic planner underfill with a usable popular inventory
-  must produce fallback poll options with at least two candidates per option.
+  may produce fallback poll options only when there are enough coherent
+  multi-candidate themes.
+- Regression test: sparse popular inventory must not be over-merged into broad
+  mood/time buckets merely to satisfy the option count.
 - Regression test: raw inventory meeting min events must relax strict popularity
   filtering instead of skipping production/debug creation.
 - Regression test: full LLM unavailability still skips instead of publishing a
@@ -127,9 +134,12 @@ be caught up after the fix if the daytime debug window still allows it.
 
 ## Corrective Actions
 
-Pending deploy: add LLM-attempt-bounded fallback topic options, relax strict
+Deploy mitigation: add LLM-attempt-bounded fallback topic options, relax strict
 popularity filtering when raw inventory is sufficient, and tighten question
 copy guardrails.
+
+Follow-up correction: constrain fallback topics to conservative coherent
+multi-candidate themes and prefer skip/alert over publishing an over-merged poll.
 
 ## Follow-up Actions
 
@@ -140,10 +150,17 @@ copy guardrails.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `a943e5afd4689945af3b1dd0f97884f8f8d78054` initially mitigated
+  the silent missing-slot issue but produced an over-merged debug fallback poll.
+- follow-up SHA: pending
+- deploy path: Fly `events-bot-new-wngqia`, image
+  `deployment-01KV683C5MT05YCX3X813Z6BR7` for the initial mitigation.
+- regression checks: `tests/test_poll_to_forward.py`,
+  `tests/test_poll_to_forward_popularity.py`.
+- post-deploy verification: `/healthz` returned `ok=true`, Fly machine version
+  `1422` was started with `1 passing` check, and debug catch-up created
+  `poll_repost_run.id=58` in `@keniggpt` with strategy `fallback_topics`.
+  That catch-up is retained as evidence for the over-merged fallback follow-up.
 
 ## Prevention
 

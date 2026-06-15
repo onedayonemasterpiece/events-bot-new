@@ -1257,12 +1257,12 @@ def _build_fallback_topic_options(
     min_options: int,
     strict_popularity_inventory: bool = True,
 ) -> list[PollOptionPlan]:
-    """Build a bounded deterministic safety net when the LLM planner underfills.
+    """Build a conservative safety net when the LLM planner underfills.
 
-    This is intentionally a fallback, not the primary editor. It prevents a
-    healthy inventory from becoming an invisible poll just because the LLM split
-    events into one-candidate options and the popularity inventory filter then
-    removed them all.
+    The fallback must not invent broad mood/time buckets just to satisfy a
+    minimum option count. If the available inventory only supports one or two
+    coherent audience choices, it should underfill and let the run skip/alert
+    instead of publishing a weak poll.
     """
 
     ordered = sorted(
@@ -1277,8 +1277,8 @@ def _build_fallback_topic_options(
     )
     specs: list[tuple[str, str, list[CandidateEvent], str]] = [
         (
-            "music_stage",
-            "Послушать музыку или сходить на сценическую программу",
+            "music_concert",
+            "Послушать живую музыку или концертную программу",
             [
                 event
                 for event in ordered
@@ -1287,20 +1287,55 @@ def _build_fallback_topic_options(
                     (
                         "концерт",
                         "музык",
-                        "театр",
-                        "спектак",
-                        "сцена",
-                        "фестивал",
-                        "кинопоказ",
-                        "кино",
+                        "оркестр",
+                        "квартет",
+                        "джаз",
+                        "кантата",
                     ),
                 )
             ],
-            "Fallback topic from music/stage/cinema markers.",
+            "Conservative fallback topic from music/concert markers.",
         ),
         (
-            "learn_talk",
-            "Узнать новое на лекции, встрече или игре",
+            "art_exhibition",
+            "Сходить на выставку или арт-событие",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(
+                    event,
+                    (
+                        "выстав",
+                        "галере",
+                        "искусств",
+                        "живопис",
+                        "музей",
+                    ),
+                )
+            ],
+            "Conservative fallback topic from art/exhibition markers.",
+        ),
+        (
+            "cinema",
+            "Сходить на кинопоказ",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(
+                    event,
+                    (
+                        "кинопоказ",
+                        "кино",
+                        "фильм",
+                        "документал",
+                    ),
+                )
+            ],
+            "Conservative fallback topic from cinema markers.",
+        ),
+        (
+            "lecture_meeting",
+            "Узнать новое на лекции или встрече",
             [
                 event
                 for event in ordered
@@ -1310,88 +1345,78 @@ def _build_fallback_topic_options(
                         "лекц",
                         "встреч",
                         "диалог",
-                        "обсуд",
-                        "экскурс",
-                        "игра",
-                        "интеллект",
-                        "клуб",
+                        "обсужд",
+                        "разговор",
+                        "клубок",
                     ),
                 )
             ],
-            "Fallback topic from learning/talk/game markers.",
+            "Conservative fallback topic from lecture/meeting markers.",
         ),
         (
-            "evening",
-            "Выбраться вечером куда-то живьём",
-            [event for event in ordered if _event_starts_in_evening(event)],
-            "Fallback topic from evening start time.",
+            "excursion_walk",
+            "Сходить на экскурсию или прогулку",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(event, ("экскурс", "прогул"))
+            ],
+            "Conservative fallback topic from excursion/walk markers.",
+        ),
+        (
+            "masterclass_hands",
+            "Сделать что-то руками на мастер-классе",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(event, ("мастер", "твор", "руками", "воркшоп"))
+            ],
+            "Conservative fallback topic from masterclass/handmade markers.",
+        ),
+        (
+            "games_quiz",
+            "Поиграть или сходить на квиз",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(event, ("игра", "квиз", "интеллект"))
+            ],
+            "Conservative fallback topic from game/quiz markers.",
+        ),
+        (
+            "family_kids",
+            "Выбраться с детьми или всей семьёй",
+            [
+                event
+                for event in ordered
+                if _event_matches_any_topic_marker(event, ("дет", "сем", "ребён", "ребен"))
+            ],
+            "Conservative fallback topic from family/kids markers.",
         ),
         (
             "free",
             "Куда угодно, только бесплатно",
             [event for event in ordered if bool(event.is_free)],
-            "Fallback topic from is_free=true.",
-        ),
-        (
-            "hands_family_walk",
-            "Сделать что-то руками или выбраться с семьёй",
-            [
-                event
-                for event in ordered
-                if _event_matches_any_topic_marker(
-                    event,
-                    (
-                        "мастер",
-                        "твор",
-                        "дет",
-                        "сем",
-                        "прогул",
-                        "экскурс",
-                        "зоопарк",
-                    ),
-                )
-            ],
-            "Fallback topic from hands/family/walk markers.",
+            "Conservative fallback topic from is_free=true.",
         ),
     ]
     min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
     options: list[PollOptionPlan] = []
+    seen_id_sets: set[tuple[int, ...]] = set()
     for key, text, option_events, rationale in specs:
         ids = _dedupe_option_ids(option_events)
         if len(ids) < min_candidates:
             continue
+        if ids in seen_id_sets:
+            continue
+        seen_id_sets.add(ids)
         options.append(PollOptionPlan(key=key, text=text[:100], candidate_event_ids=ids, rationale=rationale))
     if strict_popularity_inventory:
         options = _filter_options_by_popularity_inventory(options, events)
     content = [option for option in options if not _is_feedback_option(option)]
     if len(content) >= max(2, int(min_options)):
         return content[: TELEGRAM_POLL_MAX_OPTIONS - 1]
-
-    # Last-resort overlapping windows from the strongest events. This still
-    # keeps at least two candidates per option, but does not invent semantic
-    # claims beyond broad user jobs.
-    windows: list[tuple[str, str, Sequence[CandidateEvent]]] = [
-        ("choice_top", "Выбрать из самых заметных анонсов", ordered[: max(2, min_candidates + 1)]),
-        ("choice_evening_or_day", "Сравнить дневной и вечерний варианты", ordered[:2] + ordered[-1:]),
-        ("choice_other", "Взять спокойный формат без лишнего шума", ordered[1 : 1 + max(2, min_candidates)]),
-    ]
-    for key, text, option_events in windows:
-        ids = _dedupe_option_ids(option_events)
-        if len(ids) < min_candidates:
-            continue
-        if any(existing.key == key for existing in options):
-            continue
-        options.append(
-            PollOptionPlan(
-                key=key,
-                text=text[:100],
-                candidate_event_ids=ids,
-                rationale="Fallback topic from ranked overlapping candidate windows.",
-            )
-        )
-    if strict_popularity_inventory:
-        options = _filter_options_by_popularity_inventory(options, events)
-    return [option for option in options if not _is_feedback_option(option)][: TELEGRAM_POLL_MAX_OPTIONS - 1]
+    return content[: TELEGRAM_POLL_MAX_OPTIONS - 1]
 
 
 async def build_poll_plan(

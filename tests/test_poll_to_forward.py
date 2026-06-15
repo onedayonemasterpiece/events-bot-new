@@ -750,7 +750,7 @@ async def test_topic_planner_prompt_requests_free_option_when_possible(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_build_poll_plan_repairs_five_option_free_axis_underfill_with_fallback(monkeypatch):
+async def test_build_poll_plan_keeps_fallback_conservative_on_fragmented_inventory(monkeypatch):
     events = [
         _candidate(101, is_free=True, event_type="лекция"),
         _candidate(102, is_free=True, event_type="экскурсия"),
@@ -777,15 +777,12 @@ async def test_build_poll_plan_repairs_five_option_free_axis_underfill_with_fall
 
     _question, options, strategy = await pf.build_poll_plan(events, min_options=3, run_key="debug:2026-06-12T10")
 
-    assert strategy == "fallback_topics"
-    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
-    assert len(content_options) >= 6
-    assert "Куда угодно, только бесплатно" in [option.text for option in content_options]
-    assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
+    assert strategy == "llm_underfilled"
+    assert options == []
 
 
 @pytest.mark.asyncio
-async def test_build_poll_plan_uses_fallback_topics_when_llm_underfills_popular_inventory(monkeypatch):
+async def test_build_poll_plan_skips_instead_of_overmerging_sparse_popular_inventory(monkeypatch):
     events = [
         _candidate(
             5749,
@@ -850,10 +847,43 @@ async def test_build_poll_plan_uses_fallback_topics_when_llm_underfills_popular_
         run_key="debug:2026-06-15T20",
     )
 
+    assert strategy == "llm_underfilled"
+    assert "куда можно сходить завтра" in question
+    assert options == []
+
+
+@pytest.mark.asyncio
+async def test_build_poll_plan_uses_fallback_only_for_coherent_multi_candidate_topics(monkeypatch):
+    events = [
+        _candidate(101, title="Камерный концерт", event_type="концерт", popularity_score=8, popularity_group_key="a"),
+        _candidate(102, title="Джазовый концерт", event_type="концерт", popularity_score=7, popularity_group_key="b"),
+        _candidate(103, title="Выставка графики", event_type="выставка", popularity_score=6, popularity_group_key="c"),
+        _candidate(104, title="Выставка живописи", event_type="выставка", popularity_score=5, popularity_group_key="d"),
+        _candidate(105, title="Лекция о Канте", event_type="лекция", popularity_score=4, popularity_group_key="e"),
+        _candidate(106, title="Встреча книжного клуба", event_type="встреча", popularity_score=3, popularity_group_key="f"),
+    ]
+
+    async def fake_llm(**kwargs):
+        if "Ты пишешь вопрос для Telegram-опроса" in kwargs.get("prompt", ""):
+            return {
+                "question_text": (
+                    "Сегодня выбираем категорию событий, куда можно сходить завтра. "
+                    "Вечером возьму один анонс из варианта, за который будет больше голосов."
+                )
+            }
+        if "Ты проверяешь вопрос Telegram-опроса" in kwargs.get("prompt", ""):
+            return {"accepted": True, "reason": "понятно"}
+        return {"question_text": "", "options": []}
+
+    monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", "1")
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    question, options, strategy = await pf.build_poll_plan(events, min_options=3, run_key="debug:coherent")
+
     assert strategy == "fallback_topics"
     assert "куда можно сходить завтра" in question
     content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
-    assert len(content_options) >= 3
+    assert [option.key for option in content_options] == ["music_concert", "art_exhibition", "lecture_meeting"]
     assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
     assert pf.FEEDBACK_OPTION_TEXT in [option.text for option in options]
 
@@ -885,7 +915,14 @@ async def test_create_poll_relaxes_popularity_filter_when_raw_inventory_is_suffi
             }
         if "Ты проверяешь вопрос Telegram-опроса" in prompt:
             return {"accepted": True, "reason": "понятно"}
-        return {"question_text": "", "options": []}
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [101, 103]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [102, 105]},
+                {"key": "walk", "text": "Выбраться на прогулку", "candidate_event_ids": [104, 105]},
+            ],
+        }
 
     monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
     monkeypatch.setenv("POLL_TO_FORWARD_QUESTION_LLM_REVIEW_ENABLED", "1")
@@ -905,7 +942,7 @@ async def test_create_poll_relaxes_popularity_filter_when_raw_inventory_is_suffi
         cur = await conn.execute("SELECT error_json FROM poll_repost_run")
         error = json.loads((await cur.fetchone())[0])
     assert error["popularity"]["popularity_filter_relaxed"] is True
-    assert error["strategy"] == "fallback_topics"
+    assert error["strategy"] == "llm"
     await db.close()
 
 
@@ -1430,11 +1467,8 @@ async def test_popularity_inventory_filters_single_candidate_options(monkeypatch
         run_key="debug:2026-06-13T14",
     )
 
-    assert strategy == "fallback_topics"
-    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
-    assert len(content_options) >= 2
-    assert all(len(option.candidate_event_ids) >= 2 for option in content_options)
-    assert all(option.text != "Куда угодно, только бесплатно" for option in content_options)
+    assert strategy == "llm_underfilled"
+    assert options == []
 
 
 @pytest.mark.asyncio

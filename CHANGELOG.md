@@ -10,11 +10,13 @@
   have already started or are inside the default 4-hour lead-time cutoff.
 - **Fixed: Poll to Repost missing production/debug slots**: poll creation now
   relaxes strict popularity filtering when raw eligible inventory is sufficient,
-  and uses a bounded multi-candidate fallback topic builder after an LLM planner
-  underfill instead of silently skipping usable debug/prod inventories. Full LLM
-  unavailability still skips, and question guards now reject off-tone phrases
-  such as `найду`, `самое крутое`, and `классное мероприятие`. Tracks
-  `INC-2026-06-15-poll-repost-missing-slots`. Covered by
+  and uses a bounded multi-candidate fallback topic builder only for coherent
+  themes after an LLM planner underfill instead of silently skipping truly usable
+  debug/prod inventories. The fallback no longer creates broad mood/time buckets
+  such as "evening" or over-merges unrelated formats just to reach the option
+  count. Full LLM unavailability still skips, and question guards now reject
+  off-tone phrases such as `найду`, `самое крутое`, and `классное мероприятие`.
+  Tracks `INC-2026-06-15-poll-repost-missing-slots`. Covered by
   `tests/test_poll_to_forward.py` and `tests/test_poll_to_forward_popularity.py`.
 
 - **Fixed: Telegram promo activity media drop on long captions**: explicit
