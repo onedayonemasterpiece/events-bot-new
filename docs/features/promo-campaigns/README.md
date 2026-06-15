@@ -362,7 +362,10 @@ window / due-slot rules. The activity is intentionally separate from ordinary
 Smart Update Telegram event publication: it creates an explicit campaign post,
 records `promo_exposure.surface='tg_event_publish'` with
 `publish_status='TG_PUBLISHED'`, and stores the resulting source post URL back
-on the event for downstream reposts.
+on the event for downstream reposts. Full-body text is sanitized for Telegram
+HTML: Markdown section headings become bold headings, bullets are normalized,
+and raw service markers such as `###`, `**`, or list `*` must not leak to the
+public post.
 
 `tg_repost` forwards an existing source-channel post, normally
 `@kldevents -> @kenigevents`, instead of rendering a new text post in the

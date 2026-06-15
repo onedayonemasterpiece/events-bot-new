@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram promo activity Markdown leak**: explicit `tg_event_publish`
+  promo posts now normalize Markdown-rich Smart Update descriptions before
+  sending to Telegram, rendering section headings as bold HTML and bullets as
+  `•` so raw `###`, `**`, and `*` markers do not appear in public `@kldevents`
+  campaign posts. Tracks `INC-2026-06-15-tg-promo-markdown-leak`. Covered by
+  `tests/test_tg_event_publish.py`.
 - **Fixed: CrumpleVideo VK wall fanout drift**: scheduled `/v tomorrow`
   now bundles the current `kaggle_common/story_publish.py` into the Kaggle
   session dataset and the notebook prefers that shared helper before its

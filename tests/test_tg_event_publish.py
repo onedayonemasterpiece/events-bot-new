@@ -369,6 +369,33 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
     assert hook.startswith("Редкая камерная программа")
 
 
+def test_build_tg_promo_event_publication_formats_markdown_body():
+    event = _event(
+        title="🗣️ Творческая встреча",
+        emoji="🗣️",
+        description=(
+            "Вступительный абзац про образовательную программу.\n\n"
+            "### О спикере\n"
+            "Гость — **Иван Никифорчин**.\n\n"
+            "### Формат и темы\n"
+            "* Роль дирижёра как регулятора эмоционального поля.\n"
+            "* Специфика взаимодействия внутри оркестра."
+        ),
+        is_free=True,
+    )
+
+    text = main.build_tg_promo_event_publication_message(event)
+
+    assert text.startswith("<b>🗣️ Творческая встреча</b>")
+    assert "###" not in text
+    assert "**" not in text
+    assert "\n* " not in text
+    assert "<b>О спикере</b>" in text
+    assert "<b>Формат и темы</b>" in text
+    assert "• Роль дирижёра как регулятора эмоционального поля." in text
+    assert "Гость — Иван Никифорчин." in text
+
+
 def test_tg_event_promo_details_move_to_inline_button():
     event = _event(
         ics_url="https://example.com/event.ics",

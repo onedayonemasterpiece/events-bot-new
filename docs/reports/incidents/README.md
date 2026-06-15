@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-15-tg-promo-markdown-leak.md`
+  - Scope: explicit Telegram promo activity posts
+    (`promo_activity.surface='tg_event_publish'`), full event body formatting
+    in `main_part2.py`, and public `@kldevents` promo outputs.
+  - Must not regress: Markdown-style section headings and bullets from
+    `event.description` must not leak as literal `###`, `**`, or `*` markers in
+    public Telegram promo posts; headings should be formatted with Telegram HTML
+    and bullets normalized before escaping.
 - `INC-2026-06-14-crumple-vk-transport-drift.md`
   - Scope: CrumpleVideo scheduled `/v tomorrow` VK wall fanout, Kaggle
     notebook embedded story helper, story-enabled session dataset helper

@@ -4120,6 +4120,57 @@ def _tg_promo_strip_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text or "")
 
 
+def _tg_promo_clean_inline_markdown(text: str) -> str:
+    value = html.unescape(_tg_promo_strip_tags(str(text or "")))
+    value = re.sub(r"\[([^\]|]+)\|([^\]]+)\]", r"\2", value)
+    value = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", value)
+    value = value.replace("`", "")
+    value = re.sub(r"(?<!\w)(?:\*\*|__)(.+?)(?:\*\*|__)(?!\w)", r"\1", value)
+    value = re.sub(r"(?<!\w)(?:\*|_)([^*_]+?)(?:\*|_)(?!\w)", r"\1", value)
+    return " ".join(value.split())
+
+
+def _tg_promo_body_to_html(text: str) -> str:
+    raw = html.unescape(_tg_promo_strip_tags(str(text or "")))
+    raw = re.sub(r"```.*?```", "", raw, flags=re.S)
+    out: list[str] = []
+    blank = False
+    for raw_line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = raw_line.strip()
+        if not line:
+            if out and not blank:
+                out.append("")
+                blank = True
+            continue
+        if re.fullmatch(r"[-*_]{3,}", line):
+            continue
+        blank = False
+        heading = re.match(r"^#{1,6}\s+(.+)$", line)
+        if heading:
+            cleaned = _tg_promo_clean_inline_markdown(heading.group(1))
+            if cleaned:
+                out.append(f"<b>{html.escape(cleaned)}</b>")
+            continue
+        bold_line = re.fullmatch(r"(?:\*\*|__)(.+?)(?:\*\*|__)", line)
+        if bold_line:
+            cleaned = _tg_promo_clean_inline_markdown(bold_line.group(1))
+            if cleaned:
+                out.append(f"<b>{html.escape(cleaned)}</b>")
+            continue
+        bullet = re.match(r"^(?:[-*•▪▫–—]|\d+[.)])\s+(.+)$", line)
+        if bullet:
+            cleaned = _tg_promo_clean_inline_markdown(bullet.group(1))
+            if cleaned:
+                out.append(f"• {html.escape(cleaned)}")
+            continue
+        cleaned = _tg_promo_clean_inline_markdown(line)
+        if cleaned:
+            out.append(html.escape(cleaned))
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
 def _tg_promo_plain_location(event: Event) -> str:
     return _compose_event_location(
         getattr(event, "location_name", None),
@@ -4157,9 +4208,9 @@ def build_tg_promo_event_publication_message(event: Event) -> str:
         if price:
             lines.append(html.escape(f"🎟 Билеты {price}"))
 
-    body = _tg_promo_strip_tags(_tg_promo_text_source(event)).strip()
+    body = _tg_promo_body_to_html(_tg_promo_text_source(event)).strip()
     if body:
-        lines.extend(["", html.escape(body)])
+        lines.extend(["", body])
     hashtag_line = _tg_event_hashtag_line(event)
     if hashtag_line:
         lines.extend(["", html.escape(hashtag_line)])
