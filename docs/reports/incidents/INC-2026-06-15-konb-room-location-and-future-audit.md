@@ -39,6 +39,10 @@ The same audit found active future rows with generic/duplicate records: two gene
 - 2026-06-15 — immediate production repair changed both DB rows and public captions to `Научная библиотека, Мира 9, #Калининград`.
 - 2026-06-15 — first code mitigation added VK LLM prompt rule: room/floor labels are not venues; promo and poll reposts skip already-started/near-start events by default.
 - 2026-06-15 — follow-up investigation found `telegram_source.default_location` for `kaliningradlibrary` was present, but `vk_source.location` for `konb39` was `NULL` in production.
+- 2026-06-15 — broadened the audit beyond room/floor strings to all active
+  future event locations (`date >= 2026-06-15`, 353 active public rows).
+  Source-grounded review found additional wrong locations, alias drift, and two
+  out-of-region rows; production rows and source defaults were repaired.
 
 ## Root Cause
 
@@ -100,12 +104,40 @@ The same audit found active future rows with generic/duplicate records: two gene
 - Seed/repair `vk_source.location` for `konb39` to `Научная библиотека, Мира 9, Калининград` so VK imports have the same stable venue prior as Telegram imports.
 - Strengthen the VK LLM prompt: if the explicit place is only room/hall/auditorium/floor, treat the venue as missing and use source organization/source-location/location hint when grounded by source text/OCR.
 - Repair production duplicate/generic future rows and rebuild affected public listing jobs.
+- Repair production location-audit findings and add reference/source-default
+  prevention:
+  - `4673`/`4689`: `Дворец спорта «Юность»` was wrong for posts grounded in
+    `Дворец спорта «Янтарный»`; changed to `Дворец спорта «Янтарный», Согласия 39`.
+  - `5466`: `Музыкальный театр, Мира 87` was the artists' organization, not
+    the venue; source gave `Космонавта Леонова 17В`, so the public venue was
+    changed to address-only `Космонавта Леонова 17В`.
+  - `5804`: normalized `Калининградский областной драматический театр` to
+    `Драматический театр, Мира 4`.
+  - `4958`: normalized `Клуб "СКЛАД" (Warehouse Club)` to
+    `СКЛАD, Ялтинская 20П`.
+  - `6004`: normalized `Дом с Горгульей` to `Дом Горгульи, Комсомольская 24`.
+  - `5926`: `💥Лекции` was a section label; changed to
+    `Музей Изобразительных искусств, Ленинский проспект 83`.
+  - `2999`: normalized `Ростехarena` to
+    `Ростех Арена, Солнечный бульвар 25`.
+  - `6039`: `Калининград Сити Джаз Клуб` was unrelated; source/registration
+    evidence grounded the event at
+    `Лекторий Центра «Мой бизнес», Уральская 18, 4 этаж`.
+  - `5367`: source text did not contain a grounded public venue and no reliable
+    source default was present; hidden from the public catalog until an address
+    is confirmed.
+  - `3272` and `3918`: active catalog rows were out-of-region (`МАМТ` in
+    Moscow and festival Puccini in Torre del Lago); hidden/cancelled from the
+    public catalog.
 
 ## Follow-up Actions
 
 - [ ] Add a full replay fixture for `wall-30777579_15423`/`15425` through VK auto-import + Smart Update on a prod snapshot, not only prompt/unit tests.
 - [ ] Add a scheduled future-catalog audit report that flags generic titles, same-source duplicate rows, room/floor-only venues, and public rows linked to hidden duplicate event IDs.
 - [ ] Decide whether multi-venue citywide festivals should be represented as one umbrella event, venue-specific events, or both with explicit linking/display rules.
+- [ ] Add an LLM-first catalog-location review job for broad audits: sample
+  all active future singleton/unknown/alias-drift locations and ask for
+  source-grounded verdicts instead of relying on only room/floor regex flags.
 
 ## Release And Closure Evidence
 
@@ -117,6 +149,13 @@ The same audit found active future rows with generic/duplicate records: two gene
   - `tests/test_promo.py::test_promo_tg_repost_skips_event_inside_four_hour_lead_time`
   - `tests/test_poll_to_forward.py::test_load_eligible_events_skips_started_or_near_start_events`
 - post-deploy verification: `/healthz` returned `ok=true`, `ready=true`; production SQL audit confirmed KОНБ VK/TG defaults, repaired `6041`/`6042`, no active room/floor-only locations, and no active generic `Музыкальный фестиваль` / `Концерт к 80-летию региона` rows.
+- post-report full-location production repair: SQL audit covered 353 active
+  public future rows and applied source-grounded repairs for events
+  `4673`, `4689`, `5466`, `5804`, `4958`, `6004`, `5926`, `2999`, `6039`,
+  hid no-grounded-location row `5367`, and hid out-of-region rows `3272`,
+  `3918`; `vk_source.location` was set for
+  `amberarena39` and `mbkaliningrad39`; Telegraph/month/TG/VK refresh jobs were
+  enqueued for affected rows.
 
 ## Prevention
 

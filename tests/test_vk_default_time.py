@@ -438,19 +438,29 @@ async def test_db_init_repairs_known_vk_source_location_defaults(tmp_path):
             "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
             (30777579, "konb39", "Калининградская областная научная библиотека", None),
         )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (179910542, "amberarena39", "Дворец спорта «Янтарный»", None),
+        )
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name, location) VALUES(?,?,?,?)",
+            (39437155, "mbkaliningrad39", "Мой бизнес 39 | Калининград", "Калининград Сити Джаз Клуб"),
+        )
         await conn.commit()
 
     await db.init()
 
     async with db.raw_conn() as conn:
         rows = await conn.execute_fetchall(
-            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?, ?) ORDER BY group_id",
-            (149955604, 214027639, 30777579),
+            "SELECT group_id, location FROM vk_source WHERE group_id IN (?, ?, ?, ?, ?) ORDER BY group_id",
+            (149955604, 179910542, 214027639, 30777579, 39437155),
         )
     locations = {int(row[0]): row[1] for row in rows}
     assert locations[149955604] == "Бар Бастион, Судостроительная 6/1, Калининград"
+    assert locations[179910542] == "Дворец спорта «Янтарный», Согласия 39, Калининград"
     assert locations[214027639] == "Стендап клуб Локация, Юбилейная 18, Калининград"
     assert locations[30777579] == "Научная библиотека, Мира 9, Калининград"
+    assert locations[39437155] == "Центр «Мой бизнес», Уральская 18, Калининград"
 
 
 @pytest.mark.asyncio

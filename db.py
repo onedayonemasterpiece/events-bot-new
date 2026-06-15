@@ -1534,6 +1534,38 @@ class Database:
                     """,
                     ("Научная библиотека, Мира 9, Калининград", 30777579),
                 )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Дворец спорта «Юность»',
+                            'Дворец спорта «Юность», Маршала Баграмяна 2, Калининград'
+                        )
+                      )
+                    """,
+                    ("Дворец спорта «Янтарный», Согласия 39, Калининград", 179910542),
+                )
+                await conn.execute(
+                    """
+                    UPDATE vk_source
+                    SET location = ?
+                    WHERE group_id = ?
+                      AND (
+                        location IS NULL
+                        OR TRIM(location) = ''
+                        OR location IN (
+                            'Калининград Сити Джаз Клуб',
+                            'Калининград Сити Джаз Клуб, Мира 33-35, Калининград'
+                        )
+                      )
+                    """,
+                    ("Центр «Мой бизнес», Уральская 18, Калининград", 39437155),
+                )
                 skip_vk_source_seed = (
                     (os.getenv("DB_INIT_SKIP_VK_SOURCES_SEED") or "").strip().lower()
                     in {"1", "true", "yes", "on"}

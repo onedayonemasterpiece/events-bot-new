@@ -11,6 +11,11 @@
   source default. Telegram/VK promo reposts and Poll to Repost now skip events
   that have already started or are inside the default 4-hour lead-time cutoff.
   Tracks `INC-2026-06-15-konb-room-location-and-future-audit`.
+- **Fixed: Future catalog location audit follow-ups**: added curated location
+  aliases and VK source defaults found by the 2026-06-15 full future-location
+  audit, including `amberarena39` → `Дворец спорта «Янтарный»`, `mbkaliningrad39`
+  → `Центр «Мой бизнес»`, `Ростехarena`, `Дом с Горгульей`, `СКЛАД`, and
+  `Калининградский областной драматический театр` normalization.
 - **Fixed: Poll to Repost missing production/debug slots**: poll creation now
   relaxes strict popularity filtering when raw eligible inventory is sufficient,
   and uses a bounded multi-candidate fallback topic builder only for coherent
