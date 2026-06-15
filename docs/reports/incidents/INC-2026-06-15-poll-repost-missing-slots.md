@@ -152,15 +152,25 @@ multi-candidate themes and prefer skip/alert over publishing an over-merged poll
 
 - deployed SHA: `a943e5afd4689945af3b1dd0f97884f8f8d78054` initially mitigated
   the silent missing-slot issue but produced an over-merged debug fallback poll.
-- follow-up SHA: pending
+- follow-up SHA: `acb66219` constrains fallback topics to coherent
+  multi-candidate themes and prevents over-merged fallback polls.
 - deploy path: Fly `events-bot-new-wngqia`, image
   `deployment-01KV683C5MT05YCX3X813Z6BR7` for the initial mitigation.
+- follow-up deploy path: Fly `events-bot-new-wngqia`, image
+  `deployment-01KV68TJX3BTWEM4M8C5JPCY1P`, machine version `1423`.
 - regression checks: `tests/test_poll_to_forward.py`,
-  `tests/test_poll_to_forward_popularity.py`.
+  `tests/test_poll_to_forward_popularity.py` (`48 passed`).
 - post-deploy verification: `/healthz` returned `ok=true`, Fly machine version
   `1422` was started with `1 passing` check, and debug catch-up created
   `poll_repost_run.id=58` in `@keniggpt` with strategy `fallback_topics`.
   That catch-up is retained as evidence for the over-merged fallback follow-up.
+- bad debug catch-up containment: `poll_repost_run.id=58` was not deleted, but
+  the Telegram poll was stopped and the DB row moved from `open` to
+  `skipped_topic_underfill` with
+  `invalidated_reason=overmerged_fallback_topics_after_product_review`, so no
+  result/repost will be produced from that weak poll.
+- follow-up post-deploy verification: `/healthz` returned `ok=true`, Fly machine
+  version `1423` was started with `1 passing` check.
 
 ## Prevention
 
