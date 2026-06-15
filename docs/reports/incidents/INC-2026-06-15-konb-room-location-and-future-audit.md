@@ -106,8 +106,11 @@ The same audit found active future rows with generic/duplicate records: two gene
 - Repair production duplicate/generic future rows and rebuild affected public listing jobs.
 - Repair production location-audit findings and add reference/source-default
   prevention:
-  - `4673`/`4689`: `Дворец спорта «Юность»` was wrong for posts grounded in
+  - `4673`: `Дворец спорта «Юность»` was wrong for a post from/grounded in
     `Дворец спорта «Янтарный»`; changed to `Дворец спорта «Янтарный», Согласия 39`.
+  - `4689`: source text says the festival is on the territory in front of
+    `Дворец спорта «Янтарный»`; public venue refined to
+    `Территория перед Дворцом спорта «Янтарный», Согласия 39`.
   - `5466`: `Музыкальный театр, Мира 87` was the artists' organization, not
     the venue; source gave `Космонавта Леонова 17В`, so the public venue was
     changed to address-only `Космонавта Леонова 17В`.
