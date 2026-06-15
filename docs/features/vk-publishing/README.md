@@ -103,6 +103,10 @@
   changed the id after postponed publish (`postponed_id -> live id`), the promo
   runner must lazy-resolve both promo exposure URLs and organic
   `event.source_vk_post_url` values before deciding that no source post exists.
+  Event reposts must also pass the same future/lead-time guard as Telegram
+  reposts: with a known start time, do not repost after the event has started
+  or inside the final 4 hours before start unless the activity explicitly lowers
+  `min_lead_hours`.
 - Promo campaign activity `vk_story` publishes a caption-free image story into
   a configured community from a recent source-community event post. It uploads
   the source wall image/poster without passing the source wall URL as VK

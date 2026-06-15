@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -1748,6 +1749,73 @@ async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monke
     ]
     assert exposures[1].details_json["source_url"] == f"https://t.me/kldevents/{1000 + event_id}"
     assert saved.tg_event_post_url == f"https://t.me/kldevents/{1000 + event_id}"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_tg_repost_skips_event_inside_four_hour_lead_time(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 17, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        soon = _event("Скоро начнётся", "2026-06-13", festival="Кантата")
+        soon.time = "20:00"  # 2.5 hours away in Europe/Kaliningrad at now_utc.
+        soon.tg_event_post_url = "https://t.me/kldevents/901"
+        soon.tg_event_post_id = 901
+        later = _event("Завтра", "2026-06-14", festival="Кантата")
+        later.tg_event_post_url = "https://t.me/kldevents/902"
+        later.tg_event_post_id = 902
+        session.add_all([soon, later])
+        await session.flush()
+        campaign = PromoCampaign(
+            title="Кантата · репост",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 16, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_REPOST,
+            profile_key="kldevents->kenigevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "source_chat": "@kldevents",
+                "target_chat": "@kenigevents",
+                "active_start_hour": 18,
+                "active_end_hour": 20,
+                "dedup_hours": 72,
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(soon.id)))
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=int(later.id)))
+        await session.commit()
+        later_id = int(later.id)
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.forwarded: list[tuple[str, str, int]] = []
+
+        async def forward_message(self, *, chat_id, from_chat_id, message_id):
+            self.forwarded.append((chat_id, from_chat_id, message_id))
+            return SimpleNamespace(message_id=2000 + message_id)
+
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", None, raising=False)
+    bot = DummyBot()
+
+    results = await run_promo_vk_activities(db, bot, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id) for item in results] == [
+        (PROMO_SURFACE_TG_REPOST, "published", later_id)
+    ]
+    assert bot.forwarded == [("@kenigevents", "@kldevents", 902)]
     await db.close()
 
 

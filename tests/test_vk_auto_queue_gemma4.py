@@ -138,6 +138,43 @@ async def test_vk_intake_parse_model_flows_to_event_parse_gemma(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_vk_intake_prompt_treats_room_floor_as_non_venue(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_parse_event_via_llm(prompt_text, **kwargs):
+        captured["prompt_text"] = prompt_text
+
+        class Parsed(list):
+            festival = None
+
+        return Parsed(
+            [
+                {
+                    "title": "КардиоШкола",
+                    "date": "2099-06-17",
+                    "time": "18:30",
+                    "location_name": "Научная библиотека",
+                    "location_address": "Мира 9",
+                    "city": "Калининград",
+                    "short_description": "Встреча о профилактике заболеваний.",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        "Приглашаем на встречу научной библиотеки.\n📍 лекционный зал, 4 этаж",
+        source_name="Калининградская областная научная библиотека",
+    )
+
+    assert drafts
+    prompt = str(captured["prompt_text"])
+    assert "Room/floor is not venue" in prompt
+    assert "location_name=Научная библиотека" in prompt
+
+
+@pytest.mark.asyncio
 async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(monkeypatch):
     async def fake_parse_event_via_llm(*_args, **_kwargs):
         class Parsed(list):

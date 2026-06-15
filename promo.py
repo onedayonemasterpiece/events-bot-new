@@ -188,6 +188,49 @@ def event_is_future_for_promo(ev: Event, *, today: date) -> bool:
     return bool(start and start >= today)
 
 
+def _event_start_local_datetime_for_repost(ev: Event) -> datetime | None:
+    start = _event_start_date(ev)
+    if start is None:
+        return None
+    raw_time = str(getattr(ev, "time", "") or "").strip()
+    if not raw_time:
+        return None
+    try:
+        hour_raw, minute_raw = raw_time.split(":", 1)
+        hour = int(hour_raw)
+        minute = int(minute_raw)
+    except Exception:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return datetime.combine(start, time(hour, minute), tzinfo=ZoneInfo(PROMO_DAILY_TZ))
+
+
+def event_is_repostable_for_promo(
+    ev: Event,
+    *,
+    now_utc: datetime,
+    min_lead_hours: float = 4,
+) -> bool:
+    """Return whether a source event is still timely enough to repost.
+
+    Date-only future events remain eligible for future days, but same-day
+    events without a reliable start time are not reposted because the 4-hour
+    lead-time promise cannot be verified.
+    """
+
+    start = _event_start_date(ev)
+    if start is None:
+        return False
+    local_now = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ))
+    if start < local_now.date():
+        return False
+    start_dt = _event_start_local_datetime_for_repost(ev)
+    if start_dt is None:
+        return start > local_now.date()
+    return start_dt >= local_now + timedelta(hours=max(0.0, float(min_lead_hours)))
+
+
 def _event_is_not_after_campaign(ev: Event, *, campaign: PromoCampaign) -> bool:
     if campaign.ends_at is None:
         return True
@@ -327,6 +370,14 @@ def _vk_activity_window(activity: PromoActivity) -> int:
         return max(1, int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS))
     except (TypeError, ValueError):
         return PROMO_VK_DEFAULT_WINDOW_HOURS
+
+
+def _activity_min_lead_hours(activity: PromoActivity, default: float = 4) -> float:
+    cfg = _activity_config(activity)
+    try:
+        return max(0.0, float(cfg.get("min_lead_hours") or default))
+    except (TypeError, ValueError):
+        return default
 
 
 def _vk_activity_due_count(activity: PromoActivity, now_utc: datetime) -> int:
@@ -2094,11 +2145,18 @@ async def _recent_event_tg_posts(
     source_chat: str,
     since_utc: datetime,
     until_utc: datetime,
+    min_lead_hours: float = 4,
 ) -> list[tuple[Event, str, datetime]]:
     rows: list[tuple[Event, str, datetime]] = []
     source_name = str(source_chat or "").strip().lstrip("@").lower()
     event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
     for ev in events:
+        if not event_is_repostable_for_promo(
+            ev,
+            now_utc=until_utc,
+            min_lead_hours=min_lead_hours,
+        ):
+            continue
         url = str(getattr(ev, "tg_event_post_url", "") or "").strip()
         if not url:
             continue
@@ -2118,6 +2176,12 @@ async def _recent_event_tg_posts(
     for exposure in publication_exposures:
         ev = event_by_id.get(int(exposure.event_id))
         if ev is None:
+            continue
+        if not event_is_repostable_for_promo(
+            ev,
+            now_utc=until_utc,
+            min_lead_hours=min_lead_hours,
+        ):
             continue
         details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
         url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()
@@ -4646,6 +4710,7 @@ async def run_promo_vk_activities(
                 source_chat=source_chat,
                 since_utc=since_utc,
                 until_utc=now_utc,
+                min_lead_hours=_activity_min_lead_hours(activity),
             )
             dedup_since = now_utc - timedelta(hours=int(cfg.get("dedup_hours") or PROMO_VK_REPOST_DEDUP_HOURS))
             prior = await _recent_activity_exposures(
@@ -4733,6 +4798,16 @@ async def run_promo_vk_activities(
                 until_utc=now_utc,
                 db=db,
             )
+            min_lead_hours = _activity_min_lead_hours(activity)
+            source_candidates = [
+                item
+                for item in source_candidates
+                if event_is_repostable_for_promo(
+                    item[0],
+                    now_utc=now_utc,
+                    min_lead_hours=min_lead_hours,
+                )
+            ]
             publication_exposures = await _recent_activity_exposures(
                 db,
                 campaign_id=campaign_id,
@@ -4765,6 +4840,12 @@ async def run_promo_vk_activities(
             for exposure in publication_exposures:
                 ev = event_by_id.get(int(exposure.event_id))
                 if ev is None:
+                    continue
+                if not event_is_repostable_for_promo(
+                    ev,
+                    now_utc=now_utc,
+                    min_lead_hours=min_lead_hours,
+                ):
                     continue
                 details = exposure.details_json if isinstance(exposure.details_json, dict) else {}
                 url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()

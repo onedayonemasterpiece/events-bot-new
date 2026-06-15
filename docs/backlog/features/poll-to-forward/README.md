@@ -64,7 +64,10 @@ from its own profile, so debug and production cannot consume each other's polls.
 An event can participate only when all conditions hold:
 
 - its repostable `@kldevents` post is for the target recommendation date;
-- it is not cancelled/archived/past;
+- it is not cancelled/archived/past and, when a concrete start time is known,
+  it is still at least `POLL_TO_FORWARD_MIN_LEAD_HOURS` hours away (`4` by
+  default), so the evening repost does not recommend an event that has already
+  started or is about to start;
 - it has a known Telegram post in `@kldevents` that can be forwarded;
 - it was not recently reposted by this same feature;
 - it is suitable for a public recommendation after basic quality checks.

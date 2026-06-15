@@ -829,6 +829,38 @@ async def test_debug_create_sends_six_options_when_free_axis_is_possible(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_load_eligible_events_skips_started_or_near_start_events(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        too_soon = _event(101, title="Уже скоро", post_id=501)
+        too_soon.date = "2026-06-13"
+        too_soon.time = "20:00"
+        future = _event(102, title="Завтра нормально", post_id=502)
+        future.date = "2026-06-14"
+        future.time = "10:00"
+        session.add_all([too_soon, future])
+        await session.commit()
+
+    events = await pf.load_eligible_events(
+        db,
+        target_date=datetime(2026, 6, 13, tzinfo=timezone.utc).date(),
+        now_utc=datetime(2026, 6, 13, 17, 30, tzinfo=timezone.utc),
+    )
+
+    assert [event.id for event in events] == []
+
+    tomorrow_events = await pf.load_eligible_events(
+        db,
+        target_date=datetime(2026, 6, 14, tzinfo=timezone.utc).date(),
+        now_utc=datetime(2026, 6, 13, 17, 30, tzinfo=timezone.utc),
+    )
+
+    assert [event.id for event in tomorrow_events] == [102]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_topic_planner_reframes_after_feedback_other(monkeypatch):
     events = [_candidate(101), _candidate(102), _candidate(103)]
     captured = {}

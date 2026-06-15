@@ -675,6 +675,42 @@ def _local_datetime_for_time(day: date, *, time_raw: str | None, default: str) -
     )
 
 
+def _event_start_local_datetime_for_repost(event: Event) -> datetime | None:
+    start = _parse_date(getattr(event, "date", None))
+    if start is None:
+        return None
+    time_raw = str(getattr(event, "time", "") or "").strip()
+    if not time_raw:
+        return None
+    try:
+        hour_raw, minute_raw = time_raw.split(":", 1)
+        hour = int(hour_raw)
+        minute = int(minute_raw)
+    except Exception:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return datetime(start.year, start.month, start.day, hour, minute, tzinfo=_local_tz())
+
+
+def _event_is_repostable_with_lead_time(
+    event: Event,
+    *,
+    now_utc: datetime,
+    min_lead_hours: float,
+) -> bool:
+    start = _parse_date(getattr(event, "date", None))
+    if start is None:
+        return False
+    local_now = now_utc.astimezone(_local_tz())
+    if start < local_now.date():
+        return False
+    start_dt = _event_start_local_datetime_for_repost(event)
+    if start_dt is None:
+        return start > local_now.date()
+    return start_dt >= local_now + timedelta(hours=max(0.0, float(min_lead_hours)))
+
+
 def _event_active_on(event: Event, target: date) -> bool:
     start = _parse_date(getattr(event, "date", None))
     if start is None:
@@ -782,6 +818,7 @@ async def load_eligible_events(
     now_value = now_utc or _now_utc()
     target_iso = target_date.isoformat()
     repeat_days = _env_int("POLL_TO_FORWARD_ANTI_REPEAT_DAYS", 7)
+    min_lead_hours = float(_env_int("POLL_TO_FORWARD_MIN_LEAD_HOURS", 4))
     recent_ids = await _recent_forwarded_event_ids(
         db,
         profile_key=profile_key,
@@ -811,6 +848,12 @@ async def load_eligible_events(
         if not _event_active_on(event, target_date):
             continue
         if not _event_forward_matches_target_date(event, target_date):
+            continue
+        if not _event_is_repostable_with_lead_time(
+            event,
+            now_utc=now_value,
+            min_lead_hours=min_lead_hours,
+        ):
             continue
         post_id = _event_kldevents_message_id(event)
         if not post_id:

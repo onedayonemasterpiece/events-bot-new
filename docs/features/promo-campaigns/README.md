@@ -376,7 +376,10 @@ daily/digest channel. It looks at the promoted event's stored
 `event.tg_event_post_url` and recent `tg_event_publish` exposures, applies
 `dedup_hours` to source URLs, forwards with Telegram Bot API, and records
 `promo_exposure.surface='tg_repost'` / `publish_status='TG_FORWARDED'` with
-`details_json.source_url` and `details_json.target_url`.
+`details_json.source_url` and `details_json.target_url`. It must only forward
+future events: when an event has a concrete start time, the repost is eligible
+only before the `min_lead_hours` cutoff (`4` hours by default), so daily/digest
+channels do not amplify events that have already started or are about to start.
 
 The initial `80 историй о главном` campaign now includes:
 

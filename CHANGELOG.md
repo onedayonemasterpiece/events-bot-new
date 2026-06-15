@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: LLM-first room/floor venue extraction and repost lead time**: VK
+  auto-import prompts now instruct the LLM to treat room/floor strings such as
+  `лекционный зал, 4 этаж` as non-venue details and recover the actual
+  building/organization from source context (for example Научная библиотека,
+  Мира 9). Telegram/VK promo reposts and Poll to Repost now skip events that
+  have already started or are inside the default 4-hour lead-time cutoff.
 - **Fixed: Telegram promo activity media drop on long captions**: explicit
   `tg_event_publish` promo posts with `event.photo_urls` now always publish
   the photo/album surface. When the full promo body exceeds Telegram's caption

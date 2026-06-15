@@ -1811,6 +1811,20 @@ async def build_event_drafts_from_vk(
         "не считай афишу автоматически сильнее этой явной даты. "
         "Не оставляй time пустым, когда афиша явно содержит время начала."
     )
+    room_probe = "\n".join(
+        part
+        for part in [
+            text or "",
+            source_name or "",
+            "\n".join(poster_texts),
+        ]
+        if part
+    ).casefold().replace("ё", "е")
+    if re.search(r"\b(?:лекционн\w*\s+зал|конференц[-\s]?зал|аудитори\w*|4\s*этаж)\b", room_probe):
+        llm_text += (
+            "\nRoom/floor is not venue: `лекционный зал`/`4 этаж` -> infer building. "
+            "КОНБ+Мира9 => location_name=Научная библиотека."
+        )
     try:
         hint_parts: list[str] = [text or ""]
         if poster_texts:
