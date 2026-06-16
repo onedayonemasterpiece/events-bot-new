@@ -1,10 +1,10 @@
 # INC-2026-06-16 tg_event_publish timeout duplicate
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: events-bot Telegram event publishing (`@kldevents`)
 Opened: 2026-06-16
-Closed: —
+Closed: 2026-06-16
 Owners: events-bot
 Related incidents: —
 Related docs: `docs/features/tg-publishing/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/telegram-link-inspection.md`
@@ -106,10 +106,10 @@ Both posts were `Depeche Mode – Devotional`, `16 июня 19:00`, `Сигна�
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `9e8dc49af7c97bc8e1d89ca5f83efb3177c66589`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only` from clean hotfix worktree; Fly image `events-bot-new-wngqia:deployment-01KV7XWFJ1018WA04B3EH3ET3Z`; machine `683961db016e28` version `1432`.
+- regression checks: `python -m pytest tests/test_tg_event_publish.py -q` (54 passed); `python -m py_compile main.py main_part2.py scripts/read_telegram_message.py`.
+- post-deploy verification: Fly `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, 1/1 machine check passing; Telethon check confirmed `https://t.me/kldevents/625` remains and `https://t.me/kldevents/626` is `message_not_found`.
 
 ## Prevention
 
