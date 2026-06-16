@@ -111,6 +111,19 @@ Both posts were `Depeche Mode – Devotional`, `16 июня 19:00`, `Сигна�
 - regression checks: `python -m pytest tests/test_tg_event_publish.py -q` (54 passed); `python -m py_compile main.py main_part2.py scripts/read_telegram_message.py`.
 - post-deploy verification: Fly `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, 1/1 machine check passing; Telethon check confirmed `https://t.me/kldevents/625` remains and `https://t.me/kldevents/626` is `message_not_found`.
 
+## Recurrence / Additional Cleanup 2026-06-16
+
+Operator reported a second triple-post cluster for `event.id=6065` (`Тренировки по кикбоксингу`) after the code fix was already prepared but before it was deployed:
+
+- remaining public posts: `https://t.me/kldevents/628`, `https://t.me/kldevents/629`;
+- already-deleted stored post: `https://t.me/kldevents/630` (`event.tg_event_post_id=630` in DB before cleanup).
+
+Telethon read `628` and `629` before deletion and confirmed both were the same `Тренировки по кикбоксингу`, `16 июня 19:00`, `Ростех Арена, Солнечный бульвар 25`. Bot API deletion returned `ok=true` for both `628` and `629`; a follow-up Telethon check returned `message_not_found` for `628`, `629`, and `630`.
+
+Runtime logs for `tg_event_publish:6065` show the same pre-fix failure pattern: attempt 1 at `2026-06-16 09:34:46 UTC` timed out at `09:35:51`; attempt 2 at `09:36:55` timed out at `09:37:58`; attempt 3 at `09:49:12` succeeded and stored `630`. This happened before deployment of `9e8dc49a`, so it is evidence for the same root cause, not a post-fix regression.
+
+Production DB cleanup was applied in one narrow transaction with row-level backup table `codex_backup_tg_public_cleanup_20260616`: cleared `event.id=6065` `tg_event_post_id/url/mode/source_hash` and marked `joboutbox.id=24125` as `status=error`, `last_error=manual_public_deleted_duplicate_cluster_2026_06_16`, `next_run_at=2036-01-01 00:00:00`. `PRAGMA quick_check` was `ok` before and after; `/healthz` remained `ok=true`, `ready=true`.
+
 ## Prevention
 
 - Automatic retry is suppressed for uncertain Telegram send timeouts.
