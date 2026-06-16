@@ -1,6 +1,12 @@
 import pytest
 
-from markup import simple_md_to_html, linkify_for_telegraph, expose_links_for_vk
+from markup import (
+    simple_md_to_html,
+    linkify_for_telegraph,
+    linkify_phones_for_telegram_html,
+    expose_links_for_vk,
+    tel_href_for_phone_value,
+)
 
 def test_bold():
     assert simple_md_to_html('**bold** __bold__') == '<b>bold</b> <b>bold</b>'
@@ -97,3 +103,20 @@ def test_linkify_phone_inside_anchor_untouched():
     """Phone already inside a link is not modified."""
     html = '<a href="tel:+74951234567">+7 (495) 123-45-67</a>'
     assert linkify_for_telegraph(html) == html
+
+
+def test_tel_href_for_phone_value_normalizes_russian_numbers():
+    assert tel_href_for_phone_value("tel:+74012463635") == "tel:+74012463635"
+    assert tel_href_for_phone_value("+7 (4012) 46-36-35") == "tel:+74012463635"
+    assert tel_href_for_phone_value("8 (4012) 46-36-35") == "tel:+74012463635"
+
+
+def test_linkify_phones_for_telegram_html_keeps_existing_links():
+    html = (
+        'Запись: +7 (4012) 46-36-35. '
+        '<a href="https://example.com">+7 (999) 000-00-00</a>'
+    )
+    assert linkify_phones_for_telegram_html(html) == (
+        'Запись: <a href="tel:+74012463635">+7 (4012) 46-36-35</a>. '
+        '<a href="https://example.com">+7 (999) 000-00-00</a>'
+    )

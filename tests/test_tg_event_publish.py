@@ -156,6 +156,32 @@ def test_build_tg_event_announcement_uses_original_ticket_link_not_vk_short():
     assert "vk.cc" not in text
 
 
+def test_build_tg_event_announcement_links_phone_ticket_line():
+    event = _event(
+        ticket_link="tel:+74012463635",
+        ticket_price_min=None,
+        ticket_price_max=None,
+        is_free=True,
+    )
+
+    text = main.build_tg_event_announcement(event, "Описание.")
+
+    assert 'href="tel:+74012463635"' in text
+    assert "🟡 Бесплатно, запись: " in text
+    assert "+7 (4012) 46-36-35" in text
+
+
+def test_build_tg_event_announcement_linkifies_phone_in_body():
+    event = _event(ticket_link=None, ticket_price_min=None, is_free=True)
+
+    text = main.build_tg_event_announcement(
+        event,
+        "Запись по телефону +7 (4012) 46-36-35.",
+    )
+
+    assert 'Запись по телефону <a href="tel:+74012463635">+7 (4012) 46-36-35</a>.' in text
+
+
 def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
     event = _event()
     base_hash = main.build_tg_event_source_hash(event, "source text")

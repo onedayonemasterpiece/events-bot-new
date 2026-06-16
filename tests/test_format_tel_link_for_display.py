@@ -22,6 +22,10 @@ def test_format_russian_eleven_digit_with_plus_seven_prefix() -> None:
     assert format_tel_link_for_display("tel:+79114743004") == "+7 (911) 474-30-04"
 
 
+def test_format_kaliningrad_landline_with_4012_area_code() -> None:
+    assert format_tel_link_for_display("tel:+74012463635") == "+7 (4012) 46-36-35"
+
+
 def test_format_russian_ten_digit_without_country_code() -> None:
     assert format_tel_link_for_display("tel:9114743004") == "+7 (911) 474-30-04"
 

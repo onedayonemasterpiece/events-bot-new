@@ -35,10 +35,34 @@ def format_tel_link_for_display(link_value: str | None) -> str:
     if len(digits) == 11 and digits.startswith("8"):
         digits = "7" + digits[1:]
     if len(digits) == 11 and digits.startswith("7"):
+        if digits.startswith("74012"):
+            return f"+7 (4012) {digits[5:7]}-{digits[7:9]}-{digits[9:11]}"
         return f"+7 ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
     if len(digits) == 10:
         return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:10]}"
     return f"+{digits}"
+
+
+def tel_href_for_phone_value(value: str | None) -> str:
+    """Return a normalized ``tel:+...`` href for a phone/tel value.
+
+    Accepts both stored ``ticket_link='tel:+74012463635'`` and visible phone
+    strings such as ``+7 (4012) 46-36-35``. Empty/too-short values return ``""``.
+    """
+
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    if raw.lower().startswith("tel:"):
+        raw = raw[4:]
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) == 10 and not digits.startswith("7"):
+        digits = "7" + digits
+    if len(digits) < 10:
+        return ""
+    return f"tel:+{digits}"
 
 # Phone number patterns for tel: links (Telegraph).
 # We intentionally match only phone-looking sequences (starting with +7 / 8 / "(...)" )
@@ -279,6 +303,27 @@ def linkify_for_telegraph(text_or_html: str) -> str:
         parts[idx] = _PHONE_RE.sub(repl_phone, parts[idx])
     text = "".join(parts)
     return text
+
+
+def linkify_phones_for_telegram_html(text_or_html: str) -> str:
+    """Make phone numbers clickable in Telegram HTML without touching links.
+
+    Telegram clients do not reliably auto-link phone numbers inside long bot
+    messages/captions. Public event posts therefore need explicit ``tel:``
+    anchors for phone contacts, while existing ``<a>`` links must be left as-is.
+    """
+
+    def repl_phone(m: re.Match[str]) -> str:
+        original = m.group(1) or m.group(0)
+        href = tel_href_for_phone_value(original)
+        if not href:
+            return original
+        return f'<a href="{href}">{original}</a>'
+
+    parts = re.split(r'(<a\b[^>]*>.*?</a>)', text_or_html, flags=re.IGNORECASE | re.DOTALL)
+    for idx in range(0, len(parts), 2):
+        parts[idx] = _PHONE_RE.sub(repl_phone, parts[idx])
+    return "".join(parts)
 
 
 def expose_links_for_vk(text_or_html: str) -> str:

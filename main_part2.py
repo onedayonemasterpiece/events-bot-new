@@ -19,7 +19,9 @@ from markup import (
     simple_md_to_html,
     telegraph_br,
     linkify_for_telegraph,
+    linkify_phones_for_telegram_html,
     format_tel_link_for_display,
+    tel_href_for_phone_value,
 )
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
@@ -4402,6 +4404,7 @@ def _telegram_event_body_html(text: str | None) -> str:
         html_text = sanitize_telegram_html(html_text)
     except Exception:
         pass
+    html_text = linkify_phones_for_telegram_html(html_text)
     html_text = re.sub(
         r"<h[1-6][^>]*>(.*?)</h[1-6]>",
         lambda m: "\n<b>" + m.group(1).strip() + "</b>\n",
@@ -4491,8 +4494,10 @@ def _tg_event_ticket_line(event: Event) -> str:
     # generated for VK analytics only and must not leak into Telegram publishing.
     ticket_link_display = ticket_link
     ticket_is_http = ticket_link_display.startswith(("http://", "https://"))
+    phone_href = ""
     if ticket_link_display and not ticket_is_http:
         phone_display = format_tel_link_for_display(ticket_link_display)
+        phone_href = tel_href_for_phone_value(ticket_link_display) if phone_display else ""
         ticket_link_display = phone_display or ticket_link_display
     ticket_label = "Билеты"
     if getattr(event, "ticket_status", None) == "sold_out":
@@ -4504,6 +4509,11 @@ def _tg_event_ticket_line(event: Event) -> str:
                 "по регистрации</a>"
             )
         if ticket_link_display:
+            if phone_href:
+                return (
+                    "🟡 Бесплатно, запись: "
+                    f'<a href="{html.escape(phone_href, quote=True)}">{html.escape(ticket_link_display)}</a>'
+                )
             return f"🟡 Бесплатно, запись: {html.escape(ticket_link_display)}"
         return "🟡 Бесплатно"
     price = ""
@@ -4526,6 +4536,11 @@ def _tg_event_ticket_line(event: Event) -> str:
         )
     if ticket_link_display:
         label = "по регистрации" if not price else f"Билеты {price}"
+        if phone_href:
+            return (
+                f"🎟 {html.escape(label)}: "
+                f'<a href="{html.escape(phone_href, quote=True)}">{html.escape(ticket_link_display)}</a>'
+            )
         return f"🎟 {html.escape(label)}: {html.escape(ticket_link_display)}"
     if price:
         return f"🎟 Билеты {html.escape(price)}"
