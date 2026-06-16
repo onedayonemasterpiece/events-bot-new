@@ -35,10 +35,11 @@ The public Telegram event post `https://t.me/kldevents/589` showed a phone conta
 - 2026-06-16: production DB row for event `6043` confirms a `tel:` registration link existed before publish.
 - 2026-06-16: code audit finds `_tg_event_ticket_line()` rendered non-HTTP ticket links as escaped plain text and `_telegram_event_body_html()` did not linkify phone contacts for Telegram.
 - 2026-06-16: hotfix adds normalized `tel:` href generation, Telegram phone linkification outside existing anchors, and Kaliningrad `4012` landline display formatting.
+- 2026-06-16: post-deploy edit smoke showed Bot API accepted the caption but did not return a phone/text-link entity for the `tel:` HTML anchor, so the fix was tightened to send explicit Bot API `phone_number` entities instead of relying on HTML `tel:` anchors.
 
 ## Root Cause
 
-1. `main_part2._tg_event_ticket_line()` treated phone-only `event.ticket_link` as a display formatting case, not as a Telegram action link; it returned plain escaped text such as `+7 (4012) ...`.
+1. `main_part2._tg_event_ticket_line()` treated phone-only `event.ticket_link` as a display formatting case, not as a Telegram action link; it returned plain escaped text such as `+7 (4012) ...`. A first `tel:` HTML-anchor smoke also showed that Bot API does not expose this as a usable phone entity, so the publisher must send explicit `phone_number` entities.
 2. Telegram event body formatting relied on Telegram client auto-linking for phone-looking text, which is unreliable in bot messages/captions.
 3. `format_tel_link_for_display()` formatted Russian landlines as a generic 3-digit-code number; Kaliningrad `4012` numbers were displayed as `+7 (401) 246-36-35` instead of the more natural `+7 (4012) 46-36-35`.
 
@@ -70,7 +71,7 @@ The public Telegram event post `https://t.me/kldevents/589` showed a phone conta
 
 - Unit tests must prove `tel:+74012463635` is displayed as `+7 (4012) 46-36-35`.
 - Unit tests must prove visible phone strings are normalized to `tel:+...` hrefs.
-- Unit tests must prove Telegram event announcement ticket lines include an explicit `href="tel:+..."` phone link.
+- Unit tests must prove Telegram event announcement ticket lines are converted to explicit Bot API `phone_number` entities before send/edit.
 - Unit tests must prove body phone numbers are linkified without touching already existing `<a>` links.
 - Production or staging smoke must confirm a current/fixture event caption builds with a clickable phone action.
 
@@ -85,19 +86,20 @@ The public Telegram event post `https://t.me/kldevents/589` showed a phone conta
 ## Immediate Mitigation
 
 - No destructive action was taken on the existing post before code fix/deploy.
-- Hotfix changes the Telegram publisher boundary so future posts with phone contacts render explicit `tel:` links.
+- Hotfix changes the Telegram publisher boundary so future posts with phone contacts render explicit Telegram `phone_number` entities.
 
 ## Corrective Actions
 
 - Added normalized `tel:` href helper for stored `tel:` values and visible Russian phone strings.
 - Added Telegram-specific phone linkification that skips existing HTML anchors.
+- Added conversion from the publisher HTML shell to Bot API text/entities so phone contacts are sent as explicit `phone_number` entities while preserving bold text, text links, and hashtags.
 - Changed phone-only ticket/registration rows to render explicit Telegram HTML links.
 - Added Kaliningrad `4012` landline display formatting.
 - Added regression tests for phone display, normalization, Telegram body linkification, and ticket-line linkification.
 
 ## Follow-up Actions
 
-- [ ] After deploy, repair `@kldevents/589` if Bot API edit is safe and can preserve the current media/caption contract.
+- [ ] After final entity-based deploy, repair `@kldevents/589` and verify Bot API returns a `phone_number` caption entity.
 - [ ] Consider a live Telegram client smoke for phone link rendering across Android/Desktop when the next phone-only event is published.
 
 ## Release And Closure Evidence
@@ -109,5 +111,5 @@ The public Telegram event post `https://t.me/kldevents/589` showed a phone conta
 
 ## Prevention
 
-- `docs/features/tg-publishing/README.md` now states that phone-only contacts in Telegram event posts must be rendered as explicit `tel:` links.
+- `docs/features/tg-publishing/README.md` now states that phone-only contacts in Telegram event posts must be rendered as explicit Telegram `phone_number` entities.
 - The incident record is added as a regression contract for future Telegram event publishing/link handling changes.

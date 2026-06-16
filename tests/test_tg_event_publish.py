@@ -182,6 +182,42 @@ def test_build_tg_event_announcement_linkifies_phone_in_body():
     assert 'Запись по телефону <a href="tel:+74012463635">+7 (4012) 46-36-35</a>.' in text
 
 
+def _entity_type(entity) -> str:
+    return str(getattr(getattr(entity, "type", ""), "value", getattr(entity, "type", "")))
+
+
+def test_telegram_event_html_to_text_entities_emits_phone_entity_for_tel_link():
+    event = _event(
+        title="🎓 Лекция",
+        ticket_link="tel:+74012463635",
+        ticket_price_min=None,
+        ticket_price_max=None,
+        is_free=True,
+    )
+
+    html_text = main.build_tg_event_announcement(event, "Описание.")
+    plain, entities = main.telegram_event_html_to_text_entities(html_text)
+
+    assert "<a" not in plain
+    assert "+7 (4012) 46-36-35" in plain
+    assert any(_entity_type(ent) == "bold" for ent in entities)
+    assert any(_entity_type(ent) == "text_link" and ent.url == "https://telegra.ph/event" for ent in entities)
+    assert any(_entity_type(ent) == "phone_number" for ent in entities)
+
+
+def test_telegram_event_html_to_text_entities_linkifies_plain_body_phone():
+    event = _event(ticket_link=None, ticket_price_min=None, is_free=True)
+    html_text = main.build_tg_event_announcement(
+        event,
+        "Запись по телефону +7 (4012) 46-36-35.",
+    )
+
+    plain, entities = main.telegram_event_html_to_text_entities(html_text)
+
+    assert "Запись по телефону +7 (4012) 46-36-35." in plain
+    assert sum(1 for ent in entities if _entity_type(ent) == "phone_number") == 1
+
+
 def test_tg_event_source_hash_includes_prompt_version(monkeypatch):
     event = _event()
     base_hash = main.build_tg_event_source_hash(event, "source text")

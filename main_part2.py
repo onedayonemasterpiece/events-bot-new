@@ -5,6 +5,7 @@ import re
 import asyncio
 import time as _time
 import httpx
+from html.parser import HTMLParser
 from datetime import date, timezone, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Any, Sequence, List, Mapping, Optional, Dict, Tuple, Collection, Literal, Awaitable
@@ -20,6 +21,7 @@ from markup import (
     telegraph_br,
     linkify_for_telegraph,
     linkify_phones_for_telegram_html,
+    _PHONE_RE,
     format_tel_link_for_display,
     tel_href_for_phone_value,
 )
@@ -4303,25 +4305,27 @@ async def publish_tg_promo_event_publication(
     if len(message) > 4096:
         message = message[:4050].rstrip() + "\n\n..."
     markup = _tg_promo_event_keyboard(event)
+    message_text, message_entities = telegram_event_html_to_text_entities(message)
 
     photo_urls = [str(url).strip() for url in (getattr(event, "photo_urls", None) or []) if str(url).strip()]
     async with TG_SEND_SEMAPHORE:
         if photo_urls:
             caption = build_tg_promo_event_publication_media_caption(event)
+            caption_text, caption_entities = telegram_event_html_to_text_entities(caption)
             if len(photo_urls) == 1:
                 sent = await bot.send_photo(
                     target_chat,
                     photo_urls[0],
-                    caption=caption,
-                    parse_mode="HTML",
+                    caption=caption_text,
+                    caption_entities=caption_entities,
                     reply_markup=markup,
                 )
             else:
                 media = [
                     types.InputMediaPhoto(
                         media=url,
-                        caption=caption if idx == 0 else None,
-                        parse_mode="HTML" if idx == 0 else None,
+                        caption=caption_text if idx == 0 else None,
+                        caption_entities=caption_entities if idx == 0 else None,
                     )
                     for idx, url in enumerate(photo_urls[:TG_EVENT_ALBUM_SIZE])
                 ]
@@ -4336,8 +4340,8 @@ async def publish_tg_promo_event_publication(
         else:
             sent = await bot.send_message(
                 target_chat,
-                message,
-                parse_mode="HTML",
+                message_text,
+                entities=message_entities,
                 reply_markup=markup,
                 disable_web_page_preview=True,
             )
@@ -4445,6 +4449,144 @@ def _telegram_event_body_html(text: str | None) -> str:
     html_text = re.sub(r"[ \t]+\n", "\n", html_text)
     html_text = re.sub(r"\n{3,}", "\n\n", html_text)
     return html_text.strip()
+
+
+def _tg_utf16_len(value: str) -> int:
+    return len(value.encode("utf-16-le")) // 2
+
+
+def _tg_entity_payload(entity_type: str) -> str:
+    return str(getattr(entity_type, "value", entity_type))
+
+
+class _TelegramHtmlEntityParser(HTMLParser):
+    """Convert our limited Telegram HTML into plain text + Bot API entities.
+
+    Bot API HTML parse mode currently ignores ``tel:`` anchors for message text
+    links, so phone contacts must be sent as explicit ``phone_number`` entities.
+    """
+
+    _TAG_TO_TYPE = {
+        "b": "bold",
+        "strong": "bold",
+        "i": "italic",
+        "em": "italic",
+        "u": "underline",
+        "ins": "underline",
+        "s": "strikethrough",
+        "strike": "strikethrough",
+        "del": "strikethrough",
+        "code": "code",
+        "pre": "pre",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.entities: list[types.MessageEntity] = []
+        self._stack: list[dict[str, object]] = []
+        self._text = ""
+
+    def _offset(self) -> int:
+        return _tg_utf16_len(self._text)
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        tag = tag.lower()
+        entity_type = self._TAG_TO_TYPE.get(tag)
+        payload: dict[str, object] = {"tag": tag, "start": self._offset()}
+        if tag == "a":
+            href = ""
+            for key, value in attrs:
+                if str(key).lower() == "href":
+                    href = str(value or "").strip()
+                    break
+            if href.lower().startswith("tel:"):
+                payload.update({"type": "phone_number", "url": None})
+                self._stack.append(payload)
+            elif href:
+                payload.update({"type": "text_link", "url": href})
+                self._stack.append(payload)
+            return
+        if entity_type:
+            payload.update({"type": entity_type, "url": None})
+            self._stack.append(payload)
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        tag = tag.lower()
+        for idx in range(len(self._stack) - 1, -1, -1):
+            item = self._stack[idx]
+            if item.get("tag") != tag:
+                continue
+            self._stack.pop(idx)
+            entity_type = str(item.get("type") or "")
+            start = int(item.get("start") or 0)
+            length = self._offset() - start
+            if entity_type and length > 0:
+                kwargs = {"type": entity_type, "offset": start, "length": length}
+                if entity_type == "text_link" and item.get("url"):
+                    kwargs["url"] = str(item["url"])
+                self.entities.append(types.MessageEntity(**kwargs))
+            return
+
+    def handle_data(self, data: str) -> None:  # type: ignore[override]
+        if not data:
+            return
+        self.parts.append(data)
+        self._text += data
+
+
+def _entity_utf16_span(entity: types.MessageEntity) -> tuple[int, int]:
+    start = int(getattr(entity, "offset", 0) or 0)
+    end = start + int(getattr(entity, "length", 0) or 0)
+    return start, end
+
+
+def _tg_entities_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
+    return a_start < b_end and b_start < a_end
+
+
+def _tg_add_auto_entities(text: str, entities: list[types.MessageEntity]) -> None:
+    protected = [
+        _entity_utf16_span(ent)
+        for ent in entities
+        if _tg_entity_payload(getattr(ent, "type", "")) in {"text_link", "phone_number"}
+    ]
+
+    def can_add(start: int, end: int) -> bool:
+        return not any(_tg_entities_overlap(start, end, p_start, p_end) for p_start, p_end in protected)
+
+    for match in _PHONE_RE.finditer(text):
+        original = match.group(1) or match.group(0)
+        href = tel_href_for_phone_value(original)
+        if not href:
+            continue
+        start = _tg_utf16_len(text[: match.start(1)])
+        end = start + _tg_utf16_len(original)
+        if can_add(start, end):
+            entities.append(types.MessageEntity(type="phone_number", offset=start, length=end - start))
+            protected.append((start, end))
+
+    for match in re.finditer(r"(?<![\w/])#[\wА-Яа-яЁё_]+", text, flags=re.UNICODE):
+        start = _tg_utf16_len(text[: match.start()])
+        end = start + _tg_utf16_len(match.group(0))
+        if can_add(start, end):
+            entities.append(types.MessageEntity(type="hashtag", offset=start, length=end - start))
+
+
+def telegram_event_html_to_text_entities(html_text: str) -> tuple[str, list[types.MessageEntity]]:
+    parser = _TelegramHtmlEntityParser()
+    parser.feed(html_text or "")
+    parser.close()
+    text = "".join(parser.parts)
+    entities = list(parser.entities)
+    _tg_add_auto_entities(text, entities)
+    entities.sort(
+        key=lambda ent: (
+            int(getattr(ent, "offset", 0) or 0),
+            -int(getattr(ent, "length", 0) or 0),
+        )
+    )
+    return text, entities
 
 
 def _tg_event_hashtag_line(event: Event, festival: Festival | None = None) -> str:
@@ -5148,6 +5290,7 @@ async def publish_tg_event_announcement(
         promo_highlight=promo_highlight,
     )
     reply_markup = build_tg_event_reply_markup(event, promo_highlight=promo_highlight)
+    message_text, message_entities = telegram_event_html_to_text_entities(message_html)
 
     if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:
         try:
@@ -5155,16 +5298,16 @@ async def publish_tg_event_announcement(
                 await bot.edit_message_caption(
                     chat_id=target,
                     message_id=existing_id,
-                    caption=message_html,
-                    parse_mode="HTML",
+                    caption=message_text,
+                    caption_entities=message_entities,
                     reply_markup=reply_markup if existing_mode == "photo_caption" else None,
                 )
             elif existing_mode == "text" and desired_mode == "text":
                 await bot.edit_message_text(
                     chat_id=target,
                     message_id=existing_id,
-                    text=message_html,
-                    parse_mode="HTML",
+                    text=message_text,
+                    entities=message_entities,
                     disable_web_page_preview=True,
                     reply_markup=reply_markup,
                 )
@@ -5196,8 +5339,8 @@ async def publish_tg_event_announcement(
                 uploaded.append(
                     types.InputMediaPhoto(
                         media=media_file,
-                        caption=message_html,
-                        parse_mode="HTML",
+                        caption=message_text,
+                        caption_entities=message_entities,
                     )
                 )
             else:
@@ -5210,8 +5353,8 @@ async def publish_tg_event_announcement(
             msg = await bot.send_photo(
                 chat_id=target,
                 photo=upload,
-                caption=message_html,
-                parse_mode="HTML",
+                caption=message_text,
+                caption_entities=message_entities,
                 reply_markup=reply_markup,
             )
             sent_id = msg.message_id
@@ -5227,8 +5370,8 @@ async def publish_tg_event_announcement(
         else:
             msg = await bot.send_message(
                 target,
-                message_html,
-                parse_mode="HTML",
+                message_text,
+                entities=message_entities,
                 disable_web_page_preview=True,
                 reply_markup=reply_markup,
             )
