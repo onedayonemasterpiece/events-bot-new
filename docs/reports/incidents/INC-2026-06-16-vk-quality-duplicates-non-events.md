@@ -1,6 +1,6 @@
 # INC-2026-06-16 VK quality: duplicates, non-events, near-duplicate posters
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: VK auto-import / Smart Update / managed VK event publishing
 Opened: 2026-06-16
@@ -92,20 +92,23 @@ Reported manually by the operator with concrete public VK URLs and duplicate lis
 
 ## Immediate Mitigation
 
-Pending. Required actions:
+Completed on 2026-06-16 after authenticated VK API and production DB verification:
 
-- Delete or edit the public bad managed VK posts after owner verification.
-- Mark false digest rows non-active and cancel their pending publication jobs.
-- Merge/silence duplicate Music Night row(s) only after LLM-first duplicate decision.
+- Deleted managed VK non-event posts `wall-231920894_3484` and `wall-231920894_3485`.
+- Deleted duplicate managed VK post `wall-231920894_3494`, keeping canonical `wall-231920894_3496` for event `5925`.
+- Edited `wall-231920894_3502` to keep one poster attachment instead of two visually near-duplicate illustrations.
+- Marked false digest rows `6058`/`6059` as `lifecycle_status=cancelled`, `silent=1`, and completed their pending `tg_event_publish` jobs with incident cancellation result.
+- Contained duplicate Music Night row `6067` as `cancelled/silent`, linked it to canonical row `6048`, moved its source URLs to `6048`, and completed its pending Telegram fanout job.
+- Pointed event `6047` at live edited managed VK post `wall-231920894_3502` so subsequent Telegram fanout does not depend on stale `wall-231920894_3470`.
 
 ## Corrective Actions
 
-Pending implementation:
+Implemented in `7637bae5`:
 
-- Add LLM-first eventness review for weak rubric/digest candidates before create/update.
-- Add shortlist recall for citywide/festival same-title/date/time candidates so LLM can decide merge instead of creating duplicates.
-- Raise/verify perceptual dedupe threshold for managed event poster publication.
-- Keep managed VK postponed resolution as an idempotency guard and test it against this incident class.
+- Added an LLM-first eventness reviewer for weak VK/TG rubric/digest candidates before create/update. Deterministic code only detects high-risk shapes and routes them to LLM; uncertainty fails closed for these weak candidates.
+- Added citywide/festival same-title/date/time shortlist recall so LLM can decide merge/create when extracted venues drift. The recall helper does not merge by itself.
+- Raised the 256-bit poster near-duplicate Hamming default to `32` and covered the incident 28-bit class in VK publication tests.
+- Preserved managed VK postponed URL idempotency and kept regression coverage for the `wall.getById` empty + postponed found case.
 
 ## Follow-up Actions
 
@@ -115,10 +118,10 @@ Pending implementation:
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `7637bae5fa86f804a6a41514b73e6c7cf2786c6b`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KV7J39SKT9N4E535CXQP2VY0`; machine version `1426`, 1/1 checks passing.
+- regression checks: `uv run ... pytest -q tests/test_smart_event_update_non_event_guards.py::test_digest_stub_is_routed_to_llm_eventness_and_skipped tests/test_smart_event_update_non_event_guards.py::test_concise_real_invite_survives_eventness_review tests/test_smart_event_update_duplicate_guards.py::test_citywide_music_night_location_drift_reaches_llm_match tests/test_vk_source.py::test_sync_vk_source_post_dedupes_near_duplicate_photos tests/test_vk_source.py::test_vk_photo_near_dup_default_threshold tests/test_job_dedup.py::test_enqueue_job_skips_done_vk_sync_for_existing_postponed_managed_post` → `6 passed`. `python3 -m py_compile smart_event_update.py main_part2.py main.py` passed.
+- post-deploy verification: runtime file logging enabled at `/data/runtime_logs`; `FLY_IMAGE_REF` points to deployment `01KV7J39SKT9N4E535CXQP2VY0`; production DB shows `6058`/`6059`/`6067` non-active and their Telegram fanout jobs completed with incident cancellation results; VK API after repair returns only `3495`, `3496`, `3502` among the checked incident posts, and `3502` has one photo attachment.
 
 ## Prevention
 
