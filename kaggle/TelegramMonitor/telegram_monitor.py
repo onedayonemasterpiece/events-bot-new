@@ -1314,7 +1314,8 @@ EVENT_ARRAY_SCHEMA = {
             'location_name': _string_schema(
                 'Venue name where the event takes place; empty string if unknown. '
                 'Must be a venue/place name, not a nearby content fragment. Never copy descriptive prose, '
-                'speaker biographies, schedule commentary, film metadata, ticket instructions, or narrative sentences. '
+                'speaker biographies, schedule commentary, film metadata, ticket instructions, repertoire/program items, '
+                'musical work titles, catalogue numbers such as "соч. 16", or narrative sentences. '
                 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name. '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
@@ -2263,6 +2264,14 @@ _LOCATION_REVIEW_GENERIC_ROOM_RE = re.compile(
     r"^\s*(?:кино(?:зал|театр)|зал|холл|аудитори[яи]|сцена|мастерск(?:ая|ие)|дворик|площадка)\s*:?\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_PROGRAM_ITEM_RE = re.compile(
+    r"^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+",
+    re.IGNORECASE | re.UNICODE,
+)
+_LOCATION_REVIEW_CATALOGUE_ADDRESS_RE = re.compile(
+    r"^\s*(?:соч\.?|op\.?|№)\s*[0-9IVXLCDMivxlcdmA-Za-zА-Яа-яЁё./ -]+\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
 _CLEAR_SINGLE_EVENT_INVITE_RE = re.compile(
     r"\b(?:"
     r"спектакл[ьяею]|концерт\w*|кинопоказ\w*|показ\w*|лекци[яюи]|встреч[ауе]|"
@@ -2497,6 +2506,16 @@ def _event_needs_location_grounding_review(ev: dict, evidence_text: str) -> bool
     addr = str(ev.get('location_address') or '').strip()
     if raw and _LOCATION_REVIEW_GENERIC_ROOM_RE.search(raw):
         return True
+    if raw and _LOCATION_REVIEW_PROGRAM_ITEM_RE.search(raw) and not (
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+    ):
+        return True
+    if raw and addr and _LOCATION_REVIEW_CATALOGUE_ADDRESS_RE.search(addr) and not (
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw)
+        or _LOCATION_REVIEW_ADDRESS_HINT_RE.search(addr)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+    ):
+        return True
     if raw and not _location_review_value_grounded(raw, evidence_text):
         if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(evidence_text) or _LOCATION_REVIEW_VENUE_CUE_RE.search(evidence_text):
             return True
@@ -2604,7 +2623,8 @@ async def _repair_suspicious_locations(
         'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '
         'vs "Дворец спорта Юность"), choose only the source-grounded venue. '
         'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
-        'speaker bios, or an event description as location_name. '
+        'speaker bios, repertoire/program items, musical work titles, catalogue numbers such as "соч. 16", '
+        'or an event description as location_name. '
         'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
         'by source context or message text, output the host venue as location_name and leave the hall label out. '
         'For schedule/program posts with many lines, use only the venue nearest the event line. If the event line has '
@@ -2913,7 +2933,8 @@ async def extract_events(
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
         'location_name must be a venue/place name, not arbitrary nearby text: never copy a descriptive sentence, '
-        'speaker biography, schedule commentary, film metadata, ticket instruction, or event description into location_name. '
+        'speaker biography, schedule commentary, film metadata, ticket instruction, repertoire/program item, '
+        'musical work title, catalogue number such as "соч. 16", or event description into location_name. '
         'For multi-date, multi-event, timetable, digest, or repost posts, each event must use venue/address/city facts '
         'from the local block nearest that event date/title; do not reuse a source default or another block venue when '
         'the event-local block explicitly names a different venue. '

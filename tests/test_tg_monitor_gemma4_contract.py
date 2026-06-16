@@ -193,6 +193,36 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE" in source
     assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
     assert "city must be the place name itself, not an inflected phrase" in source
+    assert "repertoire/program items, musical work titles" in source
+    assert "catalogue number such as \"соч. 16\"" in source
+
+
+def test_tg_monitor_location_review_triggers_on_program_item_as_location() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("_LOCATION_REVIEW_TIME_RANGE_RE = re.compile")
+    end = source.index("\n\nasync def extract_events", start)
+    ns = {"re": re, "json": json}
+    exec(source[start:end], ns)
+
+    needs_review = ns["_needs_llm_location_review"]
+
+    source_text = (
+        "19 июня в 20:00 в атриуме музея прозвучит первый концерт нового сезона Pianissimo.\n"
+        "В программе вечера — шедевры фортепианной музыки:\n"
+        "🎵 С. В. Рахманинов – Музыкальные моменты, соч. 16"
+    )
+    events = [
+        {
+            "title": "Первый концерт нового сезона Pianissimo",
+            "date": "2026-06-19",
+            "time": "20:00",
+            "location_name": "🎵 С. В. Рахманинов – Музыкальные моменты",
+            "location_address": "соч. 16",
+            "city": "Калининград",
+        }
+    ]
+
+    assert needs_review(events, message_text=source_text) is True
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:

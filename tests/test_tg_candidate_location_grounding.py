@@ -144,6 +144,43 @@ async def test_tg_build_candidate_drops_section_label_location_and_uses_default(
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_drops_program_item_location_and_uses_default():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Филиал Третьяковской галереи, Парадная наб. 3, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "tretyakovka_kaliningrad",
+        "message_id": 3201,
+        "source_link": "https://t.me/tretyakovka_kaliningrad/3201",
+        "text": (
+            "🎹 Открываем летний фестиваль Pianissimo!\n\n"
+            "19 июня в 20:00 в атриуме музея прозвучит первый концерт нового сезона Pianissimo.\n\n"
+            "В программе вечера — шедевры фортепианной музыки:\n"
+            "🎵 И. С. Бах / Ф. Бузони – Чакона\n"
+            "🎵 С. В. Рахманинов – Музыкальные моменты, соч. 16"
+        ),
+    }
+    event_data = {
+        "title": "Первый концерт нового сезона Pianissimo",
+        "date": "2026-06-19",
+        "time": "20:00",
+        "location_name": "🎵 С. В. Рахманинов – Музыкальные моменты",
+        "location_address": "соч. 16",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Филиал Третьяковской галереи"
+    assert cand.location_address == "Парадная наб. 3"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_drops_reaction_text_location_without_default():
     from source_parsing.telegram.handlers import _build_candidate
 

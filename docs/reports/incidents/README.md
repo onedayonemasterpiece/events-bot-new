@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-16-tg-location-pianissimo-program-fragment.md`
+  - Scope: Telegram Monitoring / Smart Update venue extraction for official source posts where a short, source-grounded program/repertoire line is copied into `location_name`, plus public `@kldevents` event-publish repair for `event.id=6060`.
+  - Must not regress: repertoire/program items such as `🎵 С. В. Рахманинов – Музыкальные моменты` and catalogue numbers such as `соч. 16` must trigger LLM venue review and must not survive as public venue/address fields; official Tretyakovka source context/default must recover `Филиал Третьяковской галереи, Парадная наб. 3, Калининград` when the post only says `в атриуме музея`.
 - `INC-2026-06-16-tg-phone-links.md`
   - Scope: Telegram event publishing phone-only registration/ticket contacts and phone numbers in event body/captions.
   - Must not regress: `event.ticket_link=tel:+...` must become an explicit clickable Telegram `phone_number` entity with a compact Telegram-visible phone payload; body phone numbers must be linkified outside existing anchors; Kaliningrad `4012` landlines must keep natural display formatting outside the final Telegram entity payload.

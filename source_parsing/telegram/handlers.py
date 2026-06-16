@@ -2506,6 +2506,12 @@ _LOCATION_LABEL_FRAGMENT_RE = re.compile(
 _LOCATION_SCHEDULE_FRAGMENT_RE = re.compile(
     r"(?iu)^\s*\d{1,2}[:.]\d{2}\s*[-–—]\s*\d{1,2}[:.]\d{2}\s*[-–—]\s+\S+"
 )
+_LOCATION_PROGRAM_ITEM_RE = re.compile(
+    r"(?iu)^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+"
+)
+_LOCATION_CATALOGUE_ADDRESS_RE = re.compile(
+    r"(?iu)^\s*(?:соч\.?|op\.?|№)\s*[0-9IVXLCDMivxlcdmA-Za-zА-Яа-яЁё./ -]+\s*$"
+)
 _CITY_PREFIX_RE = re.compile(
     r"(?i)^\s*(?:г\.?|город|пос\.?|посёлок|поселок|пгт|село|деревня)\s+"
 )
@@ -2719,7 +2725,11 @@ def _event_local_location_candidate_ok(location_name: str | None, location_addre
         return False
     if "@" in raw or re.search(r"(?i)\bt\.me/", raw):
         return False
-    if _looks_like_location_prose_fragment(raw) or _looks_like_location_person_name_fragment(raw):
+    if (
+        _looks_like_location_prose_fragment(raw)
+        or _looks_like_location_program_fragment(raw, location_address)
+        or _looks_like_location_person_name_fragment(raw)
+    ):
         return False
     return bool(
         location_address
@@ -2844,10 +2854,27 @@ def _looks_like_location_temporal_fragment(value: str | None) -> bool:
     return bool(_LOCATION_TEMPORAL_FRAGMENT_RE.fullmatch(raw))
 
 
+def _looks_like_location_program_fragment(value: str | None, address: str | None = None) -> bool:
+    raw = str(value or "").strip()
+    addr = str(address or "").strip()
+    if not raw:
+        return False
+    has_venue_or_address_cue = bool(_ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw))
+    if _LOCATION_PROGRAM_ITEM_RE.search(raw) and not has_venue_or_address_cue:
+        return True
+    if addr and _LOCATION_CATALOGUE_ADDRESS_RE.search(addr) and not (
+        has_venue_or_address_cue or _ADDRESS_HINT_RE.search(addr)
+    ):
+        return True
+    return False
+
+
 def _looks_like_location_prose_fragment(value: str | None) -> bool:
     raw = str(value or "").strip()
     if not raw:
         return False
+    if _looks_like_location_program_fragment(raw):
+        return True
     if "\n" in raw:
         return True
     compact = re.sub(r"\s+", " ", raw)
@@ -3829,6 +3856,7 @@ def _build_candidate(
         location_had_temporal_fragment = True
     if location_name and (
         _looks_like_location_prose_fragment(location_name)
+        or _looks_like_location_program_fragment(location_name, location_address)
         or _looks_like_location_person_name_fragment(location_name)
     ):
         logger.warning(
@@ -4108,6 +4136,7 @@ def _build_candidate(
     if matched_venue is None:
         if location_name and (
             _looks_like_location_prose_fragment(location_name)
+            or _looks_like_location_program_fragment(location_name, location_address)
             or _looks_like_location_person_name_fragment(location_name)
         ):
             logger.warning(
