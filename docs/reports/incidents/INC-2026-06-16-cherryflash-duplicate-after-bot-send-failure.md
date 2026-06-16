@@ -1,6 +1,6 @@
 # INC-2026-06-16 CherryFlash duplicate after bot-send failure
 
-Status: open
+Status: mitigated
 Severity: sev2
 Service: CherryFlash / Kaggle scheduled video announcement (`@kenigevents`)
 Opened: 2026-06-16
@@ -196,11 +196,11 @@ All times are UTC unless noted. Public channel observations are also shown in Ka
 
 ## Follow-up Actions
 
-- [ ] Implement the post-render terminal status and scheduler guard for completed
+- [x] Implement the post-render terminal status and scheduler guard for completed
       Kaggle evidence.
-- [ ] Refactor `video_announce/poller.py` exception boundaries so post-download
+- [x] Refactor `video_announce/poller.py` exception boundaries so post-download
       bot-send errors cannot be logged as output-download failures.
-- [ ] Add tests for `BOOSTS_REQUIRED`, Bot API `Bad Gateway`, and terminal
+- [x] Add tests for `BOOSTS_REQUIRED`, Bot API `Bad Gateway`, and terminal
       ledger/video-url slot closure.
 - [ ] Decide and document cleanup policy for duplicate `@kenigevents` video
       announcements: keep newest, keep first, or leave both when deleting would
@@ -208,10 +208,27 @@ All times are UTC unless noted. Public channel observations are also shown in Ka
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `7c3026f0f260922713a0ff7525e5dca36d9d0600`, reachable from
+  `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only`
+  from clean worktree `inc/20260616-cherryflash-duplicate`; Fly image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KV80X1E0MG4KNWE1AMM11EG3`,
+  machine `683961db016e28` version `1433`, `1 total, 1 passing`.
+- regression checks: `python -m py_compile models.py scheduling.py
+  video_announce/poller.py`; `python -m pytest -q
+  tests/test_video_announce_poller.py tests/test_scheduling.py` reported
+  `39 passed, 1 warning in 6.78s` and then hit the known interpreter shutdown
+  hang, interrupted after the green summary; `git diff --check` passed.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB and
+  scheduler `ok`, with `video_popular_review` and watchdog both `ok`; production
+  code probe in `/app` confirmed `PUBLISH_BLOCKED`,
+  `_video_session_status_closes_scheduled_slot`, and
+  `post-render bot delivery failed` are present.
+- post-deploy scheduler evidence: after deploy and after the next watchdog tick,
+  production DB showed no new `ops_run(kind='video_popular_review')` after
+  `2026-06-16 10:45 UTC`; no new video sessions beyond `#684`; runtime logs
+  showed startup catch-up skipped with `confirmed Kaggle handoff already exists
+  today` instead of launching another full Kaggle run.
 
 ## Prevention
 
