@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-16-cherryflash-duplicate-after-bot-send-failure.md`
+  - Scope: CherryFlash/CrumpleVideo/Koenigsberg scheduled Kaggle video runs,
+    server-side output download, bot test/notify delivery, Kaggle status ledger,
+    and catch-up/watchdog slot eligibility.
+  - Must not regress: after render output, terminal Kaggle evidence, or a public
+    side effect exists, a full replacement Kaggle run is forbidden unless an
+    operator explicitly overrides it; post-download bot-send failures and
+    deterministic fanout blockers such as `BOOSTS_REQUIRED` must use a
+    post-render terminal status and retry only narrow operations that can add
+    value.
 - `INC-2026-06-16-tg-event-publish-timeout-duplicate.md`
   - Scope: Telegram event publishing idempotency around Bot API write timeouts, `tg_event_publish` retry policy, and Telethon-first inspection of operator-provided Telegram links.
   - Must not regress: a Bot API timeout during new `sendMessage`/`sendPhoto`/`sendMediaGroup` for `@kldevents` must be treated as an uncertain write and must not auto-retry into a duplicate public post; `t.me` incident links must be read through Telethon first.
