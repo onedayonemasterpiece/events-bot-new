@@ -11,6 +11,7 @@
 5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
 6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
+8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
 
 ## Incident Mode (critical)
 
@@ -74,6 +75,8 @@
 Если задача касается качества/смысла данных событий (например `title`, `description`, `search_digest`, `is_free`, `ticket_status`, work-hours/non-event классификация, venue/title semantics, duplicate/match решения), приоритет у обработки **через LLM** (промпты в `docs/llm/`, provider prompts вроде `kaggle/TelegramMonitor/telegram_monitor.py`, и LLM‑пасс в Smart Update).
 
 Детерминированные функции допустимы как поддержка (санитайзеры, нормализация, извлечение дат/времени, узкие consistency/safety guardrail‑проверки), но они **не должны менять смысл** текста или подменять LLM‑решение широкими regex/keyword правилами.
+
+В incident workflow это обязательный gate: перед prevention/fix нужно явно отделить семантическую проблему события/текста от механической проблемы транспорта/очереди/API. Семантические инциденты чинятся LLM-first; deterministic code допустим только как fail-closed/grounding/routing guard с negative controls.
 
 Каноническая политика: `docs/llm/request-guide.md` (секция про LLM‑first).
 

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Changed: events-bot incident workflow skill**: added the
+  `events-bot-incident-response` project skill as the first router for
+  production incidents, with explicit evidence routing and an LLM-first
+  semantic gate so event/text-quality incidents cannot be closed with broad
+  regex/keyword fixes.
 - **Changed: Telegram link inspection default**: operator-provided `t.me` links
   in events-bot incidents/debugging must now be read through the local Telethon
   human session first; public `t.me/s` HTML is documented as fallback evidence.
