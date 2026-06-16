@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Fixed: scheduled video rerender after post-render delivery blockers**:
+  CherryFlash/CrumpleVideo/Koenigsberg scheduled video sessions now use
+  `PUBLISH_BLOCKED` for render-complete fanout/test-delivery blockers, including
+  Bot API `Bad Gateway` after output download and deterministic target errors
+  such as `BOOSTS_REQUIRED`. Startup catch-up/watchdog slot checks now treat
+  `video_url`, terminal Kaggle ledger evidence, `DONE`, `PUBLISH_BLOCKED`,
+  `PUBLISHED_TEST`, and `PUBLISHED_MAIN` as slot-closing evidence, so recovery
+  retries only narrow publish/reconcile work instead of burning another full
+  Kaggle render. Tracks
+  `INC-2026-06-16-cherryflash-duplicate-after-bot-send-failure`.
 - **Changed: events-bot incident workflow skill**: added the
   `events-bot-incident-response` project skill as the first router for
   production incidents, with explicit evidence routing and an LLM-first

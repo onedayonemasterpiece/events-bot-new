@@ -20,6 +20,16 @@ class _DummyBot:
         self.messages.append((chat_id, text))
 
 
+class _CompleteKernelClient:
+    def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+        return {"status": "complete"}
+
+    def download_kernel_output(self, kernel_ref: str, *, path: Path, **kwargs) -> list[str]:  # noqa: ARG002
+        video = path / "cherryflash_full_final.mp4"
+        video.write_bytes(b"fake-video")
+        return [video.name]
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _close_databases_after_test():
     yield
@@ -228,3 +238,144 @@ async def test_update_status_sets_published_at_for_published_test(tmp_path: Path
     assert updated is not None
     assert updated.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
     assert updated.published_at is not None
+
+
+@pytest.mark.asyncio
+async def test_completed_kernel_bot_delivery_failure_becomes_publish_blocked(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=-1002210431821,
+            selection_params={"target_date": "2026-06-16", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #682 · 16 июня"
+
+    async def raise_bad_gateway(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise RuntimeError("Telegram server says - Bad Gateway")
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", raise_bad_gateway)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    bot = _DummyBot()
+    await poller_module.run_kernel_poller(
+        db,
+        _CompleteKernelClient(),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        bot=bot,
+        notify_chat_id=777,
+        test_chat_id=-1002210431821,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        assert refreshed.video_url == "cherryflash_full_final.mp4"
+        assert refreshed.error == "post-render bot delivery failed"
+        assert refreshed.finished_at is not None
+    assert bot.messages == [
+        (
+            777,
+            "⚠️ Сессия #1: видео готово, но бот не смог доставить mp4 в тест/notify чат. Полный Kaggle rerender не требуется.",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_story_failure_after_render_becomes_publish_blocked(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="default",
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-17", "mode": "tomorrow"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class StoryFailureClient(_CompleteKernelClient):
+        def download_kernel_output(self, kernel_ref: str, *, path: Path, **kwargs) -> list[str]:  # noqa: ARG002
+            video = path / "crumple_video_final.mp4"
+            video.write_bytes(b"fake-video")
+            report = path / "story_publish_report.json"
+            report.write_text(
+                '{"ok": false, "targets": [{"label": "@kenigevents", "ok": false, "error": "BOOSTS_REQUIRED"}]}',
+                encoding="utf-8",
+            )
+            return [video.name, report.name]
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #682 · 17 июня"
+
+    async def no_recovery(*args, **kwargs):  # noqa: ANN002,ANN003
+        return False
+
+    async def noop_send_video(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "run_story_publish_only_recovery", no_recovery)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send_video)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    bot = _DummyBot()
+    await poller_module.run_kernel_poller(
+        db,
+        StoryFailureClient(),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/crumple-video"),
+        bot=bot,
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        assert refreshed.video_url == "crumple_video_final.mp4"
+        assert refreshed.error == "story publish failed: @kenigevents (BOOSTS_REQUIRED)"
+        assert refreshed.finished_at is not None

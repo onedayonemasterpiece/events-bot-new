@@ -1126,7 +1126,11 @@ async def _update_status(
                 if not obj:
                     return None
                 obj.status = status
-                if status in {VideoAnnounceSessionStatus.DONE, VideoAnnounceSessionStatus.FAILED}:
+                if status in {
+                    VideoAnnounceSessionStatus.DONE,
+                    VideoAnnounceSessionStatus.FAILED,
+                    VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                }:
                     obj.finished_at = datetime.now(timezone.utc)
                 if status == VideoAnnounceSessionStatus.PUBLISHED_TEST and obj.published_at is None:
                     obj.published_at = datetime.now(timezone.utc)
@@ -1686,6 +1690,8 @@ async def run_kernel_poller(
     tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
     output_dir = tmp_dir / f"videoannounce-{session_obj.id}"
     output_dir.mkdir(parents=True, exist_ok=True)
+    render_output_ready = False
+    ready_video_name: str | None = None
     try:
         max_attempts = 3
         files: list[str] = []
@@ -1750,6 +1756,8 @@ async def run_kernel_poller(
                     caption=f"❌ Логи (нет видео) сессии #{session_obj.id}",
                 )
             return
+        render_output_ready = True
+        ready_video_name = video_path.name
         if video_path.stat().st_size > VIDEO_MAX_MB * 1024 * 1024:
             session_obj = await _update_status(
                 db,
@@ -1820,7 +1828,7 @@ async def run_kernel_poller(
                 session_obj = await _update_status(
                     db,
                     session_obj.id,
-                    status=VideoAnnounceSessionStatus.FAILED,
+                    status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
                     error=story_failure,
                 )
                 if not session_obj:
@@ -1868,14 +1876,65 @@ async def run_kernel_poller(
                 return
         await _maybe_register_kenigsberg_manifest(db, session_obj, output_files)
         target_test = test_chat_id or notify_chat_id
+        test_delivery_ok = False
         try:
             await _send_video_with_preview(bot, target_test, video_path, caption=caption)
+            test_delivery_ok = True
         except Exception as e:
             logger.warning("video_announce: failed to send video to test chat %s: %s", target_test, e)
-            # Fallback to notify_chat_id if test_chat_id fails
+            # Fallback to notify_chat_id if test_chat_id fails.  A fallback
+            # failure is a post-render delivery blocker, not a render/output
+            # failure, so keep it inside this phase instead of letting the
+            # broad download handler turn it into a full-rerender signal.
             if target_test != notify_chat_id:
-                await _send_video_with_preview(bot, notify_chat_id, video_path, caption=caption)
-        await _send_logs(bot, notify_chat_id, log_files, caption=f"✅ Логи сессии #{session_obj.id}")
+                try:
+                    await _send_video_with_preview(bot, notify_chat_id, video_path, caption=caption)
+                    test_delivery_ok = True
+                except Exception as fallback_exc:
+                    logger.warning(
+                        "video_announce: failed to send video fallback to notify chat %s: %s",
+                        notify_chat_id,
+                        fallback_exc,
+                    )
+        try:
+            await _send_logs(bot, notify_chat_id, log_files, caption=f"✅ Логи сессии #{session_obj.id}")
+        except Exception as logs_exc:
+            logger.warning(
+                "video_announce: failed to send post-render logs session=%s chat=%s: %s",
+                session_obj.id,
+                notify_chat_id,
+                logs_exc,
+            )
+        if not test_delivery_ok:
+            session_obj = await _update_status(
+                db,
+                session_obj.id,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                error="post-render bot delivery failed",
+            )
+            if session_obj:
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Видео готово; доставка ботом заблокирована",
+                )
+                try:
+                    await bot.send_message(
+                        notify_chat_id,
+                        f"⚠️ Сессия #{session_obj.id}: видео готово, но бот не смог доставить mp4 в тест/notify чат. Полный Kaggle rerender не требуется.",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send post-render blocked notification session=%s",
+                        session_obj.id,
+                        exc_info=True,
+                    )
+            return
         session_obj = await _update_status(
             db,
             session_obj.id,
@@ -1916,7 +1975,43 @@ async def run_kernel_poller(
                     )
             except Exception as e:
                 logger.warning("video_announce: failed to send video to main chat %s: %s", main_chat_id, e)
-    except Exception:
+    except Exception as exc:
+        if render_output_ready:
+            logger.exception(
+                "video_announce: post-render handling failed session=%s kernel=%s",
+                session_obj.id,
+                kernel_ref,
+            )
+            session_obj = await _update_status(
+                db,
+                session_obj.id,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                error=f"post-render handling failed: {exc}",
+                video_url=ready_video_name,
+            )
+            if session_obj:
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Видео готово; post-render доставка/фанаут заблокированы",
+                )
+                try:
+                    await bot.send_message(
+                        notify_chat_id,
+                        f"⚠️ Сессия #{session_obj.id}: видео уже готово, но post-render обработка упала. Полный Kaggle rerender запрещён; нужен узкий retry/reconcile.",
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to send post-render exception notification session=%s",
+                        session_obj.id,
+                        exc_info=True,
+                    )
+            return
         logger.exception(
             "video_announce: failed to download kernel output session=%s kernel=%s",
             session_obj.id,

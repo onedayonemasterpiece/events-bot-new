@@ -300,6 +300,7 @@ async def _insert_popular_review_session(
     created_at: str,
     kaggle_dataset: str | None = None,
     kaggle_kernel_ref: str | None = None,
+    video_url: str | None = None,
     error: str | None = None,
 ) -> int:
     async with db.raw_conn() as conn:
@@ -307,9 +308,9 @@ async def _insert_popular_review_session(
             """
             INSERT INTO videoannounce_session(
                 status, profile_key, selection_params, created_at,
-                kaggle_dataset, kaggle_kernel_ref, error
+                kaggle_dataset, kaggle_kernel_ref, video_url, error
             )
-            VALUES(?, 'popular_review', ?, ?, ?, ?, ?)
+            VALUES(?, 'popular_review', ?, ?, ?, ?, ?, ?)
             """,
             (
                 status,
@@ -317,6 +318,7 @@ async def _insert_popular_review_session(
                 created_at,
                 kaggle_dataset,
                 kaggle_kernel_ref,
+                video_url,
                 error,
             ),
         )
@@ -333,6 +335,7 @@ async def _insert_video_session(
     created_at: str,
     kaggle_dataset: str | None = None,
     kaggle_kernel_ref: str | None = None,
+    video_url: str | None = None,
     error: str | None = None,
 ) -> int:
     async with db.raw_conn() as conn:
@@ -340,9 +343,9 @@ async def _insert_video_session(
             """
             INSERT INTO videoannounce_session(
                 status, profile_key, selection_params, created_at,
-                kaggle_dataset, kaggle_kernel_ref, error
+                kaggle_dataset, kaggle_kernel_ref, video_url, error
             )
-            VALUES(?, ?, ?, ?, ?, ?, ?)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 status,
@@ -351,11 +354,31 @@ async def _insert_video_session(
                 created_at,
                 kaggle_dataset,
                 kaggle_kernel_ref,
+                video_url,
                 error,
             ),
         )
         await conn.commit()
         return int(cur.lastrowid)
+
+
+async def _insert_terminal_kaggle_ledger(db: Database, *, session_id: int) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, token_hash,
+                terminal_at
+            )
+            VALUES(?, ?, 'cherryflash', 'CherryFlash', 'done', 'cleanup', 'test', ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                "2026-04-12T09:26:44+00:00",
+            ),
+        )
+        await conn.commit()
 
 
 def _configure_video_tomorrow_env(monkeypatch) -> None:
@@ -918,6 +941,105 @@ async def test_popular_review_watchdog_retries_failed_remote_handoff(
 
     assert dispatched is True
     assert calls == [{"startup_catchup": False}]
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_failed_session_with_video_output(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-682",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        video_url="cherryflash_full_final.mp4",
+        error="kernel output download failed",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_failed_session_with_terminal_ledger(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    session_id = await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-682",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        error="post-render bot delivery failed",
+    )
+    await _insert_terminal_kaggle_ledger(db, session_id=session_id)
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_publish_blocked_session(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="PUBLISH_BLOCKED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-682",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        video_url="cherryflash_full_final.mp4",
+        error="story publish failed: @kenigevents BOOSTS_REQUIRED",
+    )
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
 
 
 @pytest.mark.asyncio

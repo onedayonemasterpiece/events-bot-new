@@ -1176,6 +1176,45 @@ async def _tg_monitoring_recovery_job_exists() -> bool:
     return bool(jobs)
 
 
+
+
+def _video_session_status_closes_scheduled_slot(
+    status: str | None,
+    *,
+    video_url: str | None = None,
+    terminal_ledger: bool = False,
+) -> bool:
+    normalized = str(status or "").strip()
+    if normalized in _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES:
+        return True
+    if str(video_url or "").strip():
+        return True
+    if terminal_ledger:
+        return True
+    return False
+
+
+async def _video_sessions_with_terminal_kaggle_ledger(
+    db: Any,
+    session_ids: list[int],
+) -> set[int]:
+    if db is None or not hasattr(db, "raw_conn") or not session_ids:
+        return set()
+    placeholders = ",".join("?" for _ in session_ids)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            f"""
+            SELECT DISTINCT session_id
+            FROM kaggle_run_ledger
+            WHERE session_id IN ({placeholders})
+              AND lower(status) IN ('done', 'partial')
+              AND terminal_at IS NOT NULL
+            """,
+            tuple(int(sid) for sid in session_ids),
+        )
+        rows = await cur.fetchall()
+    return {int(row[0]) for row in rows if row[0] is not None}
+
 async def _video_tomorrow_session_exists_today(
     db: Any,
     *,
@@ -1189,7 +1228,7 @@ async def _video_tomorrow_session_exists_today(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, profile_key, selection_params
+            SELECT id, status, profile_key, selection_params, video_url
             FROM videoannounce_session
             WHERE created_at >= ?
               AND created_at < ?
@@ -1198,10 +1237,12 @@ async def _video_tomorrow_session_exists_today(
             (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
         )
         rows = await cur.fetchall()
-    for status, row_profile_key, selection_params_raw in rows:
+    terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
+        db,
+        [int(row[0]) for row in rows if row and row[0] is not None],
+    )
+    for session_id, status, row_profile_key, selection_params_raw, video_url in rows:
         if str(row_profile_key or "").strip() != profile_key:
-            continue
-        if str(status or "").strip() not in _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES:
             continue
         params: dict[str, Any] = {}
         if isinstance(selection_params_raw, str) and selection_params_raw.strip():
@@ -1213,7 +1254,13 @@ async def _video_tomorrow_session_exists_today(
                 params = parsed
         elif isinstance(selection_params_raw, dict):
             params = selection_params_raw
-        if str(params.get("target_date") or "").strip() == target_date:
+        if str(params.get("target_date") or "").strip() != target_date:
+            continue
+        if _video_session_status_closes_scheduled_slot(
+            status,
+            video_url=video_url,
+            terminal_ledger=int(session_id) in terminal_ledger_sessions,
+        ):
             return True
     return False
 
@@ -1273,7 +1320,7 @@ async def _popular_review_session_exists_today(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            SELECT id, status, kaggle_dataset, kaggle_kernel_ref, selection_params, video_url
             FROM videoannounce_session
             WHERE profile_key = 'popular_review'
               AND created_at >= ?
@@ -1283,7 +1330,11 @@ async def _popular_review_session_exists_today(
             (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
         )
         rows = await cur.fetchall()
-    for status, dataset, kernel_ref, selection_params_raw in rows:
+    terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
+        db,
+        [int(row[0]) for row in rows if row and row[0] is not None],
+    )
+    for session_id, status, dataset, kernel_ref, selection_params_raw, video_url in rows:
         params: dict[str, Any] = {}
         if isinstance(selection_params_raw, str) and selection_params_raw.strip():
             try:
@@ -1296,6 +1347,12 @@ async def _popular_review_session_exists_today(
             params = selection_params_raw
         if str(params.get("target_date") or "").strip() != target_date:
             continue
+        if _video_session_status_closes_scheduled_slot(
+            status,
+            video_url=video_url,
+            terminal_ledger=int(session_id) in terminal_ledger_sessions,
+        ):
+            return True
         if _video_session_has_remote_handoff(
             {
                 "session_status": status,
@@ -1322,7 +1379,7 @@ async def _partner_track_session_exists_today(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            SELECT id, status, kaggle_dataset, kaggle_kernel_ref, selection_params, video_url
             FROM videoannounce_session
             WHERE profile_key = ?
               AND created_at >= ?
@@ -1336,7 +1393,11 @@ async def _partner_track_session_exists_today(
             ),
         )
         rows = await cur.fetchall()
-    for status, dataset, kernel_ref, selection_params_raw in rows:
+    terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
+        db,
+        [int(row[0]) for row in rows if row and row[0] is not None],
+    )
+    for session_id, status, dataset, kernel_ref, selection_params_raw, video_url in rows:
         params: dict[str, Any] = {}
         if isinstance(selection_params_raw, str) and selection_params_raw.strip():
             try:
@@ -1349,6 +1410,12 @@ async def _partner_track_session_exists_today(
             params = selection_params_raw
         if str(params.get("target_date") or "").strip() != target_date:
             continue
+        if _video_session_status_closes_scheduled_slot(
+            status,
+            video_url=video_url,
+            terminal_ledger=int(session_id) in terminal_ledger_sessions,
+        ):
+            return True
         if _video_session_has_remote_handoff(
             {
                 "session_status": status,
@@ -1428,7 +1495,7 @@ async def _kenigsberg_story_session_exists_today(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, kaggle_dataset, kaggle_kernel_ref, selection_params
+            SELECT id, status, kaggle_dataset, kaggle_kernel_ref, selection_params, video_url
             FROM videoannounce_session
             WHERE profile_key = 'kenigsberg_story'
               AND created_at >= ?
@@ -1438,7 +1505,11 @@ async def _kenigsberg_story_session_exists_today(
             (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
         )
         rows = await cur.fetchall()
-    for status, dataset, kernel_ref, selection_params_raw in rows:
+    terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
+        db,
+        [int(row[0]) for row in rows if row and row[0] is not None],
+    )
+    for session_id, status, dataset, kernel_ref, selection_params_raw, video_url in rows:
         params: dict[str, Any] = {}
         if isinstance(selection_params_raw, str) and selection_params_raw.strip():
             try:
@@ -1453,6 +1524,12 @@ async def _kenigsberg_story_session_exists_today(
             continue
         if not bool(params.get("story_publish_requested")):
             continue
+        if _video_session_status_closes_scheduled_slot(
+            status,
+            video_url=video_url,
+            terminal_ledger=int(session_id) in terminal_ledger_sessions,
+        ):
+            return True
         if _video_session_has_remote_handoff(
             {
                 "session_status": status,
@@ -2876,6 +2953,7 @@ _heavy_job_lock = asyncio.Lock()
 _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
     "RENDERING",
     "DONE",
+    "PUBLISH_BLOCKED",
     "PUBLISHED_TEST",
     "PUBLISHED_MAIN",
 }
