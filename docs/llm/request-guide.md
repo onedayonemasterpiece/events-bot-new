@@ -54,6 +54,17 @@ Documented exceptions (rare, guardrail-only):
   OCR tokens such as `9.08` as times when there is no nearby time context. These
   checks do not choose the event title or classify the post; they only stop a
   fallback/parser ambiguity from overwriting LLM-owned meaning.
+- Weak rubric/digest routing from
+  `INC-2026-06-16-vk-quality-duplicates-non-events.md`: deterministic code may
+  detect high-risk shapes such as `Дайджест`, `Афиша`, or imperative junk in
+  `location_name` and send them to a small LLM eventness reviewer. The
+  reviewer owns the semantic `event/non_event` decision; for these already
+  suspicious candidates uncertainty fails closed instead of publishing a
+  guessed event.
+- Citywide/festival duplicate recall from the same incident: deterministic
+  code may keep same-title/date/time citywide candidates visible in the LLM
+  duplicate shortlist even when extracted venues differ. It is recall-only and
+  must not merge ambiguous citywide vs venue-specific events without LLM.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The

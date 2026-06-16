@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixed: VK/TG event quality duplicates and rubric non-events**: Smart Update
+  now routes weak rubric/digest candidates such as `Дайджест - посмотри,
+  приходи` through an LLM-first eventness reviewer and fails closed when the
+  reviewer cannot confirm one concrete attendable event. Citywide/festival
+  same-title/date/time candidates with drifted extracted venues are recalled
+  into the LLM duplicate shortlist instead of creating a second active row, and
+  managed VK photo dedupe now collapses the 28-bit near-duplicate poster class
+  seen on `klgdevents`. Tracks
+  `INC-2026-06-16-vk-quality-duplicates-non-events`.
 - **Fixed: LLM-first room/floor venue extraction and repost lead time**: VK
   auto-import prompts now instruct the LLM to treat room/floor strings such as
   `лекционный зал, 4 этаж` as non-venue details and recover the actual

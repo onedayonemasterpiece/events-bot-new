@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-16-vk-quality-duplicates-non-events.md`
+  - Scope: VK/TG Smart Update eventness for weak digest/rubric candidates, citywide/festival duplicate recall, managed `klgdevents` VK post idempotency, and near-duplicate poster media dedupe.
+  - Must not regress: rubric stubs such as `Дайджест - посмотри, приходи` must go through LLM-first eventness review and fail closed when not a concrete attendable event; same title/date/time citywide events with drifted venue text must be visible to LLM matching rather than creating duplicate active rows; existing managed/postponed VK posts must be reused instead of republished; visually near-duplicate posters must collapse before public VK publication.
 - `INC-2026-06-15-konb-room-location-and-future-audit.md`
   - Scope: VK auto-import/Smart Update venue extraction for stable source-location sources, KОНБ `konb39`/`kaliningradlibrary` defaults, and future-event duplicate/generic-title audit.
   - Must not regress: room/floor labels such as `лекционный зал`, `аудитория`, or `4 этаж` must not become public venues when source context identifies a real building; KОНБ VK imports must carry `Научная библиотека, Мира 9, Калининград`; future active listings must not keep generic duplicate rows such as duplicate `Музыкальный фестиваль` donor/map notices or duplicate 80th-region concert rows.

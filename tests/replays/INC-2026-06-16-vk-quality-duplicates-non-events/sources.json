@@ -1,0 +1,33 @@
+[
+  {
+    "case": "false_digest_stub",
+    "source_type": "telegram",
+    "source_url": "https://t.me/molod_kld/3750",
+    "source_text": "🏠 Дайджест - посмотри, приходи",
+    "candidate": {
+      "title": "Дайджест",
+      "date": "2026-06-21",
+      "time": "18:00",
+      "location_name": "приходи",
+      "city": "Калининград",
+      "event_type": "встреча"
+    },
+    "expected_status": "skipped_non_event",
+    "expected_reason": "weak_eventness_review_non_event"
+  },
+  {
+    "case": "music_night_duplicate_recall",
+    "source_type": "telegram",
+    "source_url": "https://t.me/meowafisha/7661",
+    "source_text": "Первая попытка сделать оммаж на Ural Music Night, где буквально весь город становится единой музыкальной сценой. Анонсировано сразу 20 площадок и 60 групп / исполнителей.\n\n20.06 | Калининградская музыкальная ночь",
+    "candidate": {
+      "title": "Калининградская музыкальная ночь",
+      "date": "2026-06-20",
+      "time": "19:00",
+      "location_name": "Ural Music Night",
+      "city": "Калининград",
+      "event_type": "фестиваль"
+    },
+    "expected_behavior": "candidate is recalled into LLM duplicate shortlist when an existing same-title/date/time citywide festival row has a different extracted venue"
+  }
+]

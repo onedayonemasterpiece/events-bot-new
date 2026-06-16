@@ -163,6 +163,89 @@ async def _seed_westside_men_event(db: Database) -> int:
 
 
 @pytest.mark.asyncio
+async def test_citywide_music_night_location_drift_reaches_llm_match(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    llm_seen_ids: list[int] = []
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+
+        async with db.get_session() as session:
+            ev = Event(
+                title="Калининградская музыкальная ночь",
+                description="Городской музыкальный фестиваль на нескольких площадках.",
+                date="2026-06-20",
+                time="19:00",
+                location_name="Дом китобоя",
+                location_address="Мира 9",
+                city="Калининград",
+                event_type="фестиваль",
+                source_text="Калининградская музыкальная ночь — городской фестиваль с разными площадками.",
+                source_post_url="https://t.me/domkitoboya/3300",
+                telegraph_url="https://telegra.ph/Kaliningradskaya-muzykalnaya-noch-06-15",
+            )
+            session.add(ev)
+            await session.commit()
+            await session.refresh(ev)
+            eid = int(ev.id or 0)
+
+        async def fake_match_or_create_bundle(candidate, events, **kwargs):
+            llm_seen_ids.extend(int(ev.id or 0) for ev in events)
+            return {
+                "action": "match",
+                "match_event_id": eid,
+                "confidence": 0.92,
+                "reason_short": "same citywide festival title/date/time; venue text drift",
+            }
+
+        async def fake_merge_event(*args, **kwargs):
+            return {
+                "description": "Городской музыкальный фестиваль.",
+                "added_facts": [],
+                "duplicate_facts": [],
+                "conflict_facts": [],
+                "skipped_conflicts": [],
+            }
+
+        monkeypatch.setattr(su, "_llm_match_or_create_bundle", fake_match_or_create_bundle)
+        monkeypatch.setattr(su, "_llm_merge_event", fake_merge_event)
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/meowafisha/7661",
+            source_text=(
+                "Калининградская музыкальная ночь 20 июня с 19:00 до 23:00. "
+                "Это городской музыкальный фестиваль, вдохновлённый форматом Ural Music Night."
+            ),
+            title="Калининградская музыкальная ночь",
+            date="2026-06-20",
+            time="19:00",
+            location_name="Ural Music Night",
+            city="Калининград",
+            event_type="фестиваль",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        assert int(result.event_id or 0) == eid
+        assert eid in llm_seen_ids
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    su.select(Event)
+                    .where(Event.title == "Калининградская музыкальная ночь")
+                    .order_by(Event.id)
+                )
+            ).scalars().all()
+            assert [int(row.id or 0) for row in rows] == [eid]
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_smart_update_merges_copy_post_same_day_text_when_ticket_link_differs(
     tmp_path,
     monkeypatch,

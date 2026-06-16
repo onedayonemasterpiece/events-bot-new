@@ -5445,12 +5445,12 @@ def _vk_photo_near_dup_hamming_threshold() -> int:
     raw = (
         os.getenv("VK_PHOTO_NEAR_DUP_HAMMING")
         or os.getenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING")
-        or "20"
+        or "32"
     )
     try:
         return max(0, int(str(raw).strip()))
     except (TypeError, ValueError):
-        return 20
+        return 32
 
 
 def _quote_photo_url_for_request(url: str) -> str:

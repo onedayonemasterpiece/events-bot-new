@@ -377,11 +377,11 @@ SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS = _env_int(
 
 # Max Hamming distance (over the 256-bit dh16 perceptual hash) at which two
 # posters are treated as the same image and collapsed before publishing. The
-# offline thumbnail composer uses 12; the live VK feed has shown same-frame
-# re-encodes/crops at distance 19, so keep a still-conservative 256-bit default
-# above that. 0 disables near-dup dedup.
+# live VK feed has shown same-frame re-encodes/crops at distance 28
+# (INC-2026-06-16), so keep a still-conservative 256-bit default just above
+# that. 0 disables near-dup dedup.
 SMART_UPDATE_POSTER_NEAR_DUP_HAMMING = _env_int(
-    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 20, lo=0, hi=64
+    "SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", 32, lo=0, hi=64
 )
 
 # Optional: allow light emoji usage in *full* public descriptions (Telegraph/body).
@@ -548,6 +548,30 @@ MERGE_RESPONSE_FORMAT = {
 
 MATCH_SCHEMA = MATCH_RESPONSE_FORMAT["json_schema"]["schema"]
 MERGE_SCHEMA = MERGE_RESPONSE_FORMAT["json_schema"]["schema"]
+
+EVENTNESS_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {
+            "type": "string",
+            "enum": ["event", "non_event", "uncertain"],
+        },
+        "confidence": {"type": "number"},
+        "reason_short": {"type": "string"},
+        "grounded_title": {"type": ["string", "null"]},
+        "has_single_concrete_event": {"type": "boolean"},
+        "missing_anchors": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "decision",
+        "confidence",
+        "reason_short",
+        "grounded_title",
+        "has_single_concrete_event",
+        "missing_anchors",
+    ],
+    "additionalProperties": False,
+}
 
 
 CREATE_BUNDLE_RESPONSE_FORMAT = {
@@ -9923,6 +9947,104 @@ def _looks_like_schedule_digest(text: str | None, *, event_date: str | None, end
     return False
 
 
+_WEAK_RUBRIC_TITLE_RE = re.compile(
+    r"(?iu)^\s*(?:"
+    r"дайджест|афиша|анонс(?:ы)?|подборка|куда\s+сходить|что\s+делать|"
+    r"планы\s+на\s+(?:выходные|неделю)|выходные|мероприятия"
+    r")\s*[!.:—–-]?\s*$"
+)
+_WEAK_IMPERATIVE_LOCATION_RE = re.compile(
+    r"(?iu)^\s*(?:приходи|приходите|посмотри|смотри|жд[её]м|подробнее|тут|здесь|онлайн)\s*[!.:—–-]?\s*$"
+)
+
+
+def _candidate_needs_llm_eventness_review(candidate: EventCandidate, text: str | None) -> bool:
+    """Route weak rubric/digest candidates to an LLM eventness decision.
+
+    This helper intentionally does not decide semantic eventness by itself.
+    It only detects high-risk extraction shapes where the LLM must confirm that
+    the source really contains one concrete attendable event before Smart Update
+    creates or merges a public event row.
+    """
+
+    if str(candidate.source_type or "").strip().lower() not in {"vk", "tg", "telegram"}:
+        return False
+    title = str(candidate.title or "").strip()
+    loc = str(candidate.location_name or "").strip()
+    raw = str(text or candidate.source_text or candidate.raw_excerpt or "").strip()
+    if _WEAK_RUBRIC_TITLE_RE.match(title):
+        return True
+    if loc and _WEAK_IMPERATIVE_LOCATION_RE.match(loc):
+        return True
+    # Short rubric snippets are the catastrophic class from INC-2026-06-16:
+    # "Дайджест - посмотри, приходи" was not an event even though upstream had
+    # attached dates. Do not skip here; require LLM confirmation below.
+    if len(raw) <= 220 and re.search(r"(?iu)\b(дайджест|афиша|подборка)\b", raw):
+        return True
+    return False
+
+
+async def _llm_review_candidate_eventness(
+    candidate: EventCandidate,
+    *,
+    clean_title: str,
+    clean_source_text: str | None,
+    clean_raw_excerpt: str | None,
+) -> tuple[str, float, str]:
+    """LLM-first eventness gate for weak rubric/digest candidates.
+
+    Returns (decision, confidence, reason). `non_event` is allowed to block the
+    candidate; `event` lets it continue; `uncertain` fail-closes because this
+    gate is only used for already suspicious weak candidates.
+    """
+
+    if SMART_UPDATE_LLM_DISABLED:
+        return "uncertain", 0.0, "llm_disabled"
+    payload = {
+        "candidate": {
+            "title": clean_title or candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "end_date": candidate.end_date,
+            "location_name": candidate.location_name,
+            "location_address": candidate.location_address,
+            "city": candidate.city,
+            "event_type": candidate.event_type,
+            "source_url": candidate.source_url,
+        },
+        "source_text": _clip(clean_source_text or candidate.source_text, 1800),
+        "raw_excerpt": _clip(clean_raw_excerpt or candidate.raw_excerpt, 900),
+    }
+    prompt = (
+        "Ты проверяешь кандидат события перед публикацией в афише Калининграда.\n"
+        "Нужно решить, содержит ли источник ОДНО конкретное событие, на которое читатель может прийти.\n\n"
+        "Важно:\n"
+        "- Решение должно быть grounded только в source_text/raw_excerpt и полях кандидата.\n"
+        "- Рубрики, дайджесты, подборки, посты вида 'посмотри, приходи', навигационные/промо-заглушки — non_event, если в них нет одного конкретного названия/программы события.\n"
+        "- Если дата/место/тип выглядят извлечёнными из воздуха, а источник не подтверждает событие, верни non_event.\n"
+        "- Если это короткий, но конкретный анонс одного события с названием/форматом и приглашением/расписанием — event.\n"
+        "- Если сомневаешься для такого слабого кандидата, верни uncertain.\n\n"
+        f"JSON input:\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        EVENTNESS_REVIEW_SCHEMA,
+        max_tokens=500,
+        label="eventness_review",
+    )
+    if not isinstance(data, dict):
+        return "uncertain", 0.0, "llm_unavailable"
+    decision = str(data.get("decision") or "uncertain").strip().lower()
+    if decision not in {"event", "non_event", "uncertain"}:
+        decision = "uncertain"
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except Exception:
+        confidence = 0.0
+    reason = str(data.get("reason_short") or "").strip()[:240]
+    return decision, confidence, reason
+
+
 def _normalize_title_for_match(title: str | None) -> str:
     if not title:
         return ""
@@ -10830,6 +10952,70 @@ def _same_specific_ticket_shortlist_recall(
                 getattr(ev, "source_text", None),
             )
         ):
+            continue
+        recalled.append(ev)
+    return recalled
+
+
+_CITYWIDE_FESTIVAL_SIGNAL_RE = re.compile(
+    r"(?iu)\b("
+    r"фестивал\w*|музыкальн\w+\s+ноч\w*|ночь\s+музеев|день\s+города|"
+    r"citywide|городск\w+\s+программ\w*|площадк\w*|маршрут\w*"
+    r")\b"
+)
+
+
+def _citywide_festival_shortlist_recall(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+) -> list[Event]:
+    """Keep same-title/date/time citywide candidates visible to LLM matching.
+
+    This is deliberately recall-only: it does not merge. It fixes the failure
+    mode where a citywide/festival source extracts a contextual phrase as the
+    venue, the location filter hides the existing event, and the LLM never gets
+    a chance to decide that the rows are duplicates.
+    """
+
+    cand_title = _normalize_title_for_match(candidate.title)
+    if not cand_title or not events:
+        return []
+    cand_start, cand_end = _candidate_date_range(candidate)
+    if not cand_start or not cand_end:
+        return []
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
+    candidate_signal_text = "\n".join(
+        [
+            str(candidate.title or ""),
+            str(candidate.event_type or ""),
+            str(candidate.festival or ""),
+            str(candidate.festival_full or ""),
+            str(candidate.festival_series or ""),
+            str(candidate.source_text or candidate.raw_excerpt or ""),
+        ]
+    )
+    if not _CITYWIDE_FESTIVAL_SIGNAL_RE.search(candidate_signal_text):
+        return []
+    recalled: list[Event] = []
+    for ev in events:
+        if not getattr(ev, "id", None):
+            continue
+        if _normalize_title_for_match(getattr(ev, "title", None)) != cand_title:
+            continue
+        ev_start, ev_end = _event_date_range(ev)
+        if not _ranges_overlap(cand_start, cand_end, ev_start, ev_end):
+            continue
+        if _has_explicit_time_conflict(cand_time, _event_anchor_time(ev)):
+            continue
+        ev_signal_text = "\n".join(
+            [
+                str(getattr(ev, "title", "") or ""),
+                str(getattr(ev, "event_type", "") or ""),
+                str(getattr(ev, "festival", "") or ""),
+                str(getattr(ev, "source_text", "") or ""),
+            ]
+        )
+        if not _CITYWIDE_FESTIVAL_SIGNAL_RE.search(ev_signal_text):
             continue
         recalled.append(ev)
     return recalled
@@ -12258,6 +12444,30 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             return SmartUpdateResult(status="skipped_non_event", reason="completed_event_report")
+        if _candidate_needs_llm_eventness_review(candidate, combined_text):
+            decision, confidence, reason = await _llm_review_candidate_eventness(
+                candidate,
+                clean_title=clean_title,
+                clean_source_text=clean_source_text,
+                clean_raw_excerpt=clean_raw_excerpt,
+            )
+            logger.info(
+                "smart_update.eventness_review decision=%s confidence=%.2f reason=%s source_type=%s source_url=%s title=%s",
+                decision,
+                confidence,
+                reason,
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(clean_title),
+            )
+            if decision != "event" or confidence < 0.55:
+                skip_reason = (
+                    "weak_eventness_review_non_event"
+                    if decision == "non_event"
+                    else "weak_eventness_review_uncertain"
+                )
+                return SmartUpdateResult(status="skipped_non_event", reason=skip_reason)
+            text_filter_facts.append(f"LLM eventness review: event ({reason or 'weak candidate accepted'})")
 
     # Ticket price grounding: prevent hallucinated min/max prices for VK/TG sources.
     # Only accept price values when the source text/OCR contains explicit price signals.
@@ -12607,6 +12817,7 @@ async def _smart_event_update_impl(
     is_canonical_site = str(candidate.source_type or "").startswith("parser:")
     city_noise_rescued = False
     longrun_exhibition_match: Event | None = None
+    citywide_festival_recalled_ids: set[int] = set()
     if (not anchor_forced) and (not shortlist):
         city_noise_match, city_noise_reason = await _match_existing_event_by_city_noise_rescue(
             db,
@@ -12644,15 +12855,18 @@ async def _smart_event_update_impl(
         and (not candidate_location_unsupported_prose)
     ):
         same_ticket_recall = _same_specific_ticket_shortlist_recall(candidate, shortlist)
+        citywide_festival_recall = _citywide_festival_shortlist_recall(candidate, shortlist)
         shortlist = [
             ev for ev in shortlist if _event_candidate_location_matches(ev, candidate)
         ]
-        if same_ticket_recall:
+        if same_ticket_recall or citywide_festival_recall:
             seen_ids = {getattr(ev, "id", None) for ev in shortlist}
-            for ev in same_ticket_recall:
+            for ev in [*same_ticket_recall, *citywide_festival_recall]:
                 if getattr(ev, "id", None) not in seen_ids:
                     shortlist.append(ev)
                     seen_ids.add(getattr(ev, "id", None))
+                    if ev in citywide_festival_recall and getattr(ev, "id", None):
+                        citywide_festival_recalled_ids.add(int(getattr(ev, "id")))
 
     # Time is an anchor field, but for canonical site/parser imports we allow time corrections:
     # matching must work even if a Telegram-first event had a wrong/empty time.
@@ -12752,10 +12966,17 @@ async def _smart_event_update_impl(
                 "smart_update.match type=deterministic_longrun_exhibition_exact_title event_id=%s",
                 getattr(match_event, "id", None),
             )
-        elif len(shortlist) == 1 and _single_candidate_auto_match_ok(
-            candidate,
-            shortlist[0],
-            is_canonical_site=is_canonical_site,
+        elif (
+            len(shortlist) == 1
+            and not (
+                getattr(shortlist[0], "id", None) in citywide_festival_recalled_ids
+                and not _event_candidate_location_matches(shortlist[0], candidate)
+            )
+            and _single_candidate_auto_match_ok(
+                candidate,
+                shortlist[0],
+                is_canonical_site=is_canonical_site,
+            )
         ):
             match_event = shortlist[0]
             match_reason = "single_candidate"

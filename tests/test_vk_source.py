@@ -731,9 +731,11 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
     )
 
     hashes = {
-        "http://img1": "ab" * 32,
-        "http://img2": ("ab" * 31) + "aa",
-        "http://img3": "00" * 32,
+        "http://img1": "0" * 64,
+        # INC-2026-06-16: visually duplicate VK illustrations were 28 bits
+        # apart over the 256-bit dh16 hash and must still collapse.
+        "http://img2": ("f" * 7) + ("0" * 57),
+        "http://img3": "f" * 64,
     }
 
     async def fake_hash(url):
@@ -765,7 +767,7 @@ async def test_sync_vk_source_post_dedupes_near_duplicate_photos(monkeypatch):
 def test_vk_photo_near_dup_default_threshold(monkeypatch):
     monkeypatch.delenv("VK_PHOTO_NEAR_DUP_HAMMING", raising=False)
     monkeypatch.delenv("SMART_UPDATE_POSTER_NEAR_DUP_HAMMING", raising=False)
-    assert main._vk_photo_near_dup_hamming_threshold() == 20
+    assert main._vk_photo_near_dup_hamming_threshold() == 32
 
 
 @pytest.mark.asyncio
