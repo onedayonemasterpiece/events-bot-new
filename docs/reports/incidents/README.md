@@ -20,7 +20,7 @@
 
 - `INC-2026-06-16-tg-phone-links.md`
   - Scope: Telegram event publishing phone-only registration/ticket contacts and phone numbers in event body/captions.
-  - Must not regress: `event.ticket_link=tel:+...` must become an explicit clickable Telegram `phone_number` entity with readable phone text; body phone numbers must be linkified outside existing anchors; Kaliningrad `4012` landlines must keep natural display formatting.
+  - Must not regress: `event.ticket_link=tel:+...` must become an explicit clickable Telegram `phone_number` entity with a compact Telegram-visible phone payload; body phone numbers must be linkified outside existing anchors; Kaliningrad `4012` landlines must keep natural display formatting outside the final Telegram entity payload.
 - `INC-2026-06-16-vk-quality-duplicates-non-events.md`
   - Scope: VK/TG Smart Update eventness for weak digest/rubric candidates, citywide/festival duplicate recall, managed `klgdevents` VK post idempotency, and near-duplicate poster media dedupe.
   - Must not regress: rubric stubs such as `Дайджест - посмотри, приходи` must go through LLM-first eventness review and fail closed when not a concrete attendable event; same title/date/time citywide events with drifted venue text must be visible to LLM matching rather than creating duplicate active rows; existing managed/postponed VK posts must be reused instead of republished; visually near-duplicate posters must collapse before public VK publication.

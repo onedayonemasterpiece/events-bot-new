@@ -93,13 +93,14 @@ The public Telegram event post `https://t.me/kldevents/589` showed a phone conta
 - Added normalized `tel:` href helper for stored `tel:` values and visible Russian phone strings.
 - Added Telegram-specific phone linkification that skips existing HTML anchors.
 - Added conversion from the publisher HTML shell to Bot API text/entities so phone contacts are sent as explicit `phone_number` entities while preserving bold text, text links, and hashtags.
+- Normalized the visible Telegram phone payload inside phone entities to compact `+74012463635`, because Bot API silently drops `phone_number` entities over pretty landline text with parentheses.
 - Changed phone-only ticket/registration rows to render explicit Telegram HTML links.
 - Added Kaliningrad `4012` landline display formatting.
 - Added regression tests for phone display, normalization, Telegram body linkification, and ticket-line linkification.
 
 ## Follow-up Actions
 
-- [ ] After final entity-based deploy, repair `@kldevents/589` and verify Bot API returns a `phone_number` caption entity.
+- [x] After final entity-based deploy, repair `@kldevents/589` and verify Bot API returns a `phone_number` caption entity.
 - [ ] Consider a live Telegram client smoke for phone link rendering across Android/Desktop when the next phone-only event is published.
 
 ## Release And Closure Evidence

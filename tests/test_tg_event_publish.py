@@ -199,7 +199,7 @@ def test_telegram_event_html_to_text_entities_emits_phone_entity_for_tel_link():
     plain, entities = main.telegram_event_html_to_text_entities(html_text)
 
     assert "<a" not in plain
-    assert "+7 (4012) 46-36-35" in plain
+    assert "+74012463635" in plain
     assert any(_entity_type(ent) == "bold" for ent in entities)
     assert any(_entity_type(ent) == "text_link" and ent.url == "https://telegra.ph/event" for ent in entities)
     assert any(_entity_type(ent) == "phone_number" for ent in entities)
@@ -214,7 +214,7 @@ def test_telegram_event_html_to_text_entities_linkifies_plain_body_phone():
 
     plain, entities = main.telegram_event_html_to_text_entities(html_text)
 
-    assert "Запись по телефону +7 (4012) 46-36-35." in plain
+    assert "Запись по телефону +74012463635." in plain
     assert sum(1 for ent in entities if _entity_type(ent) == "phone_number") == 1
 
 

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Fixed: Telegram phone contacts in event posts**: `@kldevents` event captions now render phone-only registration/ticket contacts and phone numbers in event body as explicit clickable Telegram `phone_number` entities, including correct Kaliningrad `4012` landline formatting. Tracks `INC-2026-06-16-tg-phone-links`. Covered by `tests/test_format_tel_link_for_display.py`, `tests/test_markup.py`, and `tests/test_tg_event_publish.py`.
+- **Fixed: Telegram phone contacts in event posts**: `@kldevents` event captions now render phone-only registration/ticket contacts and phone numbers in event body as explicit clickable Telegram `phone_number` entities, including compact Telegram-visible `+74012463635` payloads for `phone_number` entity acceptance and correct Kaliningrad `4012` display formatting in non-Telegram contexts. Tracks `INC-2026-06-16-tg-phone-links`. Covered by `tests/test_format_tel_link_for_display.py`, `tests/test_markup.py`, and `tests/test_tg_event_publish.py`.
 - **Fixed: VK/TG event quality duplicates and rubric non-events**: Smart Update
   now routes weak rubric/digest candidates such as `Дайджест - посмотри,
   приходи` through an LLM-first eventness reviewer and fails closed when the

@@ -4531,6 +4531,13 @@ class _TelegramHtmlEntityParser(HTMLParser):
     def handle_data(self, data: str) -> None:  # type: ignore[override]
         if not data:
             return
+        if self._stack and str(self._stack[-1].get("type") or "") == "phone_number":
+            href = tel_href_for_phone_value(data)
+            if href:
+                # Telegram accepts ``phone_number`` entities only for a compact
+                # phone-looking visible payload; pretty landline grouping with
+                # parentheses is silently dropped by Bot API.
+                data = "+" + re.sub(r"\D", "", href)
         self.parts.append(data)
         self._text += data
 
