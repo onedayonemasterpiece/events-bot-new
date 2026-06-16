@@ -10,7 +10,7 @@
   same-title/date/time candidates with drifted extracted venues are recalled
   into the LLM duplicate shortlist instead of creating a second active row, and
   managed VK photo dedupe now collapses the 28-bit near-duplicate poster class
-  seen on `klgdevents`. Tracks
+  seen on `klgdevents`. VK post pruning also now removes managed posts for explicitly non-active events and resolves live wall posts by their original `postponed_id`, preventing cancelled false events from leaking out of VK postponed queue later. Tracks
   `INC-2026-06-16-vk-quality-duplicates-non-events`.
 - **Fixed: LLM-first room/floor venue extraction and repost lead time**: VK
   auto-import prompts now instruct the LLM to treat room/floor strings such as

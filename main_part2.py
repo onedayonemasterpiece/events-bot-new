@@ -6835,10 +6835,12 @@ async def prune_past_event_vk_posts(
       ``source_vk_post_url`` resolves to ``owner_id == -VK_EVENTS_GROUP_ID``.
       VK-imported events keep ``source_vk_post_url`` pointing at the external
       source wall, so they are filtered out and never touched.
-    - **Only past events.** Mirrors :func:`cleanup_old_events` past-event logic
-      but with a *today* cutoff: ``end_date`` strictly before today (``LOCAL_TZ``),
-      or, when ``end_date`` is null, ``date`` strictly before today. Same-day and
-      future events are never deleted.
+    - **Only past or explicitly non-active events.** Mirrors
+      :func:`cleanup_old_events` past-event logic with a *today* cutoff:
+      ``end_date`` strictly before today (``LOCAL_TZ``), or, when ``end_date``
+      is null, ``date`` strictly before today. Future events are kept unless
+      Smart Update/incident repair has already moved them out of
+      ``lifecycle_status='active'``.
     - **Only DB-tracked event posts.** We act on events still present in the DB
       (kept until 7 days after they end by :func:`cleanup_old_events`). Daily
       announcements, polls and promo reposts are not stored in
@@ -6895,7 +6897,7 @@ async def prune_past_event_vk_posts(
 
     today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
 
-    # 1. Collect past events that still carry a managed klgdevents post URL.
+    # 1. Collect past/non-active events that still carry a managed klgdevents post URL.
     async with db.get_session() as session:
         rows = (
             await session.execute(
@@ -6906,6 +6908,7 @@ async def prune_past_event_vk_posts(
                             Event.end_date.is_not(None), Event.end_date < today_str
                         ),
                         and_(Event.end_date.is_(None), Event.date < today_str),
+                        Event.lifecycle_status != "active",
                     ),
                 )
             )
@@ -6969,6 +6972,44 @@ async def prune_past_event_vk_posts(
             it_id = it.get("id")
             if it_id is not None:
                 post_state[int(it_id)] = it
+        missing_pids = {
+            pid
+            for _eid, _url, pid in chunk
+            if pid not in post_state
+        }
+        if missing_pids:
+            # A postponed post can receive a new wall id when it becomes public,
+            # while VK still exposes the original id as ``postponed_id``. If an
+            # event was cancelled after scheduling, deleting only the original
+            # id is not enough once VK has promoted it to a live wall post.
+            try:
+                recent_resp = await vk_api(
+                    "wall.get",
+                    owner_id=target_owner_id,
+                    count=100,
+                )
+            except Exception:
+                logging.info(
+                    "vk_post_prune: wall.get postponed_id probe failed owner_id=%s",
+                    target_owner_id,
+                    exc_info=True,
+                )
+                recent_resp = None
+            if isinstance(recent_resp, dict):
+                recent_items = recent_resp.get("items") or []
+            elif isinstance(recent_resp, list):
+                recent_items = recent_resp[1:] if recent_resp and isinstance(recent_resp[0], int) else recent_resp
+            else:
+                recent_items = []
+            for it in recent_items:
+                if not isinstance(it, dict):
+                    continue
+                try:
+                    postponed_id = int(it.get("postponed_id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if postponed_id in missing_pids:
+                    post_state[postponed_id] = it
 
     # 3. Decide + delete.
     cleared: list[tuple[int, str]] = []  # (event_id, deleted_url) to unlink
@@ -7028,9 +7069,10 @@ async def prune_past_event_vk_posts(
             )
             continue
         try:
+            delete_pid = int(item.get("id") or pid)
             await _vk_api(
                 "wall.delete",
-                {"owner_id": target_owner_id, "post_id": pid},
+                {"owner_id": target_owner_id, "post_id": delete_pid},
                 db,
                 bot,
             )

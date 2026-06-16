@@ -40,13 +40,21 @@ async def _add_event(db: Database, **kwargs) -> int:
         return event.id
 
 
-def _patch_vk(monkeypatch, *, posts_by_id: dict[int, dict], deletes: list):
+def _patch_vk(
+    monkeypatch,
+    *,
+    posts_by_id: dict[int, dict],
+    deletes: list,
+    recent_items: list[dict] | None = None,
+):
     """Stub VK reads (wall.getById) and writes (wall.delete)."""
 
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", GROUP_ID, raising=False)
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", GROUP_ID, raising=False)
 
     async def fake_vk_api(method, **params):
+        if method == "wall.get":
+            return {"items": list(recent_items or [])}
         assert method == "wall.getById"
         ids = params["posts"].split(",")
         items = []
@@ -146,6 +154,66 @@ async def test_prune_keeps_future_event(tmp_path, monkeypatch):
     assert stats["candidates"] == 0
     assert stats["deleted"] == 0
     assert deletes == []
+
+
+@pytest.mark.asyncio
+async def test_prune_deletes_cancelled_future_event(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _add_event(
+        db,
+        date=FUTURE_DATE,
+        lifecycle_status="cancelled",
+        source_vk_post_url=_wall_url(113),
+    )
+
+    deletes: list = []
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={113: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
+
+    stats = await main.prune_past_event_vk_posts(db)
+
+    assert stats["candidates"] == 1
+    assert stats["deleted"] == 1
+    assert deletes == [(OWNER_ID, 113)]
+
+
+@pytest.mark.asyncio
+async def test_prune_deletes_live_post_by_postponed_id_for_cancelled_event(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _add_event(
+        db,
+        date=FUTURE_DATE,
+        lifecycle_status="cancelled",
+        source_vk_post_url=_wall_url(114),
+    )
+
+    deletes: list = []
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={},
+        recent_items=[
+            {
+                "id": 3512,
+                "postponed_id": 114,
+                "reposts": {"count": 0},
+                "comments": {"count": 0},
+            }
+        ],
+        deletes=deletes,
+    )
+
+    stats = await main.prune_past_event_vk_posts(db)
+
+    assert stats["candidates"] == 1
+    assert stats["deleted"] == 1
+    assert deletes == [(OWNER_ID, 3512)]
 
 
 @pytest.mark.asyncio
