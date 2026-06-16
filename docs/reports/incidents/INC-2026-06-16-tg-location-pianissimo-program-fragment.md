@@ -1,10 +1,10 @@
 # INC-2026-06-16 TG Pianissimo Program Fragment As Location
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring + Smart Event Update + public Telegram event publishing
 Opened: 2026-06-16
-Closed: —
+Closed: 2026-06-16
 Owners: events-bot runtime / import pipeline owner
 Related incidents: `INC-2026-04-26-daily-location-fragments`, `INC-2026-05-05-event-quality-regression`, `INC-2026-05-09-event-location-alias-free-dup-regressions`, `INC-2026-05-16-tg-location-prose-cityjazz-recurrence`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/telegram-publishing/README.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -86,8 +86,9 @@ The correct attendee venue is the official Tretyakov Gallery Kaliningrad branch 
 
 ## Immediate Mitigation
 
-- Prevention patch prepared on a clean hotfix worktree from `origin/main`.
+- Prevention patch prepared on a clean hotfix worktree from `origin/main`, committed as `77e9b574bc969373990d0c09ba878b28e55097be`, pushed to `origin/main`, and deployed to Fly.
 - The patch keeps the semantic venue decision LLM-first: deterministic code only triggers venue-review for the bad syntactic shape and invalidates an obvious program/catalogue fragment at the import boundary; it does not infer a new venue from program text.
+- Production row `event.id=6060` was repaired to `Филиал Третьяковской галереи, Парадная наб. 3, Калининград`; Telegraph/ICS/VK were rebuilt/synced and the existing Telegram post `@kldevents/613` was edited in place.
 
 ## Corrective Actions
 
@@ -103,12 +104,32 @@ The correct attendee venue is the official Tretyakov Gallery Kaliningrad branch 
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `77e9b574bc969373990d0c09ba878b28e55097be` (`fix(tg-monitor): review program fragments as venues`), reachable from `origin/main`.
+- deploy path:
+  - clean worktree `/home/dev/projects/events-bot-new-inc-20260616-tg-location-613` from `origin/main`;
+  - pushed `HEAD` to `origin/hotfix/INC-2026-06-16-tg-location-pianissimo-613` and `origin/main`;
+  - `flyctl deploy --remote-only --app events-bot-new-wngqia`;
+  - deployed image `events-bot-new-wngqia:deployment-01KV7W90P695MFXRT5P9PY0X3Q`;
+  - Fly machine `683961db016e28`, version `1431`, checks `1 total, 1 passing`.
 - regression checks:
-  - pending
+  - `/home/dev/projects/events-bot-new-inc-20260614-garazhka/.venv/bin/python -m pytest -q tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py` -> `58 passed`;
+  - `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py source_parsing/telegram/handlers.py smart_event_update.py`;
+  - `git diff --check`;
+  - Gemini 3 Pro consultation agreed with the narrow LLM-first prevention approach: trigger LLM venue-review for program/list/catalogue smells and tighten the review prompt rather than using broad semantic replacements.
+- production repair:
+  - before repair: `event.id=6060` had `location_name="🎵 С. В. Рахманинов – Музыкальные моменты"`, `location_address="соч. 16"`, `tg_event_post_id=613`;
+  - after repair: `location_name="Филиал Третьяковской галереи"`, `location_address="Парадная наб. 3"`, `city="Калининград"`;
+  - `tg_event_source_hash`, `vk_source_hash`, `ics_hash`, and `content_hash` are present after rebuild/edit;
+  - `event_source_fact.id=95229` records the incident repair note;
+  - Telegraph rebuilt: `https://telegra.ph/Pervyj-koncert-novogo-sezona-Pianissimo-06-15`;
+  - ICS republished: `https://lnvfarbbofsnkedbfhlt.supabase.co/storage/v1/object/public/events-ics/event-6060-2026-06-19.ics?`;
+  - VK sync updated managed post from stale `wall-231920894_3486` to live `https://vk.com/wall-231920894_3513`;
+  - first Telegram edit/send attempt hit `TelegramNetworkError: Request timeout error`, then manual caption edit with `request_timeout=120` succeeded for existing `message_id=613`.
 - post-deploy verification:
-  - pending
+  - `/healthz` after deploy and repair: `ok=true`, `ready=true`, DB `ok`, scheduler/tasks `ok`, `issues=[]`;
+  - public `https://t.me/s/kldevents/613` contains `Филиал Третьяковской галереи, Парадная наб. 3, #Калининград` and does not contain the old location terms `🎵 С. В. Рахманинов` / `соч. 16`;
+  - public `https://t.me/s/kldevents` contained exactly one post for `Первый концерт нового сезона Pianissimo`, so the Telegram timeout fallback did not leave a duplicate visible post;
+  - public Telegraph page contains the corrected venue and no old program-line location.
 
 ## Prevention
 
