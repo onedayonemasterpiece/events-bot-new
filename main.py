@@ -17246,7 +17246,10 @@ async def _run_due_jobs_once_locked(
                 else:
                     err = str(exc) or repr(exc) or exc.__class__.__name__
                     status = JobStatus.error
-                    retry = True
+                    uncertain_cls = globals().get("TelegramEventPublishUncertainSendError")
+                    retry = not (
+                        uncertain_cls is not None and isinstance(exc, uncertain_cls)
+                    )
                 logline(
                     "RUN",
                     obj.event_id,

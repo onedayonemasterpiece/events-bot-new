@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Changed: Telegram link inspection default**: operator-provided `t.me` links
+  in events-bot incidents/debugging must now be read through the local Telethon
+  human session first; public `t.me/s` HTML is documented as fallback evidence.
+  Added `telegram-link-inspection` project skill and
+  `scripts/read_telegram_message.py`.
+- **Fixed: Telegram event publish timeout duplicate guard**: `tg_event_publish`
+  now treats Bot API timeouts during new `sendMessage`/`sendPhoto`/media-group
+  sends as an uncertain write and suppresses automatic retry, preventing the
+  retry path from creating duplicate `@kldevents` posts. Tracks
+  `INC-2026-06-16-tg-event-publish-timeout-duplicate`.
 - **Fixed: LLM-first Telegram venue review for Pianissimo program fragments**: Telegram Monitoring now routes short repertoire/program list items and catalogue-number address leaks (for example `🎵 С. В. Рахманинов – Музыкальные моменты` / `соч. 16`) through venue review, and the Telegram import boundary drops that non-venue shape before recovering the official Tretyakovka source location. Tracks `INC-2026-06-16-tg-location-pianissimo-program-fragment`. Covered by `tests/test_tg_candidate_location_grounding.py` and `tests/test_tg_monitor_gemma4_contract.py`.
 - **Fixed: Telegram phone contacts in event posts**: `@kldevents` event captions now render phone-only registration/ticket contacts and phone numbers in event body as explicit clickable Telegram `phone_number` entities, including compact Telegram-visible `+74012463635` payloads for `phone_number` entity acceptance and correct Kaliningrad `4012` display formatting in non-Telegram contexts. Tracks `INC-2026-06-16-tg-phone-links`. Covered by `tests/test_format_tel_link_for_display.py`, `tests/test_markup.py`, and `tests/test_tg_event_publish.py`.
 - **Fixed: VK/TG event quality duplicates and rubric non-events**: Smart Update

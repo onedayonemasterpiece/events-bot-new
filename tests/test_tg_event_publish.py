@@ -960,6 +960,33 @@ async def test_tg_event_publish_fails_closed_when_materialized_media_unavailable
 
 
 @pytest.mark.asyncio
+async def test_tg_event_publish_suppresses_retry_on_uncertain_send_timeout(monkeypatch):
+    event = _event(photo_urls=["https://img.example/0.jpg"])
+    bot = DummyTgBot()
+
+    _patch_media_materializer(monkeypatch)
+    async def fake_announcement_for_publish(*args, **kwargs):
+        return "<b>Камерный концерт</b>\n\nОписание", False
+
+    monkeypatch.setattr(
+        main,
+        "build_tg_event_announcement_for_publish",
+        fake_announcement_for_publish,
+    )
+
+    async def timeout_send_photo(*args, **kwargs):
+        bot.photos.append((args, kwargs))
+        raise RuntimeError("Telegram server says - Request timeout error")
+
+    bot.send_photo = timeout_send_photo
+
+    with pytest.raises(main.TelegramEventPublishUncertainSendError):
+        await main.publish_tg_event_announcement(event, "Описание", None, bot)
+
+    assert len(bot.photos) == 1
+
+
+@pytest.mark.asyncio
 async def test_tg_event_publish_does_not_keep_text_mode_when_media_exists(monkeypatch):
     long_text = " ".join(["Описание события."] * 20)
     event = _event(

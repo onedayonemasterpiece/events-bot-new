@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-16-tg-event-publish-timeout-duplicate.md`
+  - Scope: Telegram event publishing idempotency around Bot API write timeouts, `tg_event_publish` retry policy, and Telethon-first inspection of operator-provided Telegram links.
+  - Must not regress: a Bot API timeout during new `sendMessage`/`sendPhoto`/`sendMediaGroup` for `@kldevents` must be treated as an uncertain write and must not auto-retry into a duplicate public post; `t.me` incident links must be read through Telethon first.
 - `INC-2026-06-16-tg-location-pianissimo-program-fragment.md`
   - Scope: Telegram Monitoring / Smart Update venue extraction for official source posts where a short, source-grounded program/repertoire line is copied into `location_name`, plus public `@kldevents` event-publish repair for `event.id=6060`.
   - Must not regress: repertoire/program items such as `🎵 С. В. Рахманинов – Музыкальные моменты` and catalogue numbers such as `соч. 16` must trigger LLM venue review and must not survive as public venue/address fields; official Tretyakovka source context/default must recover `Филиал Третьяковской галереи, Парадная наб. 3, Калининград` when the post only says `в атриуме музея`.

@@ -4365,6 +4365,34 @@ _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
 )
 
 
+class TelegramEventPublishUncertainSendError(RuntimeError):
+    """Telegram may have accepted a channel message, but the Bot API reply was lost."""
+
+
+def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    name = exc.__class__.__name__.lower()
+    return (
+        "telegramnetworkerror" in name
+        or "request timeout error" in text
+        or "request timeout" in text
+        or "timed out" in text
+    )
+
+
+async def _await_tg_event_send_result(awaitable: Any) -> Any:
+    try:
+        return await awaitable
+    except Exception as exc:
+        if _is_telegram_event_uncertain_send_error(exc):
+            raise TelegramEventPublishUncertainSendError(
+                "Telegram event send result is uncertain after Bot API timeout; "
+                "automatic retry is suppressed to avoid duplicate @kldevents posts. "
+                "Inspect the target Telegram channel and reconcile/delete manually before retry."
+            ) from exc
+        raise
+
+
 def _tg_event_publish_enabled() -> bool:
     raw = os.getenv("ENABLE_TG_EVENT_PUBLISHING", "1")
     return str(raw or "").strip().lower() not in {"0", "false", "no", "off"}
@@ -5357,12 +5385,14 @@ async def publish_tg_event_announcement(
     try:
         if desired_mode == "photo_caption":
             upload = await materialize_tg_event_media_for_upload(photo_urls[0], 0)
-            msg = await bot.send_photo(
-                chat_id=target,
-                photo=upload,
-                caption=message_text,
-                caption_entities=message_entities,
-                reply_markup=reply_markup,
+            msg = await _await_tg_event_send_result(
+                bot.send_photo(
+                    chat_id=target,
+                    photo=upload,
+                    caption=message_text,
+                    caption_entities=message_entities,
+                    reply_markup=reply_markup,
+                )
             )
             sent_id = msg.message_id
             sent_url = message_link(msg.chat.id, msg.message_id)
@@ -5370,17 +5400,21 @@ async def publish_tg_event_announcement(
             media_items = await uploaded_media_group()
             for start in range(0, len(media_items), TG_EVENT_ALBUM_SIZE):
                 chunk = media_items[start : start + TG_EVENT_ALBUM_SIZE]
-                msgs = await bot.send_media_group(chat_id=target, media=chunk)
+                msgs = await _await_tg_event_send_result(
+                    bot.send_media_group(chat_id=target, media=chunk)
+                )
                 if sent_id is None and msgs:
                     sent_id = msgs[0].message_id
                     sent_url = message_link(msgs[0].chat.id, msgs[0].message_id)
         else:
-            msg = await bot.send_message(
-                target,
-                message_text,
-                entities=message_entities,
-                disable_web_page_preview=True,
-                reply_markup=reply_markup,
+            msg = await _await_tg_event_send_result(
+                bot.send_message(
+                    target,
+                    message_text,
+                    entities=message_entities,
+                    disable_web_page_preview=True,
+                    reply_markup=reply_markup,
+                )
             )
             sent_id = msg.message_id
             sent_url = message_link(msg.chat.id, msg.message_id)

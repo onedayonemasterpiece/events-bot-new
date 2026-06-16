@@ -15,6 +15,7 @@ sections:
     repository_workflow: docs/operations/repository-workflow.md
     release_governance: docs/operations/release-governance.md
     runtime_logs: docs/operations/runtime-logs.md
+    telegram_link_inspection: docs/operations/telegram-link-inspection.md
     scheduler_routing:
       docs: docs/operations/cron.md
       scheduler_defaults: scheduling.py
@@ -95,6 +96,7 @@ sections:
     index: docs/reports/README.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_tg_event_publish_timeout_duplicate_2026_06_16: docs/reports/incidents/INC-2026-06-16-tg-event-publish-timeout-duplicate.md
     incident_tg_location_pianissimo_program_fragment_2026_06_16: docs/reports/incidents/INC-2026-06-16-tg-location-pianissimo-program-fragment.md
     incident_vk_publication_cta_plain_duplicate_2026_06_14: docs/reports/incidents/INC-2026-06-14-vk-publication-cta-plain-duplicate.md
     incident_poll_repost_wrong_date_and_copy_2026_06_13: docs/reports/incidents/INC-2026-06-13-poll-repost-wrong-date-and-copy.md
