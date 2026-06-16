@@ -118,10 +118,10 @@ Implemented in `7637bae5`:
 
 ## Release And Closure Evidence
 
-- deployed SHA: `7637bae5fa86f804a6a41514b73e6c7cf2786c6b`
-- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KV7J39SKT9N4E535CXQP2VY0`; machine version `1426`, 1/1 checks passing.
+- deployed SHA: `084bea7d6ffe74333de1a9642974794971b6dc60`
+- deploy path: `flyctl deploy -a events-bot-new-wngqia --remote-only`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KV7JBZEB45C1SR8P9J0P1EGX`; machine version `1427`, 1/1 checks passing.
 - regression checks: `uv run ... pytest -q tests/test_smart_event_update_non_event_guards.py::test_digest_stub_is_routed_to_llm_eventness_and_skipped tests/test_smart_event_update_non_event_guards.py::test_concise_real_invite_survives_eventness_review tests/test_smart_event_update_duplicate_guards.py::test_citywide_music_night_location_drift_reaches_llm_match tests/test_vk_source.py::test_sync_vk_source_post_dedupes_near_duplicate_photos tests/test_vk_source.py::test_vk_photo_near_dup_default_threshold tests/test_job_dedup.py::test_enqueue_job_skips_done_vk_sync_for_existing_postponed_managed_post` → `6 passed`. `python3 -m py_compile smart_event_update.py main_part2.py main.py` passed.
-- post-deploy verification: runtime file logging enabled at `/data/runtime_logs`; `FLY_IMAGE_REF` points to deployment `01KV7J39SKT9N4E535CXQP2VY0`; production DB shows `6058`/`6059`/`6067` non-active and their Telegram fanout jobs completed with incident cancellation results; VK API after repair returns only `3495`, `3496`, `3502` among the checked incident posts, and `3502` has one photo attachment.
+- post-deploy verification: runtime file logging enabled at `/data/runtime_logs`; `FLY_IMAGE_REF` points to deployment `01KV7JBZEB45C1SR8P9J0P1EGX`; production DB shows `6058`/`6059`/`6067` non-active and their Telegram fanout jobs completed with incident cancellation results; VK API after repair returns only `3495`, `3496`, `3502` among the checked incident posts, and `3502` has one photo attachment.
 
 ## Prevention
 
