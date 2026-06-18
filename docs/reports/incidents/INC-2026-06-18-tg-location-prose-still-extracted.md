@@ -127,7 +127,7 @@ Initial investigation-only pass did not mutate production. The repair pass is no
 ## Follow-up Actions
 
 - [ ] Build a replay pack for `@open_fest/628`, `@terkatalk/5010`, `@kaliningradlibrary/2298`, `@kulturnaya_chaika/7865`, `@meowafisha/7677`, and `@open_fest/631`.
-- [ ] Add replay controls for public defects: `@sobor39/6000` → `https://t.me/kldevents/821`, `@kldzoo/7534` → `https://t.me/kldevents/811`, `@meowafisha/7683` / `@sofit_models/126` → `https://t.me/kldevents/835`, `@kulturnaya_chaika/7860` → `https://t.me/kldevents/814`.
+- [x] Add replay controls for public defects: `@sobor39/6000` → `https://t.me/kldevents/821`, `@kldzoo/7534` → `https://t.me/kldevents/811`, `@meowafisha/7683` / `@sofit_models/126` → `https://t.me/kldevents/835`, `@kulturnaya_chaika/7860` → `https://t.me/kldevents/814`.
 - [ ] Tighten the Telegram Monitoring LLM extraction prompt/schema so prose-location outputs become empty venue fields plus explicit uncertainty/reason, not garbage strings.
 - [x] Replace deterministic venue overrule (`grounded_loc` over extracted/default known venue) with fail-closed or LLM-owned venue-review; deterministic inference may supply hints, not override venue semantics.
 - [x] Tighten explicit `address, studio` handling so conflicting known-venue names do not survive when source/OCR names a sub-location.
@@ -138,10 +138,19 @@ Initial investigation-only pass did not mutate production. The repair pass is no
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: initial production SQL/log audit only; replay/fix not yet done.
-- post-deploy verification: —
+- deployed SHA: `cc92afb3` (`fix(tg): stop prose location overrides`), pushed to `origin/main` and deployed to Fly app `events-bot-new-wngqia` on 2026-06-18.
+- deploy path: clean linked worktree from `origin/main`, `flyctl deploy -a events-bot-new-wngqia --remote-only`; container verification confirmed `/app/source_parsing/telegram/handlers.py` contains `_location_override_candidate_ok` and `/app/main.py` contains the shared-source media rehydrate skip.
+- regression checks:
+  - `python3 -m py_compile source_parsing/telegram/handlers.py main.py tests/test_tg_candidate_location_grounding.py tests/test_telegram_link_inference.py tests/test_telegraph_side_effects.py` passed locally; full pytest was not run in the local worktree because dependencies/pytest were not installed in that environment.
+  - Gemini 3 Pro review flagged expected recall tradeoffs: stricter regex fallback can drop novel uncued venues, and shared-source media rehydrate can drop shared lineup images. This is accepted for the emergency fix because the incident class is public wrong venue/media; follow-up should add LLM/event-local media review rather than reopen broad deterministic inference.
+  - Production repair log showed `telegraph.source_media: skip shared multi-event source rehydrate` for `kldzoo/7534`, `kldzoo/7454`, and `kulturnaya_chaika/7860`.
+- public repair evidence:
+  - `https://t.me/kldevents/811` edited in place: DB now has `Калининградский зоопарк`, `пр-т Мира 26`, `ticket_link=NULL`.
+  - `https://t.me/kldevents/821` edited in place: DB now has `Кафедральный собор`, `Остров Канта`, `ticket_link=NULL`.
+  - `https://t.me/kldevents/835` edited in place: DB now has `809 студия`, `Советский проспект 12`; the curated reference still has ИЦАЭ at `Советский 1`.
+  - `https://t.me/kldevents/814` was a 3-item bad album; messages `814`, `815`, `816` were deleted and replacement `https://t.me/kldevents/844` was published with only the matching Letov/Chernyakov poster.
+  - `https://t.me/kldevents/728` was checked against current Dramteatr source text; the 2026 staging is in the internal theatre courtyard at `пр-т Мира 4`, so no location repair was applied in this pass.
+- post-deploy DB verification: production event rows `6133`, `6136`, `6138`, `6145` have corrected locations; event `6136` has `photo_count=1` and only poster `11683` attached.
 
 ## Prevention
 
