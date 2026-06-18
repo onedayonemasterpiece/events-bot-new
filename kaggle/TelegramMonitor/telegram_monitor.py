@@ -1316,7 +1316,7 @@ EVENT_ARRAY_SCHEMA = {
                 'Must be a venue/place name, not a nearby content fragment. Never copy descriptive prose, '
                 'speaker biographies, schedule commentary, film metadata, ticket instructions, repertoire/program items, '
                 'musical work titles, catalogue numbers such as "соч. 16", or narrative sentences. '
-                'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name. '
+                'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра". '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
                 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
@@ -2237,9 +2237,14 @@ _LOCATION_REVIEW_TEMPORAL_LOCATION_RE = re.compile(
     r"сегодня|завтра|послезавтра|вчера|"
     r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
     r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
-    r")\s*[.!?]?\s*$",
+    r")\s*[,.:;!?]?\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+
+
+def _strip_location_review_temporal_decoration(value: str) -> str:
+    compact = re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(r"^[^0-9A-Za-zА-Яа-яЁё]+", "", compact).strip()
 _LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE = re.compile(
     r"^\s*(?:в\s+)?(?:городе|пос[её]лке|селе|деревне|пгт|микрорайоне|мкр\.?)\s+\S+",
     re.IGNORECASE | re.UNICODE,
@@ -2569,7 +2574,8 @@ def _needs_llm_location_review(
             return True
         if _LOCATION_REVIEW_TIME_RANGE_RE.search(compact):
             return True
-        if _LOCATION_REVIEW_TEMPORAL_LOCATION_RE.fullmatch(compact):
+        temporal_probes = {compact, _strip_location_review_temporal_decoration(compact)}
+        if any(_LOCATION_REVIEW_TEMPORAL_LOCATION_RE.fullmatch(probe) for probe in temporal_probes if probe):
             return True
         if _LOCATION_REVIEW_DATE_RE.search(compact) or "|" in compact:
             return True
@@ -2624,6 +2630,7 @@ async def _repair_suspicious_locations(
         'vs "Дворец спорта Юность"), choose only the source-grounded venue. '
         'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
         'speaker bios, repertoire/program items, musical work titles, catalogue numbers such as "соч. 16", '
+        'temporal/date fragments (including emoji-prefixed values like "🤗Завтра"), '
         'or an event description as location_name. '
         'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
         'by source context or message text, output the host venue as location_name and leave the hall label out. '

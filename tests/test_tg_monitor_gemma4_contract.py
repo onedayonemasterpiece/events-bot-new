@@ -120,7 +120,7 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Prefer filling location_name and location_address" in source
     assert 'Never output literal field-name placeholders like "location_address", "address", "location_name"' in source
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
-    assert 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name' in source
+    assert 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра"' in source
     assert "never copy a descriptive sentence" in source
     assert "each event must use venue/address/city facts" in source
     assert "the event-local venue wins" in source
@@ -191,11 +191,35 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "A curator/speaker/artist/person name" in source
     assert "_location_review_looks_like_person_name" in source
     assert "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE" in source
+    assert "_strip_location_review_temporal_decoration" in source
     assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
     assert "city must be the place name itself, not an inflected phrase" in source
     assert "repertoire/program items, musical work titles" in source
     assert "catalogue number such as \"соч. 16\"" in source
+    assert 'temporal/date fragments (including emoji-prefixed values like "🤗Завтра")' in source
 
+
+
+def test_tg_monitor_location_review_triggers_on_emoji_prefixed_temporal_location() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    events = [
+        {
+            "title": "Мультсреда в музее",
+            "date": "2026-06-17",
+            "time": "15:00-17:00",
+            "location_name": "🤗Завтра",
+            "location_address": "",
+        }
+    ]
+
+    assert needs_review(
+        events,
+        source_default_location="Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+        message_text="🤗Завтра, 17 июня, у нас Мультсреда в музее.",
+        source_context_line="Source default location: Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+    ) is True
 
 def test_tg_monitor_location_review_triggers_on_program_item_as_location() -> None:
     source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
@@ -530,6 +554,7 @@ def _load_location_review_helpers_in_isolation():
         "_LOCATION_REVIEW_TIME_RANGE_RE",
         "_LOCATION_REVIEW_DATE_RE",
         "_LOCATION_REVIEW_TEMPORAL_LOCATION_RE",
+        "_strip_location_review_temporal_decoration",
         "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE",
         "_LOCATION_REVIEW_ADDRESS_HINT_RE",
         "_LOCATION_REVIEW_VENUE_CUE_RE",
