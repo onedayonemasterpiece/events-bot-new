@@ -12,7 +12,9 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, List, Sequence
 from datetime import date, datetime, timedelta, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+import aiohttp
 from db import Database
 from poster_media import (
     PosterMedia,
@@ -1430,6 +1432,102 @@ class PersistResult:
     smart_added_posters: int = 0
 
 
+_EXTERNAL_SHORT_TICKET_HOSTS = {"clck.ru"}
+_RESOLVED_SHORTLINK_TRACKING_KEYS = {
+    "clckid",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "yclid",
+    "fbclid",
+    "gclid",
+}
+
+
+def _ticket_link_host(url: str | None) -> str:
+    try:
+        return urlsplit(str(url or "").strip()).netloc.lower().removeprefix("www.")
+    except Exception:
+        return ""
+
+
+def _strip_resolved_shortlink_tracking(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+    except Exception:
+        return url
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key.casefold() not in _RESOLVED_SHORTLINK_TRACKING_KEYS
+    ]
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query, doseq=True),
+            "",
+        )
+    ).rstrip("/")
+
+
+async def _resolve_external_short_ticket_link(url: str | None) -> str | None:
+    """Resolve source-owned short registration links before they reach public posts.
+
+    This is intentionally narrow: it expands third-party shorteners such as
+    clck.ru, but does not touch our managed vk.cc output links or arbitrary
+    ticket hosts. On any network/provider problem the original URL is kept.
+    """
+
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    if raw.lower().startswith(("clck.ru/",)):
+        raw = "https://" + raw
+    if _ticket_link_host(raw) not in _EXTERNAL_SHORT_TICKET_HOSTS:
+        return raw
+    headers = {
+        "User-Agent": os.getenv("HTTP_SHORTLINK_UA", "Mozilla/5.0"),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    try:
+        timeout_total = float(os.getenv("VK_TICKET_SHORTLINK_RESOLVE_TIMEOUT_SEC", "8"))
+    except (TypeError, ValueError):
+        timeout_total = 8.0
+    timeout = aiohttp.ClientTimeout(total=timeout_total)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            try:
+                async with session.head(
+                    raw,
+                    headers=headers,
+                    allow_redirects=True,
+                    max_redirects=8,
+                    ssl=False,
+                ) as resp:
+                    final_url = str(resp.url)
+            except Exception:
+                async with session.get(
+                    raw,
+                    headers=headers,
+                    allow_redirects=True,
+                    max_redirects=8,
+                    ssl=False,
+                ) as resp:
+                    final_url = str(resp.url)
+        if final_url and _ticket_link_host(final_url) not in _EXTERNAL_SHORT_TICKET_HOSTS:
+            resolved = _strip_resolved_shortlink_tracking(final_url)
+            if resolved and resolved != raw:
+                logger.info("vk_intake ticket_shortlink_resolved url=%s resolved=%s", raw, resolved)
+                return resolved
+    except Exception as exc:
+        logger.warning("vk_intake ticket_shortlink_resolve_failed url=%s err=%s", raw, exc)
+    return raw
+
+
 def _vk_wall_source_ids_from_url(source_post_url: str | None) -> tuple[int | None, int | None]:
     if not source_post_url:
         return None, None
@@ -2051,6 +2149,36 @@ async def build_event_drafts_from_vk(
         core = f"{base} — {venue_short}" if venue_short else base
         return (prefix + core).strip()
 
+    def _poster_title_fallback() -> str | None:
+        """Use explicit poster OCR heading as a source-grounded title fallback.
+
+        This is deliberately evidence-based: it does not invent a semantic title,
+        it only promotes a poster heading that is already present in OCR and is
+        not a service label such as date/time/ticket/address.
+        """
+
+        for poster in poster_items[:4]:
+            raw = str(getattr(poster, "ocr_title", "") or "").strip()
+            if not raw:
+                continue
+            value = re.sub(r"\s+", " ", unicodedata.normalize("NFKC", raw)).strip(" «»\"'`*")
+            if not value:
+                continue
+            value_norm = value.casefold().replace("ё", "е")
+            if re.fullmatch(r"[\d\s:./–—-]+", value_norm):
+                continue
+            if re.search(
+                r"\b(?:начало|дата|время|адрес|билеты?|регистрац\w*|стоимость|цена|вход|касс[аы])\b",
+                value_norm,
+            ):
+                continue
+            if len(value) > 90:
+                continue
+            if not re.search(r"[A-Za-zА-Яа-яЁё]{3,}", value):
+                continue
+            return value
+        return None
+
     drafts: list[EventDraft] = []
 
     def _source_norm_text() -> str:
@@ -2239,6 +2367,10 @@ async def build_event_drafts_from_vk(
         ticket_price_min = clean_int(data.get("ticket_price_min"))
         ticket_price_max = clean_int(data.get("ticket_price_max"))
         ticket_link = clean_str(data.get("ticket_link"))
+        if ticket_link:
+            ticket_link = await _resolve_external_short_ticket_link(ticket_link)
+        elif fallback_ticket_link:
+            fallback_ticket_link = await _resolve_external_short_ticket_link(fallback_ticket_link)
         links: list[str] | None
         if ticket_link:
             links = [ticket_link]
@@ -2313,21 +2445,32 @@ async def build_event_drafts_from_vk(
         event_type_val = clean_str(data.get("event_type"))
         missing_tokens = _missing_title_tokens(title_raw)
         # Heuristic: if the title contains any Cyrillic word (3+ chars) absent from the source
-        # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer a safe fallback.
+        # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer an explicit
+        # poster OCR heading if present, but never synthesize the prompt-forbidden
+        # "<event_type> — <venue>" placeholder here: Smart Update owns LLM title recovery.
         if missing_tokens:
             venue_val = _clean_llm_text_field(data.get("location_name"), field_name="location_name") or source_name or ""
-            fallback = _fallback_title(
-                title_raw,
-                event_type=event_type_val,
-                venue=venue_val,
-            )
-            logger.warning(
-                "vk_intake suspicious_title replaced title=%r missing=%s fallback=%r",
-                title_raw,
-                ",".join(missing_tokens[:4]),
-                fallback,
-            )
-            title_raw = fallback
+            poster_title = _poster_title_fallback()
+            if poster_title:
+                logger.warning(
+                    "vk_intake suspicious_title replaced_with_poster_title title=%r missing=%s poster_title=%r",
+                    title_raw,
+                    ",".join(missing_tokens[:4]),
+                    poster_title,
+                )
+                title_raw = poster_title
+            else:
+                fallback = _fallback_title(
+                    title_raw,
+                    event_type=event_type_val,
+                    venue=venue_val,
+                )
+                logger.warning(
+                    "vk_intake suspicious_title kept_llm_title title=%r missing=%s rejected_fallback=%r",
+                    title_raw,
+                    ",".join(missing_tokens[:4]),
+                    fallback,
+                )
 
         venue_value = _clean_llm_text_field(data.get("location_name"), field_name="location_name")
         address_value = _clean_llm_text_field(data.get("location_address"), field_name="location_address")

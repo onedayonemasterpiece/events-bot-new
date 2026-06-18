@@ -230,6 +230,88 @@ async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(mon
 
 
 @pytest.mark.asyncio
+async def test_vk_intake_uses_poster_title_instead_of_generic_venue_fallback(monkeypatch):
+    async def fake_parse_event_via_llm(*_args, **_kwargs):
+        class Parsed(list):
+            festival = None
+
+        return Parsed(
+            [
+                {
+                    "title": "💿 Виниловый вечер с DJ Switchoff",
+                    "date": "2026-06-19",
+                    "time": "21:00",
+                    "location_name": "Бар Советов",
+                    "location_address": "проспект Мира 118",
+                    "city": "Калининград",
+                    "event_type": "концерт",
+                    "is_free": True,
+                }
+            ]
+        )
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+
+    poster = PosterMedia(
+        data=b"",
+        name="poster.jpg",
+        ocr_text="СОВЕТСКАЯ ЭЛЕКТРОНИКА\n19/06 21:00\nБАР SOVETOV\nDJ SWITCHOFF\nVINYL ONLY",
+        ocr_title="СОВЕТСКАЯ ЭЛЕКТРОНИКА",
+    )
+
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        (
+            "В пятницу в “Баре Советов” слушаем винил, прокачиваем музыкальную эрудицию "
+            "с DJ Switchoff.\n\n19 июня в 21:00\nБАР SOVETOV, проспект Мира 118\nВход свободный"
+        ),
+        source_name="Бар Советов",
+        publish_ts=datetime(2026, 6, 18, 10, 0, tzinfo=timezone.utc),
+        poster_media=[poster],
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].title == "СОВЕТСКАЯ ЭЛЕКТРОНИКА"
+    assert drafts[0].title != "Концерт — Бар Советов"
+
+
+@pytest.mark.asyncio
+async def test_vk_intake_resolves_clck_ticket_link_before_publication(monkeypatch):
+    async def fake_parse_event_via_llm(*_args, **_kwargs):
+        class Parsed(list):
+            festival = None
+
+        return Parsed(
+            [
+                {
+                    "title": "Акция «Набережная кораблей»",
+                    "date": "2026-06-18",
+                    "end_date": "2026-07-04",
+                    "location_name": "Музей Мирового океана",
+                    "location_address": "наб. Петра Великого 1",
+                    "city": "Калининград",
+                    "ticket_link": "https://clck.ru/3UEVYF",
+                    "is_free": True,
+                }
+            ]
+        )
+
+    async def fake_resolve(url):
+        assert url == "https://clck.ru/3UEVYF"
+        return "https://world-ocean.ru/posetitelyam/vremya-raboty"
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+    monkeypatch.setattr(vk_intake, "_resolve_external_short_ticket_link", fake_resolve)
+
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        "Оформить билет можно по ссылке: https://clck.ru/3UEVYF",
+        source_name="Музей Мирового океана",
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].links == ["https://world-ocean.ru/posetitelyam/vremya-raboty"]
+
+
+@pytest.mark.asyncio
 async def test_vk_intake_does_not_overwrite_explicit_text_date_with_poster(monkeypatch):
     async def fake_parse_event_via_llm(*_args, **_kwargs):
         class Parsed(list):

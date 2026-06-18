@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: VK auto-import title and registration link recurrence**: `vk_intake` no longer replaces a suspicious LLM title with the forbidden `<event_type> — <venue>` placeholder; when poster OCR has an explicit heading it uses that source-grounded heading instead, and otherwise keeps the LLM title for Smart Update LLM recovery rather than synthesizing `Концерт — Бар Советов`. VK auto-import also expands source-owned `clck.ru` registration shortlinks before public Telegram/VK/Telegraph rendering. Tracks `INC-2026-06-18-vk-title-shortlink-public-regression`.
 - **Fixed: Poll to Repost production-only stabilization**: disabled the public
   hourly debug loop on Fly, stopped operator-invalidated visible debug rows from
   blocking later slots, and made production `Другое` votes feed the next

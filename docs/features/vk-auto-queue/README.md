@@ -24,6 +24,8 @@ post-processing, without importing or relying on Smart Update private regexes.
 
 После `INC-2026-05-08-vk-quality-false-skips` VK draft prompt для ярмарок, арт-маркетов и праздничных программ явно предпочитает **один umbrella event**, если источник описывает одну программу в одном месте/день. Отдельные child events допустимы только когда у блока есть самостоятельный билет/регистрация, отдельная площадка или явный source anchor; иначе программа уходит в `description`/`search_digest`, а Smart Update получает один устойчивый кандидат.
 
+После `INC-2026-06-18-vk-title-shortlink-public-regression` deterministic title guard в `vk_intake` не имеет права заменять LLM-заголовок на шаблон `<event_type> — <venue>` (`Концерт — Бар Советов`). Если guard считает LLM title подозрительным, он может использовать только явный source-grounded poster OCR heading; если такого heading нет, title остаётся LLM-owned и дальше проходит Smart Update LLM title-recovery/grounding. Ссылки регистрации из внешних shortener'ов вроде `clck.ru` раскрываются до конечного URL до сохранения `ticket_link`, чтобы публичный Telegram/VK/Telegraph не вёл пользователя через source shortlink.
+
 Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
 
 - при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY` новые постеры пишутся в Yandex Object Storage (`kenigevents`);
