@@ -1150,6 +1150,9 @@ class KaggleClient:
             requested_ref = str(target_kernel_ref or kernel_ref or "").strip()
             if requested_ref and not requested_ref.startswith(LOCAL_KERNEL_PREFIX):
                 meta_data["id"] = requested_ref
+                requested_slug = requested_ref.split("/", 1)[-1].strip()
+                if requested_slug:
+                    meta_data["slug"] = requested_slug
             username = (os.getenv("KAGGLE_USERNAME") or "").strip()
             kernel_id = str(meta_data.get("id") or "").strip()
             if username and kernel_id:
