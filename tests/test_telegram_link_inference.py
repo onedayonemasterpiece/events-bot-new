@@ -45,3 +45,12 @@ def test_does_not_replace_broad_ticket_link_with_non_ticket_entity() -> None:
     )
 
     assert refined is None
+
+
+def test_does_not_infer_vk_hashtag_search_as_ticket_link() -> None:
+    refined = _infer_ticket_link_from_message_links(
+        ["https://vk.com/search/statuses?q=%23%D0%BC%D1%83%D0%B7%D1%8B%D0%BA%D0%B0"],
+        current=None,
+    )
+
+    assert refined is None

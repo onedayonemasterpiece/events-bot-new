@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-18-tg-location-prose-still-extracted.md`
+  - Scope: Telegram Monitoring LLM-first venue extraction, server import location recovery, exact address/studio handling, source-default venue ownership, Telegraph source-media rehydration, and public `@kldevents` repairs.
+  - Must not regress: regex/OCR helpers must not override an LLM/default known venue with prose; source-owned venues such as `sobor39`/`kldzoo` must keep their canonical defaults unless LLM-reviewed offsite evidence exists; explicit `address, studio` evidence must not be rebound to unrelated known venues like ИЦАЭ; multi-event source URLs must not rehydrate unrelated posters into another event.
 - `INC-2026-06-16-cherryflash-duplicate-after-bot-send-failure.md`
   - Scope: CherryFlash/CrumpleVideo/Koenigsberg scheduled Kaggle video runs,
     server-side output download, bot test/notify delivery, Kaggle status ledger,

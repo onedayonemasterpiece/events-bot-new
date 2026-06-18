@@ -18,7 +18,11 @@ from sqlalchemy.exc import OperationalError
 
 from db import Database
 from event_utils import strip_city_from_address
-from location_reference import find_known_venue_in_text, normalise_event_location_from_reference
+from location_reference import (
+    find_known_venue_in_text,
+    match_known_venue,
+    normalise_event_location_from_reference,
+)
 from models import (
     Channel,
     Event,
@@ -675,6 +679,25 @@ def _is_more_specific_same_host_url(current: str | None, candidate: str | None) 
     return cand_specificity > cur_specificity
 
 
+def _link_is_public_ticket_candidate(url: str | None) -> bool:
+    value = str(url or "").strip().casefold()
+    if not value:
+        return False
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return True
+    host = (parsed.netloc or "").casefold()
+    path = (parsed.path or "").casefold()
+    query = (parsed.query or "").casefold()
+    # Telegram/VK entity extractors expose hashtags as synthetic search URLs;
+    # those are navigation noise, not registration/ticket targets.
+    if host in {"vk.com", "www.vk.com", "m.vk.com"} and path.startswith("/search/statuses"):
+        if "q=%23" in query or "q=#" in query:
+            return False
+    return True
+
+
 def _infer_ticket_link_from_message_links(
     message_links: list[Any], *, current: str | None = None
 ) -> str | None:
@@ -689,7 +712,7 @@ def _infer_ticket_link_from_message_links(
         else:
             url = _coerce_url(str(item or ""))
             label = None
-        if url:
+        if url and _link_is_public_ticket_candidate(url):
             normalized.append({"url": url, "text": label})
     external = [item for item in normalized if "t.me/" not in str(item.get("url") or "").lower()]
     if current:
@@ -2486,7 +2509,8 @@ _ADDRESS_HINT_RE = re.compile(
 )
 _LOCATION_VENUE_CUE_RE = re.compile(
     r"(?iu)\b(?:театр\w*|музе[йяе]|галере[яи]|кино(?:театр|зал)|дк\b|дом\s+культур\w*|"
-    r"центр\s+культур\w*|бар\w*|клуб\w*|пространств\w*|зал|сцена|ворот[а-я]*)\b"
+    r"центр\s+культур\w*|бар\w*|клуб\w*|пространств\w*|зал|сцена|"
+    r"студи[яи]|ворот[а-я]*)\b"
 )
 _LOCATION_PROSE_VERB_RE = re.compile(
     r"(?iu)\b("
@@ -2731,12 +2755,19 @@ def _event_local_location_candidate_ok(location_name: str | None, location_addre
         or _looks_like_location_person_name_fragment(raw)
     ):
         return False
-    return bool(
-        location_address
-        or _ADDRESS_HINT_RE.search(raw)
-        or _LOCATION_VENUE_CUE_RE.search(raw)
-        or len(_location_support_tokens(raw)) >= 1
-    )
+    if str(location_address or "").strip():
+        return True
+    if _ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw):
+        return True
+    # A bare free-text fragment is not enough to override an LLM/default venue.
+    # Allow only curated known venues without address cues; otherwise fail closed
+    # and leave the semantic decision to the LLM/update pass.
+    return match_known_venue(raw) is not None
+
+
+def _location_override_candidate_ok(location_name: str | None, location_address: str | None) -> bool:
+    """Stricter guard for replacing an LLM/default venue with regex/OCR evidence."""
+    return _event_local_location_candidate_ok(location_name, location_address)
 
 
 _CITY_SALUTATION_LOCATION_RE = re.compile(
@@ -2811,12 +2842,16 @@ def _infer_location_from_text(text: str | None) -> tuple[str | None, str | None]
                 ):
                     continue
                 if _ADDRESS_HINT_RE.search(left) or re.search(r"\b\d{1,3}\b", left):
+                    right_before_time = re.split(r"\b\d{1,2}[:.]\d{2}\b", right, maxsplit=1)[0].strip(" ,;–—-")
+                    if right_before_time and _LOCATION_VENUE_CUE_RE.search(right_before_time):
+                        return _normalize_ocr_location_case(right_before_time), left
                     return cleaned, None
                 left_city = _infer_city_from_location_string(left)
                 if left_city and not _ADDRESS_HINT_RE.search(right) and not re.search(r"\b\d{1,3}\b", right):
                     normalized_right = _normalize_ocr_location_case(right)
-                    if normalized_right:
+                    if normalized_right and _event_local_location_candidate_ok(normalized_right, None):
                         return normalized_right, None
+                    continue
                 return left, right
         # No comma: treat the whole line as a venue/address blob.
         if len(cleaned) >= 3:
@@ -3908,15 +3943,15 @@ def _build_candidate(
         )
         alternate_loc = None
         alternate_addr = None
-        if inferred_loc and not _location_matches(inferred_loc, default_name):
-            alternate_loc = inferred_loc
-            alternate_addr = inferred_addr
-        elif known_loc and not _location_matches(known_loc, default_name):
-            alternate_loc = known_loc
-            alternate_addr = known_addr
-        elif poster_loc and not _location_matches(poster_loc, default_name):
-            alternate_loc = poster_loc
-            alternate_addr = poster_addr
+        for candidate_loc, candidate_addr in (
+            (known_loc, known_addr),
+            (poster_loc, poster_addr),
+            (inferred_loc, inferred_addr),
+        ):
+            if candidate_loc and not _location_matches(candidate_loc, default_name):
+                alternate_loc = candidate_loc
+                alternate_addr = candidate_addr
+                break
         if default_requires_grounding and default_is_grounded:
             alternate_loc = None
             alternate_addr = None
@@ -4005,6 +4040,7 @@ def _build_candidate(
             probe_text = "\n".join(part for part in probe_parts if part).strip()
             if (
                 grounded_loc
+                and _location_override_candidate_ok(grounded_loc, grounded_addr)
                 and not _location_matches(extracted_location, grounded_loc)
                 and _location_is_grounded_in_text(grounded_loc, probe_text)
                 and not _location_is_grounded_in_text(extracted_location, probe_text)
@@ -4047,6 +4083,7 @@ def _build_candidate(
         grounded_addr = inferred_addr or poster_addr
         if (
             grounded_loc
+            and _location_override_candidate_ok(grounded_loc, grounded_addr)
             and not _location_matches(extracted_location, grounded_loc)
             and _location_is_grounded_in_text(grounded_loc, probe_text)
             and not _location_is_grounded_in_text(extracted_location, probe_text)

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram location prose/public repair root cause**: Telegram import now prevents regex/OCR location inference from overriding LLM/default known venues with comma-prose fragments, recovers explicit `address, studio` OCR shapes without binding them to unrelated known venues, ignores VK hashtag-search pseudo-links as ticket URLs, and stops Telegraph source-media rehydration from pulling posters from source URLs shared by multiple events. Tracks `INC-2026-06-18-tg-location-prose-still-extracted`.
 - **Fixed: scheduled video rerender after post-render delivery blockers**:
   CherryFlash/CrumpleVideo/Koenigsberg scheduled video sessions now use
   `PUBLISH_BLOCKED` for render-complete fanout/test-delivery blockers, including

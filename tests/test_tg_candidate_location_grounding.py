@@ -876,3 +876,80 @@ def test_tg_zero_event_diagnostic_does_not_flag_plain_news():
     }
 
     assert _message_has_event_like_zero_extraction_signals(message) is False
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_does_not_replace_known_venue_with_city_prose_fragment():
+    """Regression for kldzoo/7534 and sobor39/6000: comma prose like
+    'Калининград, с приглашения...' must not overrule the LLM/default venue."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Калининградский зоопарк, пр-т Мира 26, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "kldzoo",
+        "message_id": 7534,
+        "source_link": "https://t.me/kldzoo/7534",
+        "text": (
+            "Сегодня начнём, пожалуй, с приглашения на концерт🎻🙃\n"
+            "🎷20 июня 17:00\n"
+            "🎷Музыкальный вечер: выступает ансамбль «Янтарь»\n"
+            "Место проведения — сцена у фонтана."
+        ),
+    }
+    event_data = {
+        "title": "Музыкальный вечер: выступает ансамбль «Янтарь»",
+        "date": "2026-06-20",
+        "time": "17:00",
+        "location_name": "Калининградский зоопарк",
+        "location_address": "Калининградский зоопарк",
+        "city": "Калининград",
+        "source_text": message["text"],
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Калининградский зоопарк"
+    assert cand.location_address == "пр-т Мира 26"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_recovers_studio_from_address_ocr_over_wrong_known_venue():
+    """Regression for meowafisha/7683: if OCR/source has explicit
+    'Советский проспект 12, 809 студия', a wrong known venue name must not
+    survive with that conflicting address."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="medium")
+    message = {
+        "source_username": "meowafisha",
+        "message_id": 7683,
+        "source_link": "https://t.me/meowafisha/7683",
+        "text": "21.06 | Старт программы «Модный интенсив»\n📍Советский проспект 12, 809 студия",
+        "posters": [
+            {
+                "sha256": "poster-fashion",
+                "ocr_text": "Советский проспект 12, 809 студия 15:00 21 июня Кастинг",
+                "ocr_title": "Кастинг в модельное агентство",
+            }
+        ],
+    }
+    event_data = {
+        "title": "Модный интенсив",
+        "date": "2026-06-21",
+        "time": "15:00",
+        "location_name": "ИЦАЭ (в КГТУ)",
+        "location_address": "Советский проспект 12",
+        "city": "Калининград",
+        "source_text": message["text"],
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "809 студия"
+    assert cand.location_address == "Советский проспект 12"
+    assert cand.city == "Калининград"

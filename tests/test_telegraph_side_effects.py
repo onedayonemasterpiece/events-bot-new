@@ -240,3 +240,66 @@ async def test_telegraph_rehydrates_missing_media_from_event_sources(tmp_path, m
             )
         ).all()
         assert {r[0] for r in rows} == {"existing", "vk", "tg3191", "tg3193"}
+
+
+@pytest.mark.asyncio
+async def test_telegraph_rehydrate_skips_shared_multi_event_source(tmp_path, monkeypatch):
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        ev1 = m.Event(
+            title="Лекция Летова",
+            description="D",
+            date="2026-06-19",
+            time="20:00",
+            location_name="Дом китобоя",
+            source_text="SRC",
+            photo_urls=[],
+            photo_count=0,
+        )
+        ev2 = m.Event(
+            title="Другое событие из той же подборки",
+            description="D",
+            date="2026-06-19",
+            time="18:00",
+            location_name="Дом китобоя",
+            source_text="SRC",
+            photo_urls=[],
+            photo_count=0,
+        )
+        session.add_all([ev1, ev2])
+        await session.commit()
+        await session.refresh(ev1)
+        await session.refresh(ev2)
+        eid = int(ev1.id)
+        shared_url = "https://t.me/kulturnaya_chaika/7860"
+        session.add_all(
+            [
+                m.EventSource(event_id=eid, source_type="telegram", source_url=shared_url, source_text="tg"),
+                m.EventSource(event_id=int(ev2.id), source_type="telegram", source_url=shared_url, source_text="tg"),
+            ]
+        )
+        await session.commit()
+
+    calls = []
+
+    async def fake_fetch(source_type, source_url, *, limit):
+        calls.append(source_url)
+        return [SimpleNamespace(catbox_url="https://cdn.example/wrong.jpg", sha256="wrong")]
+
+    monkeypatch.setattr(m, "_fetch_event_source_poster_candidates", fake_fetch)
+    monkeypatch.setenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH", "1")
+
+    async with db.get_session() as session:
+        ev = await session.get(m.Event, eid)
+        added = await m._rehydrate_missing_event_source_posters_for_telegraph(
+            session,
+            ev,
+            event_id=eid,
+        )
+        await session.commit()
+
+    assert added == 0
+    assert calls == []

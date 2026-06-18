@@ -17647,6 +17647,29 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
     if not source_rows:
         return 0
 
+    source_urls = [
+        str(row[1] or "").strip()
+        for row in source_rows
+        if str(row[1] or "").strip()
+    ]
+    shared_source_urls: set[str] = set()
+    if source_urls:
+        source_counts = (
+            await session.execute(
+                select(
+                    EventSource.source_url,
+                    func.count(func.distinct(EventSource.event_id)),
+                )
+                .where(EventSource.source_url.in_(source_urls))
+                .group_by(EventSource.source_url)
+            )
+        ).all()
+        shared_source_urls = {
+            str(source_url or "").strip()
+            for source_url, event_count in source_counts
+            if str(source_url or "").strip() and int(event_count or 0) > 1
+        }
+
     poster_rows = (
         await session.execute(
             select(EventPoster.poster_hash, EventPoster.catbox_url, EventPoster.supabase_url)
@@ -17680,9 +17703,17 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
     photo_urls = list(getattr(ev, "photo_urls", None) or [])
     now = datetime.now(timezone.utc)
     for source_type, source_url in source_rows:
+        source_url_clean = str(source_url or "").strip()
+        if source_url_clean in shared_source_urls:
+            logging.info(
+                "telegraph.source_media: skip shared multi-event source rehydrate event_id=%s source=%s",
+                event_id,
+                source_url_clean,
+            )
+            continue
         candidates = await _fetch_event_source_poster_candidates(
             str(source_type or ""),
-            str(source_url or ""),
+            source_url_clean,
             limit=per_source_limit,
         )
         for poster in candidates:

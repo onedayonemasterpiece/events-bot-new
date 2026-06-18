@@ -59,6 +59,14 @@
     и Telegraph fallback не даёт картинок), VK publication fail-closed: managed `klgdevents` пост не создаётся текстом.
     Это regression contract для `INC-2026-06-04-tg-monitoring-media-and-digest-quality.md`: чинить нужно media
     ingestion/source parsing, а не принимать silent text-only публикацию.
+    Venue/location semantics остаются LLM-first: regex/OCR helpers may only provide narrow structural hints
+    (address normalization, explicit `адрес, студия/зал` parsing) or fail-closed safety gates. They must not
+    override an LLM-extracted/source-default known venue with a free-text comma fragment unless a separate LLM-owned
+    venue-review stage confirms that offsite venue from source-grounded evidence. Regression contract:
+    `INC-2026-06-18-tg-location-prose-still-extracted`.
+    Telegraph/source-media rehydration must also be event-local: if one source URL is attached to multiple event rows,
+    the rehydrate pass must not attach all source images to each row; media recovery needs event-local assignment/OCR
+    evidence instead of broad deterministic source-context reuse.
   - обрабатывает Telegram-посты в хронологическом порядке (старые → новые), чтобы старые посты не перезатирали более свежие обновления того же события.
   - во время импорта в `/tg` показывает live-прогресс по каждому посту (`X/Y`, ссылка на пост, `Smart Update: ✅/🔄`, `event_ids`, иллюстрации, `took_sec`), чтобы оператор видел, что импорт не завис.
   - отправляет подробный блок `Smart Update (детали событий)` сразу после обработки конкретного поста (не дожидаясь завершения всего импорта).
