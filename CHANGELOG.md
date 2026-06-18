@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Fixed: VK auto-import title and registration link recurrence**: `vk_intake` no longer replaces a suspicious LLM title with the forbidden `<event_type> — <venue>` placeholder or with a poster OCR heading; missing-token detection is now evidence/logging only, so source-grounded LLM titles such as `Виниловый вечер с DJ Switchoff` stay LLM-owned for Smart Update LLM review rather than being overwritten deterministically. VK auto-import also expands source-owned `clck.ru` registration shortlinks before public Telegram/VK/Telegraph rendering. Tracks `INC-2026-06-18-vk-title-shortlink-public-regression`.
+- **Fixed: VK auto-import title and registration link recurrence**: `vk_intake` no longer replaces a suspicious LLM title with the forbidden `<event_type> — <venue>` placeholder or with a poster OCR heading; missing-token detection now handles simple adjectival/inflection grounding (`виниловый` ← `винил`) and is evidence/logging only, so source-grounded LLM titles such as `Виниловый вечер с DJ Switchoff` stay LLM-owned for Smart Update LLM review rather than being overwritten deterministically. VK auto-import also expands source-owned `clck.ru` registration shortlinks before public Telegram/VK/Telegraph rendering. Tracks `INC-2026-06-18-vk-title-shortlink-public-regression`.
 - **Fixed: Poll to Repost production-only stabilization**: disabled the public
   hourly debug loop on Fly, stopped operator-invalidated visible debug rows from
   blocking later slots, and made production `Другое` votes feed the next

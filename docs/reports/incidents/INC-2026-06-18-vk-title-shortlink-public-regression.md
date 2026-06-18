@@ -46,7 +46,7 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 
 ## Root Cause
 
-1. VK intake's deterministic suspicious-title guard detected a missing Cyrillic token in the LLM output (`Виниловый`) and replaced the LLM title with `_fallback_title(...)`.
+1. VK intake's exact-token suspicious-title guard falsely classified the normal LLM title `Виниловый вечер с DJ Switchoff` as suspicious: `Виниловый` is grounded by the source noun `винил`, and `вечер` appears in the source text. This false-positive signal was then allowed to drive a deterministic rewrite.
 2. `_fallback_title(...)` synthesized exactly the forbidden `<event_type> — <venue>` shape (`Концерт — Бар Советов`). This happened after the main `event_parse` defender, so the existing bare-title escalation did not see it.
 3. A source-grounded poster OCR heading existed (`СОВЕТСКАЯ ЭЛЕКТРОНИКА`), but the better LLM title `Виниловый вечер с DJ Switchoff` was also source-supported (`винил` + `DJ Switchoff`). The correct boundary is that VK intake must not deterministically choose either a generic fallback or a poster heading over a non-generic LLM title; poster OCR is evidence, not an override.
 4. Smart Update's LLM title recovery was present, but provider `rpd` and 4o hourly budget exhaustion made it unavailable at the critical moment. The pipeline therefore needed a non-placeholder fail-safe before public fanout.
@@ -70,11 +70,11 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 - `vk_intake.py` suspicious-title guard and ticket-link normalization.
 - `smart_event_update.py` generic title recovery and ticket-link persistence.
 - Public Telegram `@kldevents`, VK `klgdevents`, Telegraph event pages.
-- Runtime logs `/data/runtime_logs/events-bot.log*` for `vk_intake suspicious_title`, `title_recover`, and `ticket_shortlink_resolved`.
+- Runtime logs `/data/runtime_logs/events-bot.log*` for historical `vk_intake suspicious_title`, current `vk_intake title_grounding_gap`, `title_recover`, and `ticket_shortlink_resolved`.
 
 ### Mandatory checks before closure or deploy
 
-- Regression test: VK intake must keep a source-grounded non-generic LLM title such as `Виниловый вечер с DJ Switchoff` and must not replace it with either `Концерт — <venue>` or a poster OCR heading.
+- Regression test: VK intake must not falsely flag a source-grounded non-generic LLM title such as `Виниловый вечер с DJ Switchoff` as a title-grounding gap, and must not replace it with either `Концерт — <venue>` or a poster OCR heading.
 - Regression test: `clck.ru` ticket links must be resolved before draft links are persisted.
 - Active/future public audit must show no fresh `Концерт — <venue>` / `Лекция — <venue>` / `Спектакль — <venue>` placeholders when source/OCR contains attendee-facing title material.
 - Public post repair must update DB, Telegraph, Telegram and VK; hashes must be invalidated/recomputed. If VK sync creates a replacement postponed post, the stale postponed post must be deleted or verified absent.
@@ -89,12 +89,12 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 
 ## Immediate Mitigation
 
-- Prepared source-root code fix in `vk_intake`: do not synthesize `<event_type> — <venue>` as the suspicious-title fallback and do not overwrite a non-generic LLM title with poster OCR; poster OCR heading is logged as evidence only, while the LLM title stays owned by Smart Update LLM recovery/review. Resolve `clck.ru` source ticket links before storing `ticket_link`.
+- Prepared source-root code fix in `vk_intake`: fix the false-positive grounding signal for adjectival/inflected words such as `виниловый`←`винил`; do not synthesize `<event_type> — <venue>` as the title fallback and do not overwrite a non-generic LLM title with poster OCR. Remaining grounding gaps are logged as evidence only, while the LLM title stays owned by Smart Update LLM recovery/review. Resolve `clck.ru` source ticket links before storing `ticket_link`.
 - Production repair completed for events `6155` and `6156`; active/future audit also repaired event `6120` title, event `6032`/`6033` source shortlinks, and VK-only rows `4084`/`5511`. Telegram, Telegraph and VK were republished; stale VK postponed posts `https://vk.com/wall-231920894_3754` and the first-repair `https://vk.com/wall-231920894_3760` were deleted; current corrected VK post is `https://vk.com/wall-231920894_3767`.
 
 ## Corrective Actions
 
-- [x] Add regression tests for preserving source-grounded LLM title against both generic fallback and poster-title overwrite, plus `clck.ru` ticket-link expansion.
+- [x] Add regression tests for not flagging/preserving source-grounded LLM title against both generic fallback and poster-title overwrite, plus `clck.ru` ticket-link expansion.
 - [x] Update VK auto-import docs and changelog with the LLM-first boundary.
 - [x] Repair event `6155` ticket link and all public surfaces.
 - [x] Repair event `6156` title and all public surfaces.

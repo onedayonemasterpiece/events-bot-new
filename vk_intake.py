@@ -2117,12 +2117,23 @@ async def build_event_drafts_from_vk(
             return True
         if tok in ground_norm:
             return True
-        # Best-effort: allow simple inflection differences.
-        if len(tok) >= 5 and tok[:-1] in ground_norm:
-            return True
-        if len(tok) >= 6 and tok[:-2] in ground_norm:
-            return True
-        return False
+        # Best-effort: allow simple inflection and adjectival derivation differences.
+        # Example from INC-2026-06-18: LLM title word "Виниловый" is grounded by
+        # source noun "винил"; exact-token matching must not classify that as a
+        # suspicious semantic title.
+        candidates = {tok}
+        if len(tok) >= 5:
+            candidates.add(tok[:-1])
+        if len(tok) >= 6:
+            candidates.add(tok[:-2])
+        for suffix in (
+            "овыми", "евыми", "ого", "его", "ому", "ему", "ыми", "ими",
+            "овая", "евая", "овый", "евый", "овое", "евое", "овой", "евой",
+            "ая", "яя", "ые", "ие", "ый", "ий", "ой", "ую", "юю",
+        ):
+            if tok.endswith(suffix) and len(tok) - len(suffix) >= 4:
+                candidates.add(tok[: -len(suffix)])
+        return any(c and c in ground_norm for c in candidates)
 
     def _missing_title_tokens(title: str) -> list[str]:
         words = [w for w in _title_word_re.findall(title or "") if w]
@@ -2428,17 +2439,15 @@ async def build_event_drafts_from_vk(
         title_raw = clean_str(data.get("title")) or ""
         event_type_val = clean_str(data.get("event_type"))
         missing_tokens = _missing_title_tokens(title_raw)
-        # Heuristic signal only: if the title contains a Cyrillic word absent from
-        # source text/OCR, do not deterministically rewrite it. Morphology and
-        # attendee-facing summary titles can be valid even when a word is not an
-        # exact source token (INC-2026-06-18: "Виниловый вечер с DJ Switchoff" was
-        # better than both the generic fallback and a poster-heading overwrite).
-        # Smart Update owns LLM-first title review/recovery; VK intake only logs
-        # evidence for debugging.
+        # Grounding signal only: if a title contains a Cyrillic word that is still
+        # absent after conservative morphology checks, do not deterministically
+        # rewrite it. Attendee-facing LLM summary titles can be valid even when
+        # not every word is an exact source token. Smart Update owns LLM-first
+        # title review/recovery; VK intake only logs evidence for debugging.
         if missing_tokens:
             poster_title = _poster_title_candidate()
-            logger.warning(
-                "vk_intake suspicious_title kept_llm_title title=%r missing=%s poster_title_candidate=%r",
+            logger.info(
+                "vk_intake title_grounding_gap kept_llm_title title=%r missing=%s poster_title_candidate=%r",
                 title_raw,
                 ",".join(missing_tokens[:4]),
                 poster_title,

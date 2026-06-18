@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -230,7 +231,7 @@ async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(mon
 
 
 @pytest.mark.asyncio
-async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_generic_fallback(monkeypatch):
+async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_generic_fallback(monkeypatch, caplog):
     async def fake_parse_event_via_llm(*_args, **_kwargs):
         class Parsed(list):
             festival = None
@@ -251,6 +252,7 @@ async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_ge
         )
 
     monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
+    caplog.set_level(logging.INFO, logger="vk_intake")
 
     poster = PosterMedia(
         data=b"",
@@ -262,7 +264,15 @@ async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_ge
     drafts, _festival = await vk_intake.build_event_drafts_from_vk(
         (
             "В пятницу в “Баре Советов” слушаем винил, прокачиваем музыкальную эрудицию "
-            "с DJ Switchoff.\n\n19 июня в 21:00\nБАР SOVETOV, проспект Мира 118\nВход свободный"
+            "с DJ Switchoff.\n\n"
+            "Путешествие по галактикам электронной музыки от композиторского авангарда "
+            "и эмбиента, через легкую музыку космической эры к ритмичным диско, "
+            "фанку и джазу.\n\n"
+            "Звучание уникальных синтезаторов АНС и Синти-100, кастомных "
+            "электроакустических гибридов Мещерина, импортных Moog и ARP, "
+            "электроорганов и синт-аккордеонов экспериментальных радиозаводов СССР "
+            "наполнит ваш незабываемый вечер неожиданными аудио впечатлениями!\n\n"
+            "19 июня в 21:00\nБАР SOVETOV, проспект Мира 118\nВход свободный"
         ),
         source_name="Бар Советов",
         publish_ts=datetime(2026, 6, 18, 10, 0, tzinfo=timezone.utc),
@@ -273,6 +283,7 @@ async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_ge
     assert drafts[0].title == "💿 Виниловый вечер с DJ Switchoff"
     assert drafts[0].title != "Концерт — Бар Советов"
     assert drafts[0].title != "СОВЕТСКАЯ ЭЛЕКТРОНИКА"
+    assert "title_grounding_gap" not in caplog.text
 
 
 @pytest.mark.asyncio
