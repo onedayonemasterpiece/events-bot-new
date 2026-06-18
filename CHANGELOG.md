@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Fixed: Poll to Repost production-only stabilization**: disabled the public
+  hourly debug loop on Fly, stopped operator-invalidated visible debug rows from
+  blocking later slots, and made production `Другое` votes feed the next
+  LLM-first topic planner when they are meaningful even if they did not win.
+  Tied `Другое` votes are now stored as feedback but removed from winner
+  selection candidates. Tracks `INC-2026-06-15-poll-repost-missing-slots`.
 - **Fixed: decorated temporal location fragments**: Telegram import and Smart Update now treat emoji/bullet-prefixed date words such as `🤗Завтра` as temporal non-venues, so source defaults can recover the real venue instead of publishing prose/date text in `location_name`. Follows up `INC-2026-06-18-tg-location-prose-still-extracted`.
 - **Fixed: VK event post repair invalidation**: managed VK event post hashes now include event date/time, location, ticket link, and photo URL signature, so DB repairs for wrong venues/media invalidate and edit the existing `klgdevents` post instead of requiring manual `vk_source_hash` clearing. Follows up `INC-2026-06-18-tg-location-prose-still-extracted`.
 - **Fixed: Telegram location prose/public repair root cause**: Telegram import now prevents regex/OCR location inference from overriding LLM/default known venues with comma-prose fragments, recovers explicit `address, studio` OCR shapes without binding them to unrelated known venues, ignores VK hashtag-search pseudo-links as ticket URLs, and stops Telegraph source-media rehydration from pulling posters from source URLs shared by multiple events. Tracks `INC-2026-06-18-tg-location-prose-still-extracted`.

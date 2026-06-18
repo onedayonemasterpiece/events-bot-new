@@ -1099,6 +1099,137 @@ async def test_latest_feedback_other_context_reads_options_json(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_latest_feedback_other_context_reads_significant_prod_other_votes(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.delenv("POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_VOTES", raising=False)
+    monkeypatch.delenv("POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_SHARE", raising=False)
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_PROD,
+        run_key="prod:2026-06-18",
+        status=pf.STATUS_FORWARDED,
+        target_event_date=datetime(2026, 6, 18, tzinfo=timezone.utc).date(),
+        poll_chat_id="@kenigevents",
+        poll_message_id=4052,
+        options=[
+            pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102)),
+            pf.PollOptionPlan(key="family", text="Выбраться всей семьёй", candidate_event_ids=(201, 202)),
+            pf.PollOptionPlan(key=pf.FEEDBACK_OPTION_KEY, text=pf.FEEDBACK_OPTION_TEXT, candidate_event_ids=()),
+        ],
+    )
+    await pf._update_run(
+        db,
+        1,
+        status=pf.STATUS_FORWARDED,
+        result={
+            "total_voter_count": 11,
+            "options": [
+                {"index": 0, "key": "music", "text": "Послушать музыку", "voter_count": 6},
+                {"index": 1, "key": "family", "text": "Выбраться всей семьёй", "voter_count": 3},
+                {
+                    "index": 2,
+                    "key": pf.FEEDBACK_OPTION_KEY,
+                    "text": pf.FEEDBACK_OPTION_TEXT,
+                    "voter_count": 2,
+                },
+            ],
+        },
+        forwarded_message_id=4055,
+    )
+
+    context = await pf._latest_feedback_other_context(db, profile_key=pf.PROFILE_PROD)
+
+    assert context["run_key"] == "prod:2026-06-18"
+    assert context["strength"] == "partial"
+    assert context["feedback_votes"] == 2
+    assert context["feedback_share"] == pytest.approx(0.1818, abs=0.001)
+    assert context["option_texts"] == ["Послушать музыку", "Выбраться всей семьёй"]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_create_prod_poll_passes_previous_other_feedback_to_planner(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_PROD,
+        run_key="prod:2026-06-18",
+        status=pf.STATUS_FORWARDED,
+        target_event_date=datetime(2026, 6, 18, tzinfo=timezone.utc).date(),
+        poll_chat_id="@kenigevents",
+        poll_message_id=4052,
+        options=[
+            pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102)),
+            pf.PollOptionPlan(key=pf.FEEDBACK_OPTION_KEY, text=pf.FEEDBACK_OPTION_TEXT, candidate_event_ids=()),
+        ],
+    )
+    await pf._update_run(
+        db,
+        1,
+        status=pf.STATUS_FORWARDED,
+        result={
+            "total_voter_count": 10,
+            "options": [
+                {"index": 0, "key": "music", "text": "Послушать музыку", "voter_count": 8},
+                {
+                    "index": 1,
+                    "key": pf.FEEDBACK_OPTION_KEY,
+                    "text": pf.FEEDBACK_OPTION_TEXT,
+                    "voter_count": 2,
+                },
+            ],
+        },
+        forwarded_message_id=4055,
+    )
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_PROD", "1")
+    monkeypatch.setenv("POLL_TO_FORWARD_PROD_POLL_TIME_LOCAL", "16:00")
+    captured = {}
+
+    async def fake_create_poll_if_due(*args, **kwargs):
+        captured["previous_feedback"] = kwargs.get("previous_feedback")
+        return {"created": False, "reason": "captured"}
+
+    monkeypatch.setattr(pf, "_create_poll_if_due", fake_create_poll_if_due)
+
+    result = await pf.create_prod_poll_if_due(
+        db,
+        DummyPollBot(),
+        now_utc=datetime(2026, 6, 18, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["reason"] == "captured"
+    assert captured["previous_feedback"]["profile_key"] == pf.PROFILE_PROD
+    assert captured["previous_feedback"]["strength"] == "partial"
+    assert captured["previous_feedback"]["feedback_votes"] == 2
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_operator_invalidated_visible_poll_does_not_block_next_slot(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await pf._insert_run(
+        db,
+        profile_key=pf.PROFILE_DEBUG,
+        run_key="debug:2026-06-15T20-hotfix-a943e5af",
+        status=pf.STATUS_SKIPPED_TOPIC_UNDERFILL,
+        target_event_date=datetime(2026, 6, 16, tzinfo=timezone.utc).date(),
+        poll_chat_id="@keniggpt",
+        poll_message_id=2333,
+        options=[
+            pf.PollOptionPlan(key="music", text="Послушать музыку", candidate_event_ids=(101, 102)),
+            pf.PollOptionPlan(key=pf.FEEDBACK_OPTION_KEY, text=pf.FEEDBACK_OPTION_TEXT, candidate_event_ids=()),
+        ],
+        error={"invalidated_reason": "overmerged_fallback_topics_after_product_review"},
+    )
+
+    assert await pf._latest_visible_poll_without_result(db, profile_key=pf.PROFILE_DEBUG) is None
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_five_isolated_cycles_keep_recommendation_inside_voted_theme(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -1387,6 +1518,86 @@ async def test_debug_resolve_feedback_other_winner_replies_without_forward(tmp_p
         now_utc=datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc),
     )
     assert second["created"] is True
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_feedback_other_tie_is_signal_but_not_candidate_for_winner_llm(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    await _seed_events(db)
+    monkeypatch.setenv("ENABLE_POLL_TO_FORWARD_DEBUG", "1")
+    captured_tied_keys = []
+
+    async def fake_llm(**kwargs):
+        prompt = kwargs.get("prompt", "")
+        if "Ты пишешь публичный комментарий" in prompt:
+            return {
+                "reply_text": (
+                    "Спасибо за голоса — беру один анонс из выбранных тем.\n\n"
+                    "Для этой темы подходит {{EVENT_LINK}}.\n\n"
+                    "Если попал с рекомендацией — поставьте 👍. Если нет — 👎, буду сверяться с вами дальше.\n\n"
+                    "Сейчас перешлю анонс 👇"
+                ),
+                "event_link_text": "камерный концерт",
+            }
+        if "winner_key" in prompt:
+            match = re.search(
+                r"Опции-победители/ничья:\n(?P<options>.*?)\n\nСобытия-кандидаты:",
+                prompt,
+                flags=re.DOTALL,
+            )
+            tied_options = json.loads(match.group("options")) if match else []
+            captured_tied_keys.extend(option["key"] for option in tied_options)
+            assert pf.FEEDBACK_OPTION_KEY not in captured_tied_keys
+            return {
+                "winner_key": tied_options[0]["key"],
+                "event_id": tied_options[0]["candidate_event_ids"][0],
+                "reason": "выбрана реальная тема, а «Другое» учтём как сигнал",
+            }
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "music", "text": "Вечер с музыкой", "candidate_event_ids": [101]},
+                {"key": "learn", "text": "Узнать новое", "candidate_event_ids": [102]},
+                {"key": "kids", "text": "С детьми", "candidate_event_ids": [103]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+    bot = DummyPollBot()
+    await pf.create_debug_poll_if_due(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 0, tzinfo=timezone.utc),
+    )
+    feedback_index = bot.sent_polls[0]["options"].index(pf.FEEDBACK_OPTION_TEXT)
+    votes = [0] * len(bot.sent_polls[0]["options"])
+    votes[0] = 2
+    votes[1] = 2
+    votes[feedback_index] = 2
+    bot.stop_poll_result = SimpleNamespace(
+        total_voter_count=sum(votes),
+        options=[SimpleNamespace(voter_count=count) for count in votes],
+    )
+
+    result = await pf.resolve_due_debug_polls(
+        db,
+        bot,
+        now_utc=datetime(2026, 6, 12, 8, 31, tzinfo=timezone.utc),
+    )
+
+    assert result["resolved"] == 1
+    assert pf.FEEDBACK_OPTION_KEY not in captured_tied_keys
+    assert bot.forwarded
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT status, result_json FROM poll_repost_run")
+        status, result_json = await cur.fetchone()
+    assert status == pf.STATUS_FORWARDED
+    feedback_signal = json.loads(result_json)["feedback_other_signal"]
+    assert feedback_signal["significant"] is True
+    assert feedback_signal["tied_top"] is True
+    assert feedback_signal["reason"] == "feedback_other_tied_top"
     await db.close()
 
 

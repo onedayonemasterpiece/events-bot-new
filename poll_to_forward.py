@@ -110,6 +110,16 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
+
+
 def _env_str(name: str, default: str) -> str:
     raw = (os.getenv(name) or "").strip()
     return raw or default
@@ -207,6 +217,13 @@ def _question_clear_fallback(*, previous_feedback_other: bool = False) -> str:
     return _poll_question_with_feedback_hint(base, previous_feedback_other=previous_feedback_other)
 
 
+def _previous_feedback_was_outright_other(previous_feedback: dict[str, Any] | None) -> bool:
+    if not previous_feedback:
+        return False
+    strength = str(previous_feedback.get("strength") or "won").strip().casefold()
+    return strength == "won"
+
+
 def _question_guard_rejection_reason(question: str) -> str | None:
     text = re.sub(r"\s+", " ", str(question or "").strip())
     lowered = text.casefold()
@@ -269,7 +286,8 @@ async def _call_llm_poll_question_writer(
         "что завтра подсветить, что завтра показать, разберусь с выбором, план звучит, звучит лучше.\n"
         "До 300 символов. Верни JSON строго: {\"question_text\":\"...\"}.\n"
         f"run_key={run_key or ''}\n"
-        f"previous_feedback_other={bool(previous_feedback)}\n"
+        f"previous_feedback_other={_previous_feedback_was_outright_other(previous_feedback)}\n"
+        f"previous_feedback_signal={json.dumps(previous_feedback or {}, ensure_ascii=False)}\n"
         f"Отклонённые прошлые варианты и причины: {json.dumps(list(rejected), ensure_ascii=False)}"
     )
     data = await _google_generate_json(prompt=prompt, max_output_tokens=350, temperature=0.75)
@@ -303,7 +321,7 @@ async def _validated_poll_question(
     run_key: str | None,
     previous_feedback: dict[str, Any] | None = None,
 ) -> str:
-    previous_feedback_other = bool(previous_feedback)
+    previous_feedback_other = _previous_feedback_was_outright_other(previous_feedback)
     if not _question_llm_review_enabled():
         question = _poll_question_with_feedback_hint(
             _poll_question_text(run_key),
@@ -1062,8 +1080,19 @@ async def _call_llm_topic_planner(
     previous_bad_options = list((previous_feedback or {}).get("option_texts") or [])
     previous_feedback_instruction = ""
     if previous_bad_options:
+        strength = str((previous_feedback or {}).get("strength") or "won").strip().casefold()
+        if strength == "won":
+            feedback_lead = (
+                "В прошлом опросе этой же поверхности аудитория выбрала «Другое», "
+                "то есть набор тем не попал. "
+            )
+        else:
+            feedback_lead = (
+                "В прошлом опросе этой же поверхности заметная часть голосов ушла в «Другое». "
+                "Это не отменяет прошлый результат, но показывает, что часть аудитории не увидела свой сценарий. "
+            )
         previous_feedback_instruction = (
-            "В прошлом отладочном опросе аудитория выбрала «Другое», то есть набор тем не попал. "
+            f"{feedback_lead}"
             "Не повторяй тот же набор формулировок и не собирай опции тем же разрезом. "
             "Сделай альтернативную группировку по другим пользовательским сценариям, оставаясь только в переданных событиях. "
             f"Прошлые темы, которые нужно переосмыслить: {json.dumps(previous_bad_options[:8], ensure_ascii=False)}.\n"
@@ -1502,6 +1531,12 @@ async def _latest_visible_poll_without_result(db: Database, *, profile_key: str)
     ]
     data = dict(zip(keys, row))
     status = str(data.get("status") or "")
+    try:
+        error = json.loads(str(data.get("error_json") or "{}"))
+    except Exception:
+        error = {}
+    if isinstance(error, dict) and error.get("invalidated_reason"):
+        return None
     if status in {STATUS_SKIPPED_NO_VOTES, STATUS_SKIPPED_FEEDBACK_OTHER}:
         return None
     if status == STATUS_FORWARDED and data.get("forwarded_message_id"):
@@ -1510,33 +1545,60 @@ async def _latest_visible_poll_without_result(db: Database, *, profile_key: str)
 
 
 async def _latest_feedback_other_context(db: Database, *, profile_key: str) -> dict[str, Any] | None:
+    lookback_days = max(1, _env_int("POLL_TO_FORWARD_FEEDBACK_LOOKBACK_DAYS", 14))
+    since = _iso_utc(_now_utc() - timedelta(days=lookback_days))
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT id, run_key, options_json
+            SELECT id, run_key, status, options_json, result_json
             FROM poll_repost_run
             WHERE profile_key=?
-              AND status=?
+              AND created_at >= ?
             ORDER BY id DESC
-            LIMIT 1
+            LIMIT 20
             """,
-            (profile_key, STATUS_SKIPPED_FEEDBACK_OTHER),
+            (profile_key, since),
         )
-        row = await cur.fetchone()
-        if not row:
-            return None
+        rows = await cur.fetchall()
+    for row in rows:
         run_id = int(row[0])
-        options = _decode_options(row[2])
+        status = str(row[2] or "")
+        options = _decode_options(row[3])
         option_texts = [
             re.sub(r"\s+", " ", option.text.strip())
             for option in options
             if option.key != FEEDBACK_OPTION_KEY and option.text.strip()
         ]
-    return {
-        "run_id": run_id,
-        "run_key": str(row[1] or ""),
-        "option_texts": option_texts,
-    }
+        if status == STATUS_SKIPPED_FEEDBACK_OTHER:
+            return {
+                "run_id": run_id,
+                "run_key": str(row[1] or ""),
+                "profile_key": profile_key,
+                "strength": "won",
+                "option_texts": option_texts,
+            }
+        try:
+            result = json.loads(row[4] or "{}")
+        except Exception:
+            result = {}
+        signal = None
+        if isinstance(result, dict):
+            raw_signal = result.get("feedback_other_signal")
+            signal = raw_signal if isinstance(raw_signal, dict) else _feedback_other_signal_from_snapshot(result)
+        if not signal or not bool(signal.get("significant")):
+            continue
+        return {
+            "run_id": run_id,
+            "run_key": str(row[1] or ""),
+            "profile_key": profile_key,
+            "strength": "won" if bool(signal.get("won")) else "partial",
+            "option_texts": option_texts,
+            "feedback_votes": int(signal.get("votes") or 0),
+            "feedback_share": float(signal.get("share") or 0.0),
+            "feedback_tied_top": bool(signal.get("tied_top")),
+            "source_status": status,
+        }
+    return None
 
 
 async def _insert_run(
@@ -1881,7 +1943,7 @@ async def create_prod_poll_if_due(
         min_options=_env_int("POLL_TO_FORWARD_PROD_MIN_OPTIONS", 4),
         log_label="prod",
         now_utc=now_value,
-        previous_feedback=None,
+        previous_feedback=await _latest_feedback_other_context(db, profile_key=PROFILE_PROD),
     )
 
 def _decode_options(value: Any) -> list[PollOptionPlan]:
@@ -1941,6 +2003,73 @@ def _poll_result_snapshot(poll: Any, fallback_options: Sequence[PollOptionPlan])
     except Exception:
         total_count = sum(int(row["voter_count"]) for row in rows)
     return {"total_voter_count": total_count, "options": rows}
+
+
+def _feedback_other_signal_from_snapshot(
+    snapshot: dict[str, Any] | None,
+    *,
+    force_significant: bool = False,
+) -> dict[str, Any] | None:
+    if not isinstance(snapshot, dict):
+        return None
+    rows = [row for row in snapshot.get("options") or [] if isinstance(row, dict)]
+    feedback = next((row for row in rows if str(row.get("key") or "") == FEEDBACK_OPTION_KEY), None)
+    if not feedback:
+        return None
+    try:
+        total_votes = int(snapshot.get("total_voter_count", 0) or 0)
+    except Exception:
+        total_votes = 0
+    try:
+        feedback_votes = int(feedback.get("voter_count", 0) or 0)
+    except Exception:
+        feedback_votes = 0
+    option_votes: list[tuple[dict[str, Any], int]] = []
+    for row in rows:
+        try:
+            votes = int(row.get("voter_count", 0) or 0)
+        except Exception:
+            votes = 0
+        option_votes.append((row, votes))
+    max_votes = max((votes for _row, votes in option_votes), default=0)
+    top_non_feedback = [
+        row
+        for row, votes in option_votes
+        if votes == max_votes and votes > 0 and str(row.get("key") or "") != FEEDBACK_OPTION_KEY
+    ]
+    feedback_tied_top = feedback_votes > 0 and feedback_votes == max_votes and bool(top_non_feedback)
+    feedback_won = feedback_votes > 0 and feedback_votes == max_votes and not top_non_feedback
+    share = (float(feedback_votes) / float(total_votes)) if total_votes > 0 else 0.0
+    min_votes = max(1, _env_int("POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_VOTES", 2))
+    min_share = min(max(_env_float("POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_SHARE", 0.15), 0.0), 1.0)
+    significant = bool(force_significant or feedback_won or feedback_tied_top or (feedback_votes >= min_votes and share >= min_share))
+    return {
+        "option_key": FEEDBACK_OPTION_KEY,
+        "option_text": str(feedback.get("text") or FEEDBACK_OPTION_TEXT),
+        "votes": feedback_votes,
+        "total_votes": total_votes,
+        "share": round(share, 4),
+        "min_votes": min_votes,
+        "min_share": min_share,
+        "top_votes": max_votes,
+        "won": feedback_won,
+        "tied_top": feedback_tied_top,
+        "significant": significant,
+    }
+
+
+def _snapshot_with_feedback_signal(
+    snapshot: dict[str, Any],
+    *,
+    force_significant: bool = False,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    signal = _feedback_other_signal_from_snapshot(snapshot, force_significant=force_significant)
+    if not signal:
+        return snapshot
+    if reason:
+        signal = {**signal, "reason": reason}
+    return {**snapshot, "feedback_other_signal": signal}
 
 
 def _popularity_reason(event: CandidateEvent) -> str:
@@ -2328,6 +2457,7 @@ async def _resolve_due_polls(
                 message_id=int(run["poll_message_id"]),
             )
             snapshot = _poll_result_snapshot(poll, options)
+            snapshot_with_feedback = _snapshot_with_feedback_signal(snapshot)
             total_votes = int(snapshot.get("total_voter_count", 0) or 0)
             min_votes = min_vote_threshold_for_profile(profile_key, target_date)
             if total_votes < min_votes:
@@ -2344,7 +2474,7 @@ async def _resolve_due_polls(
                     db,
                     run_id,
                     status=STATUS_SKIPPED_NO_VOTES,
-                    result=snapshot,
+                    result=snapshot_with_feedback,
                     reply_message_id=reply_message_id,
                     error={"total_votes": total_votes, "min_votes": min_votes},
                 )
@@ -2396,7 +2526,11 @@ async def _resolve_due_polls(
                     run_id,
                     status=STATUS_SKIPPED_FEEDBACK_OTHER,
                     result={
-                        **snapshot,
+                        **_snapshot_with_feedback_signal(
+                            snapshot,
+                            force_significant=True,
+                            reason="feedback_other_won",
+                        ),
                         "selection_trace": {
                             "reason": "feedback_other_won",
                             "feedback_option": tied_options[0].text,
@@ -2417,6 +2551,32 @@ async def _resolve_due_polls(
                 )
                 resolved += 1
                 continue
+            feedback_tied_options = [option for option in tied_options if _is_feedback_option(option)]
+            if feedback_tied_options:
+                tied_options = [option for option in tied_options if not _is_feedback_option(option)]
+                snapshot_with_feedback = _snapshot_with_feedback_signal(
+                    snapshot,
+                    force_significant=True,
+                    reason="feedback_other_tied_top",
+                )
+                if not tied_options:
+                    await _update_run(
+                        db,
+                        run_id,
+                        status=STATUS_SKIPPED_NO_CANDIDATE,
+                        result=snapshot_with_feedback,
+                        error={"reason": "feedback_other_tied_without_content_option"},
+                    )
+                    logger.info(
+                        "poll_to_forward.%s_resolve skipped feedback_tied_without_content run_id=%s run_key=%s profile=%s total_votes=%s",
+                        log_label,
+                        run_id,
+                        run.get("run_key"),
+                        profile_key,
+                        total_votes,
+                    )
+                    resolved += 1
+                    continue
             events = await load_eligible_events(
                 db,
                 target_date=target_date,
@@ -2441,7 +2601,7 @@ async def _resolve_due_polls(
                 "popularity": popularity_diag,
                 "chosen_event": chosen.popularity_trace if chosen else None,
             }
-            snapshot_with_trace = {**snapshot, "selection_trace": selection_trace}
+            snapshot_with_trace = {**snapshot_with_feedback, "selection_trace": selection_trace}
             if not winner_option or not chosen:
                 await _update_run(
                     db,

@@ -47,6 +47,13 @@ options.
   but ended as `skipped_topic_underfill` because topic planning returned no
   valid public options after strict filtering.
 - 2026-06-15: operator reported no prod poll/repost and no debug poll/repost.
+- 2026-06-18: follow-up log/DB audit found that public debug had stayed blocked
+  since 2026-06-15. The scheduler kept running hourly, but every visible debug
+  create attempt returned `previous_poll_without_result` because the latest
+  visible debug row was the manually invalidated catch-up poll
+  `poll_repost_run.id=58`, status `skipped_topic_underfill`,
+  `invalidated_reason=overmerged_fallback_topics_after_product_review`, with no
+  forwarded result.
 
 ## Root Cause
 
@@ -68,6 +75,14 @@ options.
    fallback: it merged unrelated formats and created weak buckets such as
    "evening" to satisfy the option count. That preserved visibility but violated
    the product bar for a friendly editorial poll.
+6. The public debug blocker did not distinguish a genuinely unresolved visible
+   poll from an operator-invalidated visible poll. Because id=58 remained the
+   latest visible debug poll without `forwarded_message_id`, all later hourly
+   debug slots self-skipped even though the scheduler was healthy.
+7. Production `Другое` feedback was only terminal when `Другое` won outright.
+   Non-winning but meaningful `Другое` votes were recorded in `result_json` but
+   were not fed into the next production topic-planning prompt, because
+   `create_prod_poll_if_due` passed no previous-feedback context.
 
 ## Contributing Factors
 
@@ -114,6 +129,13 @@ options.
 - Production evidence for 2026-06-15 skipped runs and post-deploy evidence that
   debug can create a visible poll or the next debug slot is no longer blocked by
   underfill for the observed inventory.
+- Regression test: operator-invalidated visible Poll to Repost rows with
+  `error_json.invalidated_reason` must not block the next slot.
+- Regression test: production reads meaningful `Другое` feedback from previous
+  results and passes it to the next LLM topic planner.
+- Regression test: when `Другое` ties with real options, it is stored as a
+  feedback signal but is not sent to the winner-selection LLM as a candidate
+  option.
 - `/healthz`, Fly status, deployed SHA, and confirmation that deployed fix is
   reachable from `origin/main`.
 
@@ -140,6 +162,11 @@ copy guardrails.
 
 Follow-up correction: constrain fallback topics to conservative coherent
 multi-candidate themes and prefer skip/alert over publishing an over-merged poll.
+
+2026-06-18 follow-up correction: disable the long-running public debug loop on
+Fly, treat operator-invalidated visible rows as terminal for slot blocking, and
+promote production `Другое` votes into the next poll-planning prompt when they
+are meaningful but did not win outright.
 
 ## Follow-up Actions
 
@@ -171,6 +198,15 @@ multi-candidate themes and prefer skip/alert over publishing an over-merged poll
   result/repost will be produced from that weak poll.
 - follow-up post-deploy verification: `/healthz` returned `ok=true`, Fly machine
   version `1423` was started with `1 passing` check.
+- 2026-06-18 audit evidence before fix: runtime file mirror enabled
+  (`ENABLE_RUNTIME_FILE_LOGGING=1`, `/data/runtime_logs/events-bot.log*`, 24
+  files); DB quick check `ok`; debug status rollup had 23
+  `skipped_topic_underfill`, 6 `skipped_low_popularity_inventory`, 5 `failed`,
+  and 18 `forwarded`; recent logs showed repeated
+  `poll_to_forward.debug_create skipped previous_poll_without_result ...
+  previous_run_id=58 previous_status=skipped_topic_underfill`; production row
+  `poll_repost_run.id=59` had 11 votes including 2 for `Другое` (18.2%),
+  which was recorded but not used by the old production planner.
 
 ## Prevention
 

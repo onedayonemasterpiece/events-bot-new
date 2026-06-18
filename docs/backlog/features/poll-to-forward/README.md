@@ -1,6 +1,6 @@
 # Poll to Repost
 
-> Status: hybrid debug + production rollout  
+> Status: production-only rollout; public debug mode disabled on Fly  
 > Source requirements: `docs/backlog/features/poll-to-forward/requirements.md`
 
 ## Product Goal
@@ -34,12 +34,11 @@ Production:
 
 Debug:
 
-- publish polls to `@keniggpt` at most hourly during a configured daytime window;
-- resolve each debug poll about 30 minutes later, or by a resolver tick every
-  30 minutes;
-- do not publish polls at night;
-- if there are no poll results, do nothing publicly;
-- forward the selected event post from `@kldevents`.
+- disabled in production Fly configuration (`ENABLE_POLL_TO_FORWARD_DEBUG=0`);
+- no public hourly polls are published to `@keniggpt` during the stable
+  production rollout;
+- if debug is temporarily needed again, use an isolated operator sandbox or an
+  explicitly planned one-cycle smoke, not a long-running public hourly loop.
 
 The public repost must use Telegram `forward_message` so the repost carries the
 source header. `copy_message` is not a normal success path for this product.
@@ -48,12 +47,12 @@ Implemented entrypoints:
 
 - `poll_to_forward.py`;
 - `db.py` table bootstrap for `poll_repost_run`;
-- `scheduling.py` job `poll_to_forward_debug`, enabled by
+- `scheduling.py` job `poll_to_forward_debug`, enabled only when
   `ENABLE_POLL_TO_FORWARD_DEBUG=1`, running at minutes `0,30`;
 - `scheduling.py` jobs `poll_to_forward_prod_create` and
   `poll_to_forward_prod_resolve`, enabled by `ENABLE_POLL_TO_FORWARD_PROD=1`;
-- production Fly hybrid targets: debug poll/repost surface `@keniggpt`,
-  production surface `@kenigevents`, source forward chat `@kldevents`.
+- production Fly target: production surface `@kenigevents`, source forward chat
+  `@kldevents`; public debug surface `@keniggpt` is off by default.
 
 Run identity is profile-scoped: debug uses `debug:YYYY-MM-DDTHH`, production
 uses `prod:YYYY-MM-DD` for the target event date. The resolver reads only runs
@@ -119,7 +118,7 @@ back to an explicit safe question. Deterministic guardrails still reject known
 ambiguous phrases such as "что завтра подсветить", "рекомендация на завтра",
 "завтрашней рекомендации" and "разберусь с выбором".
 
-Debug and production otherwise rotate several participation frames by slot, for
+Production rotates several participation frames by slot, for
 example:
 
 - `Сегодня выбираем категорию событий, куда можно сходить завтра. Вечером возьму один анонс из варианта, за который будет больше голосов.`
@@ -131,8 +130,8 @@ example:
 
 The rotation can be replaced with `POLL_TO_FORWARD_QUESTION_VARIANTS` (`||`
 separator) or pinned with `POLL_TO_FORWARD_QUESTION_TEXT`. The default rotation
-also avoids repeating the same question text in adjacent debug hourly slots.
-The LLM still owns the meaningful option set.
+also avoids repeating the same question text in adjacent debug hourly slots if
+debug is explicitly re-enabled. The LLM still owns the meaningful option set.
 
 Avoid false mechanics such as "найду/поищу" when the feature operates on
 events already stored in the database. Avoid pseudo-personal mood wording such
@@ -407,10 +406,17 @@ set. The poll question explicitly mentions that subscribers can pick
 closed as `skipped_feedback_other`: the bot replies under the poll that the
 topics did not land and that the next poll should be assembled differently, but
 it does not forward an unrelated event. This terminal state does not block the
-next debug poll slot. The next debug poll reads the previous option texts from
-`options_json`, tells subscribers that the previous themes did not land, and
-passes those themes to the LLM topic planner as a set to rethink rather than
-repeat.
+next poll slot. The next poll on the same surface reads the previous option
+texts from `options_json`, tells subscribers that the previous themes did not
+land, and passes those themes to the LLM topic planner as a set to rethink
+rather than repeat. Non-winning but meaningful `Другое` feedback is also
+retained as a softer signal: by default, at least two `Другое` votes and at
+least 15% of votes (`POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_VOTES`,
+`POLL_TO_FORWARD_FEEDBACK_SIGNAL_MIN_SHARE`) are enough to ask the next LLM
+planner to rethink the topic cut without cancelling the current recommendation.
+This applies to production as well as debug. If `Другое` ties for first place
+with real content options, it is recorded as feedback but removed from the LLM
+winner-candidate set, so the result can still stay inside a real voted category.
 
 ## Data Model
 
@@ -456,7 +462,9 @@ Implement as an idempotent state machine:
 - debug `create_poll` also refuses to publish a new visible poll when the latest
   visible debug poll is still `open`, `failed`, or otherwise ended without a
   public forwarded result; the next poll should follow the previous public
-  result, not a silent internal skip after votes were collected;
+  result, not a silent internal skip after votes were collected. Operator-
+  invalidated rows with `error_json.invalidated_reason` are treated as terminal
+  and do not block the next slot;
 - `resolve_poll` finds due open runs, stops the Telegram poll, and moves the run
   to `resolved`, `skipped`, or `failed`;
 - scheduler restarts must be able to continue from the persisted run.
@@ -467,7 +475,7 @@ tick at `HH:30:00` does not miss a due poll because of scheduler milliseconds.
 
 Current debug defaults:
 
-- `ENABLE_POLL_TO_FORWARD_DEBUG=1` in `fly.toml`;
+- `ENABLE_POLL_TO_FORWARD_DEBUG=0` in `fly.toml`; public hourly debug is off;
 - create ticks only in local hours `9 <= hour < 24` (`24` is exclusive, so
   the last create slot is `23:00 Europe/Kaliningrad`; the quiet night window is
   `00:00-08:30`);
@@ -477,6 +485,15 @@ Current debug defaults:
   possible and inventory supports it;
 - LLM model: `gemini-3.1-flash-lite`;
 - anti-repeat window: `7` days.
+
+Historical debug instability on 2026-06-15/18 was caused by two separate
+mechanics: many hourly slots legitimately self-skipped on low inventory or LLM
+topic underfill, and then one manually invalidated visible debug poll
+(`skipped_topic_underfill` with `invalidated_reason`) became the latest visible
+poll without a forwarded result, so every later hourly debug tick refused to
+publish. Operator-invalidated visible rows are now treated as terminal for slot
+blocking, and the long-running public debug loop remains disabled to avoid
+noisy public regressions while production is the authoritative smoke surface.
 
 ## Observability
 
