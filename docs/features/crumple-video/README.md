@@ -440,11 +440,13 @@ color: #100E0E;
     выбирается как video lane и фиксируется в `selection_params._video_lane_auth_env`;
   - для параллельных long CPU renders `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS`
     должен задавать Kaggle kernel targets в том же порядке, что и
-    `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`; каждый target slug должен быть
-    предварительно создан/виден в Kaggle API до включения в production,
-    иначе `SaveKernel` может отклонить handoff как missing notebook; без
-    lane-target refs два `/v` рендера с одним remote kernel slug остаются
-    сериализованными, чтобы не перетереть output/poller state;
+    `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`; новый target slug может быть
+    автоматически создан первым `SaveKernel` push, но если недельная GPU quota
+    уже исчерпана, launcher должен создать target CPU-first. Иначе неудачная
+    GPU-попытка создания с последующим CPU retry может вернуться как
+    `Notebook not found`. Без lane-target refs два `/v` рендера с одним remote
+    kernel slug остаются сериализованными, чтобы не перетереть output/poller
+    state;
   - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем non-blocking `vk:kenigeventsofficial:wall` with `caption_variant=crumple_official`, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - target objects may carry `required=true`: such targets do not block the expensive render preflight, but the final publish report becomes failed if they do not receive the story;

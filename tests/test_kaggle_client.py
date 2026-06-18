@@ -485,6 +485,113 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
     assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-220"]
 
 
+def test_quota_remaining_seconds_from_raw_parses_kaggle_duration_strings(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    remaining = module._quota_remaining_seconds_from_raw(
+        {
+            "gpuQuota": {
+                "timeUsed": "108146.341s",
+                "timeReserved": "0s",
+                "totalTimeAllowed": "108000s",
+            }
+        }
+    )
+
+    assert remaining == pytest.approx(-146.341)
+
+
+def test_kaggle_kernel_exists_treats_wrong_slug_as_missing(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    class StubApi:
+        def kernels_status(self, ref):
+            raise RuntimeError(
+                f"Cannot access kernel '{ref}' (Permission 'kernels.get' was denied). "
+                "The most likely cause is a wrong kernel slug."
+            )
+
+    assert module._kaggle_kernel_exists(StubApi(), "zigomaro/missing-lane") is False
+
+
+def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quota_exhausted(
+    monkeypatch,
+    tmp_path,
+):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CherryFlash"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/cherryflash",
+  "title": "CherryFlash",
+  "code_file": "cherryflash.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [
+    "zigomaro/cherryflash-session-old"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "cherryflash.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_meta: dict = {}
+
+    class Response:
+        ref = "/code/zigomaro/cherryflash-video1"
+        versionNumber = 79
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            pushed_meta.update(
+                module.json.loads(
+                    (Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8")
+                )
+            )
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "cherryflash", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(module, "_kaggle_kernel_exists", lambda _api, _ref: False)
+    monkeypatch.setattr(module, "_read_gpu_quota_remaining_seconds", lambda _api: -1.0)
+
+    result = client.deploy_kernel_update(
+        "local:CherryFlash",
+        ["zigomaro/cherryflash-session-221"],
+        target_kernel_ref="zigomaro/cherryflash-video1",
+        machine_shape="NvidiaTeslaT4",
+    )
+
+    assert result == "zigomaro/cherryflash-video1"
+    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert pushed_meta["enable_gpu"] is False
+    assert "machine_shape" not in pushed_meta
+    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-221"]
+
+
 def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")

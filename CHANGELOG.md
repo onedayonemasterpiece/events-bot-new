@@ -10,8 +10,10 @@
   renew active resource leases on live Kaggle heartbeats, coalesce high-frequency
   `alive` history rows, and stop marking long CPU renders `FAILED` at the fixed
   225-minute timeout while the Kaggle ledger still has a fresh heartbeat.
-  Production docs now make the Kaggle constraint explicit: lane target kernel
-  slugs should be pre-created/visible to Kaggle before enabling them.
+  New lane target kernel slugs can be auto-created by Kaggle, and the launcher
+  now reads the real GPU quota before the first push: if a target slug is new
+  and the weekly GPU quota is already exhausted, it creates the lane notebook
+  CPU-first instead of failing the handoff with `Notebook not found`.
   Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: VK auto-import title and registration link recurrence**: `vk_intake` no longer replaces a suspicious LLM title with the forbidden `<event_type> — <venue>` placeholder or with a poster OCR heading; the VK-intake exact-token title-grounding guard was removed entirely, so source-grounded LLM titles such as `Виниловый вечер с DJ Switchoff` stay LLM-owned for Smart Update LLM review rather than being overwritten deterministically. VK auto-import also expands source-owned `clck.ru` registration shortlinks before public Telegram/VK/Telegraph rendering. Tracks `INC-2026-06-18-vk-title-shortlink-public-regression`.
 - **Fixed: Poll to Repost production-only stabilization**: disabled the public

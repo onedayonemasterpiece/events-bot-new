@@ -734,10 +734,11 @@ This section captures the latest intro-direction request as an explicit delta to
     `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` is the ordered pool of Telegram auth
     bundles, `selection_params._video_lane_auth_env` records the actual lane for
     that session, and `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` maps the same
-    lane index to an isolated, pre-existing Kaggle kernel target. Do not enable
-    a new target slug in production until it is visible to the Kaggle API;
-    `SaveKernel` may reject first creation of a notebook target and leave the
-    scheduled slot as a handoff failure. Without lane kernel refs, CherryFlash
+    lane index to an isolated Kaggle kernel target. Kaggle can auto-create a
+    new target slug from the first `SaveKernel` push; if the weekly GPU quota is
+    already exhausted at that moment, the launcher must detect that and create
+    the target CPU-first, otherwise a failed GPU creation followed by CPU retry
+    can surface as `Notebook not found`. Without lane kernel refs, CherryFlash
     runs that resolve to the same remote Kaggle slug remain serialized to avoid
     overwritten outputs/polling.
   - Business story posts must pass Bot API `post_to_chat_page=true`; without it, Telegram can accept `postStory` and show an active story while not exposing it on the account page/profile story list in the expected way.

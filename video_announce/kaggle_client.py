@@ -119,6 +119,114 @@ def _is_gpu_quota_error(message: str) -> bool:
     return "gpu quota" in lowered or "weekly gpu quota" in lowered
 
 
+def _duration_seconds(value: Any) -> float | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.endswith("s"):
+        raw = raw[:-1]
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _quota_remaining_seconds_from_raw(data: dict[str, Any]) -> float | None:
+    quota = data.get("gpuQuota") or data.get("gpu_quota") or {}
+    if not isinstance(quota, dict):
+        return None
+    used = _duration_seconds(quota.get("timeUsed") or quota.get("time_used"))
+    reserved = _duration_seconds(quota.get("timeReserved") or quota.get("time_reserved")) or 0.0
+    total = _duration_seconds(
+        quota.get("totalTimeAllowed")
+        or quota.get("total_time_allowed")
+        or quota.get("minimumTimeAllowed")
+        or quota.get("minimum_time_allowed")
+    )
+    if used is None or total is None:
+        return None
+    return float(total) - float(used) - float(reserved)
+
+
+def _read_gpu_quota_remaining_seconds(api: Any) -> float | None:
+    """Read Kaggle GPU quota with a raw fallback for SDK duration parser bugs.
+
+    Kaggle CLI 2.2.1 can fail parsing quota durations like ``"108000s"``
+    because it expects a fractional part.  The raw endpoint still returns
+    valid JSON, so use the same authenticated HTTP client and parse durations
+    locally.
+    """
+
+    try:
+        response = api.quota_view()
+        quota = getattr(response, "gpu_quota", None)
+        if quota is not None:
+            used = getattr(quota, "time_used", None)
+            reserved = getattr(quota, "time_reserved", None)
+            total = getattr(quota, "total_time_allowed", None)
+            used_seconds = float(used.total_seconds()) if used is not None else None
+            reserved_seconds = float(reserved.total_seconds()) if reserved is not None else 0.0
+            total_seconds = float(total.total_seconds()) if total is not None else None
+            if used_seconds is not None and total_seconds is not None:
+                return total_seconds - used_seconds - reserved_seconds
+    except Exception as exc:
+        logger.info("kaggle: quota_view high-level parser failed; trying raw quota endpoint: %s", exc)
+
+    try:
+        from kagglesdk.kernels.types.kernels_api_service import (  # type: ignore
+            ApiGetAcceleratorQuotaStatisticsRequest,
+        )
+
+        with api.build_kaggle_client() as kaggle:
+            http = getattr(kaggle, "_http_client", None)
+            if http is None:
+                return None
+            http._init_session()
+            request = http._prepare_request(
+                "kernels.KernelsApiService",
+                "GetAcceleratorQuotaStatistics",
+                ApiGetAcceleratorQuotaStatisticsRequest(),
+            )
+            settings = http._session.merge_environment_settings(
+                request.url,
+                {},
+                None,
+                None,
+                None,
+            )
+            response = http._session.send(request, **settings)
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, dict):
+                return _quota_remaining_seconds_from_raw(data)
+    except Exception as exc:
+        logger.warning("kaggle: failed to read raw GPU quota: %s", exc)
+    return None
+
+
+def _kaggle_kernel_exists(api: Any, kernel_ref: str | None) -> bool | None:
+    ref = str(kernel_ref or "").strip()
+    if not ref or ref.startswith(LOCAL_KERNEL_PREFIX):
+        return None
+    try:
+        api.kernels_status(ref)
+        return True
+    except Exception as exc:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+        message = str(exc).casefold()
+        if (
+            status_code == 404
+            or "404" in message
+            or "not found" in message
+            or "cannot access kernel" in message
+            or "wrong kernel slug" in message
+        ):
+            return False
+        logger.warning("kaggle: failed to check kernel existence ref=%s: %s", ref, exc)
+        return None
+
+
 async def await_kernel_dataset_sources(
     client: "KaggleClient",
     kernel_ref: str,
@@ -1214,6 +1322,27 @@ class KaggleClient:
                     meta_data.get("id"),
                     machine_shape,
                 )
+
+            if (
+                is_local
+                and bool(meta_data.get("enable_gpu"))
+                and _is_session_kernel_id(str(meta_data.get("id") or ""))
+                and _kaggle_kernel_exists(api, str(meta_data.get("id") or "")) is False
+            ):
+                remaining_seconds = _read_gpu_quota_remaining_seconds(api)
+                logger.info(
+                    "kaggle: target kernel is new; GPU quota remaining seconds=%s id=%s",
+                    remaining_seconds,
+                    meta_data.get("id"),
+                )
+                if remaining_seconds is not None and remaining_seconds <= 0:
+                    logger.warning(
+                        "kaggle: target kernel does not exist and GPU quota is exhausted; "
+                        "creating/updating lane target with CPU first id=%s",
+                        meta_data.get("id"),
+                    )
+                    meta_data["enable_gpu"] = False
+                    meta_data.pop("machine_shape", None)
 
             _instrument_notebook_kernel(tmp_path, meta_data)
             _instrument_script_kernel(tmp_path, meta_data)
