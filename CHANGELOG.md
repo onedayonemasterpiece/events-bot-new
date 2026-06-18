@@ -19,6 +19,18 @@
   stale-but-unexpired remote lease cannot immediately recycle the same Telegram
   auth lane into another scheduled handoff.
   Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
+- **Fixed: Kaggle video false-terminal classification**: video pollers now
+  probe downloadable Kaggle output before accepting repeated `UNKNOWN` status,
+  provider `error`/`failed`, or timeout as a final `FAILED`. If an artifact or
+  story report is present, the session is classified from that evidence;
+  story/preflight blockers such as `BOOSTS_REQUIRED` become `PUBLISH_BLOCKED`
+  even when no mp4 was rendered, and oversize generated videos preserve
+  `video_url` under `PUBLISH_BLOCKED`. Explicit operator cancellations remain
+  terminal and are not output-recovered.
+  Tracks `INC-2026-04-22-cherryflash-false-failed-after-successful-story-publish`,
+  `INC-2026-04-24-crumple-story-channel-boosts-required`,
+  `INC-2026-06-13-kaggle-duplicate-videoannounce`, and
+  `INC-2026-06-16-cherryflash-duplicate-after-bot-send-failure`.
 - **Fixed: VK auto-import title and registration link recurrence**: `vk_intake` no longer replaces a suspicious LLM title with the forbidden `<event_type> — <venue>` placeholder or with a poster OCR heading; the VK-intake exact-token title-grounding guard was removed entirely, so source-grounded LLM titles such as `Виниловый вечер с DJ Switchoff` stay LLM-owned for Smart Update LLM review rather than being overwritten deterministically. VK auto-import also expands source-owned `clck.ru` registration shortlinks before public Telegram/VK/Telegraph rendering. Tracks `INC-2026-06-18-vk-title-shortlink-public-regression`.
 - **Fixed: Poll to Repost production-only stabilization**: disabled the public
   hourly debug loop on Fly, stopped operator-invalidated visible debug rows from

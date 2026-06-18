@@ -1519,8 +1519,12 @@ async def run_kernel_poller(
     queued_since: datetime | None = None
 
     timed_out = True
+    status: dict = {}
     timeout_status: dict | None = None
     timeout_note_sent_at: datetime | None = None
+    output_probe_failure_error: str | None = None
+    output_probe_failure_message: str | None = None
+    output_probe_status: dict | None = None
     while True:
         now = datetime.now(timezone.utc)
         if now >= deadline:
@@ -1597,39 +1601,38 @@ async def run_kernel_poller(
             )
             if unknown_status_count >= MAX_UNKNOWN_STATUS_COUNT:
                 error_msg = f"Kaggle API returns unknown status after {MAX_UNKNOWN_STATUS_COUNT} attempts"
-                session_obj = await _update_status(
+                heartbeat = await _fresh_kaggle_ledger_heartbeat(
                     db,
+                    f"videoannounce:{session_obj.id}",
+                    now=datetime.now(timezone.utc),
+                )
+                if heartbeat:
+                    logger.warning(
+                        "video_announce: Kaggle status is unknown but ledger heartbeat is fresh; "
+                        "continuing poll session=%s kernel=%s heartbeat_age=%.1fs phase=%s",
+                        session_obj.id,
+                        kernel_ref,
+                        float(heartbeat.get("age_seconds") or 0),
+                        heartbeat.get("phase"),
+                    )
+                    unknown_status_count = 0
+                    await asyncio.sleep(poll_interval)
+                    continue
+                logger.warning(
+                    "video_announce: Kaggle status remained unknown; probing output before failing "
+                    "session=%s kernel=%s",
                     session_obj.id,
-                    status=VideoAnnounceSessionStatus.FAILED,
-                    error=error_msg,
-                )
-                if not session_obj:
-                    return
-                await update_status_message(
-                    bot,
-                    session_obj,
-                    status,
-                    db=db,
-                    chat_id=status_chat_id,
-                    message_id=status_message_id,
-                    allow_send=True,
-                )
-                await bot.send_message(
-                    notify_chat_id,
-                    f"⚠️ Сессия #{session_obj.id}: Kaggle API не возвращает статус.\n"
-                    "Проверьте ноутбук вручную на kaggle.com",
-                )
-                await _download_and_send_logs(
-                    client,
                     kernel_ref,
-                    bot,
-                    notify_chat_id,
-                    session_obj.id,
-                    download_dir=download_dir,
-                    caption_prefix="⚠️ Логи (неизвестный статус)",
                 )
-                await _cleanup_dataset(client, dataset_slug)
-                return
+                output_probe_failure_error = error_msg
+                output_probe_failure_message = (
+                    f"⚠️ Сессия #{session_obj.id}: Kaggle API не возвращает статус, "
+                    "и готовый output не подтвердился.\n"
+                    "Проверьте ноутбук вручную на kaggle.com"
+                )
+                output_probe_status = dict(status)
+                timed_out = False
+                break
             await asyncio.sleep(poll_interval)
             continue
         else:
@@ -1725,8 +1728,6 @@ async def run_kernel_poller(
             timed_out = False
             break
         if state in {
-            "error",
-            "failed",
             "cancel_acknowledged",
             "cancel_requested",
             "cancelled",
@@ -1735,7 +1736,7 @@ async def run_kernel_poller(
             failure_msg = status.get("failureMessage") or status.get("failure_message") or ""
             error_detail = f"{state}: {failure_msg}" if failure_msg else str(status)
             logger.warning(
-                "video_announce: kernel failed session=%s kernel=%s error=%s",
+                "video_announce: kernel cancelled session=%s kernel=%s error=%s",
                 session_obj.id,
                 kernel_ref,
                 error_detail,
@@ -1758,9 +1759,8 @@ async def run_kernel_poller(
                 allow_send=True,
             )
             await bot.send_message(
-                notify_chat_id, f"❌ Сессия #{session_obj.id} завершилась ошибкой Kaggle: {state}"
+                notify_chat_id, f"❌ Сессия #{session_obj.id} отменена в Kaggle: {state}"
             )
-            # Download and send logs on failure
             await _download_and_send_logs(
                 client,
                 kernel_ref,
@@ -1768,10 +1768,34 @@ async def run_kernel_poller(
                 notify_chat_id,
                 session_obj.id,
                 download_dir=download_dir,
-                caption_prefix="❌ Логи ошибки Kaggle",
+                caption_prefix="❌ Логи отменённого Kaggle run",
             )
             await _cleanup_dataset(client, dataset_slug)
             return
+        if state in {"error", "failed"}:
+            failure_msg = status.get("failureMessage") or status.get("failure_message") or ""
+            error_detail = f"{state}: {failure_msg}" if failure_msg else str(status)
+            logger.warning(
+                "video_announce: kernel failed session=%s kernel=%s error=%s",
+                session_obj.id,
+                kernel_ref,
+                error_detail,
+            )
+            logger.warning(
+                "video_announce: probing Kaggle output before accepting terminal failure "
+                "session=%s kernel=%s state=%s",
+                session_obj.id,
+                kernel_ref,
+                state,
+            )
+            output_probe_failure_error = error_detail
+            output_probe_failure_message = (
+                f"❌ Сессия #{session_obj.id} завершилась ошибкой Kaggle: {state}; "
+                "готовый output не подтвердился."
+            )
+            output_probe_status = dict(status)
+            timed_out = False
+            break
         await asyncio.sleep(poll_interval)
     if timed_out:
         timeout_status = status if "status" in locals() else {}
@@ -1781,39 +1805,17 @@ async def run_kernel_poller(
             kernel_ref,
             timeout_minutes,
         )
-        session_obj = await _update_status(
-            db,
+        logger.warning(
+            "video_announce: probing Kaggle output before timeout failure session=%s kernel=%s",
             session_obj.id,
-            status=VideoAnnounceSessionStatus.FAILED,
-            error=f"timeout after {timeout_minutes}min",
-        )
-        if not session_obj:
-            return
-        await update_status_message(
-            bot,
-            session_obj,
-            timeout_status,
-            db=db,
-            chat_id=status_chat_id,
-            message_id=status_message_id,
-            allow_send=True,
-        )
-        await bot.send_message(
-            notify_chat_id,
-            f"⏱️ Сессия #{session_obj.id} не завершилась за {timeout_minutes} минут",
-        )
-        # Download and send logs on timeout
-        await _download_and_send_logs(
-            client,
             kernel_ref,
-            bot,
-            notify_chat_id,
-            session_obj.id,
-            download_dir=download_dir,
-            caption_prefix="⏱️ Логи (таймаут) Kaggle",
         )
-        await _cleanup_dataset(client, dataset_slug)
-        return
+        output_probe_failure_error = f"timeout after {timeout_minutes}min"
+        output_probe_failure_message = (
+            f"⏱️ Сессия #{session_obj.id} не завершилась за {timeout_minutes} минут; "
+            "готовый output не подтвердился."
+        )
+        output_probe_status = dict(timeout_status)
 
     tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
     output_dir = tmp_dir / f"videoannounce-{session_obj.id}"
@@ -1857,6 +1859,38 @@ async def run_kernel_poller(
                 session_obj.id,
                 files or [p.name for p in output_files],
             )
+            story_failure = _story_failure_message(story_report)
+            if story_failure:
+                session_obj = await _update_status(
+                    db,
+                    session_obj.id,
+                    status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+                    error=story_failure,
+                )
+                if not session_obj:
+                    return
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note="Story publish/preflight заблокировал render",
+                )
+                await bot.send_message(
+                    notify_chat_id,
+                    f"⚠️ Сессия #{session_obj.id}: {story_failure}. Полный Kaggle rerender не требуется без изменения target/access.",
+                )
+                if log_files:
+                    await _send_logs(
+                        bot,
+                        notify_chat_id,
+                        log_files,
+                        caption=f"⚠️ Логи preflight/publish blocker сессии #{session_obj.id}",
+                    )
+                return
             session_obj = await _update_status(
                 db,
                 session_obj.id,
@@ -1890,8 +1924,9 @@ async def run_kernel_poller(
             session_obj = await _update_status(
                 db,
                 session_obj.id,
-                status=VideoAnnounceSessionStatus.FAILED,
+                status=VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
                 error=f"video exceeds {VIDEO_MAX_MB}MB",
+                video_url=video_path.name,
             )
             if not session_obj:
                 return
@@ -1906,7 +1941,8 @@ async def run_kernel_poller(
             )
             await bot.send_message(
                 notify_chat_id,
-                f"Видео из сессии #{session_obj.id} превышает {VIDEO_MAX_MB} MB",
+                f"⚠️ Видео из сессии #{session_obj.id} превышает {VIDEO_MAX_MB} MB. "
+                "Артефакт есть; нужен узкий publish/encode fix, не blind rerender.",
             )
             return
         session_obj = await _update_status(
@@ -2145,17 +2181,18 @@ async def run_kernel_poller(
             session_obj.id,
             kernel_ref,
         )
+        final_error = output_probe_failure_error or "kernel output download failed"
         session_obj = await _update_status(
             db,
             session_obj.id,
             status=VideoAnnounceSessionStatus.FAILED,
-            error="kernel output download failed",
+            error=final_error,
         )
         if session_obj:
             await update_status_message(
                 bot,
                 session_obj,
-                status,
+                output_probe_status or status,
                 db=db,
                 chat_id=status_chat_id,
                 message_id=status_message_id,
@@ -2163,7 +2200,8 @@ async def run_kernel_poller(
             )
         await bot.send_message(
             notify_chat_id,
-            f"⚠️ Сессия #{session_obj.id}: не удалось скачать вывод kernel",
+            output_probe_failure_message
+            or f"⚠️ Сессия #{session_obj.id}: не удалось скачать вывод kernel",
         )
     finally:
         await _cleanup_dataset(client, dataset_slug)

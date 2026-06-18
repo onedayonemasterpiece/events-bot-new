@@ -474,6 +474,13 @@ color: #100E0E;
   обязан сначала попробовать publish-only recovery через
   `CrumpleStoryPublishOnly` и после успешной компенсации продолжить обычную
   post-download доставку mp4/логов без повторного рендера.
+- Если Kaggle status API возвращает `UNKNOWN`/ошибки или сам kernel закончил
+  `error`/`failed`, poller перед `FAILED` обязан проверить downloadable output.
+  Уже готовый mp4/report закрывает full-rerender path и классифицируется по
+  фактическому story/publish результату. Если report содержит pre-render
+  story blocker вроде `BOOSTS_REQUIRED` и mp4 поэтому отсутствует, это
+  `PUBLISH_BLOCKED`, а не renderer/output failure. Явная операторская отмена в
+  Kaggle не восстанавливается через output-probe.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
 - Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path. Если timeout достигнут, но `kaggle_run_ledger` всё ещё получает свежий `alive`, poller продолжает ждать bounded increments вместо ложного `FAILED`; окончательный потолок задаёт `VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES`.
 - Live evidence on `2026-04-26` showed `@kenigevents` can still return `BOOSTS_REQUIRED`; production keeps the Premium self-account as the render blocking target, but treats channel fanout as required delivery so a missing channel story cannot finish green.

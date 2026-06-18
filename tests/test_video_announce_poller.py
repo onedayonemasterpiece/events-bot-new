@@ -379,3 +379,332 @@ async def test_story_failure_after_render_becomes_publish_blocked(
         assert refreshed.video_url == "crumple_video_final.mp4"
         assert refreshed.error == "story publish failed: @kenigevents (BOOSTS_REQUIRED)"
         assert refreshed.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_error_kernel_with_rendered_story_failure_becomes_publish_blocked(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="kenigsberg_story",
+            kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-12", "mode": "kenigsberg_story"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class ErrorWithOutputClient(_CompleteKernelClient):
+        def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+            return {"status": "error", "failureMessage": "MEDIA_FILE_INVALID"}
+
+        def download_kernel_output(self, kernel_ref: str, *, path: Path, **kwargs) -> list[str]:  # noqa: ARG002
+            video = path / "koenigsberg_story_final.mp4"
+            video.write_bytes(b"fake-video")
+            report = path / "story_publish_report.json"
+            report.write_text(
+                '{"ok": false, "targets": [{"label": "@mostvkenig", "ok": false, "error": "MEDIA_FILE_INVALID"}]}',
+                encoding="utf-8",
+            )
+            return [video.name, report.name]
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Кёнигсберг #661"
+
+    async def no_recovery(*args, **kwargs):  # noqa: ANN002,ANN003
+        return False
+
+    async def noop_send_video(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "run_story_publish_only_recovery", no_recovery)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send_video)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    bot = _DummyBot()
+    await poller_module.run_kernel_poller(
+        db,
+        ErrorWithOutputClient(),
+        VideoAnnounceSession(
+            id=session_id,
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+        ),
+        bot=bot,
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        assert refreshed.video_url == "koenigsberg_story_final.mp4"
+        assert refreshed.error == "story publish failed: @mostvkenig (MEDIA_FILE_INVALID)"
+        assert refreshed.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_kernel_does_not_probe_or_publish_output(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class CancelledClient(_CompleteKernelClient):
+        def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+            return {"status": "CANCEL_ACKNOWLEDGED"}
+
+        def download_kernel_output(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            raise AssertionError("cancelled operator run must not be output-recovered")
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_download_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_download_and_send_logs", noop_download_logs)
+
+    bot = _DummyBot()
+    await poller_module.run_kernel_poller(
+        db,
+        CancelledClient(),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        bot=bot,
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert "CANCEL_ACKNOWLEDGED" in (refreshed.error or "")
+    assert bot.messages == [
+        (777, "❌ Сессия #1 отменена в Kaggle: cancel_acknowledged")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_complete_kernel_missing_video_with_story_preflight_failure_is_publish_blocked(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="default",
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-04-25", "mode": "tomorrow"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class PreflightFailureNoVideoClient(_CompleteKernelClient):
+        def download_kernel_output(self, kernel_ref: str, *, path: Path, **kwargs) -> list[str]:  # noqa: ARG002
+            report = path / "story_publish_report.json"
+            report.write_text(
+                '{"ok": false, "targets": [{"label": "@kenigevents", "ok": false, "error": "BOOSTS_REQUIRED"}]}',
+                encoding="utf-8",
+            )
+            log = path / "crumple.log"
+            log.write_text("Story preflight failed: BOOSTS_REQUIRED", encoding="utf-8")
+            return [report.name, log.name]
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    bot = _DummyBot()
+    await poller_module.run_kernel_poller(
+        db,
+        PreflightFailureNoVideoClient(),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/crumple-video"),
+        bot=bot,
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        assert refreshed.video_url is None
+        assert refreshed.error == "story publish failed: @kenigevents (BOOSTS_REQUIRED)"
+        assert refreshed.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_unknown_status_probes_output_before_failed(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-08", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    class UnknownThenOutputClient(_CompleteKernelClient):
+        def __init__(self) -> None:
+            self.status_calls = 0
+
+        def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+            self.status_calls += 1
+            return {"status": "UNKNOWN"}
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #1 · 8 июня"
+
+    async def noop_send_video(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send_video)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    client = UnknownThenOutputClient()
+    await poller_module.run_kernel_poller(
+        db,
+        client,
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        bot=_DummyBot(),
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+        assert refreshed.video_url == "cherryflash_full_final.mp4"
+    assert client.status_calls == 30
+
+
+@pytest.mark.asyncio
+async def test_timeout_probes_output_before_failed(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #1 · 18 июня"
+
+    async def noop_send_video(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send_video)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    await poller_module.run_kernel_poller(
+        db,
+        _CompleteKernelClient(),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        bot=_DummyBot(),
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=0,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+        assert refreshed.video_url == "cherryflash_full_final.mp4"

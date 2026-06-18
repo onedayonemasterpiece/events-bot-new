@@ -146,6 +146,21 @@ has a fresh heartbeat. They extend polling in bounded increments
 ceiling (`VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES`, default `720`) if the runtime
 keeps running without reaching a terminal output/report.
 
+Before accepting an opaque terminal failure from Kaggle, video pollers must also
+probe the kernel output. This applies to repeated `UNKNOWN`/empty status,
+Kaggle `error`/`failed`, and timeout paths: if a final video/report is already
+downloadable, the session is classified from that artifact and any
+story/publish report instead of blindly becoming `FAILED`. Operator-initiated
+Kaggle cancellation is the exception: cancelled states are respected as an
+explicit stop and must not be output-recovered into publication.
+
+If no video is present but `story_publish_report.json` contains a deterministic
+target blocker such as `BOOSTS_REQUIRED`, the session is `PUBLISH_BLOCKED`
+rather than a render failure. A generated video that is too large for the bot
+delivery limit is also `PUBLISH_BLOCKED` with `video_url` preserved, because the
+artifact exists and the next action is a narrow publish/encode fix, not an
+uncontrolled full rerender.
+
 ## Regression Contract
 
 This framework is a regression guard for opaque Kaggle runs. A scheduler retry

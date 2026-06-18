@@ -78,6 +78,14 @@
   - scheduled `popular_review` must wait through the pre-Kaggle phase until `videoannounce_session.kaggle_dataset` is set and `kaggle_kernel_ref` is a real Kaggle slug such as `zigomaro/cherryflash`;
   - `ops_run(kind='video_popular_review')` must not be marked `success` while the session is still local-only (`local:CherryFlash`), and a successful `ops_run` handoff is not delivery evidence by itself;
   - same-day startup/watchdog catch-up may retry a missed CherryFlash slot when today's matching session failed before render/output evidence; it must not launch a full replacement Kaggle run after `video_url`, terminal Kaggle ledger evidence (`done`/`partial` with `terminal_at`), `DONE`, `PUBLISH_BLOCKED`, `PUBLISHED_TEST`, or `PUBLISHED_MAIN`. Post-render bot/test delivery failures and deterministic fanout blockers such as `BOOSTS_REQUIRED` are narrow publish/reconcile problems, not rerender signals.
+  - poller-side terminal classification must prefer durable artifacts over
+    provider status alone: repeated Kaggle `UNKNOWN` status, status HTTP 5xx
+    collapsed into an empty status response, timeout, or Kaggle `error`/`failed`
+    are followed by an output probe before the session is marked `FAILED`.
+    If a video/report is downloadable, classify from the artifact/report; if a
+    story preflight/publish report names a deterministic target blocker such as
+    `BOOSTS_REQUIRED`, use `PUBLISH_BLOCKED`. Explicit operator cancellation
+    stays cancelled/failed and is not output-recovered.
   - CherryFlash story fanout is target-independent: an unavailable or unauthorized Telethon session may fail Telegram story/channel targets, but it must not abort configured VK wall or VK story targets that can publish with VK credentials.
   - public CherryFlash captions must carry the release/session number and the target date in `D month` form: `Видеоанонс #<session_id> · <D month>` (for example, `Видеоанонс #677 · 15 июня`). The `telegram_chat` post target receives this exact caption; the VK wall target may expand it with the normal VK hashtag/date block, but must keep the same numbered/date title.
   - if CherryFlash fails or leaves no local-day `ops_run` because SQLite reports `database or disk is full`, treat it as `INC-2026-05-05-cherryflash-disk-full`: collect Fly `/data` evidence, restore free space and SQLite write health first, verify `/healthz`, then perform the same-day compensating CherryFlash run and collect dataset/kernel/story evidence.
