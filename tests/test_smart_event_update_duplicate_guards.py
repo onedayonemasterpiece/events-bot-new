@@ -413,7 +413,7 @@ async def test_smart_update_rejects_temporal_location_candidate(
             title="Экспериментальный пленэр",
             date="2026-06-14",
             time="12:00",
-            location_name="Завтра",
+            location_name="🤗Завтра",
             location_address="Каштановая аллея 1а",
             city="Калининград",
             event_type="выставка",

@@ -2878,15 +2878,28 @@ _LOCATION_TEMPORAL_FRAGMENT_RE = re.compile(
     r"сегодня|завтра|послезавтра|вчера|"
     r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
     r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
-    r")\s*[.!?]?\s*$"
+    r")\s*[,.:;!?]?\s*$"
 )
+
+
+def _strip_location_temporal_decoration(value: str) -> str:
+    """Remove leading emoji/bullets that LLMs often copy with date words.
+
+    Public incidents showed values such as ``🤗Завтра`` surviving the temporal
+    gate because the semantic token was decorated.  Keep this as a fail-closed
+    shape normalizer only; it does not infer or replace a venue.
+    """
+
+    compact = re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(r"^[^0-9A-Za-zА-Яа-яЁё]+", "", compact).strip()
 
 
 def _looks_like_location_temporal_fragment(value: str | None) -> bool:
     raw = str(value or "").strip()
     if not raw:
         return False
-    return bool(_LOCATION_TEMPORAL_FRAGMENT_RE.fullmatch(raw))
+    probes = {raw, _strip_location_temporal_decoration(raw)}
+    return any(_LOCATION_TEMPORAL_FRAGMENT_RE.fullmatch(probe) for probe in probes if probe)
 
 
 def _looks_like_location_program_fragment(value: str | None, address: str | None = None) -> bool:

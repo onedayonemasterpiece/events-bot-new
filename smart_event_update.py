@@ -5636,8 +5636,13 @@ _LOCATION_VALUE_TEMPORAL_RE = re.compile(
     r"сегодня|завтра|послезавтра|вчера|"
     r"(?:в\s+)?(?:понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)|"
     r"\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
-    r")\s*[.!?]?\s*$"
+    r")\s*[,.:;!?]?\s*$"
 )
+
+
+def _strip_location_value_temporal_decoration(value: str) -> str:
+    compact = re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(r"^[^0-9A-Za-zА-Яа-яЁё]+", "", compact).strip()
 
 
 def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
@@ -5648,7 +5653,8 @@ def _location_value_looks_like_prose_fragment(value: str | None) -> bool:
     words = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", compact)
     if "\n" in raw:
         return True
-    if _LOCATION_VALUE_TEMPORAL_RE.fullmatch(compact):
+    temporal_probes = {compact, _strip_location_value_temporal_decoration(compact)}
+    if any(_LOCATION_VALUE_TEMPORAL_RE.fullmatch(probe) for probe in temporal_probes if probe):
         return True
     if len(compact) > 90:
         return True

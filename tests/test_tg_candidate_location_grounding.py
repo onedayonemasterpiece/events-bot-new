@@ -235,7 +235,7 @@ async def test_tg_build_candidate_drops_temporal_location_without_default_repair
         "title": "Экспериментальный пленэр",
         "date": "2026-06-14",
         "time": "12:00",
-        "location_name": "Завтра",
+        "location_name": "🤗Завтра",
         "location_address": "Каштановая аллея 1а",
         "city": "Калининград",
     }
