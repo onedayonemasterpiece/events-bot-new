@@ -1153,6 +1153,9 @@ class KaggleClient:
                 requested_slug = requested_ref.split("/", 1)[-1].strip()
                 if requested_slug:
                     meta_data["slug"] = requested_slug
+                    title_slug = str(meta_data.get("title") or "").strip().casefold().replace(" ", "-")
+                    if title_slug != requested_slug.casefold():
+                        meta_data["title"] = requested_slug
             username = (os.getenv("KAGGLE_USERNAME") or "").strip()
             kernel_id = str(meta_data.get("id") or "").strip()
             if username and kernel_id:

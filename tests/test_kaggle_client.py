@@ -481,6 +481,7 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
     assert result == "zigomaro/cherryflash-video1"
     assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
     assert pushed_meta["slug"] == "cherryflash-video1"
+    assert pushed_meta["title"] == "cherryflash-video1"
     assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-220"]
 
 
