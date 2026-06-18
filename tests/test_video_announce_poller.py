@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -521,6 +522,104 @@ async def test_cancelled_kernel_does_not_probe_or_publish_output(
     assert bot.messages == [
         (777, "❌ Сессия #1 отменена в Kaggle: cancel_acknowledged")
     ]
+
+
+@pytest.mark.asyncio
+async def test_error_status_with_fresh_notebook_heartbeat_keeps_polling(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, progress_json,
+                token_hash, last_heartbeat_at, created_at, updated_at
+            )
+            VALUES (?, ?, 'cherryflash', 'CherryFlash', 'alive', 'render', ?, 'token-hash', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                json.dumps({"progress_label": "рендер 42%"}, ensure_ascii=False),
+                (now - timedelta(minutes=2)).isoformat(),
+                (now - timedelta(hours=1)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    class ErrorThenCompleteClient(_CompleteKernelClient):
+        def __init__(self) -> None:
+            self.status_calls = 0
+
+        def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+            self.status_calls += 1
+            if self.status_calls == 1:
+                return {"status": "error", "failureMessage": "transient provider state"}
+            return {"status": "complete"}
+
+    status_notes: list[str | None] = []
+
+    async def capture_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        status_notes.append(kwargs.get("note"))
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #1 · 18 июня"
+
+    async def noop_send_video(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def noop_send_logs(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", capture_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send_video)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send_logs)
+
+    client = ErrorThenCompleteClient()
+    await poller_module.run_kernel_poller(
+        db,
+        client,
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        bot=_DummyBot(),
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+        assert refreshed.video_url == "cherryflash_full_final.mp4"
+        assert not refreshed.error
+    assert client.status_calls == 2
+    assert any(
+        note and "notebook heartbeat свежий" in note
+        for note in status_notes
+    )
 
 
 @pytest.mark.asyncio

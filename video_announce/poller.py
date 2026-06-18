@@ -96,7 +96,7 @@ VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES = _read_positive_int(
 )
 VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES = _read_positive_int(
     "VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES",
-    20,
+    15,
 )
 VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES = _read_positive_int(
     "VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES",
@@ -1781,6 +1781,42 @@ async def run_kernel_poller(
                 kernel_ref,
                 error_detail,
             )
+            heartbeat = await _fresh_kaggle_ledger_heartbeat(
+                db,
+                f"videoannounce:{session_obj.id}",
+                now=datetime.now(timezone.utc),
+            )
+            if heartbeat:
+                display_status = dict(status)
+                display_status["status"] = heartbeat.get("status") or "alive"
+                display_status["phase"] = heartbeat.get("phase")
+                display_status.pop("failureMessage", None)
+                display_status.pop("failure_message", None)
+                display_status.pop("error", None)
+                logger.warning(
+                    "video_announce: Kaggle terminal status conflicts with fresh notebook heartbeat; "
+                    "continuing poll session=%s kernel=%s provider_state=%s heartbeat_age=%.1fs phase=%s",
+                    session_obj.id,
+                    kernel_ref,
+                    state,
+                    float(heartbeat.get("age_seconds") or 0),
+                    heartbeat.get("phase"),
+                )
+                await update_status_message(
+                    bot,
+                    session_obj,
+                    display_status,
+                    db=db,
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    allow_send=True,
+                    note=(
+                        f"Kaggle API сообщил {state}, но notebook heartbeat свежий "
+                        f"({int(float(heartbeat.get('age_seconds') or 0))}с); продолжаю ждать."
+                    ),
+                )
+                await asyncio.sleep(poll_interval)
+                continue
             logger.warning(
                 "video_announce: probing Kaggle output before accepting terminal failure "
                 "session=%s kernel=%s state=%s",

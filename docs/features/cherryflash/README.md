@@ -81,7 +81,10 @@
   - poller-side terminal classification must prefer durable artifacts over
     provider status alone: repeated Kaggle `UNKNOWN` status, status HTTP 5xx
     collapsed into an empty status response, timeout, or Kaggle `error`/`failed`
-    are followed by an output probe before the session is marked `FAILED`.
+    are checked against the notebook heartbeat/status ledger first. A fresh
+    non-terminal heartbeat (default freshness window: 15 minutes) means the
+    notebook is still alive and the poller keeps waiting. Without fresh
+    heartbeat, the poller performs an output probe before marking `FAILED`.
     If a video/report is downloadable, classify from the artifact/report; if a
     story preflight/publish report names a deterministic target blocker such as
     `BOOSTS_REQUIRED`, use `PUBLISH_BLOCKED`. Explicit operator cancellation

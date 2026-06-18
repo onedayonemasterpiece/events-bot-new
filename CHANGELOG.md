@@ -21,7 +21,10 @@
   Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: Kaggle video false-terminal classification**: video pollers now
   probe downloadable Kaggle output before accepting repeated `UNKNOWN` status,
-  provider `error`/`failed`, or timeout as a final `FAILED`. If an artifact or
+  provider `error`/`failed`, or timeout as a final `FAILED`. Provider
+  `error`/`failed` is first checked against the notebook status ledger: a fresh
+  non-terminal heartbeat within the 15-minute default window keeps the run alive
+  and visible by phase/progress instead of failing early. If an artifact or
   story report is present, the session is classified from that evidence;
   story/preflight blockers such as `BOOSTS_REQUIRED` become `PUBLISH_BLOCKED`
   even when no mp4 was rendered, and oversize generated videos preserve

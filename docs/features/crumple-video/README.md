@@ -476,9 +476,12 @@ color: #100E0E;
   post-download доставку mp4/логов без повторного рендера.
 - Если Kaggle status API возвращает `UNKNOWN`/ошибки или сам kernel закончил
   `error`/`failed`, poller перед `FAILED` обязан проверить downloadable output.
+  Для `error`/`failed` сначала проверяется свежий notebook heartbeat/status
+  ledger: если за последние 15 минут ноутбук прислал non-terminal `alive`, он
+  считается живым и poller продолжает ждать с отображением phase/progress.
   Уже готовый mp4/report закрывает full-rerender path и классифицируется по
-  фактическому story/publish результату. Если report содержит pre-render
-  story blocker вроде `BOOSTS_REQUIRED` и mp4 поэтому отсутствует, это
+  фактическому story/publish результату. Если report содержит pre-render story
+  blocker вроде `BOOSTS_REQUIRED` и mp4 поэтому отсутствует, это
   `PUBLISH_BLOCKED`, а не renderer/output failure. Явная операторская отмена в
   Kaggle не восстанавливается через output-probe.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
