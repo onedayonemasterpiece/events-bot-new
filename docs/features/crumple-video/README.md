@@ -446,7 +446,11 @@ color: #100E0E;
     GPU-попытка создания с последующим CPU retry может вернуться как
     `Notebook not found`. Без lane-target refs два `/v` рендера с одним remote
     kernel slug остаются сериализованными, чтобы не перетереть output/poller
-    state;
+    state. Server-side selector обязан считать lane занятой не только по
+    `RENDERING` video session, но и по active/non-expired
+    `kaggle_resource_lease` для `telegram_session:env:<ENV>`, чтобы ручная
+    остановка Kaggle run не приводила к немедленному повторному handoff на ту же
+    Telegram-сессию;
   - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем non-blocking `vk:kenigeventsofficial:wall` with `caption_variant=crumple_official`, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - target objects may carry `required=true`: such targets do not block the expensive render preflight, but the final publish report becomes failed if they do not receive the story;

@@ -740,7 +740,11 @@ This section captures the latest intro-direction request as an explicit delta to
     the target CPU-first, otherwise a failed GPU creation followed by CPU retry
     can surface as `Notebook not found`. Without lane kernel refs, CherryFlash
     runs that resolve to the same remote Kaggle slug remain serialized to avoid
-    overwritten outputs/polling.
+    overwritten outputs/polling. The server-side selector must treat both
+    `RENDERING` video sessions and active, non-expired `kaggle_resource_lease`
+    rows for `telegram_session:env:<ENV>` as busy lanes before pushing the next
+    notebook, so a manually cancelled Kaggle run cannot immediately recycle a
+    still-held Telegram auth session.
   - Business story posts must pass Bot API `post_to_chat_page=true`; without it, Telegram can accept `postStory` and show an active story while not exposing it on the account page/profile story list in the expected way.
   - Kaggle story runtime startup must log enough non-secret matching evidence to diagnose publication fanout before render starts: config/cipher/key paths, target labels already present in `story_publish.json`, business target count, encrypted business secret count, and missing business connection hashes. Raw `business_connection_id`, Telegram user ids, bot tokens, and personal account handles must not be printed.
 - Sibling profile rule:

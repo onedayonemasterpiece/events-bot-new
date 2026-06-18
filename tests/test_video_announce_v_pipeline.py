@@ -1181,6 +1181,119 @@ async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_targe
 
 
 @pytest.mark.asyncio
+async def test_video_lane_assignment_skips_active_resource_lease(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
+        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            )
+            VALUES (?, 'videoannounce:703', 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY",
+                (now - timedelta(minutes=5)).isoformat(),
+                (now + timedelta(hours=1)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    async with db.get_session() as session:
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert error is None
+    assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
+    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
+    assert kernel_ref == "zigomaro/cherryflash-video1"
+
+
+@pytest.mark.asyncio
+async def test_video_lane_assignment_fails_when_all_resource_leases_busy(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        for env_name in ["TELEGRAM_AUTH_BUNDLE_STORY", "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"]:
+            await conn.execute(
+                """
+                INSERT INTO kaggle_resource_lease(
+                    resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+                )
+                VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+                """,
+                (
+                    f"telegram_session:env:{env_name}",
+                    f"videoannounce:{env_name}",
+                    (now - timedelta(minutes=5)).isoformat(),
+                    (now + timedelta(hours=1)).isoformat(),
+                    now.isoformat(),
+                ),
+            )
+        await conn.commit()
+
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+    async with db.get_session() as session:
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert params == {"story_publish_enabled": True}
+    assert kernel_ref == "local:CherryFlash"
+    assert error and "video-lanes заняты" in error
+
+
+@pytest.mark.asyncio
 async def test_fresh_kaggle_ledger_heartbeat_prevents_fixed_timeout_failure(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

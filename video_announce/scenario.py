@@ -489,6 +489,42 @@ class VideoAnnounceScenario:
             auth_env = str(params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip()
             if auth_env:
                 active.add(auth_env)
+        lane_resource_to_env = {
+            self._video_resource_key_for_auth_env(auth_env): auth_env
+            for auth_env in self._video_lane_auth_envs()
+            if str(auth_env or "").strip()
+        }
+        lane_resource_to_env = {
+            str(resource_key): str(auth_env)
+            for resource_key, auth_env in lane_resource_to_env.items()
+            if resource_key
+        }
+        if lane_resource_to_env and self.db is not None and hasattr(self.db, "raw_conn"):
+            now = datetime.now(timezone.utc).isoformat()
+            async with self.db.raw_conn() as conn:
+                placeholders = ",".join("?" for _ in lane_resource_to_env)
+                cur = await conn.execute(
+                    f"""
+                    SELECT resource_key, run_id
+                    FROM kaggle_resource_lease
+                    WHERE status = 'active'
+                      AND expires_at > ?
+                      AND resource_key IN ({placeholders})
+                    """,
+                    (now, *lane_resource_to_env.keys()),
+                )
+                rows = await cur.fetchall()
+            own_run_id = (
+                f"videoannounce:{int(exclude_session_id)}"
+                if exclude_session_id is not None
+                else ""
+            )
+            for resource_key, run_id in rows:
+                if own_run_id and str(run_id or "") == own_run_id:
+                    continue
+                auth_env = lane_resource_to_env.get(str(resource_key or ""))
+                if auth_env:
+                    active.add(auth_env)
         return active
 
     async def _assign_video_lane_for_render(
