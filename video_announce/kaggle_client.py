@@ -101,12 +101,17 @@ def _is_ephemeral_session_dataset(dataset_slug: str) -> bool:
 
 def _is_session_kernel_id(kernel_id: str | None) -> bool:
     lowered = str(kernel_id or "").strip().casefold()
-    return lowered.endswith((
-        "/cherryflash",
-        "/koenigsberg-stories",
-        "/crumple-video",
-        "/crumple-story-publish-only",
-    ))
+    slug = lowered.split("/", 1)[-1]
+    return (
+        slug in {
+            "cherryflash",
+            "koenigsberg-stories",
+            "crumple-video",
+            "crumple-story-publish-only",
+        }
+        or slug.startswith("cherryflash-")
+        or slug.startswith("crumple-video-")
+    )
 
 
 def _is_gpu_quota_error(message: str) -> bool:
@@ -1079,6 +1084,7 @@ class KaggleClient:
         kernel_ref: str,
         dataset_sources: str | list[str],
         *,
+        target_kernel_ref: str | None = None,
         machine_shape: str | None = None,
     ) -> str:
         """Deploy kernel with dataset sources updated.
@@ -1086,6 +1092,10 @@ class KaggleClient:
         HYBRID approach:
         - If a matching repo-local kernel exists, use repo code/metadata as source of truth
         - Otherwise, pull from Kaggle as a fallback
+
+        ``target_kernel_ref`` lets one repo-local source (for example
+        ``local:CherryFlash``) be pushed into an isolated Kaggle kernel slug for
+        a video lane.
 
         ``machine_shape`` overrides the accelerator (e.g. ``NvidiaTeslaT4``).
         Pass ``None`` to keep the kernel's default. Used by the accel-pref
@@ -1137,7 +1147,7 @@ class KaggleClient:
                 raise FileNotFoundError(f"kernel-metadata.json not found")
 
             meta_data = json.loads(meta_path.read_text(encoding="utf-8"))
-            requested_ref = str(kernel_ref or "").strip()
+            requested_ref = str(target_kernel_ref or kernel_ref or "").strip()
             if requested_ref and not requested_ref.startswith(LOCAL_KERNEL_PREFIX):
                 meta_data["id"] = requested_ref
             username = (os.getenv("KAGGLE_USERNAME") or "").strip()

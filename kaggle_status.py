@@ -43,6 +43,30 @@ PHASE_PROGRESS_PERCENT = {
 }
 
 
+def _read_positive_int_env(key: str, default: int) -> int:
+    raw = os.getenv(key)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+        if value <= 0:
+            raise ValueError
+        return value
+    except ValueError:
+        logger.warning("kaggle_status: invalid %s=%r; using default %s", key, raw, default)
+        return default
+
+
+KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS = _read_positive_int_env(
+    "KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS",
+    3 * 60 * 60,
+)
+KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS = _read_positive_int_env(
+    "KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS",
+    5 * 60,
+)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -544,6 +568,74 @@ async def _record_resource(conn, *, run_id: str, resource: dict[str, Any]) -> di
     return {"resource_action": "acquired", "resource_key": key, "expires_at": expires}
 
 
+def _parse_utc_iso(value: str | None) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+async def _renew_run_resource_leases(
+    conn,
+    *,
+    run_id: str,
+    now: str,
+    ttl_seconds: int = KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS,
+) -> int:
+    now_dt = _parse_utc_iso(now) or datetime.now(timezone.utc)
+    ttl = max(60, min(int(ttl_seconds), 24 * 3600))
+    expires = datetime.fromtimestamp(now_dt.timestamp() + ttl, timezone.utc).isoformat()
+    cur = await conn.execute(
+        """
+        UPDATE kaggle_resource_lease
+        SET expires_at=?, updated_at=?
+        WHERE run_id=? AND status='active' AND expires_at < ?
+        """,
+        (expires, now, run_id, expires),
+    )
+    return int(getattr(cur, "rowcount", 0) or 0)
+
+
+async def _coalesced_alive_seq(
+    conn,
+    *,
+    run_id: str,
+    phase: str,
+    now: str,
+    min_interval_seconds: int = KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS,
+) -> int | None:
+    interval = max(0, int(min_interval_seconds))
+    if interval <= 0:
+        return None
+    cur = await conn.execute(
+        """
+        SELECT seq, phase, created_at
+        FROM kaggle_run_event
+        WHERE run_id=? AND event_name='alive'
+        ORDER BY seq DESC
+        LIMIT 1
+        """,
+        (run_id,),
+    )
+    row = await cur.fetchone()
+    await cur.close()
+    if not row:
+        return None
+    created = _parse_utc_iso(row[2])
+    current = _parse_utc_iso(now)
+    if created is None or current is None:
+        return None
+    if str(row[1] or "") != str(phase or ""):
+        return None
+    age = (current - created).total_seconds()
+    if 0 <= age < interval:
+        return int(row[0])
+    return None
+
+
 async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     run_id = _clean_text(payload.get("run_id"), limit=300)
     token = str(payload.get("token") or "")
@@ -566,6 +658,13 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
         await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):
             resource_result = await _record_resource(conn, run_id=run_id, resource=payload["resource"])
+        elif event == "alive":
+            renewed = await _renew_run_resource_leases(conn, run_id=run_id, now=now)
+            if renewed:
+                resource_result = {
+                    "resource_action": "renewed",
+                    "resource_lease_count": renewed,
+                }
         if event_uid:
             cur = await conn.execute(
                 "SELECT seq FROM kaggle_run_event WHERE run_id=? AND event_uid=?",
@@ -578,22 +677,35 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
                 body = {"ok": True, "run_id": run_id, "seq": int(row[0]), "duplicate": True}
                 body.update(resource_result)
                 return 200, body
-        cur = await conn.execute(
-            "SELECT COALESCE(MAX(seq), 0) FROM kaggle_run_event WHERE run_id=?",
-            (run_id,),
-        )
-        row = await cur.fetchone()
-        await cur.close()
-        seq = int(row[0] or 0) + 1
-        await conn.execute(
-            """
-            INSERT INTO kaggle_run_event(
-                run_id, seq, event_name, phase, status, event_uid, progress_json, message, created_at
+        coalesced = False
+        coalesced_seq = None
+        if event == "alive":
+            coalesced_seq = await _coalesced_alive_seq(
+                conn,
+                run_id=run_id,
+                phase=phase,
+                now=now,
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (run_id, seq, event, phase, status, event_uid, _json_dumps(progress), message, now),
-        )
+        if coalesced_seq is not None:
+            seq = coalesced_seq
+            coalesced = True
+        else:
+            cur = await conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) FROM kaggle_run_event WHERE run_id=?",
+                (run_id,),
+            )
+            row = await cur.fetchone()
+            await cur.close()
+            seq = int(row[0] or 0) + 1
+            await conn.execute(
+                """
+                INSERT INTO kaggle_run_event(
+                    run_id, seq, event_name, phase, status, event_uid, progress_json, message, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (run_id, seq, event, phase, status, event_uid, _json_dumps(progress), message, now),
+            )
         terminal_at = now if event in TERMINAL_EVENTS and status in {"done", "partial", "failed", "error"} else None
         error = message if status in {"failed", "error"} else None
         await conn.execute(
@@ -618,6 +730,8 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
         resource_result.get("resource_action"),
     )
     body = {"ok": True, "run_id": run_id, "seq": seq, "duplicate": False}
+    if coalesced:
+        body["coalesced"] = True
     body.update(resource_result)
     return 200, body
 

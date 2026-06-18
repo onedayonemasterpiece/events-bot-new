@@ -34,7 +34,7 @@ Every server-created session dataset must include `kaggle_run.json`:
   "notebook": "CherryFlash",
   "callback_url": "https://<app>/internal/kaggle/run-event",
   "token": "<one-time secret token>",
-  "resource_leases": ["telegram_session:s22"]
+  "resource_leases": ["telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY"]
 }
 ```
 
@@ -115,12 +115,20 @@ The framework must not silently suppress or deduplicate publication attempts.
 Any future "skip duplicate publication" policy is a separate product decision
 and must be approved explicitly.
 
-Critical resources such as the shared Kaggle Telegram auth session must be leased
-before use. The canonical resource key for the S22 Kaggle session is
-`telegram_session:s22`. Story runtimes that use a different configured auth
-scope should derive the key from that scope, for example
-`telegram_session:telegram_auth_bundle_story`. A live lease blocks another run
-from using the same auth bundle until it expires or is released.
+Critical resources such as Kaggle Telegram auth sessions must be leased before
+use. The canonical resource key is now based on the actual auth source, for
+example `telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY` or
+`telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1`; monitoring jobs that use
+the shared S22 session still use `telegram_session:s22`. A live lease blocks
+another run from using the same auth bundle until it expires or is released.
+
+For long CPU renders, `alive` callbacks renew active leases for the same
+`run_id` (`KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS`, default `10800`) so a valid
+render does not lose its Telegram session lease mid-run. To keep the production
+DB bounded, high-frequency `alive` callbacks update `kaggle_run_ledger` every
+time but are coalesced in `kaggle_run_event` when the previous `alive` event for
+the same phase is newer than `KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS`
+(default `300` seconds).
 
 ## Diagnostics
 
@@ -129,6 +137,14 @@ phase, status, notebook, session id, progress keys, and resource action.
 Reports written by Kaggle remain required, but they are no longer the only source
 of truth: a run with outbound callbacks can be diagnosed before the final output
 download finishes or fails.
+
+Video pollers must not mark a run as `FAILED` just because the fixed local
+`VIDEO_KAGGLE_TIMEOUT_MINUTES` window has elapsed while the Kaggle ledger still
+has a fresh heartbeat. They extend polling in bounded increments
+(`VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES`,
+`VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES`) and still stop at the absolute
+ceiling (`VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES`, default `720`) if the runtime
+keeps running without reaching a terminal output/report.
 
 ## Regression Contract
 

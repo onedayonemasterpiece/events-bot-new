@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -330,6 +331,94 @@ async def test_resource_lease_blocks_parallel_holder(tmp_path, monkeypatch):
     assert status == 200
     assert body["resource_action"] == "blocked"
     assert body["holder_run_id"] == first["run_id"]
+
+
+@pytest.mark.asyncio
+async def test_alive_renews_resource_lease_and_coalesces_history(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    monkeypatch.setenv("KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS", "300")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="videoannounce:700",
+        session_id=700,
+        kind="cherryflash",
+        notebook="CherryFlash",
+    )
+    assert config
+    now = datetime.now(timezone.utc)
+    old_expires = (now + timedelta(minutes=10)).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            )
+            VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY",
+                config["run_id"],
+                now.isoformat(),
+                old_expires,
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    first_status, first_body = await record_kaggle_run_event(
+        db,
+        {
+            "run_id": config["run_id"],
+            "token": config["token"],
+            "event": "alive",
+            "event_uid": "alive:1",
+            "phase": "render",
+            "status": "alive",
+            "progress": {"progress_label": "кадры 10/100"},
+        },
+    )
+    second_status, second_body = await record_kaggle_run_event(
+        db,
+        {
+            "run_id": config["run_id"],
+            "token": config["token"],
+            "event": "alive",
+            "event_uid": "alive:2",
+            "phase": "render",
+            "status": "alive",
+            "progress": {"progress_label": "кадры 11/100"},
+        },
+    )
+
+    assert first_status == 200
+    assert second_status == 200
+    assert first_body["resource_action"] == "renewed"
+    assert second_body.get("coalesced") is True
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT COUNT(*) FROM kaggle_run_event WHERE run_id=? AND event_name='alive'",
+            (config["run_id"],),
+        )
+        event_count = (await cur.fetchone())[0]
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT expires_at FROM kaggle_resource_lease WHERE resource_key=?",
+            ("telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY",),
+        )
+        renewed_expires = (await cur.fetchone())[0]
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT last_heartbeat_at, progress_json FROM kaggle_run_ledger WHERE run_id=?",
+            (config["run_id"],),
+        )
+        ledger = await cur.fetchone()
+        await cur.close()
+    assert event_count == 1
+    assert renewed_expires > old_expires
+    assert ledger[0]
+    assert json.loads(ledger[1])["progress_label"] == "кадры 11/100"
 
 
 @pytest.mark.asyncio

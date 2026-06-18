@@ -518,7 +518,7 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
         assert session_obj.id == session_id
         return "zigomaro/cherryflash-session-161", ["zigomaro/story-cipher"]
 
-    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref):  # noqa: ANN001
+    async def _fake_push_kernel(self, client, dataset_sources, kernel_ref, **kwargs):  # noqa: ANN001,ARG001
         assert kernel_ref == "local:CherryFlash"
         assert dataset_sources == [
             "zigomaro/cherryflash-session-161",
@@ -862,7 +862,7 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
             "targets": [{"peer": "@keniggpt", "label": "@keniggpt", "delay_seconds": 0}],
         }
 
-    def _fake_write_story_secret_files(path):  # noqa: ANN001
+    def _fake_write_story_secret_files(path, **kwargs):  # noqa: ANN001, ARG001
         cipher_path = Path(path) / "story_publish.enc"
         key_path = Path(path) / "story_publish.key"
         cipher_path.write_bytes(b"cipher")
@@ -949,10 +949,6 @@ async def test_create_cherryflash_dataset_fails_when_story_requested_but_config_
     monkeypatch.setattr(
         "video_announce.scenario.build_story_publish_config",
         AsyncMock(return_value=None),
-    )
-    monkeypatch.setattr(
-        "video_announce.scenario.ensure_story_secret_datasets",
-        AsyncMock(return_value=[]),
     )
     monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
 
@@ -1093,9 +1089,16 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
         "video_announce.scenario.build_story_publish_config",
         _fake_build_story_publish_config,
     )
+    def _fake_write_story_secret_files(path, **kwargs):  # noqa: ANN001, ARG001
+        cipher_path = Path(path) / "story_publish.enc"
+        key_path = Path(path) / "story_publish.key"
+        cipher_path.write_bytes(b"cipher")
+        key_path.write_bytes(b"key")
+        return cipher_path, key_path
+
     monkeypatch.setattr(
-        "video_announce.scenario.ensure_story_secret_datasets",
-        AsyncMock(return_value=["zigomaro/story-secret"]),
+        "video_announce.scenario.write_story_secret_files",
+        _fake_write_story_secret_files,
     )
 
     session_obj = SimpleNamespace(
@@ -1113,7 +1116,7 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
     )
 
     assert dataset_id == "zigomaro/video-afisha-session-676"
-    assert story_sources == ["zigomaro/story-secret"]
+    assert story_sources == []
     assert len(calls) == 1
     assert calls[0][0] == "create_dataset"
     bundled_helper = snapshot_dir / "kaggle_common" / "story_publish.py"
@@ -1122,6 +1125,96 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
         Path("kaggle/CrumpleVideo/story_publish.py").read_text(encoding="utf-8")
     )
     assert (snapshot_dir / "story_publish.json").exists()
+    assert (snapshot_dir / "story_publish.enc").exists()
+    assert (snapshot_dir / "story_publish.key").exists()
+
+
+@pytest.mark.asyncio
+async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_target(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS",
+        "TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1",
+    )
+    monkeypatch.setenv(
+        "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
+        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    scenario = VideoAnnounceScenario(db=db, bot=_DummyBot(), chat_id=0, user_id=0)
+
+    async with db.get_session() as session:
+        busy = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            selection_params={
+                "story_publish_enabled": True,
+                "_video_lane_auth_env": "TELEGRAM_AUTH_BUNDLE_STORY",
+            },
+            kaggle_kernel_ref="zigomaro/cherryflash",
+        )
+        fresh = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.SELECTED,
+            profile_key="popular_review",
+            selection_params={"story_publish_enabled": True},
+            kaggle_kernel_ref="local:CherryFlash",
+        )
+        session.add_all([busy, fresh])
+        await session.commit()
+        await session.refresh(fresh)
+
+        params, kernel_ref, error = await scenario._assign_video_lane_for_render(
+            session,
+            fresh,
+            dict(fresh.selection_params),
+        )
+
+    assert error is None
+    assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
+    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
+    assert kernel_ref == "zigomaro/cherryflash-video1"
+
+
+@pytest.mark.asyncio
+async def test_fresh_kaggle_ledger_heartbeat_prevents_fixed_timeout_failure(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, progress_json,
+                token_hash, last_heartbeat_at, created_at, updated_at
+            )
+            VALUES (?, ?, 'cherryflash', 'CherryFlash', 'alive', 'render', ?, 'token-hash', ?, ?, ?)
+            """,
+            (
+                "videoannounce:701",
+                701,
+                json.dumps({"progress_label": "рендер 80%"}, ensure_ascii=False),
+                (now - timedelta(minutes=5)).isoformat(),
+                (now - timedelta(hours=4)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    heartbeat = await poller_module._fresh_kaggle_ledger_heartbeat(
+        db,
+        "videoannounce:701",
+        now=now,
+        grace_minutes=20,
+    )
+
+    assert heartbeat is not None
+    assert heartbeat["phase"] == "render"
+    assert heartbeat["progress"]["progress_label"] == "рендер 80%"
 
 
 @pytest.mark.asyncio

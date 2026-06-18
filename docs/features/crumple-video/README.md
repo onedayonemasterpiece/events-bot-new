@@ -434,7 +434,15 @@ color: #100E0E;
 - После завершения рендера результат всегда отправляется в `test`-канал, а если для профиля настроен `main`-канал, бот сейчас автоматически дублирует ролик и туда.
 - Если `VIDEO_ANNOUNCE_STORY_ENABLED=1`, story publish выполняется внутри `Kaggle` notebook, а не после локального скачивания:
   - notebook читает `story_publish.json` из session-dataset;
-  - auth для Telethon передаётся в Kaggle через encrypted split-datasets (`story_publish.enc` + `story_publish.key`);
+  - auth для Telethon передаётся в Kaggle через per-run encrypted files in the
+    same session dataset (`story_publish.enc` + `story_publish.key`); при
+    включённом `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` конкретный auth bundle
+    выбирается как video lane и фиксируется в `selection_params._video_lane_auth_env`;
+  - для параллельных long CPU renders `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS`
+    должен задавать Kaggle kernel targets в том же порядке, что и
+    `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`; без lane-target refs два `/v`
+    рендера с одним remote kernel slug остаются сериализованными, чтобы не
+    перетереть output/poller state;
   - production order лучше задавать явно через `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`; если он задан, именно этот ordered list целиком определяет target fanout (текущий prod default: `me` как blocking upload target, затем non-blocking `vk:kenigeventsofficial:wall` with `caption_variant=crumple_official`, затем `@kenigevents` и `@lovekenig` через `repost_previous` с `required=true`);
   - target objects in `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` may also carry `mode=repost_previous`, which means “do not upload media again; repost the previously published story target after its delay”;
   - target objects may carry `required=true`: such targets do not block the expensive render preflight, but the final publish report becomes failed if they do not receive the story;
@@ -459,7 +467,7 @@ color: #100E0E;
   `CrumpleStoryPublishOnly` и после успешной компенсации продолжить обычную
   post-download доставку mp4/логов без повторного рендера.
 - Для быстрого smoke-check перед долгим рендером есть отдельный image-only runner: `kaggle/execute_crumple_story_smoke.py`.
-- Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path.
+- Дефолтный runtime timeout для `/v` поднят до `225` минут (`VIDEO_KAGGLE_TIMEOUT_MINUTES`), чтобы длинные Kaggle runs успевали не только дорендерить mp4, но и отдать output на download path. Если timeout достигнут, но `kaggle_run_ledger` всё ещё получает свежий `alive`, poller продолжает ждать bounded increments вместо ложного `FAILED`; окончательный потолок задаёт `VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES`.
 - Live evidence on `2026-04-26` showed `@kenigevents` can still return `BOOSTS_REQUIRED`; production keeps the Premium self-account as the render blocking target, but treats channel fanout as required delivery so a missing channel story cannot finish green.
 
 ## Продовый rollout

@@ -118,6 +118,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   - when `VIDEO_ANNOUNCE_STORY_ENABLED=1`, the same Kaggle notebook can also publish the finished `/v` video to Telegram stories from inside Kaggle and attach `story_publish_report.json` to the kernel output;
   - when production also sets `VIDEO_ANNOUNCE_STORY_REQUIRED=1`, `/healthz` must fail closed if story publish is unexpectedly disabled or the required auth/target env path is broken, so stale deploy branches cannot silently downgrade `/v` to mp4-only delivery;
   - story-enabled exact reruns and regular cron runs must share the same dataset/story path: if `VIDEO_ANNOUNCE_STORY_ENABLED=1`, both paths should generate `story_publish.json` and the encrypted auth datasets;
+  - story-enabled scheduled video runs assign one configured video lane from `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`; each run writes the selected auth env into its own session dataset, leases `telegram_session:env:<ENV>`, and can push the same local source notebook into a lane-specific Kaggle kernel target from `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` or `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS`;
   - `CrumpleVideo` keeps its main render at `1080x1572`, but story upload must use a story-safe `1080x1920` derivative with padding instead of sending the raw non-`9:16` mp4;
   - for story fanout use explicit `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` when order matters; production keeps `me` as the blocking upload target and marks channel reposts as `required=true`, so Telegram boost failures do not waste the render but still fail the final publish status; `main` channel + `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` remain only as fallback;
   - recommended default window: `16:45 Europe/Kaliningrad`, which centers the historical GPU render window (`~1:45..2:40`) near `19:00` while still keeping buffer before the `20:10` guide full scan.
@@ -218,14 +219,21 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `V_POPULAR_REVIEW_WATCHDOG_GRACE_SECONDS` – same-day local-time grace window after the CherryFlash slot before the independent watchdog dispatches a missing local-only pre-handoff run (default: `900`).
 - `V_PARTNER_TRACK_ECO_TIME_LOCAL` / `V_PARTNER_TRACK_KONB_TIME_LOCAL` / `V_PARTNER_TRACK_EAST_TIME_LOCAL` – local schedule overrides for the always-registered CherryFlash partner tracks.
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
+- `VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES` – after the fixed timeout, keep waiting instead of failing if `kaggle_run_ledger.last_heartbeat_at` is fresher than this window (default `20`).
+- `VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES` – bounded wait extension after a fresh heartbeat at timeout (default `30`).
+- `VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES` – hard ceiling for a video poller even when heartbeats continue (default `720`).
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_REQUIRED` – optional prod guard: when enabled, `/healthz` fails if `/v` story publish is disabled or obviously misconfigured.
 - `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish; the same encrypted auth runtime is also reused by notebook-side Telegram poster-cache rescue when direct poster URLs are dead. For production parallelism with remote monitoring, prefer `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV=TELEGRAM_AUTH_BUNDLE_STORY`; keep `TELEGRAM_AUTH_BUNDLE_S22` reserved for monitoring unless a deliberate maintenance window serializes all remote Telegram jobs.
+- `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` – comma-separated pool of Telethon auth bundle env names available for parallel story-enabled video renders. Example for two lanes: `TELEGRAM_AUTH_BUNDLE_STORY,TELEGRAM_AUTH_BUNDLE_S22_VIDEO1`. When unset, the legacy single `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` scope is used.
+- `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` / `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS` – optional comma-separated Kaggle kernel targets matching the video-lane order. They let one repo-local source notebook be pushed into isolated per-lane Kaggle slugs so two long CPU renders do not overwrite/poll the same remote kernel. Without these vars, runs with the same real Kaggle kernel slug remain serialized by the existing rendering guard.
 - `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`. Production should keep the first blocking target as `me` and put required channel reposts after it with `required=true`, so downstream `BOOSTS_REQUIRED` channel failures stay visible, do not prevent render delivery, and still fail the final publish status.
 - `SOURCE_CHANNEL_ID` – optional Telegram channel id embedded into the encrypted story auth payload so Kaggle can search that channel by filename for poster rescue instead of defaulting to Saved Messages.
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.
 - `VIDEO_ANNOUNCE_STORY_PERIOD_SECONDS` – story TTL passed to Telegram (default `86400`).
+- `KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS` – active resource-lease TTL written on live `alive` callbacks (default `10800`).
+- `KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS` – minimum interval for storing another `alive` row in `kaggle_run_event` for the same phase while still updating the ledger every callback (default `300`).
 - `ENABLE_FESTIVAL_QUEUE` – enable festival queue schedule (disabled by default; next release keep off).
 - `FESTIVAL_QUEUE_TIMES_LOCAL` / `FESTIVAL_QUEUE_TZ` – festival queue schedule times (default `03:30,16:30` local).
 - `FESTIVAL_QUEUE_LIMIT` – optional limit of queue items per run.
@@ -238,8 +246,10 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `V_TOMORROW_PROFILE` – video profile key for the scheduled `/v` run (default: `default`).
 - `V_TOMORROW_TEST_MODE` – when enabled, force the scheduled slot back into the legacy test-render path instead of the production `/v` path.
 - `VIDEO_KAGGLE_TIMEOUT_MINUTES` – `/v` Kaggle timeout in minutes (default `225`).
+- `VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES` / `VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES` / `VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES` – timeout safety for long CPU renders with fresh Kaggle heartbeats.
 - `VIDEO_ANNOUNCE_STORY_ENABLED` – enable Kaggle-side story publish for `/v`.
 - `VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV` / `VIDEO_ANNOUNCE_STORY_SESSION_ENV` – explicit auth source passed into Kaggle for story publish. Prefer a dedicated `TELEGRAM_AUTH_BUNDLE_STORY` when story jobs may overlap with monitoring on `TELEGRAM_AUTH_BUNDLE_S22`.
+- `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` – optional comma-separated pool of video Telegram auth bundle envs for parallel story-enabled renders; lane-specific kernel targets come from `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` / `VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS`.
 - `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` – explicit ordered story targets list; when set, it overrides `main`-channel-derived ordering and `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON`. Production should keep the first blocking target as `me` and put required channel reposts after it with `required=true`, so downstream `BOOSTS_REQUIRED` channel failures stay visible, do not prevent render delivery, and still fail the final publish status.
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.

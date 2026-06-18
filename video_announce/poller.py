@@ -94,6 +94,18 @@ VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES = _read_positive_int(
     "VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES",
     10,
 )
+VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES",
+    20,
+)
+VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES",
+    30,
+)
+VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES = _read_positive_int(
+    "VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES",
+    12 * 60,
+)
 STORY_PUBLISH_ONLY_TIMEOUT_MINUTES = _read_positive_int(
     "VIDEO_ANNOUNCE_STORY_PUBLISH_ONLY_TIMEOUT_MINUTES",
     45,
@@ -112,15 +124,82 @@ STORY_PUBLISH_ONLY_LOCK_DIR = Path(
 )
 
 logger.info(
-    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s",
+    "video_announce: limits configured max_video_mb=%s kaggle_timeout_min=%s handoff_grace_min=%s remote_alive_grace_min=%s",
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
     VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES,
+    VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
 )
 
 
 def _is_local_kernel_ref(kernel_ref: str | None) -> bool:
     return str(kernel_ref or "").strip().startswith(LOCAL_KERNEL_PREFIX)
+
+
+def _parse_utc_iso(value: object) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _fresh_kaggle_ledger_heartbeat(
+    db: Database,
+    run_id: str,
+    *,
+    now: datetime | None = None,
+    grace_minutes: int = VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+) -> dict | None:
+    now = now or datetime.now(timezone.utc)
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT status, phase, last_heartbeat_at, updated_at, terminal_at, progress_json
+                FROM kaggle_run_ledger
+                WHERE run_id=?
+                """,
+                (run_id,),
+            )
+            row = await cur.fetchone()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read Kaggle ledger heartbeat run_id=%s", run_id)
+        return None
+    if not row:
+        return None
+    status = str(row[0] or "").strip().casefold()
+    if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
+        return None
+    if row[4]:
+        return None
+    heartbeat_at = _parse_utc_iso(row[2]) or _parse_utc_iso(row[3])
+    if heartbeat_at is None:
+        return None
+    age_seconds = (now - heartbeat_at).total_seconds()
+    if age_seconds < 0 or age_seconds > max(60, int(grace_minutes) * 60):
+        return None
+    progress: dict = {}
+    try:
+        parsed = json.loads(row[5] or "{}")
+        if isinstance(parsed, dict):
+            progress = parsed
+    except Exception:
+        progress = {}
+    return {
+        "status": row[0],
+        "phase": row[1],
+        "last_heartbeat_at": row[2],
+        "updated_at": row[3],
+        "age_seconds": age_seconds,
+        "progress": progress,
+    }
 
 
 def _local_handoff_grace_deadline(session_obj: VideoAnnounceSession) -> datetime | None:
@@ -1400,7 +1479,10 @@ async def run_kernel_poller(
     download_dir: Path | None = None,
     dataset_slug: str | None = None,
 ) -> None:
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=timeout_minutes)
+    started_at = datetime.now(timezone.utc)
+    deadline = started_at + timedelta(minutes=timeout_minutes)
+    absolute_timeout_minutes = max(timeout_minutes, VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES)
+    absolute_deadline = started_at + timedelta(minutes=absolute_timeout_minutes)
     kernel_ref = session_obj.kaggle_kernel_ref
     if not kernel_ref:
         await _update_status(
@@ -1436,7 +1518,51 @@ async def run_kernel_poller(
 
     queued_since: datetime | None = None
 
-    while datetime.now(timezone.utc) < deadline:
+    timed_out = True
+    timeout_status: dict | None = None
+    timeout_note_sent_at: datetime | None = None
+    while True:
+        now = datetime.now(timezone.utc)
+        if now >= deadline:
+            heartbeat = await _fresh_kaggle_ledger_heartbeat(
+                db,
+                f"videoannounce:{session_obj.id}",
+                now=now,
+            )
+            if heartbeat and now < absolute_deadline:
+                extension_deadline = now + timedelta(
+                    minutes=VIDEO_KAGGLE_REMOTE_ALIVE_EXTENSION_MINUTES
+                )
+                deadline = min(extension_deadline, absolute_deadline)
+                progress_label = ""
+                progress = heartbeat.get("progress") or {}
+                if isinstance(progress, dict) and progress.get("progress_label"):
+                    progress_label = f" · {progress.get('progress_label')}"
+                logger.warning(
+                    "video_announce: fixed timeout reached but Kaggle ledger is alive; extending poller "
+                    "session=%s kernel=%s heartbeat_age=%.1fs phase=%s new_deadline=%s absolute_deadline=%s",
+                    session_obj.id,
+                    kernel_ref,
+                    float(heartbeat.get("age_seconds") or 0),
+                    heartbeat.get("phase"),
+                    deadline.isoformat(),
+                    absolute_deadline.isoformat(),
+                )
+                if (
+                    timeout_note_sent_at is None
+                    or (now - timeout_note_sent_at).total_seconds() >= 60 * 60
+                ):
+                    await bot.send_message(
+                        notify_chat_id,
+                        (
+                            f"⏳ Сессия #{session_obj.id}: лимит {timeout_minutes} мин достигнут, "
+                            f"но Kaggle живой ({heartbeat.get('phase') or heartbeat.get('status')}"
+                            f"{progress_label}); продолжаю ждать до {deadline:%H:%M UTC}."
+                        ),
+                    )
+                    timeout_note_sent_at = now
+                continue
+            break
         try:
             status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
             logger.info(
@@ -1596,6 +1722,7 @@ async def run_kernel_poller(
             queued_since = None
 
         if state == "complete":
+            timed_out = False
             break
         if state in {
             "error",
@@ -1646,7 +1773,8 @@ async def run_kernel_poller(
             await _cleanup_dataset(client, dataset_slug)
             return
         await asyncio.sleep(poll_interval)
-    else:
+    if timed_out:
+        timeout_status = status if "status" in locals() else {}
         logger.warning(
             "video_announce: kernel timeout session=%s kernel=%s timeout_min=%s",
             session_obj.id,
@@ -1664,7 +1792,7 @@ async def run_kernel_poller(
         await update_status_message(
             bot,
             session_obj,
-            status,
+            timeout_status,
             db=db,
             chat_id=status_chat_id,
             message_id=status_message_id,

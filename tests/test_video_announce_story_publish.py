@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 from datetime import datetime
 
 import pytest
@@ -18,6 +19,12 @@ from telegram_business import cache_business_connection
 class Obj:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+
+def _auth_bundle(session: str) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps({"session": session}, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
 
 
 def test_story_session_payload_includes_optional_source_channel_id(monkeypatch):
@@ -41,6 +48,32 @@ def test_story_remote_auth_scope_prefers_bundle_env(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_SESSION_ENV", "TELEGRAM_SESSION")
 
     assert story_publish.story_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_STORY"
+
+
+def test_story_remote_auth_scope_prefers_lane_selection_params(monkeypatch):
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+
+    assert (
+        story_publish.story_remote_auth_scope(
+            {"_video_lane_auth_env": "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"}
+        )
+        == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    )
+
+
+def test_story_session_payload_can_use_lane_auth_bundle(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "12345")
+    monkeypatch.setenv("TG_API_HASH", "hash-123")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_STORY", _auth_bundle("story-session"))
+    monkeypatch.setenv("TELEGRAM_AUTH_BUNDLE_S22_VIDEO1", _auth_bundle("video1-session"))
+
+    payload = story_publish._story_session_payload(
+        auth_bundle_env="TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
+    )
+
+    assert payload["session"] == "video1-session"
+    assert payload["auth_source"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
 
 
 def test_create_or_update_story_dataset_versions_existing_dataset() -> None:

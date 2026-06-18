@@ -169,11 +169,21 @@ def _parse_auth_bundle(bundle_b64: str, *, env_key: str) -> dict[str, Any]:
     return payload
 
 
-def _story_session_payload() -> dict[str, Any]:
+def _story_session_payload(
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> dict[str, Any]:
     api_id = _require_env_any("TG_API_ID", "TELEGRAM_API_ID")
     api_hash = _require_env_any("TG_API_HASH", "TELEGRAM_API_HASH")
-    bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
-    session_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    bundle_env_key = (
+        str(auth_bundle_env or "").strip()
+        or (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
+    )
+    session_env_key = (
+        str(session_env or "").strip()
+        or (_get_env_value("VIDEO_ANNOUNCE_STORY_SESSION_ENV") or "").strip()
+    )
 
     auth: dict[str, Any] = {
         "api_id": int(api_id),
@@ -227,7 +237,31 @@ def _story_session_payload() -> dict[str, Any]:
     )
 
 
-def story_remote_auth_scope() -> str | None:
+def _selection_auth_bundle_env(selection_params: dict[str, Any] | None) -> str:
+    params = selection_params if isinstance(selection_params, dict) else {}
+    return str(
+        params.get("_video_lane_auth_env")
+        or params.get("story_auth_bundle_env")
+        or ""
+    ).strip()
+
+
+def _selection_session_env(selection_params: dict[str, Any] | None) -> str:
+    params = selection_params if isinstance(selection_params, dict) else {}
+    return str(
+        params.get("_video_lane_session_env")
+        or params.get("story_session_env")
+        or ""
+    ).strip()
+
+
+def story_remote_auth_scope(selection_params: dict[str, Any] | None = None) -> str | None:
+    selection_bundle_env = _selection_auth_bundle_env(selection_params)
+    if selection_bundle_env:
+        return selection_bundle_env
+    selection_session = _selection_session_env(selection_params)
+    if selection_session:
+        return selection_session
     bundle_env_key = (_get_env_value("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV") or "").strip()
     if bundle_env_key:
         return bundle_env_key
@@ -237,8 +271,15 @@ def story_remote_auth_scope() -> str | None:
     return None
 
 
-def build_story_secrets_payload() -> str:
-    payload = _story_session_payload()
+def build_story_secrets_payload(
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> str:
+    payload = _story_session_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     vk_access_token = _get_env_value("VK_ACCESS_TOKEN5")
     if vk_access_token:
         payload["vk_access_token"] = vk_access_token
@@ -266,8 +307,16 @@ def build_story_secrets_payload() -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def write_story_secret_files(target_dir: Path) -> tuple[Path, Path]:
-    payload = build_story_secrets_payload()
+def write_story_secret_files(
+    target_dir: Path,
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> tuple[Path, Path]:
+    payload = build_story_secrets_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     encrypted, key = encrypt_secret(payload)
     if not encrypted or not key:
         raise RuntimeError("Failed to encrypt story secrets payload")
@@ -334,8 +383,16 @@ def _create_or_update_dataset(
     return dataset_slug
 
 
-async def ensure_story_secret_datasets(client: KaggleClient) -> list[str]:
-    payload = build_story_secrets_payload()
+async def ensure_story_secret_datasets(
+    client: KaggleClient,
+    *,
+    auth_bundle_env: str | None = None,
+    session_env: str | None = None,
+) -> list[str]:
+    payload = build_story_secrets_payload(
+        auth_bundle_env=auth_bundle_env,
+        session_env=session_env,
+    )
     encrypted, key = encrypt_secret(payload)
     if not encrypted or not key:
         raise RuntimeError("Failed to encrypt story secrets payload")
@@ -752,7 +809,7 @@ async def build_story_publish_config(
         "mode": mode,
         "smoke_only": smoke_only,
         "upload_profile": _story_upload_profile(selection_params),
-        "auth_source": story_remote_auth_scope(),
+        "auth_source": story_remote_auth_scope(selection_params),
         "period_seconds": _story_period_seconds(selected_event_dates=selected_event_dates),
         "pinned": _story_should_be_pinned(mode=mode, smoke_only=smoke_only),
         "caption": caption_text or None,

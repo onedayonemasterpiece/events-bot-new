@@ -416,6 +416,73 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     ]
 
 
+def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    KaggleClient = module.KaggleClient
+
+    kernel_dir = tmp_path / "CherryFlash"
+    kernel_dir.mkdir()
+    (kernel_dir / "kernel-metadata.json").write_text(
+        """
+{
+  "id": "zigomaro/cherryflash",
+  "title": "CherryFlash",
+  "code_file": "cherryflash.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "zigomaro/cherryflash-session-old"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    (kernel_dir / "cherryflash.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+        encoding="utf-8",
+    )
+    pushed_meta: dict = {}
+
+    class Response:
+        ref = "/code/zigomaro/cherryflash-video1"
+        versionNumber = 78
+        error = ""
+        invalidDatasetSources: list[str] = []
+
+    class StubApi:
+        def kernels_push(self, folder, timeout=None):
+            del timeout
+            pushed_meta.update(
+                module.json.loads(
+                    (Path(folder) / "kernel-metadata.json").read_text(encoding="utf-8")
+                )
+            )
+            return Response()
+
+    client = KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+    monkeypatch.setattr(
+        module,
+        "find_local_kernel",
+        lambda kernel_ref: {"path": str(kernel_dir), "slug": "cherryflash", "id": kernel_ref},
+    )
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    result = client.deploy_kernel_update(
+        "local:CherryFlash",
+        ["zigomaro/cherryflash-session-220"],
+        target_kernel_ref="zigomaro/cherryflash-video1",
+    )
+
+    assert result == "zigomaro/cherryflash-video1"
+    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-220"]
+
+
 def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")

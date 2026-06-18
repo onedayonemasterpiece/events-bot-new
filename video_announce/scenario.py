@@ -83,7 +83,8 @@ from .story_publish import (
     STORY_PUBLISH_CONFIG_FILENAME,
     STORY_PUBLISH_KEY_FILENAME,
     build_story_publish_config,
-    ensure_story_secret_datasets,
+    story_publish_enabled,
+    story_remote_auth_scope,
     write_story_secret_files,
 )
 from .poller import (
@@ -296,6 +297,11 @@ def read_positive_int_env(env_key: str, default: int) -> int:
 
 
 DATASET_PAYLOAD_MAX_MB = read_positive_int_env("VIDEO_ANNOUNCE_DATASET_MAX_MB", 50)
+VIDEO_LANE_AUTH_ENV_KEY = "_video_lane_auth_env"
+VIDEO_LANE_RESOURCE_KEY = "_video_lane_resource_key"
+VIDEO_LANE_INDEX_KEY = "_video_lane_index"
+VIDEO_SOURCE_KERNEL_REF_KEY = "_kaggle_source_kernel_ref"
+VIDEO_TARGET_KERNEL_REF_KEY = "_kaggle_target_kernel_ref"
 
 logger.info(
     "video_announce: limits configured dataset_max_mb=%s video_max_mb=%s",
@@ -421,6 +427,145 @@ class VideoAnnounceScenario:
             await self.bot.send_message(self.chat_id, "Not authorized")
             return False
         return True
+
+    @staticmethod
+    def _parse_csv_env(env_key: str) -> list[str]:
+        raw = os.getenv(env_key, "")
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    def _video_lane_auth_envs(self) -> list[str]:
+        """Return configured per-video Telethon auth bundle env names.
+
+        When no explicit pool is configured, keep the legacy single story auth
+        scope so existing deployments still acquire a correct one-session lease
+        instead of falling back to the S22 monitoring key.
+        """
+
+        pool = self._parse_csv_env("VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS")
+        if pool:
+            return pool
+        scope = story_remote_auth_scope()
+        return [scope] if scope else []
+
+    def _video_parallel_lanes_enabled(self) -> bool:
+        return len(self._video_lane_auth_envs()) > 1
+
+    @staticmethod
+    def _video_resource_key_for_auth_env(auth_env: str | None) -> str | None:
+        value = str(auth_env or "").strip()
+        if not value:
+            return None
+        safe = "".join(ch if ch.isalnum() or ch in {"_", "-", "."} else "_" for ch in value)
+        return f"telegram_session:env:{safe}"
+
+    def _story_requested_for_selection(self, selection_params: dict[str, Any]) -> bool:
+        return bool(selection_params.get("story_publish_enabled")) or story_publish_enabled()
+
+    def _kernel_lane_refs_for_source(self, kernel_ref: str | None) -> list[str]:
+        if self._is_cherryflash_kernel_ref(kernel_ref):
+            return self._parse_csv_env("VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS")
+        if self._is_crumple_kernel_ref(kernel_ref):
+            return self._parse_csv_env("VIDEO_ANNOUNCE_CRUMPLE_KERNEL_REFS")
+        return []
+
+    def _kernel_lane_refs_configured(self, kernel_ref: str | None) -> bool:
+        return bool(self._kernel_lane_refs_for_source(kernel_ref))
+
+    async def _active_video_lane_auth_envs(
+        self,
+        session,
+        *,
+        exclude_session_id: int | None = None,
+    ) -> set[str]:
+        query = select(VideoAnnounceSession).where(
+            VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
+        )
+        if exclude_session_id is not None:
+            query = query.where(VideoAnnounceSession.id != int(exclude_session_id))
+        res = await session.execute(query)
+        active: set[str] = set()
+        for item in res.scalars().all():
+            params = item.selection_params if isinstance(item.selection_params, dict) else {}
+            auth_env = str(params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip()
+            if auth_env:
+                active.add(auth_env)
+        return active
+
+    async def _assign_video_lane_for_render(
+        self,
+        session,
+        session_obj: VideoAnnounceSession,
+        selection_params: dict[str, Any],
+    ) -> tuple[dict[str, Any], str | None, str | None]:
+        """Attach a per-run Telegram auth lane and optional target kernel.
+
+        Returns ``(params, kernel_ref, error_message)``.  The lane is a compact
+        field in ``selection_params`` rather than a new DB table: the durable
+        lock is still enforced by ``kaggle_resource_lease`` inside the Kaggle
+        status framework.
+        """
+
+        params = dict(selection_params)
+        kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip() or None
+        if not self._story_requested_for_selection(params):
+            return params, kernel_ref, None
+
+        lanes = self._video_lane_auth_envs()
+        if not lanes:
+            return params, kernel_ref, None
+
+        auth_env = str(params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip()
+        lane_index: int | None = None
+        if auth_env:
+            try:
+                lane_index = lanes.index(auth_env)
+            except ValueError:
+                lane_index = None
+        else:
+            active_lanes = await self._active_video_lane_auth_envs(
+                session,
+                exclude_session_id=session_obj.id,
+            )
+            for idx, candidate in enumerate(lanes):
+                if candidate not in active_lanes:
+                    auth_env = candidate
+                    lane_index = idx
+                    break
+            if not auth_env:
+                return (
+                    params,
+                    kernel_ref,
+                    "Все Telegram video-lanes заняты: дождитесь завершения текущих видеогенераций",
+                )
+
+        if lane_index is None:
+            lane_index = 0
+        resource_key = self._video_resource_key_for_auth_env(auth_env)
+        if auth_env:
+            params[VIDEO_LANE_AUTH_ENV_KEY] = auth_env
+            params[VIDEO_LANE_INDEX_KEY] = lane_index
+        if resource_key:
+            params[VIDEO_LANE_RESOURCE_KEY] = resource_key
+
+        target_refs = self._kernel_lane_refs_for_source(kernel_ref)
+        if target_refs:
+            if lane_index >= len(target_refs):
+                return (
+                    params,
+                    kernel_ref,
+                    (
+                        "Для выбранной Telegram video-lane не задан Kaggle kernel target "
+                        f"(lane={lane_index + 1}, env={auth_env})"
+                    ),
+                )
+            source_kernel_ref = str(params.get(VIDEO_SOURCE_KERNEL_REF_KEY) or kernel_ref or "").strip()
+            target_kernel_ref = target_refs[lane_index].strip()
+            if source_kernel_ref:
+                params[VIDEO_SOURCE_KERNEL_REF_KEY] = source_kernel_ref
+            params[VIDEO_TARGET_KERNEL_REF_KEY] = target_kernel_ref
+            kernel_ref = target_kernel_ref
+
+        return params, kernel_ref, None
 
     def _default_required_periods(self, base_day: date | None = None) -> list[dict[str, int | str]]:
         today_local = base_day or datetime.now(LOCAL_TZ).date()
@@ -1218,7 +1363,7 @@ class VideoAnnounceScenario:
             await self.run_popular_review_pipeline()
             return
         existing = await self.has_rendering()
-        if existing:
+        if existing and not self._video_parallel_lanes_enabled():
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
@@ -1256,7 +1401,7 @@ class VideoAnnounceScenario:
         if not await self.ensure_access():
             return
         existing = await self.has_rendering()
-        if existing:
+        if existing and not self._video_parallel_lanes_enabled():
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
@@ -1330,7 +1475,7 @@ class VideoAnnounceScenario:
         if not await self.ensure_access():
             return
         existing = await self.has_rendering()
-        if existing:
+        if existing and not self._video_parallel_lanes_enabled():
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
@@ -1390,7 +1535,7 @@ class VideoAnnounceScenario:
         if not await self.ensure_access():
             return
         existing = await self.has_rendering()
-        if existing:
+        if existing and not self._video_parallel_lanes_enabled():
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
@@ -1843,7 +1988,7 @@ class VideoAnnounceScenario:
             if prospective_slug
             else await self.has_rendering(profile_key=partner_track.profile_key)
         )
-        if existing:
+        if existing and not self._kernel_lane_refs_configured(prospective_kernel_ref):
             self.last_partner_track_skip_reason = "render_in_progress"
             await self.bot.send_message(
                 self.chat_id,
@@ -3165,7 +3310,20 @@ class VideoAnnounceScenario:
                 kernel_ref = f"{username}/video-announce-renderer" if username else "video-announce-renderer"
 
             dataset_sources = [dataset_slug, *extra_dataset_sources]
-            actual_ref = await self._push_kernel(client, dataset_sources, kernel_ref)
+            selection_params_raw = getattr(session_obj, "selection_params", None)
+            selection_params = selection_params_raw if isinstance(selection_params_raw, dict) else {}
+            source_kernel_ref = str(
+                selection_params.get(VIDEO_SOURCE_KERNEL_REF_KEY) or kernel_ref
+            ).strip()
+            target_kernel_ref = str(
+                selection_params.get(VIDEO_TARGET_KERNEL_REF_KEY) or kernel_ref
+            ).strip()
+            actual_ref = await self._push_kernel(
+                client,
+                dataset_sources,
+                source_kernel_ref,
+                target_kernel_ref=target_kernel_ref,
+            )
             if actual_ref != kernel_ref:
                 logger.info("Kernel ref changed from %s to %s", kernel_ref, actual_ref)
                 kernel_ref = actual_ref
@@ -3820,6 +3978,8 @@ class VideoAnnounceScenario:
             sess_preview = await session.get(VideoAnnounceSession, session_id)
             if sess_preview is not None:
                 sess_kaggle_slug = _resolve_kaggle_slug(sess_preview.kaggle_kernel_ref)
+                if self._kernel_lane_refs_configured(sess_preview.kaggle_kernel_ref):
+                    sess_kaggle_slug = None
         if sess_kaggle_slug and await self.has_rendering(kaggle_slug=sess_kaggle_slug):
             return "Уже есть активный рендер"
         ranked = await self._load_ranked_events(session_id, ready_only=True)
@@ -3846,6 +4006,23 @@ class VideoAnnounceScenario:
                 validation_error = await self._validate_render_selection(sess)
                 if validation_error:
                     return validation_error
+            params = (
+                dict(sess.selection_params)
+                if isinstance(sess.selection_params, dict)
+                else {}
+            )
+            params, assigned_kernel_ref, lane_error = await self._assign_video_lane_for_render(
+                session,
+                sess,
+                params,
+            )
+            if lane_error:
+                return lane_error
+            if assigned_kernel_ref:
+                assigned_slug = _resolve_kaggle_slug(assigned_kernel_ref)
+                if assigned_slug and await self.has_rendering(kaggle_slug=assigned_slug):
+                    return "Уже есть активный рендер на выбранном Kaggle kernel/video-lane"
+                sess.kaggle_kernel_ref = assigned_kernel_ref
             
             # Load items and events for fill_missing_about
             ranked_ids = [r.event.id for r in ranked if r.event.id is not None]
@@ -3880,11 +4057,6 @@ class VideoAnnounceScenario:
             
             payload = await self._build_render_payload(sess, ranked)
             payload_json = payload_as_json(payload, timezone.utc)
-            params = (
-                dict(sess.selection_params)
-                if isinstance(sess.selection_params, dict)
-                else {}
-            )
             params["notify_chat_id"] = self.chat_id
             sess.selection_params = params
             sess.status = VideoAnnounceSessionStatus.RENDERING
@@ -4368,11 +4540,15 @@ class VideoAnnounceScenario:
                         json.dumps(story_config, ensure_ascii=False, indent=2),
                         encoding="utf-8",
                     )
-                    write_story_secret_files(tmp_path)
+                    write_story_secret_files(
+                        tmp_path,
+                        auth_bundle_env=str(selection_params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip() or None,
+                    )
                 else:
                     raise RuntimeError(
                         "CherryFlash story publish was requested but story_publish.json was not generated"
                     )
+            resource_key = str(selection_params.get(VIDEO_LANE_RESOURCE_KEY) or "").strip()
             kaggle_run_config = await create_kaggle_run_config(
                 self.db,
                 run_id=f"videoannounce:{session_obj.id}",
@@ -4381,7 +4557,7 @@ class VideoAnnounceScenario:
                 notebook="CherryFlash",
                 kernel_ref=getattr(session_obj, "kaggle_kernel_ref", None),
                 dataset_ref=dataset_id,
-                resource_leases=(["telegram_session:s22"] if story_publish_requested else []),
+                resource_leases=([resource_key] if story_publish_requested and resource_key else []),
             )
             if kaggle_run_config:
                 write_kaggle_status_files(tmp_path, kaggle_run_config)
@@ -4563,7 +4739,10 @@ class VideoAnnounceScenario:
                     json.dumps(story_config, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
-                story_dataset_sources = await ensure_story_secret_datasets(client)
+                write_story_secret_files(
+                    tmp_path,
+                    auth_bundle_env=str(selection_params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip() or None,
+                )
                 if kind == "crumple_video":
                     project_root = Path(__file__).resolve().parent.parent
                     helper_src = project_root / "kaggle" / "CrumpleVideo" / "story_publish.py"
@@ -4572,6 +4751,7 @@ class VideoAnnounceScenario:
                         raise RuntimeError(f"Missing CrumpleVideo story helper: {helper_src}")
                     helper_dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(helper_src, helper_dest)
+            resource_key = str(selection_params.get(VIDEO_LANE_RESOURCE_KEY) or "").strip()
             kaggle_run_config = await create_kaggle_run_config(
                 self.db,
                 run_id=f"videoannounce:{session_obj.id}",
@@ -4580,7 +4760,7 @@ class VideoAnnounceScenario:
                 notebook="CrumpleVideo" if kind == "crumple_video" else "VideoAfisha",
                 kernel_ref=session_obj.kaggle_kernel_ref,
                 dataset_ref=dataset_id,
-                resource_leases=(["telegram_session:s22"] if story_config else []),
+                resource_leases=([resource_key] if story_config and resource_key else []),
             )
             if kaggle_run_config:
                 write_kaggle_status_files(tmp_path, kaggle_run_config)
@@ -4703,6 +4883,8 @@ class VideoAnnounceScenario:
         client: KaggleClient,
         dataset_sources: list[str],
         kernel_ref: str | None = None,
+        *,
+        target_kernel_ref: str | None = None,
     ) -> str:
         if not kernel_ref:
             # Fallback (old behavior) should be avoided if we enforce selection
@@ -4710,7 +4892,8 @@ class VideoAnnounceScenario:
 
         from .accel_pref import read_active_pref, tier_to_machine_shape
 
-        slug = _resolve_kaggle_slug(kernel_ref) or kernel_ref
+        deploy_ref = (target_kernel_ref or kernel_ref or "").strip()
+        slug = _resolve_kaggle_slug(deploy_ref) or deploy_ref
         machine_shape: str | None = None
         try:
             pref = await read_active_pref(self.db, slug)
@@ -4733,6 +4916,7 @@ class VideoAnnounceScenario:
             client.deploy_kernel_update,
             kernel_ref,
             dataset_sources,
+            target_kernel_ref=target_kernel_ref,
             machine_shape=machine_shape,
         )
 
