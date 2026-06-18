@@ -20431,7 +20431,20 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # VK wall text includes event metadata built from `ev` (title/date/place)
     # plus the body text, so title-only repairs must not be invisible here.
     new_hash = content_hash(
-        f"{VK_SOURCE_POST_FORMAT_VERSION}\n{getattr(ev, 'title', '') or ''}\n{text_for_vk}"
+        "\n".join(
+            [
+                VK_SOURCE_POST_FORMAT_VERSION,
+                str(getattr(ev, "title", "") or ""),
+                str(getattr(ev, "date", "") or ""),
+                str(getattr(ev, "time", "") or ""),
+                str(getattr(ev, "location_name", "") or ""),
+                str(getattr(ev, "location_address", "") or ""),
+                str(getattr(ev, "city", "") or ""),
+                str(getattr(ev, "ticket_link", "") or ""),
+                json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
+                text_for_vk,
+            ]
+        )
     )
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False

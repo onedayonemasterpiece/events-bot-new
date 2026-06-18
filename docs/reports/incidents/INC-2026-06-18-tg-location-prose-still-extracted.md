@@ -123,6 +123,7 @@ Initial investigation-only pass did not mutate production. The repair pass is no
 - 2026-06-18: server import root fix prepared. `_infer_location_from_text` no longer turns `City, prose` into an override venue; deterministic `grounded_loc` replacements are restricted to strong event-local venue/address evidence; `address, studio` OCR/source lines can recover the studio instead of preserving a wrong known venue; VK hashtag-search pseudo-links are ignored as ticket links.
 - 2026-06-18: Telegraph source-media rehydration prepared to skip source URLs that are shared by multiple event rows, preventing broad media reuse from multi-event/roundup posts.
 - 2026-06-18: regression tests added for `kldzoo/7534`, `meowafisha/7683`, VK hashtag ticket leakage, and shared-source media rehydration.
+- 2026-06-18: VK repair propagation follow-up prepared: `vk_source_hash` now includes date/time, location, ticket link, and photo URLs, because the previous hash only covered title/body text and could skip VK edits after DB location/media repair.
 
 ## Follow-up Actions
 
