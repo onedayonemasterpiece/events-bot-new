@@ -2133,28 +2133,12 @@ async def build_event_drafts_from_vk(
             missing.append(w)
         return missing
 
-    def _fallback_title(title: str, *, event_type: str | None, venue: str | None) -> str:
-        prefix = ""
-        m = _title_prefix_re.match(title or "")
-        if m:
-            prefix = m.group(1)
-        et = (event_type or "").strip().casefold()
-        if any(k in et for k in ("выстав", "экспоз")):
-            base = "Интерактивная экспозиция"
-        elif et:
-            base = (event_type or "").strip().capitalize()
-        else:
-            base = "Событие"
-        venue_short = (venue or "").split(",", 1)[0].strip()
-        core = f"{base} — {venue_short}" if venue_short else base
-        return (prefix + core).strip()
+    def _poster_title_candidate() -> str | None:
+        """Return an explicit poster OCR heading as evidence, not as an override.
 
-    def _poster_title_fallback() -> str | None:
-        """Use explicit poster OCR heading as a source-grounded title fallback.
-
-        This is deliberately evidence-based: it does not invent a semantic title,
-        it only promotes a poster heading that is already present in OCR and is
-        not a service label such as date/time/ticket/address.
+        Title choice remains LLM-owned. This helper is only logged so Smart
+        Update/runtime investigations can see that poster evidence existed; it
+        must not replace a non-generic LLM title inside VK intake.
         """
 
         for poster in poster_items[:4]:
@@ -2444,33 +2428,21 @@ async def build_event_drafts_from_vk(
         title_raw = clean_str(data.get("title")) or ""
         event_type_val = clean_str(data.get("event_type"))
         missing_tokens = _missing_title_tokens(title_raw)
-        # Heuristic: if the title contains any Cyrillic word (3+ chars) absent from the source
-        # text/OCR, it's likely a hallucination/typo (e.g. "Утя"). Prefer an explicit
-        # poster OCR heading if present, but never synthesize the prompt-forbidden
-        # "<event_type> — <venue>" placeholder here: Smart Update owns LLM title recovery.
+        # Heuristic signal only: if the title contains a Cyrillic word absent from
+        # source text/OCR, do not deterministically rewrite it. Morphology and
+        # attendee-facing summary titles can be valid even when a word is not an
+        # exact source token (INC-2026-06-18: "Виниловый вечер с DJ Switchoff" was
+        # better than both the generic fallback and a poster-heading overwrite).
+        # Smart Update owns LLM-first title review/recovery; VK intake only logs
+        # evidence for debugging.
         if missing_tokens:
-            venue_val = _clean_llm_text_field(data.get("location_name"), field_name="location_name") or source_name or ""
-            poster_title = _poster_title_fallback()
-            if poster_title:
-                logger.warning(
-                    "vk_intake suspicious_title replaced_with_poster_title title=%r missing=%s poster_title=%r",
-                    title_raw,
-                    ",".join(missing_tokens[:4]),
-                    poster_title,
-                )
-                title_raw = poster_title
-            else:
-                fallback = _fallback_title(
-                    title_raw,
-                    event_type=event_type_val,
-                    venue=venue_val,
-                )
-                logger.warning(
-                    "vk_intake suspicious_title kept_llm_title title=%r missing=%s rejected_fallback=%r",
-                    title_raw,
-                    ",".join(missing_tokens[:4]),
-                    fallback,
-                )
+            poster_title = _poster_title_candidate()
+            logger.warning(
+                "vk_intake suspicious_title kept_llm_title title=%r missing=%s poster_title_candidate=%r",
+                title_raw,
+                ",".join(missing_tokens[:4]),
+                poster_title,
+            )
 
         venue_value = _clean_llm_text_field(data.get("location_name"), field_name="location_name")
         address_value = _clean_llm_text_field(data.get("location_address"), field_name="location_address")

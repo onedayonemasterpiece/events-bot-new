@@ -230,7 +230,7 @@ async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(mon
 
 
 @pytest.mark.asyncio
-async def test_vk_intake_uses_poster_title_instead_of_generic_venue_fallback(monkeypatch):
+async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_generic_fallback(monkeypatch):
     async def fake_parse_event_via_llm(*_args, **_kwargs):
         class Parsed(list):
             festival = None
@@ -270,8 +270,9 @@ async def test_vk_intake_uses_poster_title_instead_of_generic_venue_fallback(mon
     )
 
     assert len(drafts) == 1
-    assert drafts[0].title == "СОВЕТСКАЯ ЭЛЕКТРОНИКА"
+    assert drafts[0].title == "💿 Виниловый вечер с DJ Switchoff"
     assert drafts[0].title != "Концерт — Бар Советов"
+    assert drafts[0].title != "СОВЕТСКАЯ ЭЛЕКТРОНИКА"
 
 
 @pytest.mark.asyncio

@@ -20,7 +20,7 @@
 
 - `INC-2026-06-18-vk-title-shortlink-public-regression.md`
   - Scope: VK auto-import title guard, poster OCR title handoff, Smart Update generic-title recovery, and source shortlink normalization for public Telegram/VK/Telegraph event posts.
-  - Must not regress: deterministic VK intake must not synthesize `<event_type> — <venue>` placeholders such as `Концерт — Бар Советов`; if a title is suspicious it may use only source-grounded poster OCR heading or leave the LLM title for Smart Update LLM recovery. External source shortlinks such as `clck.ru` must be resolved before public registration links are rendered.
+  - Must not regress: deterministic VK intake must not synthesize `<event_type> — <venue>` placeholders such as `Концерт — Бар Советов`; if a title is suspicious it must not be overwritten by deterministic code, including poster OCR heading; poster OCR is evidence for Smart Update/review, while the LLM title remains LLM-owned unless Smart Update changes it. External source shortlinks such as `clck.ru` must be resolved before public registration links are rendered.
 - `INC-2026-06-18-tg-location-prose-still-extracted.md`
   - Scope: Telegram Monitoring LLM-first venue extraction, server import location recovery, exact address/studio handling, source-default venue ownership, Telegraph source-media rehydration, and public `@kldevents` repairs.
   - Must not regress: regex/OCR helpers must not override an LLM/default known venue with prose; source-owned venues such as `sobor39`/`kldzoo` must keep their canonical defaults unless LLM-reviewed offsite evidence exists; explicit `address, studio` evidence must not be rebound to unrelated known venues like ИЦАЭ; multi-event source URLs must not rehydrate unrelated posters into another event.
