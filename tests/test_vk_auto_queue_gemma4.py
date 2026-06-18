@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import logging
 from types import SimpleNamespace
 
 import pytest
@@ -231,7 +230,7 @@ async def test_vk_intake_prefers_exact_poster_datetime_over_relative_caption(mon
 
 
 @pytest.mark.asyncio
-async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_generic_fallback(monkeypatch, caplog):
+async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_generic_fallback(monkeypatch):
     async def fake_parse_event_via_llm(*_args, **_kwargs):
         class Parsed(list):
             festival = None
@@ -252,7 +251,6 @@ async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_ge
         )
 
     monkeypatch.setattr(main, "parse_event_via_llm", fake_parse_event_via_llm)
-    caplog.set_level(logging.INFO, logger="vk_intake")
 
     poster = PosterMedia(
         data=b"",
@@ -283,7 +281,6 @@ async def test_vk_intake_keeps_source_grounded_llm_title_instead_of_poster_or_ge
     assert drafts[0].title == "💿 Виниловый вечер с DJ Switchoff"
     assert drafts[0].title != "Концерт — Бар Советов"
     assert drafts[0].title != "СОВЕТСКАЯ ЭЛЕКТРОНИКА"
-    assert "title_grounding_gap" not in caplog.text
 
 
 @pytest.mark.asyncio

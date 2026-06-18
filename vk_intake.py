@@ -2100,80 +2100,6 @@ async def build_event_drafts_from_vk(
         except (TypeError, ValueError):
             return bool(value)
 
-    # Title grounding: prevent hallucinated/garbled short tokens in titles from leaking into UI.
-    ground_parts: list[str] = []
-    if isinstance(text, str) and text.strip():
-        ground_parts.append(text)
-    if poster_texts:
-        ground_parts.extend([p for p in poster_texts if isinstance(p, str) and p.strip()])
-    ground_norm = unicodedata.normalize("NFKC", "\n".join(ground_parts)).casefold().replace("ё", "е")
-
-    _title_word_re = re.compile(r"[а-яё]{3,}", re.IGNORECASE)
-    _title_prefix_re = re.compile(r"^([^a-zа-я0-9]+\\s+)", re.IGNORECASE)
-
-    def _token_in_ground(token: str) -> bool:
-        tok = token.casefold().replace("ё", "е").strip()
-        if not tok:
-            return True
-        if tok in ground_norm:
-            return True
-        # Best-effort: allow simple inflection and adjectival derivation differences.
-        # Example from INC-2026-06-18: LLM title word "Виниловый" is grounded by
-        # source noun "винил"; exact-token matching must not classify that as a
-        # suspicious semantic title.
-        candidates = {tok}
-        if len(tok) >= 5:
-            candidates.add(tok[:-1])
-        if len(tok) >= 6:
-            candidates.add(tok[:-2])
-        for suffix in (
-            "овыми", "евыми", "ого", "его", "ому", "ему", "ыми", "ими",
-            "овая", "евая", "овый", "евый", "овое", "евое", "овой", "евой",
-            "ая", "яя", "ые", "ие", "ый", "ий", "ой", "ую", "юю",
-        ):
-            if tok.endswith(suffix) and len(tok) - len(suffix) >= 4:
-                candidates.add(tok[: -len(suffix)])
-        return any(c and c in ground_norm for c in candidates)
-
-    def _missing_title_tokens(title: str) -> list[str]:
-        words = [w for w in _title_word_re.findall(title or "") if w]
-        missing: list[str] = []
-        for w in words:
-            if _token_in_ground(w):
-                continue
-            missing.append(w)
-        return missing
-
-    def _poster_title_candidate() -> str | None:
-        """Return an explicit poster OCR heading as evidence, not as an override.
-
-        Title choice remains LLM-owned. This helper is only logged so Smart
-        Update/runtime investigations can see that poster evidence existed; it
-        must not replace a non-generic LLM title inside VK intake.
-        """
-
-        for poster in poster_items[:4]:
-            raw = str(getattr(poster, "ocr_title", "") or "").strip()
-            if not raw:
-                continue
-            value = re.sub(r"\s+", " ", unicodedata.normalize("NFKC", raw)).strip(" «»\"'`*")
-            if not value:
-                continue
-            value_norm = value.casefold().replace("ё", "е")
-            if re.fullmatch(r"[\d\s:./–—-]+", value_norm):
-                continue
-            if re.search(
-                r"\b(?:начало|дата|время|адрес|билеты?|регистрац\w*|стоимость|цена|вход|касс[аы])\b",
-                value_norm,
-            ):
-                continue
-            if len(value) > 90:
-                continue
-            if not re.search(r"[A-Za-zА-Яа-яЁё]{3,}", value):
-                continue
-            return value
-        return None
-
     drafts: list[EventDraft] = []
 
     def _source_norm_text() -> str:
@@ -2438,20 +2364,6 @@ async def build_event_drafts_from_vk(
 
         title_raw = clean_str(data.get("title")) or ""
         event_type_val = clean_str(data.get("event_type"))
-        missing_tokens = _missing_title_tokens(title_raw)
-        # Grounding signal only: if a title contains a Cyrillic word that is still
-        # absent after conservative morphology checks, do not deterministically
-        # rewrite it. Attendee-facing LLM summary titles can be valid even when
-        # not every word is an exact source token. Smart Update owns LLM-first
-        # title review/recovery; VK intake only logs evidence for debugging.
-        if missing_tokens:
-            poster_title = _poster_title_candidate()
-            logger.info(
-                "vk_intake title_grounding_gap kept_llm_title title=%r missing=%s poster_title_candidate=%r",
-                title_raw,
-                ",".join(missing_tokens[:4]),
-                poster_title,
-            )
 
         venue_value = _clean_llm_text_field(data.get("location_name"), field_name="location_name")
         address_value = _clean_llm_text_field(data.get("location_address"), field_name="location_address")

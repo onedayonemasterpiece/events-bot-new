@@ -70,11 +70,11 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 - `vk_intake.py` suspicious-title guard and ticket-link normalization.
 - `smart_event_update.py` generic title recovery and ticket-link persistence.
 - Public Telegram `@kldevents`, VK `klgdevents`, Telegraph event pages.
-- Runtime logs `/data/runtime_logs/events-bot.log*` for historical `vk_intake suspicious_title`, current `vk_intake title_grounding_gap`, `title_recover`, and `ticket_shortlink_resolved`.
+- Runtime logs `/data/runtime_logs/events-bot.log*` for historical `vk_intake suspicious_title`, `title_recover`, and `ticket_shortlink_resolved`; current code must have no VK-intake title-grounding/suspicious-title rewrite path.
 
 ### Mandatory checks before closure or deploy
 
-- Regression test: VK intake must not falsely flag a source-grounded non-generic LLM title such as `Виниловый вечер с DJ Switchoff` as a title-grounding gap, and must not replace it with either `Концерт — <venue>` or a poster OCR heading.
+- Regression test: VK intake must not run deterministic word-level suspicious-title/grounding checks and must keep a source-grounded non-generic LLM title such as `Виниловый вечер с DJ Switchoff`; it must not replace it with either `Концерт — <venue>` or a poster OCR heading.
 - Regression test: `clck.ru` ticket links must be resolved before draft links are persisted.
 - Active/future public audit must show no fresh `Концерт — <venue>` / `Лекция — <venue>` / `Спектакль — <venue>` placeholders when source/OCR contains attendee-facing title material.
 - Public post repair must update DB, Telegraph, Telegram and VK; hashes must be invalidated/recomputed. If VK sync creates a replacement postponed post, the stale postponed post must be deleted or verified absent.
@@ -89,12 +89,12 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 
 ## Immediate Mitigation
 
-- Prepared source-root code fix in `vk_intake`: fix the false-positive grounding signal for adjectival/inflected words such as `виниловый`←`винил`; do not synthesize `<event_type> — <venue>` as the title fallback and do not overwrite a non-generic LLM title with poster OCR. Remaining grounding gaps are logged as evidence only, while the LLM title stays owned by Smart Update LLM recovery/review. Resolve `clck.ru` source ticket links before storing `ticket_link`.
+- Prepared source-root code fix in `vk_intake`: remove the VK-intake exact-token title-grounding/suspicious-title guard entirely; do not synthesize `<event_type> — <venue>` as the title fallback and do not overwrite a non-generic LLM title with poster OCR. Title review/recovery stays owned by Smart Update LLM stages. Resolve `clck.ru` source ticket links before storing `ticket_link`.
 - Production repair completed for events `6155` and `6156`; active/future audit also repaired event `6120` title, event `6032`/`6033` source shortlinks, and VK-only rows `4084`/`5511`. Telegram, Telegraph and VK were republished; stale VK postponed posts `https://vk.com/wall-231920894_3754` and the first-repair `https://vk.com/wall-231920894_3760` were deleted; current corrected VK post is `https://vk.com/wall-231920894_3767`.
 
 ## Corrective Actions
 
-- [x] Add regression tests for not flagging/preserving source-grounded LLM title against both generic fallback and poster-title overwrite, plus `clck.ru` ticket-link expansion.
+- [x] Add regression tests for preserving source-grounded LLM title with no deterministic title-grounding/suspicious-title gate, plus `clck.ru` ticket-link expansion.
 - [x] Update VK auto-import docs and changelog with the LLM-first boundary.
 - [x] Repair event `6155` ticket link and all public surfaces.
 - [x] Repair event `6156` title and all public surfaces.
@@ -112,7 +112,7 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 - deploy path: Fly remote deploy to `events-bot-new-wngqia`; image `events-bot-new-wngqia:deployment-01KVDNH4DT5FJQT96SYJCXMY34`, machine `683961db016e28` version `1446`, Fly status `1 passing`
 - regression checks: `python3 -m py_compile vk_intake.py` passed; local pytest unavailable (`No module named pytest`). `git diff --check` passed.
 - production repair verification: `https://t.me/kldevents/860` registration href resolves directly to `https://world-ocean.ru/posetitelyam/vremya-raboty`; `https://t.me/kldevents/861` title was initially repaired to `💿 Советская электроника: DJ Switchoff`, then rechecked and corrected to the source-supported LLM title `💿 Виниловый вечер с DJ Switchoff`; `https://t.me/kldevents/751` title is `🎻 ПроСТО век Зацепина`; `https://t.me/kldevents/662` title/link and `https://t.me/kldevents/582` link were also repaired. VK API verified current managed posts `3749`, `3767`, `3622`, `3761`, `3654`, `3763`, and `3764`; old bad postponed posts `3754` and `3760` were deleted. Final production audit found no active/public rows with `clck.ru` ticket links or generic `<type> — <venue>` titles in Telegram/VK-managed surfaces.
-- post-deploy verification: Fly status healthy; deployed `/app/vk_intake.py` has adjectival grounding for `виниловый`←`винил`, `title_grounding_gap` evidence logging, and no `replaced_with_poster_title` overwrite path.
+- post-deploy verification: Fly status healthy; deployed `/app/vk_intake.py` has no VK-intake deterministic title-grounding/suspicious-title gate and no `replaced_with_poster_title` overwrite path.
 
 ## Prevention
 
