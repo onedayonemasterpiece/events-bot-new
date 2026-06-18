@@ -1,10 +1,10 @@
 # INC-2026-06-18 VK Auto-import Generic Title And Source Shortlink Leaked To Public Posts
 
-Status: mitigated (production repair completed; code deploy pending)
+Status: closed
 Severity: sev2
 Service: VK auto-import / Smart Update / public @kldevents + klgdevents event posts
 Opened: 2026-06-18
-Closed: —
+Closed: 2026-06-18
 Owners: Codex / events-bot maintainers
 Related incidents: `INC-2026-05-08-vk-tg-prompt-and-dup-probe`, `INC-2026-05-11-event-parse-defender-and-escalation-poc`, `INC-2026-05-29-genai-response-repr-leak`, `INC-2026-06-18-tg-location-prose-still-extracted`
 Related docs: `docs/features/vk-auto-queue/README.md`, `docs/features/smart-event-update/README.md`, `docs/llm/prompts.md`, `docs/operations/runtime-logs.md`
@@ -95,7 +95,7 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 - [x] Update VK auto-import docs and changelog with the LLM-first boundary.
 - [x] Repair event `6155` ticket link and all public surfaces.
 - [x] Repair event `6156` title and all public surfaces.
-- [ ] Deploy code fix and verify health.
+- [x] Deploy code fix and verify health.
 
 ## Follow-up Actions
 
@@ -105,11 +105,11 @@ Both rows were created by VK auto-import and reached Telegram, VK and Telegraph 
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `b67006e7` (code fix commit, reachable from `origin/main`)
+- deploy path: Fly remote deploy to `events-bot-new-wngqia`; first fixed image `events-bot-new-wngqia:deployment-01KVDKP3110Y06QVSMP9AQGZM8`, machine `683961db016e28` version `1443`, Fly status `1 passing`
 - regression checks: `python3 -m py_compile vk_intake.py` passed; local pytest unavailable (`No module named pytest`). `git diff --check` passed.
 - production repair verification: `https://t.me/kldevents/860` registration href resolves directly to `https://world-ocean.ru/posetitelyam/vremya-raboty`; `https://t.me/kldevents/861` title is `💿 Советская электроника: DJ Switchoff`; `https://t.me/kldevents/751` title is `🎻 ПроСТО век Зацепина`; `https://t.me/kldevents/662` title/link and `https://t.me/kldevents/582` link were also repaired. VK API verified current managed posts `3749`, `3760`, `3622`, `3761`, `3654`, `3763`, and `3764`; old bad postponed post `3754` was deleted. Final production audit found no active/public rows with `clck.ru` ticket links or generic `<type> — <venue>` titles in Telegram/VK-managed surfaces.
-- post-deploy verification: pending
+- post-deploy verification: Fly status healthy; deployed `/app/vk_intake.py` exposes `_resolve_external_short_ticket_link` and `clck.ru` resolver host set.
 
 ## Prevention
 
