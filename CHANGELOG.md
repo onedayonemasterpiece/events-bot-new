@@ -11,7 +11,10 @@
   session or Kaggle dataset. Materialized scheduled sessions now carry stable
   `scheduled_slot_key` metadata, and same-day slot checks treat `SELECTED` as a
   materialized attempt to prevent watchdog/startup cloning while the pre-handoff
-  state is investigated. Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
+  state is investigated. The second CrumpleVideo lane target
+  `zigomaro/crumple-video-video1` was also created/verified in Kaggle alongside
+  the existing two CherryFlash targets. Tracks
+  `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: Kaggle video lane/session coordination**: scheduled
   CherryFlash/CrumpleVideo runs now assign a per-run video Telegram auth lane
   from `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`, lease the actual auth scope

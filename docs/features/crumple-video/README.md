@@ -74,6 +74,9 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   scheduler records `ops_run.status='skipped'` with
   `skip_reason='video_lanes_busy'` and must not create another `SELECTED`
   session or Kaggle dataset.
+- The current two-lane production CrumpleVideo kernel mapping is
+  `zigomaro/crumple-video,zigomaro/crumple-video-video1`; both targets must stay
+  accessible before production env keeps the two-lane mapping enabled.
 - A scheduled `video_tomorrow` ops run is successful only after confirmed Kaggle
   handoff: the session has a session dataset and a non-local Kaggle kernel ref
   (or terminal artifact/publication evidence). A local-only `SELECTED` row is
