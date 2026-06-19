@@ -64,6 +64,21 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   post должен идти через тот же helper (`video.save` + `wall.post`), что и
   CherryFlash, без преобразования `kenigeventsofficial` в Telegram username.
 
+### Scheduled `/v tomorrow` handoff contract
+
+- Scheduled `/v tomorrow` creates a stable slot key
+  `crumple_video:<profile>:<target_date>:tomorrow` in
+  `videoannounce_session.selection_params` when a session is materialized.
+- If story-enabled video lanes are configured and all lane auth bundles are
+  already busy (`RENDERING` session or active `kaggle_resource_lease`), the
+  scheduler records `ops_run.status='skipped'` with
+  `skip_reason='video_lanes_busy'` and must not create another `SELECTED`
+  session or Kaggle dataset.
+- A scheduled `video_tomorrow` ops run is successful only after confirmed Kaggle
+  handoff: the session has a session dataset and a non-local Kaggle kernel ref
+  (or terminal artifact/publication evidence). A local-only `SELECTED` row is
+  an attempted slot, not product delivery.
+
 ## Проблемы и наблюдения (последний тестовый прогон)
 
 - Рендер занял `7314.6s` (ускорение требуется только для тестового запуска).

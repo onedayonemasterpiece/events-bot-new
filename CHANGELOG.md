@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Fixed: scheduled video handoff result contract**: scheduled
+  `video_tomorrow` and CherryFlash partner-track attempts now wait for confirmed
+  Kaggle handoff before `ops_run` can become `success`; a local-only `SELECTED`
+  row is no longer reported as delivered product. If all configured
+  story-video lanes are busy, the scheduler records an explicit
+  `skipped/video_lanes_busy` attempt and does not create another `SELECTED`
+  session or Kaggle dataset. Materialized scheduled sessions now carry stable
+  `scheduled_slot_key` metadata, and same-day slot checks treat `SELECTED` as a
+  materialized attempt to prevent watchdog/startup cloning while the pre-handoff
+  state is investigated. Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: Kaggle video lane/session coordination**: scheduled
   CherryFlash/CrumpleVideo runs now assign a per-run video Telegram auth lane
   from `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS`, lease the actual auth scope

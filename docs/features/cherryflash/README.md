@@ -759,6 +759,14 @@ This section captures the latest intro-direction request as an explicit delta to
     rows for `telegram_session:env:<ENV>` as busy lanes before pushing the next
     notebook, so a manually cancelled Kaggle run cannot immediately recycle a
     still-held Telegram auth session.
+  - Scheduled CherryFlash/partner attempts must not create another `SELECTED`
+    session when all configured lanes are busy. The scheduler records an
+    explicit `ops_run.status='skipped'` with `skip_reason='video_lanes_busy'`
+    and retries from the normal watchdog cadence instead of multiplying
+    session rows or Kaggle datasets. If a scheduled session is created, it
+    carries a stable `scheduled_slot_key` (`product:profile:target_date:slot`)
+    and the scheduler must not mark the corresponding `ops_run` successful
+    until the Kaggle dataset and non-local kernel handoff are confirmed.
   - Business story posts must pass Bot API `post_to_chat_page=true`; without it, Telegram can accept `postStory` and show an active story while not exposing it on the account page/profile story list in the expected way.
   - Kaggle story runtime startup must log enough non-secret matching evidence to diagnose publication fanout before render starts: config/cipher/key paths, target labels already present in `story_publish.json`, business target count, encrypted business secret count, and missing business connection hashes. Raw `business_connection_id`, Telegram user ids, bot tokens, and personal account handles must not be printed.
 - Sibling profile rule:

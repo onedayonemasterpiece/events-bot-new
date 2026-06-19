@@ -302,6 +302,9 @@ VIDEO_LANE_RESOURCE_KEY = "_video_lane_resource_key"
 VIDEO_LANE_INDEX_KEY = "_video_lane_index"
 VIDEO_SOURCE_KERNEL_REF_KEY = "_kaggle_source_kernel_ref"
 VIDEO_TARGET_KERNEL_REF_KEY = "_kaggle_target_kernel_ref"
+SCHEDULED_SLOT_KEY = "scheduled_slot_key"
+SCHEDULED_SLOT_KIND_KEY = "scheduled_slot_kind"
+SCHEDULED_TRIGGER_KEY = "trigger"
 
 logger.info(
     "video_announce: limits configured dataset_max_mb=%s video_max_mb=%s",
@@ -316,6 +319,8 @@ class VideoAnnounceScenario:
         self.bot = bot
         self.chat_id = chat_id
         self.user_id = user_id
+        self.last_tomorrow_skip_reason = ""
+        self.last_partner_track_skip_reason = ""
 
     async def _load_admin_channels(self) -> list[Channel]:
         async with self.db.get_session() as session:
@@ -458,6 +463,25 @@ class VideoAnnounceScenario:
         safe = "".join(ch if ch.isalnum() or ch in {"_", "-", "."} else "_" for ch in value)
         return f"telegram_session:env:{safe}"
 
+    @staticmethod
+    def _scheduled_slot_key(
+        product: str,
+        profile_key: str,
+        target_date: date | str,
+        slot_kind: str,
+    ) -> str:
+        return (
+            f"{str(product).strip()}:{str(profile_key).strip()}:"
+            f"{str(target_date).strip()}:{str(slot_kind).strip()}"
+        )
+
+    @staticmethod
+    def _lane_error_skip_reason(error_message: str | None) -> str:
+        lowered = str(error_message or "").casefold()
+        if "video-lanes заняты" in lowered or "выбранном kaggle kernel/video-lane" in lowered:
+            return "video_lanes_busy"
+        return "video_lane_unavailable"
+
     def _story_requested_for_selection(self, selection_params: dict[str, Any]) -> bool:
         return bool(selection_params.get("story_publish_enabled")) or story_publish_enabled()
 
@@ -470,6 +494,34 @@ class VideoAnnounceScenario:
 
     def _kernel_lane_refs_configured(self, kernel_ref: str | None) -> bool:
         return bool(self._kernel_lane_refs_for_source(kernel_ref))
+
+    async def _preflight_new_video_lane(
+        self,
+        *,
+        kernel_ref: str | None,
+        selection_params: dict[str, Any],
+    ) -> tuple[dict[str, Any], str | None, str | None]:
+        """Pick a video lane before materialising a scheduled session row.
+
+        This is intentionally a light preflight rather than a durable lock: the
+        authoritative lock is still the Kaggle status resource lease acquired by
+        the notebook.  The purpose here is to avoid creating piles of
+        ``SELECTED`` scheduled sessions when all configured video lanes are
+        already visibly occupied.
+        """
+
+        class _PreviewSession:
+            id = None
+
+            def __init__(self, ref: str | None) -> None:
+                self.kaggle_kernel_ref = ref
+
+        async with self.db.get_session() as session:
+            return await self._assign_video_lane_for_render(
+                session,
+                _PreviewSession(kernel_ref),
+                selection_params,
+            )
 
     async def _kaggle_kernel_target_available(self, kernel_ref: str | None) -> tuple[bool | None, str | None]:
         """Best-effort preflight for a configured Kaggle lane target.
@@ -588,16 +640,22 @@ class VideoAnnounceScenario:
 
         auth_env = str(params.get(VIDEO_LANE_AUTH_ENV_KEY) or "").strip()
         lane_index: int | None = None
+        active_lanes = await self._active_video_lane_auth_envs(
+            session,
+            exclude_session_id=session_obj.id,
+        )
         if auth_env:
+            if auth_env in active_lanes:
+                return (
+                    params,
+                    kernel_ref,
+                    "Все Telegram video-lanes заняты: дождитесь завершения текущих видеогенераций",
+                )
             try:
                 lane_index = lanes.index(auth_env)
             except ValueError:
                 lane_index = None
         else:
-            active_lanes = await self._active_video_lane_auth_envs(
-                session,
-                exclude_session_id=session_obj.id,
-            )
             for idx, candidate in enumerate(lanes):
                 if candidate not in active_lanes:
                     auth_env = candidate
@@ -1469,33 +1527,62 @@ class VideoAnnounceScenario:
         profile_key: str = "default",
         selected_max: int = DEFAULT_SELECTED_MAX,
         test_mode: bool = False,
-    ) -> None:
+        wait_for_handoff: bool = False,
+        trigger: str | None = None,
+    ) -> int | None:
+        self.last_tomorrow_skip_reason = ""
+        normalized_profile_key = (profile_key or "default").strip() or "default"
         if not await self.ensure_access():
-            return
+            self.last_tomorrow_skip_reason = "access_denied"
+            return None
         existing = await self.has_rendering()
         if existing and not self._video_parallel_lanes_enabled():
+            self.last_tomorrow_skip_reason = "render_in_progress"
             await self.bot.send_message(
                 self.chat_id,
                 f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
             )
-            return
+            return None
 
         tomorrow, params, render_scene_limit = self._tomorrow_selection_setup(
             selected_max=selected_max,
             test_mode=test_mode,
         )
+        slot_kind = "tomorrow_test" if test_mode else "tomorrow"
+        params[SCHEDULED_SLOT_KIND_KEY] = slot_kind
+        params[SCHEDULED_SLOT_KEY] = self._scheduled_slot_key(
+            "crumple_video",
+            normalized_profile_key,
+            tomorrow,
+            slot_kind,
+        )
+        if trigger:
+            params[SCHEDULED_TRIGGER_KEY] = trigger
         test_scene_limit = render_scene_limit if test_mode else None
 
         kernel_ref = self._pick_crumple_kernel_ref() or self._pick_default_kernel_ref()
         if not kernel_ref:
+            self.last_tomorrow_skip_reason = "missing_kernel_ref"
             await self.bot.send_message(self.chat_id, "Не удалось подобрать kernel для Kaggle")
-            return
+            return None
 
-        test_chat_id, main_chat_id = await self._get_profile_channels(profile_key)
+        params, kernel_ref, lane_error = await self._preflight_new_video_lane(
+            kernel_ref=kernel_ref,
+            selection_params=params,
+        )
+        if lane_error:
+            self.last_tomorrow_skip_reason = self._lane_error_skip_reason(lane_error)
+            await self.bot.send_message(
+                self.chat_id,
+                f"Плановый /v tomorrow не стартовал: {lane_error}",
+            )
+            return None
+
+        test_chat_id, main_chat_id = await self._get_profile_channels(normalized_profile_key)
         async with self.db.get_session() as session:
             obj = VideoAnnounceSession(
                 status=VideoAnnounceSessionStatus.SELECTED,
-                profile_key=profile_key,
+                profile_key=normalized_profile_key,
                 selection_params=params,
                 test_chat_id=test_chat_id,
                 main_chat_id=main_chat_id,
@@ -1533,9 +1620,15 @@ class VideoAnnounceScenario:
             obj.id,
             message=None,
             limit_scenes=test_scene_limit if test_mode else render_scene_limit,
+            background=not wait_for_handoff,
         )
         if msg and msg != "Рендеринг запущен":
+            self.last_tomorrow_skip_reason = self._lane_error_skip_reason(msg)
+            if self.last_tomorrow_skip_reason != "video_lanes_busy":
+                self.last_tomorrow_skip_reason = "render_start_failed"
             await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
+            return None
+        return int(obj.id)
 
     async def prepare_tomorrow_session(
         self,
@@ -2038,6 +2131,7 @@ class VideoAnnounceScenario:
         partner_track: PartnerTrack,
         *,
         wait_for_handoff: bool = False,
+        trigger: str | None = None,
     ) -> int | None:
         self.last_partner_track_skip_reason = ""
         if not await self.ensure_access():
@@ -2114,6 +2208,43 @@ class VideoAnnounceScenario:
                     ),
                 )
                 return None
+        kernel_ref = prospective_kernel_ref
+        if not kernel_ref:
+            self.last_partner_track_skip_reason = "missing_kernel_ref"
+            await self.bot.send_message(
+                self.chat_id,
+                "Не удалось подобрать CherryFlash kernel для Kaggle",
+            )
+            return None
+        today = datetime.now(LOCAL_TZ).date()
+        params = self._partner_track_selection_params(
+            partner_track,
+            business_selector=business_selector,
+            publish_mode=publish_mode,
+        )
+        params[SCHEDULED_SLOT_KIND_KEY] = partner_track.track_id
+        params[SCHEDULED_SLOT_KEY] = self._scheduled_slot_key(
+            "cherryflash",
+            partner_track.profile_key,
+            today,
+            partner_track.track_id,
+        )
+        if trigger:
+            params[SCHEDULED_TRIGGER_KEY] = trigger
+        params, kernel_ref, lane_error = await self._preflight_new_video_lane(
+            kernel_ref=kernel_ref,
+            selection_params=params,
+        )
+        if lane_error:
+            self.last_partner_track_skip_reason = self._lane_error_skip_reason(lane_error)
+            await self.bot.send_message(
+                self.chat_id,
+                (
+                    f"Партнёрский трек «{partner_track.display_name}» не стартовал: "
+                    f"{lane_error}"
+                ),
+            )
+            return None
         event_filter = self._build_event_filter_for_partner_track(partner_track)
         try:
             selection = await build_popular_review_selection(
@@ -2154,14 +2285,6 @@ class VideoAnnounceScenario:
             )
             self.last_partner_track_skip_reason = "selection_empty"
             return None
-        kernel_ref = self._pick_cherryflash_kernel_ref() or self._pick_default_kernel_ref()
-        if not kernel_ref:
-            self.last_partner_track_skip_reason = "missing_kernel_ref"
-            await self.bot.send_message(
-                self.chat_id,
-                "Не удалось подобрать CherryFlash kernel для Kaggle",
-            )
-            return None
         configured_test_chat_id, _configured_main_chat_id = await self._get_profile_channels(
             POPULAR_REVIEW_PROFILE
         )
@@ -2178,11 +2301,6 @@ class VideoAnnounceScenario:
                 ),
             )
             return None
-        params = self._partner_track_selection_params(
-            partner_track,
-            business_selector=business_selector,
-            publish_mode=publish_mode,
-        )
         async with self.db.get_session() as session:
             obj = VideoAnnounceSession(
                 status=VideoAnnounceSessionStatus.SELECTED,
@@ -2212,7 +2330,9 @@ class VideoAnnounceScenario:
             background=not wait_for_handoff,
         )
         if msg and msg != "Рендеринг запущен":
-            self.last_partner_track_skip_reason = "render_start_failed"
+            self.last_partner_track_skip_reason = self._lane_error_skip_reason(msg)
+            if self.last_partner_track_skip_reason != "video_lanes_busy":
+                self.last_partner_track_skip_reason = "render_start_failed"
             await self.bot.send_message(self.chat_id, f"Сессия #{obj.id}: {msg}")
             return None
         return int(obj.id)

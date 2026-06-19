@@ -143,8 +143,16 @@ async def test_run_tomorrow_pipeline_creates_session_and_starts(monkeypatch, tmp
 
     started: dict[str, int] = {}
 
-    async def _fake_start_render(self, session_id: int, message=None, *, limit_scenes=None) -> str:  # noqa: ANN001,ARG002
+    async def _fake_start_render(  # noqa: ANN001,ARG002
+        self,
+        session_id: int,
+        message=None,
+        *,
+        limit_scenes=None,
+        background: bool = True,
+    ) -> str:
         started["session_id"] = session_id
+        started["background"] = background
         return "Рендеринг запущен"
 
     monkeypatch.setattr(VideoAnnounceScenario, "start_render", _fake_start_render)
@@ -233,6 +241,55 @@ async def test_run_tomorrow_pipeline_test_mode_limits_scenes(monkeypatch, tmp_pa
     await scenario.run_tomorrow_pipeline(test_mode=True)
 
     assert started["limit_scenes"] == TOMORROW_TEST_MIN_POSTERS
+
+
+@pytest.mark.asyncio
+async def test_run_tomorrow_pipeline_lane_busy_does_not_create_selected_session(
+    monkeypatch, tmp_path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
+    monkeypatch.setenv("VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS", "LANE1,LANE2")
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="popular_review_eco",
+                selection_params={"_video_lane_auth_env": "LANE1"},
+                kaggle_kernel_ref="zigomaro/cherryflash",
+            )
+        )
+        session.add(
+            VideoAnnounceSession(
+                status=VideoAnnounceSessionStatus.RENDERING,
+                profile_key="popular_review_konb",
+                selection_params={"_video_lane_auth_env": "LANE2"},
+                kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+            )
+        )
+        await session.commit()
+
+    async def _start_render_must_not_run(*_args, **_kwargs) -> str:
+        raise AssertionError("lane-busy preflight must stop before SELECTED/start_render")
+
+    monkeypatch.setattr(VideoAnnounceScenario, "start_render", _start_render_must_not_run)
+
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db, bot, chat_id=123, user_id=1)
+    result = await scenario.run_tomorrow_pipeline(wait_for_handoff=True)
+
+    assert result is None
+    assert scenario.last_tomorrow_skip_reason == "video_lanes_busy"
+    assert any("video-lanes заняты" in text for _, text, _ in bot.messages)
+
+    async with db.get_session() as session:
+        res = await session.execute(select(VideoAnnounceSession))
+        sessions = list(res.scalars().all())
+    assert len(sessions) == 2
+    assert all(sess.status == VideoAnnounceSessionStatus.RENDERING for sess in sessions)
 
 
 @pytest.mark.asyncio

@@ -275,11 +275,42 @@ async def _run_scheduled_video_tomorrow(
             chat_id=int(target_chat_id),
             user_id=int(target_chat_id),
         )
-        await scenario.run_tomorrow_pipeline(
+        session_id = await scenario.run_tomorrow_pipeline(
             profile_key=normalized_profile_key,
             selected_max=TOMORROW_TEST_MIN_POSTERS if test_mode else DEFAULT_SELECTED_MAX,
             test_mode=test_mode,
+            wait_for_handoff=True,
+            trigger="startup_catchup" if startup_catchup else "scheduled",
         )
+        if session_id is None:
+            skip_reason = str(getattr(scenario, "last_tomorrow_skip_reason", "") or "")
+            if skip_reason in {"video_lanes_busy", "render_in_progress"}:
+                ops_details["skip_reason"] = skip_reason
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    details=ops_details,
+                )
+                return
+            reason = "video_tomorrow did not create a session"
+            if skip_reason:
+                reason = f"{reason} (skip_reason={skip_reason})"
+                ops_details["skip_reason"] = skip_reason
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
+        ops_details["session_id"] = int(session_id)
+        launch_state = await _video_session_launch_state(db, int(session_id))
+        ops_details.update(launch_state)
+        if not _video_session_has_remote_handoff(launch_state):
+            reason = (
+                "video_tomorrow did not reach confirmed Kaggle handoff: "
+                f"status={launch_state.get('session_status') or '-'} "
+                f"dataset={launch_state.get('kaggle_dataset') or '-'} "
+                f"kernel={launch_state.get('kaggle_kernel_ref') or '-'}"
+            )
+            ops_details["error"] = reason
+            raise RuntimeError(reason)
     except Exception as exc:
         ops_details["error"] = str(exc) or type(exc).__name__
         await finish_ops_run(
@@ -436,7 +467,9 @@ async def _run_scheduled_partner_track(
             user_id=int(target_chat_id),
         )
         session_id = await scenario.run_partner_track_pipeline(
-            partner_track, wait_for_handoff=True
+            partner_track,
+            wait_for_handoff=True,
+            trigger="startup_catchup" if startup_catchup else "scheduled",
         )
         if session_id is None:
             skip_reason = str(
@@ -446,6 +479,15 @@ async def _run_scheduled_partner_track(
                 partner_track.track_id == "partner_region_east_001"
                 and skip_reason == "missing_business_target"
             ):
+                ops_details["skip_reason"] = skip_reason
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    details=ops_details,
+                )
+                return
+            if skip_reason in {"video_lanes_busy", "render_in_progress"}:
                 ops_details["skip_reason"] = skip_reason
                 await finish_ops_run(
                     db,
@@ -3035,6 +3077,7 @@ _scheduler: AsyncIOScheduler | None = None
 _run_meta: dict[str, tuple[str, float]] = {}
 _heavy_job_lock = asyncio.Lock()
 _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
+    "SELECTED",
     "RENDERING",
     "DONE",
     "PUBLISH_BLOCKED",

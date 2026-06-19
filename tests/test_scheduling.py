@@ -13,8 +13,10 @@ import pytest
 
 import scheduling
 import vk_intake
+import video_announce.scenario as scenario_module
 from db import Database
 from heavy_ops import HeavyOpMeta
+from models import User
 from ops_run import finish_ops_run, start_ops_run
 
 
@@ -569,6 +571,92 @@ def test_runtime_health_status_reports_critical_monitoring_jobs(monkeypatch):
     assert "critical_scheduler_watchdog_next_run" in payload
     assert "tg_monitoring_next_run" in payload
     assert "vk_auto_import_next_run" in payload
+
+
+@pytest.mark.asyncio
+async def test_scheduled_video_tomorrow_fails_if_session_has_no_remote_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        await session.commit()
+
+    class FakeScenario:
+        last_tomorrow_skip_reason = ""
+
+        def __init__(self, db, bot, chat_id: int, user_id: int) -> None:  # noqa: ANN001
+            self.db = db
+
+        async def run_tomorrow_pipeline(self, **_kwargs) -> int:
+            async with self.db.raw_conn() as conn:
+                cur = await conn.execute(
+                    """
+                    INSERT INTO videoannounce_session(
+                        status, profile_key, selection_params, kaggle_kernel_ref
+                    )
+                    VALUES('SELECTED', 'default', '{"target_date":"2026-04-13"}', 'local:CrumpleVideo')
+                    """
+                )
+                await conn.commit()
+                return int(cur.lastrowid)
+
+    monkeypatch.setattr(scenario_module, "VideoAnnounceScenario", FakeScenario)
+
+    with pytest.raises(RuntimeError, match="confirmed Kaggle handoff"):
+        await scheduling._run_scheduled_video_tomorrow(
+            db, bot=object(), profile_key="default"
+        )
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_tomorrow' ORDER BY id DESC LIMIT 1"
+        )
+        row = await cur.fetchone()
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "failed"
+    assert details["session_status"] == "SELECTED"
+    assert "confirmed Kaggle handoff" in details["error"]
+
+
+@pytest.mark.asyncio
+async def test_scheduled_video_tomorrow_lane_busy_is_explicit_skip(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        await session.commit()
+
+    class FakeScenario:
+        last_tomorrow_skip_reason = "video_lanes_busy"
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def run_tomorrow_pipeline(self, **_kwargs) -> None:
+            return None
+
+    monkeypatch.setattr(scenario_module, "VideoAnnounceScenario", FakeScenario)
+
+    await scheduling._run_scheduled_video_tomorrow(
+        db, bot=object(), profile_key="default"
+    )
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_tomorrow' ORDER BY id DESC LIMIT 1"
+        )
+        row = await cur.fetchone()
+    assert row is not None
+    status, details_raw = row
+    details = json.loads(details_raw)
+    assert status == "skipped"
+    assert details["skip_reason"] == "video_lanes_busy"
 
 
 @pytest.mark.asyncio
