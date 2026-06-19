@@ -116,6 +116,44 @@ async def test_resume_rendering_sessions_keeps_fresh_local_kernel_refs_during_ha
 
 
 @pytest.mark.asyncio
+async def test_resume_rendering_sessions_skips_fresh_remote_pre_handoff_without_dataset(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/cherryflash-video1",
+            kaggle_dataset=None,
+            test_chat_id=123,
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("pre-handoff session without dataset must not poll stale Kaggle kernel")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+        assert refreshed.error in (None, "")
+    assert bot.messages == []
+
+
+@pytest.mark.asyncio
 async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypatch, tmp_path: Path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -148,6 +186,74 @@ async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypa
     assert recovered == 1
     assert started == [(session_id, "zigomaro/video-announce-session-1")]
     assert bot.messages == []
+
+
+@pytest.mark.asyncio
+async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.FAILED,
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset="zigomaro/cherryflash-session-714",
+            test_chat_id=123,
+            error="missing video output",
+            finished_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    heartbeat_at = datetime.now(timezone.utc).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at,
+                last_heartbeat_at
+            )
+            VALUES(?, ?, 'cherryflash', 'CherryFlash', ?, ?, 'alive', 'render',
+                   'test', '{}', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                "zigomaro/cherryflash",
+                "zigomaro/cherryflash-session-714",
+                heartbeat_at,
+                heartbeat_at,
+                heartbeat_at,
+            ),
+        )
+        await conn.commit()
+
+    started: list[tuple[int, str | None]] = []
+
+    def _fake_start_poller(db, client, session_obj, **kwargs):  # noqa: ANN001
+        del db, client, kwargs
+        started.append((session_obj.id, session_obj.kaggle_dataset))
+        return None
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _fake_start_poller)
+
+    bot = _DummyBot()
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 1
+    assert started == [(session_id, "zigomaro/cherryflash-session-714")]
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+        assert refreshed.finished_at is None
+        assert refreshed.error in (None, "")
 
 
 @pytest.mark.asyncio

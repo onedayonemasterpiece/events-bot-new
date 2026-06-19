@@ -10,14 +10,16 @@
   renew active resource leases on live Kaggle heartbeats, coalesce high-frequency
   `alive` history rows, and stop marking long CPU renders `FAILED` at the fixed
   225-minute timeout while the Kaggle ledger still has a fresh heartbeat.
-  New lane target kernel slugs can be auto-created by Kaggle, and the launcher
-  now reads the real GPU quota before the first push: if a target slug is new
-  and the weekly GPU quota is already exhausted, it creates the lane notebook
-  CPU-first instead of failing the handoff with `Notebook not found`. The
-  server-side lane selector also treats active `kaggle_resource_lease` rows as
-  busy lanes before pushing a new notebook, so manual Kaggle cancellation or a
-  stale-but-unexpired remote lease cannot immediately recycle the same Telegram
-  auth lane into another scheduled handoff.
+  Configured per-lane Kaggle target slugs are now preflighted before dataset
+  creation: if the target notebook is missing or inaccessible, the scheduled
+  session becomes `PUBLISH_BLOCKED` and no orphan session dataset is created.
+  Existing lane targets still read the real GPU quota before push and fall back
+  to CPU when weekly GPU quota is exhausted. Recovery now ignores fresh
+  pre-handoff sessions without a dataset, revives false-`FAILED` sessions that
+  still have a live Kaggle heartbeat, and slot checks treat that fresh heartbeat
+  as active handoff evidence; manual Kaggle cancellation or a stale-but-unexpired
+  remote lease cannot immediately recycle the same Telegram auth lane into
+  another scheduled handoff.
   Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: Kaggle video false-terminal classification**: video pollers now
   probe downloadable Kaggle output before accepting repeated `UNKNOWN` status,

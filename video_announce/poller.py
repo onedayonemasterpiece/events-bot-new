@@ -214,6 +214,57 @@ def _local_handoff_grace_deadline(session_obj: VideoAnnounceSession) -> datetime
     return reference + timedelta(minutes=VIDEO_KAGGLE_HANDOFF_GRACE_MINUTES)
 
 
+async def _live_video_ledger_session_ids(
+    db: Database,
+    *,
+    now: datetime | None = None,
+    grace_minutes: int = VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+) -> set[int]:
+    """Return video session ids whose Kaggle status ledger is freshly alive.
+
+    This is used by recovery after a bot restart to rescue sessions that were
+    falsely marked FAILED by stale Kaggle status/output while the newly pushed
+    notebook had already started and was still sending heartbeats.
+    """
+
+    if db is None or not hasattr(db, "raw_conn"):
+        return set()
+    now = now or datetime.now(timezone.utc)
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT session_id, status, last_heartbeat_at, updated_at, terminal_at
+                FROM kaggle_run_ledger
+                WHERE run_id LIKE 'videoannounce:%'
+                  AND session_id IS NOT NULL
+                """
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read live Kaggle video ledgers")
+        return set()
+
+    live: set[int] = set()
+    for session_id, status_raw, heartbeat_raw, updated_raw, terminal_raw in rows:
+        status = str(status_raw or "").strip().casefold()
+        if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
+            continue
+        if terminal_raw:
+            continue
+        heartbeat_at = _parse_utc_iso(heartbeat_raw) or _parse_utc_iso(updated_raw)
+        if heartbeat_at is None:
+            continue
+        age_seconds = (now - heartbeat_at).total_seconds()
+        if 0 <= age_seconds <= max(60, int(grace_minutes) * 60):
+            try:
+                live.add(int(session_id))
+            except (TypeError, ValueError):
+                continue
+    return live
+
+
 def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
     preview_path = Path(video_path).with_name("telegram_preview.jpg")
     if preview_path.exists():
@@ -2244,12 +2295,17 @@ async def run_kernel_poller(
 
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
+    live_ledger_session_ids = await _live_video_ledger_session_ids(db)
     async with db.get_session() as session:
-        res = await session.execute(
-            select(VideoAnnounceSession).where(
-                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
-            )
+        query = select(VideoAnnounceSession).where(
+            VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
         )
+        if live_ledger_session_ids:
+            query = select(VideoAnnounceSession).where(
+                (VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING)
+                | (VideoAnnounceSession.id.in_(live_ledger_session_ids))
+            )
+        res = await session.execute(query)
         sessions = res.scalars().all()
     if not sessions:
         return 0
@@ -2266,6 +2322,57 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
         )
         if not notify_chat_id:
             continue
+        dataset_slug = str(sess.kaggle_dataset or "").strip()
+        if not dataset_slug:
+            grace_deadline = _local_handoff_grace_deadline(sess)
+            now_utc = datetime.now(timezone.utc)
+            if grace_deadline is not None and now_utc < grace_deadline:
+                logger.warning(
+                    "video_announce: skipping recovery for pre-handoff session without dataset "
+                    "session_id=%s kernel_ref=%s grace_until=%s",
+                    sess.id,
+                    kernel_ref,
+                    grace_deadline.isoformat(),
+                )
+                continue
+            logger.error(
+                "video_announce: refusing to resume session_id=%s without Kaggle dataset kernel_ref=%s",
+                sess.id,
+                kernel_ref,
+            )
+            failed = await _update_status(
+                db,
+                sess.id,
+                status=VideoAnnounceSessionStatus.FAILED,
+                error="runtime restart before Kaggle handoff; rerun required",
+            )
+            if failed:
+                await bot.send_message(
+                    notify_chat_id,
+                    (
+                        f"⚠️ Сессия #{failed.id}: рантайм перезапустился до подтверждённого запуска Kaggle.\n"
+                        "Сессия переведена в FAILED; нужен повторный запуск."
+                    ),
+                )
+            continue
+        if sess.id in live_ledger_session_ids and sess.status == VideoAnnounceSessionStatus.FAILED:
+            async with db.get_session() as session:
+                obj = await session.get(VideoAnnounceSession, sess.id)
+                if obj and obj.status == VideoAnnounceSessionStatus.FAILED:
+                    logger.warning(
+                        "video_announce: reviving false-failed session from fresh Kaggle heartbeat "
+                        "session_id=%s kernel_ref=%s dataset=%s",
+                        sess.id,
+                        kernel_ref,
+                        dataset_slug,
+                    )
+                    obj.status = VideoAnnounceSessionStatus.RENDERING
+                    obj.finished_at = None
+                    obj.error = None
+                    session.add(obj)
+                    await session.commit()
+                    await session.refresh(obj)
+                    sess = obj
         if _is_local_kernel_ref(kernel_ref):
             grace_deadline = _local_handoff_grace_deadline(sess)
             now_utc = datetime.now(timezone.utc)
@@ -2310,7 +2417,7 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
             main_chat_id=sess.main_chat_id,
             poll_interval=60,
             timeout_minutes=VIDEO_KAGGLE_TIMEOUT_MINUTES,
-            dataset_slug=sess.kaggle_dataset,
+            dataset_slug=dataset_slug,
         )
         recovered += 1
     return recovered

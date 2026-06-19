@@ -381,6 +381,31 @@ async def _insert_terminal_kaggle_ledger(db: Database, *, session_id: int) -> No
         await conn.commit()
 
 
+async def _insert_live_kaggle_ledger(
+    db: Database,
+    *,
+    session_id: int,
+    heartbeat_at: str,
+) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, token_hash,
+                updated_at, last_heartbeat_at
+            )
+            VALUES(?, ?, 'cherryflash', 'CherryFlash', 'alive', 'render', 'test', ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                heartbeat_at,
+                heartbeat_at,
+            ),
+        )
+        await conn.commit()
+
+
 def _configure_video_tomorrow_env(monkeypatch) -> None:
     monkeypatch.setenv("ENABLE_V_TOMORROW_SCHEDULED", "1")
     monkeypatch.setenv("V_TOMORROW_TZ", "Europe/Kaliningrad")
@@ -993,6 +1018,43 @@ async def test_popular_review_watchdog_skips_failed_session_with_terminal_ledger
         error="post-render bot delivery failed",
     )
     await _insert_terminal_kaggle_ledger(db, session_id=session_id)
+
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_popular_review", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_popular_review_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_review_watchdog_skips_failed_session_with_live_heartbeat(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    session_id = await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-714",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        error="missing video output",
+    )
+    await _insert_live_kaggle_ledger(
+        db,
+        session_id=session_id,
+        heartbeat_at="2026-04-12T08:58:00+00:00",
+    )
 
     calls: list[dict] = []
 

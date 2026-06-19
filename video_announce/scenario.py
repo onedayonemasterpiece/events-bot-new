@@ -471,6 +471,42 @@ class VideoAnnounceScenario:
     def _kernel_lane_refs_configured(self, kernel_ref: str | None) -> bool:
         return bool(self._kernel_lane_refs_for_source(kernel_ref))
 
+    async def _kaggle_kernel_target_available(self, kernel_ref: str | None) -> tuple[bool | None, str | None]:
+        """Best-effort preflight for a configured Kaggle lane target.
+
+        Missing Kaggle notebooks are deterministic configuration blockers. If we
+        discover one before dataset creation, keep the scheduled slot closed with
+        a PUBLISH_BLOCKED session instead of creating another orphan session
+        dataset every watchdog tick.
+        """
+
+        ref = str(kernel_ref or "").strip()
+        if not ref or ref.startswith("local:"):
+            return True, None
+        try:
+            await asyncio.to_thread(KaggleClient().get_kernel_status, ref)
+            return True, None
+        except Exception as exc:
+            response = getattr(exc, "response", None)
+            status_code = getattr(response, "status_code", None)
+            message = str(exc)
+            lowered = message.casefold()
+            if (
+                status_code == 404
+                or "404" in lowered
+                or "not found" in lowered
+                or "cannot access kernel" in lowered
+                or "wrong kernel slug" in lowered
+                or "permission 'kernels.get' was denied" in lowered
+            ):
+                return False, message[:500]
+            logger.warning(
+                "video_announce: unable to preflight Kaggle lane target ref=%s: %s",
+                ref,
+                message,
+            )
+            return None, message[:500]
+
     async def _active_video_lane_auth_envs(
         self,
         session,
@@ -4055,6 +4091,28 @@ class VideoAnnounceScenario:
             if lane_error:
                 return lane_error
             if assigned_kernel_ref:
+                available, availability_error = await self._kaggle_kernel_target_available(
+                    assigned_kernel_ref
+                )
+                if available is False:
+                    error_msg = (
+                        "Kaggle video-lane target недоступен/не создан: "
+                        f"{assigned_kernel_ref}. Dataset не создавался; нужен существующий Kaggle notebook target."
+                    )
+                    logger.error(
+                        "video_announce: blocking render because Kaggle lane target is missing "
+                        "session_id=%s target=%s error=%s",
+                        session_id,
+                        assigned_kernel_ref,
+                        availability_error,
+                    )
+                    sess.selection_params = params
+                    sess.status = VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+                    sess.finished_at = datetime.now(timezone.utc)
+                    sess.error = error_msg
+                    session.add(sess)
+                    await session.commit()
+                    return error_msg
                 assigned_slug = _resolve_kaggle_slug(assigned_kernel_ref)
                 if assigned_slug and await self.has_rendering(kaggle_slug=assigned_slug):
                     return "Уже есть активный рендер на выбранном Kaggle kernel/video-lane"

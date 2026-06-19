@@ -1215,6 +1215,69 @@ async def _video_sessions_with_terminal_kaggle_ledger(
         rows = await cur.fetchall()
     return {int(row[0]) for row in rows if row[0] is not None}
 
+
+def _video_live_ledger_grace_minutes() -> int:
+    raw = (os.getenv("VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES") or "").strip()
+    try:
+        value = int(raw) if raw else 15
+    except ValueError:
+        value = 15
+    return max(1, value)
+
+
+def _parse_utcish_datetime(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _video_sessions_with_fresh_kaggle_heartbeat(
+    db: Any,
+    session_ids: list[int],
+    *,
+    now: datetime | None = None,
+) -> set[int]:
+    if db is None or not hasattr(db, "raw_conn") or not session_ids:
+        return set()
+    placeholders = ",".join("?" for _ in session_ids)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            f"""
+            SELECT session_id, status, last_heartbeat_at, updated_at, terminal_at
+            FROM kaggle_run_ledger
+            WHERE session_id IN ({placeholders})
+              AND run_id LIKE 'videoannounce:%'
+            """,
+            tuple(int(sid) for sid in session_ids),
+        )
+        rows = await cur.fetchall()
+    now_utc = now or datetime.now(timezone.utc)
+    max_age = _video_live_ledger_grace_minutes() * 60
+    live: set[int] = set()
+    for session_id, status_raw, heartbeat_raw, updated_raw, terminal_raw in rows:
+        status = str(status_raw or "").strip().casefold()
+        if status in {"failed", "error", "cancelled", "canceled", "complete", "done"}:
+            continue
+        if terminal_raw:
+            continue
+        heartbeat_at = _parse_utcish_datetime(heartbeat_raw) or _parse_utcish_datetime(updated_raw)
+        if heartbeat_at is None:
+            continue
+        age_seconds = (now_utc - heartbeat_at).total_seconds()
+        if 0 <= age_seconds <= max(60, max_age):
+            try:
+                live.add(int(session_id))
+            except (TypeError, ValueError):
+                continue
+    return live
+
 async def _video_tomorrow_session_exists_today(
     db: Any,
     *,
@@ -1237,9 +1300,14 @@ async def _video_tomorrow_session_exists_today(
             (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
         )
         rows = await cur.fetchall()
+    session_ids = [int(row[0]) for row in rows if row and row[0] is not None]
     terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
         db,
-        [int(row[0]) for row in rows if row and row[0] is not None],
+        session_ids,
+    )
+    live_ledger_sessions = await _video_sessions_with_fresh_kaggle_heartbeat(
+        db,
+        session_ids,
     )
     for session_id, status, row_profile_key, selection_params_raw, video_url in rows:
         if str(row_profile_key or "").strip() != profile_key:
@@ -1256,6 +1324,8 @@ async def _video_tomorrow_session_exists_today(
             params = selection_params_raw
         if str(params.get("target_date") or "").strip() != target_date:
             continue
+        if int(session_id) in live_ledger_sessions:
+            return True
         if _video_session_status_closes_scheduled_slot(
             status,
             video_url=video_url,
@@ -1330,9 +1400,14 @@ async def _popular_review_session_exists_today(
             (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
         )
         rows = await cur.fetchall()
+    session_ids = [int(row[0]) for row in rows if row and row[0] is not None]
     terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
         db,
-        [int(row[0]) for row in rows if row and row[0] is not None],
+        session_ids,
+    )
+    live_ledger_sessions = await _video_sessions_with_fresh_kaggle_heartbeat(
+        db,
+        session_ids,
     )
     for session_id, status, dataset, kernel_ref, selection_params_raw, video_url in rows:
         params: dict[str, Any] = {}
@@ -1347,6 +1422,8 @@ async def _popular_review_session_exists_today(
             params = selection_params_raw
         if str(params.get("target_date") or "").strip() != target_date:
             continue
+        if int(session_id) in live_ledger_sessions:
+            return True
         if _video_session_status_closes_scheduled_slot(
             status,
             video_url=video_url,
@@ -1393,9 +1470,14 @@ async def _partner_track_session_exists_today(
             ),
         )
         rows = await cur.fetchall()
+    session_ids = [int(row[0]) for row in rows if row and row[0] is not None]
     terminal_ledger_sessions = await _video_sessions_with_terminal_kaggle_ledger(
         db,
-        [int(row[0]) for row in rows if row and row[0] is not None],
+        session_ids,
+    )
+    live_ledger_sessions = await _video_sessions_with_fresh_kaggle_heartbeat(
+        db,
+        session_ids,
     )
     for session_id, status, dataset, kernel_ref, selection_params_raw, video_url in rows:
         params: dict[str, Any] = {}
@@ -1410,6 +1492,8 @@ async def _partner_track_session_exists_today(
             params = selection_params_raw
         if str(params.get("target_date") or "").strip() != target_date:
             continue
+        if int(session_id) in live_ledger_sessions:
+            return True
         if _video_session_status_closes_scheduled_slot(
             status,
             video_url=video_url,
