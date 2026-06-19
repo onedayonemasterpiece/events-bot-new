@@ -61,6 +61,8 @@ def _normalize_kernel_ref(ref: str | None) -> str:
     value = str(ref or "").strip()
     if value.startswith("/code/"):
         return value[len("/code/") :]
+    if value.startswith("/") and value.count("/") >= 2:
+        return value[1:]
     return value
 
 

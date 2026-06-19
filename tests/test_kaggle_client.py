@@ -35,6 +35,18 @@ def _install_dummy_kaggle(monkeypatch):
     )
 
 
+def test_normalize_kernel_ref_strips_code_and_owner_leading_slash(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+
+    assert module._normalize_kernel_ref("/code/zigomaro/cherryflash-video-lane-1") == (
+        "zigomaro/cherryflash-video-lane-1"
+    )
+    assert module._normalize_kernel_ref("/zigomaro/cherryflash-video-lane-1") == (
+        "zigomaro/cherryflash-video-lane-1"
+    )
+
+
 def test_kaggle_test_skips_max_size(monkeypatch):
     _install_dummy_kaggle(monkeypatch)
     KaggleClient = importlib.import_module("video_announce.kaggle_client").KaggleClient
