@@ -745,11 +745,14 @@ This section captures the latest intro-direction request as an explicit delta to
     `VIDEO_ANNOUNCE_VIDEO_LANE_AUTH_ENVS` is the ordered pool of Telegram auth
     bundles, `selection_params._video_lane_auth_env` records the actual lane for
     that session, and `VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS` maps the same
-    lane index to an isolated Kaggle kernel target. Kaggle can auto-create a
-    new target slug from the first `SaveKernel` push; if the weekly GPU quota is
-    already exhausted at that moment, the launcher must detect that and create
-    the target CPU-first, otherwise a failed GPU creation followed by CPU retry
-    can surface as `Notebook not found`. Without lane kernel refs, CherryFlash
+    lane index to an isolated existing Kaggle kernel target. A lane target must
+    be precreated before it is put into the production env; relying on the first
+    normal `kernels_push` to create a slug can fail with `Notebook not found`
+    after the session dataset has already been created. Production now
+    preflights target availability before dataset creation and blocks the
+    session as `PUBLISH_BLOCKED` if the configured target is missing. Current
+    two-lane production mapping is `zigomaro/cherryflash` plus
+    `zigomaro/cherryflash-video-lane-1`. Without lane kernel refs, CherryFlash
     runs that resolve to the same remote Kaggle slug remain serialized to avoid
     overwritten outputs/polling. The server-side selector must treat both
     `RENDERING` video sessions and active, non-expired `kaggle_resource_lease`

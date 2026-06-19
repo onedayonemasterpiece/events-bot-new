@@ -19,7 +19,10 @@
   still have a live Kaggle heartbeat, and slot checks treat that fresh heartbeat
   as active handoff evidence; manual Kaggle cancellation or a stale-but-unexpired
   remote lease cannot immediately recycle the same Telegram auth lane into
-  another scheduled handoff.
+  another scheduled handoff. The second production CherryFlash target was
+  created as `zigomaro/cherryflash-video-lane-1`; the exact
+  `zigomaro/cherryflash-video1` slug is not usable via Kaggle's normal
+  `kernels_push` create path.
   Tracks `INC-2026-06-13-kaggle-duplicate-videoannounce`.
 - **Fixed: Kaggle video false-terminal classification**: video pollers now
   probe downloadable Kaggle output before accepting repeated `UNKNOWN` status,
