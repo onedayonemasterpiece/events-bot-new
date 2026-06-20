@@ -174,6 +174,17 @@ Initial investigation-only pass did not mutate production. The repair pass is no
 - post-deploy DB verification: production event rows `6133`, `6136`, `6138`, `6145` have corrected locations; event `6136` has `photo_count=1` and only poster `11683` attached.
 - follow-up repair for event `6089`: production DB now has `Музей Изобразительных искусств`, `Ленинский проспект 83`; bad `@kldevents/698` is no longer visible, replacement `https://t.me/kldevents/854` shows the corrected location with one matching poster; interim replacement `/852` and original `/698` are no longer visible, and VK live post `https://vk.com/wall-231920894_3592` was edited to the corrected location with one photo.
 
+- 2026-06-20 recurrence prevention release:
+  - commit `7c8a693f` (`fix(tg): review short prose location fragments`) pushed to `origin/main`;
+  - deploy command: `flyctl deploy --remote-only --app events-bot-new-wngqia`;
+  - deployed image `events-bot-new-wngqia:deployment-01KVK24ARHXNKDYN9NK3AEP3ZD`; Fly machine `683961db016e28`, version `1469`, checks `1 total, 1 passing`;
+  - `/healthz` after deploy and repair: `ok=true`, `ready=true`, `db=ok`, `issues=[]`;
+  - regression checks: `pytest -q tests/test_tg_candidate_location_grounding.py tests/test_tg_monitor_gemma4_contract.py` → `65 passed`; `py_compile source_parsing/telegram/handlers.py kaggle/TelegramMonitor/telegram_monitor.py`; `git diff --check`.
+- 2026-06-20 public repair for new recurrence examples:
+  - production backup tables: `codex_backup_event_location_repair_20260620_6162_6163`, `codex_backup_event_source_fact_location_repair_20260620_6162_6163`, `codex_backup_joboutbox_location_repair_20260620_6162_6163`;
+  - `event 6162` now has `Музей Изобразительных искусств`, `Ленинский проспект 83`, `Калининград`; existing Telegram post `https://t.me/kldevents/913` was edited in place and Telethon verified the corrected `📍` line; Telegraph `https://telegra.ph/Revushchij-lev-poyushchij-los-06-18` contains the corrected location and no old location fragment; managed VK row now points to postponed `https://vk.com/wall-231920894_4023` with corrected `📍` line, while old `_3786` was absent from `wall.getById`;
+  - `event 6163` now has `Онлайн`, empty address, `Калининград`; existing Telegram post `https://t.me/kldevents/914` was edited in place and Telethon verified `📍 Онлайн, #Калининград`; Telegraph location block is corrected; managed VK row now points to postponed `https://vk.com/wall-231920894_4024` with corrected `📍` line, while old `_3787` was absent from `wall.getById`.
+
 ## Prevention
 
 Closure requires moving the primary fix back to the LLM-owned extraction contract and treating deterministic location gates as narrow guardrails/reporting, not as the main quality mechanism. Public-row absence alone is not sufficient closure evidence; recall impact from fail-closed skips must be measured.
