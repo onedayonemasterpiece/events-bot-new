@@ -1,10 +1,10 @@
 # INC-2026-06-20 TG on-demand scheduler run_id crash
 
-Status: mitigated
+Status: closed
 Severity: sev3
 Service: Telegram Monitoring on demand scheduler
 Opened: 2026-06-20
-Closed: —
+Closed: 2026-06-20
 Owners: events-bot maintainer
 Related incidents: —
 Related docs: `docs/features/tg-monitoring-on-demand/README.md`, `docs/features/telegram-monitoring/README.md`, `docs/operations/release-governance.md`, `docs/operations/runtime-logs.md`
@@ -30,7 +30,8 @@ After deploying TG monitoring on demand v1, the new APScheduler job `tg_monitori
 - 2026-06-20 08:31 UTC — `/healthz` returned HTTP 200 ready.
 - 2026-06-20 08:32 UTC — first `tg_monitoring_on_demand` tick failed with `TypeError` in runtime logs.
 - 2026-06-20 08:33 UTC — root cause identified as scheduler-wrapper function signature mismatch.
-- 2026-06-20 08:36 UTC — code fix prepared to accept optional scheduler `run_id`.
+- 2026-06-20 08:34 UTC — code fix prepared to accept optional scheduler `run_id`; fixed SHA `5b1e8830` deployed as Fly release `v1464`.
+- 2026-06-20 08:35 UTC — next `tg_monitoring_on_demand` tick executed successfully (`JOB_EXECUTED`, no `TypeError`).
 
 ## Root Cause
 
@@ -67,11 +68,11 @@ After deploying TG monitoring on demand v1, the new APScheduler job `tg_monitori
 
 ### Required evidence
 
-- deployed SHA:
-- Fly release version:
-- test output:
-- runtime log evidence:
-- `origin/main` reachability:
+- deployed SHA: `5b1e8830`
+- Fly release version: `v1464` (`events-bot-new-wngqia:deployment-01KVJ2MGT3A3QK1E5ZYEV8HAGQ`)
+- test output: `/home/dev/projects/events-bot-new-video-lanes-20260618/.venv/bin/python -m pytest tests/test_tg_monitoring_on_demand.py` → `4 passed`; `py_compile` changed modules → ok; `git diff --check` → ok
+- runtime log evidence: `/data/runtime_logs/events-bot.log` line 3592 `JOB_SUBMITTED job_id=tg_monitoring_on_demand`; line 3594 `tg_on_demand.dispatcher_tick run_id=96ee0cd70c1d4cb8a07983e81c6d4d4f`; line 3596 `JOB_EXECUTED job_id=tg_monitoring_on_demand ... traceback_excerpt=None`
+- `origin/main` reachability: `origin/main=5b1e8830` at deploy time and deployed SHA is reachable from `origin/main`
 
 ## Immediate Mitigation
 
@@ -88,10 +89,10 @@ After deploying TG monitoring on demand v1, the new APScheduler job `tg_monitori
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `5b1e8830`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean task worktree, with SHA pushed to `origin/main` before deploy
+- regression checks: targeted pytest, py_compile, `git diff --check`, Fly `/healthz`, runtime log next-tick verification
+- post-deploy verification: Fly release `v1464` complete, machine `683961db016e28` version `1464` started with 1/1 checks passing, `/healthz` HTTP 200 ready, next on-demand interval tick executed successfully
 
 ## Prevention
 
