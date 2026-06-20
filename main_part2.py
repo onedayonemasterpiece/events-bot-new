@@ -3917,6 +3917,12 @@ async def post_to_vk(
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
+    if location_params:
+        # Production verification showed VK accepts lat/long with group tokens
+        # but silently publishes community posts without a visible geo marker.
+        # Prefer the user actor for marker-bearing community posts; keep the
+        # normal actor fallback order if user publishing fails.
+        actors = sorted(actors, key=lambda actor: 0 if actor.kind == "user" else 1)
     if publish_date is None:
         publish_date = await _reserve_vk_postponed_publish_date(
             owner_id,
@@ -6070,6 +6076,7 @@ async def sync_vk_source_post(
             db,
             bot,
             attachments,
+            location_marker=location_marker,
         )
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
@@ -6136,6 +6143,7 @@ async def edit_vk_post(
     bot: Bot | None = None,
     attachments: list[str] | None = None,
     carousel: bool = False,
+    location_marker: Mapping[str, Any] | None = None,
 ) -> bool:
     """Edit an existing VK post.
 
@@ -6154,6 +6162,9 @@ async def edit_vk_post(
         "message": message,
         "from_group": 1,
     }
+    location_params = sanitize_location_marker_payload(location_marker)
+    if location_params:
+        params.update(location_params)
     owner_id_num: int | None = None
     try:
         owner_id_num = int(owner_id)
@@ -6263,7 +6274,7 @@ async def edit_vk_post(
             except Exception:  # pragma: no cover - best effort
                 logging.exception("edit_vk_post notify_superadmin failed")
         return False
-    if post_text == message and current == old_attachments:
+    if post_text == message and current == old_attachments and not location_params:
         logging.info("edit_vk_post: no changes for %s", post_url)
         return False
     if attachments is not None:

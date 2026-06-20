@@ -152,3 +152,84 @@ async def test_resolver_skips_ambiguous_city_without_supporting_context(tmp_path
 
     assert decision.status == "skipped_low_confidence"
     assert not decision.applied
+
+
+@pytest.mark.asyncio
+async def test_post_to_vk_prefers_user_actor_for_location_marker(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "group-token")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+
+    async def fake_reserve(owner_id, actors, db, bot, **kwargs):
+        assert [actor.kind for actor in actors] == ["user", "group"]
+        return None
+
+    wall_calls: list[dict[str, object]] = []
+
+    async def fake_vk_api(method, params=None, *_, token=None, token_kind="group", **__):
+        if method == "wall.post":
+            wall_calls.append(
+                {"params": dict(params or {}), "token": token, "token_kind": token_kind}
+            )
+            return {"response": {"post_id": 77}}
+        return {"response": {}}
+
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", fake_reserve)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.post_to_vk(
+        "231920894",
+        "Message",
+        location_marker={"lat": 54.710426, "long": 20.452214},
+    )
+
+    assert url == "https://vk.com/wall-231920894_77"
+    assert wall_calls[0]["token_kind"] == "user"
+    assert wall_calls[0]["token"] == "user-token"
+    assert wall_calls[0]["params"]["lat"] == "54.710426"
+    assert wall_calls[0]["params"]["long"] == "20.452214"
+
+
+@pytest.mark.asyncio
+async def test_edit_vk_post_applies_location_marker_even_when_text_unchanged(monkeypatch):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setenv("VK_USER_TOKEN", "user-token")
+    monkeypatch.setattr(main, "VK_POST_MAX_EDIT_AGE", main.timedelta(days=3650))
+
+    calls: list[tuple[str, dict[str, object], str | None]] = []
+
+    async def fake_vk_api(method, params=None, *_, token=None, **__):
+        calls.append((method, dict(params or {}), token))
+        if method == "wall.getById":
+            return {
+                "response": [
+                    {
+                        "id": 4018,
+                        "date": int(main.datetime.now(main.timezone.utc).timestamp()),
+                        "can_edit": 1,
+                        "text": "Same text",
+                        "attachments": [
+                            {"type": "photo", "photo": {"owner_id": -231920894, "id": 1}}
+                        ],
+                    }
+                ]
+            }
+        if method == "wall.edit":
+            return {"response": {"post_id": 4018}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    changed = await main.edit_vk_post(
+        "https://vk.com/wall-231920894_4018",
+        "Same text",
+        None,
+        None,
+        location_marker={"lat": 54.710426, "long": 20.452214},
+    )
+
+    assert changed is True
+    edit_calls = [params for method, params, _token in calls if method == "wall.edit"]
+    assert edit_calls
+    assert edit_calls[0]["lat"] == "54.710426"
+    assert edit_calls[0]["long"] == "20.452214"

@@ -8,6 +8,10 @@ Canonical requirements: [requirements.md](requirements.md).
 - The resolver is conservative and fail-open: if city is missing, outside Kaliningrad Oblast, ambiguous, not present in the internal marker directory, or resolution errors, VK publication continues without marker.
 - Region safety reuses `geo_region.py` allowlist/cache primitives and only applies markers for Kaliningrad Oblast decisions.
 - `wall.post` receives only VK-supported marker payload keys: `lat`, `long`, and/or `place_id`; `city_id` is never sent.
+- Marker-bearing community posts prefer the VK user actor. Production check on
+  2026-06-20 showed group-token `wall.post` accepts `lat`/`long` without error
+  but publishes without a visible `geo` marker; user-token `wall.edit` adds the
+  expected marker.
 - If VK rejects marker params as invalid, `post_to_vk` retries the same post without location params.
 - Marker decisions are logged as `vk.location_marker decision=...` with statuses such as `applied`, `skipped_no_city`, `skipped_not_region`, `skipped_low_confidence`, and `lookup_error`.
 
