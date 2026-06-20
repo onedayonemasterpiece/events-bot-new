@@ -16,6 +16,7 @@
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily
 - `docs/features/vk-dynamic-cover/README.md` — динамическая обложка VK-сообщества: генерация wide/mobile assets и `/cover`
+- `docs/features/vk-location-marker/README.md` — требования к VK location marker: безопасная отметка города/места в VK-публикациях событий
 - `docs/features/tg-publishing/README.md` — исходящие Telegram-публикации отдельных событий после Smart Update
 - `docs/features/exhibitions-smart-update/README.md` — поддержка выставок через Smart Update
 - `docs/features/festivals/README.md` — фестивали: серии/выпуски, очередь и связь с событиями

@@ -341,6 +341,13 @@ features:
       - scheduling.py
       - main.py
       - main_part2.py
+  vk_location_marker:
+    status: draft
+    docs: docs/features/vk-location-marker/README.md
+    requirements: docs/features/vk-location-marker/requirements.md
+    source: docs/features/vk-location-marker/source/
+    entrypoints:
+      - main_part2.py
   general_stats:
     status: in_progress
     docs: docs/features/general-stats/README.md
