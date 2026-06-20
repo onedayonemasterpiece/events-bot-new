@@ -28,6 +28,7 @@
 - `docs/features/preview-3d/README.md` — генерация 3D-превью (`/3di`) через Kaggle/Blender с выгрузкой в Supabase Storage
 - `docs/features/guide-excursions-monitoring/README.md` — мониторинг экскурсионных анонсов гидов, отдельный digest track и публикация в тестовый канал
 - `docs/features/telegram-business-stories/README.md` — Telegram Business webhook contract, encrypted connection cache и публикация сторис через Bot API
+- `docs/features/tg-monitoring-on-demand/README.md` — fast-path запуск Telegram Monitoring по новым постам в allowlisted Telegram-каналах
 - `docs/features/kaggle-status-framework/README.md` — единый callback/heartbeat/status framework для Kaggle runtime/notebooks без скрытой дедупликации публикаций
 
 ## Как добавлять новую фичу

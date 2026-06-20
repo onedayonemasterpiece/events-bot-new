@@ -741,6 +741,33 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_tg_force_source ON telegram_source_force_message(source_id)"
             )
 
+            dbg("telegram_monitoring_on_demand_queue")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS telegram_monitoring_on_demand_queue(
+                    source_username TEXT PRIMARY KEY,
+                    source_id INTEGER NOT NULL,
+                    chat_id INTEGER,
+                    latest_message_id INTEGER,
+                    latest_message_date TIMESTAMP,
+                    first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    next_run_at TIMESTAMP NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    last_run_at TIMESTAMP,
+                    last_error TEXT,
+                    FOREIGN KEY(source_id) REFERENCES telegram_source(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_tg_on_demand_status_next_run ON telegram_monitoring_on_demand_queue(status, next_run_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_tg_on_demand_source ON telegram_monitoring_on_demand_queue(source_id)"
+            )
+
             dbg("telegram_post_metric")
             await conn.execute(
                 """

@@ -3608,6 +3608,32 @@ def startup(
             coalesce=True,
             misfire_grace_time=_tg_monitoring_misfire_grace_seconds(),
         )
+        from source_parsing.telegram.on_demand import (
+            dispatch_due_on_demand_monitoring,
+            is_on_demand_enabled,
+            scheduler_poll_seconds,
+        )
+
+        if is_on_demand_enabled():
+            _register_job(
+                "tg_monitoring_on_demand",
+                _job_wrapper(
+                    "tg_monitoring_on_demand",
+                    dispatch_due_on_demand_monitoring,
+                    notify_skip=_notify_admin_skip,
+                ),
+                "interval",
+                id="tg_monitoring_on_demand",
+                seconds=scheduler_poll_seconds(),
+                args=[db, bot],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=scheduler_poll_seconds(),
+            )
+        else:
+            logging.info("SCHED skipping tg_monitoring_on_demand (ENABLE_TG_MONITORING_ON_DEMAND!=1)")
+            _notify_admin_skip("tg_monitoring_on_demand", "ENABLE_TG_MONITORING_ON_DEMAND!=1")
     else:
         logging.info("SCHED skipping tg_monitoring (ENABLE_TG_MONITORING!=1)")
         _notify_admin_skip("tg_monitoring", "ENABLE_TG_MONITORING!=1")

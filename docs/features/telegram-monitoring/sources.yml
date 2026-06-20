@@ -65,6 +65,10 @@ sources:
     filters: {skip_ads: true}
     notes: "агрегатор; фильтровать явную рекламу (#реклама)"
 
+  - username: kraftmarket39
+    trust_level: high
+    notes: "основной источник для TG monitoring on demand v1; Bot API update ставит source-specific мониторинг после debounce"
+
   - username: kaliningradartmuseum
     trust_level: high
     default_location: "Музей Изобразительных искусств, Ленинский проспект 83, Калининград"

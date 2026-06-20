@@ -215,6 +215,7 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 
 - `/tg` — управление источниками и ручной запуск мониторинга (есть пагинация списка источников).
 - `/tg` -> `Только @kraftmarket39` — emergency/containment запуск того же Telegram Monitoring + Smart Update pipeline, но с Kaggle config scope ровно для `@kraftmarket39`. Это временный обходной путь для отладки фестивальных источников без полного multi-source прогона; он не создаёт отдельный импортёр и не обходит Smart Update. Канонический техдолг: `docs/backlog/features/festival-monitoring-debt/README.md`.
+- Bot API `channel_post` on-demand — fast-path для allowlisted каналов (v1 default `@kraftmarket39`): новый пост coalesce'ится в durable очередь, после 10-минутного debounce ставится source-specific запуск того же Telegram Monitoring pipeline. Если `_RUN_LOCK`/global lock/remote Telegram session заняты, очередь retry'ится через 10 минут; scheduled monitoring остаётся catch-up. Детали: `docs/features/tg-monitoring-on-demand/README.md`.
 - `/tg` → `♻️ Импорт из JSON` — debug/import-only режим: позволяет выбрать один из последних локальных `telegram_results.json` (по умолчанию показываются 4, newest → older) и повторить server-import без нового запуска Kaggle.
   - После выбора файла показывается выбор режима:
     - `Импорт (обычно)` — обычный `run_telegram_import_from_results(...)`.

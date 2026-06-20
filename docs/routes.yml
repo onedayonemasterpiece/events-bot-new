@@ -239,8 +239,19 @@ features:
       - source_parsing/telegram/commands.py
       - source_parsing/telegram/service.py
       - source_parsing/telegram/handlers.py
+      - source_parsing/telegram/on_demand.py
       - smart_event_update.py
       - scheduling.py
+  tg_monitoring_on_demand:
+    status: implemented
+    docs: docs/features/tg-monitoring-on-demand/README.md
+    entrypoints:
+      - handlers/channel_nav.py
+      - source_parsing/telegram/on_demand.py
+      - source_parsing/telegram/service.py
+      - scheduling.py
+      - db.py
+      - models.py
   telegram_business_stories:
     status: implemented
     docs: docs/features/telegram-business-stories/README.md

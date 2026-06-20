@@ -906,6 +906,37 @@ class TelegramSourceForceMessage(SQLModel, table=True):
     )
 
 
+class TelegramMonitoringOnDemandQueue(SQLModel, table=True):
+    __tablename__ = "telegram_monitoring_on_demand_queue"
+    __table_args__ = (
+        Index("ix_tg_on_demand_status_next_run", "status", "next_run_at"),
+        Index("ix_tg_on_demand_source", "source_id"),
+    )
+
+    source_username: str = Field(primary_key=True)
+    source_id: int = Field(foreign_key="telegram_source.id")
+    chat_id: Optional[int] = None
+    latest_message_id: Optional[int] = None
+    latest_message_date: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    first_seen_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    next_run_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    attempts: int = 0
+    status: str = "pending"
+    last_run_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    last_error: Optional[str] = None
+
+
 class TelegramPostMetric(SQLModel, table=True):
     __tablename__ = "telegram_post_metric"
     __table_args__ = (

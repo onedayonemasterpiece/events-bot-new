@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- **Added: TG monitoring on demand v1**: Bot API `channel_post` updates from
+  allowlisted Telegram sources (default `@kraftmarket39`) now coalesce into a
+  durable per-source queue, force the new message id for the existing Kaggle
+  Telegram Monitoring runtime, and dispatch source-specific monitoring after a
+  10-minute debounce. Busy local/global/remote Telegram-session guards requeue
+  the request for 10-minute retry while scheduled monitoring remains catch-up.
 - **Fixed: scheduled video handoff result contract**: scheduled
   `video_tomorrow` and CherryFlash partner-track attempts now wait for confirmed
   Kaggle handoff before `ops_run` can become `success`; a local-only `SELECTED`
