@@ -1,5 +1,8 @@
 # TG monitoring on demand
 
+Canonical requirements: [requirements.md](requirements.md).
+Source materials: [source/](source/).
+
 V1 добавляет fast-path для отдельных Telegram-каналов: Bot API `channel_post` не извлекает событие сам, а только ставит source-specific запуск существующего Telegram Monitoring pipeline.
 
 ## Поведение v1
