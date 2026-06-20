@@ -339,6 +339,97 @@ async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_tit
     assert "О спикере" in prompt
     assert "профессиональная позиция спикера" in prompt
     assert "одном именованном факте" in prompt.casefold() or "одном именованном" in prompt
+    assert "ОТДЕЛЬНЫЙ именованный факт для КАЖДОГО блока" in prompt
+    assert "не сокращай состав до категорий" in prompt
+    assert "named roster" in prompt
+    assert "Главный архитектор Калининграда" in prompt
+
+
+@pytest.mark.asyncio
+async def test_g4_split_create_writer_repairs_logistics_instead_of_dropping_speaker_roster(
+    monkeypatch,
+):
+    """Regression for INC-2026-06-20-tg-speaker-roster-dropped.
+
+    Event 6244 had a rich speaker roster in the source, but the split writer's
+    first draft was rejected for logistics and the create path fell back to a
+    generic one-sentence description. The writer should ask the LLM to remove
+    logistics and keep the speaker roster before giving up.
+    """
+    client = _FakeGemmaClient(
+        [
+            (
+                '{"description":"23 июня в 18:30 на Клинической 21 пройдёт паблик-ток.\\n\\n'
+                '### Спикеры\\n'
+                '- Артур Сарниц, архитектор.\\n'
+                '- Андрей Анисимов, главный архитектор Калининграда.",'
+                '"warnings":[]}'
+            ),
+            (
+                '{"short_description":"Паблик-ток о городской среде с архитекторами и краеведами.",'
+                '"search_digest":"Паблик-ток о городской среде с Артуром Сарницем и Андреем Анисимовым.",'
+                '"warnings":[]}'
+            ),
+        ]
+    )
+    text_calls: list[dict] = []
+
+    async def fake_ask_gemma_text(prompt, **kwargs):
+        text_calls.append({"prompt": prompt, **kwargs})
+        return (
+            "Паблик-ток о качестве городской среды и будущем районов Калининграда.\n\n"
+            "### Спикеры\n"
+            "- Артур Сарниц, архитектор\n"
+            "- Андрей Анисимов, главный архитектор Калининграда"
+        )
+
+    original_logistics_reject = su._description_needs_g4_split_create_logistics_reject
+
+    def fake_logistics_reject(text, *, candidate):
+        if "Клинической 21" in (text or ""):
+            return True
+        return original_logistics_reject(text, candidate=candidate)
+
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: client)
+    monkeypatch.setattr(su, "_ask_gemma_text", fake_ask_gemma_text)
+    monkeypatch.setattr(
+        su,
+        "_description_needs_g4_split_create_logistics_reject",
+        fake_logistics_reject,
+    )
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kenigevents/4104",
+        source_text="АРТУР САРНИЦ\nАрхитектор\n\nАНДРЕЙ АНИСИМОВ\nГлавный архитектор Калининграда",
+        title="Лекция «Калининград: город-сад или микрорайон для жизни у моря!»",
+        date="2026-06-23",
+        time="18:30",
+        location_name="Историко-художественный музей",
+        location_address="Клиническая 21",
+        city="Калининград",
+        event_type="лекция",
+    )
+
+    result = await su._llm_g4_split_create_writer(
+        candidate=candidate,
+        title=candidate.title,
+        event_type=candidate.event_type,
+        facts_text_clean=[
+            "Формат: паблик-ток с участием экспертов",
+            "Спикер: Артур Сарниц, архитектор",
+            "Спикер: Андрей Анисимов, главный архитектор Калининграда",
+        ],
+    )
+
+    assert result is not None
+    assert "Артур Сарниц" in result["description"]
+    assert "Андрей Анисимов" in result["description"]
+    assert "18:30" not in result["description"]
+    assert "Клинической 21" not in result["description"]
+    assert text_calls and text_calls[0]["label"] == "split_description_writer_remove_logistics"
+    writer_prompt = client.calls[0]["prompt"]
+    assert "named roster" in writer_prompt
+    assert "не сворачивай имена в категории" in writer_prompt
 
 
 @pytest.mark.asyncio

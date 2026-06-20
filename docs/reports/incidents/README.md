@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-20-tg-speaker-roster-dropped.md`
+  - Scope: Telegram/Smart Update lecture and public-talk imports with named speaker rosters, split-create logistics cleanup, and public Telegraph/VK/TG descriptions.
+  - Must not regress: source-grounded named speaker rosters must not be collapsed into generic categories; logistics-tainted split-writer drafts should be LLM-cleaned before falling back to a generic description.
 - `INC-2026-06-20-tg-forward-service-chat-leak.md`
   - Scope: forwarded/reposted Telegram message routing, TG monitoring on-demand channel/group signals, and manual add-event service replies.
   - Must not regress: forwarded-post manual add-event flow must run only in private bot chats; group/channel reposts must not receive `Festival added` / `Event added` / publication progress service messages.
