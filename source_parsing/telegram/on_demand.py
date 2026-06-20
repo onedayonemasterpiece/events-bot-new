@@ -327,7 +327,12 @@ async def _mark_terminal(
         await conn.commit()
 
 
-async def dispatch_due_on_demand_monitoring(db: Database, bot: Any | None) -> int:
+async def dispatch_due_on_demand_monitoring(
+    db: Database,
+    bot: Any | None,
+    *,
+    run_id: str | None = None,
+) -> int:
     """Run due source-specific on-demand Telegram Monitoring requests.
 
     Returns the number of due rows that were attempted. Busy resource outcomes
@@ -337,12 +342,13 @@ async def dispatch_due_on_demand_monitoring(db: Database, bot: Any | None) -> in
     if not is_on_demand_enabled():
         return 0
     if _DISPATCH_LOCK.locked():
-        logger.info("tg_on_demand.skip reason=dispatcher_already_running")
+        logger.info("tg_on_demand.skip reason=dispatcher_already_running run_id=%s", run_id)
         return 0
 
     async with _DISPATCH_LOCK:
         now = _utc_now()
         await _reset_stale_running(db, now=now)
+        logger.info("tg_on_demand.dispatcher_tick run_id=%s", run_id)
         rows = await _fetch_due_rows(db, now=now)
         if not rows:
             return 0
@@ -369,9 +375,10 @@ async def dispatch_due_on_demand_monitoring(db: Database, bot: Any | None) -> in
             await _mark_running(db, username=username, now=run_started)
             attempted += 1
             logger.info(
-                "tg_on_demand.dispatch source=%s latest_message_id=%s",
+                "tg_on_demand.dispatch source=%s latest_message_id=%s run_id=%s",
                 username,
                 latest_message_id,
+                run_id,
             )
             try:
                 report = await run_telegram_monitor(

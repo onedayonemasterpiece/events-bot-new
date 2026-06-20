@@ -130,7 +130,7 @@ async def test_on_demand_dispatch_busy_requeues(tmp_path, monkeypatch):
     monkeypatch.setattr(on_demand, "resolve_superadmin_chat_id", fake_chat_id)
     monkeypatch.setattr(on_demand, "_utc_now", lambda: now)
 
-    attempted = await on_demand.dispatch_due_on_demand_monitoring(db, bot=object())
+    attempted = await on_demand.dispatch_due_on_demand_monitoring(db, bot=object(), run_id="sched-1")
 
     assert attempted == 1
     assert calls and calls[0]["source_usernames"] == ["kraftmarket39"]
@@ -163,7 +163,7 @@ async def test_on_demand_dispatch_success_marks_done(tmp_path, monkeypatch):
     monkeypatch.setattr(on_demand, "resolve_superadmin_chat_id", fake_chat_id)
     monkeypatch.setattr(on_demand, "_utc_now", lambda: now)
 
-    attempted = await on_demand.dispatch_due_on_demand_monitoring(db, bot=object())
+    attempted = await on_demand.dispatch_due_on_demand_monitoring(db, bot=object(), run_id="sched-1")
 
     assert attempted == 1
     row = await _queue_row(db)

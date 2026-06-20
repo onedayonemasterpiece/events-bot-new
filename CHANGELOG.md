@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: TG monitoring on demand scheduler entrypoint**: `tg_monitoring_on_demand` now accepts the scheduler wrapper `run_id` keyword, so the interval dispatcher can tick in production instead of failing with `unexpected keyword argument 'run_id'`. Tracks `INC-2026-06-20-tg-on-demand-scheduler-run-id`.
 - **Added: TG monitoring on demand v1**: Bot API `channel_post` updates from
   allowlisted Telegram sources (default `@kraftmarket39`) now coalesce into a
   durable per-source queue, force the new message id for the existing Kaggle

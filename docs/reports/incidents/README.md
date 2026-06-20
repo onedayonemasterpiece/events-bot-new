@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-20-tg-on-demand-scheduler-run-id.md`
+  - Scope: TG monitoring on demand APScheduler entrypoint, `_job_wrapper` run_id injection, and post-deploy runtime log smoke.
+  - Must not regress: scheduler jobs registered through `_job_wrapper` must accept the injected `run_id`; `tg_monitoring_on_demand` ticks must not fail with unexpected keyword argument errors.
 - `INC-2026-06-18-vk-title-shortlink-public-regression.md`
   - Scope: VK auto-import title guard, poster OCR title handoff, Smart Update generic-title recovery, and source shortlink normalization for public Telegram/VK/Telegraph event posts.
   - Must not regress: deterministic VK intake must not synthesize `<event_type> — <venue>` placeholders such as `Концерт — Бар Советов`; VK intake must not run deterministic word-level title-grounding/suspicious-title checks at all; if title quality needs review, it must route through Smart Update/LLM. Poster OCR is evidence for Smart Update/review, while the LLM title remains LLM-owned unless Smart Update changes it. External source shortlinks such as `clck.ru` must be resolved before public registration links are rendered.
