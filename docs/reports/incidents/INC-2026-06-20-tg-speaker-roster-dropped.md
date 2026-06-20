@@ -1,6 +1,6 @@
 # INC-2026-06-20-tg-speaker-roster-dropped Speaker roster dropped from TG-imported lecture
 
-Status: open
+Status: monitoring
 Severity: sev3
 Service: Telegram import / Smart Update G4 split-create / public Telegraph + VK event posts
 Opened: 2026-06-20
@@ -31,6 +31,11 @@ Production event `6244` (`https://t.me/kenigevents/4104`, lecture/public talk «
 - 2026-06-20 08:57 UTC: Smart Update created event `6244`; runtime log shows `g4_split_description_writer rejected description with logistics` and `g4_split_create_v2_rich_facts_unavailable`.
 - 2026-06-20 08:58 UTC: Telegraph and VK jobs completed with the generic description.
 - 2026-06-20 09:52 UTC: incident investigation confirmed DB facts/public surfaces/source mismatch; Telegram event post was still pending for 11:00 UTC.
+- 2026-06-20 09:56 UTC: production DB row repaired, missing `Андрей Анисимов` fact inserted, Telegraph/VK jobs requeued.
+- 2026-06-20 09:56 UTC: Telegraph page edited and VK replacement postponed post `wall-231920894_3986` created with all five speakers.
+- 2026-06-20 10:00 UTC: stale VK postponed duplicate `wall-231920894_3978` (generic text without speakers) deleted after owner/text verification.
+- 2026-06-20 10:02 UTC: prevention code deployed to Fly app `events-bot-new-wngqia` as machine version `1466`, image `deployment-01KVJ7N1MH1F2F10RZD3VA705B`.
+- 2026-06-20 10:03 UTC: `tg_event_publish` job `25025` requeued earlier, but remained pending due normal `tg_spacing`; corrected DB fields will be used when the Telegram cadence reaches event `6244`.
 
 ## Root Cause
 
@@ -77,12 +82,18 @@ Production event `6244` (`https://t.me/kenigevents/4104`, lecture/public talk «
 
 ## Immediate Mitigation
 
-- Pending: repair event `6244` canonical DB fields and re-render Telegraph/VK before the queued Telegram event publication slot.
+- Repaired event `6244` canonical DB fields (`description`, `short_description`, `search_digest`) with all five source-grounded speakers.
+- Inserted missing `event_source_fact`: `Спикер: Андрей Анисимов, главный архитектор Калининграда`.
+- Cleared publication hashes and requeued `telegraph_build` / `vk_sync`.
+- Verified Telegraph page now contains all five names.
+- Verified VK managed postponed post `wall-231920894_3986` contains all five names and deleted stale managed postponed duplicate `wall-231920894_3978`.
+- Requeued `tg_event_publish` earlier; it remains pending under normal Telegram spacing, with corrected DB fields ready for publication.
 
 ## Corrective Actions
 
-- Pending: tighten `rich_facts_extract` roster prompt.
-- Pending: tighten `split_description_writer` prompt and add an LLM-first logistics-cleanup rescue before dropping writer output.
+- Tightened `rich_facts_extract` prompt: multi-speaker `NAME` + role rosters must produce one named fact per block and must not collapse into categories.
+- Tightened `split_description_writer` prompt: lecture/public-talk descriptions must include named speaker rosters from `facts_text_clean`.
+- Added LLM-first rescue `split_description_writer_remove_logistics`: when a draft is rejected for duplicate logistics, Smart Update asks the LLM to remove only logistics and then re-validates instead of immediately dropping to a generic fallback.
 
 ## Follow-up Actions
 
@@ -90,11 +101,14 @@ Production event `6244` (`https://t.me/kenigevents/4104`, lecture/public talk «
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `41d65d42da616650f92ea09d3e90e551fbeee06c` (reachable from `origin/main`).
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean task worktree; Fly machine `683961db016e28`, version `1466`, image `events-bot-new-wngqia:deployment-01KVJ7N1MH1F2F10RZD3VA705B`.
+- regression checks: `/home/dev/projects/events-bot-new-video-lanes-20260618/.venv/bin/python -m pytest tests/test_smart_update_native_schema.py -q` → `27 passed`; `/home/dev/projects/events-bot-new-video-lanes-20260618/.venv/bin/python -m pytest tests/test_tg_monitoring_on_demand.py -q` → `6 passed`.
+- production DB/public repair evidence: `artifacts/codex/INC-2026-06-20-tg-speaker-roster-dropped/prod_6244_verify_after_repair.json` shows all five speaker names in DB and only VK postponed `3986` for this title; Telegraph page fetch with cache-bust confirmed all five names and no old generic description.
+- post-deploy smoke: `https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, `issues=[]` after deploy.
+- remaining monitoring item: `tg_event_publish` for event `6244` is pending under normal `tg_spacing`; DB `description/search_digest` and Telegraph/VK are already corrected before it publishes.
 
 ## Prevention
 
-- Pending: regression tests pin the multi-speaker roster prompt and logistics-cleanup rescue.
+- Regression tests pin the multi-speaker roster prompt and the logistics-cleanup rescue path.
+- Incident index lists this record as an active regression contract for Smart Update prompt/schema/logistics changes.
