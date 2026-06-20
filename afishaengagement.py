@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from sqlalchemy import or_, select
 
@@ -4942,6 +4942,7 @@ async def maybe_publish_shadow_debug_copy(
     now_utc: datetime | None = None,
     source_publish_url: str | None = None,
     source_event_id: int | None = None,
+    location_marker: Mapping[str, Any] | None = None,
 ) -> str | None:
     started = time.monotonic()
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -5383,6 +5384,7 @@ async def maybe_publish_shadow_debug_copy(
                         publish_date=scheduled_ts,
                         source_publish_url=source_publish_url,
                         source_event_id=source_event_id,
+                        location_marker=location_marker if publish_mode == "public" else None,
                     )
                     last_publish_exc = None
                     break

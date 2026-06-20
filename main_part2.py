@@ -35,6 +35,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from scheduling import MONTHS_GEN
 from event_utils import format_event_md, is_recent
 from festival_queue import festival_queue_effective_limit, festival_queue_info_text, process_festival_queue
+from vk_location_marker import (
+    location_marker_param_keys,
+    resolve_vk_location_marker_for_event,
+    sanitize_location_marker_payload,
+)
 
 if "LOCAL_TZ" not in globals():
     LOCAL_TZ = timezone.utc
@@ -3850,6 +3855,7 @@ async def post_to_vk(
     publish_date: int | None = None,
     source_publish_url: str | None = None,
     source_event_id: int | None = None,
+    location_marker: Mapping[str, Any] | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -3867,6 +3873,9 @@ async def post_to_vk(
         "from_group": 1,
         "signed": 0,
     }
+    location_params = sanitize_location_marker_payload(location_marker)
+    if location_params:
+        params_base.update(location_params)
     coauthor_url = str(vk_coauthor_url or "").strip()
     coauthor_screen = str(vk_coauthor_screen_name or "").strip().lstrip("@")
     if coauthor_url:
@@ -3932,31 +3941,8 @@ async def post_to_vk(
         try:
             if DEBUG:
                 mem_info("VK post before")
-            try:
-                data = await _vk_api(
-                    "wall.post",
-                    params,
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=actor.kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-            except VKAPIError as exc:
-                if (
-                    exc.code == 100
-                    and any(k in params for k in ("copyright", "coauthors", "coauthor_ids"))
-                ):
-                    logging.warning(
-                        "post_to_vk coauthor params rejected; retrying without coauthor screen=%s msg=%s",
-                        coauthor_screen,
-                        exc.message,
-                    )
-                    params = {
-                        k: v
-                        for k, v in params.items()
-                        if k not in {"copyright", "coauthors", "coauthor_ids"}
-                    }
+            while True:
+                try:
                     data = await _vk_api(
                         "wall.post",
                         params,
@@ -3966,7 +3952,34 @@ async def post_to_vk(
                         token_kind=actor.kind,
                         skip_captcha=(actor.kind == "group"),
                     )
-                else:
+                    break
+                except VKAPIError as exc:
+                    if exc.code == 100 and any(k in params for k in location_marker_param_keys()):
+                        logging.warning(
+                            "post_to_vk location marker params rejected; retrying without marker msg=%s",
+                            exc.message,
+                        )
+                        params = {
+                            k: v
+                            for k, v in params.items()
+                            if k not in location_marker_param_keys()
+                        }
+                        continue
+                    if (
+                        exc.code == 100
+                        and any(k in params for k in ("copyright", "coauthors", "coauthor_ids"))
+                    ):
+                        logging.warning(
+                            "post_to_vk coauthor params rejected; retrying without coauthor screen=%s msg=%s",
+                            coauthor_screen,
+                            exc.message,
+                        )
+                        params = {
+                            k: v
+                            for k, v in params.items()
+                            if k not in {"copyright", "coauthors", "coauthor_ids"}
+                        }
+                        continue
                     raise
             if DEBUG:
                 mem_info("VK post after")
@@ -5809,6 +5822,10 @@ async def sync_vk_source_post(
     logging.info("sync_vk_source_post start for event %s", event.id)
     festival = await _resolve_event_festival(db, event)
     publish_source_url = await _event_primary_publish_source_url(db, event)
+    location_marker_decision = await resolve_vk_location_marker_for_event(event, db)
+    location_marker = (
+        location_marker_decision.payload if location_marker_decision.applied else None
+    )
 
     existing_vk_post_url = (event.source_vk_post_url or "").strip()
     if existing_vk_post_url:
@@ -5857,6 +5874,7 @@ async def sync_vk_source_post(
                 shadow_only=shadow_only,
                 source_publish_url=publish_source_url,
                 source_event_id=int(event.id) if event.id is not None else None,
+                location_marker=location_marker,
             )
         except Exception:
             logging.exception(
@@ -6104,6 +6122,7 @@ async def sync_vk_source_post(
                 vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
                 source_publish_url=publish_source_url,
                 source_event_id=int(event.id) if event.id is not None else None,
+                location_marker=location_marker,
             )
         if url:
             logging.info("sync_vk_source_post created %s", url)

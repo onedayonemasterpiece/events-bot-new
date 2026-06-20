@@ -331,6 +331,14 @@ features:
       - main_part2.py
       - video_announce/story_publish.py
       - kaggle/CrumpleVideo/story_publish.py
+  vk_location_marker:
+    status: implemented
+    docs: docs/features/vk-location-marker/README.md
+    requirements: docs/features/vk-location-marker/requirements.md
+    entrypoints:
+      - vk_location_marker.py
+      - main_part2.py
+      - db.py
   vk_dynamic_cover:
     status: mvp
     docs: docs/features/vk-dynamic-cover/README.md

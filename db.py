@@ -1852,6 +1852,51 @@ class Database:
                 "ON geo_city_region_cache(created_at)"
             )
 
+            # Cache for optional VK wall.post location markers. The publisher is
+            # fail-open: only confident Kaliningrad Oblast marker payloads are
+            # reused; negative/ambiguous rows prevent repeated resolution work
+            # for a bounded TTL in vk_location_marker.py.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_location_marker_cache(
+                    query_norm TEXT PRIMARY KEY,
+                    query_display TEXT,
+                    display_title TEXT,
+                    city TEXT,
+                    is_kaliningrad_oblast BOOLEAN,
+                    lat REAL,
+                    long REAL,
+                    place_id TEXT,
+                    confidence REAL,
+                    provenance TEXT,
+                    status TEXT,
+                    details JSON,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            for column_def in (
+                "query_display TEXT",
+                "display_title TEXT",
+                "city TEXT",
+                "is_kaliningrad_oblast BOOLEAN",
+                "lat REAL",
+                "long REAL",
+                "place_id TEXT",
+                "confidence REAL",
+                "provenance TEXT",
+                "status TEXT",
+                "details JSON",
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            ):
+                await _add_column(conn, "vk_location_marker_cache", column_def)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_location_marker_cache_updated_at "
+                "ON vk_location_marker_cache(updated_at)"
+            )
+
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_festival_name ON festival(name)"
             )
