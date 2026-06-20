@@ -1,10 +1,10 @@
 # INC-2026-06-20 TG forwarded-post service messages leaked to chat
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram forwarded-post intake / TG monitoring on demand
 Opened: 2026-06-20
-Closed: —
+Closed: 2026-06-20
 Owners: events-bot maintainer
 Related incidents: `INC-2026-06-20-tg-on-demand-scheduler-run-id.md`
 Related docs: `docs/features/tg-monitoring-on-demand/README.md`, `docs/features/telegram-monitoring/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -31,6 +31,8 @@ After TG monitoring on demand rollout, a repost/forward intended as a channel si
 - 2026-06-20 08:57 UTC — legacy forwarded-post handler parsed it immediately via add-event flow and sent service messages to the message chat.
 - 2026-06-20 09:00 UTC — user reported service messages leaked to chat.
 - 2026-06-20 09:05 UTC — logs/DB localized root cause to forwarded-post handler routing, not LLM event semantics.
+- 2026-06-20 09:04 UTC — fix `c021f56b` deployed as Fly release `v1465`.
+- 2026-06-20 09:06 UTC — post-deploy runtime logs showed `tg_monitoring_on_demand` `JOB_EXECUTED` with `traceback_excerpt=None`; `/healthz` was ready.
 
 ## Root Cause
 
@@ -68,11 +70,11 @@ After TG monitoring on demand rollout, a repost/forward intended as a channel si
 
 ### Required evidence
 
-- deployed SHA:
-- Fly release version:
-- test output:
-- runtime/log evidence:
-- `origin/main` reachability:
+- deployed SHA: `c021f56b`
+- Fly release version: `v1465` (`events-bot-new-wngqia:deployment-01KVJ4BZSMDG2AQ4WPJ87HTD17`)
+- test output: `/home/dev/projects/events-bot-new-video-lanes-20260618/.venv/bin/python -m pytest tests/test_tg_monitoring_on_demand.py` → `6 passed`; `py_compile` changed modules → ok; `git diff --check` → ok
+- runtime/log evidence: `/data/runtime_logs/events-bot.log` line 11617 `JOB_SUBMITTED job_id=tg_monitoring_on_demand`; line 11621 `JOB_EXECUTED job_id=tg_monitoring_on_demand ... traceback_excerpt=None` after release `v1465`; pre-fix evidence lines 10495/10501 showed legacy `add_event`/`forward parsed` path for event `6244`
+- `origin/main` reachability: `origin/main=c021f56b` before deploy and deployed SHA reachable from `origin/main`
 
 ## Immediate Mitigation
 
@@ -91,10 +93,10 @@ After TG monitoring on demand rollout, a repost/forward intended as a channel si
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `c021f56b`
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia` from clean task worktree, with SHA pushed to `origin/main` before deploy
+- regression checks: targeted pytest, py_compile, `git diff --check`, Fly `/healthz`, runtime log tick verification
+- post-deploy verification: Fly release `v1465` complete, machine `683961db016e28` version `1465` started with 1/1 checks passing, `/healthz` ready, `tg_monitoring_on_demand` continued executing without traceback
 
 ## Prevention
 
