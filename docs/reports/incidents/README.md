@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-20-tg-forward-service-chat-leak.md`
+  - Scope: forwarded/reposted Telegram message routing, TG monitoring on-demand channel/group signals, and manual add-event service replies.
+  - Must not regress: forwarded-post manual add-event flow must run only in private bot chats; group/channel reposts must not receive `Festival added` / `Event added` / publication progress service messages.
 - `INC-2026-06-20-tg-on-demand-scheduler-run-id.md`
   - Scope: TG monitoring on demand APScheduler entrypoint, `_job_wrapper` run_id injection, and post-deploy runtime log smoke.
   - Must not regress: scheduler jobs registered through `_job_wrapper` must accept the injected `run_id`; `tg_monitoring_on_demand` ticks must not fail with unexpected keyword argument errors.

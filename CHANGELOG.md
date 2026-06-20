@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: forwarded TG service-message leak**: forwarded/reposted Telegram messages now enter the manual add-event flow only in private bot chats; group/channel reposts used as on-demand signals no longer receive `Festival added`, `Event added`, or publication progress service replies. Tracks `INC-2026-06-20-tg-forward-service-chat-leak`.
 - **Fixed: TG monitoring on demand scheduler entrypoint**: `tg_monitoring_on_demand` now accepts the scheduler wrapper `run_id` keyword, so the interval dispatcher can tick in production instead of failing with `unexpected keyword argument 'run_id'`. Tracks `INC-2026-06-20-tg-on-demand-scheduler-run-id`.
 - **Added: TG monitoring on demand v1**: Bot API `channel_post` updates from
   allowlisted Telegram sources (default `@kraftmarket39`) now coalesce into a

@@ -12,6 +12,7 @@ V1 добавляет fast-path для отдельных Telegram-канало�
   - ставит `next_run_at = now + TG_MONITORING_ON_DEMAND_DEBOUNCE_SECONDS` (default `600`, 10 минут), чтобы автор канала успел внести правки.
 - Periodic job `tg_monitoring_on_demand` проверяет очередь и запускает `run_telegram_monitor(..., source_usernames=[username], trigger="on_demand")`.
 - Existing scheduled Telegram Monitoring остаётся catch-up контуром; on-demand — только ускоритель для новых постов.
+- Reposts/forwards in allowlisted channels/groups are treated as automation signals only: the legacy manual forwarded-post add-event flow is private-chat-only and must not send `Festival added` / `Event added` / publication progress messages into the source chat.
 - Если ресурс занят (`already_running`, global heavy lock, remote Telegram session busy), строка возвращается в `pending` с retry через `TG_MONITORING_ON_DEMAND_RETRY_SECONDS` (default `600`, 10 минут).
 - Non-busy ошибка помечает строку `status='error'`; scheduled catch-up остаётся safety net.
 

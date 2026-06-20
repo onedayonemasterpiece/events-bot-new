@@ -77,6 +77,29 @@ def allowed_source_usernames() -> set[str]:
     return usernames or {DEFAULT_ON_DEMAND_SOURCE}
 
 
+
+
+def is_private_forward_message(message: Any) -> bool:
+    """Return True only for forwarded messages sent directly to the bot.
+
+    Reposts in channels/groups are signals for channel-specific automation and
+    must not fall through into the manual add-event flow, because that flow sends
+    operator service messages to ``message.chat.id``.
+    """
+
+    chat = getattr(message, "chat", None)
+    chat_type = str(getattr(chat, "type", "") or "").strip().lower()
+    if chat_type != "private":
+        return False
+    model_extra = getattr(message, "model_extra", None) or {}
+    return bool(
+        getattr(message, "forward_date", None)
+        or getattr(message, "forward_from_chat", None)
+        or getattr(message, "forward_origin", None)
+        or (isinstance(model_extra, dict) and "forward_origin" in model_extra)
+    )
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 

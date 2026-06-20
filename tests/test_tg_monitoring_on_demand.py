@@ -171,3 +171,45 @@ async def test_on_demand_dispatch_success_marks_done(tmp_path, monkeypatch):
     assert row[4] == 1
     assert row[5] is None
     await db.close()
+
+
+def test_private_forward_message_filter_blocks_group_and_channel_reposts():
+    private_forward = SimpleNamespace(
+        chat=SimpleNamespace(type="private"),
+        forward_date=datetime(2026, 6, 20, 8, 0, tzinfo=timezone.utc),
+        model_extra={},
+    )
+    group_forward = SimpleNamespace(
+        chat=SimpleNamespace(type="supergroup"),
+        forward_date=datetime(2026, 6, 20, 8, 0, tzinfo=timezone.utc),
+        model_extra={},
+    )
+    channel_forward = SimpleNamespace(
+        chat=SimpleNamespace(type="channel"),
+        forward_date=datetime(2026, 6, 20, 8, 0, tzinfo=timezone.utc),
+        model_extra={},
+    )
+
+    assert on_demand.is_private_forward_message(private_forward) is True
+    assert on_demand.is_private_forward_message(group_forward) is False
+    assert on_demand.is_private_forward_message(channel_forward) is False
+
+
+def test_private_forward_message_filter_supports_forward_origin_model_extra():
+    private_forward = SimpleNamespace(
+        chat=SimpleNamespace(type="private"),
+        forward_date=None,
+        forward_from_chat=None,
+        forward_origin=None,
+        model_extra={"forward_origin": {"type": "channel"}},
+    )
+    group_forward = SimpleNamespace(
+        chat=SimpleNamespace(type="group"),
+        forward_date=None,
+        forward_from_chat=None,
+        forward_origin=None,
+        model_extra={"forward_origin": {"type": "channel"}},
+    )
+
+    assert on_demand.is_private_forward_message(private_forward) is True
+    assert on_demand.is_private_forward_message(group_forward) is False

@@ -20640,10 +20640,11 @@ def create_app() -> web.Application:
         festival_edit_wrapper, lambda m: m.from_user.id in festival_edit_sessions
 
     )
+    from source_parsing.telegram.on_demand import is_private_forward_message
+
     dp.message.register(
         forward_wrapper,
-        lambda m: bool(m.forward_date)
-        or "forward_origin" in getattr(m, "model_extra", {}),
+        is_private_forward_message,
     )
     dp.my_chat_member.register(partial(handle_my_chat_member, db=db))
     dp.business_connection.register(
