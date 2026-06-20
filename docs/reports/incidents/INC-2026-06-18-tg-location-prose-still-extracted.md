@@ -30,6 +30,8 @@ The incident therefore remains a regression of the LLM-first venue extraction co
 - Follow-up audit found `https://t.me/kldevents/698` / VK `https://vk.com/wall-231920894_3592` with `location_name='🤗Завтра'`; this was missed by the first investigation because the public Telegram/VK window around older same-day posts was not inspected.
 - The system still spends runtime on repeated guardrail clean-up instead of producing source-grounded venue fields in the LLM-owned extraction stage.
 
+2026-06-20 recurrence evidence: new public posts `https://t.me/kldevents/913` (`event.id=6162`) and `https://t.me/kldevents/914` (`event.id=6163`) again exposed short source-grounded prose/list fragments as public location lines: `📩 Зоосад с первого года (напомним` and the split list topic `о концертах` / `организованных в честь 80-летия Калининградской области;`. These posts prove that the previous guards still missed non-location emoji/list bullets and discussion-topic fragments unless the LLM venue-review stage is explicitly triggered for those shapes.
+
 ## Detection
 
 - Operator request on 2026-06-18 to pull all `prose in location` incidents and audit current active events.
@@ -53,6 +55,9 @@ The incident therefore remains a regression of the LLM-first venue extraction co
 - 2026-06-17 00:24 UTC — `@kaliningradartmuseum/8011` produced event `6089` with `location_name='🤗Завтра'`. Runtime logs for the import/publish window had already rotated out by the 2026-06-18 follow-up check; DB/source/public Telegram+VK evidence remained available. It was published as `https://t.me/kldevents/698` and live VK `https://vk.com/wall-231920894_3592`.
 - 2026-06-18 UTC — current active/future event audit checked 402 active future rows. The first pass incorrectly underweighted user-visible `@kldevents` rows; follow-up inspection confirmed fresh public defects above.
 - 2026-06-18 UTC — follow-up public-surface audit inspected the visible `@kldevents` window around posts 680–860 and the latest `klgdevents` VK wall items via API; it found the missed `/698` / VK `_3592` decorated temporal-location leak, plus adjacent non-location public-surface issues for separate follow-up (`Ленинскийский проспект 30`, duplicate `Янтарь холл, Ленина 11, Светлогорск, Ленина 11`, and a VK debug-copy marker).
+- 2026-06-19 05:48 UTC — `event.id=6162` was published as `https://t.me/kldevents/913` with `location_name=📩 Зоосад с первого года (напомним` from source `@kaliningradartmuseum/8017`; Telegraph and managed VK `wall-231920894_3786` consumed the same bad location.
+- 2026-06-19 05:58 UTC — `event.id=6163` was published as `https://t.me/kldevents/914` with `location_name=о концертах`, `location_address=организованных в честь 80-летия Калининградской области;` from source `@minkultturism_39/4826`; Telegraph and managed VK `wall-231920894_3787` consumed the same bad location.
+- 2026-06-20 UTC — recurrence investigation confirmed runtime file mirror is enabled (`ENABLE_RUNTIME_FILE_LOGGING=1`, `/data/runtime_logs/events-bot.log*`), but the 2026-06-18 23:40 import window had rotated out; production DB/source rows and Telethon reads of `/913` and `/914` are the primary evidence.
 
 ## Root Cause
 
@@ -63,6 +68,7 @@ The incident therefore remains a regression of the LLM-first venue extraction co
 5. Event-local media assignment/rehydration can attach unrelated posters from a multi-event roundup/source context. This is confirmed for `@kldevents/814`.
 6. The temporal-location guard was too literal: it matched `Завтра`, but not emoji/bullet-decorated forms such as `🤗Завтра`, so a temporal word copied by the LLM survived both Telegram import and Smart Update prose checks.
 7. The historical closure criteria were too focused on preventing public garbage rows. They did not require evidence that the LLM extraction stopped producing prose-location candidates, nor that fail-closed skips and public `@kldevents`/`klgdevents` posts were audited as potentially lost or degraded events.
+8. The LLM venue-review trigger still did not cover short non-location emoji/list bullets (`📩 ...`) or discussion-topic fragments (`о концертах`) when they were literally grounded in the source text. The server fail-closed gate had the same blind spot, so deterministic publication safety was again the last line of defense and it missed these short forms.
 
 ## Contributing Factors
 
@@ -83,6 +89,8 @@ The incident therefore remains a regression of the LLM-first venue extraction co
 | `https://t.me/kldevents/728` | `5041` | Location complaint checked; current official sources say the 2026 staging is in the internal theatre courtyard at `пр-т Мира 4`, not Башня Врангеля. Not confirmed as location bug, but old `bashnya_vrangelya` media remain attached from parser/source media and should be treated as stale media risk. | `parser:dramteatr` source text and VK source `wall-132625599_19027` both say new площадка/internal courtyard, `Мира 4`; older image URLs include `bashnya_vrangelya`. |
 | `https://t.me/kldevents/821` | `6138` | Prose in location: `location_name='как это чувствуется 🎹'`, `location_address='Остров Канта'`; expected canonical source/default venue `Кафедральный собор`. | Runtime line: `replaced unsupported extracted location source=sobor39 message_id=6000 ... extracted='Кафедральный собор' grounded='как это чувствуется 🎹'`. |
 | `https://t.me/kldevents/811` | `6133` | Prose in location: `location_name='пожалуй, с приглашения на концерт🎻🙃'`, `location_address='Калининградский зоопарк'`; expected source/default `Калининградский зоопарк, пр-т Мира 26`. | Runtime lines: `replaced unsupported extracted location source=kldzoo message_id=7534 ... grounded='пожалуй, с приглашения на концерт🎻🙃'`; public DB row. |
+| `https://t.me/kldevents/913` / `https://vk.com/wall-231920894_3786` | `6162` | Non-location emoji/list paragraph fragment in location: `location_name='📩 Зоосад с первого года (напомним'`; expected source-owned default `Музей Изобразительных искусств, Ленинский проспект 83`. | Telethon read of `/913`; production DB event/source rows; source `@kaliningradartmuseum/8017`; `telegram_source.default_location`. |
+| `https://t.me/kldevents/914` / `https://vk.com/wall-231920894_3787` | `6163` | Discussion-topic bullet split across `location_name='о концертах'` and `location_address='организованных в честь 80-летия Калининградской области;'`; online-only livestream should use explicit online platform/page or fail closed, never prose. | Telethon read of `/914`; production DB event/source/poster OCR rows; source `@minkultturism_39/4826`. |
 
 ## Automation Contract
 
@@ -110,6 +118,7 @@ The incident therefore remains a regression of the LLM-first venue extraction co
 - For source-owned venue channels such as `sobor39` and `kldzoo`, a deterministic free-text inference candidate must never overrule the source default or an extracted known venue unless an LLM-owned venue-review stage confirms the change with source-grounded evidence.
 - Exact-address reference normalization must not bind to a canonical venue when the source address includes a room/studio/sub-location and the source does not name that canonical venue.
 - Multi-event roundup media must be event-local: unrelated posters from the same source post must not be published with a different event.
+- Short non-location emoji/list bullets such as `📩 Зоосад...`, discussion-topic fragments such as `о концертах`, and prose split between `location_name`/`location_address` must trigger LLM venue review and must not survive the server import fail-closed gate.
 
 ### Required evidence
 
@@ -132,13 +141,15 @@ Initial investigation-only pass did not mutate production. The repair pass is no
 - 2026-06-18: follow-up LLM-first root fix prepared for emoji/bullet-decorated temporal fragments: Telegram Monitoring producer schema and the Gemma venue-review prompt now explicitly reject decorated temporal `location_name` values such as `🤗Завтра`, and the review trigger strips leading emoji/bullets before temporal checks. Telegram import and Smart Update keep the same normalization as fail-closed backup, not as the primary fix.
 - 2026-06-18: public repair completed for the missed adjacent surface defects found after the weak first audit: `event 6091` / `https://t.me/kldevents/768` / `https://vk.com/wall-231920894_3593` now says `Кинотеатр «КАРО 7», Ленинский проспект 30`; `event 2759` / `https://t.me/kldevents/339` / `https://vk.com/wall-231920894_3746` now says `Янтарь холл, Ленина 11`; VK debug shadow copy `https://vk.com/wall-231920894_3747` was deleted after owner/debug-marker verification. Production backups: `codex_backup_20260618_public_surface_event_20260618_141429`, `codex_backup_20260618_public_surface_event_source_20260618_141429`, `codex_backup_20260618_public_surface_eventposter_20260618_141429`, `codex_backup_20260618_public_surface_joboutbox_20260618_141429`.
 - 2026-06-18: LLM-first producer fix deployed from `96abe913` to Fly image `events-bot-new-wngqia:deployment-01KVDHKJ79KSNN06ENCA5TQC2S`; `/healthz` returned `ok=true`, `ready=true`, machine `683961db016e28` checks `1/1` passing.
+- 2026-06-20: recurrence prevention added for `/913` and `/914`: Telegram Monitoring venue-review now routes non-location emoji/list bullets and discussion-topic fragments to the LLM-owned location repair path; the prompt forbids splitting one prose/list sentence across `location_name`/`location_address` and clarifies online-only livestream venue handling. Server import got the same fail-closed shape guard so these short forms cannot reach public Telegram/VK/Telegraph location fields if the remote LLM output is stale or fails.
+- 2026-06-20: server import now preserves event-grounded `address, studio` evidence over ungrounded reference normalization, keeping the existing `/835` regression contract green while touching the location guard.
 
 ## Follow-up Actions
 
 - [ ] Build a replay pack for `@open_fest/628`, `@terkatalk/5010`, `@kaliningradlibrary/2298`, `@kulturnaya_chaika/7865`, `@meowafisha/7677`, `@open_fest/631`, and `@kaliningradartmuseum/8011`.
 - [x] Repair missed public-surface defects not explicitly pointed to in the previous operator message: `/768` typo, `/339` duplicated venue/address line, and `klgdevents` debug shadow post `_3747`.
 - [x] Add replay controls for public defects: `@sobor39/6000` → `https://t.me/kldevents/821`, `@kldzoo/7534` → `https://t.me/kldevents/811`, `@meowafisha/7683` / `@sofit_models/126` → `https://t.me/kldevents/835`, `@kulturnaya_chaika/7860` → `https://t.me/kldevents/814`.
-- [ ] Tighten the Telegram Monitoring LLM extraction prompt/schema so prose/temporal-location outputs, including emoji-prefixed date words, become empty venue fields plus explicit uncertainty/reason, not garbage strings.
+- [x] Tighten the Telegram Monitoring LLM extraction prompt/schema so prose/temporal-location outputs, including emoji-prefixed date words, non-location emoji/list bullets, and discussion-topic fragments, become empty/reviewed venue fields rather than garbage strings.
 - [x] Replace deterministic venue overrule (`grounded_loc` over extracted/default known venue) with fail-closed or LLM-owned venue-review; deterministic inference may supply hints, not override venue semantics.
 - [x] Tighten explicit `address, studio` handling so conflicting known-venue names do not survive when source/OCR names a sub-location.
 - [x] Make source media rehydration fail closed for source URLs shared by multiple event rows before publication to `@kldevents`; full event-local OCR assignment remains follow-up.

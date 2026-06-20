@@ -122,10 +122,14 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "location_name must be a venue/place name, not arbitrary nearby text" in source
     assert 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра"' in source
     assert "never copy a descriptive sentence" in source
+    assert "discussion-topic line such as" in source
+    assert "Never split one prose/list sentence across location_name and location_address" in source
+    assert "For online-only livestreams, use an explicit platform/page as location_name" in source
     assert "each event must use venue/address/city facts" in source
     assert "the event-local venue wins" in source
     assert "canonical attendee-facing title rather than the in-character/plot phrase" in source
-    assert "speaker biography, schedule commentary, film metadata" in source
+    assert "speaker biography, schedule commentary" in source
+    assert "film metadata" in source
     assert 'hall/room label such as "Кинозал:" or "Атриум:"' in source
     assert "use the host venue as location_name" in source
     assert "leave location_name empty rather than filling it with prose" in source
@@ -247,6 +251,59 @@ def test_tg_monitor_location_review_triggers_on_program_item_as_location() -> No
     ]
 
     assert needs_review(events, message_text=source_text) is True
+
+
+def test_tg_monitor_location_review_triggers_on_non_location_bullet_fragment() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Ревущий лев, поющий лось",
+                "date": "2026-06-18",
+                "time": "",
+                "end_date": "2026-06-28",
+                "location_name": "📩 Зоосад с первого года (напомним",
+                "city": "Калининград",
+            }
+        ],
+        source_default_location="Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+        message_text=(
+            "📩 Зоосад с первого года (напомним, Кёнигсбергский зоосад открылся "
+            "21 мая 1896 года) издавал открытки. Выставка работает до 28 июня."
+        ),
+        ocr_text="",
+        source_context_line="source_username=kaliningradartmuseum",
+    )
+
+
+def test_tg_monitor_location_review_triggers_on_topic_sentence_split_location() -> None:
+    ns = _load_location_review_helpers_in_isolation()
+    needs_review = ns["_needs_llm_location_review"]
+
+    assert needs_review(
+        [
+            {
+                "title": "Прямой эфир с министром по культуре и туризму Калининградской области Андреем Ермаком",
+                "date": "2026-06-19",
+                "time": "14:30",
+                "location_name": "о концертах",
+                "location_address": "организованных в честь 80-летия Калининградской области;",
+                "city": "Калининград",
+            }
+        ],
+        message_text=(
+            "Андрей Викторович расскажет:\n\n"
+            "- о концертах, организованных в честь 80-летия Калининградской области;\n"
+            "- об итогах фестиваля классической музыки «Кантата»."
+        ),
+        ocr_text=(
+            "Официальная страница правительства Калининградской области "
+            "Вконтакте и в Одноклассниках"
+        ),
+        source_context_line="source_username=minkultturism_39",
+    )
 
 
 def test_tg_monitor_extracts_official_bridge_lifting_notices() -> None:
@@ -559,6 +616,10 @@ def _load_location_review_helpers_in_isolation():
         "_LOCATION_REVIEW_ADDRESS_HINT_RE",
         "_LOCATION_REVIEW_VENUE_CUE_RE",
         "_LOCATION_REVIEW_GENERIC_ROOM_RE",
+        "_LOCATION_REVIEW_NON_VENUE_BULLET_RE",
+        "_LOCATION_REVIEW_TOPIC_FRAGMENT_RE",
+        "_LOCATION_REVIEW_PROGRAM_ITEM_RE",
+        "_LOCATION_REVIEW_CATALOGUE_ADDRESS_RE",
         "_location_review_looks_like_person_name",
         "_location_review_norm",
         "_location_review_value_grounded",

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: Telegram Monitoring prose/location recurrence**: venue-review now routes non-location emoji/list bullets and discussion-topic fragments (for example `📩 Зоосад...` and `о концертах`) through the LLM-owned location repair path, and server import fails closed so such fragments cannot reach Telegram/VK/Telegraph location fields. Tracks `INC-2026-06-18-tg-location-prose-still-extracted`.
 - **Added: VK location marker v1**: managed VK event posts now best-effort add
   a safe `lat`/`long` location marker from structured `event.city` for
   confident Kaliningrad Oblast events, cache marker decisions in

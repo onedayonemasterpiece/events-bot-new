@@ -2269,6 +2269,14 @@ _LOCATION_REVIEW_GENERIC_ROOM_RE = re.compile(
     r"^\s*(?:кино(?:зал|театр)|зал|холл|аудитори[яи]|сцена|мастерск(?:ая|ие)|дворик|площадка)\s*:?\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+_LOCATION_REVIEW_NON_VENUE_BULLET_RE = re.compile(
+    r"^\s*(?!📍)[^\w\s#@,.:;!?()«»\"'`-]{1,4}\s+\S+",
+    re.UNICODE,
+)
+_LOCATION_REVIEW_TOPIC_FRAGMENT_RE = re.compile(
+    r"^\s*(?:о|об|обо|про|по|для|к|ко|с|со)\s+\S+",
+    re.IGNORECASE | re.UNICODE,
+)
 _LOCATION_REVIEW_PROGRAM_ITEM_RE = re.compile(
     r"^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+",
     re.IGNORECASE | re.UNICODE,
@@ -2331,7 +2339,7 @@ def _location_review_looks_like_person_name(value: str | None) -> bool:
         return False
     if _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw):
         return False
-    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+    if re.search(r"\d|[,:;.!?/@#()]|[«»\"'`]", raw):
         return False
     words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
     if not (2 <= len(words) <= 4):
@@ -2509,7 +2517,19 @@ def _location_review_value_grounded(value: str | None, evidence_text: str) -> bo
 def _event_needs_location_grounding_review(ev: dict, evidence_text: str) -> bool:
     raw = str(ev.get('location_name') or '').strip()
     addr = str(ev.get('location_address') or '').strip()
+    has_venue_or_address_cue = bool(
+        _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw)
+        or _LOCATION_REVIEW_ADDRESS_HINT_RE.search(addr)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
+        or _LOCATION_REVIEW_VENUE_CUE_RE.search(addr)
+    )
     if raw and _LOCATION_REVIEW_GENERIC_ROOM_RE.search(raw):
+        return True
+    if raw and not has_venue_or_address_cue and (
+        _LOCATION_REVIEW_NON_VENUE_BULLET_RE.search(raw)
+        or _LOCATION_REVIEW_TOPIC_FRAGMENT_RE.search(raw)
+        or raw.count('(') > raw.count(')')
+    ):
         return True
     if raw and _LOCATION_REVIEW_PROGRAM_ITEM_RE.search(raw) and not (
         _LOCATION_REVIEW_ADDRESS_HINT_RE.search(raw) or _LOCATION_REVIEW_VENUE_CUE_RE.search(raw)
@@ -2581,9 +2601,9 @@ def _needs_llm_location_review(
             return True
         if _location_review_looks_like_person_name(compact):
             return True
-        if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
+        if _event_needs_location_grounding_review(ev, evidence_text):
             return True
-        if evidence_text and _event_needs_location_grounding_review(ev, evidence_text):
+        if len(words) >= 5 and re.search(r"[.!?]\s*$", compact) and not _LOCATION_REVIEW_ADDRESS_HINT_RE.search(compact):
             return True
     return False
 
@@ -2628,10 +2648,13 @@ async def _repair_suspicious_locations(
         'grounded venue from the source or return empty strings. Do not preserve a plausible but ungrounded venue. '
         'When the source names a specific venue and another similar venue exists (for example "дворец спорта Янтарный" '
         'vs "Дворец спорта Юность"), choose only the source-grounded venue. '
-        'Never keep descriptive prose, schedule commentary, a service heading, film metadata, ticket instructions, '
+        'Never keep descriptive prose, schedule commentary, a service heading, non-location emoji/list bullets, '
+        'discussion-topic lines such as "о концертах" / "об итогах ...", film metadata, ticket instructions, '
         'speaker bios, repertoire/program items, musical work titles, catalogue numbers such as "соч. 16", '
         'temporal/date fragments (including emoji-prefixed values like "🤗Завтра"), '
-        'or an event description as location_name. '
+        'or an event description as location_name. Never split one prose/list sentence across location_name and '
+        'location_address. For online-only livestreams, use an explicit platform/page as location_name only when '
+        'the source/OCR states it; otherwise leave venue fields empty. '
         'If the extracted location is a hall/room/section label such as "Кинозал:" and the host venue is grounded '
         'by source context or message text, output the host venue as location_name and leave the hall label out. '
         'For schedule/program posts with many lines, use only the venue nearest the event line. If the event line has '
@@ -2940,8 +2963,11 @@ async def extract_events(
         'or better speaker/title spelling, merge those facts into the event object. '
         'Prefer filling location_name and location_address whenever the source or OCR gives enough evidence. '
         'location_name must be a venue/place name, not arbitrary nearby text: never copy a descriptive sentence, '
-        'speaker biography, schedule commentary, film metadata, ticket instruction, repertoire/program item, '
+        'speaker biography, schedule commentary, non-location emoji/list bullet, discussion-topic line such as '
+        '"о концертах" / "об итогах ...", film metadata, ticket instruction, repertoire/program item, '
         'musical work title, catalogue number such as "соч. 16", or event description into location_name. '
+        'Never split one prose/list sentence across location_name and location_address. For online-only livestreams, '
+        'use an explicit platform/page as location_name only when the source/OCR states it; otherwise leave venue fields empty. '
         'For multi-date, multi-event, timetable, digest, or repost posts, each event must use venue/address/city facts '
         'from the local block nearest that event date/title; do not reuse a source default or another block venue when '
         'the event-local block explicitly names a different venue. '

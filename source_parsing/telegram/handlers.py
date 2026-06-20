@@ -2530,6 +2530,12 @@ _LOCATION_LABEL_FRAGMENT_RE = re.compile(
 _LOCATION_SCHEDULE_FRAGMENT_RE = re.compile(
     r"(?iu)^\s*\d{1,2}[:.]\d{2}\s*[-–—]\s*\d{1,2}[:.]\d{2}\s*[-–—]\s+\S+"
 )
+_LOCATION_NON_VENUE_BULLET_RE = re.compile(
+    r"(?u)^\s*(?!📍)[^\w\s#@,.:;!?()«»\"'`-]{1,4}\s+\S+"
+)
+_LOCATION_TOPIC_FRAGMENT_RE = re.compile(
+    r"(?iu)^\s*(?:о|об|обо|про|по|для|к|ко|с|со)\s+\S+"
+)
 _LOCATION_PROGRAM_ITEM_RE = re.compile(
     r"(?iu)^\s*(?:[🎵🎶🎼•·▪️-]\s*)?(?:[A-ZА-ЯЁ]\.\s*){1,4}[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё-]+\b.*[–—-]\s*\S+"
 )
@@ -2933,6 +2939,13 @@ def _looks_like_location_prose_fragment(value: str | None) -> bool:
         return True
     if _LOCATION_SCHEDULE_FRAGMENT_RE.search(compact):
         return True
+    has_venue_or_address_cue = bool(_ADDRESS_HINT_RE.search(compact) or _LOCATION_VENUE_CUE_RE.search(compact))
+    if not has_venue_or_address_cue and (
+        _LOCATION_NON_VENUE_BULLET_RE.search(compact)
+        or _LOCATION_TOPIC_FRAGMENT_RE.search(compact)
+        or (compact.count("(") > compact.count(")"))
+    ):
+        return True
     if len(compact) > 90:
         return True
     if re.search(r"[:]\s*$", compact) and len(words) <= 3 and not _ADDRESS_HINT_RE.search(compact):
@@ -2959,7 +2972,7 @@ def _looks_like_location_person_name_fragment(value: str | None) -> bool:
         return False
     if _ADDRESS_HINT_RE.search(raw) or _LOCATION_VENUE_CUE_RE.search(raw):
         return False
-    if re.search(r"\d|[,:;.!?/@#]|[«»\"'`]", raw):
+    if re.search(r"\d|[,:;.!?/@#()]|[«»\"'`]", raw):
         return False
     words = re.findall(r"[A-Za-zА-Яа-яЁё-]+", raw)
     if not (2 <= len(words) <= 4):
@@ -3957,9 +3970,9 @@ def _build_candidate(
         alternate_loc = None
         alternate_addr = None
         for candidate_loc, candidate_addr in (
-            (known_loc, known_addr),
-            (poster_loc, poster_addr),
             (inferred_loc, inferred_addr),
+            (poster_loc, poster_addr),
+            (known_loc, known_addr),
         ):
             if candidate_loc and not _location_matches(candidate_loc, default_name):
                 alternate_loc = candidate_loc
@@ -4146,15 +4159,38 @@ def _build_candidate(
     if location_address:
         location_address = strip_city_from_address(location_address, city)
 
+    pre_normalized_location_name = str(location_name).strip() if location_name else None
+    pre_normalized_location_address = str(location_address).strip() if location_address else None
+    pre_normalized_city = str(city).strip() if city else None
     location_payload = {
-        "location_name": str(location_name).strip() if location_name else None,
-        "location_address": str(location_address).strip() if location_address else None,
-        "city": str(city).strip() if city else None,
+        "location_name": pre_normalized_location_name,
+        "location_address": pre_normalized_location_address,
+        "city": pre_normalized_city,
     }
     matched_venue = normalise_event_location_from_reference(location_payload)
     normalized_location_name = (location_payload.get("location_name") or "").strip() or None
     normalized_location_address = (location_payload.get("location_address") or "").strip() or None
     normalized_city = (location_payload.get("city") or "").strip() or None
+    if (
+        matched_venue
+        and pre_normalized_location_name
+        and normalized_location_name
+        and not _location_matches(pre_normalized_location_name, normalized_location_name)
+        and default_grounding_text
+        and _location_is_grounded_in_text(pre_normalized_location_name, default_grounding_text)
+        and not _location_is_grounded_in_text(normalized_location_name, default_grounding_text)
+    ):
+        logger.warning(
+            "telegram: keeping event-grounded venue over ungrounded reference normalization source=%s message_id=%s before=%r after=%r",
+            username,
+            message_id,
+            pre_normalized_location_name,
+            normalized_location_name,
+        )
+        matched_venue = None
+        normalized_location_name = pre_normalized_location_name
+        normalized_location_address = pre_normalized_location_address
+        normalized_city = pre_normalized_city
     if matched_venue and (
         normalized_location_name != (str(location_name).strip() if location_name else None)
         or normalized_location_address != (str(location_address).strip() if location_address else None)
@@ -4201,6 +4237,19 @@ def _build_candidate(
         if location_address and _looks_like_location_prose_fragment(location_address):
             logger.warning(
                 "telegram: dropping prose location_address after recovery source=%s message_id=%s title=%r address=%r",
+                username,
+                message_id,
+                title,
+                location_address,
+            )
+            location_address = None
+        if (
+            not location_name
+            and location_address
+            and not (_ADDRESS_HINT_RE.search(location_address) or _LOCATION_VENUE_CUE_RE.search(location_address))
+        ):
+            logger.warning(
+                "telegram: dropping unpaired non-address location_address after recovery source=%s message_id=%s title=%r address=%r",
                 username,
                 message_id,
                 title,

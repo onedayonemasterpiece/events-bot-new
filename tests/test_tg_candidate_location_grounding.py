@@ -918,6 +918,95 @@ async def test_tg_build_candidate_does_not_replace_known_venue_with_city_prose_f
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_drops_non_location_bullet_fragment_and_uses_default():
+    """Regression for @kldevents/913 / event 6162: a paragraph/list bullet from
+    the source text must not survive as `location_name`; source default recovery
+    is allowed as grounding metadata, while the semantic repair is LLM-owned
+    upstream."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Музей Изобразительных искусств, Ленинский проспект 83, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message_text = (
+        "🐵Обезьянка Кики – обитательница Кёнигсбергского зоосада в 1920-х годах.\n\n"
+        "📩 Зоосад с первого года (напомним, Кёнигсбергский зоосад открылся 21 мая "
+        "1896 года) издавал открытки с видами зданий, памятников и животных.\n\n"
+        "📌Выставка работает до 28 июня."
+    )
+    message = {
+        "source_username": "kaliningradartmuseum",
+        "message_id": 8017,
+        "source_link": "https://t.me/kaliningradartmuseum/8017",
+        "text": message_text,
+    }
+    event_data = {
+        "title": "Ревущий лев, поющий лось",
+        "date": "2026-06-18",
+        "end_date": "2026-06-28",
+        "time": "",
+        "location_name": "📩 Зоосад с первого года (напомним",
+        "city": "Калининград",
+        "source_text": message_text,
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name == "Музей Изобразительных искусств"
+    assert cand.location_address == "Ленинский проспект 83"
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
+async def test_tg_build_candidate_drops_topic_sentence_split_as_location():
+    """Regression for @kldevents/914 / event 6163: a list topic split between
+    `location_name` and `location_address` is not a venue and must fail closed
+    instead of reaching public TG/VK/Telegraph surfaces as prose."""
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level="high")
+    message_text = (
+        "19 июня в 14:30 проведём прямой эфир с министром по культуре и туризму "
+        "Калининградской области Андреем Ермаком.\n\n"
+        "Андрей Викторович расскажет:\n\n"
+        "- о концертах, организованных в честь 80-летия Калининградской области;\n"
+        "- об итогах фестиваля классической музыки «Кантата».\n\n"
+        "Вопросы можно задавать в комментариях к этому посту."
+    )
+    message = {
+        "source_username": "minkultturism_39",
+        "message_id": 4826,
+        "source_link": "https://t.me/minkultturism_39/4826",
+        "text": message_text,
+        "posters": [
+            {
+                "ocr_text": (
+                    "прямой эфир\nАндрей Ермак\n19 июня, 14:30\n"
+                    "Официальная страница правительства Калининградской области Вконтакте и в Одноклассниках"
+                )
+            }
+        ],
+    }
+    event_data = {
+        "title": "Прямой эфир с министром по культуре и туризму Калининградской области Андреем Ермаком",
+        "date": "2026-06-19",
+        "time": "14:30",
+        "location_name": "о концертах",
+        "location_address": "организованных в честь 80-летия Калининградской области;",
+        "city": "Калининград",
+        "source_text": message_text,
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert cand.location_name is None
+    assert cand.location_address is None
+    assert cand.city == "Калининград"
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_recovers_studio_from_address_ocr_over_wrong_known_venue():
     """Regression for meowafisha/7683: if OCR/source has explicit
     'Советский проспект 12, 809 студия', a wrong known venue name must not
