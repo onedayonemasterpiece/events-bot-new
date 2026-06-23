@@ -379,17 +379,20 @@ step instead of dropping the voted topic. This preserves LLM-first final choice
 without turning popularity into an availability gate.
 
 The LLM topic planner remains primary. If it is unavailable, the poll is skipped
-instead of publishing a fully deterministic topic set. If the LLM planner is
-available but returns an underfilled/over-fragmented plan, code may apply a
-bounded fallback topic builder only for conservative, coherent multi-candidate
-themes (for example concerts/music, exhibitions/art, lectures/meetings,
-excursions/walks, master classes, games/quizzes, family/kids, or free). The
-fallback must not invent mood/time buckets like "вечером" and must not over-merge
-unrelated formats merely to reach the minimum option count. If the inventory
-supports only one or two coherent choices, the run should underfill and alert
-rather than publish a weak poll. This fallback exists only to keep a truly usable
-inventory visible; it must not select the final event and must keep the final
-recommendation inside the winning option.
+instead of publishing a fully deterministic topic set. If the first LLM planner
+is available but returns an underfilled/over-fragmented plan, creation makes one
+LLM repair pass with stricter grounding instructions: reuse only the supplied
+event IDs, satisfy the candidate-count constraints, and rebuild a full topic set
+before any deterministic fallback is considered. Only if that LLM repair also
+underfills may code apply a bounded fallback topic builder for conservative,
+coherent multi-candidate themes (for example concerts/music, exhibitions/art,
+lectures/meetings, excursions/walks, master classes, games/quizzes, family/kids,
+or free). The fallback must not invent mood/time buckets like "вечером" and
+must not over-merge unrelated formats merely to reach the minimum option count.
+If the inventory supports only one or two coherent choices, the run should
+underfill and alert rather than publish a weak poll. This fallback exists only to
+keep a truly usable inventory visible; it must not select the final event and
+must keep the final recommendation inside the winning option.
 The final recommendation stays inside the winning poll option and uses a
 weighted pick from that option's deduplicated TOP-3 candidates. The pick seed
 includes the concrete run/poll, so repeated debug cycles with the same category

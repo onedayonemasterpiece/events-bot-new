@@ -1094,6 +1094,41 @@ async def _google_generate_json(
     return _extract_json_object(str(raw or ""))
 
 
+def _normalize_llm_topic_options(data: dict[str, Any], events: Sequence[CandidateEvent]) -> tuple[str, list[PollOptionPlan]]:
+    event_ids = {ev.id for ev in events}
+    free_by_id = {ev.id: bool(ev.is_free) for ev in events}
+    question = str(data.get("question_text") or "").strip()
+    options: list[PollOptionPlan] = []
+    for idx, item in enumerate(data.get("options") or []):
+        if not isinstance(item, dict):
+            continue
+        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+        if not text:
+            continue
+        key = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(item.get("key") or f"opt{idx+1}")).strip("_")
+        rationale = str(item.get("rationale") or "").strip()[:500]
+        free_only = _option_mentions_free(key, text, rationale)
+        ids = []
+        for raw_id in item.get("candidate_event_ids") or []:
+            try:
+                event_id = int(raw_id)
+            except Exception:
+                continue
+            if event_id in event_ids and (not free_only or free_by_id.get(event_id, False)):
+                ids.append(event_id)
+        if not ids:
+            continue
+        options.append(
+            PollOptionPlan(
+                key=key or f"opt{idx+1}",
+                text=text[:100],
+                candidate_event_ids=tuple(dict.fromkeys(ids)),
+                rationale=rationale,
+            )
+        )
+    return question, options[:TELEGRAM_POLL_MAX_OPTIONS]
+
+
 def _free_topic_possible(events: Sequence[CandidateEvent]) -> bool:
     return sum(1 for event in events if bool(event.is_free)) >= FREE_TOPIC_MIN_FREE_EVENTS
 
@@ -1210,38 +1245,79 @@ async def _call_llm_topic_planner(
     data = await _google_generate_json(prompt=prompt, max_output_tokens=900, temperature=0.55)
     if not data:
         return None, []
-    event_ids = {ev.id for ev in events}
-    free_by_id = {ev.id: bool(ev.is_free) for ev in events}
-    question = str(data.get("question_text") or "").strip()
-    options: list[PollOptionPlan] = []
-    for idx, item in enumerate(data.get("options") or []):
-        if not isinstance(item, dict):
-            continue
-        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
-        if not text:
-            continue
-        key = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(item.get("key") or f"opt{idx+1}")).strip("_")
-        rationale = str(item.get("rationale") or "").strip()[:500]
-        free_only = _option_mentions_free(key, text, rationale)
-        ids = []
-        for raw_id in item.get("candidate_event_ids") or []:
-            try:
-                event_id = int(raw_id)
-            except Exception:
-                continue
-            if event_id in event_ids and (not free_only or free_by_id.get(event_id, False)):
-                ids.append(event_id)
-        if not ids:
-            continue
-        options.append(
-            PollOptionPlan(
-                key=key or f"opt{idx+1}",
-                text=text[:100],
-                candidate_event_ids=tuple(dict.fromkeys(ids)),
-                rationale=rationale,
-            )
-        )
-    return question, options[:TELEGRAM_POLL_MAX_OPTIONS]
+    return _normalize_llm_topic_options(data, events)
+
+
+async def _call_llm_topic_repair_planner(
+    events: Sequence[CandidateEvent],
+    *,
+    min_options: int,
+    previous_options: Sequence[PollOptionPlan],
+) -> tuple[str | None, list[PollOptionPlan]]:
+    """Ask the LLM to repair an underfilled topic plan before deterministic fallback.
+
+    This keeps semantic poll grouping LLM-first: deterministic code only validates
+    and grounds candidate ids, then falls back to conservative predefined topics
+    if the repair call also cannot produce a safe plan.
+    """
+
+    required_options = _topic_plan_min_options(events, min_options)
+    max_options = min(TELEGRAM_POLL_MAX_OPTIONS, max(TOPIC_PLAN_DEFAULT_MAX_OPTIONS, required_options))
+    popular_active = _popularity_filter_active(events)
+    min_candidates = max(1, _env_int("POLL_TO_FORWARD_MIN_POPULAR_CANDIDATES_PER_OPTION", 2))
+    rejected = [
+        {
+            "text": option.text,
+            "candidate_event_ids": list(option.candidate_event_ids),
+            "rationale": option.rationale,
+        }
+        for option in previous_options[:10]
+    ]
+    items = [
+        {
+            "id": ev.id,
+            "title": ev.title,
+            "time": ev.time,
+            "type": ev.event_type,
+            "festival": ev.festival,
+            "city": ev.city,
+            "location": ev.location_name,
+            "is_free": ev.is_free,
+            "topics": list(ev.topics),
+            "popularity_score": round(float(ev.popularity_score or 0.0), 3),
+            "popularity_group": ev.popularity_group_key,
+            "popularity": (ev.popularity_trace or {}).get("best_signal") if ev.popularity_trace else None,
+            "summary": ev.summary[:280],
+        }
+        for ev in events[:40]
+    ]
+    popularity_instruction = (
+        f"После проверки каждая опция должна иметь минимум {min_candidates} разных популярных кандидата; "
+        "иначе она будет отброшена. Можно использовать одно событие в нескольких опциях, если оно честно "
+        "подходит по смыслу. "
+        if popular_active and min_candidates > 1
+        else ""
+    )
+    prompt = (
+        "Ты редактор Telegram-афиши Калининграда. Предыдущая попытка составить варианты опроса "
+        "дала слишком мало валидных вариантов после проверки candidate_event_ids. Нужно починить план, "
+        "а не объяснять проблему.\n"
+        "Работай только с переданными событиями и id. Не придумывай события, площадки или категории без кандидатов. "
+        "Опции должны быть живыми пользовательскими сценариями, а не служебными типами базы. "
+        f"{popularity_instruction}"
+        "Если есть несколько бесплатных событий, можно добавить живую опцию про бесплатность, "
+        "но только с is_free=true кандидатами. Не возвращай пустой options.\n"
+        "Верни JSON строго такого вида: "
+        "{\"question_text\":\"\",\"options\":[{\"key\":\"music\",\"text\":\"...\",\"candidate_event_ids\":[1,2],\"rationale\":\"...\"}]}.\n"
+        f"Нужно {required_options}-{max_options} опций, текст каждой опции до 100 символов. "
+        "candidate_event_ids обязателен для каждой опции.\n\n"
+        f"Отброшенные/слабые варианты прошлой попытки:\n{json.dumps(rejected, ensure_ascii=False)}\n\n"
+        f"События на завтра:\n{json.dumps(items, ensure_ascii=False)}"
+    )
+    data = await _google_generate_json(prompt=prompt, max_output_tokens=1100, temperature=0.35)
+    if not data:
+        return None, []
+    return _normalize_llm_topic_options(data, events)
 
 
 def _popularity_group_count(option: PollOptionPlan, events_by_id: dict[int, CandidateEvent]) -> int:
@@ -1539,6 +1615,16 @@ async def build_poll_plan(
     if len(content_options) >= effective_min_options:
         return question, _with_feedback_option(content_options), "llm"
     if _question is not None:
+        _repair_question, repair_options = await _call_llm_topic_repair_planner(
+            events,
+            min_options=effective_min_options,
+            previous_options=llm_options,
+        )
+        if strict_popularity_inventory:
+            repair_options = _filter_options_by_popularity_inventory(repair_options, events)
+        repair_content_options = [option for option in repair_options if not _is_feedback_option(option)]
+        if len(repair_content_options) >= effective_min_options:
+            return question, _with_feedback_option(repair_content_options), "llm_repair"
         fallback_options = _build_fallback_topic_options(
             events,
             min_options=effective_min_options,

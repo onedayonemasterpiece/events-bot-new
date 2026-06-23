@@ -847,6 +847,50 @@ async def test_build_poll_plan_keeps_fallback_conservative_on_fragmented_invento
 
 
 @pytest.mark.asyncio
+async def test_build_poll_plan_repairs_underfilled_llm_topics_before_fallback(monkeypatch):
+    events = [
+        _candidate(101, title="Камерный концерт", event_type="концерт", popularity_score=8, popularity_group_key="a"),
+        _candidate(102, title="Джазовый концерт", event_type="концерт", popularity_score=7, popularity_group_key="b"),
+        _candidate(103, title="Выставка графики", event_type="выставка", popularity_score=6, popularity_group_key="c"),
+        _candidate(104, title="Выставка живописи", event_type="выставка", popularity_score=5, popularity_group_key="d"),
+        _candidate(105, title="Лекция о Канте", event_type="лекция", popularity_score=4, popularity_group_key="e"),
+        _candidate(106, title="Книжная встреча", event_type="встреча", popularity_score=3, popularity_group_key="f"),
+    ]
+    prompts: list[str] = []
+
+    async def fake_llm(**kwargs):
+        prompt = kwargs.get("prompt", "")
+        prompts.append(prompt)
+        if "Предыдущая попытка составить варианты опроса" in prompt:
+            return {
+                "question_text": "",
+                "options": [
+                    {"key": "music", "text": "Послушать живую музыку", "candidate_event_ids": [101, 102]},
+                    {"key": "art", "text": "Сходить на выставку", "candidate_event_ids": [103, 104]},
+                    {"key": "talk", "text": "Выбрать лекцию или встречу", "candidate_event_ids": [105, 106]},
+                ],
+            }
+        return {
+            "question_text": "",
+            "options": [
+                {"key": "music", "text": "Послушать музыку", "candidate_event_ids": [101]},
+                {"key": "art", "text": "Посмотреть выставку", "candidate_event_ids": [103]},
+                {"key": "talk", "text": "Узнать новое", "candidate_event_ids": [105]},
+            ],
+        }
+
+    monkeypatch.setattr(pf, "_google_generate_json", fake_llm)
+
+    _question, options, strategy = await pf.build_poll_plan(events, min_options=3, run_key="debug:repair")
+
+    assert strategy == "llm_repair"
+    assert any("Предыдущая попытка составить варианты опроса" in prompt for prompt in prompts)
+    content_options = [option for option in options if option.key != pf.FEEDBACK_OPTION_KEY]
+    assert [option.key for option in content_options] == ["music", "art", "talk"]
+    assert all(len(option.candidate_event_ids) == 2 for option in content_options)
+
+
+@pytest.mark.asyncio
 async def test_build_poll_plan_skips_instead_of_overmerging_sparse_popular_inventory(monkeypatch):
     events = [
         _candidate(
