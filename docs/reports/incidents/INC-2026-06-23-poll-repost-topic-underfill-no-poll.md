@@ -1,6 +1,6 @@
 # INC-2026-06-23 Poll Repost Topic Underfill No Poll
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Poll to Repost / Telegram `@kenigevents`
 Opened: 2026-06-23
@@ -135,10 +135,15 @@ after midnight UTC; Fly runtime logs and production DB showed
 
 - Incident investigation identified that the failure was semantic topic underfill,
   not the 2026-06-22 SQLite-lock/orphan-poll failure.
-- A code fix is being prepared to add an LLM topic repair pass before the bounded
-  deterministic fallback.
-- Same-day catch-up must be attempted after deploy if a safe public poll/result
-  can still be produced.
+- Code fix `b3ffebfea66135b7e2a222f720eec6f4bcc02a1e` was deployed to Fly as
+  image `deployment-01KVTZRKA3AEMHKA9WRFSK74PM`, machine version `1472`.
+- Same-day catch-up was executed for target date 2026-06-24 with run key
+  `prod:2026-06-24-catchup-20260623T1945Z`. It published poll
+  `@kenigevents/4136` at 2026-06-23 19:40:49 UTC and resolved it at
+  2026-06-23 20:00:32 UTC with reply `@kenigevents/4137`. The poll collected
+  six votes, below the production minimum of eleven, so no recommendation was
+  forwarded; the public low-votes reply was posted instead of fabricating a
+  weak recommendation.
 
 ## Corrective Actions
 
@@ -160,10 +165,20 @@ after midnight UTC; Fly runtime logs and production DB showed
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `b3ffebfea66135b7e2a222f720eec6f4bcc02a1e`, reachable from
+  `origin/main` and `origin/agent/T-000036`.
+- deploy path: manual `flyctl deploy --remote-only --app events-bot-new-wngqia`,
+  image `registry.fly.io/events-bot-new-wngqia:deployment-01KVTZRKA3AEMHKA9WRFSK74PM`,
+  machine `683961db016e28`, version `1472`, `1 total, 1 passing` check.
+- regression checks: `python -m py_compile poll_to_forward.py scheduling.py`;
+  `python -m pytest tests/test_poll_to_forward.py tests/test_poll_to_forward_popularity.py -q`
+  (`54 passed`).
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`,
+  `db=ok`; Fly status showed image `deployment-01KVTZRKA3AEMHKA9WRFSK74PM`;
+  production DB `poll_repost_run.id=65` is `skipped_no_votes` after catch-up,
+  `poll_message_id=4136`, `reply_message_id=4137`, `total_voter_count=6`,
+  `min_votes=11`; Telethon showed `@kenigevents/4136` closed and
+  `@kenigevents/4137` containing the low-votes public result.
 
 ## Prevention
 
