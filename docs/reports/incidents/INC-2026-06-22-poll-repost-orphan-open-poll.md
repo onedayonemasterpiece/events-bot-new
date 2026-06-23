@@ -154,10 +154,10 @@ had `22` voters, and no reply/forward existed in the 2026-06-22 result window.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `d6b59f20e9e1327668b8ada92c0846322f04350c`, reachable from `origin/main` and `origin/agent/T-000036`.
-- deploy path: manual `flyctl deploy --remote-only --app events-bot-new-wngqia`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KVT3J560RGW51C99VNW45M3J`, machine `683961db016e28`, version `1470`, `1 total, 1 passing` check.
+- deployed SHA: `a96ca61530c1b0d5b26ed21aba1d3abfed856377`, reachable from `origin/main` and `origin/agent/T-000036`.
+- deploy path: manual `flyctl deploy --remote-only --app events-bot-new-wngqia`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KVT3TS1TGZ1YPG3NHCJQSEVS`, machine `683961db016e28`, version `1471`, `1 total, 1 passing` check.
 - regression checks: `python -m py_compile poll_to_forward.py scheduling.py`; `python -m pytest tests/test_poll_to_forward.py tests/test_poll_to_forward_popularity.py -q` (`53 passed`).
-- post-deploy verification: Fly status showed image `deployment-01KVT3J560RGW51C99VNW45M3J`; production DB `pragma quick_check` returned `ok`; Telethon showed `@kenigevents/4124` closed with vote counts `[1,3,1,7,5,4,1]`, wrong catch-up messages `4132`/`4133` deleted, corrected reply `4134` and forward `4135` visible; DB row `poll_repost_run.id=63` is `forwarded`, `chosen_event_id=6244`, `kldevents_message_id=1040`, `reply_message_id=4134`, `forwarded_message_id=4135`.
+- post-deploy verification: Fly status showed image `deployment-01KVT3TS1TGZ1YPG3NHCJQSEVS`; production DB `pragma quick_check` returned `ok`; Telethon showed `@kenigevents/4124` closed with vote counts `[1,3,1,7,5,4,1]`, wrong catch-up messages `4132`/`4133` deleted, corrected reply `4134` and forward `4135` visible; DB row `poll_repost_run.id=63` is `forwarded`, `chosen_event_id=6244`, `kldevents_message_id=1040`, `reply_message_id=4134`, `forwarded_message_id=4135`.
 
 ## Prevention
 
