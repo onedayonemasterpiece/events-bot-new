@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import re
 import hashlib
+import sqlite3
 from html import escape
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
@@ -123,6 +125,67 @@ def _env_float(name: str, default: float) -> float:
 def _env_str(name: str, default: str) -> str:
     raw = (os.getenv(name) or "").strip()
     return raw or default
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    message = str(exc).lower()
+    return (
+        "database is locked" in message
+        or "database table is locked" in message
+        or "database schema is locked" in message
+    )
+
+
+async def _db_write_with_lock_retry(operation, *, label: str) -> Any:
+    """Run a small SQLite write and wait through transient writer contention.
+
+    Poll creation has a Telegram side effect before the run row is stored. A
+    transient SQLite writer lock at that exact point creates an orphan public
+    poll that the resolver cannot see. Keep this retry local to Poll to Repost
+    writes so the daily scheduler can survive source-import bursts without
+    weakening the LLM-first poll semantics.
+    """
+
+    max_wait = max(0.0, _env_float("POLL_TO_FORWARD_DB_LOCK_RETRY_SEC", 180.0))
+    delay = max(0.1, _env_float("POLL_TO_FORWARD_DB_LOCK_RETRY_INITIAL_SEC", 2.0))
+    max_delay = max(delay, _env_float("POLL_TO_FORWARD_DB_LOCK_RETRY_MAX_SEC", 15.0))
+    deadline = _now_utc().timestamp() + max_wait
+    attempt = 0
+    while True:
+        try:
+            return await operation()
+        except Exception as exc:
+            if not _is_sqlite_lock_error(exc):
+                raise
+            now_ts = _now_utc().timestamp()
+            if attempt > 0 and now_ts >= deadline:
+                logger.error(
+                    "poll_to_forward.db_write_locked exhausted label=%s attempts=%s waited_sec=%.1f",
+                    label,
+                    attempt + 1,
+                    max_wait,
+                )
+                raise
+            sleep_for = min(delay, max(0.0, deadline - now_ts)) if max_wait else 0.0
+            if sleep_for <= 0:
+                logger.error(
+                    "poll_to_forward.db_write_locked exhausted label=%s attempts=%s waited_sec=%.1f",
+                    label,
+                    attempt + 1,
+                    max_wait,
+                )
+                raise
+            attempt += 1
+            logger.warning(
+                "poll_to_forward.db_write_locked retry label=%s attempt=%s sleep_sec=%.1f",
+                label,
+                attempt,
+                sleep_for,
+            )
+            await asyncio.sleep(sleep_for)
+            delay = min(max_delay, delay * 1.5)
 
 
 def _env_date(name: str, default: date) -> date:
@@ -1617,44 +1680,50 @@ async def _insert_run(
     error: dict[str, Any] | None = None,
 ) -> None:
     now = _iso_utc()
-    async with db.raw_conn() as conn:
-        await conn.execute(
-            """
-            INSERT OR IGNORE INTO poll_repost_run(
-                profile_key, run_key, status, target_event_date,
-                poll_chat_id, poll_message_id, poll_id, question_text, options_json,
-                resolve_after, error_json, created_at, updated_at
-            )
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                profile_key,
-                run_key,
-                status,
-                target_event_date.isoformat(),
-                str(poll_chat_id) if poll_chat_id is not None else None,
-                int(poll_message_id) if poll_message_id else None,
-                str(poll_id) if poll_id else None,
-                question_text,
-                json.dumps(
-                    [
-                        {
-                            "key": option.key,
-                            "text": option.text,
-                            "candidate_event_ids": list(option.candidate_event_ids),
-                            "rationale": option.rationale,
-                        }
-                        for option in (options or [])
-                    ],
-                    ensure_ascii=False,
+    options_payload = json.dumps(
+        [
+            {
+                "key": option.key,
+                "text": option.text,
+                "candidate_event_ids": list(option.candidate_event_ids),
+                "rationale": option.rationale,
+            }
+            for option in (options or [])
+        ],
+        ensure_ascii=False,
+    )
+    error_payload = json.dumps(error or {}, ensure_ascii=False)
+
+    async def _write() -> None:
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT OR IGNORE INTO poll_repost_run(
+                    profile_key, run_key, status, target_event_date,
+                    poll_chat_id, poll_message_id, poll_id, question_text, options_json,
+                    resolve_after, error_json, created_at, updated_at
+                )
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    profile_key,
+                    run_key,
+                    status,
+                    target_event_date.isoformat(),
+                    str(poll_chat_id) if poll_chat_id is not None else None,
+                    int(poll_message_id) if poll_message_id else None,
+                    str(poll_id) if poll_id else None,
+                    question_text,
+                    options_payload,
+                    _iso_utc(resolve_after) if resolve_after else None,
+                    error_payload,
+                    now,
+                    now,
                 ),
-                _iso_utc(resolve_after) if resolve_after else None,
-                json.dumps(error or {}, ensure_ascii=False),
-                now,
-                now,
-            ),
-        )
-        await conn.commit()
+            )
+            await conn.commit()
+
+    await _db_write_with_lock_retry(_write, label=f"insert_run:{profile_key}:{run_key}:{status}")
 
 
 def _debug_publish_window_contains(now_local: datetime) -> bool:
@@ -2386,41 +2455,47 @@ async def _update_run(
     forwarded_message_id: int | None = None,
     error: dict[str, Any] | None = None,
 ) -> None:
-    async with db.raw_conn() as conn:
-        await conn.execute(
-            """
-            UPDATE poll_repost_run
-            SET status=?,
-                result_json=COALESCE(?, result_json),
-                winner_option_id=COALESCE(?, winner_option_id),
-                winner_text=COALESCE(?, winner_text),
-                chosen_event_id=COALESCE(?, chosen_event_id),
-                kldevents_chat_id=COALESCE(?, kldevents_chat_id),
-                kldevents_message_id=COALESCE(?, kldevents_message_id),
-                kldevents_post_url=COALESCE(?, kldevents_post_url),
-                reply_message_id=COALESCE(?, reply_message_id),
-                forwarded_message_id=COALESCE(?, forwarded_message_id),
-                error_json=COALESCE(?, error_json),
-                updated_at=?
-            WHERE id=?
-            """,
-            (
-                status,
-                json.dumps(result, ensure_ascii=False) if result is not None else None,
-                winner_option_id,
-                winner_text,
-                int(chosen_event_id) if chosen_event_id else None,
-                kldevents_chat_id,
-                int(kldevents_message_id) if kldevents_message_id else None,
-                kldevents_post_url,
-                int(reply_message_id) if reply_message_id else None,
-                int(forwarded_message_id) if forwarded_message_id else None,
-                json.dumps(error, ensure_ascii=False) if error is not None else None,
-                _iso_utc(),
-                int(run_id),
-            ),
-        )
-        await conn.commit()
+    result_payload = json.dumps(result, ensure_ascii=False) if result is not None else None
+    error_payload = json.dumps(error, ensure_ascii=False) if error is not None else None
+
+    async def _write() -> None:
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                UPDATE poll_repost_run
+                SET status=?,
+                    result_json=COALESCE(?, result_json),
+                    winner_option_id=COALESCE(?, winner_option_id),
+                    winner_text=COALESCE(?, winner_text),
+                    chosen_event_id=COALESCE(?, chosen_event_id),
+                    kldevents_chat_id=COALESCE(?, kldevents_chat_id),
+                    kldevents_message_id=COALESCE(?, kldevents_message_id),
+                    kldevents_post_url=COALESCE(?, kldevents_post_url),
+                    reply_message_id=COALESCE(?, reply_message_id),
+                    forwarded_message_id=COALESCE(?, forwarded_message_id),
+                    error_json=COALESCE(?, error_json),
+                    updated_at=?
+                WHERE id=?
+                """,
+                (
+                    status,
+                    result_payload,
+                    winner_option_id,
+                    winner_text,
+                    int(chosen_event_id) if chosen_event_id else None,
+                    kldevents_chat_id,
+                    int(kldevents_message_id) if kldevents_message_id else None,
+                    kldevents_post_url,
+                    int(reply_message_id) if reply_message_id else None,
+                    int(forwarded_message_id) if forwarded_message_id else None,
+                    error_payload,
+                    _iso_utc(),
+                    int(run_id),
+                ),
+            )
+            await conn.commit()
+
+    await _db_write_with_lock_retry(_write, label=f"update_run:{run_id}:{status}")
 
 
 def _low_votes_reply_text(*, total_votes: int, min_votes: int) -> str:
@@ -2583,12 +2658,46 @@ async def _resolve_due_polls(
                 profile_key=profile_key,
                 now_utc=now_value,
             )
+            raw_resolve_events = list(events)
             events, popularity_diag = await _apply_popularity_preflight(
                 db,
                 events,
                 target_date=target_date,
                 now_utc=now_value,
             )
+            current_ids = {event.id for event in events}
+            raw_by_id = {event.id: event for event in raw_resolve_events}
+            tied_candidate_ids = {
+                event_id
+                for option in tied_options
+                for event_id in option.candidate_event_ids
+            }
+            if (
+                tied_candidate_ids
+                and tied_candidate_ids - current_ids
+                and any(event_id in raw_by_id for event_id in tied_candidate_ids)
+                and _env_enabled("POLL_TO_FORWARD_RELAX_POPULARITY_ON_UNDERFILL", True)
+            ):
+                popular_by_id = {event.id: event for event in events}
+                events = [popular_by_id.get(event.id, event) for event in raw_resolve_events]
+                popularity_diag = {
+                    **popularity_diag,
+                    "popularity_filter_relaxed": True,
+                    "popular_events_before_relax": len(popular_by_id),
+                    "eligible_after_relax": len(events),
+                    "relax_reason": "poll_winning_option_candidates_were_filtered_by_popularity",
+                }
+                logger.warning(
+                    "poll_to_forward.%s_resolve relaxing popularity filter run_id=%s run_key=%s profile=%s target_date=%s raw=%s popular=%s tied_candidate_ids=%s",
+                    log_label,
+                    run_id,
+                    run.get("run_key"),
+                    profile_key,
+                    target_date,
+                    len(raw_resolve_events),
+                    len(popular_by_id),
+                    sorted(tied_candidate_ids),
+                )
             winner_option, chosen_id, llm_reason = await _choose_winner_with_llm(
                 tied_options=tied_options,
                 events=events,

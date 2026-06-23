@@ -366,13 +366,17 @@ per option" constraint. This prevents a busy date from being collapsed into a
 tiny poll.
 
 Popularity is a ranking and quality signal, not a single point of failure for
-poll visibility. If popularity-qualified events underfill but the raw eligible
-repost inventory still meets the profile minimum, creation relaxes the strict
-popularity filter (`POLL_TO_FORWARD_RELAX_POPULARITY_ON_UNDERFILL=1` by
-default) and records `popularity_filter_relaxed=true` in diagnostics. Popular
+poll visibility or resolution. If popularity-qualified events underfill but the
+raw eligible repost inventory still meets the profile minimum, creation relaxes
+the strict popularity filter (`POLL_TO_FORWARD_RELAX_POPULARITY_ON_UNDERFILL=1`
+by default) and records `popularity_filter_relaxed=true` in diagnostics. Popular
 events keep their scores for final ranking; non-popular eligible events can
 participate in topic options so a day with partial metric coverage does not
-silently lose the whole poll.
+silently lose the whole poll. The resolver applies the same principle after
+votes are known: if sparse popularity coverage removed the winning option's
+valid candidates, it reopens the raw eligible pool for the LLM winner-selection
+step instead of dropping the voted topic. This preserves LLM-first final choice
+without turning popularity into an availability gate.
 
 The LLM topic planner remains primary. If it is unavailable, the poll is skipped
 instead of publishing a fully deterministic topic set. If the LLM planner is
@@ -458,7 +462,10 @@ size.
 Implement as an idempotent state machine:
 
 - `create_poll` creates a run only when no active run exists for the same
-  profile and slot;
+  profile and slot; Poll to Repost DB writes retry transient SQLite writer locks
+  (`POLL_TO_FORWARD_DB_LOCK_RETRY_SEC`, default 180 seconds) because Telegram
+  `send_poll` is a public side effect and must not be orphaned by a short
+  post-send `database is locked` error;
 - debug `create_poll` also refuses to publish a new visible poll when the latest
   visible debug poll is still `open`, `failed`, or otherwise ended without a
   public forwarded result; the next poll should follow the previous public

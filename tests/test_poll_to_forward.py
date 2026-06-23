@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -258,6 +260,69 @@ class DummyPollBot:
         message_id = self._next_forward_message_id
         self._next_forward_message_id += 1
         return SimpleNamespace(message_id=message_id)
+
+
+class _LockedOnceConn:
+    def __init__(self, conn, state: dict[str, bool]):
+        self._conn = conn
+        self._state = state
+
+    async def execute(self, sql, parameters=()):
+        if "INSERT OR IGNORE INTO poll_repost_run" in str(sql) and not self._state["raised"]:
+            self._state["raised"] = True
+            raise sqlite3.OperationalError("database is locked")
+        return await self._conn.execute(sql, parameters)
+
+    async def commit(self):
+        return await self._conn.commit()
+
+
+class _LockedOnceDb:
+    def __init__(self, db: Database):
+        self._db = db
+        self.state = {"raised": False}
+
+    @asynccontextmanager
+    async def raw_conn(self):
+        async with self._db.raw_conn() as conn:
+            yield _LockedOnceConn(conn, self.state)
+
+
+@pytest.mark.asyncio
+async def test_insert_run_retries_transient_database_locked(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    wrapped = _LockedOnceDb(db)
+    sleeps = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setenv("POLL_TO_FORWARD_DB_LOCK_RETRY_INITIAL_SEC", "0.1")
+    monkeypatch.setattr(pf.asyncio, "sleep", fake_sleep)
+
+    await pf._insert_run(
+        wrapped,
+        profile_key=pf.PROFILE_PROD,
+        run_key="prod:2026-06-23",
+        status=pf.STATUS_OPEN,
+        target_event_date=datetime(2026, 6, 23, tzinfo=timezone.utc).date(),
+        options=[pf.PollOptionPlan(key="music", text="Музыка", candidate_event_ids=(101,))],
+        poll_chat_id="@kenigevents",
+        poll_message_id=4124,
+        poll_id="poll-4124",
+        resolve_after=datetime(2026, 6, 22, 17, 55, tzinfo=timezone.utc),
+    )
+
+    assert wrapped.state["raised"] is True
+    assert sleeps == [0.1]
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, poll_message_id FROM poll_repost_run WHERE run_key='prod:2026-06-23'"
+        )
+        row = await cur.fetchone()
+    assert row == (pf.STATUS_OPEN, 4124)
+    await db.close()
 
 
 def _event(event_id: int, *, title: str, post_id: int, event_type: str = "концерт") -> Event:

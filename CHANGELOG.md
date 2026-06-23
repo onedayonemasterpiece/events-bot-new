@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Fixed: Poll to Repost orphan polls after SQLite locks**: production poll state writes now retry transient `database is locked` errors after Telegram `send_poll`, and resolver popularity filtering relaxes when sparse metrics would otherwise erase the winning option's valid candidates. Telethon/Fly evidence for the 2026-06-22 orphan `@kenigevents` poll is recorded in `INC-2026-06-22-poll-repost-orphan-open-poll`. Covered by `tests/test_poll_to_forward.py` and `tests/test_poll_to_forward_popularity.py`.
 - **Fixed: Telegram Monitoring prose/location recurrence**: venue-review now routes non-location emoji/list bullets and discussion-topic fragments (for example `📩 Зоосад...` and `о концертах`) through the LLM-owned location repair path, and server import fails closed so such fragments cannot reach Telegram/VK/Telegraph location fields. Tracks `INC-2026-06-18-tg-location-prose-still-extracted`.
 - **Added: VK location marker v1**: managed VK event posts now best-effort add
   a safe `lat`/`long` location marker from structured `event.city` for

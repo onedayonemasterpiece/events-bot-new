@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-22-poll-repost-orphan-open-poll.md`
+  - Scope: Poll to Repost production DB-write idempotency after Telegram `send_poll`, resolver popularity relaxation, Telethon/Fly/DB evidence for orphan public polls, and scheduler failure recovery.
+  - Must not regress: a transient SQLite writer lock after a public poll is sent must not leave the poll without a durable `poll_repost_run` row; resolver must not drop a valid winning option solely because sparse popularity coverage filtered its candidates after a relaxed creation.
 - `INC-2026-06-20-tg-speaker-roster-dropped.md`
   - Scope: Telegram/Smart Update lecture and public-talk imports with named speaker rosters, split-create logistics cleanup, and public Telegraph/VK/TG descriptions.
   - Must not regress: source-grounded named speaker rosters must not be collapsed into generic categories; logistics-tainted split-writer drafts should be LLM-cleaned before falling back to a generic description.
