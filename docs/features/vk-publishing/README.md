@@ -117,6 +117,9 @@
   hashtags: title, date/time/location, short description, one CTA URL. Delivery
   is recorded as `promo_exposure.surface='vk_channel_publish'`,
   `publish_status='VK_CHANNEL_SENT'`, `public_targets_json.type='vk_channel'`.
+  If VK rejects a user-token send with `group_id` as `Cannot message as group`,
+  the runner retries the configured peer id without `group_id`; it still never
+  infers a recipient from the community wall id.
 - Promo campaign activity `vk_story` publishes a caption-free image story into
   a configured community from a recent source-community event post. It uploads
   the source wall image/poster without passing the source wall URL as VK
