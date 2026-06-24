@@ -139,15 +139,15 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
 
 - [x] Add replay fixtures under `tests/replays/INC-2026-06-24-future-event-date-default-venue-regressions/` with raw source text/OCR for the seven offending sources plus a valid source-default negative control.
 - [ ] Run closure-grade replay through Telegram Monitoring server import and `smart_event_update.py` on a prod snapshot/shadow DB; attach pre/post DB diff.
-- [ ] Isolate, commit, push, and deploy only incident-related prevention code from a clean worktree because the current worktree contains unrelated dirty files.
+- [x] Isolate, commit, push, and deploy only incident-related prevention code from clean worktree `/tmp/events-bot-inc-20260624` (`109232adb622007a3d0a3b204f416758abfa7827`).
 - [ ] Add Smart Update writer anti-boilerplate replay for `5783` and `6286` so thin/free source posts cannot gain unsupported ticket/theatre prose.
 - [ ] Review unresolved possible time conflict `5538/6141` (`А где мне взять такую песню…`, 15:00 vs 16:00) against source authority; do not auto-merge without evidence.
 - [ ] Add a reusable future-event audit command/report that flags compact date drift, source-default offsite drift, retrospective future rows, and public-caption mismatch.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending (mitigation data/public captions repaired; prevention code not yet release-evidenced from `origin/main`)
-- deploy path: pending clean-worktree deploy
+- deployed SHA: `109232adb622007a3d0a3b204f416758abfa7827` (emergency hotfix branch; `origin/main` back-merge/push still pending in this evidence block until completed)
+- deploy path: clean worktree `/tmp/events-bot-inc-20260624`, branch `hotfix/inc-2026-06-24-event-quality`, `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KVWH1ZDQ9XHPTFASB5NJJBA2`
 - regression checks:
   - `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py source_parsing/telegram/handlers.py tests/test_tg_monitor_gemma4_contract.py tests/test_tg_candidate_location_grounding.py` — passed locally.
   - Manual source-date helper replay for `26 июля`, `#21_июня ... гейт 2.6`, and `10.05 | Run sos run!` — passed locally.
@@ -155,7 +155,7 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
   - `_build_candidate` import/test — blocked locally: missing `aiogram` dependency.
   - Claude Opus consultation — blocked by org subscription access disabled.
   - Gemini 3 Pro consultation — blocked by `IneligibleTierError` in installed CLI route.
-- post-deploy verification: pending.
+- post-deploy verification: Fly machine `683961db016e28` version `1473` reached `started`, Fly status reported `1 passing` check, and in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true` on 2026-06-24 around 10:01Z. Production data/public caption mitigation evidence remains in `artifacts/codex/event-quality-audit-20260624/`.
 
 ## Prevention
 
