@@ -17,18 +17,18 @@ FIRST_SENT_SETTING = "kgd80_social_report:first_sent_at"
 LAST_SENT_SETTING = "kgd80_social_report:last_sent_date"
 
 # Raffle conversion model. The final raffle currency is the same as
-# stamps/visits: one verified visit/stamp is worth VISIT_POINTS. Social activity
+# stamps/visits: one verified visit/stamp is one final raffle point. Social activity
 # is subordinate: one very strong day (>=1 repost and >=2 comments) is about
 # half a visit, so two such days roughly equal one visit.
-VISIT_POINTS = 10.0
-SOCIAL_DAILY_CAP_POINTS = VISIT_POINTS / 2.0
+VISIT_POINTS = 1.0
+SOCIAL_DAILY_CAP_POINTS = 0.5
 SOCIAL_BONUS_WEIGHTS: dict[str, float] = {
-    "repost": 3.0,
-    "comment": 1.0,
-    "like": 0.2,
-    "view": 0.002,
+    "repost": 0.3,
+    "comment": 0.1,
+    "like": 0.02,
+    "view": 0.0002,
 }
-VIEW_POINTS_CAP_PER_POST = 2.0
+VIEW_POINTS_CAP_PER_POST = 0.2
 
 _WALL_RE = re.compile(r"(?:^|/)wall(?P<owner>-?\d+)_(?P<post>\d+)")
 
@@ -301,8 +301,8 @@ def format_kgd80_social_report(summary: Kgd80SocialSummary) -> str:
         f"• репосты: {summary.reposts} → +{_fmt_points(summary.repost_points)} баллов",
         f"Итого расчётного социального бонуса: +{_fmt_points(summary.total_points)} баллов.",
         "",
-        "Модель конвертации: 1 посещение/штамп = 10 баллов; соцактивность за день ограничена 5 баллами.",
-        "Соцвеса: репост ×3, комментарий ×1, лайк ×0.2, просмотр ×0.002 только для агрегатного отчёта.",
+        "Модель конвертации: 1 посещение/штамп = 1 итоговый балл; соцактивность за день ограничена 0.5 балла.",
+        "Соцвеса: репост ×0.3, комментарий ×0.1, лайк ×0.02, просмотр ×0.0002 только для агрегатного отчёта.",
         "Примечание: бонус социальной активности считается без понижения за победы в других розыгрышах; понижение применяется только к базовой вероятности.",
     ]
     return "\n".join(lines)

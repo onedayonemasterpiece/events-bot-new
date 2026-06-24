@@ -32,11 +32,11 @@ def test_parse_vk_wall_ids_normalizes_group_owner() -> None:
 
 def test_calculate_social_bonus_weights_reposts_strongest_and_caps_views() -> None:
     points = calculate_social_bonus(views=10_000, likes=3, comments=2, reposts=1, posts=1)
-    assert points["repost"] == 3
-    assert points["comment"] == 2
-    assert points["like"] == 0.6
-    assert points["view"] == 2
-    assert points["total"] == 7.6
+    assert points["repost"] == 0.3
+    assert points["comment"] == 0.2
+    assert points["like"] == 0.06
+    assert points["view"] == 0.2
+    assert points["total"] == 0.76
 
 
 def test_participant_social_two_good_days_equal_one_visit() -> None:
@@ -48,8 +48,8 @@ def test_participant_social_two_good_days_equal_one_visit() -> None:
         comments=4,
     )
     assert result.attendance_points == 0
-    assert result.social_points == 10
-    assert result.final_draw_points == 10
+    assert result.social_points == 1
+    assert result.final_draw_points == 1
 
 
 def test_participant_social_bonus_does_not_get_winner_damping() -> None:
@@ -61,9 +61,9 @@ def test_participant_social_bonus_does_not_get_winner_damping() -> None:
         comments=2,
         won_other_draw=True,
     )
-    assert result.attendance_points == 10
-    assert result.social_points == 5
-    assert result.final_draw_points == 10
+    assert result.attendance_points == 1
+    assert result.social_points == 0.5
+    assert result.final_draw_points == 1
 
 
 @pytest.mark.asyncio
@@ -109,10 +109,10 @@ async def test_collect_kgd80_summary_aggregates_verified_vk_metrics(tmp_path) ->
     assert summary.likes == 7
     assert summary.comments == 3
     assert summary.reposts == 2
-    assert summary.total_points == 10.6
+    assert summary.total_points == 1.06
     text = format_kgd80_social_report(summary)
     assert "Сообщение создано автоматически" in text
-    assert "репосты: 2 → +6" in text
+    assert "репосты: 2 → +0.6" in text
 
 
 @pytest.mark.asyncio
