@@ -103,18 +103,18 @@ The same audit found two more stale future postponed items:
 ## Follow-up Actions
 
 - [ ] Run the focused pytest tests in an environment with project test dependencies installed.
-- [ ] Deploy the prevention code from a clean worktree and record the reachable `origin/main` SHA.
+- [x] Deploy the prevention code from a clean worktree and record the reachable `origin/main` SHA.
 - [ ] Add a reusable VK postponed audit command that parses event date lines and flags any managed postponed post whose event start is already past.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `3d7d504d9df5d25026b68ca09a3e501291b5eaf3` (reachable from `origin/main`)
+- deploy path: clean linked worktree `/home/dev/projects/events-bot-inc-20260624-vk-past`, branch `hotfix/2026-06-24-vk-past-event-guard`, pushed to `origin/main`, `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KVWSA6XGPSX7DE3E11P875SX`, Fly machine `683961db016e28` version `1475`
 - regression checks:
   - `python3 -m py_compile promo.py afishaengagement.py main.py tests/test_promo.py tests/test_afishaengagement.py tests/test_tg_event_publish.py` — passed locally.
   - `python3 -m pytest ...` — blocked locally: base Python had no `pytest`/`sqlmodel`; attempted ephemeral venv install from `requirements.txt`, but pip failed with `OSError: [Errno 28] No space left on device`.
-- post-deploy verification: pending
+- post-deploy verification: Fly status showed `1 total, 1 passing`; in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true`, `db=ok`, scheduler `promo_vk=ok`, and no issues. Post-deploy VK API verification showed `wall-231920894_4345` deleted, `wall-231920894_4149`/`4159` absent, and current postponed queue had no `21/22/23 июня` or Afisha Engagement debug-shadow stale posts.
 
 ## Prevention
 
-This incident remains `mitigated`, not `closed`, until the prevention code is deployed from a SHA reachable from `origin/main` and the focused tests or equivalent dependency-complete CI evidence are attached.
+This incident remains `mitigated`, not `closed`, until the focused tests or equivalent dependency-complete CI evidence are attached. The prevention code has been deployed from a SHA reachable from `origin/main`.
