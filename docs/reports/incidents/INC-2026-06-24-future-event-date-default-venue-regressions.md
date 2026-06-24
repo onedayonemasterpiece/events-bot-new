@@ -155,7 +155,7 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
   - `_build_candidate` import/test — blocked locally: missing `aiogram` dependency.
   - Claude Opus consultation — blocked by org subscription access disabled.
   - Gemini 3 Pro consultation — blocked by `IneligibleTierError` in installed CLI route.
-- post-deploy verification: Fly machine `683961db016e28` version `1473` reached `started`, Fly status reported `1 passing` check, and in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true` on 2026-06-24 around 10:01Z. Production data/public caption mitigation evidence remains in `artifacts/codex/event-quality-audit-20260624/`.
+- post-deploy verification: Fly machine `683961db016e28` version `1473` reached `started`, Fly status reported `1 passing` check, and in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true` on 2026-06-24 around 10:01Z. Production data/public caption mitigation evidence remains in `artifacts/codex/event-quality-audit-20260624/`; post-deploy prod SQL verification was saved as `prod_verify_post_deploy.json` and confirmed touched rows still carry the repaired values (`6223`/`6276` cancelled, `6333` on 2026-07-26, `6252` at `Театр Слово`).
 
 ## Prevention
 
