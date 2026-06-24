@@ -1495,6 +1495,45 @@ async def test_promo_vk_publication_records_no_media_candidate_as_failed(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_promo_target_skips_same_day_event_after_start(tmp_path) -> None:
+    from promo import _events_for_target
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 24, 12, 30, tzinfo=timezone.utc)  # 14:30 Kaliningrad
+    async with db.get_session() as session:
+        campaign = PromoCampaign(
+            title="80 stories",
+            status="active",
+            starts_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+        session.add(campaign)
+        await session.flush()
+        target = PromoTarget(
+            campaign_id=int(campaign.id),
+            target_type="festival",
+            festival_name="80 историй о главном",
+        )
+        past_start = _event("Already started", "2026-06-24", festival="80 историй о главном")
+        past_start.time = "13:00"
+        future_start = _event("Still upcoming", "2026-06-24", festival="80 историй о главном")
+        future_start.time = "18:30"
+        session.add_all([target, past_start, future_start])
+        await session.commit()
+
+    matched = await _events_for_target(
+        db,
+        target=target,
+        campaign=campaign,
+        today=date(2026, 6, 24),
+        now_utc=now_utc,
+    )
+
+    assert [event.title for event in matched] == ["Still upcoming"]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_promo_vk_runner_schedules_publications_and_repost(tmp_path, monkeypatch) -> None:
     import main
     from types import SimpleNamespace

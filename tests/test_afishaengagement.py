@@ -17,6 +17,40 @@ from db import Database
 from models import Event, PromoActivity, PromoCampaign, PromoExposure, PromoTarget
 
 
+def test_shadow_schedule_must_be_before_event_start() -> None:
+    event = Event(
+        title="Калининград: Город-сад",
+        description="",
+        date="2026-06-23",
+        time="18:30",
+        location_name="Историко-художественный музей",
+        source_text="",
+    )
+
+    before = int(datetime(2026, 6, 23, 15, 0, tzinfo=timezone.utc).timestamp())
+    after = int(datetime(2026, 6, 24, 11, 15, tzinfo=timezone.utc).timestamp())
+
+    assert aeg._shadow_schedule_is_before_event_start(event, before) is True
+    assert aeg._shadow_schedule_is_before_event_start(event, after) is False
+
+
+def test_shadow_schedule_for_date_only_event_must_be_before_event_day() -> None:
+    event = Event(
+        title="Выставка",
+        description="",
+        date="2026-06-23",
+        time="",
+        location_name="Музей",
+        source_text="",
+    )
+
+    previous_day = int(datetime(2026, 6, 22, 20, 59, tzinfo=timezone.utc).timestamp())
+    event_day = int(datetime(2026, 6, 22, 21, 0, tzinfo=timezone.utc).timestamp())
+
+    assert aeg._shadow_schedule_is_before_event_start(event, previous_day) is True
+    assert aeg._shadow_schedule_is_before_event_start(event, event_day) is False
+
+
 def _load_cleanup_script_module():
     path = Path(__file__).resolve().parents[1] / "scripts" / "cleanup_afishaengagement_debug_vk.py"
     spec = importlib.util.spec_from_file_location("cleanup_afishaengagement_debug_vk", path)

@@ -286,6 +286,11 @@ publish attempts are included in the structured `afishaengagement.decision` log.
 Marked debug-shadow copies must not participate in the ordinary VK postponed
 slot calculation for real event posts; normal source posts choose their next
 slot as if `[AFISHAENGAGEMENT DEBUG COPY ...]` posts were not present.
+The selected debug-shadow slot must also be before the event start. For
+date-only events this means before the event day starts in `Europe/Kaliningrad`;
+for timed events it means strictly before the local start time. If the configured
+debug delay would publish the shadow after the event has started, the copy is
+skipped instead of entering VK postponed posts.
 
 ## Rendering
 

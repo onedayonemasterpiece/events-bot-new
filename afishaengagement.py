@@ -12,9 +12,10 @@ import random
 import re
 import time
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 
@@ -4665,6 +4666,35 @@ async def _next_shadow_schedule(
     return candidate, meta
 
 
+def _event_shadow_publish_deadline_local(event: Event) -> datetime | None:
+    raw_date = str(getattr(event, "date", "") or "").split("..", 1)[0].strip()
+    if not raw_date:
+        return None
+    try:
+        event_date = date.fromisoformat(raw_date)
+    except ValueError:
+        return None
+    raw_time = str(getattr(event, "time", "") or "").strip()
+    match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", raw_time)
+    if not match:
+        return datetime.combine(event_date, datetime_time.min, tzinfo=ZoneInfo("Europe/Kaliningrad"))
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return datetime.combine(event_date, datetime_time.min, tzinfo=ZoneInfo("Europe/Kaliningrad"))
+    return datetime.combine(event_date, datetime_time(hour, minute), tzinfo=ZoneInfo("Europe/Kaliningrad"))
+
+
+def _shadow_schedule_is_before_event_start(event: Event, scheduled_ts: int | None) -> bool:
+    if scheduled_ts is None:
+        return True
+    deadline = _event_shadow_publish_deadline_local(event)
+    if deadline is None:
+        return True
+    scheduled = datetime.fromtimestamp(int(scheduled_ts), timezone.utc).astimezone(deadline.tzinfo)
+    return scheduled < deadline
+
+
 def _looks_like_vk_schedule_collision(exc: Exception) -> bool:
     text = str(exc).lower()
     return "scheduled for this time" in text or "уже заплан" in text or "на это время" in text
@@ -5349,6 +5379,32 @@ async def maybe_publish_shadow_debug_copy(
                 db=db,
                 bot=bot,
             )
+            if not _shadow_schedule_is_before_event_start(event, scheduled_ts):
+                _json_log(
+                    StageLog(
+                        stage="vk_schedule",
+                        decision="skip",
+                        reason="shadow_schedule_after_event_start",
+                        event_id=event_id,
+                        campaign_id=campaign_id,
+                        activity_id=activity_id,
+                        vk_owner_id=owner_id,
+                        vk_group_short=group_short,
+                        shadow_mode=True,
+                        shadow_marker=marker,
+                        seed=dice.seed,
+                        apply_rate=dice.apply_rate,
+                        dice_value=dice.value,
+                        extra={
+                            "publish_mode": publish_mode,
+                            "scheduled_ts": scheduled_ts,
+                            "schedule": schedule_meta,
+                            "event_date": str(getattr(event, "date", "") or ""),
+                            "event_time": str(getattr(event, "time", "") or ""),
+                        },
+                    )
+                )
+                return None
         vk_url = None
         publish_attempts: list[int | None] = []
         spacing = (

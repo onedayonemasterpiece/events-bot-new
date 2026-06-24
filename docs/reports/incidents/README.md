@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-24-vk-past-actuals.md`
+  - Scope: Promo VK publication/repost/story/carousel event eligibility, Afisha Engagement debug-shadow scheduling/cleanup, managed `klgdevents` VK/TG fanout gating, and VK postponed queue audits.
+  - Must not regress: a managed VK/Promo/Afisha Engagement post must not publish at or after the event start for one-day timed events; date-only debug-shadow copies must publish before the event day; same-day timed events whose start has passed must be excluded from promo candidate selection and `schedule_event_update_tasks` must not enqueue new `vk_sync`/`tg_event_publish` for them.
 - `INC-2026-06-24-future-event-date-default-venue-regressions.md`
   - Scope: Telegram Monitoring Gemma extraction/import date semantics, event-local offsite venue grounding versus source defaults, Smart Update writer grounding, duplicate recall after venue drift, and public `@kldevents` future inventory.
   - Must not regress: Russian compact dates (`10.05`, `30.05`) are `DD.MM`, month-word/hashtag dates (`26 июля`, `#13_июня`, `#21_июня`) remain authoritative, gate/floor/address/price/coordinate numbers never become event dates/times, retrospective reports without a future invite return `[]`, explicit offsite venue/address lines beat `source.default_location` even when extractor initially omits venue, and thin/free source posts must not gain unsupported buy-ticket/theatre boilerplate. Closure requires replaying the exact source URLs through Telegram Monitoring server import + Smart Update and verifying repaired public Telegram/Telegraph surfaces.

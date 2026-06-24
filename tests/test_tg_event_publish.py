@@ -1588,6 +1588,33 @@ async def test_schedule_event_update_tasks_skips_tg_publish_for_past(tmp_path, m
 
 
 @pytest.mark.asyncio
+async def test_schedule_event_update_tasks_skips_same_day_started_event(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    tasks = []
+
+    async def fake_enqueue_job(db_obj, eid, task, **kwargs):
+        tasks.append(task)
+        return "job"
+
+    monkeypatch.setattr(main, "enqueue_job", fake_enqueue_job)
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+
+    local_now = main.datetime.now(main.LOCAL_TZ)
+    started_at = (local_now - main.timedelta(hours=1)).strftime("%H:%M")
+    event = _event(id=None, date=local_now.date().isoformat(), time=started_at)
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    await main.schedule_event_update_tasks(db, event, skip_vk_sync=False)
+
+    assert main.JobTask.vk_sync not in tasks
+    assert main.JobTask.tg_event_publish not in tasks
+
+
+@pytest.mark.asyncio
 async def test_schedule_event_update_tasks_skips_ticket_giveaway_when_alternative_exists(
     tmp_path,
     monkeypatch,

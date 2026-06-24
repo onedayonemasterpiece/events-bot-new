@@ -56,7 +56,11 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 Targets are never abstract: a festival campaign is refused until the name is
 grounded by an existing `festival` row or by future active event rows whose
 `event.festival` already equals that name. Event/festival rotation uses only
-events whose start date is today or later.
+events whose start date is today or later. For timed one-day events, VK promo
+surfaces also require that the local start time has not passed yet; a 15:00
+event must not be selected for a 16:00+ VK publication just because its date is
+still today. Date-only same-day events remain eligible because there is no
+reliable start time to compare against.
 
 Live festival/program campaigns must not be modelled as `event.id`-only
 campaigns while the programme is still being imported or corrected. A fixed

@@ -231,6 +231,30 @@ def event_is_repostable_for_promo(
     return start_dt >= local_now + timedelta(hours=max(0.0, float(min_lead_hours)))
 
 
+def event_has_not_started_for_promo(
+    ev: Event,
+    *,
+    now_utc: datetime,
+) -> bool:
+    """Return whether a promo/event wall post is still timely.
+
+    Date-only same-day events remain eligible because there is no reliable
+    start time to compare against. Timed same-day events, however, must not be
+    selected once their start time has already passed.
+    """
+
+    start = _event_start_date(ev)
+    if start is None:
+        return False
+    local_now = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ))
+    if start < local_now.date():
+        return False
+    start_dt = _event_start_local_datetime_for_repost(ev)
+    if start_dt is None:
+        return start >= local_now.date()
+    return start_dt >= local_now
+
+
 def _event_is_not_after_campaign(ev: Event, *, campaign: PromoCampaign) -> bool:
     if campaign.ends_at is None:
         return True
@@ -530,7 +554,7 @@ async def create_festival_promo_campaign(
     created_by: int | None = None,
 ) -> PromoCreateResult:
     now_utc = now_utc or datetime.now(timezone.utc)
-    today = now_utc.date()
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
     name = " ".join(str(festival_name or "").split())
     if not name:
         return PromoCreateResult(None, "invalid", "Нужно указать название фестиваля.")
@@ -1359,7 +1383,13 @@ async def _events_for_target(
     target: PromoTarget,
     campaign: PromoCampaign,
     today: date,
+    now_utc: datetime | None = None,
 ) -> list[Event]:
+    now_utc = now_utc or datetime.now(timezone.utc)
+
+    def timely(ev: Event) -> bool:
+        return event_has_not_started_for_promo(ev, now_utc=now_utc)
+
     async with db.get_session() as session:
         if target.target_type == "event" and target.event_id:
             ev = await session.get(Event, int(target.event_id))
@@ -1368,7 +1398,7 @@ async def _events_for_target(
                 today=today,
                 campaign=campaign,
                 enforce_event_date_lte_campaign=False,
-            ):
+            ) or not timely(ev):
                 return []
             return [ev]
         if target.target_type == PROMO_TARGET_TYPE_TG_CHAT_AUTHOR:
@@ -1393,6 +1423,7 @@ async def _events_for_target(
                 ev
                 for ev in res.scalars().all()
                 if _event_is_promo_eligible(ev, today=today, campaign=campaign)
+                and timely(ev)
             ]
         if target.target_type != "festival" or not target.festival_name:
             return []
@@ -1411,6 +1442,7 @@ async def _events_for_target(
             ev
             for ev in res.scalars().all()
             if _event_is_promo_eligible(ev, today=today, campaign=campaign)
+            and timely(ev)
         ]
 
 
@@ -1476,7 +1508,7 @@ async def resolve_video_promo_candidates(
     include_global_profile: bool = True,
 ) -> list[PromoCandidate]:
     now_utc = now_utc or datetime.now(timezone.utc)
-    today = now_utc.date()
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
     day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
     await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
     await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
@@ -1545,6 +1577,7 @@ async def resolve_video_promo_candidates(
             target=target,
             campaign=campaign,
             today=today,
+            now_utc=now_utc,
         )
         events = [
             ev
@@ -1622,7 +1655,7 @@ async def resolve_surface_promo_event_ids(
     profile_key: str | None = None,
 ) -> set[int]:
     now_utc = now_utc or datetime.now(timezone.utc)
-    today = now_utc.date()
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
     await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
 
     async with db.get_session() as session:
@@ -1644,7 +1677,13 @@ async def resolve_surface_promo_event_ids(
 
     result: set[int] = set()
     for campaign, activity, target in rows:
-        events = await _events_for_target(db, target=target, campaign=campaign, today=today)
+        events = await _events_for_target(
+            db,
+            target=target,
+            campaign=campaign,
+            today=today,
+            now_utc=now_utc,
+        )
         max_per_publish = max(1, min(int(activity.max_per_publish or 1), 2))
         for ev in events[:max_per_publish]:
             if ev.id is not None:
@@ -1782,6 +1821,7 @@ async def resolve_daily_promo_recommendations(
                 target=target,
                 campaign=campaign,
                 today=local_day,
+                now_utc=now_utc,
             )
             for ev in target_events:
                 if ev.id is None:
@@ -1895,7 +1935,7 @@ async def resolve_campaign_promo_event_ids(
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
-    today = now_utc.date()
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
     await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
 
     async with db.get_session() as session:
@@ -1924,6 +1964,7 @@ async def resolve_campaign_promo_event_ids(
             target=target,
             campaign=campaign,
             today=today,
+            now_utc=now_utc,
         )
         for ev in events:
             if ev.id is not None:
@@ -3633,7 +3674,9 @@ async def _select_vk_festival_carousel_events(
     activity: PromoActivity,
     target: PromoTarget,
     today: date,
+    now_utc: datetime | None = None,
 ) -> list[Event]:
+    now_utc = now_utc or datetime.now(timezone.utc)
     cfg = _activity_config(activity)
     raw_ids = cfg.get("carousel_event_ids") or cfg.get("event_ids")
     ordered_ids: list[int] = []
@@ -3651,8 +3694,15 @@ async def _select_vk_festival_carousel_events(
             by_id[event_id]
             for event_id in ordered_ids
             if event_id in by_id and _event_is_promo_eligible(by_id[event_id], today=today, campaign=campaign)
+            and event_has_not_started_for_promo(by_id[event_id], now_utc=now_utc)
         ]
-    events = await _events_for_target(db, target=target, campaign=campaign, today=today)
+    events = await _events_for_target(
+        db,
+        target=target,
+        campaign=campaign,
+        today=today,
+        now_utc=now_utc,
+    )
     preferred_ids = _preferred_event_ids_for_date(activity, today)
     if preferred_ids:
         by_id = {int(ev.id): ev for ev in events if ev.id is not None}
@@ -3714,6 +3764,7 @@ async def _publish_vk_festival_carousel(
         activity=activity,
         target=target,
         today=today,
+        now_utc=now_utc,
     )
     events = [ev for ev in events if ev.id is not None]
     if not events:
@@ -4393,7 +4444,13 @@ async def run_promo_vk_activities(
             continue
         window_hours = _vk_activity_window(activity)
         since_utc = now_utc - timedelta(hours=window_hours)
-        events = await _events_for_target(db, target=target, campaign=campaign, today=today)
+        events = await _events_for_target(
+            db,
+            target=target,
+            campaign=campaign,
+            today=today,
+            now_utc=now_utc,
+        )
         events = [ev for ev in events if ev.id is not None]
         if not events:
             continue

@@ -14283,6 +14283,37 @@ def _event_has_ended_before_today(ev: Event, *, now: datetime | None = None) -> 
     return end_date < today
 
 
+def _event_start_has_passed_for_publication(
+    ev: Event, *, now: datetime | None = None
+) -> bool:
+    """Return True when a timed one-day event already started locally.
+
+    Date-only same-day events are not treated as started because there is no
+    reliable time anchor. Multi-day/long-running events are handled by
+    ``_event_has_ended_before_today`` and remain publishable until their end
+    date.
+    """
+
+    if getattr(ev, "end_date", None):
+        return False
+    date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
+    event_date = parse_iso_date(date_raw)
+    if event_date is None:
+        return False
+    time_raw = str(getattr(ev, "time", "") or "").strip()
+    match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", time_raw)
+    if not match:
+        return False
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return False
+    now_value = now or datetime.now(LOCAL_TZ)
+    local_now = now_value if now_value.tzinfo is None else now_value.astimezone(LOCAL_TZ)
+    start_dt = datetime.combine(event_date, time(hour, minute), tzinfo=LOCAL_TZ)
+    return start_dt <= local_now
+
+
 VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v2"
 
 
@@ -14838,6 +14869,10 @@ async def schedule_event_update_tasks(
     if _event_has_ended_before_today(ev):
         # Fully past events may still need page rebuild cleanup, but they must not create
         # a new managed klgdevents wall post.
+        skip_vk_sync = True
+    if _event_start_has_passed_for_publication(ev):
+        # A same-day event that has already started is no longer safe to announce
+        # on VK/Telegram; keep page rebuilds only.
         skip_vk_sync = True
     if (not skip_vk_sync) and await _should_skip_ticket_giveaway_publication(db, ev):
         logging.info(
@@ -20411,6 +20446,14 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             getattr(ev, "end_date", None),
         )
         return False
+    if _event_start_has_passed_for_publication(ev):
+        logging.info(
+            "job_sync_vk_source_post: skip already-started event_id=%s date=%s time=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "time", None),
+        )
+        return False
     if await _should_skip_ticket_giveaway_publication(db, ev):
         logging.info(
             "job_sync_vk_source_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
@@ -20534,6 +20577,14 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
             event_id,
             getattr(ev, "date", None),
             getattr(ev, "end_date", None),
+        )
+        return False
+    if _event_start_has_passed_for_publication(ev):
+        logging.info(
+            "job_publish_tg_event_post: skip already-started event_id=%s date=%s time=%s",
+            event_id,
+            getattr(ev, "date", None),
+            getattr(ev, "time", None),
         )
         return False
     if await _should_skip_ticket_giveaway_publication(db, ev):
