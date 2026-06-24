@@ -28,7 +28,7 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
   `daily_recommend_today`, `vk_publication`, `vk_festival_carousel`,
-  `tg_event_publish`, `tg_repost`, `vk_repost`, `vk_story`, and
+  `tg_event_publish`, `tg_repost`, `vk_channel_publish`, `vk_repost`, `vk_story`, and
   `afishaengagement`. Social activity parameters live in
   `promo_activity.config_json` (`target_group`, `source_group`, `target_chat`,
   `source_chat`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
@@ -255,6 +255,20 @@ The repost result is recorded in `promo_exposure` with
 `surface='vk_repost'`, `details_json.source_url` and
 `details_json.target_url`.
 
+`vk_channel_publish` is the messenger-style VK activity for compact event
+promos in the VK Channel of the `klgdevents` community ("Полюбить Калининград
+Афиша"). VK Channels behave like a Telegram-like feed inside VK messages, but
+VK's public Open API documentation currently exposes the documented
+`messages.send` contract rather than a public channel discovery/post method.
+Therefore the activity requires an explicit configured peer id (`peer_id`,
+`peer_ids`, or env indirection such as `VK_AFISHA_CHANNEL_PEER_ID`). The copy is
+Telegram-channel-like but VK-safe: title, date/time/location infoblock, short
+plain-text description, and exactly one event CTA link; no footer link block
+and no hashtags. The runner records
+`promo_exposure.surface='vk_channel_publish'` with
+`publish_status='VK_CHANNEL_SENT'`, `target_type='vk_channel'`, and skips safely
+without creating exposure rows when the peer id is absent.
+
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
 the source wall post's first photo, with fallback to the promoted event's stored
@@ -389,6 +403,11 @@ The initial `80 историй о главном` campaign now includes:
 
 - `vk_publication` to `https://vk.com/klgdevents`, `max_per_publish=2`,
   `daily_cap=2`, 24-hour window, active window 09:00-21:00;
+- `vk_channel_publish` to the VK Channel of `https://vk.com/klgdevents`
+  ("Полюбить Калининград Афиша"), `max_per_publish=1`, `daily_cap=1`,
+  24-hour window, active window 09:00-21:00. It is active only when
+  `VK_AFISHA_CHANNEL_PEER_ID` or `VK_AFISHA_CHANNEL_PEER_IDS` provides an
+  explicit VK messenger peer id;
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.

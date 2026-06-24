@@ -25,6 +25,7 @@ from models import (
 from promo import (
     PROMO_POLICY_FIRST_SLOT,
     PROMO_POLICY_FIRST_TWO_SLOTS,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
     PROMO_SURFACE_VIDEO_GENERAL,
     PartnerPromoSpec,
     create_partner_event_promo_campaign,
@@ -286,6 +287,39 @@ async def test_campaign_card_shows_add_activity_button(tmp_path) -> None:
     kb = _campaign_card_keyboard(campaign, is_superadmin=False)
     labels = [b.text for row in kb.inline_keyboard for b in row]
     assert any("➕ Активность" in l for l in labels)
+
+
+def test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign() -> None:
+    campaign = PromoCampaign(
+        id=80,
+        title="80 историй о главном / summer visibility",
+        status="active",
+        starts_at=datetime(2026, 6, 24, tzinfo=timezone.utc),
+        ends_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+    )
+    add_kb = _campaign_card_keyboard(
+        campaign,
+        is_superadmin=True,
+        activities=[],
+        is_initial_80=True,
+    )
+    add_labels = [b.text for row in add_kb.inline_keyboard for b in row]
+    assert "➕ VK-канал" in add_labels
+
+    activity = PromoActivity(
+        id=7,
+        campaign_id=80,
+        surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+        enabled=True,
+    )
+    remove_kb = _campaign_card_keyboard(
+        campaign,
+        is_superadmin=True,
+        activities=[activity],
+        is_initial_80=True,
+    )
+    remove_labels = [b.text for row in remove_kb.inline_keyboard for b in row]
+    assert "➖ VK-канал" in remove_labels
 
 
 @pytest.mark.asyncio
