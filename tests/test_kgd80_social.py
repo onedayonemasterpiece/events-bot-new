@@ -8,6 +8,7 @@ import pytest
 from db import Database
 from kgd80_social import (
     calculate_social_bonus,
+    calculate_participant_raffle_points,
     collect_kgd80_social_summary,
     format_kgd80_social_report,
     parse_vk_wall_ids,
@@ -31,11 +32,38 @@ def test_parse_vk_wall_ids_normalizes_group_owner() -> None:
 
 def test_calculate_social_bonus_weights_reposts_strongest_and_caps_views() -> None:
     points = calculate_social_bonus(views=10_000, likes=3, comments=2, reposts=1, posts=1)
-    assert points["repost"] == 8
-    assert points["comment"] == 10
-    assert points["like"] == 3
-    assert points["view"] == 20
-    assert points["total"] == 41
+    assert points["repost"] == 3
+    assert points["comment"] == 2
+    assert points["like"] == 0.6
+    assert points["view"] == 2
+    assert points["total"] == 7.6
+
+
+def test_participant_social_two_good_days_equal_one_visit() -> None:
+    result = calculate_participant_raffle_points(
+        full_name="Пример Участника",
+        visits=0,
+        social_days=2,
+        reposts=2,
+        comments=4,
+    )
+    assert result.attendance_points == 0
+    assert result.social_points == 10
+    assert result.final_draw_points == 10
+
+
+def test_participant_social_bonus_does_not_get_winner_damping() -> None:
+    result = calculate_participant_raffle_points(
+        full_name="Пример Участника",
+        visits=1,
+        social_days=1,
+        reposts=1,
+        comments=2,
+        won_other_draw=True,
+    )
+    assert result.attendance_points == 10
+    assert result.social_points == 5
+    assert result.final_draw_points == 10
 
 
 @pytest.mark.asyncio
@@ -81,10 +109,10 @@ async def test_collect_kgd80_summary_aggregates_verified_vk_metrics(tmp_path) ->
     assert summary.likes == 7
     assert summary.comments == 3
     assert summary.reposts == 2
-    assert summary.total_points == 40
+    assert summary.total_points == 10.6
     text = format_kgd80_social_report(summary)
     assert "Сообщение создано автоматически" in text
-    assert "репосты: 2 → +16" in text
+    assert "репосты: 2 → +6" in text
 
 
 @pytest.mark.asyncio

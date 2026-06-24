@@ -494,20 +494,42 @@ Recommended scoring model, aligned with VK recommendation signals:
 
 | Activity | Bonus | Reason |
 | --- | ---: | --- |
-| Repost/share | `+8` | strongest distribution signal; creates a new audience edge |
-| Comment | `+5` | deliberate engagement and conversation signal |
-| Like | `+1` | lightweight positive signal |
-| View | `+0.02`, capped at `20` per post | weak implicit attention signal; cap prevents pure reach from overwhelming explicit actions |
+| Visit/stamp | `+10` | main raffle currency and strongest proof of real participation |
+| Repost/share | `+3` | strongest social distribution signal; creates a new audience edge |
+| Comment | `+1` | deliberate engagement and conversation signal |
+| Like | `+0.2` | lightweight positive signal |
+| View | `+0.002`, aggregate-only, capped at `2` per post | weak implicit attention signal; not attributed to FIO today |
+
+One participant's social activity is capped at `5` points per social day
+(`1/2` visit). Therefore a strong day with at least `1` repost and `2`
+comments is about half a visit, and two such days are approximately one
+visit/stamp.
 
 For participant `u`, raffle type `t`:
 
 ```text
-base_weight(u,t) = 1.0
+attendance_points(u) = 10 * (stamps + visits)
 if u already won type t: eligible=false
-if u won another type: base_weight *= 0.5
-social_bonus(u) = 8*reposts + 5*comments + 1*likes + min(0.02*views, 20*posts)
-draw_weight(u,t) = base_weight(u,t) + social_bonus(u)
+if u won another type: attendance_points *= 0.5
+raw_social_bonus(u) = 3*reposts + 1*comments + 0.2*likes
+social_bonus(u) = min(raw_social_bonus, 5*social_days)
+draw_weight(u,t) = attendance_points(u) + social_bonus(u)
 ```
+
+Example calculations (illustrative FIO until a real participant/FIO table is
+connected):
+
+| ФИО | Посещения/штампы | Соцактивность | Победитель другого типа? | Итоговый вес |
+| --- | ---: | --- | --- | ---: |
+| Анна Петрова | `1` | нет | нет | `10` |
+| Борис Смирнов | `0` | 2 дня: `2` репоста + `4` комментария | нет | `10` |
+| Виктория Иванова | `1` | 1 день: `1` репост + `2` комментария | да | `10` (`10*0.5 + 5`) |
+| Дмитрий Соколов | `2` | 1 день: `1` репост + `2` комментария + `5` лайков | нет | `25` (`20 + min(6, 5)`) |
+| Елена Кузнецова | `0` | 1 день: `1` репост + `2` комментария + `20` лайков | нет | `5` (cap за день) |
+
+This keeps attendance dominant: one visit equals two very strong social days,
+and a user with only likes cannot outrank a real visit in one day because the
+daily social cap is `5`.
 
 The daily report is sent to the resolved superadmin private chat only
 (`resolve_superadmin_chat_id`); if no trusted superadmin chat is known, it is

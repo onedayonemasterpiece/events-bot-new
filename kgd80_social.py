@@ -16,16 +16,19 @@ REPORT_TZ = ZoneInfo("Europe/Kaliningrad")
 FIRST_SENT_SETTING = "kgd80_social_report:first_sent_at"
 LAST_SENT_SETTING = "kgd80_social_report:last_sent_date"
 
-# Raffle bonus model. Reposts are intentionally the strongest signal because
-# they create a new distribution edge; comments are the next strongest explicit
-# interaction, then likes. Views are weak, capped and used only as a tie-breaker.
+# Raffle conversion model. The final raffle currency is the same as
+# stamps/visits: one verified visit/stamp is worth VISIT_POINTS. Social activity
+# is subordinate: one very strong day (>=1 repost and >=2 comments) is about
+# half a visit, so two such days roughly equal one visit.
+VISIT_POINTS = 10.0
+SOCIAL_DAILY_CAP_POINTS = VISIT_POINTS / 2.0
 SOCIAL_BONUS_WEIGHTS: dict[str, float] = {
-    "repost": 8.0,
-    "comment": 5.0,
-    "like": 1.0,
-    "view": 0.02,
+    "repost": 3.0,
+    "comment": 1.0,
+    "like": 0.2,
+    "view": 0.002,
 }
-VIEW_POINTS_CAP_PER_POST = 20.0
+VIEW_POINTS_CAP_PER_POST = 2.0
 
 _WALL_RE = re.compile(r"(?:^|/)wall(?P<owner>-?\d+)_(?P<post>\d+)")
 
@@ -43,6 +46,22 @@ class Kgd80SocialSummary:
     repost_points: float
     total_points: float
     first_report: bool
+
+
+@dataclass(frozen=True)
+class ParticipantRafflePoints:
+    full_name: str
+    stamps: int
+    visits: int
+    social_days: int
+    likes: int
+    comments: int
+    reposts: int
+    attendance_points: float
+    raw_social_points: float
+    social_points: float
+    winner_damping: float
+    final_draw_points: float
 
 
 def parse_vk_wall_ids(url: str | None) -> tuple[int, int] | None:
@@ -82,6 +101,48 @@ def calculate_social_bonus(
         "repost": repost_points,
         "total": total,
     }
+
+
+def calculate_participant_raffle_points(
+    *,
+    full_name: str,
+    stamps: int = 0,
+    visits: int = 0,
+    social_days: int = 1,
+    likes: int = 0,
+    comments: int = 0,
+    reposts: int = 0,
+    won_other_draw: bool = False,
+) -> ParticipantRafflePoints:
+    stamps = max(0, int(stamps or 0))
+    visits = max(0, int(visits or 0))
+    social_days = max(1, int(social_days or 1))
+    likes = max(0, int(likes or 0))
+    comments = max(0, int(comments or 0))
+    reposts = max(0, int(reposts or 0))
+    attendance_points = float(stamps + visits) * VISIT_POINTS
+    raw_social_points = (
+        float(reposts) * SOCIAL_BONUS_WEIGHTS["repost"]
+        + float(comments) * SOCIAL_BONUS_WEIGHTS["comment"]
+        + float(likes) * SOCIAL_BONUS_WEIGHTS["like"]
+    )
+    social_points = min(raw_social_points, SOCIAL_DAILY_CAP_POINTS * social_days)
+    winner_damping = 0.5 if won_other_draw else 1.0
+    final_draw_points = attendance_points * winner_damping + social_points
+    return ParticipantRafflePoints(
+        full_name=full_name,
+        stamps=stamps,
+        visits=visits,
+        social_days=social_days,
+        likes=likes,
+        comments=comments,
+        reposts=reposts,
+        attendance_points=attendance_points,
+        raw_social_points=raw_social_points,
+        social_points=social_points,
+        winner_damping=winner_damping,
+        final_draw_points=final_draw_points,
+    )
 
 
 def _metric_int(value: Any) -> int:
@@ -240,7 +301,8 @@ def format_kgd80_social_report(summary: Kgd80SocialSummary) -> str:
         f"• репосты: {summary.reposts} → +{_fmt_points(summary.repost_points)} баллов",
         f"Итого расчётного социального бонуса: +{_fmt_points(summary.total_points)} баллов.",
         "",
-        "Модель: репост ×8, комментарий ×5, лайк ×1, просмотр ×0.02 с капом 20 баллов на пост.",
+        "Модель конвертации: 1 посещение/штамп = 10 баллов; соцактивность за день ограничена 5 баллами.",
+        "Соцвеса: репост ×3, комментарий ×1, лайк ×0.2, просмотр ×0.002 только для агрегатного отчёта.",
         "Примечание: бонус социальной активности считается без понижения за победы в других розыгрышах; понижение применяется только к базовой вероятности.",
     ]
     return "\n".join(lines)
