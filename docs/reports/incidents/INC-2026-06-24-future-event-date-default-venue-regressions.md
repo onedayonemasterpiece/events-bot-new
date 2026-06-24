@@ -121,6 +121,12 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
   - `5783` and `6286` descriptions/search digests rewritten from source-grounded facts; unsupported buy-ticket/theatre boilerplate removed.
 - Re-armed Telegraph/month/week/weekend rebuild jobs and cleared relevant content/publication hashes for touched rows.
 - Edited public Telegram captions for `2872`, `5766`, `5783`, `6213`, `6252`, `6286`, `6333`, `6334`; marked `6223` public caption as withdrawn. Duplicate `6276` had no Telegram post.
+- 2026-06-24 follow-up on `5538/6141`:
+  - user policy applied: trust the later/current source publication and poster OCR over the stale imported `16:00` raffle text;
+  - current Telethon source read for `https://t.me/koihm/5742` and poster OCR both support `2026-06-28 15:00`;
+  - `5538` kept as canonical active event, `6141` cancelled/silent, stale linked occurrence removed, and Telegraph `https://telegra.ph/Koncert-A-gde-mne-vzyat-takuyu-pesnyu-05-31` rebuilt without `28 июня 16:00`;
+  - independent public-surface check found additional duplicates of the same concert: `6287` and `6300`; both rows were cancelled/silenced, duplicate Telegram posts `@kldevents/1147` and `@kldevents/1178` plus duplicate calendar posts `6951/6962` were deleted, canonical Telegram `@kldevents/528` was kept at `15:00`;
+  - canonical managed VK post updated to `https://vk.com/wall-231920894_4153` and edited from `15:00 и 16:00` to `15:00`; duplicate managed VK posts `4157` and `4217` were deleted; stale calendar `6822` could not be deleted but its caption was edited to the canonical `15:00` page.
 
 ## Corrective Actions
 
@@ -141,7 +147,7 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
 - [ ] Run closure-grade replay through Telegram Monitoring server import and `smart_event_update.py` on a prod snapshot/shadow DB; attach pre/post DB diff.
 - [x] Isolate, commit, push, and deploy only incident-related prevention code from clean worktree `/tmp/events-bot-inc-20260624` (`109232adb622007a3d0a3b204f416758abfa7827`).
 - [ ] Add Smart Update writer anti-boilerplate replay for `5783` and `6286` so thin/free source posts cannot gain unsupported ticket/theatre prose.
-- [ ] Review unresolved possible time conflict `5538/6141` (`А где мне взять такую песню…`, 15:00 vs 16:00) against source authority; do not auto-merge without evidence.
+- [x] Review unresolved possible time conflict `5538/6141` (`А где мне взять такую песню…`, 15:00 vs 16:00) against source authority; resolved as one `15:00` concert with stale `16:00` duplicate import, then repaired across DB/TG/Telegraph/VK.
 - [ ] Add a reusable future-event audit command/report that flags compact date drift, source-default offsite drift, retrospective future rows, and public-caption mismatch.
 
 ## Release And Closure Evidence
@@ -153,6 +159,10 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
   - Manual source-date helper replay for `26 июля`, `#21_июня ... гейт 2.6`, and `10.05 | Run sos run!` — passed locally.
   - `python3 -m pytest ...` — blocked locally: `No module named pytest`.
   - `_build_candidate` import/test — blocked locally: missing `aiogram` dependency.
+  - Playwright text/screenshot check for `5538` Telegraph after repair — passed; no `28 июня 16:00` or `Другие даты` remained.
+  - Telethon check for `@kldevents/528`, `@kldevents/17`, and `@kldevents/1146` — passed; `5783`/`6286` no longer contain unsupported ticket/theatre boilerplate and match free-entry source semantics.
+  - Telethon check for duplicate posts `@kldevents/1147`, `@kldevents/1178`, calendar `6951/6962` — passed as deleted; calendar `6822` passed as edited to canonical `15:00`.
+  - VK API check for `wall-231920894_4153/4157/4217` — passed; canonical post has `15:00` and no `16:00`, duplicate posts resolve as deleted.
   - Claude Opus consultation — blocked by org subscription access disabled.
   - Gemini 3 Pro consultation — blocked by `IneligibleTierError` in installed CLI route.
 - post-deploy verification: Fly machine `683961db016e28` version `1473` reached `started`, Fly status reported `1 passing` check, and in-machine `http://127.0.0.1:8080/healthz` returned HTTP 200 with `ready=true` on 2026-06-24 around 10:01Z. Production data/public caption mitigation evidence remains in `artifacts/codex/event-quality-audit-20260624/`; post-deploy prod SQL verification was saved as `prod_verify_post_deploy.json` and confirmed touched rows still carry the repaired values (`6223`/`6276` cancelled, `6333` on 2026-07-26, `6252` at `Театр Слово`).

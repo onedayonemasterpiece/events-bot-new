@@ -17909,6 +17909,8 @@ async def update_telegraph_event_page(
                             rid_int = int(rid)
                         except Exception:
                             continue
+                        if str(rstatus or "").strip().casefold() != "active":
+                            continue
                         items.append(
                             {
                                 "id": rid_int,
