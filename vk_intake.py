@@ -4326,9 +4326,20 @@ async def crawl_once(
                             and isinstance(age_day, int)
                             and age_day >= 0
                         ):
-                            views = post.get("views")
-                            likes = post.get("likes")
-                            if isinstance(views, int) or isinstance(likes, int):
+                            def _counter(value):
+                                if isinstance(value, int):
+                                    return int(value)
+                                if isinstance(value, dict):
+                                    count = value.get("count")
+                                    if isinstance(count, int):
+                                        return int(count)
+                                return None
+
+                            views = _counter(post.get("views"))
+                            likes = _counter(post.get("likes"))
+                            comments = _counter(post.get("comments"))
+                            reposts = _counter(post.get("reposts"))
+                            if any(isinstance(v, int) for v in (views, likes, comments, reposts)):
                                 await _upsert_vk_post_metric(
                                     db,
                                     group_id=int(gid),
@@ -4336,8 +4347,10 @@ async def crawl_once(
                                     age_day=int(age_day),
                                     source_url=miss_url,
                                     post_ts=int(ts),
-                                    views=int(views) if isinstance(views, int) else None,
-                                    likes=int(likes) if isinstance(likes, int) else None,
+                                    views=views,
+                                    likes=likes,
+                                    comments=comments,
+                                    reposts=reposts,
                                     collected_ts=int(collected_ts),
                                 )
                     except Exception:

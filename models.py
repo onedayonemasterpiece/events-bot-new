@@ -954,6 +954,8 @@ class TelegramPostMetric(SQLModel, table=True):
     collected_ts: int = Field(default_factory=lambda: int(utc_now().timestamp()))
     views: Optional[int] = None
     likes: Optional[int] = None
+    comments: Optional[int] = None
+    reposts: Optional[int] = None
     reactions_json: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
 
 

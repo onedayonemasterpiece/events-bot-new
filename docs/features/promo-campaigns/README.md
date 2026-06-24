@@ -463,6 +463,58 @@ selects active future events that have an `event_source` row with
   day's several announces can each include it where it passes filters). Seeded on
   every `resolve_video_promo_candidates` run.
 
+## KGD80 raffle social activity contract
+
+Audit result: there is no standalone raffle engine in this repository yet, and
+no existing draw path currently consumes social activity. The implemented
+building block is the KGD80 social report (`kgd80_social.py`) plus VK metric
+collection (`vk_post_metric.views/likes/comments/reposts`). The draw engine,
+when added, must consume the same model instead of introducing a second scoring
+scheme.
+
+Fairness requirements for the future raffle:
+
+1. **One activity type, one win.** A participant who already won a prize in one
+   raffle/activity type (for example repost-based draw) must not win again in
+   that same activity type.
+2. **Other raffle types stay available.** The same participant may still be
+   eligible in another activity type (for example comment-based or general
+   participation draw).
+3. **Cross-draw winner damping.** Winners from other draw types receive a
+   global base-probability damping factor (recommended start: `0.5`) so the
+   prize distribution is less concentrated.
+4. **Social bonus is not damped.** The damping applies only to base probability;
+   points earned by social activity are added after damping and are not reduced.
+5. **Verified-only reporting.** Automated reports and later draw inputs may use
+   only activity that the bot can confidently tie to VK post counters or explicit
+   VK user lists. If user-level attribution is unavailable, the report stays at
+   aggregate level and must not pretend to have participant identities.
+
+Recommended scoring model, aligned with VK recommendation signals:
+
+| Activity | Bonus | Reason |
+| --- | ---: | --- |
+| Repost/share | `+8` | strongest distribution signal; creates a new audience edge |
+| Comment | `+5` | deliberate engagement and conversation signal |
+| Like | `+1` | lightweight positive signal |
+| View | `+0.02`, capped at `20` per post | weak implicit attention signal; cap prevents pure reach from overwhelming explicit actions |
+
+For participant `u`, raffle type `t`:
+
+```text
+base_weight(u,t) = 1.0
+if u already won type t: eligible=false
+if u won another type: base_weight *= 0.5
+social_bonus(u) = 8*reposts + 5*comments + 1*likes + min(0.02*views, 20*posts)
+draw_weight(u,t) = base_weight(u,t) + social_bonus(u)
+```
+
+The daily report is sent to the resolved superadmin private chat only
+(`resolve_superadmin_chat_id`); if no trusted superadmin chat is known, it is
+not sent. Every message states that it was generated automatically. The first
+report includes the fixed counts by activity type and the currently calculated
+bonus points; subsequent evening reports use the same format for auditability.
+
 ## Daily Marker
 
 The "добавили в анонс" daily section can mark promoted events with standard

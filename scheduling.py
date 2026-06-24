@@ -4384,6 +4384,35 @@ def startup(
         logging.info("SCHED skipping general_stats (ENABLE_GENERAL_STATS!=1)")
         _notify_admin_skip("general_stats", "ENABLE_GENERAL_STATS!=1")
 
+    enable_kgd80_social_report = _env_enabled("ENABLE_KGD80_SOCIAL_REPORT", default=True)
+    if enable_kgd80_social_report:
+        from kgd80_social import kgd80_social_report_scheduler
+
+        kgd80_report_time_raw = os.getenv("KGD80_SOCIAL_REPORT_TIME_LOCAL", "20:30").strip()
+        kgd80_report_tz_name = os.getenv("KGD80_SOCIAL_REPORT_TZ", "Europe/Kaliningrad").strip()
+        kgd80_report_hour, kgd80_report_minute = _cron_from_local(
+            kgd80_report_time_raw,
+            kgd80_report_tz_name,
+            default_hour="18",
+            default_minute="30",
+            label="KGD80_SOCIAL_REPORT_TIME_LOCAL",
+        )
+        _register_job(
+            "kgd80_social_report",
+            _job_wrapper("kgd80_social_report", kgd80_social_report_scheduler, notify_skip=_notify_admin_skip),
+            "cron",
+            id="kgd80_social_report",
+            hour=kgd80_report_hour,
+            minute=kgd80_report_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=1800,
+        )
+    else:
+        logging.info("SCHED skipping kgd80_social_report (ENABLE_KGD80_SOCIAL_REPORT!=1)")
+
     enable_telegraph_cache = _env_enabled("ENABLE_TELEGRAPH_CACHE_SANITIZER", default=False)
     if enable_telegraph_cache:
         from telegraph_cache_sanitizer import run_telegraph_cache_sanitizer
