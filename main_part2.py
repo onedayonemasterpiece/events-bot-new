@@ -4571,15 +4571,35 @@ async def publish_vk_channel_promo_event_publication(
                 params["peer_ids"] = ",".join(str(peer_id) for peer_id in peer_ids[:100])
             if actor.kind == "user":
                 params["group_id"] = abs(int(target_group_id))
-            data = await _vk_api(
-                "messages.send",
-                params,
-                db,
-                bot,
-                token=token,
-                token_kind=token_kind,
-                skip_captcha=(actor.kind == "group"),
-            )
+            try:
+                data = await _vk_api(
+                    "messages.send",
+                    params,
+                    db,
+                    bot,
+                    token=token,
+                    token_kind=token_kind,
+                    skip_captcha=(actor.kind == "group"),
+                )
+            except Exception as exc:
+                if actor.kind != "user" or "Cannot message as group" not in str(exc):
+                    raise
+                # VK Channels/messenger peers may be represented by a user-like
+                # peer and reject the documented community ``group_id`` send.
+                # In that case keep the same explicit peer id but send with the
+                # user token directly; this is still gated by the configured
+                # VK_AFISHA_CHANNEL_PEER_ID(S), never inferred from a screen name.
+                fallback_params = dict(params)
+                fallback_params.pop("group_id", None)
+                data = await _vk_api(
+                    "messages.send",
+                    fallback_params,
+                    db,
+                    bot,
+                    token=token,
+                    token_kind=token_kind,
+                    skip_captcha=False,
+                )
             payload = data.get("response") if isinstance(data, dict) and "response" in data else data
             if isinstance(payload, list) and payload:
                 first = payload[0]

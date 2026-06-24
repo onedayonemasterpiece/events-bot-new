@@ -268,6 +268,9 @@ and no hashtags. The runner records
 `promo_exposure.surface='vk_channel_publish'` with
 `publish_status='VK_CHANNEL_SENT'`, `target_type='vk_channel'`, and skips safely
 without creating exposure rows when the peer id is absent.
+If VK rejects a user-token send with `group_id` as `Cannot message as group`,
+the runner retries the same explicit peer id without `group_id`, matching
+VK-channel-style peers that behave as personal-message recipients.
 
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
