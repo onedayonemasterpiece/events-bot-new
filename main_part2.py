@@ -4367,6 +4367,239 @@ async def publish_tg_promo_event_publication(
     return _tg_channel_message_link(target_chat, int(sent.message_id))
 
 
+def _single_event_link(event: Event) -> str:
+    """Pick exactly one public URL for compact channel-style event promos."""
+
+    for attr in (
+        "telegraph_url",
+        "ticket_link",
+        "ticket_url",
+        "source_url",
+        "source_vk_post_url",
+        "ics_url",
+    ):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+    return ""
+
+
+def _strip_urls_for_channel_text(value: str) -> str:
+    text = re.sub(r"https?://\S+", "", str(value or ""))
+    return " ".join(text.split())
+
+
+def build_vk_channel_promo_event_publication_message(event: Event) -> str:
+    """Compact VK-channel/direct-message promo text: short copy + one link.
+
+    The layout mirrors a Telegram channel event card, but removes the footer
+    link block and hashtags: title, info block, short description, one CTA URL.
+    """
+
+    title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
+    title = f"{emoji_part}{title_text}".strip()
+    date_part = str(event.date or "").split("..", 1)[0]
+    d = parse_iso_date(date_part)
+    day = format_day_pretty(d) if d else date_part
+    time_part = str(getattr(event, "time", "") or "").strip()
+    when = f"{day} {time_part}".strip()
+
+    lines = [title]
+    if when:
+        lines.append(f"📅 {when}")
+    loc = _tg_promo_plain_location(event)
+    if loc:
+        lines.append(f"📍 {loc}")
+
+    body_source = (
+        str(getattr(event, "short_description", None) or "").strip()
+        or str(getattr(event, "search_digest", None) or "").strip()
+        or str(getattr(event, "description", None) or "").strip()
+        or str(getattr(event, "source_text", None) or "").strip()
+    )
+    body = _strip_urls_for_channel_text(_strip_tags(body_source))
+    if body:
+        if len(body) > 220:
+            body = body[:217].rstrip() + "…"
+        lines.extend(["", body])
+
+    link = _single_event_link(event)
+    if link:
+        lines.extend(["", link])
+    return "\n".join(lines).strip()
+
+
+def _vk_message_target_link(peer_id: int, message_id: int | None = None) -> str:
+    suffix = f"&msgid={int(message_id)}" if message_id else ""
+    return f"https://vk.com/im?sel={int(peer_id)}{suffix}"
+
+
+async def _upload_vk_message_photo(
+    *,
+    peer_id: int,
+    photo_url: str,
+    db: Database | None,
+    bot: Bot | None,
+    token: str | None,
+    token_kind: str,
+) -> str | None:
+    """Upload one photo for VK ``messages.send`` and return an attachment id."""
+
+    if not photo_url:
+        return None
+    import mimetypes
+    import requests
+
+    server = await _vk_api(
+        "photos.getMessagesUploadServer",
+        {"peer_id": int(peer_id)},
+        db,
+        bot,
+        token=token,
+        token_kind=token_kind,
+        skip_captcha=(token_kind == "group"),
+    )
+    upload_url = (server.get("response") or {}).get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        upload_url = server.get("upload_url") if isinstance(server, dict) else None
+    if not upload_url:
+        raise RuntimeError("photos.getMessagesUploadServer returned no upload_url")
+
+    download = await asyncio.to_thread(requests.get, photo_url, timeout=120)
+    if download.status_code >= 400:
+        raise RuntimeError(f"VK channel photo download failed status={download.status_code}")
+    filename = os.path.basename(photo_url.split("?", 1)[0]) or "promo.jpg"
+    upload_response = await asyncio.to_thread(
+        requests.post,
+        str(upload_url),
+        files={
+            "photo": (
+                filename,
+                download.content,
+                mimetypes.guess_type(filename)[0] or "image/jpeg",
+            )
+        },
+        timeout=300,
+    )
+    upload_payload = upload_response.json()
+    if upload_response.status_code >= 400 or "error" in upload_payload:
+        raise RuntimeError(f"VK channel photo upload failed: {upload_payload}")
+    saved = await _vk_api(
+        "photos.saveMessagesPhoto",
+        {
+            "photo": upload_payload.get("photo"),
+            "server": upload_payload.get("server"),
+            "hash": upload_payload.get("hash"),
+        },
+        db,
+        bot,
+        token=token,
+        token_kind=token_kind,
+        skip_captcha=(token_kind == "group"),
+    )
+    payload = saved.get("response") if isinstance(saved, dict) and "response" in saved else saved
+    item = payload[0] if isinstance(payload, list) and payload else {}
+    owner_id = item.get("owner_id")
+    photo_id = item.get("id")
+    if owner_id is None or photo_id is None:
+        return None
+    access_key = str(item.get("access_key") or "").strip()
+    return f"photo{owner_id}_{photo_id}" + (f"_{access_key}" if access_key else "")
+
+
+async def publish_vk_channel_promo_event_publication(
+    event: Event,
+    db: Database | None,
+    bot: Bot | None,
+    *,
+    target_group_id: int,
+    peer_ids: Sequence[int],
+    channel_ref: str | None = None,
+) -> str | None:
+    """Send a compact event promo through documented VK ``messages.send``."""
+
+    normalized_peer_ids: list[int] = []
+    for peer_id in peer_ids:
+        try:
+            parsed_peer_id = int(peer_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_peer_id:
+            normalized_peer_ids.append(parsed_peer_id)
+    peer_ids = normalized_peer_ids
+    if not peer_ids:
+        raise RuntimeError("VK channel peer_id is not configured")
+
+    message = build_vk_channel_promo_event_publication_message(event)
+    if len(message) > 9000:
+        message = message[:8950].rstrip() + "\n\n..."
+    actors = choose_vk_actor(-abs(int(target_group_id)), "messages.send")
+    if not actors:
+        raise RuntimeError("VK token missing for messages.send")
+
+    last_error: Exception | None = None
+    for actor in actors:
+        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
+        token_kind = actor.kind
+        try:
+            attachments: list[str] = []
+            for photo_url in [
+                str(url).strip()
+                for url in (getattr(event, "photo_urls", None) or [])
+                if str(url).strip()
+            ][:10]:
+                attachment = await _upload_vk_message_photo(
+                    peer_id=peer_ids[0],
+                    photo_url=photo_url,
+                    db=db,
+                    bot=bot,
+                    token=token,
+                    token_kind=token_kind,
+                )
+                if attachment:
+                    attachments.append(attachment)
+            params: dict[str, Any] = {
+                "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
+                "message": message,
+                "dont_parse_links": 0,
+            }
+            if attachments:
+                params["attachment"] = ",".join(attachments)
+            if len(peer_ids) == 1:
+                params["peer_id"] = peer_ids[0]
+            else:
+                params["peer_ids"] = ",".join(str(peer_id) for peer_id in peer_ids[:100])
+            if actor.kind == "user":
+                params["group_id"] = abs(int(target_group_id))
+            data = await _vk_api(
+                "messages.send",
+                params,
+                db,
+                bot,
+                token=token,
+                token_kind=token_kind,
+                skip_captcha=(actor.kind == "group"),
+            )
+            payload = data.get("response") if isinstance(data, dict) and "response" in data else data
+            if isinstance(payload, list) and payload:
+                first = payload[0]
+                if isinstance(first, dict):
+                    return _vk_message_target_link(int(first.get("peer_id") or peer_ids[0]), first.get("message_id"))
+            if isinstance(payload, int):
+                return _vk_message_target_link(peer_ids[0], payload)
+            return _vk_message_target_link(peer_ids[0])
+        except Exception as exc:
+            logging.warning(
+                "vk channel promo send failed actor=%s channel=%s error=%s",
+                getattr(actor, "label", actor.kind),
+                channel_ref or "",
+                exc,
+            )
+            last_error = exc
+            continue
+    raise last_error or RuntimeError("VK channel promo send failed")
+
+
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
 TG_EVENT_SUBSCRIBE_URL = "https://t.me/+MrSeuZSHv3VjMThi"
 TG_EVENT_VK_URL = "https://vk.com/klgdevents"

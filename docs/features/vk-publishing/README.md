@@ -108,6 +108,15 @@
   reposts: with a known start time, do not repost after the event has started
   or inside the final 4 hours before start unless the activity explicitly lowers
   `min_lead_hours`.
+- Promo campaign activity `vk_channel_publish` sends a compact event promo to
+  the VK Channel of the `klgdevents` community ("Полюбить Калининград Афиша")
+  through the documented VK `messages.send` contract. The activity requires an
+  explicit messenger peer id from config or `VK_AFISHA_CHANNEL_PEER_ID(S)`:
+  the runner must not guess a Channel recipient from a community screen name.
+  The text mirrors the Telegram event-channel shape but strips footer links and
+  hashtags: title, date/time/location, short description, one CTA URL. Delivery
+  is recorded as `promo_exposure.surface='vk_channel_publish'`,
+  `publish_status='VK_CHANNEL_SENT'`, `public_targets_json.type='vk_channel'`.
 - Promo campaign activity `vk_story` publishes a caption-free image story into
   a configured community from a recent source-community event post. It uploads
   the source wall image/poster without passing the source wall URL as VK
@@ -143,3 +152,6 @@
 - Для нескольких событий из одного исходного поста/афиши (`event.source_post_url` или внешний `event_source.source_url`) VK postponed reservation добавляет source-specific spacing: минимум `SAME_SOURCE_EVENT_PUBLISH_INTERVAL_HOURS` (default `12`) между managed VK-постами этой афиши, с горизонтом `SAME_SOURCE_EVENT_PUBLISH_SPACING_HORIZON_HOURS` (default `168`). Посты всё равно создаются через общий `post_to_vk` и попадают в VK postponed queue сразу, поэтому стандартная VK-очередь видит эти отложенные anchors и не ставит соседние публикации в занятые слоты.
 - Runtime-параметры promo VK: `ENABLE_PROMO_VK_SCHEDULER` (default `true`) и
   `PROMO_VK_INTERVAL_MINUTES` (default `30`).
+- Runtime-параметры VK-channel promo: `VK_AFISHA_CHANNEL_PEER_ID` or
+  `VK_AFISHA_CHANNEL_PEER_IDS` (comma-separated) must be set explicitly; no
+  fallback from `klgdevents` wall/group id is allowed.

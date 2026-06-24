@@ -14,6 +14,7 @@ from promo import (
     INITIAL_80_STORIES_PRIORITY,
     PROMO_TARGET_TYPE_TG_CHAT_AUTHOR,
     PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
     _parse_chat_author_query,
@@ -335,6 +336,7 @@ def _activity_label(activity: PromoActivity) -> str:
         "telegraph_month": "Telegraph: месяц",
         "telegraph_weekend": "Telegraph: выходные",
         PROMO_SURFACE_VK_PUBLICATION: "VK-публикация",
+        PROMO_SURFACE_VK_CHANNEL_PUBLISH: "VK-канал",
         PROMO_SURFACE_VK_REPOST: "VK-репост",
         PROMO_SURFACE_VK_STORY: "VK-история",
     }.get(activity.surface, activity.surface)
@@ -362,6 +364,7 @@ async def _vk_exposures_for_campaign(
                     PromoExposure.surface.in_(
                         [
                             PROMO_SURFACE_VK_PUBLICATION,
+                            PROMO_SURFACE_VK_CHANNEL_PUBLISH,
                             PROMO_SURFACE_VK_REPOST,
                             PROMO_SURFACE_VK_STORY,
                         ]
@@ -535,6 +538,7 @@ async def _campaign_lines(
             for item in vk_exposures[:8]:
                 label = {
                     PROMO_SURFACE_VK_PUBLICATION: "публикация",
+                    PROMO_SURFACE_VK_CHANNEL_PUBLISH: "канал",
                     PROMO_SURFACE_VK_REPOST: "репост",
                     PROMO_SURFACE_VK_STORY: "история",
                 }.get(str(item["surface"]), str(item["surface"]))

@@ -50,6 +50,7 @@ from promo import (
     PROMO_POLICY_GUARANTEED_ANY_POSITION,
     PROMO_SURFACE_VIDEO_GENERAL,
     PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
     PROMO_VK_DEFAULT_WINDOW_HOURS,
@@ -57,6 +58,7 @@ from promo import (
     build_partner_campaign_title,
     clamp_campaign_end_to_event,
     create_partner_event_promo_campaign,
+    _initial_80_vk_channel_publish_activity,
     normalize_promo_priority,
 )
 
@@ -1306,6 +1308,7 @@ _SURFACE_LABELS: dict[str, str] = {
     "telegraph_month": "📰 Telegraph: месяц",
     "telegraph_weekend": "📰 Telegraph: выходные",
     "vk_publication": "📢 VK-публикация",
+    "vk_channel_publish": "📣 VK-канал",
     "vk_repost": "📨 VK-репост",
     "vk_story": "VK-история",
     "placeholder": "—",
@@ -1346,6 +1349,15 @@ def _humanize_activity(activity: PromoActivity) -> str:
             bits.append(f"vk.com/{group}")
         window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
         bits.append(f"минимум {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
+    elif activity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH:
+        channel = str(cfg.get("target_channel") or activity.profile_key or "").strip()
+        if channel:
+            bits.append(channel)
+        peer_hint = str(cfg.get("peer_id_env") or cfg.get("peer_ids_env") or "").strip()
+        if peer_hint:
+            bits.append(peer_hint)
+        window = int(cfg.get("window_hours") or PROMO_VK_DEFAULT_WINDOW_HOURS)
+        bits.append(f"сообщений {int(activity.daily_cap or activity.max_per_publish or 1)}/{window}ч")
     elif activity.surface == PROMO_SURFACE_VK_REPOST:
         # VK-репост: показываем направление source → target.
         source = str(cfg.get("source_group") or "").strip()
@@ -1374,6 +1386,7 @@ def _humanize_activity(activity: PromoActivity) -> str:
                 bits.append(policy_label)
     if activity.daily_cap and activity.surface not in (
         PROMO_SURFACE_VK_PUBLICATION,
+        PROMO_SURFACE_VK_CHANNEL_PUBLISH,
         PROMO_SURFACE_VK_REPOST,
         PROMO_SURFACE_VK_STORY,
     ):
@@ -1587,7 +1600,11 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
 
 
 def _campaign_card_keyboard(
-    campaign: PromoCampaign, *, is_superadmin: bool
+    campaign: PromoCampaign,
+    *,
+    is_superadmin: bool,
+    activities: list[PromoActivity] | None = None,
+    is_initial_80: bool = False,
 ) -> types.InlineKeyboardMarkup:
     cid = int(campaign.id or 0)
     rows: list[list[types.InlineKeyboardButton]] = []
@@ -1643,6 +1660,29 @@ def _campaign_card_keyboard(
                 )
             ]
         )
+        activity_rows: list[types.InlineKeyboardButton] = []
+        channel_seen = False
+        for activity in activities or []:
+            if activity.id is None:
+                continue
+            if activity.surface != PROMO_SURFACE_VK_CHANNEL_PUBLISH:
+                continue
+            channel_seen = True
+            activity_rows.append(
+                types.InlineKeyboardButton(
+                    text=("➖ VK-канал" if activity.enabled else "➕ VK-канал"),
+                    callback_data=f"ppromo:acttoggle:{cid}:{int(activity.id)}",
+                )
+            )
+        if is_initial_80 and not channel_seen:
+            activity_rows.append(
+                types.InlineKeyboardButton(
+                    text="➕ VK-канал",
+                    callback_data=f"ppromo:add80vkchan:{cid}",
+                )
+            )
+        for idx in range(0, len(activity_rows), 2):
+            rows.append(activity_rows[idx : idx + 2])
     if is_superadmin:
         rows.append(
             [
@@ -1673,7 +1713,33 @@ async def _render_campaign_card(
     campaign: PromoCampaign,
 ) -> None:
     text = await _campaign_card_text(db, campaign)
-    markup = _campaign_card_keyboard(campaign, is_superadmin=bool(user.is_superadmin))
+    async with db.get_session() as session:
+        activities = list(
+            (
+                await session.execute(
+                    select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
+                )
+            ).scalars().all()
+        )
+        target = (
+            await session.execute(
+                select(PromoTarget).where(PromoTarget.campaign_id == campaign.id)
+            )
+        ).scalars().first()
+    is_initial_80 = (
+        str(campaign.title or "") == "80 историй о главном / summer visibility"
+        or (
+            target is not None
+            and target.target_type == "festival"
+            and str(target.festival_name or "") == "80 историй о главном"
+        )
+    )
+    markup = _campaign_card_keyboard(
+        campaign,
+        is_superadmin=bool(user.is_superadmin),
+        activities=activities,
+        is_initial_80=is_initial_80,
+    )
     if callback is not None and callback.message is not None:
         try:
             await callback.message.edit_text(
@@ -1733,11 +1799,17 @@ async def _change_campaign_priority(
 # Statuses that count as a real public action. ``VK_SCHEDULED`` is included
 # because promo VK posts land in the community postponed queue, not as an
 # immediate ``wall.post`` — excluding it would under-count VK activities.
-_STATS_PUBLISHED_STATUSES = ("PUBLISHED_MAIN", "PUBLISHED_TEST", "VK_SCHEDULED")
+_STATS_PUBLISHED_STATUSES = (
+    "PUBLISHED_MAIN",
+    "PUBLISHED_TEST",
+    "VK_SCHEDULED",
+    "VK_CHANNEL_SENT",
+)
 _STATUS_RU = {
     "PUBLISHED_MAIN": "опубликовано",
     "PUBLISHED_TEST": "тест",
     "VK_SCHEDULED": "в отложке",
+    "VK_CHANNEL_SENT": "отправлено в VK-канал",
 }
 
 
@@ -1838,6 +1910,7 @@ async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
         bucket = by_activity.get(aid, [])
         is_vk = activity.surface in (
             PROMO_SURFACE_VK_PUBLICATION,
+            PROMO_SURFACE_VK_CHANNEL_PUBLISH,
             PROMO_SURFACE_VK_REPOST,
             PROMO_SURFACE_VK_STORY,
         )
@@ -1888,6 +1961,7 @@ async def _campaign_stats_text(db: Database, campaign: PromoCampaign) -> str:
         for exposure, title in leftover_recent[:5]:
             is_vk = exposure.surface in (
                 PROMO_SURFACE_VK_PUBLICATION,
+                PROMO_SURFACE_VK_CHANNEL_PUBLISH,
                 PROMO_SURFACE_VK_REPOST,
                 PROMO_SURFACE_VK_STORY,
             )
@@ -2062,6 +2136,96 @@ async def _handle_campaign_priority(
     )
 
 
+async def _handle_activity_toggle(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+    activity_id: int,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    async with db.get_session() as session:
+        activity = await session.get(PromoActivity, int(activity_id))
+        if activity is None or int(activity.campaign_id) != int(campaign_id):
+            await callback.answer("Активность не найдена", show_alert=True)
+            return
+        new_enabled = not bool(activity.enabled)
+        activity.enabled = new_enabled
+        campaign_obj = await session.get(PromoCampaign, int(campaign_id))
+        if campaign_obj is not None:
+            campaign_obj.updated_at = datetime.now(timezone.utc)
+            session.add(campaign_obj)
+        session.add(activity)
+        await session.commit()
+    fresh = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    await callback.answer("Активность включена" if new_enabled else "Активность выключена")
+    if fresh is not None:
+        await _render_campaign_card(bot, callback, callback.message.chat.id, db=db, user=user, campaign=fresh)
+
+
+async def _handle_add_initial_80_vk_channel(
+    callback: types.CallbackQuery,
+    db: Database,
+    bot: Bot,
+    *,
+    campaign_id: int,
+) -> None:
+    user = await _load_user(db, int(callback.from_user.id))
+    if not _is_role_authorized_for_menu(user):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+    campaign = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    if campaign is None:
+        await callback.answer("Кампания недоступна", show_alert=True)
+        return
+    async with db.get_session() as session:
+        target = (
+            await session.execute(
+                select(PromoTarget).where(PromoTarget.campaign_id == campaign_id)
+            )
+        ).scalars().first()
+        is_initial_80 = (
+            str(campaign.title or "") == "80 историй о главном / summer visibility"
+            or (
+                target is not None
+                and target.target_type == "festival"
+                and str(target.festival_name or "") == "80 историй о главном"
+            )
+        )
+        if not is_initial_80:
+            await callback.answer("VK-канал сейчас доступен только кампании 80 историй.", show_alert=True)
+            return
+        existing = (
+            await session.execute(
+                select(PromoActivity)
+                .where(PromoActivity.campaign_id == campaign_id)
+                .where(PromoActivity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH)
+            )
+        ).scalars().first()
+        if existing is None:
+            session.add(_initial_80_vk_channel_publish_activity(int(campaign_id)))
+        else:
+            existing.enabled = True
+            session.add(existing)
+        campaign_obj = await session.get(PromoCampaign, int(campaign_id))
+        if campaign_obj is not None:
+            campaign_obj.updated_at = datetime.now(timezone.utc)
+            session.add(campaign_obj)
+        await session.commit()
+    fresh = await _load_campaign_with_visibility(db, user=user, campaign_id=campaign_id)
+    await callback.answer("VK-канал добавлен")
+    if fresh is not None:
+        await _render_campaign_card(bot, callback, callback.message.chat.id, db=db, user=user, campaign=fresh)
+
+
 async def _handle_campaign_stats(
     callback: types.CallbackQuery, db: Database, bot: Bot, *, campaign_id: int
 ) -> None:
@@ -2206,6 +2370,20 @@ async def handle_partner_promo_callback(  # noqa: F811 — extend dispatch
             return True
         if action == "addact" and len(parts) >= 3:
             await _open_add_activity_form(
+                callback, db, bot, campaign_id=int(parts[2])
+            )
+            return True
+        if action == "acttoggle" and len(parts) >= 4:
+            await _handle_activity_toggle(
+                callback,
+                db,
+                bot,
+                campaign_id=int(parts[2]),
+                activity_id=int(parts[3]),
+            )
+            return True
+        if action == "add80vkchan" and len(parts) >= 3:
+            await _handle_add_initial_80_vk_channel(
                 callback, db, bot, campaign_id=int(parts[2])
             )
             return True

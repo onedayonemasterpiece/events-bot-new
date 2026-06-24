@@ -32,6 +32,7 @@ from promo import (
     PROMO_SURFACE_TG_REPOST,
     PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
     PROMO_SURFACE_VK_PUBLICATION,
+    PROMO_SURFACE_VK_CHANNEL_PUBLISH,
     PROMO_SURFACE_VK_REPOST,
     PROMO_SURFACE_VK_STORY,
     create_event_promo_campaign,
@@ -319,6 +320,7 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
                     PromoActivity.surface.in_(
                         [
                             PROMO_SURFACE_VK_PUBLICATION,
+                            PROMO_SURFACE_VK_CHANNEL_PUBLISH,
                             PROMO_SURFACE_VK_REPOST,
                             PROMO_SURFACE_VK_STORY,
                         ]
@@ -328,6 +330,7 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
         ).scalars().all()
     assert [activity.surface for activity in vk_activities] == [
         PROMO_SURFACE_VK_PUBLICATION,
+        PROMO_SURFACE_VK_CHANNEL_PUBLISH,
         PROMO_SURFACE_VK_REPOST,
         PROMO_SURFACE_VK_STORY,
         PROMO_SURFACE_VK_STORY,
@@ -1788,6 +1791,85 @@ async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monke
     ]
     assert exposures[1].details_json["source_url"] == f"https://t.me/kldevents/{1000 + event_id}"
     assert saved.tg_event_post_url == f"https://t.me/kldevents/{1000 + event_id}"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_promo_runner_sends_vk_channel_publish(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 17, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Завтрашняя история", "2026-06-14", festival="Кантата")
+        event.telegraph_url = "https://telegra.ph/story"
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="VK channel smoke",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(day=16),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+            profile_key="klgdevents:vk_channel",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "target_group": "klgdevents",
+                "target_channel": "Полюбить Калининград Афиша",
+                "peer_id": 2000000123,
+                "active_start_hour": 18,
+                "active_end_hour": 20,
+            },
+        )
+        session.add(activity)
+        session.add(
+            PromoTarget(
+                campaign_id=int(campaign.id),
+                target_type="festival",
+                festival_name="Кантата",
+            )
+        )
+        await session.commit()
+
+    async def fake_resolve(ref: str):
+        assert ref == "klgdevents"
+        return 111, "Events", "klgdevents", "group"
+
+    async def fake_publish(ev, db_arg, bot_arg, **kwargs):
+        assert int(ev.id) == event_id
+        assert kwargs["target_group_id"] == 111
+        assert kwargs["peer_ids"] == [2000000123]
+        assert kwargs["channel_ref"] == "Полюбить Калининград Афиша"
+        return f"https://vk.com/im?sel=2000000123&msgid={3000 + int(ev.id)}"
+
+    monkeypatch.setattr(main, "vk_resolve_group", fake_resolve)
+    monkeypatch.setattr(main, "publish_vk_channel_promo_event_publication", fake_publish)
+
+    results = await run_promo_vk_activities(db, None, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id) for item in results] == [
+        (PROMO_SURFACE_VK_CHANNEL_PUBLISH, "published", event_id)
+    ]
+    async with db.get_session() as session:
+        exposures = (await session.execute(select(PromoExposure))).scalars().all()
+    assert len(exposures) == 1
+    exposure = exposures[0]
+    assert exposure.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH
+    assert exposure.publish_status == "VK_CHANNEL_SENT"
+    assert exposure.public_targets_json == [
+        {"type": "vk_channel", "url": f"https://vk.com/im?sel=2000000123&msgid={3000 + event_id}"}
+    ]
+    assert exposure.details_json["peer_count"] == 1
     await db.close()
 
 
