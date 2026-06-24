@@ -146,7 +146,7 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
 
 ## Release And Closure Evidence
 
-- deployed SHA: `109232adb622007a3d0a3b204f416758abfa7827` (emergency hotfix branch; `origin/main` back-merge/push still pending in this evidence block until completed)
+- deployed SHA: `109232adb622007a3d0a3b204f416758abfa7827` (prevention code deployed; code commit is reachable from `origin/main` via `dfc5f338` and later evidence commits)
 - deploy path: clean worktree `/tmp/events-bot-inc-20260624`, branch `hotfix/inc-2026-06-24-event-quality`, `flyctl deploy -a events-bot-new-wngqia --remote-only`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KVWH1ZDQ9XHPTFASB5NJJBA2`
 - regression checks:
   - `python3 -m py_compile kaggle/TelegramMonitor/telegram_monitor.py source_parsing/telegram/handlers.py tests/test_tg_monitor_gemma4_contract.py tests/test_tg_candidate_location_grounding.py` — passed locally.
