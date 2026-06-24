@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-24-future-event-date-default-venue-regressions.md`
+  - Scope: Telegram Monitoring Gemma extraction/import date semantics, event-local offsite venue grounding versus source defaults, Smart Update writer grounding, duplicate recall after venue drift, and public `@kldevents` future inventory.
+  - Must not regress: Russian compact dates (`10.05`, `30.05`) are `DD.MM`, month-word/hashtag dates (`26 июля`, `#13_июня`, `#21_июня`) remain authoritative, gate/floor/address/price/coordinate numbers never become event dates/times, retrospective reports without a future invite return `[]`, explicit offsite venue/address lines beat `source.default_location` even when extractor initially omits venue, and thin/free source posts must not gain unsupported buy-ticket/theatre boilerplate. Closure requires replaying the exact source URLs through Telegram Monitoring server import + Smart Update and verifying repaired public Telegram/Telegraph surfaces.
 - `INC-2026-06-22-poll-repost-orphan-open-poll.md`
   - Scope: Poll to Repost production DB-write idempotency after Telegram `send_poll`, resolver popularity relaxation, Telethon/Fly/DB evidence for orphan public polls, and scheduler failure recovery.
   - Must not regress: a transient SQLite writer lock after a public poll is sent must not leave the poll without a durable `poll_repost_run` row; resolver must not drop a valid winning option solely because sparse popularity coverage filtered its candidates after a relaxed creation.

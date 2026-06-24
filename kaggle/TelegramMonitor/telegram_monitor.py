@@ -1307,7 +1307,11 @@ EVENT_ARRAY_SCHEMA = {
             ),
             'date': _string_schema(
                 'YYYY-MM-DD or empty string; never a placeholder literal. '
-                'Message date is context for resolving explicit relative anchors, not a default event date.'
+                'Message date is context for resolving explicit relative anchors, not a default event date. '
+                'Russian numeric dates are day.month: "10.05" means 10 May, not September 10; '
+                '"26 июля" and "#13_июня" are authoritative event dates and must not be remapped to the '
+                'current/message month. Nearby address/venue numbers, gates, floors, prices, coordinates, '
+                'or building numbers are not dates.'
             ),
             'time': _string_schema('HH:MM (24h) or empty string; never a date.'),
             'end_date': _string_schema('YYYY-MM-DD or empty string; omit for single-date events.'),
@@ -1317,6 +1321,9 @@ EVENT_ARRAY_SCHEMA = {
                 'speaker biographies, schedule commentary, film metadata, ticket instructions, repertoire/program items, '
                 'musical work titles, catalogue numbers such as "соч. 16", or narrative sentences. '
                 'Never use temporal/date fragments such as "Завтра", "Сегодня", "в пятницу", or "14 июня" as location_name, including emoji/bullet-prefixed forms like "🤗Завтра". '
+                'If source context has a default venue but this message explicitly gives a different address/venue '
+                '(for example a line starting with "Место:" or "📍"), do not copy the source default; use only the '
+                'event-local venue/address evidence or leave the unresolved venue empty. '
                 'If the text gives only a hall/room label like "Кинозал" or "Атриум" and source context names '
                 'the host venue, use the host venue as location_name and keep the hall label out of location_name. '
                 'Do not use generic placeholders like "музей", "галерея", "пространство", or "площадка" '
@@ -1823,7 +1830,7 @@ MONTHS_MAP = {
     'декабря': 12,
 }
 DATE_TEXT_RE = re.compile(
-    r"\b(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
+    r"(?:\b|#)(\d{1,2})[\s_]+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b",
     re.IGNORECASE,
 )
 DATE_NUM_RE = re.compile(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b")
@@ -1986,6 +1993,159 @@ def _extract_ocr_datetime(ocr_text: str | None, message_date: str | None = None)
     counts = Counter(times)
     best = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
     return date_val, best
+
+
+def _time_from_text_slice(text: str | None) -> str | None:
+    """Return one explicit time/range from a narrow source slice, if unambiguous."""
+    if not text:
+        return None
+    _date_val, time_val = _extract_ocr_datetime(text, None)
+    return time_val
+
+
+def _extract_single_textual_datetime(
+    text: str | None,
+    message_date: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Extract one explicit source date/time candidate from message text.
+
+    This is a narrow fail-closed safety net for already-LLM-extracted single
+    events. It does not classify eventness and it intentionally returns
+    ``(None, None)`` when the source mentions multiple different dates.
+
+    Priority is given to Russian month-word dates (including hashtag forms like
+    ``#13_июня``). Numeric ``DD.MM`` dates are accepted only when they look like
+    an event date marker (start of line / before a title separator / hashtag),
+    which avoids treating address details such as ``гейт 2.6`` as dates.
+    """
+    raw = str(text or "").replace("\xa0", " ").strip()
+    if not raw:
+        return None, None
+    msg_date = _parse_message_date(message_date)
+
+    month_matches: list[tuple[date, int, int]] = []
+    for m in DATE_TEXT_RE.finditer(raw.lower().replace("ё", "е")):
+        month = MONTHS_MAP.get(m.group(2).lower())
+        if not month:
+            continue
+        candidate = _infer_ocr_date(int(m.group(1)), month, None, msg_date)
+        if candidate:
+            month_matches.append((candidate, m.start(), m.end()))
+
+    unique_month_dates = sorted({item[0] for item in month_matches})
+    matches: list[tuple[date, int, int]] = []
+    if len(unique_month_dates) == 1:
+        target = unique_month_dates[0]
+        matches = [item for item in month_matches if item[0] == target]
+    elif len(unique_month_dates) > 1:
+        return None, None
+    else:
+        numeric_matches: list[tuple[date, int, int]] = []
+        for m in DATE_NUM_RE.finditer(raw):
+            marker_end = min(len(raw), m.end() + 4)
+            line_start = raw.rfind("\n", 0, m.start()) + 1
+            prefix = raw[line_start:m.start()]
+            suffix = raw[m.end():marker_end]
+            looks_event_marker = (
+                not prefix.strip()
+                or "|" in suffix
+                or re.search(r"(?iu)#\s*$", prefix)
+                or re.search(r"(?iu)\b(?:дата|когда|старт|открытие)\s*:?\s*$", prefix)
+            )
+            if not looks_event_marker:
+                # ``10.05 |`` can be preceded by an emoji/bullet.
+                stripped_prefix = re.sub(r"^[^\wА-Яа-яЁё#]+", "", prefix.strip())
+                looks_event_marker = not stripped_prefix and "|" in suffix
+            if not looks_event_marker:
+                continue
+            try:
+                day = int(m.group(1))
+                month = int(m.group(2))
+            except Exception:
+                continue
+            if not (1 <= day <= 31 and 1 <= month <= 12):
+                continue
+            year = None
+            if m.group(3):
+                try:
+                    year = int(m.group(3))
+                    if year < 100:
+                        year += 2000
+                except Exception:
+                    year = None
+            candidate = _infer_ocr_date(day, month, year, msg_date)
+            if candidate:
+                numeric_matches.append((candidate, m.start(), m.end()))
+        unique_numeric_dates = sorted({item[0] for item in numeric_matches})
+        if len(unique_numeric_dates) != 1:
+            return None, None
+        target = unique_numeric_dates[0]
+        matches = [item for item in numeric_matches if item[0] == target]
+
+    if not matches:
+        return None, None
+    source_date = matches[0][0].isoformat()
+
+    # Prefer time near the explicit date marker, then fall back to one unique
+    # time in the whole post. This keeps unrelated programme times from
+    # overwriting the event start.
+    for _candidate, start, end in matches[:4]:
+        window = raw[max(0, start - 80):min(len(raw), end + 220)]
+        near_time = _time_from_text_slice(window)
+        if near_time:
+            return source_date, near_time
+    _date_val, source_time = _extract_ocr_datetime(raw, message_date)
+    return source_date, source_time
+
+
+def _correct_single_event_from_source_datetime(
+    events: list[dict],
+    *,
+    message_text: str | None,
+    ocr_text: str | None,
+    message_date: str | None,
+    source_username: str | None,
+) -> list[dict]:
+    """Correct one-row LLM date/time drift from one explicit source date.
+
+    LLM remains the eventness/field extractor. This guard only rejects the
+    familiar failure where the model emits an unsupported future date while the
+    same source text contains exactly one explicit, parseable event date.
+    """
+    if not events or len(events) != 1 or not isinstance(events[0], dict):
+        return events
+    source_date, source_time = _extract_single_textual_datetime(message_text, message_date)
+    if not source_date and ocr_text:
+        source_date, source_time = _extract_single_textual_datetime(ocr_text, message_date)
+    if not source_date:
+        return events
+    ev = dict(events[0])
+    current_date = str(ev.get("date") or "").strip()
+    current_time = str(ev.get("time") or "").strip()
+    changed = False
+    if current_date and current_date != source_date:
+        ev["date"] = source_date
+        changed = True
+    elif not current_date:
+        ev["date"] = source_date
+        changed = True
+    if source_time and (not current_time or current_time in {"00:00", "0:00"} or changed):
+        # Keep existing explicit time if the date was already correct; when the
+        # date was wrong, the associated time is also suspect (e.g. 12:55 from
+        # an unrelated token).
+        ev["time"] = source_time
+        changed = True
+    if not changed:
+        return events
+    logger.info(
+        "extract_events source_datetime_correct source=%s date=%s->%s time=%s->%s",
+        source_username,
+        current_date,
+        ev.get("date"),
+        current_time,
+        ev.get("time"),
+    )
+    return [ev]
 
 
 def _bridge_date_from_parts(day: int, month_name: str, msg_date) -> str | None:
@@ -2947,6 +3107,11 @@ async def extract_events(
         'Title must be the attendee-facing event name, not a poster service heading. '
         'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс" are not event titles when a nearby date line names the real event. '
         'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05". '
+        'Russian numeric dates are always day.month: "10.05" means 10 May, not September 10; '
+        '"30.05 | Никита Крас" means 30 May. Month-word and hashtag dates such as "26 июля", '
+        '"#13_июня", and "#21_июня" are authoritative and must not be changed to the current/message month. '
+        'Never use nearby address/venue numbers, gates/floors ("гейт 2.6", "2 этаж"), prices, coordinates, '
+        'phone numbers, or building numbers as date/time anchors. '
         'A date marker like "12.06" or "13.06" is not an event time unless the source also writes the same value as HH:MM. '
         'If a post is in-character promo copy but a ticket URL/page or clear program title gives the canonical event name, '
         'use the canonical attendee-facing title rather than the in-character/plot phrase. '
@@ -2972,6 +3137,8 @@ async def extract_events(
         'from the local block nearest that event date/title; do not reuse a source default or another block venue when '
         'the event-local block explicitly names a different venue. '
         'If a source/default location conflicts with an explicitly named event-local venue, the event-local venue wins. '
+        'If the message gives a different explicit address/venue line ("Место:", "📍", "ул.", "пр-т", etc.), '
+        'that event-local evidence also wins over the source default; do not silently keep the source default venue. '
         'If a schedule groups items under a hall/room label such as "Кинозал:" or "Атриум:" and source context names '
         'the museum/theatre/venue, use the host venue as location_name; do not return only the hall label as the venue. '
         'If the venue is not grounded, leave location_name empty rather than filling it with prose. '
@@ -3037,6 +3204,8 @@ async def extract_events(
         'use relative words such as "сегодня" only against the message date, and split multiple nights into multiple events. '
         'Pure retrospective reports of completed events ("прошло мероприятие", "ленту развернули", "приняли участие") '
         'are NOT new events to attend unless the same post also explicitly invites attendance at a future dated event. '
+        'Retrospective wording like "17 июня ... прошла лекция", "на встрече говорили", "состоялась встреча" '
+        'with no future invitation must return [] even if the text contains a venue and a past date. '
         'A recap that only says "следующий фестиваль" with dates but "локация/место/адрес уточняется" is NOT a concrete future event; return []. '
         'Operational updates for people already attending an event ("важная информация для гостей/зрителей", entry route, navigation, parking, queue, cloakroom) '
         'are NOT standalone events; return [] unless the same post is also a full new invitation with a concrete future date, title, venue, and ticket/registration signal. '
@@ -3509,6 +3678,13 @@ async def extract_events(
         source_context_line=source_context_line,
         events=out,
         source_default_location=source_default_location,
+    )
+    out = _correct_single_event_from_source_datetime(
+        out,
+        message_text=message_text_only,
+        ocr_text=ocr_text,
+        message_date=message_date,
+        source_username=source_username,
     )
     out = _sanitize_extracted_events(out)
     return (out or [])[: max(1, int(MAX_EVENTS_PER_MESSAGE))]

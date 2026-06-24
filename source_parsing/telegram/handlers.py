@@ -4125,6 +4125,39 @@ def _build_candidate(
             location_name = grounded_loc
             if grounded_addr:
                 location_address = grounded_addr
+    elif source.default_location and location_name:
+        # LLM-first extraction may leave location_name empty, causing the import
+        # boundary to seed the source default. If the post itself has an
+        # explicit offsite address/venue line, fail toward that event-local
+        # evidence instead of silently publishing the source default.
+        probe_parts = [str(message_text_s or event_source_text or "").strip()]
+        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+            if not isinstance(item, dict):
+                continue
+            for key in ("ocr_text", "ocr_title"):
+                chunk = str(item.get(key) or "").strip()
+                if chunk:
+                    probe_parts.append(chunk)
+        probe_text = "\n".join(part for part in probe_parts if part).strip()
+        grounded_loc = inferred_loc or poster_loc
+        grounded_addr = inferred_addr or poster_addr
+        if (
+            grounded_loc
+            and not _location_matches(grounded_loc, source.default_location)
+            and _location_is_grounded_in_text(grounded_loc, probe_text)
+            and not _location_is_grounded_in_text(str(location_name), probe_text)
+        ):
+            logger.warning(
+                "telegram: replaced source-default location with explicit event-local location source=%s message_id=%s title=%r default=%r grounded=%r",
+                username,
+                message_id,
+                title,
+                source.default_location,
+                grounded_loc,
+            )
+            location_name = grounded_loc
+            location_address = grounded_addr
+            location_overridden_by_default = True
 
     kept_explicit_location = bool(
         extracted_location

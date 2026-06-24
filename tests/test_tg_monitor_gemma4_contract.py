@@ -146,6 +146,11 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "Title must be the attendee-facing event name, not a poster service heading." in source
     assert 'Digest/section labels such as "неделя в театре", "афиша", "репертуар", or "анонс"' in source
     assert 'A compact line like "17.05 | GROZA" means date 17 May and title "GROZA"; never convert "17.05" into time "17:05".' in source
+    assert 'Russian numeric dates are always day.month: "10.05" means 10 May, not September 10' in source
+    assert '"#13_июня", and "#21_июня" are authoritative' in source
+    assert 'Never use nearby address/venue numbers, gates/floors ("гейт 2.6", "2 этаж")' in source
+    assert 'Retrospective wording like "17 июня ... прошла лекция"' in source
+    assert 'that event-local evidence also wins over the source default' in source
     assert "performance/show/concert/play/film screening with exact future date, start time" in source
     assert '"НАЧАЛО В ...", "БИЛЕТЫ", "РЕГИСТРАЦИЯ"' in source
     assert "keep the named event from message text as title and use OCR only to fill date/time/venue/ticket fields" in source
@@ -198,6 +203,51 @@ def test_tg_monitor_extract_prompt_hardens_gemma4_ocr_merge_rules() -> None:
     assert "_strip_location_review_temporal_decoration" in source
     assert "_LOCATION_REVIEW_CITY_INFLECTED_PREFIX_RE" in source
     assert "city must be the place name itself, not an inflected phrase" in source
+    assert "_correct_single_event_from_source_datetime" in source
+
+
+def test_tg_monitor_source_datetime_guard_corrects_single_event_drift() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("MONTHS_MAP = {")
+    end = source.index("\n\nasync def extract_events", start)
+    ns = {
+        "date": date,
+        "datetime": datetime,
+        "re": re,
+        "timedelta": timedelta,
+        "timezone": timezone,
+        "logger": type("_L", (), {"info": lambda *a, **k: None})(),
+    }
+    exec(source[start:end], ns)
+
+    correct = ns["_correct_single_event_from_source_datetime"]
+
+    assert correct(
+        [{"title": "Дегустация сыров и вин", "date": "2026-06-26", "time": "19:00"}],
+        message_text="Встречаемся 26 июля , в 19:00, в Виниссимо на пр. Мира, 23",
+        ocr_text=None,
+        message_date="2026-06-23T12:00:00+00:00",
+        source_username="terkatalk",
+    )[0]["date"] == "2026-07-26"
+
+    yoga = correct(
+        [{"title": "Международный день йоги", "date": "2026-07-02", "time": "10:00"}],
+        message_text="🗓 #21_июня с 10.00-13.00\n📍 Ростех арена, ул. Триумфальная аллея, гейт 2.6",
+        ocr_text=None,
+        message_date="2026-06-19T12:00:00+00:00",
+        source_username="kulturnaya_chaika",
+    )[0]
+    assert yoga["date"] == "2026-06-21"
+    assert yoga["time"] == "10:00-13:00"
+
+    past = correct(
+        [{"title": "Run sos run!", "date": "2026-09-10", "time": "14:00"}],
+        message_text="10.05 | Run sos run!\n14:00 разминка\n📍Плохой охотник",
+        ocr_text=None,
+        message_date="2026-05-10T09:00:00+00:00",
+        source_username="meowafisha",
+    )[0]
+    assert past["date"] == "2026-05-10"
     assert "repertoire/program items, musical work titles" in source
     assert "catalogue number such as \"соч. 16\"" in source
     assert 'temporal/date fragments (including emoji-prefixed values like "🤗Завтра")' in source

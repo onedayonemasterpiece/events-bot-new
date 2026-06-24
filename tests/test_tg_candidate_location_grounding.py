@@ -343,6 +343,43 @@ async def test_tg_build_candidate_future_quality_recovers_pure_from_text():
 
 
 @pytest.mark.asyncio
+async def test_tg_build_candidate_does_not_keep_default_when_post_has_offsite_address():
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Пространство Тёрка, пл. Победы 4, Калининград",
+        default_ticket_link=None,
+        trust_level="medium",
+    )
+    message = {
+        "source_username": "terkatalk",
+        "message_id": 5031,
+        "source_link": "https://t.me/terkatalk/5031",
+        "text": (
+            "Спектакль «Женщины Мира. Война».\n"
+            "🗓 Дата: 26 ИЮНЯ\n"
+            "🕖 Время: 19:00\n"
+            "📍 Место: г.Калининград Ул Кирпичная 7 (Центр города)"
+        ),
+    }
+    event_data = {
+        "title": "Женщины Мира. Война",
+        "date": "2026-06-26",
+        "time": "19:00",
+        # The extractor missed the offsite venue/address; source default must
+        # not silently become the public venue for this event-local address.
+        "location_name": "",
+        "location_address": "",
+        "city": "Калининград",
+    }
+
+    cand = _build_candidate(src, message, event_data)
+
+    assert "тёрк" not in (cand.location_name or "").casefold()
+    assert "кирпич" in ((cand.location_name or "") + " " + (cand.location_address or "")).casefold()
+
+
+@pytest.mark.asyncio
 async def test_tg_build_candidate_future_quality_recovers_1255_from_text():
     from source_parsing.telegram.handlers import _build_candidate
 
