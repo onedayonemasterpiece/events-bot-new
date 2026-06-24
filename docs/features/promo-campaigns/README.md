@@ -494,13 +494,13 @@ Recommended scoring model, aligned with VK recommendation signals:
 
 | Activity | Bonus | Reason |
 | --- | ---: | --- |
-| Visit/stamp | `+1` | main raffle currency and strongest proof of real participation |
+| Visit/stamp | canonical draw unit | main raffle eligibility/weight anchor; no hardcoded point price here |
 | Repost/share | `+0.3` | strongest social distribution signal; creates a new audience edge |
 | Comment | `+0.1` | deliberate engagement and conversation signal |
 | Like | `+0.02` | lightweight positive signal |
 | View | `+0.0002`, aggregate-only, capped at `0.2` per post | weak implicit attention signal; not attributed to FIO today |
 
-One participant's social activity is capped at `0.5` points per social day
+One participant's social activity is capped at `0.5` visit-equivalent per social day
 (`1/2` visit). Therefore a strong day with at least `1` repost and `2`
 comments is about half a visit, and two such days are approximately one
 visit/stamp.
@@ -508,12 +508,12 @@ visit/stamp.
 For participant `u`, raffle type `t`:
 
 ```text
-attendance_points(u) = stamps_or_visits
+attendance_weight(u) = canonical_stamp_visit_weight(stamps, visits)
 if u already won type t: eligible=false
-if u won another type: attendance_points *= 0.5
+if u won another type: attendance_weight *= 0.5
 raw_social_bonus(u) = 0.3*reposts + 0.1*comments + 0.02*likes
-social_bonus(u) = min(raw_social_bonus, 0.5*social_days)
-draw_weight(u,t) = attendance_points(u) + social_bonus(u)
+social_visit_equivalent(u) = min(raw_social_bonus, 0.5*social_days)
+draw_weight(u,t) = attendance_weight(u) + convert_visit_equivalent(social_visit_equivalent)
 ```
 
 Example calculations (illustrative FIO until a real participant/FIO table is

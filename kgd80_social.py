@@ -16,12 +16,13 @@ REPORT_TZ = ZoneInfo("Europe/Kaliningrad")
 FIRST_SENT_SETTING = "kgd80_social_report:first_sent_at"
 LAST_SENT_SETTING = "kgd80_social_report:last_sent_date"
 
-# Raffle conversion model. The final raffle currency is the same as
-# stamps/visits: one verified visit/stamp is one final raffle point. Social activity
-# is subordinate: one very strong day (>=1 repost and >=2 comments) is about
-# half a visit, so two such days roughly equal one visit.
-VISIT_POINTS = 1.0
-SOCIAL_DAILY_CAP_POINTS = 0.5
+# Raffle conversion model. Do not assume an absolute stamp-to-point conversion here. Official KGD80
+# raffle rules use stamps/visits as the eligibility/weight anchor (minimum five
+# visits for special draws). Social activity is therefore expressed in
+# visit-equivalent units and must be multiplied by the canonical draw scoring
+# scale only in the actual raffle engine.
+VISIT_EQUIVALENT_UNIT = 1.0
+SOCIAL_DAILY_CAP_VISIT_EQUIVALENT = 0.5
 SOCIAL_BONUS_WEIGHTS: dict[str, float] = {
     "repost": 0.3,
     "comment": 0.1,
@@ -57,11 +58,11 @@ class ParticipantRafflePoints:
     likes: int
     comments: int
     reposts: int
-    attendance_points: float
-    raw_social_points: float
-    social_points: float
+    attendance_equivalent: float
+    raw_social_equivalent: float
+    social_equivalent: float
     winner_damping: float
-    final_draw_points: float
+    final_draw_equivalent: float
 
 
 def parse_vk_wall_ids(url: str | None) -> tuple[int, int] | None:
@@ -120,15 +121,15 @@ def calculate_participant_raffle_points(
     likes = max(0, int(likes or 0))
     comments = max(0, int(comments or 0))
     reposts = max(0, int(reposts or 0))
-    attendance_points = float(stamps + visits) * VISIT_POINTS
-    raw_social_points = (
+    attendance_equivalent = float(stamps + visits) * VISIT_EQUIVALENT_UNIT
+    raw_social_equivalent = (
         float(reposts) * SOCIAL_BONUS_WEIGHTS["repost"]
         + float(comments) * SOCIAL_BONUS_WEIGHTS["comment"]
         + float(likes) * SOCIAL_BONUS_WEIGHTS["like"]
     )
-    social_points = min(raw_social_points, SOCIAL_DAILY_CAP_POINTS * social_days)
+    social_equivalent = min(raw_social_equivalent, SOCIAL_DAILY_CAP_VISIT_EQUIVALENT * social_days)
     winner_damping = 0.5 if won_other_draw else 1.0
-    final_draw_points = attendance_points * winner_damping + social_points
+    final_draw_equivalent = attendance_equivalent * winner_damping + social_equivalent
     return ParticipantRafflePoints(
         full_name=full_name,
         stamps=stamps,
@@ -137,11 +138,11 @@ def calculate_participant_raffle_points(
         likes=likes,
         comments=comments,
         reposts=reposts,
-        attendance_points=attendance_points,
-        raw_social_points=raw_social_points,
-        social_points=social_points,
+        attendance_equivalent=attendance_equivalent,
+        raw_social_equivalent=raw_social_equivalent,
+        social_equivalent=social_equivalent,
         winner_damping=winner_damping,
-        final_draw_points=final_draw_points,
+        final_draw_equivalent=final_draw_equivalent,
     )
 
 
@@ -295,15 +296,15 @@ def format_kgd80_social_report(summary: Kgd80SocialSummary) -> str:
         "",
         "Зафиксированная VK-активность за последние 24 часа:",
         f"• постов с метриками: {summary.posts}",
-        f"• просмотры: {summary.views} → +{_fmt_points(summary.view_points)} баллов",
-        f"• лайки: {summary.likes} → +{_fmt_points(summary.like_points)} баллов",
-        f"• комментарии: {summary.comments} → +{_fmt_points(summary.comment_points)} баллов",
-        f"• репосты: {summary.reposts} → +{_fmt_points(summary.repost_points)} баллов",
-        f"Итого расчётного социального бонуса: +{_fmt_points(summary.total_points)} баллов.",
+        f"• просмотры: {summary.views} → +{_fmt_points(summary.view_points)} эквивалента посещения",
+        f"• лайки: {summary.likes} → +{_fmt_points(summary.like_points)} эквивалента посещения",
+        f"• комментарии: {summary.comments} → +{_fmt_points(summary.comment_points)} эквивалента посещения",
+        f"• репосты: {summary.reposts} → +{_fmt_points(summary.repost_points)} эквивалента посещения",
+        f"Итого расчётного социального эквивалента: +{_fmt_points(summary.total_points)} эквивалента посещения.",
         "",
-        "Модель конвертации: 1 посещение/штамп = 1 итоговый балл; соцактивность за день ограничена 0.5 балла.",
-        "Соцвеса: репост ×0.3, комментарий ×0.1, лайк ×0.02, просмотр ×0.0002 только для агрегатного отчёта.",
-        "Примечание: бонус социальной активности считается без понижения за победы в других розыгрышах; понижение применяется только к базовой вероятности.",
+        "Модель конвертации: соцактивность считается в долях посещения/штампа; дневной вклад ограничен 0.5 посещения.",
+        "Соцвеса в долях посещения: репост ×0.3, комментарий ×0.1, лайк ×0.02, просмотр ×0.0002 только для агрегатного отчёта.",
+        "Примечание: соцэквивалент не понижается за победы в других розыгрышах; понижение применяется только к базовому весу заявки.",
     ]
     return "\n".join(lines)
 

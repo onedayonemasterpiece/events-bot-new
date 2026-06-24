@@ -47,9 +47,9 @@ def test_participant_social_two_good_days_equal_one_visit() -> None:
         reposts=2,
         comments=4,
     )
-    assert result.attendance_points == 0
-    assert result.social_points == 1
-    assert result.final_draw_points == 1
+    assert result.attendance_equivalent == 0
+    assert result.social_equivalent == 1
+    assert result.final_draw_equivalent == 1
 
 
 def test_participant_social_bonus_does_not_get_winner_damping() -> None:
@@ -61,9 +61,9 @@ def test_participant_social_bonus_does_not_get_winner_damping() -> None:
         comments=2,
         won_other_draw=True,
     )
-    assert result.attendance_points == 1
-    assert result.social_points == 0.5
-    assert result.final_draw_points == 1
+    assert result.attendance_equivalent == 1
+    assert result.social_equivalent == 0.5
+    assert result.final_draw_equivalent == 1
 
 
 @pytest.mark.asyncio
