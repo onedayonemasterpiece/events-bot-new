@@ -35,6 +35,7 @@ Publication fanout stopped after Telegram `@kldevents/1275` on 2026-06-24 10:16Z
 - 2026-06-25 09:48Z — Telegram resumed: event `6386` published as `@kldevents/1276`.
 - 2026-06-25 09:49Z–09:58Z — VK catch-up resumed, with managed VK posts `wall-231920894_4356` through `wall-231920894_4369` confirmed from DB job results.
 - 2026-06-25 09:58Z — health check passing and no fresh unknown-enum crash observed in the sampled post-mitigation window; backlog still draining, so incident remains in monitoring.
+- 2026-06-25 10:14Z — Telegram catch-up advanced to `@kldevents/1277`; VK catch-up advanced through `wall-231920894_4395`; deployed fix commit was fast-forwarded to `origin/main`.
 
 ## Root Cause
 
@@ -103,16 +104,16 @@ Publication fanout stopped after Telegram `@kldevents/1275` on 2026-06-24 10:16Z
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending final clean commit/back-merge to `origin/main` for this incident record
-- deploy path: manual `flyctl deploy` to `events-bot-new-wngqia`
-- deployed image before final documentation commit: `registry.fly.io/events-bot-new-wngqia:deployment-01KVZ324P67BXERR1NE0HM1Y8Z`
+- deployed SHA: `241994dab8a02f724529bcdcdf0ab51ac6244ca9` (fast-forwarded to `origin/main`)
+- deploy path: manual `flyctl deploy` to `events-bot-new-wngqia` from clean `hotfix/outbox-unknown-jobtask-outage` worktree
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KVZ3JNMKNKDVK58749Y7V181`
 - regression checks:
   - `python3 -m py_compile main.py smart_event_update.py models.py` — passed
   - `/tmp/events-bot-test-venv/bin/python -m pytest -q tests/test_job_running_stale.py::test_due_jobs_ignore_unknown_task_values_without_crashing tests/test_job_running_stale.py::test_running_stale_marked_and_replaced tests/test_smart_event_update_duplicate_guards.py::test_match_create_prompt_distinguishes_time_conflict_from_multi_session tests/test_genai_dump_and_poster_dedup.py::test_sanitize_description_output_rejects_dump tests/test_genai_dump_and_poster_dedup.py::test_sanitize_description_output_strips_editor_meta_preamble` — passed, 5 tests
 - post-deploy verification:
   - Fly checks passing for machine `683961db016e28`.
-  - Telegram resumed with `@kldevents/1276` (`event_id=6386`) at 2026-06-25 09:48Z.
-  - VK catch-up produced managed posts including `https://vk.com/wall-231920894_4356` through `https://vk.com/wall-231920894_4369` from `vk_sync` job results.
+  - Telegram resumed with `@kldevents/1276` (`event_id=6386`) at 2026-06-25 09:48Z and advanced to `@kldevents/1277` (`event_id=6122`) at 2026-06-25 10:14Z.
+  - VK catch-up produced managed posts including `https://vk.com/wall-231920894_4356` through `https://vk.com/wall-231920894_4395` from `vk_sync` job results.
   - Evidence artifacts under `artifacts/codex/publication-outage-20260625/` (not committed).
 
 ## Prevention
