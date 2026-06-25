@@ -22,9 +22,11 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 - `promo_campaign`: title, status (`draft | active | paused | archived`), goal,
   start/end dates, priority (`0..3`, where `0` is highest), optional exposure
   caps/disclosure fields.
-- `promo_target`: one real `event.id`, one existing `festival.name`, or a
-  Telegram source author (`target_type='tg_chat_author'`, `query_text`
-  `"<chat>:<author>"`). See "Author-in-chat trigger" below.
+- `promo_target`: one real `event.id`, one existing `festival.name`, all active
+  future events (`target_type='all'`, only for explicitly broad editorial
+  selectors such as weighted popular reposts), or a Telegram source author
+  (`target_type='tg_chat_author'`, `query_text` `"<chat>:<author>"`). See
+  "Author-in-chat trigger" below.
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
   `daily_recommend_today`, `vk_publication`, `vk_festival_carousel`,
@@ -411,6 +413,21 @@ daily/digest channel. It looks at the promoted event's stored
 future events: when an event has a concrete start time, the repost is eligible
 only before the `min_lead_hours` cutoff (`4` hours by default), so daily/digest
 channels do not amplify events that have already started or are about to start.
+For broad editorial amplification, a `tg_repost` activity may use
+`selection_policy='weighted_popularity'` with an `all` target. In that mode the
+candidate is the event, not the source post: the selector sums
+`/popular_posts`-style normalized popularity from the original TG/VK source
+posts and adds owned-audience VK activity for the same event with a higher
+weight. Production uses `owned_vk_group_ids=[231920894, 231828790]`
+(`klgdevents`, `kenigeventsofficial`) and
+`owned_vk_popularity_weight=4`, because reactions in the bot's own VK audiences
+are a stronger signal than reactions in arbitrary internet sources while both
+signals still count. The forwarded post itself is still taken from the event's
+`@kldevents` publication (`event.tg_event_post_url` or recent
+`tg_event_publish` exposure). If a highly ranked event has no forwardable
+`@kldevents`/`t.me/c/...` post yet, the activity skips it and tries the next
+ranked event; it does not create a new source post just to satisfy the repost
+slot.
 
 The initial `80 историй о главном` campaign now includes:
 
