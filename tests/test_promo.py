@@ -28,6 +28,8 @@ from promo import (
     PROMO_POLICY_FIRST_SLOT,
     PROMO_SURFACE_DAILY_RECOMMEND_TODAY,
     PROMO_SURFACE_AFISHA_ENGAGEMENT,
+    PROMO_POLICY_WEIGHTED_POPULARITY,
+    PROMO_TARGET_TYPE_ALL,
     PROMO_SURFACE_TG_EVENT_PUBLISH,
     PROMO_SURFACE_TG_REPOST,
     PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
@@ -2069,6 +2071,164 @@ async def test_tg_event_publish_honors_preferred_ids_by_date(tmp_path, monkeypat
     ]
     assert second_results == []
     assert published_ids == [preferred_id]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_tg_repost_weighted_popularity_uses_owned_vk_boost_and_tme_c_source(
+    tmp_path, monkeypatch
+) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 13, 30, tzinfo=timezone.utc)
+    owned_group_id = 231920894
+
+    async with db.get_session() as session:
+        internet_popular_missing_post = _event("Internet popular but no kldevents post", "2026-06-15")
+        owned_popular = _event("Owned audience winner", "2026-06-15")
+        owned_popular.tg_event_post_url = "https://t.me/c/3954607218/77"
+        owned_popular.tg_event_post_id = 77
+        owned_popular.source_vk_post_url = f"https://vk.com/wall-{owned_group_id}_10"
+        source_popular = _event("Internet source fallback", "2026-06-15")
+        source_popular.tg_event_post_url = "https://t.me/kldevents/88"
+        source_popular.tg_event_post_id = 88
+        session.add_all([internet_popular_missing_post, owned_popular, source_popular])
+        await session.flush()
+        missing_id = int(internet_popular_missing_post.id)
+        owned_id = int(owned_popular.id)
+        source_id = int(source_popular.id)
+
+        campaign = PromoCampaign(
+            title="Popular TG reposts",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=datetime(2026, 6, 30, tzinfo=timezone.utc),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_REPOST,
+            profile_key="kldevents->kenigevents",
+            max_per_publish=1,
+            daily_cap=1,
+            selection_policy=PROMO_POLICY_WEIGHTED_POPULARITY,
+            config_json={
+                "source_chat": "@kldevents",
+                "target_chat": "@kenigevents",
+                "active_start_hour": 10,
+                "active_end_hour": 20,
+                "dedup_hours": 72,
+                "selection_policy": PROMO_POLICY_WEIGHTED_POPULARITY,
+                "owned_vk_group_ids": [owned_group_id, 231828790],
+                "owned_vk_popularity_weight": 4,
+                "popularity_window_days": 7,
+                "popularity_preferred_age_day": 0,
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type=PROMO_TARGET_TYPE_ALL))
+        session.add(
+            EventSource(
+                event_id=missing_id,
+                source_type="telegram",
+                source_url="https://t.me/weighted_source/1",
+                source_chat_username="weighted_source",
+                source_message_id=1,
+            )
+        )
+        session.add(
+            EventSource(
+                event_id=source_id,
+                source_type="telegram",
+                source_url="https://t.me/weighted_source/3",
+                source_chat_username="weighted_source",
+                source_message_id=3,
+            )
+        )
+        await session.commit()
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "INSERT INTO telegram_source(username, title, enabled) VALUES(?,?,1)",
+            ("weighted_source", "Weighted Source"),
+        )
+        weighted_source_id = int(cur.lastrowid)
+        for message_id, views, likes in [
+            (1, 1000, 100),  # would win, but has no @kldevents/t.me/c post to forward
+            (2, 10, 1),
+            (3, 50, 5),
+        ]:
+            await conn.execute(
+                """
+                INSERT INTO telegram_scanned_message(source_id, message_id, status, events_extracted, events_imported)
+                VALUES(?,?,?,?,?)
+                """,
+                (weighted_source_id, message_id, "imported", 1, 1),
+            )
+            await conn.execute(
+                """
+                INSERT INTO telegram_post_metric(source_id, message_id, age_day, source_url, message_ts, collected_ts, views, likes)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    weighted_source_id,
+                    message_id,
+                    0,
+                    f"https://t.me/weighted_source/{message_id}",
+                    int(now_utc.timestamp()) - 3600,
+                    int(now_utc.timestamp()),
+                    views,
+                    likes,
+                ),
+            )
+        for post_id, views, likes in [
+            (10, 300, 30),  # owned_popular gets 4x weighted owned signal
+            (11, 20, 2),
+        ]:
+            await conn.execute(
+                """
+                INSERT INTO vk_post_metric(group_id, post_id, age_day, source_url, post_ts, collected_ts, views, likes)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    owned_group_id,
+                    post_id,
+                    0,
+                    f"https://vk.com/wall-{owned_group_id}_{post_id}",
+                    int(now_utc.timestamp()) - 3600,
+                    int(now_utc.timestamp()),
+                    views,
+                    likes,
+                ),
+            )
+        await conn.commit()
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.forwarded: list[tuple[str, str, int]] = []
+
+        async def forward_message(self, *, chat_id, from_chat_id, message_id):
+            self.forwarded.append((chat_id, from_chat_id, message_id))
+            return SimpleNamespace(message_id=2000 + int(message_id))
+
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", None, raising=False)
+    bot = DummyBot()
+
+    results = await run_promo_vk_activities(db, bot, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id) for item in results] == [
+        (PROMO_SURFACE_TG_REPOST, "published", owned_id)
+    ]
+    assert bot.forwarded == [("@kenigevents", "@kldevents", 77)]
+    async with db.get_session() as session:
+        exposure = (await session.execute(select(PromoExposure))).scalars().one()
+    assert exposure.details_json["source_url"] == "https://t.me/c/3954607218/77"
+    assert exposure.details_json["popularity_score"] > exposure.details_json["source_popularity_score"]
+    assert exposure.details_json["owned_vk_popularity_score"] > 0
     await db.close()
 
 

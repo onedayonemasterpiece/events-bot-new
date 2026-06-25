@@ -44,6 +44,7 @@ PROMO_POLICY_GUARANTEED_ANY_POSITION = "guaranteed_any_position"
 PROMO_POLICY_DIVERSE_SHUFFLE = "diverse_shuffle"
 PROMO_POLICY_FIRST_SLOT = "first_slot"
 PROMO_POLICY_FIRST_TWO_SLOTS = "first_two_slots"
+PROMO_POLICY_WEIGHTED_POPULARITY = "weighted_popularity"
 PROMO_DAILY_TZ = "Europe/Kaliningrad"
 PROMO_SURFACE_VIDEO_GENERAL = "video_general"
 PROMO_SURFACE_DAILY_RECOMMEND_TODAY = "daily_recommend_today"
@@ -86,6 +87,7 @@ DEBUG_PROMO_EXPOSURE_STATUSES = frozenset({"VK_SCHEDULED_DEBUG"})
 # Target that matches events by their Telegram source chat + post author.
 # query_text holds "<chat_username>:<author_username>" (both lowercased, no @).
 PROMO_TARGET_TYPE_TG_CHAT_AUTHOR = "tg_chat_author"
+PROMO_TARGET_TYPE_ALL = "all"
 # Concrete kraftmarket39 / @LANGEANNA -> video announce campaign.
 KRAFTMARKET_AUTHOR_CHAT = "kraftmarket39"
 KRAFTMARKET_AUTHOR_USERNAME = "langeanna"
@@ -149,6 +151,15 @@ class PromoVkActionResult:
     source_url: str | None = None
     target_url: str | None = None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class PromoPopularityScore:
+    score: float
+    source_score: float = 0.0
+    owned_vk_score: float = 0.0
+    source_count: int = 0
+    owned_vk_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -424,6 +435,82 @@ def _csv_ints(value: object) -> list[int]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _median_int(values: Iterable[int]) -> int | None:
+    data = sorted(int(v) for v in values)
+    if not data:
+        return None
+    mid = len(data) // 2
+    if len(data) % 2:
+        return int(data[mid])
+    return int((data[mid - 1] + data[mid]) // 2)
+
+
+def _safe_ratio(value: int, denom: int | None) -> float:
+    d = int(denom or 0)
+    if d <= 0:
+        d = 1
+    return float(value) / float(d)
+
+
+def _popularity_metric_score(
+    *,
+    views: int | None,
+    likes: int | None,
+    median_views: int | None,
+    median_likes: int | None,
+    sample: int,
+    min_sample: int,
+) -> float:
+    """Return the normalized /popular_posts-style score for one metric row.
+
+    The candidate must be strictly above the per-source median on views or likes.
+    The formula intentionally mirrors handlers.popular_posts_cmd:
+    max(above-median ratio) + a small combined-ratio tie-breaker.
+    """
+
+    if int(sample or 0) < int(min_sample or 0):
+        return 0.0
+    if median_views is None or median_likes is None:
+        return 0.0
+    if not isinstance(views, int) or not isinstance(likes, int) or views < 0 or likes < 0:
+        return 0.0
+    above_views = int(views) > int(median_views)
+    above_likes = int(likes) > int(median_likes)
+    if not (above_views or above_likes):
+        return 0.0
+    v_ratio = _safe_ratio(int(views), int(median_views))
+    l_ratio = _safe_ratio(int(likes), int(median_likes))
+    return float(max(v_ratio if above_views else 0.0, l_ratio if above_likes else 0.0) + 0.01 * (v_ratio + l_ratio))
+
+
+def _vk_wall_ids_from_url(url: str | None) -> tuple[int, int] | None:
+    text = str(url or "").strip()
+    if not text:
+        return None
+    match = re.search(r"vk\.com/wall(-?\d+)_(\d+)", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        owner_id = int(match.group(1))
+        post_id = int(match.group(2))
+    except ValueError:
+        return None
+    group_id = abs(owner_id)
+    if group_id <= 0 or post_id <= 0:
+        return None
+    return group_id, post_id
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return int(default)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return int(default)
 
 
 def _vk_channel_peer_ids(cfg: dict[str, Any]) -> list[int]:
@@ -1501,6 +1588,23 @@ async def _events_for_target(
                 if _event_is_promo_eligible(ev, today=today, campaign=campaign)
                 and timely(ev)
             ]
+        if target.target_type == PROMO_TARGET_TYPE_ALL:
+            query = (
+                select(Event)
+                .where(Event.date >= today.isoformat())
+                .where(Event.lifecycle_status == "active")
+                .where(Event.silent.is_(False))
+                .order_by(Event.date, Event.time, Event.id)
+            )
+            if campaign.ends_at is not None:
+                query = query.where(Event.date <= campaign.ends_at.date().isoformat())
+            res = await session.execute(query)
+            return [
+                ev
+                for ev in res.scalars().all()
+                if _event_is_promo_eligible(ev, today=today, campaign=campaign)
+                and timely(ev)
+            ]
         if target.target_type != "festival" or not target.festival_name:
             return []
         query = (
@@ -2278,7 +2382,10 @@ async def _recent_event_tg_posts(
         url = str(getattr(ev, "tg_event_post_url", "") or "").strip()
         if not url:
             continue
-        if source_name and f"t.me/{source_name}/" not in url.lower():
+        url_l = url.lower()
+        is_public_source_url = bool(source_name and f"t.me/{source_name}/" in url_l)
+        is_internal_tme_c_url = "t.me/c/" in url_l
+        if source_name and not (is_public_source_url or is_internal_tme_c_url):
             continue
         rows.append((ev, url, until_utc))
 
@@ -2305,11 +2412,366 @@ async def _recent_event_tg_posts(
         url = str(details.get("target_url") or (exposure.public_targets_json or [{}])[0].get("url") or "").strip()
         if not url or url in seen_urls:
             continue
-        if source_name and f"t.me/{source_name}/" not in url.lower():
+        url_l = url.lower()
+        is_public_source_url = bool(source_name and f"t.me/{source_name}/" in url_l)
+        is_internal_tme_c_url = "t.me/c/" in url_l
+        if source_name and not (is_public_source_url or is_internal_tme_c_url):
             continue
         rows.append((ev, url, exposure.published_at or until_utc))
         seen_urls.add(url)
     return rows
+
+
+async def _weighted_popularity_scores_for_events(
+    db: Database,
+    *,
+    event_ids: Iterable[int],
+    activity: PromoActivity,
+    now_utc: datetime,
+) -> dict[int, PromoPopularityScore]:
+    """Score events using /popular_posts-style source popularity plus owned VK boost.
+
+    Source TG/VK metrics use the same above-per-source-median idea as
+    `/popular_posts`. Owned VK posts (configured group ids, normally
+    klgdevents + kenigeventsofficial) are added as a separate signal with a
+    higher weight because they reflect the bot's own audience.
+    """
+
+    ids = sorted({int(event_id) for event_id in event_ids if event_id is not None})
+    if not ids:
+        return {}
+    id_set = set(ids)
+    cfg = _activity_config(activity)
+    window_days = max(1, int(cfg.get("popularity_window_days") or 7))
+    preferred_age_day = max(0, int(cfg.get("popularity_preferred_age_day") or min(6, window_days - 1)))
+    min_sample = max(2, int(cfg.get("popularity_min_sample") or _env_int("POST_POPULARITY_MIN_SAMPLE", 2)))
+    source_weight = float(cfg.get("source_popularity_weight") or 1.0)
+    owned_vk_weight = float(cfg.get("owned_vk_popularity_weight") or 4.0)
+    owned_vk_group_ids = set(_csv_ints(cfg.get("owned_vk_group_ids")))
+    since_ts = int(now_utc.timestamp()) - window_days * 86400
+
+    scores: dict[int, dict[str, float | int]] = {
+        event_id: {
+            "source_score": 0.0,
+            "owned_vk_score": 0.0,
+            "source_count": 0,
+            "owned_vk_count": 0,
+        }
+        for event_id in ids
+    }
+
+    def dedupe_latest(
+        rows: list[tuple],
+        *,
+        key_indexes: tuple[int, int],
+        age_idx: int,
+    ) -> list[tuple]:
+        best: dict[tuple[int, int], tuple[int, tuple]] = {}
+        for row in rows:
+            try:
+                key = (int(row[key_indexes[0]]), int(row[key_indexes[1]]))
+                age = int(row[age_idx])
+            except Exception:
+                continue
+            current = best.get(key)
+            if current is None or age > current[0]:
+                best[key] = (age, row)
+        return [item[1] for item in best.values()]
+
+    def add_score(event_id: int, value: float, *, owned: bool) -> None:
+        if event_id not in scores or value <= 0:
+            return
+        key = "owned_vk_score" if owned else "source_score"
+        count_key = "owned_vk_count" if owned else "source_count"
+        scores[event_id][key] = float(scores[event_id][key]) + float(value)
+        scores[event_id][count_key] = int(scores[event_id][count_key]) + 1
+
+    placeholders = ",".join("?" for _ in ids)
+
+    async with db.raw_conn() as conn:
+        # Telegram source posts: baseline over all imported metric rows, then map
+        # source_chat_username/message_id to the requested event ids.
+        tg_rows: list[tuple] = []
+        try:
+            cur = await conn.execute(
+                """
+                SELECT
+                    m.source_id,
+                    m.message_id,
+                    m.age_day,
+                    m.views,
+                    m.likes,
+                    COALESCE(t.username, '') AS username
+                FROM telegram_post_metric m
+                JOIN telegram_scanned_message s
+                  ON s.source_id = m.source_id
+                 AND s.message_id = m.message_id
+                JOIN telegram_source t
+                  ON t.id = m.source_id
+                WHERE m.age_day <= ?
+                  AND m.message_ts IS NOT NULL
+                  AND m.message_ts >= ?
+                  AND COALESCE(s.events_imported, 0) > 0
+                """,
+                (preferred_age_day, since_ts),
+            )
+            tg_rows = await cur.fetchall()
+        except Exception:
+            logger.debug("promo.weighted_popularity: TG metric load failed", exc_info=True)
+            tg_rows = []
+        tg_rows = dedupe_latest(tg_rows, key_indexes=(0, 1), age_idx=2)
+
+        tg_event_map: dict[tuple[str, int], set[int]] = {}
+        try:
+            cur = await conn.execute(
+                f"""
+                SELECT source_chat_username, source_message_id, event_id
+                FROM event_source
+                WHERE event_id IN ({placeholders})
+                  AND source_chat_username IS NOT NULL
+                  AND source_message_id IS NOT NULL
+                """,
+                tuple(ids),
+            )
+            for username, message_id, event_id in await cur.fetchall():
+                try:
+                    eid = int(event_id)
+                    mid = int(message_id)
+                except Exception:
+                    continue
+                if eid not in id_set:
+                    continue
+                uname = str(username or "").strip().lstrip("@").lower()
+                if not uname or mid <= 0:
+                    continue
+                tg_event_map.setdefault((uname, mid), set()).add(eid)
+        except Exception:
+            logger.debug("promo.weighted_popularity: TG event map load failed", exc_info=True)
+
+        tg_by_source: dict[int, list[tuple]] = {}
+        for row in tg_rows:
+            try:
+                tg_by_source.setdefault(int(row[0]), []).append(row)
+            except Exception:
+                continue
+        for rows in tg_by_source.values():
+            sample = len({int(row[1]) for row in rows})
+            median_views = _median_int(int(row[3]) for row in rows if isinstance(row[3], int) and int(row[3]) >= 0)
+            median_likes = _median_int(int(row[4]) for row in rows if isinstance(row[4], int) and int(row[4]) >= 0)
+            for source_id, message_id, _age, views, likes, username in rows:
+                score = _popularity_metric_score(
+                    views=views if isinstance(views, int) else None,
+                    likes=likes if isinstance(likes, int) else None,
+                    median_views=median_views,
+                    median_likes=median_likes,
+                    sample=sample,
+                    min_sample=min_sample,
+                )
+                if score <= 0:
+                    continue
+                uname = str(username or "").strip().lstrip("@").lower()
+                for event_id in tg_event_map.get((uname, int(message_id)), set()):
+                    add_score(event_id, score * source_weight, owned=False)
+
+        # VK source posts imported from monitored communities, matching /popular_posts.
+        vk_rows: list[tuple] = []
+        try:
+            cur = await conn.execute(
+                """
+                SELECT DISTINCT
+                    m.group_id,
+                    m.post_id,
+                    m.age_day,
+                    m.views,
+                    m.likes
+                FROM vk_post_metric m
+                JOIN vk_inbox i
+                  ON i.group_id = m.group_id
+                 AND i.post_id = m.post_id
+                JOIN vk_inbox_import_event ie
+                  ON ie.inbox_id = i.id
+                WHERE m.age_day <= ?
+                  AND m.post_ts IS NOT NULL
+                  AND m.post_ts >= ?
+                """,
+                (preferred_age_day, since_ts),
+            )
+            vk_rows = await cur.fetchall()
+        except Exception:
+            logger.debug("promo.weighted_popularity: VK metric load failed", exc_info=True)
+            vk_rows = []
+        vk_rows = dedupe_latest(vk_rows, key_indexes=(0, 1), age_idx=2)
+
+        vk_event_map: dict[tuple[int, int], set[int]] = {}
+        try:
+            cur = await conn.execute(
+                f"""
+                SELECT i.group_id, i.post_id, ie.event_id
+                FROM vk_inbox i
+                JOIN vk_inbox_import_event ie ON ie.inbox_id = i.id
+                WHERE ie.event_id IN ({placeholders})
+                """,
+                tuple(ids),
+            )
+            for group_id, post_id, event_id in await cur.fetchall():
+                try:
+                    eid = int(event_id)
+                    key = (int(group_id), int(post_id))
+                except Exception:
+                    continue
+                if eid in id_set:
+                    vk_event_map.setdefault(key, set()).add(eid)
+        except Exception:
+            logger.debug("promo.weighted_popularity: VK event map load failed", exc_info=True)
+
+        vk_by_group: dict[int, list[tuple]] = {}
+        for row in vk_rows:
+            try:
+                vk_by_group.setdefault(int(row[0]), []).append(row)
+            except Exception:
+                continue
+        for rows in vk_by_group.values():
+            sample = len({int(row[1]) for row in rows})
+            median_views = _median_int(int(row[3]) for row in rows if isinstance(row[3], int) and int(row[3]) >= 0)
+            median_likes = _median_int(int(row[4]) for row in rows if isinstance(row[4], int) and int(row[4]) >= 0)
+            for group_id, post_id, _age, views, likes in rows:
+                score = _popularity_metric_score(
+                    views=views if isinstance(views, int) else None,
+                    likes=likes if isinstance(likes, int) else None,
+                    median_views=median_views,
+                    median_likes=median_likes,
+                    sample=sample,
+                    min_sample=min_sample,
+                )
+                if score <= 0:
+                    continue
+                owned = int(group_id) in owned_vk_group_ids
+                # Imported posts from owned groups are rare, but if present they
+                # should be treated as owned-audience signal rather than internet-source signal.
+                weight = owned_vk_weight if owned else source_weight
+                for event_id in vk_event_map.get((int(group_id), int(post_id)), set()):
+                    add_score(event_id, score * weight, owned=owned)
+
+        # Owned VK posts: event.source_vk_post_url / event.vk_repost_url plus
+        # promo vk_repost target URLs. These posts are not necessarily in vk_inbox,
+        # but vk_post_metric can still contain audience metrics for them.
+        owned_post_map: dict[tuple[int, int], set[int]] = {}
+        if owned_vk_group_ids:
+            try:
+                cur = await conn.execute(
+                    f"""
+                    SELECT id, source_vk_post_url, vk_repost_url
+                    FROM event
+                    WHERE id IN ({placeholders})
+                    """,
+                    tuple(ids),
+                )
+                for event_id, source_vk_post_url, vk_repost_url in await cur.fetchall():
+                    try:
+                        eid = int(event_id)
+                    except Exception:
+                        continue
+                    for url in (source_vk_post_url, vk_repost_url):
+                        ids_pair = _vk_wall_ids_from_url(url)
+                        if ids_pair and ids_pair[0] in owned_vk_group_ids:
+                            owned_post_map.setdefault(ids_pair, set()).add(eid)
+            except Exception:
+                logger.debug("promo.weighted_popularity: owned event VK urls load failed", exc_info=True)
+
+            try:
+                cur = await conn.execute(
+                    f"""
+                    SELECT event_id, public_targets_json, details_json
+                    FROM promo_exposure
+                    WHERE event_id IN ({placeholders})
+                      AND surface IN ('vk_repost', 'vk_publication')
+                    """,
+                    tuple(ids),
+                )
+                for event_id, public_targets_json, details_json in await cur.fetchall():
+                    try:
+                        eid = int(event_id)
+                    except Exception:
+                        continue
+                    urls: list[str] = []
+                    for raw in (public_targets_json, details_json):
+                        try:
+                            data = json.loads(raw) if isinstance(raw, str) else raw
+                        except Exception:
+                            data = None
+                        if isinstance(data, dict):
+                            urls.extend(str(data.get(key) or "") for key in ("target_url", "source_url"))
+                        elif isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict):
+                                    urls.append(str(item.get("url") or ""))
+                    for url in urls:
+                        ids_pair = _vk_wall_ids_from_url(url)
+                        if ids_pair and ids_pair[0] in owned_vk_group_ids:
+                            owned_post_map.setdefault(ids_pair, set()).add(eid)
+            except Exception:
+                logger.debug("promo.weighted_popularity: owned promo exposure URLs load failed", exc_info=True)
+
+        if owned_post_map:
+            owned_rows: list[tuple] = []
+            group_placeholders = ",".join("?" for _ in owned_vk_group_ids)
+            try:
+                cur = await conn.execute(
+                    f"""
+                    SELECT group_id, post_id, age_day, views, likes
+                    FROM vk_post_metric
+                    WHERE group_id IN ({group_placeholders})
+                      AND age_day <= ?
+                      AND post_ts IS NOT NULL
+                      AND post_ts >= ?
+                    """,
+                    tuple(sorted(owned_vk_group_ids)) + (preferred_age_day, since_ts),
+                )
+                owned_rows = await cur.fetchall()
+            except Exception:
+                logger.debug("promo.weighted_popularity: owned VK metrics load failed", exc_info=True)
+                owned_rows = []
+            owned_rows = dedupe_latest(owned_rows, key_indexes=(0, 1), age_idx=2)
+            owned_by_group: dict[int, list[tuple]] = {}
+            for row in owned_rows:
+                try:
+                    owned_by_group.setdefault(int(row[0]), []).append(row)
+                except Exception:
+                    continue
+            for rows in owned_by_group.values():
+                sample = len({int(row[1]) for row in rows})
+                median_views = _median_int(int(row[3]) for row in rows if isinstance(row[3], int) and int(row[3]) >= 0)
+                median_likes = _median_int(int(row[4]) for row in rows if isinstance(row[4], int) and int(row[4]) >= 0)
+                for group_id, post_id, _age, views, likes in rows:
+                    mapped_ids = owned_post_map.get((int(group_id), int(post_id)), set())
+                    if not mapped_ids:
+                        continue
+                    score = _popularity_metric_score(
+                        views=views if isinstance(views, int) else None,
+                        likes=likes if isinstance(likes, int) else None,
+                        median_views=median_views,
+                        median_likes=median_likes,
+                        sample=sample,
+                        min_sample=min_sample,
+                    )
+                    for event_id in mapped_ids:
+                        add_score(event_id, score * owned_vk_weight, owned=True)
+
+    out: dict[int, PromoPopularityScore] = {}
+    for event_id, parts in scores.items():
+        source_score = float(parts["source_score"])
+        owned_score = float(parts["owned_vk_score"])
+        total = source_score + owned_score
+        if total <= 0:
+            continue
+        out[event_id] = PromoPopularityScore(
+            score=total,
+            source_score=source_score,
+            owned_vk_score=owned_score,
+            source_count=int(parts["source_count"]),
+            owned_vk_count=int(parts["owned_vk_count"]),
+        )
+    return out
 
 
 async def _publish_tg_repost(
@@ -4871,13 +5333,42 @@ async def run_promo_vk_activities(
                 if isinstance(exposure.details_json, dict)
             }
             picked: tuple[Event, str, datetime] | None = None
-            for candidate in sorted(source_candidates, key=lambda item: (item[2], int(item[0].id or 0))):
+            popularity_scores: dict[int, PromoPopularityScore] = {}
+            selection_policy = str(cfg.get("selection_policy") or activity.selection_policy or "").strip()
+            if selection_policy == PROMO_POLICY_WEIGHTED_POPULARITY:
+                popularity_scores = await _weighted_popularity_scores_for_events(
+                    db,
+                    event_ids=[int(candidate[0].id) for candidate in source_candidates if candidate[0].id is not None],
+                    activity=activity,
+                    now_utc=now_utc,
+                )
+
+                def weighted_key(item: tuple[Event, str, datetime]) -> tuple[float, float, datetime, int]:
+                    ev = item[0]
+                    event_id = int(ev.id or 0)
+                    score = popularity_scores.get(event_id)
+                    return (
+                        float(score.score if score else 0.0),
+                        float(score.owned_vk_score if score else 0.0),
+                        item[2],
+                        -event_id,
+                    )
+
+                ranked_candidates = [
+                    item
+                    for item in sorted(source_candidates, key=weighted_key, reverse=True)
+                    if popularity_scores.get(int(item[0].id or 0)) is not None
+                ]
+            else:
+                ranked_candidates = sorted(source_candidates, key=lambda item: (item[2], int(item[0].id or 0)))
+            for candidate in ranked_candidates:
                 if candidate[1] not in forwarded_source_urls:
                     picked = candidate
                     break
             if picked is None:
                 continue
             ev, source_url, source_at = picked
+            selected_popularity = popularity_scores.get(int(ev.id or 0)) if popularity_scores else None
             try:
                 url = await _publish_tg_repost(
                     bot,
@@ -4903,6 +5394,12 @@ async def run_promo_vk_activities(
                         "source_url": source_url,
                         "source_published_at": source_at.isoformat(),
                         "target_url": url,
+                        "selection_policy": selection_policy or None,
+                        "popularity_score": selected_popularity.score if selected_popularity else None,
+                        "source_popularity_score": selected_popularity.source_score if selected_popularity else None,
+                        "owned_vk_popularity_score": selected_popularity.owned_vk_score if selected_popularity else None,
+                        "source_popularity_count": selected_popularity.source_count if selected_popularity else None,
+                        "owned_vk_popularity_count": selected_popularity.owned_vk_count if selected_popularity else None,
                     },
                     target_type="telegram_forward",
                 )
