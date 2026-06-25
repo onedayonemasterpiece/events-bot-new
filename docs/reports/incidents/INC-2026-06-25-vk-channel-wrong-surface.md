@@ -72,7 +72,8 @@ channels and did not contain the target community channel/post.
   reports for `vk_channel_publish`;
 - adding any VK Channel/community Channel transport;
 - using `messages.send`, `wall.post`, or private VK web endpoints for a product
-  described as a VK community Channel.
+  described as a VK community Channel. `messages.send` is acceptable only when
+  the feature is explicitly labelled as a non-public operator manual-copy draft.
 
 ### Affected surfaces
 
@@ -80,17 +81,22 @@ channels and did not contain the target community channel/post.
   initial `80 историй о главном` activity seed, runner branch;
 - `main_part2.py`: compact VK Channel copy builder and transport helper;
 - production DB: `promo_activity`, `promo_exposure`;
-- Fly secrets: `VK_AFISHA_CHANNEL_PEER_ID`;
+- Fly secrets: `VK_AFISHA_CHANNEL_PEER_ID` (removed), `VK_AFISHA_CHANNEL_DRAFT_PEER_ID`
+  (manual-copy draft only);
 - external VK Open API and VK mobile/web UI.
 
 ### Mandatory checks before closure or deploy
 
-- Targeted test proving `vk_channel_publish` does not call `messages.send`, does
-  not create `VK_CHANNEL_SENT`, and creates no public exposure while unsupported.
+- Targeted test proving `vk_channel_publish` does not create `VK_CHANNEL_SENT`
+  or public exposure. If it uses `messages.send`, it must be explicit
+  `delivery_mode='vk_messages_manual_copy_draft'`, record only
+  `VK_CHANNEL_DRAFT_SENT`, and keep `public_target_count=0`.
+- Targeted test proving the draft CTA prefers `ticket_link`/registration links
+  over Telegraph URLs.
 - Check `PUBLIC_PROMO_EXPOSURE_STATUSES` excludes `VK_CHANNEL_SENT`.
-- Production DB verification that the activity is disabled and wrong exposure is
-  invalidated (`FAILED_WRONG_SURFACE`, `public_target_count=0`, empty public
-  targets).
+- Production DB verification that the wrong exposure is invalidated
+  (`FAILED_WRONG_SURFACE`, `public_target_count=0`, empty public targets) and
+  any current manual-draft exposure remains non-public.
 - VK API research evidence: official `messages.send` and `wall.post` docs do
   not document community Channel posting; any future transport must be verified
   in the actual Channels tab before public exposure is counted.
@@ -99,7 +105,9 @@ channels and did not contain the target community channel/post.
 
 ### Required evidence
 
-- Tests: `tests/test_promo.py::test_promo_runner_skips_vk_channel_publish_until_real_channel_api`.
+- Tests:
+  `tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic`,
+  `tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph`.
 - Production SQL before/after mitigation.
 - Fly secret list after mitigation (name absent; no secret values).
 - Source research links or saved notes for VK API/community Channel behavior.
@@ -125,6 +133,10 @@ channels and did not contain the target community channel/post.
   `vk_community_channel_post_api_unsupported` instead of falling back to
   Messenger.
 - `VK_CHANNEL_SENT` is no longer a public promo exposure status.
+- Follow-up behavior (2026-06-25): while true VK community Channel API remains
+  unavailable, the activity may send the prepared text to the operator's VK
+  Messenger/Favorites as `VK_CHANNEL_DRAFT_SENT`. This is a manual-copy draft,
+  not Channel delivery; it must remain non-public in campaign accounting.
 
 ## Follow-up Actions
 

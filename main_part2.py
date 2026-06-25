@@ -4371,9 +4371,11 @@ def _single_event_link(event: Event) -> str:
     """Pick exactly one public URL for compact channel-style event promos."""
 
     for attr in (
-        "telegraph_url",
         "ticket_link",
         "ticket_url",
+        "registration_link",
+        "registration_url",
+        "telegraph_url",
         "source_url",
         "source_vk_post_url",
         "ics_url",
@@ -4516,14 +4518,50 @@ async def publish_vk_channel_promo_event_publication(
     peer_ids: Sequence[int],
     channel_ref: str | None = None,
 ) -> str | None:
-    """Fail closed until VK documents or exposes community Channel posting.
+    """Send a manual-copy draft to VK Messenger/Favorites.
 
-    ``messages.send`` writes to VK Messenger (including Favorites/personal
-    dialogs).  It does not publish into the community Channel surface shown in
-    the Messenger "Каналы" tab, so this helper must not fall back to messaging.
+    This is intentionally not treated as VK community Channel publication:
+    ``messages.send`` writes to VK Messenger, where the operator can copy the
+    prepared post and publish it through the community UI's "Пост в канал".
     """
 
-    raise RuntimeError("vk_community_channel_post_api_unsupported")
+    normalized_peer_ids: list[int] = []
+    for peer_id in peer_ids:
+        try:
+            parsed_peer_id = int(peer_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_peer_id:
+            normalized_peer_ids.append(parsed_peer_id)
+    if not normalized_peer_ids:
+        raise RuntimeError("VK channel manual draft peer_id is not configured")
+    if not VK_USER_TOKEN:
+        raise RuntimeError("VK_USER_TOKEN missing for VK channel manual draft")
+
+    peer_id = normalized_peer_ids[0]
+    message = build_vk_channel_promo_event_publication_message(event)
+    if len(message) > 9000:
+        message = message[:8950].rstrip() + "\n\n..."
+    data = await _vk_api(
+        "messages.send",
+        {
+            "peer_id": peer_id,
+            "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
+            "message": message,
+            "dont_parse_links": 0,
+        },
+        db,
+        bot,
+        token=VK_USER_TOKEN,
+        token_kind="user",
+        skip_captcha=False,
+    )
+    payload = data.get("response") if isinstance(data, dict) and "response" in data else data
+    if isinstance(payload, int):
+        return _vk_message_target_link(peer_id, payload)
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        return _vk_message_target_link(int(payload[0].get("peer_id") or peer_id), payload[0].get("message_id"))
+    return _vk_message_target_link(peer_id)
 
 
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"
