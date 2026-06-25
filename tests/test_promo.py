@@ -1809,6 +1809,9 @@ async def test_promo_runner_sends_vk_channel_manual_draft_nonpublic(tmp_path, mo
         session.add(event)
         await session.flush()
         event_id = int(event.id)
+        later = _event("Поздняя история", "2026-07-04", festival="Кантата")
+        later.ticket_link = "https://example.com/later"
+        session.add(later)
         campaign = PromoCampaign(
             title="VK channel smoke",
             status="active",

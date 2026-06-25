@@ -9,7 +9,8 @@
   records non-public `VK_CHANNEL_DRAFT_SENT` evidence with
   `public_target_count=0`, and still refuses to count `vk.com/im?...` as a
   public Channel delivery. The compact CTA link now prefers
-  `ticket_link`/registration URLs over Telegraph details pages.
+  `ticket_link`/registration URLs over Telegraph details pages, and the manual
+  draft selector now prefers the nearest eligible event before stable shuffling.
 - **Incident / VK community Channel wrong surface (INC-2026-06-25)**: disabled
   `vk_channel_publish` fail-closed after the compensation run used
   `messages.send`, which reached VK Messenger/Favorites rather than the
