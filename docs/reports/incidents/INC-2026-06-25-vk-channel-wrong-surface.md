@@ -138,10 +138,22 @@ channels and did not contain the target community channel/post.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending manual Fly deploy from clean hotfix worktree
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `0de0fbe8` (`fix(promo): fail closed VK channel wrong surface (#10)`), reachable from `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only --detach` from a clean detached `origin/main` worktree.
+- Fly release: `v1480`, image `events-bot-new-wngqia:deployment-01KVYVQKQG6N2YY9NA93YH8QFS`, machine `683961db016e28` started.
+- regression checks:
+  - `python -m pytest -q tests/test_promo.py::test_promo_runner_skips_vk_channel_publish_until_real_channel_api tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`2 passed`).
+  - Deployed code check: `VK_CHANNEL_SENT` is absent from `PUBLIC_PROMO_EXPOSURE_STATUSES`; initial `vk_channel_publish` activity seeds `enabled=False`; helper contains `vk_community_channel_post_api_unsupported`.
+- production mitigation verification:
+  - `promo_activity.id=30` has `enabled=0`.
+  - `promo_exposure.id=514` has `publish_status='FAILED_WRONG_SURFACE'`, `public_target_count=0`, `public_targets_json=[]`.
+  - Fly secrets list no longer includes `VK_AFISHA_CHANNEL_PEER_ID`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, `promo_vk=ok`; Fly HTTP service check passing.
+- VK API research evidence:
+  - Official `https://dev.vk.com/ru/method/messages.send`, `https://dev.vk.com/ru/method/wall.post`, method index, object reference, and sitemap returned no `channel`/`канал`/`Пост в канал` documentation.
+  - Authenticated harmless method probes for `channels.*`, `messages.*Channel*`, `wall.post*Channel*`, `newsfeed.getChannels`, and `groups.getChannels` returned VK error code `3` (`Unknown method passed`) via Open API.
+  - VK mobile public JS exposes a frontend `ChannelsApi` only for `create/delete/join/leave/getMessagesById/getById/getRecommendations`; no channel post/send method was found in the downloaded channel/posting chunks. This is evidence of product surface/recommendations, not a verified posting API.
+  - Public SMM guide confirms community Channels are created/published from the community UI (`Создать пост` → `Пост в канал`) and posts appear in Messenger → `Каналы`.
 
 ## Prevention
 
