@@ -4390,7 +4390,7 @@ def _strip_urls_for_channel_text(value: str) -> str:
 
 
 def build_vk_channel_promo_event_publication_message(event: Event) -> str:
-    """Compact VK-channel/direct-message promo text: short copy + one link.
+    """Compact VK community Channel promo text: short copy + one link.
 
     The layout mirrors a Telegram channel event card, but removes the footer
     link block and hashtags: title, info block, short description, one CTA URL.
@@ -4516,108 +4516,14 @@ async def publish_vk_channel_promo_event_publication(
     peer_ids: Sequence[int],
     channel_ref: str | None = None,
 ) -> str | None:
-    """Send a compact event promo through documented VK ``messages.send``."""
+    """Fail closed until VK documents or exposes community Channel posting.
 
-    normalized_peer_ids: list[int] = []
-    for peer_id in peer_ids:
-        try:
-            parsed_peer_id = int(peer_id)
-        except (TypeError, ValueError):
-            continue
-        if parsed_peer_id:
-            normalized_peer_ids.append(parsed_peer_id)
-    peer_ids = normalized_peer_ids
-    if not peer_ids:
-        raise RuntimeError("VK channel peer_id is not configured")
+    ``messages.send`` writes to VK Messenger (including Favorites/personal
+    dialogs).  It does not publish into the community Channel surface shown in
+    the Messenger "Каналы" tab, so this helper must not fall back to messaging.
+    """
 
-    message = build_vk_channel_promo_event_publication_message(event)
-    if len(message) > 9000:
-        message = message[:8950].rstrip() + "\n\n..."
-    actors = choose_vk_actor(-abs(int(target_group_id)), "messages.send")
-    if not actors:
-        raise RuntimeError("VK token missing for messages.send")
-
-    last_error: Exception | None = None
-    for actor in actors:
-        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
-        token_kind = actor.kind
-        try:
-            attachments: list[str] = []
-            for photo_url in [
-                str(url).strip()
-                for url in (getattr(event, "photo_urls", None) or [])
-                if str(url).strip()
-            ][:10]:
-                attachment = await _upload_vk_message_photo(
-                    peer_id=peer_ids[0],
-                    photo_url=photo_url,
-                    db=db,
-                    bot=bot,
-                    token=token,
-                    token_kind=token_kind,
-                )
-                if attachment:
-                    attachments.append(attachment)
-            params: dict[str, Any] = {
-                "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
-                "message": message,
-                "dont_parse_links": 0,
-            }
-            if attachments:
-                params["attachment"] = ",".join(attachments)
-            if len(peer_ids) == 1:
-                params["peer_id"] = peer_ids[0]
-            else:
-                params["peer_ids"] = ",".join(str(peer_id) for peer_id in peer_ids[:100])
-            if actor.kind == "user":
-                params["group_id"] = abs(int(target_group_id))
-            try:
-                data = await _vk_api(
-                    "messages.send",
-                    params,
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=token_kind,
-                    skip_captcha=(actor.kind == "group"),
-                )
-            except Exception as exc:
-                if actor.kind != "user" or "Cannot message as group" not in str(exc):
-                    raise
-                # VK Channels/messenger peers may be represented by a user-like
-                # peer and reject the documented community ``group_id`` send.
-                # In that case keep the same explicit peer id but send with the
-                # user token directly; this is still gated by the configured
-                # VK_AFISHA_CHANNEL_PEER_ID(S), never inferred from a screen name.
-                fallback_params = dict(params)
-                fallback_params.pop("group_id", None)
-                data = await _vk_api(
-                    "messages.send",
-                    fallback_params,
-                    db,
-                    bot,
-                    token=token,
-                    token_kind=token_kind,
-                    skip_captcha=False,
-                )
-            payload = data.get("response") if isinstance(data, dict) and "response" in data else data
-            if isinstance(payload, list) and payload:
-                first = payload[0]
-                if isinstance(first, dict):
-                    return _vk_message_target_link(int(first.get("peer_id") or peer_ids[0]), first.get("message_id"))
-            if isinstance(payload, int):
-                return _vk_message_target_link(peer_ids[0], payload)
-            return _vk_message_target_link(peer_ids[0])
-        except Exception as exc:
-            logging.warning(
-                "vk channel promo send failed actor=%s channel=%s error=%s",
-                getattr(actor, "label", actor.kind),
-                channel_ref or "",
-                exc,
-            )
-            last_error = exc
-            continue
-    raise last_error or RuntimeError("VK channel promo send failed")
+    raise RuntimeError("vk_community_channel_post_api_unsupported")
 
 
 TG_EVENT_CHANNEL_DEFAULT = "@kldevents"

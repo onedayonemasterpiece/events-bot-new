@@ -255,22 +255,23 @@ The repost result is recorded in `promo_exposure` with
 `surface='vk_repost'`, `details_json.source_url` and
 `details_json.target_url`.
 
-`vk_channel_publish` is the messenger-style VK activity for compact event
-promos in the VK Channel of the `klgdevents` community ("Полюбить Калининград
-Афиша"). VK Channels behave like a Telegram-like feed inside VK messages, but
-VK's public Open API documentation currently exposes the documented
-`messages.send` contract rather than a public channel discovery/post method.
-Therefore the activity requires an explicit configured peer id (`peer_id`,
-`peer_ids`, or env indirection such as `VK_AFISHA_CHANNEL_PEER_ID`). The copy is
-Telegram-channel-like but VK-safe: title, date/time/location infoblock, short
-plain-text description, and exactly one event CTA link; no footer link block
-and no hashtags. The runner records
-`promo_exposure.surface='vk_channel_publish'` with
-`publish_status='VK_CHANNEL_SENT'`, `target_type='vk_channel'`, and skips safely
-without creating exposure rows when the peer id is absent.
-If VK rejects a user-token send with `group_id` as `Cannot message as group`,
-the runner retries the same explicit peer id without `group_id`, matching
-VK-channel-style peers that behave as personal-message recipients.
+`vk_channel_publish` is reserved for compact event promos in the VK community
+Channel of the `klgdevents` community ("Полюбить Калининград Афиша"). The
+intended copy is Telegram-channel-like but VK-safe: title,
+date/time/location infoblock, short plain-text description, and exactly one
+event CTA link; no footer link block and no hashtags.
+
+Current production contract: **fail closed**. VK community Channels are the
+surface shown in Messenger → "Каналы" and are created from the community UI via
+"Создать пост" → "Пост в канал". Public VK Open API docs for `messages.send`
+describe Messenger recipients, and `wall.post` describes community wall posts;
+neither documents a parameter or method that publishes into the community
+Channel. Therefore the runner must not use `messages.send` peer ids as a
+fallback: that reaches personal Messenger/Favorites, not the Channels tab.
+Until a documented or verified community-Channel posting API is available,
+`vk_channel_publish` is disabled by default, returns
+`reason='vk_community_channel_post_api_unsupported'`, and creates no public
+`promo_exposure` rows.
 
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
@@ -408,9 +409,8 @@ The initial `80 историй о главном` campaign now includes:
   `daily_cap=2`, 24-hour window, active window 09:00-21:00;
 - `vk_channel_publish` to the VK Channel of `https://vk.com/klgdevents`
   ("Полюбить Калининград Афиша"), `max_per_publish=1`, `daily_cap=1`,
-  24-hour window, active window 09:00-21:00. It is active only when
-  `VK_AFISHA_CHANNEL_PEER_ID` or `VK_AFISHA_CHANNEL_PEER_IDS` provides an
-  explicit VK messenger peer id;
+  24-hour window, active window 09:00-21:00. It is disabled/fail-closed until
+  VK community Channel posting has a verified non-Messenger API path;
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
