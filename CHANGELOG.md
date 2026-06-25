@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Promo campaigns / VK Channel manual draft**: `vk_channel_publish` now runs
+  as an operator-assisted fallback while VK community Channel posting has no
+  verified Open API: it sends the ready-to-copy compact event text to the
+  operator's VK Messenger/Favorites using `VK_AFISHA_CHANNEL_DRAFT_PEER_ID`,
+  records non-public `VK_CHANNEL_DRAFT_SENT` evidence with
+  `public_target_count=0`, and still refuses to count `vk.com/im?...` as a
+  public Channel delivery. The compact CTA link now prefers
+  `ticket_link`/registration URLs over Telegraph details pages.
 - **Incident / VK community Channel wrong surface (INC-2026-06-25)**: disabled
   `vk_channel_publish` fail-closed after the compensation run used
   `messages.send`, which reached VK Messenger/Favorites rather than the

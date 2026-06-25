@@ -11,7 +11,7 @@ import textwrap
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from difflib import SequenceMatcher
-from typing import Any, Iterable
+from typing import Any, Collection, Iterable
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
@@ -68,6 +68,7 @@ PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
 PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES = {
     "klgdevents:motivation:80stories",
 }
+NONPUBLIC_PROMO_DELIVERY_STATUSES = frozenset({"VK_CHANNEL_DRAFT_SENT"})
 VK_SYNC_MISSING_TG_MEDIA_ERROR = "vk_sync_missing_media_for_telegram_event"
 PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
     {
@@ -436,6 +437,8 @@ def _vk_channel_peer_ids(cfg: dict[str, Any]) -> list[int]:
     peer_ids = _csv_ints(cfg.get("peer_ids"))
     peer_ids.extend(_csv_ints(cfg.get("peer_id")))
     for env_key in (
+        str(cfg.get("draft_peer_ids_env") or "").strip(),
+        str(cfg.get("draft_peer_id_env") or "").strip(),
         str(cfg.get("peer_ids_env") or "").strip(),
         str(cfg.get("peer_id_env") or "").strip(),
     ):
@@ -1034,16 +1037,18 @@ def _initial_80_vk_channel_publish_activity(campaign_id: int) -> PromoActivity:
         max_per_publish=1,
         daily_cap=1,
         selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-        enabled=False,
+        enabled=True,
         config_json={
             "target_group": "klgdevents",
             "target_channel": "Полюбить Калининград Афиша",
+            "draft_peer_id_env": "VK_AFISHA_CHANNEL_DRAFT_PEER_ID",
+            "peer_id_env": "VK_AFISHA_CHANNEL_DRAFT_PEER_ID",
             "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
             "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
             "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
             "post_style": "vk_channel_short_event_one_link",
-            "api_contract": "unsupported_until_documented_vk_community_channel_post_api",
-            "disabled_reason": "messages.send reaches personal Messenger/Favorites, not the community Channels tab",
+            "delivery_mode": "vk_messages_manual_copy_draft",
+            "api_contract": "manual_copy_draft_until_documented_vk_community_channel_post_api",
         },
     )
 
@@ -1523,6 +1528,7 @@ async def _load_public_exposure_stats(
     campaign_id: int,
     activity_id: int,
     event_ids: Iterable[int],
+    statuses: Collection[str] | None = None,
 ) -> dict[int, tuple[int, datetime | None]]:
     ids = [int(event_id) for event_id in event_ids if event_id is not None]
     if not ids:
@@ -1537,7 +1543,7 @@ async def _load_public_exposure_stats(
             .where(PromoExposure.campaign_id == campaign_id)
             .where(PromoExposure.activity_id == activity_id)
             .where(PromoExposure.event_id.in_(ids))
-            .where(PromoExposure.publish_status.in_(PUBLIC_PROMO_EXPOSURE_STATUSES))
+            .where(PromoExposure.publish_status.in_(statuses or PUBLIC_PROMO_EXPOSURE_STATUSES))
             .group_by(PromoExposure.event_id)
         )
         rows = res.all()
@@ -2391,6 +2397,7 @@ async def _recent_activity_exposures(
     since_utc: datetime,
     until_utc: datetime | None = None,
     public_only: bool = True,
+    statuses: Collection[str] | None = None,
 ) -> list[PromoExposure]:
     async with db.get_session() as session:
         query = (
@@ -2403,7 +2410,9 @@ async def _recent_activity_exposures(
             query = query.where(PromoExposure.activity_id == activity_id)
         if until_utc is not None:
             query = query.where(PromoExposure.published_at <= until_utc)
-        if public_only:
+        if statuses is not None:
+            query = query.where(PromoExposure.publish_status.in_(statuses))
+        elif public_only:
             query = query.where(PromoExposure.publish_status.in_(PUBLIC_PROMO_EXPOSURE_STATUSES))
         res = await session.execute(query.order_by(PromoExposure.published_at.desc()))
         return list(res.scalars().all())
@@ -2416,6 +2425,7 @@ async def _activity_day_exposures(
     activity_id: int,
     surface: str,
     now_utc: datetime,
+    statuses: Collection[str] | None = None,
 ) -> list[PromoExposure]:
     day_start_utc, day_end_utc = _promo_day_bounds(now_utc)
     return await _recent_activity_exposures(
@@ -2425,6 +2435,7 @@ async def _activity_day_exposures(
         surface=surface,
         since_utc=day_start_utc,
         until_utc=day_end_utc,
+        statuses=statuses,
     )
 
 
@@ -2653,6 +2664,7 @@ async def _record_vk_promo_exposure(
     published_at: datetime,
     details: dict[str, Any],
     target_type: str = "vk_wall",
+    public: bool = True,
 ) -> None:
     last_exc: Exception | None = None
     for attempt in range(1, 4):
@@ -2666,8 +2678,8 @@ async def _record_vk_promo_exposure(
                         surface=surface,
                         placement_kind=placement_kind,
                         publish_status=status,
-                        public_target_count=1 if url else 0,
-                        public_targets_json=[{"type": target_type, "url": url}] if url else [],
+                        public_target_count=1 if (public and url) else 0,
+                        public_targets_json=[{"type": target_type, "url": url}] if (public and url) else [],
                         published_at=published_at,
                         details_json=details,
                     )
@@ -4901,25 +4913,134 @@ async def run_promo_vk_activities(
 
         elif activity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH:
             cfg = _activity_config(activity)
-            logger.warning(
-                "promo.vk channel publish skipped: unsupported VK community Channel API "
-                "campaign_id=%s activity_id=%s target_group=%s target_channel=%s",
-                campaign_id,
-                activity_id,
-                cfg.get("target_group") or activity.profile_key,
-                cfg.get("target_channel") or activity.profile_key,
-            )
-            results.append(
-                PromoVkActionResult(
+            delivery_mode = str(cfg.get("delivery_mode") or "").strip()
+            if delivery_mode != "vk_messages_manual_copy_draft":
+                logger.warning(
+                    "promo.vk channel publish skipped: unsupported VK community Channel API "
+                    "campaign_id=%s activity_id=%s target_group=%s target_channel=%s",
                     campaign_id,
                     activity_id,
-                    activity.surface,
-                    0,
-                    "skipped",
-                    reason="vk_community_channel_post_api_unsupported",
+                    cfg.get("target_group") or activity.profile_key,
+                    cfg.get("target_channel") or activity.profile_key,
                 )
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "skipped",
+                        reason="vk_community_channel_post_api_unsupported",
+                    )
+                )
+                continue
+            target_group_id = await _resolve_vk_group_id(cfg.get("target_group") or activity.profile_key)
+            peer_ids = _vk_channel_peer_ids(cfg)
+            if not target_group_id:
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="target_group_missing")
+                )
+                continue
+            if not peer_ids:
+                logger.info(
+                    "promo.vk channel manual draft skipped: peer id missing campaign_id=%s activity_id=%s",
+                    campaign_id,
+                    activity_id,
+                )
+                results.append(
+                    PromoVkActionResult(campaign_id, activity_id, activity.surface, 0, "skipped", reason="manual_draft_peer_id_missing")
+                )
+                continue
+            due_count = _vk_activity_due_count(activity, now_utc)
+            if due_count <= 0:
+                continue
+            counted_statuses = PUBLIC_PROMO_EXPOSURE_STATUSES | NONPUBLIC_PROMO_DELIVERY_STATUSES
+            recent_exposures = await _activity_day_exposures(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+                now_utc=now_utc,
+                statuses=counted_statuses,
             )
-            continue
+            if len(recent_exposures) >= due_count:
+                continue
+            recent_event_ids = {int(exposure.event_id) for exposure in recent_exposures}
+            preferred_ids = _preferred_event_ids_for_date(activity, today)
+            preferred_id_set = set(preferred_ids or [])
+            stats = await _load_public_exposure_stats(
+                db,
+                campaign_id=campaign_id,
+                activity_id=activity_id,
+                event_ids=[int(ev.id) for ev in events],
+                statuses=counted_statuses,
+            )
+
+            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
+                event_id = int(ev.id)
+                count, last_at = stats.get(event_id, (0, None))
+                last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
+                return (
+                    _preferred_event_rank(activity, today, event_id),
+                    count,
+                    last_key,
+                    _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
+                    str(ev.date or ""),
+                    event_id,
+                )
+
+            candidates = [
+                ev
+                for ev in sorted(events, key=sort_key)
+                if int(ev.id) not in recent_event_ids
+                and (preferred_ids is None or int(ev.id) in preferred_id_set)
+            ]
+            for ev in candidates[:1]:
+                try:
+                    from main import publish_vk_channel_promo_event_publication
+
+                    url = await publish_vk_channel_promo_event_publication(
+                        ev,
+                        db,
+                        bot,
+                        target_group_id=target_group_id,
+                        peer_ids=peer_ids,
+                        channel_ref=str(cfg.get("target_channel") or activity.profile_key or ""),
+                    )
+                    if not url:
+                        raise RuntimeError("VK channel manual draft returned no URL")
+                    details = {
+                        "target_group_id": target_group_id,
+                        "target_channel": cfg.get("target_channel") or activity.profile_key,
+                        "target_url": url,
+                        "window_hours": window_hours,
+                        "peer_count": len(peer_ids),
+                        "api_contract": cfg.get("api_contract"),
+                        "delivery_mode": delivery_mode,
+                        "manual_copy_draft": True,
+                    }
+                    await _record_vk_promo_exposure(
+                        db,
+                        campaign_id=campaign_id,
+                        activity_id=activity_id,
+                        event_id=int(ev.id),
+                        surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
+                        placement_kind="manual_copy_channel_draft",
+                        status="VK_CHANNEL_DRAFT_SENT",
+                        url=url,
+                        published_at=now_utc,
+                        details=details,
+                        target_type="vk_manual_draft",
+                        public=False,
+                    )
+                    results.append(
+                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "draft_sent", target_url=url)
+                    )
+                except Exception as exc:
+                    logger.exception("promo.vk channel manual draft failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
+                    results.append(
+                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
+                    )
 
         elif activity.surface == PROMO_SURFACE_VK_REPOST:
             cfg = _activity_config(activity)

@@ -1795,7 +1795,7 @@ async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monke
 
 
 @pytest.mark.asyncio
-async def test_promo_runner_skips_vk_channel_publish_until_real_channel_api(tmp_path, monkeypatch) -> None:
+async def test_promo_runner_sends_vk_channel_manual_draft_nonpublic(tmp_path, monkeypatch) -> None:
     import main
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -1805,7 +1805,10 @@ async def test_promo_runner_skips_vk_channel_publish_until_real_channel_api(tmp_
     async with db.get_session() as session:
         event = _event("Завтрашняя история", "2026-06-14", festival="Кантата")
         event.telegraph_url = "https://telegra.ph/story"
+        event.ticket_link = "https://example.com/register"
         session.add(event)
+        await session.flush()
+        event_id = int(event.id)
         campaign = PromoCampaign(
             title="VK channel smoke",
             status="active",
@@ -1825,6 +1828,7 @@ async def test_promo_runner_skips_vk_channel_publish_until_real_channel_api(tmp_
                 "target_group": "klgdevents",
                 "target_channel": "Полюбить Калининград Афиша",
                 "peer_id": 2000000123,
+                "delivery_mode": "vk_messages_manual_copy_draft",
                 "active_start_hour": 18,
                 "active_end_hour": 20,
             },
@@ -1839,21 +1843,49 @@ async def test_promo_runner_skips_vk_channel_publish_until_real_channel_api(tmp_
         )
         await session.commit()
 
-    async def fail_if_called(*args, **kwargs):
-        raise AssertionError("vk_channel_publish must not fall back to messages.send")
+    async def fake_resolve(ref: str):
+        assert ref == "klgdevents"
+        return 111, "Events", "klgdevents", "group"
 
-    monkeypatch.setattr(main, "publish_vk_channel_promo_event_publication", fail_if_called)
+    async def fake_publish(ev, db_arg, bot_arg, **kwargs):
+        assert int(ev.id) == event_id
+        assert kwargs["target_group_id"] == 111
+        assert kwargs["peer_ids"] == [2000000123]
+        assert kwargs["channel_ref"] == "Полюбить Калининград Афиша"
+        return f"https://vk.com/im?sel=2000000123&msgid={3000 + int(ev.id)}"
+
+    monkeypatch.setattr(main, "vk_resolve_group", fake_resolve)
+    monkeypatch.setattr(main, "publish_vk_channel_promo_event_publication", fake_publish)
 
     results = await run_promo_vk_activities(db, None, now_utc=now_utc)
 
     assert [(item.surface, item.status, item.event_id) for item in results] == [
-        (PROMO_SURFACE_VK_CHANNEL_PUBLISH, "skipped", 0)
+        (PROMO_SURFACE_VK_CHANNEL_PUBLISH, "draft_sent", event_id)
     ]
-    assert results[0].reason == "vk_community_channel_post_api_unsupported"
     async with db.get_session() as session:
         exposures = (await session.execute(select(PromoExposure))).scalars().all()
-    assert exposures == []
+    assert len(exposures) == 1
+    exposure = exposures[0]
+    assert exposure.publish_status == "VK_CHANNEL_DRAFT_SENT"
+    assert exposure.placement_kind == "manual_copy_channel_draft"
+    assert exposure.public_target_count == 0
+    assert exposure.public_targets_json == []
+    assert exposure.details_json["manual_copy_draft"] is True
+    assert exposure.details_json["target_url"] == f"https://vk.com/im?sel=2000000123&msgid={3000 + event_id}"
     await db.close()
+
+
+def test_vk_channel_manual_draft_prefers_registration_link_over_telegraph() -> None:
+    import main
+
+    event = _event("Завтрашняя история", "2026-06-14", festival="Кантата")
+    event.telegraph_url = "https://telegra.ph/story"
+    event.ticket_link = "https://example.com/register"
+
+    message = main.build_vk_channel_promo_event_publication_message(event)
+
+    assert "https://example.com/register" in message
+    assert "https://telegra.ph/story" not in message
 
 
 @pytest.mark.asyncio

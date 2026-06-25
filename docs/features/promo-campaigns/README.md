@@ -261,17 +261,20 @@ intended copy is Telegram-channel-like but VK-safe: title,
 date/time/location infoblock, short plain-text description, and exactly one
 event CTA link; no footer link block and no hashtags.
 
-Current production contract: **fail closed**. VK community Channels are the
+Current production contract: **operator-assisted manual draft**. VK community Channels are the
 surface shown in Messenger → "Каналы" and are created from the community UI via
 "Создать пост" → "Пост в канал". Public VK Open API docs for `messages.send`
 describe Messenger recipients, and `wall.post` describes community wall posts;
 neither documents a parameter or method that publishes into the community
-Channel. Therefore the runner must not use `messages.send` peer ids as a
-fallback: that reaches personal Messenger/Favorites, not the Channels tab.
-Until a documented or verified community-Channel posting API is available,
-`vk_channel_publish` is disabled by default, returns
-`reason='vk_community_channel_post_api_unsupported'`, and creates no public
-`promo_exposure` rows.
+Channel. Therefore `messages.send` is allowed only as a **non-public draft
+delivery to the operator's VK Messenger/Favorites** (`delivery_mode=
+vk_messages_manual_copy_draft`), so the operator can copy the prepared post and
+publish it manually through the VK UI. Draft delivery records
+`publish_status='VK_CHANNEL_DRAFT_SENT'`, keeps `public_target_count=0`, and
+creates no public target rows. If the activity is not explicitly in manual-draft
+mode, it still fails closed with
+`reason='vk_community_channel_post_api_unsupported'`. The one CTA link in the
+copy prefers registration/ticket links over Telegraph details pages.
 
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
@@ -409,8 +412,10 @@ The initial `80 историй о главном` campaign now includes:
   `daily_cap=2`, 24-hour window, active window 09:00-21:00;
 - `vk_channel_publish` to the VK Channel of `https://vk.com/klgdevents`
   ("Полюбить Калининград Афиша"), `max_per_publish=1`, `daily_cap=1`,
-  24-hour window, active window 09:00-21:00. It is disabled/fail-closed until
-  VK community Channel posting has a verified non-Messenger API path;
+  24-hour window, active window 09:00-21:00. Until VK community Channel posting
+  has a verified non-Messenger API path, it sends a manual-copy draft to the
+  operator via `VK_AFISHA_CHANNEL_DRAFT_PEER_ID` and never counts that Messenger
+  delivery as public Channel publication;
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
