@@ -167,8 +167,9 @@ channels and did not contain the target community channel/post.
   - `0de0fbe8` (`fix(promo): fail closed VK channel wrong surface (#10)`) — initial containment.
   - `c3815bff` (`feat(promo): send VK channel manual drafts (#12)`) — operator manual-copy draft mode and registration-link CTA priority.
   - `366af059` (`fix(promo): prefer nearest VK channel draft (#13)`) — nearest eligible event before stable shuffling.
+  - `0586cd91` (`fix(promo): attach poster to VK channel draft (#15)`) — manual drafts attach event posters, fail closed on expected poster upload failure, and keep nearest date/time before stable shuffling.
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only --detach` from a clean detached `origin/main` worktree.
-- latest Fly release: `v1484`, image `events-bot-new-wngqia:deployment-01KVYX2PVE6RKR7B3PHJJDCMB6`, machine `683961db016e28` started with service check passing.
+- latest Fly release: `v1485`, image `events-bot-new-wngqia:deployment-01KVYXW9DGTMVW7N2SMP5GAXSV`, machine `683961db016e28` started with service check passing.
 - regression checks:
   - `python -m pytest -q tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph tests/test_promo.py::test_vk_channel_manual_draft_sends_poster_attachment tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`4 passed`).
   - Deployed/manual behavior check: `VK_CHANNEL_SENT` remains absent from `PUBLIC_PROMO_EXPOSURE_STATUSES`; manual draft uses `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, and CTA prefers event registration/ticket URL.
@@ -191,7 +192,7 @@ channels and did not contain the target community channel/post.
     `https://kgd80.ru/sobytiya/velikie-uchitelya-preemstvennost-hudozhestvennyh-pokoleniy/?register=1`;
     pre-repair row is backed up in
     `codex_backup_event_ticket_20260625_5783`.
-- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, `promo_vk=ok`; Fly HTTP service check passing.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, `promo_vk=ok`, with `promo_vk_next_run=2026-06-25T08:52:03.523028+00:00`; Fly release `v1485` is `complete`.
 - VK API research evidence:
   - Official `https://dev.vk.com/ru/method/messages.send`, `https://dev.vk.com/ru/method/wall.post`, method index, object reference, and sitemap returned no `channel`/`канал`/`Пост в канал` documentation.
   - Authenticated harmless method probes for `channels.*`, `messages.*Channel*`, `wall.post*Channel*`, `newsfeed.getChannels`, and `groups.getChannels` returned VK error code `3` (`Unknown method passed`) via Open API.
