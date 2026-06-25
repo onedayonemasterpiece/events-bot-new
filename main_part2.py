@@ -3,6 +3,7 @@ import os
 import html
 import re
 import asyncio
+import json
 import time as _time
 import httpx
 from html.parser import HTMLParser
@@ -4436,6 +4437,34 @@ def _vk_message_target_link(peer_id: int, message_id: int | None = None) -> str:
     return f"https://vk.com/im?sel={int(peer_id)}{suffix}"
 
 
+def _vk_channel_manual_draft_photo_urls(event: Event, *, limit: int = 3) -> list[str]:
+    """Return candidate poster URLs for a VK channel manual-copy draft.
+
+    The draft is a Messenger staging message for an operator to copy into a VK
+    community Channel.  Keep the staging payload close to the final post by
+    attaching the event poster when the canonical event row has media.
+    """
+
+    raw = getattr(event, "photo_urls", None) or []
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = []
+        raw = parsed if isinstance(parsed, (list, tuple)) else []
+    urls: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        url = str(item or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+        if len(urls) >= limit:
+            break
+    return urls
+
+
 async def _upload_vk_message_photo(
     *,
     peer_id: int,
@@ -4542,14 +4571,47 @@ async def publish_vk_channel_promo_event_publication(
     message = build_vk_channel_promo_event_publication_message(event)
     if len(message) > 9000:
         message = message[:8950].rstrip() + "\n\n..."
+    attachments: list[str] = []
+    photo_urls = _vk_channel_manual_draft_photo_urls(event)
+    upload_errors: list[str] = []
+    for photo_url in photo_urls:
+        try:
+            attachment = await _upload_vk_message_photo(
+                peer_id=peer_id,
+                photo_url=photo_url,
+                db=db,
+                bot=bot,
+                token=VK_USER_TOKEN,
+                token_kind="user",
+            )
+        except Exception as exc:
+            upload_errors.append(f"{type(exc).__name__}: {exc}")
+            logging.warning(
+                "vk_channel.manual_draft photo upload failed event_id=%s url=%s err=%s",
+                getattr(event, "id", None),
+                photo_url[:180],
+                exc,
+            )
+            continue
+        if attachment:
+            attachments.append(attachment)
+            break
+    if photo_urls and not attachments:
+        raise RuntimeError(
+            "VK channel manual draft poster upload failed"
+            + (f": {'; '.join(upload_errors[:2])}" if upload_errors else "")
+        )
+    send_params = {
+        "peer_id": peer_id,
+        "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
+        "message": message,
+        "dont_parse_links": 0,
+    }
+    if attachments:
+        send_params["attachment"] = ",".join(attachments)
     data = await _vk_api(
         "messages.send",
-        {
-            "peer_id": peer_id,
-            "random_id": int(_time.time() * 1000) & 0x7FFFFFFF,
-            "message": message,
-            "dont_parse_links": 0,
-        },
+        send_params,
         db,
         bot,
         token=VK_USER_TOKEN,

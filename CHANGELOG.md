@@ -9,8 +9,12 @@
   records non-public `VK_CHANNEL_DRAFT_SENT` evidence with
   `public_target_count=0`, and still refuses to count `vk.com/im?...` as a
   public Channel delivery. The compact CTA link now prefers
-  `ticket_link`/registration URLs over Telegraph details pages, and the manual
-  draft selector now prefers the nearest eligible event before stable shuffling.
+  `ticket_link`/registration URLs over Telegraph details pages, manual drafts
+  attach the event poster/афишу when available, poster upload failure no longer
+  silently degrades to text-only, and the manual draft selector now prefers the
+  nearest eligible event before stable shuffling. Production data was also
+  repaired so `Великие учителя. Преемственность художественных поколений`
+  points to its `?register=1` event-registration URL.
 - **Incident / VK community Channel wrong surface (INC-2026-06-25)**: disabled
   `vk_channel_publish` fail-closed after the compensation run used
   `messages.send`, which reached VK Messenger/Favorites rather than the

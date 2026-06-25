@@ -1892,6 +1892,49 @@ def test_vk_channel_manual_draft_prefers_registration_link_over_telegraph() -> N
 
 
 @pytest.mark.asyncio
+async def test_vk_channel_manual_draft_sends_poster_attachment(monkeypatch) -> None:
+    import main
+
+    event = _event("С афишей", "2026-06-14", festival="Кантата")
+    event.id = 123
+    event.ticket_link = "https://example.com/register"
+    event.photo_urls = ["https://example.com/poster.jpg"]
+    sent: dict[str, object] = {}
+
+    async def fake_upload_vk_message_photo(**kwargs):
+        assert kwargs["peer_id"] == 868977531
+        assert kwargs["photo_url"] == "https://example.com/poster.jpg"
+        assert kwargs["token"] == "user-token"
+        assert kwargs["token_kind"] == "user"
+        return "photo1_2_access"
+
+    async def fake_vk_api(method, params, db, bot, **kwargs):
+        assert method == "messages.send"
+        sent.update(params)
+        assert kwargs["token"] == "user-token"
+        assert kwargs["token_kind"] == "user"
+        return {"response": 265}
+
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+    monkeypatch.setattr(main, "_upload_vk_message_photo", fake_upload_vk_message_photo)
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+
+    url = await main.publish_vk_channel_promo_event_publication(
+        event,
+        None,
+        None,
+        target_group_id=231920894,
+        peer_ids=[868977531],
+        channel_ref="Полюбить Калининград Афиша",
+    )
+
+    assert url == "https://vk.com/im?sel=868977531&msgid=265"
+    assert sent["attachment"] == "photo1_2_access"
+    assert sent["dont_parse_links"] == 0
+    assert "https://example.com/register" in str(sent["message"])
+
+
+@pytest.mark.asyncio
 async def test_promo_tg_repost_skips_event_inside_four_hour_lead_time(tmp_path, monkeypatch) -> None:
     import main
 

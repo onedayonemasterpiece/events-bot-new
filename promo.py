@@ -4752,16 +4752,19 @@ async def run_promo_vk_activities(
                 event_ids=[int(ev.id) for ev in events],
             )
 
-            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
+            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, str, int]:
                 event_id = int(ev.id)
                 count, last_at = stats.get(event_id, (0, None))
                 last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
+                date_key = str(ev.date or "")
+                time_key = str(getattr(ev, "time", "") or "")
                 return (
                     _preferred_event_rank(activity, today, event_id),
                     count,
                     last_key,
+                    date_key,
+                    time_key,
                     _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
-                    str(ev.date or ""),
                     event_id,
                 )
 
