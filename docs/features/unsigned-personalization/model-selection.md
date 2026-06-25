@@ -5,7 +5,7 @@ Date: 2026-06-25
 Source analysis: `docs/features/unsigned-personalization/alanytics.md`.
 
 Goal: pick the smallest stable model/tooling set for static-site personalization:
-offline event enrichment, embeddings/similarity, eval/oracle, and no LLM in the
+offline event enrichment, embeddings/similarity, eval/review, and no LLM in the
 online page-view/feed hot path.
 
 ## Executive decision
@@ -25,7 +25,7 @@ Selected minimal set:
 | Event semantic enrichment | `gemini-3.1-flash-lite` as primary; `gemma-4-31b-it` only as quality fallback/review for ambiguous rows | Source analytics asked for younger/simple models; Lite is the cheapest stable managed candidate with a limiter row; 31B is reserved for hard cases | Live provider + Supabase limiter smoke passed |
 | Event vectors / similarity baseline | Local deterministic feature vectors first; `gemini-embedding-001` only as optional semantic embedding eval/upgrade | Normalized tags/categories/audience/price/time/venue from enrichment can be vectorized locally; external embeddings cost extra requests and are not required for MVP | Local vector needs no provider; Google embedding live-smoked if we later enable it |
 | Local/open embedding option | `EmbeddingGemma` is accepted as future offline/local candidate, not selected for immediate MVP | It fits the source analytics idea (small 308M multilingual embedding model), but current repo env lacks HF token and local `torch`/`sentence-transformers`; Google API does not expose it as a simple managed model here | Not available in current local access path |
-| Eval/oracle / prompt audit | `gemini-3.1-flash-lite` first; `gemma-4-31b-it` for hard Google-side review; no OpenAI in MVP | Keeps the MVP on available/free-tier Google models with AI Studio limits; avoids assuming GPT-5.x complimentary-token eligibility | Google live + limiter smoke passed; OpenAI GPT-5.x removed from selected MVP set |
+| Eval/reviewer / prompt audit | `gemini-3.1-flash-lite` first; `gemma-4-31b-it` for hard Google-side review; no OpenAI in MVP | Keeps the MVP on available/free-tier Google models with AI Studio limits; avoids assuming GPT-5.x complimentary-token eligibility | Google live + limiter smoke passed; OpenAI GPT-5.x removed from selected MVP set |
 | Legacy/public writer fallback | Existing project `gpt-4o` / `gpt-4o-mini` remains for existing Smart Update/OCR paths, not personalization hot path | Already guarded by daily token cap; do not add it to online personalization | Live smoke passed; existing budget guard documented |
 
 ## Processing chain and data contract
@@ -60,7 +60,7 @@ gemini-embedding-001]
 | Local vectorization | normalized enrichment features: tags/category/audience/mood/price/time/venue/city | deterministic sparse/hashed vector builder | `feature_vector` + schema version | no provider limit; no external request |
 | Online feed/rank | static feature snapshot + local anonymous profile/action weights + viewport/layout | `local_rerank_v1` deterministic JS/SQL scoring | ranked list; mobile feed and desktop grid/list can use different layout triggers | none |
 | Optional semantic embedding eval | `embedding_text` from enrichment | `gemini-embedding-001` | semantic embedding + model version | AI Studio provider limit: `100 RPM / 30000 TPM / 1000 RPD`; create limiter before bulk |
-| Eval/oracle | synthetic personas + top-k outputs + telemetry aggregates, not raw identity | `gemini-3.1-flash-lite`; `gemma-4-31b-it` for hard samples | pass/fail reasons, prompt/schema defects, top-k quality report | same limiter rows as above |
+| Eval/reviewer | synthetic personas + top-k outputs + telemetry aggregates, not raw identity | `gemini-3.1-flash-lite`; `gemma-4-31b-it` for hard samples | pass/fail reasons, prompt/schema defects, top-k quality report | same limiter rows as above |
 
 Responsive requirement: “feed” is the **mobile** discovery pattern. Desktop should use a native, expected desktop layout (grid/list/modules) with the same profile signals but different presentation/rerank triggers such as density, visible date groups, hover/detail open, and broader category exploration.
 
@@ -93,11 +93,11 @@ interaction logs, and labels.
 
 | Analytics recommendation | Applies? | Implementation stage | How it is installed/implemented here | Why not more/less now |
 | --- | --- | --- | --- | --- |
-| Event tags/category/entities/price/time/venue features | Yes | MVP | Offline enrichment job over future accepted events using `gemini-3.1-flash-lite`; persist into `event_feature_snapshot` / static manifest | Needed before any recommender can work |
-| Event vectors / embeddings | Yes | MVP/eval | MVP builds local vectors from normalized tags/features; `gemini-embedding-001` is optional semantic eval/upgrade and needs a limiter row before bulk | Directly matches analytics without forcing an extra provider request on day one |
-| Weighted action signals: impression, detail, dwell, ticket click, hide | Yes | MVP | Browser telemetry after consent + local profile update; server snapshot in personalization Supabase | This is the core of anonymous personalization |
+| Event tags/category/entities/price/time/venue features | Yes | MVP | Taxonomy/schema first, then offline enrichment over future accepted events using `gemini-3.1-flash-lite`; persist into `event_feature_snapshot` / static manifest | Needed before any recommender can work; LLM tags are not trusted until normalized/quarantined |
+| Event vectors / embeddings | Yes | MVP/eval | MVP builds local vectors from normalized tags/features; early offline eval compares this baseline with `gemini-embedding-001` and local/Kaggle embedding candidates before final weights | Directly matches analytics without forcing an online provider request |
+| Weighted action signals: valid impression, detail, dwell, ticket click, hide | Yes | MVP | Browser local update after consent + compact session summary + served-list summary in personalization Supabase | This is the core of anonymous personalization and future ranker labels |
 | Session/short/mid/long profiles with decay | Yes | MVP staged | Local session/short profile first; Supabase snapshots can aggregate mid/long horizons nightly | Long-term profile has no value until return-user data exists |
-| Negative interests separate from positive | Yes | MVP | Keep `negative_tags`/hidden events separate; scoring subtracts them and hard-filters explicit hides | Prevents noisy vector subtraction |
+| Negative interests separate from positive | Yes | MVP | Keep `negative_interest_tags`/hidden events separate from event `audience_exclusion_tags`; scoring penalizes them and hard-filters explicit hides | Prevents noisy vector subtraction |
 | Candidate generation → scoring → reranking | Yes | MVP simplified | Filter eligible events → score all current static candidates → diversity/freshness/exploration rerank | Catalog is small enough initially; no ANN service required on day one |
 | Vector search / ANN: FAISS, ScaNN, Milvus, Qdrant, OpenSearch | Applicable later | Scale stage | Install `pgvector` or FAISS/Qdrant only after event count/latency proves local/static scoring is insufficient | It is easy to install, but unnecessary operational surface for a small event catalog |
 | `pgvector` in Supabase/Postgres | Applicable later | After embedding eval | `create extension if not exists vector;` + vector table/RPC; use only personalization DB, not core SQLite | Current Supabase does not have pgvector enabled and MVP can ship without DB ANN |
@@ -250,7 +250,7 @@ surface for the requested product problem:
 
 | Planned model | Pipeline role | RPM | TPM | RPD | Source of limit | Production rule |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| `gemini-3.1-flash-lite` | Primary event semantic enrichment; cheap eval/oracle | 15 provider / 13 repo | 250000 provider / 240000 repo | 500 provider / 450 repo | AI Studio project limit + current Supabase limiter | Can run now through limiter with safety margin |
+| `gemini-3.1-flash-lite` | Primary event semantic enrichment; cheap eval/reviewer | 15 provider / 13 repo | 250000 provider / 240000 repo | 500 provider / 450 repo | AI Studio project limit + current Supabase limiter | Can run now through limiter with safety margin |
 | `gemma-4-31b-it` | Hard review/fallback only | 15 | unlimited | 1500 | AI Studio project limit + current Supabase limiter (`2147483647` sentinel for TPM) | Can run now through limiter with mandatory thinking config |
 | `gemini-embedding-001` | Optional semantic embedding eval/upgrade | 100 provider / no repo row yet | 30000 provider / no repo row yet | 1000 provider / no repo row yet | AI Studio project limit | Not required for MVP; **do not bulk-run until limiter row is created** |
 
@@ -291,6 +291,11 @@ snapshot. The runnable application source remains the Supabase
 `google_ai_model_limits` registry; reconcile it with AI Studio when adding
 `gemini-embedding-001` or promoting any backup model.
 
+**Multiple API keys are not quota multiplication.** Google AI Studio limits apply
+per project, not per API key. `GOOGLE_API_KEY`, `GOOGLE_API_KEY2`, and
+`GOOGLE_API_KEY3` must go through one shared limiter and must not be used to
+work around RPM/TPM/RPD.
+
 ### OpenAI
 
 OpenAI model availability is not the same as “free”. A live call proving
@@ -329,24 +334,29 @@ Before committing embeddings/ranker beyond MVP:
    tourist, free-events, weekend, exhibitions, nightlife, desktop grid vs mobile
    feed.
 3. Compare:
-   - local feature-vector baseline from normalized tags/features;
-   - Google `gemini-embedding-001` as optional text-embedding comparison;
+   - local controlled feature-vector baseline from normalized taxonomy features;
+   - Google `gemini-embedding-001` as managed text-embedding comparison;
+   - local/Kaggle open embedding candidates such as EmbeddingGemma-style models,
+     multilingual MiniLM-style models, or BGE-style models only after the local
+     ML/Kaggle route is approved;
    - Google `gemini-embedding-2` only if multimodal/PDF/image similarity becomes a requirement;
-   - optional `EmbeddingGemma` only after HF/local access exists;
    - OpenAI embeddings only in a separately approved paid/complimentary-token track.
 4. Metrics: persona top-k pass rate, must-not-show violations, diversity,
-   latency, storage size, provider cost, JSON/schema validity for enrichment.
-5. Only if deterministic + embeddings are insufficient, add ranker training after
-   enough telemetry exists.
+   latency, storage size, provider cost, JSON/schema validity for enrichment, and
+   tag-drift / unmapped-tag rate.
+5. Acceptance evidence must include deterministic assertions and human/golden
+   personas. LLM review is optional reviewer evidence, not the final oracle.
+6. Only if deterministic + embeddings are insufficient, add ranker training after
+   enough served-list labels exist.
 
 ## Final recommendation for MVP
 
 - **Online:** no LLM; deterministic score/rerank with consent-aware local profile.
 - **Offline enrichment primary:** `gemini-3.1-flash-lite`.
 - **Offline enrichment fallback/review:** `gemma-4-31b-it` with required thinking config.
-- **Event vectors:** MVP uses local feature vectors from normalized tags/category/audience/price/time/venue features, with no external embedding request.
-- **Optional semantic embeddings:** compare Google `gemini-embedding-001` offline if local vectors are insufficient; provider limit is `100 RPM / 30000 TPM / 1000 RPD`. Add a Supabase limiter row before any bulk embedding run.
-- **Eval/oracle:** Google-first only for MVP: `gemini-3.1-flash-lite` for cheap
+- **Event vectors:** MVP uses local feature vectors from controlled taxonomy fields, with no external embedding request in the online path.
+- **Semantic embedding eval:** run early offline comparison on the small future-event catalog. Compare Google `gemini-embedding-001` and approved local/Kaggle embedding candidates against the local-vector baseline; provider limit for `gemini-embedding-001` is `100 RPM / 30000 TPM / 1000 RPD`. Add a Supabase limiter row before any bulk embedding run.
+- **Eval/reviewer:** Google-first only for MVP: `gemini-3.1-flash-lite` for cheap
   eval, `gemma-4-31b-it` for hard review. OpenAI is out of the MVP model set
   unless separately approved with budget/complimentary-token evidence.
 - **Do not select now:** `gemini-2.5-flash-lite` / `gemini-2.5-flash` /

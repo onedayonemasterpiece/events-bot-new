@@ -71,15 +71,15 @@
   <rect x="420" y="500" width="285" height="150" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
   <text x="445" y="533" class="h">Local profile update</text>
   <text x="445" y="561" class="t">session + short vectors</text>
-  <text x="445" y="586" class="small">positive/negative vectors</text>
+  <text x="445" y="586" class="small">positive + negative-interest vectors</text>
   <text x="445" y="609" class="small">tags, venue, price/time</text>
   <text x="445" y="632" class="small">seen / hidden ids</text>
 
   <rect x="790" y="500" width="285" height="150" fill="#eef2ff" stroke="#4f46e5" class="box" filter="url(#shadow)"/>
   <text x="815" y="533" class="h">Compact summaries</text>
   <text x="815" y="561" class="t">Supabase, not raw flood</text>
-  <text x="815" y="586" class="small">session_summary rows</text>
-  <text x="815" y="609" class="small">strong actions + deltas</text>
+  <text x="815" y="586" class="small">session + served_list summaries</text>
+  <text x="815" y="609" class="small">strong actions + exposure chunks</text>
   <text x="815" y="632" class="small">raw only sampled/debug</text>
 
   <rect x="1160" y="500" width="285" height="150" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>

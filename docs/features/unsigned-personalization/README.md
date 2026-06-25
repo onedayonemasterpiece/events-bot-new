@@ -12,6 +12,7 @@
 
 Исследовательская заметка про рекомендации/LLM/embeddings: `docs/features/unsigned-personalization/alanytics.md`.
 Решение по выбору моделей и статусу доступов: `docs/features/unsigned-personalization/model-selection.md`.
+Контролируемая таксономия признаков: `docs/features/unsigned-personalization/taxonomy.md`.
 Итоговый флоу с нейросетями и стадиями внедрения: `docs/features/unsigned-personalization/neural-flow.md`.
 Картинка-схема флоу: `docs/features/unsigned-personalization/assets/neural-flow.svg`.
 
@@ -19,10 +20,16 @@
 
 - схема БД/RLS/retention: `docs/features/unsigned-personalization/database.md`;
 - контракт влияния на Smart Update: `docs/features/unsigned-personalization/smart-update-contract.md`;
-- LLM stress scenario на production sample: `docs/features/unsigned-personalization/llm-stress-scenarios.md` + offline prompt-pack builder `scripts/build_personalization_llm_stress_pack.py`;
-- Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
-- reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
-- Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
+- LLM stress scenario на production sample: `docs/features/unsigned-personalization/llm-stress-scenarios.md`;
+- planned implementation/test artifacts before implementation PR:
+  - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
+  - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
+  - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
+
+Documentation rule: links to implementation/test artifacts must be accurate. A
+document must not say that a reference client, Gherkin scenario, or Playwright
+test is already added unless that file exists in the same commit/PR. Otherwise
+the link must remain explicitly marked as planned.
 
 Локальный референс динамики поверх static HTML — соседний проект `/home/dev/projects/kdg80`:
 
@@ -32,6 +39,18 @@
 
 Для personalization это означает: не делать Supabase/PostgREST единственным массовым read-path для каждого посетителя, если тот же результат можно выдать как короткоживущий static/recommendation manifest.
 
+## External review hardening
+
+Feedback from the first external review is accepted into the design:
+
+- taxonomy/schema comes before LLM enrichment; LLM tags are proposals, not production taxonomy;
+- `negative_tags` is no longer shared between event fields and user dislikes; use `audience_exclusion_tags` for events and `negative_interest_tags` for visitors;
+- compact telemetry now includes both `session_summary` and `served_list_summary`, so future rankers get exposure context;
+- server profile snapshots are analytics/post-MVP ranker evidence, not an MVP browser-read dependency while public SELECT by `anon_id` is forbidden;
+- public Supabase writes require abuse/rate-limit/cleanup/growth-alert controls, with same-origin endpoint preferred for production;
+- LLM eval is reviewer evidence only; deterministic assertions and human/golden personas are required for acceptance;
+- early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path.
+
 ## Принятые решения на MVP
 
 - Авторизации нет.
@@ -39,10 +58,10 @@
 - Consent banner допустим: простой “ОК” включает analytics/personalization.
 - Personalization state живёт в двух местах:
   - localStorage — лёгкий, быстрый, browser-local профиль;
-  - Supabase/Postgres — server snapshot, telemetry, debugging, E2E personas, aggregates.
+  - Supabase/Postgres — compact telemetry, debugging/eval, aggregates, and server snapshots for analytics/post-MVP ranker (not a browser read dependency in MVP).
 - Supabase не является source of truth для событий; event catalog приходит из Fly SQLite через static export/snapshots.
 - Персонализация должна иметь fallback: если Supabase/API недоступен, пользователь видит обычный static feed.
-- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а Supabase/RPC используется для записи telemetry, обновления server profile и fallback/personal refresh.
+- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а same-origin endpoint/Supabase используется для записи compact telemetry, analytics/server profile aggregation и future fallback/personal refresh.
 
 ## Что оптимизируем
 
@@ -77,7 +96,7 @@
 - Layout: single-column vertical feed, card chunks, sticky lightweight filters/chips, optional bottom sheet для расширенных фильтров.
 - Сильные сигналы: `ticket_click`, `share`, `copy_link`, `save`/future favorite, `event_detail_view`, long dwell.
 - Средние сигналы: card tap, scroll-stop/dwell checkpoint, повторное появление похожих тегов в сессии.
-- Отрицательные сигналы: explicit hide/not interested, quick skip после impression, repeated skips same category/venue.
+- Отрицательные сигналы: explicit hide/not interested, quick skip после valid impression, repeated skips same category/venue.
 - Ranking guardrails: разнообразие каждые N карточек, не показывать 10 концертов подряд, не повторять venue слишком часто, exploration 10–20%, never block first paint.
 
 ### Desktop
@@ -115,20 +134,30 @@ algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experimen
 {
   "anon_id": "uuid-or-random-opaque-id",
   "consent_ok": true,
+  "profile_version": "anon-profile-v1",
+  "feature_schema_version": "event-features-v1",
+  "taxonomy_version": "event-taxonomy-v1",
+  "vector_dim": 384,
+  "created_at": "2026-06-24T12:00:00Z",
+  "last_updated_at": "2026-06-24T12:10:00Z",
+  "expires_at": "2026-12-24T00:00:00Z",
   "session_vector": [0.01, -0.02],
   "short_vector": [0.04, 0.11],
   "mid_vector": [0.03, 0.05],
   "long_vector": [0.02, 0.04],
-  "negative_vector": [-0.01, 0.08],
+  "negative_interest_vector": [-0.01, 0.08],
   "recent_event_ids": [123, 456],
   "positive_tags": {"concert": 0.7, "jazz": 0.4},
-  "negative_tags": {"kids": 0.8},
+  "negative_interest_tags": {"kids": 0.8},
   "city_affinity": {"Калининград": 1.0},
-  "last_updated_at": "2026-06-24T12:00:00Z"
+  "hidden_event_ids": []
 }
 ```
 
-Не хранить секреты, токены backend, raw source texts, большие payloads.
+Не хранить секреты, токены backend, raw source texts, большие payloads. Если
+`profile_version`, `feature_schema_version`, `taxonomy_version` или `vector_dim`
+несовместимы с текущим manifest — выполнить reset или migrate-known-fields-only.
+UX обязан иметь действие «Сбросить персонализацию».
 
 ### Supabase/Postgres
 
@@ -137,8 +166,9 @@ algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experimen
 - `anonymous_visitor` — opaque id, first/last seen, consent state/version;
 - `anonymous_session` — session id, visitor id, started/ended, device/context, rollup state;
 - `personalization_session_summary` — основной browser-facing append-only payload: компактный итог сессии/интервала, а не каждое событие скролла;
+- `personalization_served_list_summary` — compact exposure/served-list summary для обучения будущего ranker;
 - `interaction_event` — опциональная sampled/debug raw telemetry, выключена по умолчанию для слабых impression/skip;
-- `visitor_profile_snapshot` — compact `session`/`short`/`mid`/`long` profile horizons; each snapshot keeps positive vectors/maps and the separate negative axis;
+- `visitor_profile_snapshot` — compact `session`/`short`/`mid`/`long` profile horizons; each snapshot keeps positive vectors/maps and the separate negative-interest axis; в MVP это analytics/eval/post-MVP server-ranker evidence, а не browser read dependency;
 - `event_feature_snapshot` — lightweight snapshot event features for ranking;
 - `recommendation_request` / `recommendation_result` — debug/E2E evidence;
 - daily aggregates для retention и аналитики.
@@ -147,6 +177,7 @@ Raw telemetry не является основным продуктовым хр
 Supabase быстро заполнится. Базовый ориентир: weak raw impressions/skips
 выключены или sampled с retention 0–7 дней; strong raw actions — 14–30 дней;
 `personalization_session_summary` — 90–180 дней или до сворачивания в профиль;
+`personalization_served_list_summary` — 30–90 дней или до обучения/агрегации;
 profile snapshots / daily aggregates — дольше, потому что они компактные.
 
 ## Interaction events
@@ -158,7 +189,7 @@ profile snapshots / daily aggregates — дольше, потому что он�
 Минимальные сигналы:
 
 - `page_view`;
-- `event_impression`;
+- `valid_impression`;
 - `event_card_click`;
 - `event_detail_view`;
 - `dwell_checkpoint`;
@@ -187,12 +218,16 @@ profile snapshots / daily aggregates — дольше, потому что он�
 ```text
 score =
   dot_session_event + dot_short_event + dot_mid_event + dot_long_event
-  + local positive tag/category affinity
+  + tag/category affinity
+  + semantic_embedding_similarity   # low-weight optional score part after eval
   + freshness/date proximity
   + city/venue match
+  + price match
   + popularity baseline
-  - negative vector/tag/category affinity
-  - already_seen penalty
+  + exploration_bonus
+  - negative_interest_match
+  - fatigue/already_seen penalty
+  - explicit_hide hard filter
 ```
 
 Правила:
@@ -202,7 +237,7 @@ score =
 - сохранять 10–20% exploration;
 - явно скрытые события не возвращать в ближайших выдачах;
 - ticket_click сильнее простого card click;
-- quick skip/hide — отрицательный сигнал.
+- quick skip/hide — отрицательный сигнал, но quick skip считается только после valid impression.
 
 LLM/embedding/ranker — не MVP online dependency. LLM полезна для offline event enrichment, но не должна вызываться на каждый page view.
 
@@ -222,7 +257,7 @@ Presentation-level reranking отличается по layout:
    - нормализованные теги, аудитория, настроение/формат, тематики, price/free semantics, tourist/local fit;
    - короткий embedding input text: `title + venue + event_type + search_digest + normalized tags`;
    - объяснимые признаки для ranker/debug, не только свободный текст.
-2. **Quality/eval oracle** для сложных случаев и prompt/schema design.
+2. **Quality/eval reviewer** для сложных случаев и prompt/schema design; acceptance требует deterministic + human/golden checks, не только LLM.
 3. **Cold-start personas** и synthetic evaluation packs.
 
 Где LLM не нужна в MVP:
@@ -237,10 +272,11 @@ As of 2026-06-25, availability was smoke-checked with real provider calls from
 this repository environment. This is **availability evidence**, not a product
 quality decision: final choice still requires Russian event/persona eval.
 
-Probe artifact: `artifacts/codex/model-probes/live_model_probe_2026-06-25.json`
-(not committed; contains no secret values, but records that a prior shell grep
-accidentally exposed `FOUR_O_TOKEN` in tool output and the token should be
-rotated).
+Live probe artifacts stay local under `artifacts/codex/` and must not be
+committed. Public/review docs should contain only sanitized availability
+evidence: model id, date, pass/fail class, quota source, and no secret/env-value
+fragments. Any accidental secret exposure in local tool output is handled as a
+separate security action, not as a public design footnote.
 
 Observed:
 
@@ -326,10 +362,10 @@ Acceptance для модели: качество top-k и объяснимых �
 - Frontend использует только `PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY`.
 - Backend/migrations используют secret/direct connection string.
 - Все exposed tables с RLS.
-- Public browser insert — только append-only telemetry.
+- Public browser insert — только явно approved canary; production default предпочитает same-origin endpoint с rate-limit и service-role/direct DB insert.
 - Сырые profiles не доступны на SELECT по anon id.
 - Public RPC/view возвращает только безопасный recommendation result, а не полный профиль.
-- Для anonymous telemetry нужны rate limits/abuse guard на уровне RPC/backend/CDN, если прямой Data API окажется слишком открытым.
+- Для anonymous telemetry обязательны rate limits/abuse guard на уровне endpoint/CDN/WAF, payload caps, cleanup и table-growth alerts.
 
 ## Consent UX
 
@@ -350,15 +386,15 @@ MVP banner:
 3. **Feature enrichment pipeline**: LLM/offline tagging + embedding input text + deterministic safeguards; результаты хранятся как snapshot, а не меняют core event смысл без LLM-first правил.
 4. **Static recommendation manifests**: generic/top/date/category/persona-neutral JSON рядом со static build.
 5. **Consent + local profile island**: localStorage profile, reset personalization, no telemetry before OK.
-6. **Supabase schema/RLS**: visitors/sessions/interaction events/profile snapshots/recommendation debug, insert-only telemetry, retention jobs/aggregates.
+6. **Supabase schema/RLS**: compact session summaries, served-list summaries, optional sampled strong actions, profile snapshots for analytics/post-MVP ranker, retention jobs/aggregates, abuse controls.
 7. **Client reranker**: local-first ranking, mobile feed chunking, desktop grid/module sorting, fallback on timeout.
 8. **Server profile/RPC**: optional post-MVP RPC for profile snapshots and recommendation cache; not required for first paint.
 9. **Metrics/E2E**: personas, viewport split, no-consent/no-Supabase fallback, cross-persona isolation.
 10. **Rollout**: preview, internal QA, 1-month Telegraph dual-run, canonical switch criteria.
 
-## Reference client module and Playwright contract test
+## Planned reference client module and Playwright contract test
 
-До появления полноценного Astro-приложения добавлен reusable browser reference implementation:
+До появления полноценного Astro-приложения нужен reusable browser reference implementation. Если эти файлы не входят в текущий commit/PR, этот раздел является planned contract, а не release evidence:
 
 - `static_site/personalization/personalization.js` — local-first controller/ranker/telemetry contract;
 - `static_site/personalization/demo.html` — static demo page that mimics future Astro island wiring;
@@ -372,7 +408,7 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Проверено 2026-06-24: `4 passed`. Дополнительно prompt-pack builder для LLM stress проверен через `python3 -m unittest tests.test_personalization_llm_stress_pack -v` (`1 test OK`) и на real-data artifact вернул `{"ok": true, "errors": []}`. Тест фиксирует текущий MVP contract:
+Когда файлы будут committed, минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP contract:
 
 - без consent — static fallback и нет telemetry/localStorage profile;
 - mobile после consent — `layout_mode=feed`, local rerank, layout-aware telemetry, hide_event;

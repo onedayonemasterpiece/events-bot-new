@@ -48,9 +48,13 @@ Offline enrichment may create ranking features:
 ```json
 {
   "event_id": 123,
-  "normalized_tags": ["concert", "jazz", "live_music"],
+  "taxonomy_version": "event-taxonomy-v1",
+  "feature_schema_version": "event-features-v1",
+  "raw_tags": ["джаз", "концерт"],
+  "normalized_tags": ["jazz", "live_music"],
+  "unmapped_tags": [],
   "audience_tags": ["adults", "tourists"],
-  "negative_tags": ["kids"],
+  "audience_exclusion_tags": ["kids"],
   "mood_tags": ["evening", "calm"],
   "format_tags": ["indoor", "ticketed"],
   "embedding_text": "short normalized text for embedding",
@@ -76,9 +80,13 @@ Schema:
   "events": [
     {
       "event_id": integer,
+      "taxonomy_version": "event-taxonomy-v1",
+      "feature_schema_version": "event-features-v1",
+      "raw_tags": string[],
       "normalized_tags": string[],
+      "unmapped_tags": string[],
       "audience_tags": string[],
-      "negative_tags": string[],
+      "audience_exclusion_tags": string[],
       "mood_tags": string[],
       "format_tags": string[],
       "embedding_text": string,
@@ -90,7 +98,7 @@ Schema:
 
 Allowed tag style: lower_snake_case English tokens.
 Prefer 3-8 normalized_tags per event.
-negative_tags mean audiences/interests likely not suited for the event, not moral judgement.
+audience_exclusion_tags mean audiences/interests likely not suited for the event, not moral judgement. User dislikes are called negative_interest_tags and are not event fields.
 quality_warnings examples:
 - type_description_mismatch
 - missing_time
@@ -115,7 +123,7 @@ Acceptance:
 
 ## Stress prompt: persona top-k evaluator
 
-This prompt is for eval/oracle only, not online ranking.
+This prompt is for eval/reviewer use only, not online ranking and not final acceptance by itself.
 
 ```text
 You are evaluating whether a deterministic recommender ranked events well.
@@ -128,14 +136,14 @@ Persona:
   "viewport_class": "mobile",
   "layout_mode": "feed",
   "positive_tags": {"concert": 0.8, "jazz": 0.7, "evening": 0.4},
-  "negative_tags": {"kids": 0.9, "workshop": 0.4},
+  "negative_interest_tags": {"kids": 0.9, "workshop": 0.4},
   "strong_actions": ["ticket_click", "event_detail_view"]
 }
 
 Checks:
 - top_5_contains_positive_interest
 - no_more_than_3_same_event_type_in_top_10
-- negative_tags_not_in_top_5_unless_exploration_slot
+- negative_interest_tags_not_in_top_5_unless_exploration_slot
 - sold_out_downranked_unless_exact_interest
 - mobile_feed_diversity_ok
 
@@ -160,15 +168,17 @@ Acceptance:
 1. Build event feature snapshots for 200–500 real future/recent events.
 2. Run 8–12 synthetic personas across mobile feed and desktop grid.
 3. For each persona, run deterministic local ranker first.
-4. Use LLM evaluator only on the proposed top-k and sampled failures.
-5. Track:
+4. Run deterministic assertions first: hidden events never in top-N, explicit filters preserved, sold-out/cancelled rules, diversity caps.
+5. Run human/golden persona review for 8-12 personas before treating LLM eval as evidence.
+6. Use LLM evaluator only on the proposed top-k and sampled failures; it is a reviewer, not the acceptance oracle.
+7. Track:
    - schema validity;
    - retry consistency;
    - cost per 100 events;
    - latency per batch;
    - number of quality warnings;
    - cases where LLM disagrees with deterministic tags.
-6. Stop if two similar model/schema failures occur; inspect prompts/docs/model contract before another trial.
+8. Stop if two similar model/schema failures occur; inspect prompts/docs/model contract before another trial.
 
 ## Expected product conclusion
 
@@ -180,7 +190,7 @@ Smart Update accepted event
   -> offline LLM feature enrichment / embeddings
   -> static feature/recommendation manifests
   -> local-first browser rerank after consent
-  -> Supabase append-only telemetry and backend aggregates
+  -> compact telemetry summaries and backend aggregates
 ```
 
 No online LLM call is required to render a personalized feed.

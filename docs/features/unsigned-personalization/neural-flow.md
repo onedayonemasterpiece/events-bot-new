@@ -13,6 +13,7 @@ Related docs:
 
 - source analytics: `docs/features/unsigned-personalization/alanytics.md`;
 - model/limit evidence: `docs/features/unsigned-personalization/model-selection.md`;
+- controlled taxonomy: `docs/features/unsigned-personalization/taxonomy.md`;
 - product/system design: `docs/features/unsigned-personalization/README.md`;
 - DB/RLS draft: `docs/features/unsigned-personalization/database.md`.
 
@@ -28,19 +29,22 @@ block importing or publishing an event.
 
 Use neural models only in offline/batch or evaluation stages:
 
-1. `gemini-3.1-flash-lite` enriches public event content into structured
-   recommendation features.
-2. A local feature-vector builder turns normalized tags/categories/price/time
+1. Controlled taxonomy/schema comes first: LLM output is normalized into
+   `event-taxonomy-v1`, and unknown tags are quarantined.
+2. `gemini-3.1-flash-lite` enriches public event content into structured
+   recommendation features inside that taxonomy.
+3. A local feature-vector builder turns normalized tags/categories/price/time
    features into vectors without an external request.
-3. `gemini-embedding-001` is an optional semantic embedding eval/upgrade, not a
-   mandatory MVP dependency.
-4. `gemma-4-31b-it` is a hard-review fallback for ambiguous enrichment rows, not
+4. `gemini-embedding-001` is an optional semantic embedding eval/upgrade, not a
+   mandatory online dependency. It should be evaluated early offline on the small
+   future-event catalog before finalizing feature weights.
+5. `gemma-4-31b-it` is a hard-review fallback for ambiguous enrichment rows, not
    the primary model.
-5. Online personalization uses event vectors + anonymous interest horizons:
+6. Online personalization uses event vectors + anonymous interest horizons:
    session, short, mid, long, plus negative interests.
-6. The first scorer is formula-based only until labels exist; then CatBoost /
+7. The first scorer is formula-based only until labels exist; then CatBoost /
    LightGBM becomes the learned ranking model over the same features.
-7. CatBoost/LightGBM/two-tower/ANN are **not rejected**; they are later stages
+8. CatBoost/LightGBM/two-tower/ANN are **not rejected**; they are later stages
    once compact telemetry/profile snapshots and labels exist.
 
 This means the “intelligence” is split deliberately:
@@ -115,11 +119,11 @@ gemma-4-31b-it]
 | --- | --- | --- | --- | --- | --- |
 | 0. Canonical event source | accepted future events, title, dates, venue, city, price, ticket URL, source facts | no neural model | source rows for static build | Fly SQLite | no |
 | 1. Static export | public event fields only | no neural model | compact event manifest | static JSON/object storage | yes, but static only |
-| 2. Semantic enrichment | `event_id`, title, description/search digest, venue, city, dates, price/free, age, source type | `gemini-3.1-flash-lite` | normalized category/tags, audience hints, mood/format, negative tags, confidence, warnings, `embedding_text` | `event_feature_snapshot` + static manifest | no |
+| 2. Semantic enrichment | `event_id`, title, description/search digest, venue, city, dates, price/free, age, source type | `gemini-3.1-flash-lite` + taxonomy validator | controlled category/tags, audience hints, mood/format, `audience_exclusion_tags`, `unmapped_tags`, confidence, warnings, `embedding_text` | `event_feature_snapshot` + static manifest | no |
 | 3. Hard review | only low-confidence/conflicting rows + Lite output | `gemma-4-31b-it` | corrected/confirmed enrichment, warnings | same feature snapshot, with model version | no |
 | 4. Event vectorization | normalized tags/category/audience/mood/price/time/venue features | local deterministic vector builder; optional `gemini-embedding-001` eval | local `feature_vector`; optional semantic embedding + model version | static vector manifest first; later Supabase/pgvector if needed | no |
 | 5. Browser interaction buffer | impressions, detail views, dwell checkpoints, ticket clicks, hide/not interested, share/copy | no neural model | local ring buffer, immediate session deltas | localStorage/sessionStorage | yes, local only |
-| 6. Compact session summary upload | bounded action counts, top tag deltas, strong actions, hidden ids, layout/device context | no neural model | one compact `session_summary`, not every raw event | Supabase append-only summary table | yes, after consent |
+| 6. Compact telemetry upload | bounded action counts, top tag deltas, strong actions, hidden ids, served-list chunks, layout/device context | no neural model | compact `session_summary` + `served_list_summary`, not every raw event | Supabase append-only summary tables | yes, after consent |
 | 7. Profile horizon update | compact session summary + event feature vectors | no neural model; weighted update + decay | session, short, mid, long vectors/maps plus separate negative axis | localStorage + private Supabase snapshots | yes for local, nightly/server for Supabase |
 | 8. Candidate generation | future eligible events + profile horizons | no neural model in MVP | candidate set | runtime memory/static manifest | yes |
 | 9. Scoring | event vector + session/short/mid/long profile vectors + negative vector/maps + affinity maps | formula `local_rerank_v1`; later CatBoost/LightGBM ranker | raw score per event with score parts | client/server runtime; optional compact debug | yes |
@@ -143,7 +147,7 @@ There are two different operations that are easy to confuse:
 
 1. **Build a vector** from known features. This can be done locally: tags,
    categories, audience, price band, venue, weekday/time bucket, city, and
-   negative tags become a sparse or hashed numeric vector. Similarity can then
+   audience-exclusion tags and user negative-interest tags become controlled sparse/hashed vector parts. Similarity can then
    be computed by ordinary functions: cosine/dot product/weighted sums in JS,
    Python, SQL, or later pgvector.
 2. **Infer semantic meaning from raw text**. A vector function cannot know that
@@ -191,10 +195,14 @@ Output shape:
 ```json
 {
   "event_id": 123,
+  "taxonomy_version": "event-taxonomy-v1",
+  "feature_schema_version": "event-features-v1",
   "category": "music",
   "subcategories": ["jazz", "live_music", "instrumental"],
-  "tags": ["джаз", "концерт", "вечер", "камерный формат"],
-  "negative_tags": ["kids"],
+  "raw_tags": ["джаз", "концерт", "вечер", "камерный формат"],
+  "tags": ["jazz", "live_music", "instrumental", "evening"],
+  "unmapped_tags": ["камерный формат"],
+  "audience_exclusion_tags": ["kids"],
   "audience": ["adults", "music_lovers"],
   "mood": ["calm", "evening", "intellectual"],
   "format": ["indoor", "seated"],
@@ -236,23 +244,51 @@ Compact `session_summary` example:
   "layout_mode": "feed",
   "algorithm_id": "local_rerank_v1",
   "event_counts": {
-    "impression": 28,
+    "valid_impression": 28,
     "detail_view": 3,
     "ticket_click": 1,
     "hide_event": 2
   },
-  "positive_tag_delta": {"jazz": 0.42, "concert": 0.31},
-  "negative_tag_delta": {"kids": 0.66},
-  "strong_event_ids": {"ticket_click": [123], "hide": [789]},
+  "positive_tag_delta": {"jazz": 0.42, "live_music": 0.31},
+  "negative_interest_tag_delta": {"kids": 0.66},
+  "strong_event_ids": {"ticket_click": [123], "hide_event": [789]},
+  "served_list_ids": ["served-list-uuid"],
   "seen_event_ids_sample": [123, 456, 789],
   "profile_delta_vector": [0.02, -0.01, 0.07],
   "client_summary_version": "profile-v1"
 }
 ```
 
-This gives enough signal to train/evaluate recommendations without storing every
-scroll event. Raw impressions can be sampled or retained for a few days only when
-debugging position bias.
+This gives enough signal to update local/server profile snapshots without storing
+every scroll event. Raw impressions can be sampled or retained for a few days
+only when debugging position bias.
+
+For future CatBoost/LightGBM training, compact profile summaries are still not
+enough: the system must know what was actually shown. Therefore MVP telemetry
+also needs a compact served-list summary per feed/list chunk:
+
+```json
+{
+  "served_list_id": "opaque-uuid",
+  "anon_id": "opaque-id",
+  "session_id": "opaque-session",
+  "requested_at": "2026-06-25T10:03:00Z",
+  "surface": "home_feed",
+  "viewport_class": "mobile",
+  "layout_mode": "feed",
+  "algorithm_id": "local_rerank_v1",
+  "event_pool_hash": "sha256",
+  "shown": [
+    {"event_id": 123, "rank": 0, "score": 0.812, "reason_codes": ["tag:jazz", "time:evening"]},
+    {"event_id": 456, "rank": 1, "score": 0.744, "reason_codes": ["fresh", "weekend"]}
+  ],
+  "debug_sample": false
+}
+```
+
+This is not a raw-scroll firehose. It is exposure context for future pairwise /
+listwise ranker labels, where positives and negatives must be formed inside the
+same served group, not across unrelated sessions.
 
 ## 7. How the anonymous profile is updated
 
@@ -278,13 +314,17 @@ Minimum browser/local profile:
 ```json
 {
   "anon_id": "opaque-id",
+  "profile_version": "anon-profile-v1",
+  "feature_schema_version": "event-features-v1",
+  "taxonomy_version": "event-taxonomy-v1",
+  "vector_dim": 384,
   "session_vector": [0.01, -0.02],
   "short_vector": [0.04, 0.11],
   "mid_vector": [0.03, 0.05],
   "long_vector": [0.02, 0.04],
-  "negative_vector": [-0.01, 0.08],
-  "positive_tags": {"jazz": 0.7, "concert": 0.5},
-  "negative_tags": {"kids": 0.8},
+  "negative_interest_vector": [-0.01, 0.08],
+  "positive_tags": {"jazz": 0.7, "live_music": 0.5},
+  "negative_interest_tags": {"kids": 0.8},
   "venue_affinity": {"dom_iskusstv": 0.3},
   "price_preference": {"median_clicked": 1200},
   "time_preference": {"friday_evening": 0.4},
@@ -297,7 +337,7 @@ Action weights for MVP start:
 
 | Action | Weight |
 | --- | ---: |
-| impression | `0.05` |
+| valid impression | `0.05` |
 | quick skip | `-0.3` |
 | card click | `0.7` |
 | detail view | `1.0` |
@@ -313,11 +353,24 @@ session_vector = normalize(0.70 * old_session_vector + 0.30 * action_weight * ev
 short_vector   = normalize(0.90 * old_short_vector   + 0.10 * action_weight * event_vector)
 mid_vector     = normalize(0.97 * old_mid_vector + 0.03 * weighted session summary)   # 14-45 days
 long_vector    = normalize(0.995 * old_long_vector + 0.005 * weighted strong actions) # 90-365 days
-negative_vector = separate update from hide/not_interested/repeated quick-skip
+negative_interest_vector = separate update from hide/not_interested/repeated valid quick-skip
 ```
 
 Negative interests are stored separately and used as penalties/hard filters, not
 just subtracted from a single positive vector.
+
+### Valid impression and quick-skip definition
+
+`quick_skip` is too noisy unless the card was actually seen. MVP must count a
+negative quick-skip only after a `valid_impression`:
+
+- card visible >= 50% of its area;
+- visible for at least 800-1200 ms;
+- tab/window is active;
+- not during initial layout shift;
+- not while the user is in fast drag/scroll mode;
+- desktop hover/focus/mousemove are diagnostics only and should have near-zero
+  ranking weight.
 
 ## 8. Online ranking formula for MVP
 
@@ -325,18 +378,20 @@ For each eligible candidate event:
 
 ```text
 raw_score =
-  0.22 * dot_session_event
-+ 0.18 * dot_short_event
-+ 0.14 * dot_mid_event
-+ 0.12 * dot_long_event
-+ 0.12 * tag_affinity_score
-+ 0.08 * category_affinity_score
-+ 0.05 * date/time match
-+ 0.04 * city/venue match
-+ 0.03 * price match
-+ 0.02 * freshness/popularity baseline
-- 0.35 * negative_tag_or_vector_score
-- 0.25 * already_seen_penalty
+  0.20 * dot_session_event
++ 0.15 * dot_short_event
++ 0.10 * dot_mid_event
++ 0.10 * dot_long_event
++ 0.15 * tag_affinity_score
++ 0.10 * category_affinity_score
++ 0.08 * date/time match
++ 0.06 * city/venue match
++ 0.05 * price match
++ 0.05 * freshness/popularity baseline
++ 0.04 * semantic_embedding_similarity   # only after offline eval enables it
++ 0.03 * exploration_bonus
+- 0.30 * negative_interest_match
+- 0.20 * fatigue_or_seen_penalty
 - 1.00 * explicit_hide_filter
 ```
 
@@ -361,7 +416,7 @@ anonymous visitor. The practical split is:
 2. **Global learned ranker:** after enough compact summaries and labels exist,
    train CatBoost/LightGBM on pair features such as:
    - `dot_session_event`, `dot_short_event`, `dot_mid_event`, `dot_long_event`;
-   - `negative_similarity`;
+   - `negative_interest_similarity`;
    - tag/category/venue affinity;
    - price/time/city match;
    - position/layout/device context;
@@ -398,31 +453,41 @@ The analytics document's target architecture is preserved:
 
 ### MVP implementation
 
-1. Implement offline enrichment job:
+1. Define `event-taxonomy-v1` and `event-features-v1` first:
+   - allowed categories/tags/aliases;
+   - schema validation;
+   - unknown/unmapped tag quarantine;
+   - localStorage reset/migration rule for incompatible schema changes.
+2. Implement offline enrichment job:
    - select future accepted events from Fly SQLite/static export;
-   - call `gemini-3.1-flash-lite` through limiter;
-   - store feature snapshot and `embedding_text`.
+   - call `gemini-3.1-flash-lite` through limiter with JSON schema and controlled taxonomy;
+   - store feature snapshot, `raw_tags`, normalized tags, `unmapped_tags`, warnings, and `embedding_text`.
 3. Implement local feature-vector builder:
    - build sparse/hashed vectors from normalized tags, category, audience,
      price/time/venue/city features;
-   - store vector manifest with feature schema version;
-   - no external embedding request is required for MVP.
-4. Optional semantic embedding eval:
-   - add `gemini-embedding-001` to Supabase limiter only before bulk semantic
-     embedding;
-   - provider limit: `100 RPM / 30000 TPM / 1000 RPD`;
-   - recommended repo row: `90 RPM / 30000 TPM / 900 RPD` for margin.
+   - store vector manifest with taxonomy/schema version;
+   - no external embedding request is required in the online path.
+4. Run early offline semantic embedding eval on the small future-event catalog:
+   - compare local feature vectors vs `gemini-embedding-001` and/or local/Kaggle
+     EmbeddingGemma-style candidates;
+   - do not enable provider bulk calls until a limiter row exists;
+   - if enabled, keep semantic similarity as a low-weight score part until eval proves value.
 5. Implement local browser profile/ranker:
    - no neural model in request path;
-   - use static manifest + session/short/mid/long profiles plus negative axis.
-6. Add compact session-summary table/RLS in personalization Supabase:
-   - do not upload every raw impression;
-   - keep raw event debug sampling optional and short-retention only.
-7. Add profile horizon aggregation:
-   - local immediate session/short updates;
-   - nightly Supabase short/mid/long compact snapshots.
-8. Add offline eval report over personas/top-K.
-9. After enough labels, train CatBoost/LightGBM ranker over the same features.
+   - use static manifest + session/short/mid/long profiles plus negative-interest axis;
+   - include `reason_codes` for top-ranked events.
+6. Add compact telemetry tables/RLS in personalization Supabase:
+   - `session_summary` for profile deltas;
+   - `served_list_summary` for exposure context/future ranker labels;
+   - raw weak telemetry remains off by default; strong raw actions are short-retention/debug only.
+7. Add abuse controls before public write rollout:
+   - preferred production path: same-origin endpoint with IP/session rate-limit and service-role/direct DB insert;
+   - direct Supabase insert is canary-only unless protected by payload caps, WAF/CDN rate limits, cleanup, and table-growth alerts.
+8. Add offline eval report over deterministic assertions + human/golden personas + optional LLM reviewer.
+9. Add profile horizon aggregation for analytics/post-MVP server ranker:
+   - local immediate session/short updates are product-critical;
+   - server short/mid/long snapshots are analytics/eval evidence until a safe read endpoint exists.
+10. After enough served-list labels exist, train CatBoost/LightGBM ranker over the same features.
 
 ### Scale stage
 
@@ -452,18 +517,44 @@ The analytics document's target architecture is preserved:
   be built from normalized event features and `gemini-embedding-001` remains an
   optional managed semantic baseline.
 
-## 11. Acceptance checklist for the design
+## 11. Eval gates
+
+LLM persona eval is useful, but it is not the acceptance oracle. MVP quality
+evidence has three layers:
+
+1. **Deterministic assertions**: explicit hidden events never appear in top-N;
+   cancelled events are removed; sold-out is downranked except exact-detail
+   contexts; explicit filters override personalization; diversity/fatigue caps
+   are enforced.
+2. **Human/golden personas**: 8-12 reviewed personas across mobile feed and
+   desktop grid/list, including positive interests, must-not-show tags/event ids,
+   and expected diversity.
+3. **LLM reviewer**: `gemini-3.1-flash-lite` / `gemma-4-31b-it` can review
+   proposed top-K and sampled failures, but cannot be the sole pass/fail source.
+
+For future ranker training, labels must be joined to `served_list_id` / rank /
+algorithm / viewport context. “Not clicked” is usable only if the event was in a
+served list and had a valid exposure opportunity.
+
+## 12. Acceptance checklist for the design
 
 The flow is ready to implement when:
 
+- every README/link points to a file that exists in the same commit, or is marked planned;
+- `event-taxonomy-v1` exists with allowed categories/tags/aliases;
 - every static event has enrichment fields or a fallback default;
-- every enriched event has normalized features and local vector schema version;
+- every enriched event has normalized features, taxonomy version, and local vector schema version;
+- unknown/unmapped tags are quarantined and visible in quality warnings;
 - optional semantic embedding batch has a limiter row before calling `gemini-embedding-001`;
 - browser can rank from static data with Supabase unavailable;
-- Supabase stores compact session summaries/profile snapshots, not unbounded raw telemetry;
-- session/short/mid/long horizons and the separate negative axis are visible in profile snapshots;
+- Supabase stores compact session summaries and served-list summaries, not unbounded raw telemetry;
+- public writes have payload caps plus rate-limit/abuse/cleanup/growth-alert plan;
+- session/short/mid/long horizons and the separate negative-interest axis are visible in profile snapshots;
+- server profile snapshots are not required for product MVP while public SELECT by anon_id is forbidden;
 - vectors are actually used in scoring: `dot_*_event` and negative similarity;
 - mobile feed and desktop grid/list have separate telemetry context;
 - explicit `hide/not interested` is respected;
+- eval includes deterministic assertions, human/golden personas, and optional LLM reviewer;
 - eval personas show no obvious must-not-show violations;
+- localStorage profile has version/TTL/reset behavior;
 - no user history or visitor identity is sent to LLM providers in the online path.

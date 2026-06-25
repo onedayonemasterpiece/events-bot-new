@@ -32,12 +32,13 @@ Official references:
 
 ### Public/exposed table in `public`
 
-The MVP browser-facing write should be **compact summaries first**, not a raw event firehose:
+The MVP write path should be **compact summaries first**, not a raw event firehose:
 
-- `public.personalization_session_summary` — append-only compact session/profile deltas after consent;
-- `public.personalization_interaction_event` — optional short-retention/debug/sampled raw telemetry, not the default path for every impression.
+- `public.personalization_session_summary` — compact session/profile deltas after consent;
+- `public.personalization_served_list_summary` — compact exposure context per feed/list chunk for future ranker labels;
+- `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Both have insert-only RLS and **no public SELECT** if exposed. The default frontend path should upload one bounded summary per session/interval and only strong raw actions when needed for debugging/evaluation. This is required to protect the 500 MB free-tier database limit.
+Preferred production path: same-origin endpoint validates/rate-limits payload and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**.
 
 ### Private schema `personalization`
 
@@ -48,6 +49,7 @@ All derived and debug data lives outside exposed schemas:
 - `personalization.event_feature_snapshot` — event ranking features exported from Fly SQLite + offline enrichment;
 - `personalization.visitor_profile_snapshot` — compact session/short/mid/long profile horizons, each with positive and negative vectors/maps;
 - `personalization.recommendation_request` and `recommendation_result` — debug/eval evidence;
+- served-list summaries are kept in `public` only as append-only compact telemetry; backend jobs can fold them into private training/eval tables later;
 - `personalization.daily_interaction_aggregate` — retention-safe analytics;
 - `personalization.e2e_persona` — synthetic test personas and expected top-k.
 
@@ -61,7 +63,8 @@ Default MVP retention and storage policy:
 | --- | ---: | --- |
 | Raw weak `interaction_event` impressions/skips | off by default or sampled; 0-7 days | avoid filling 500 MB with scroll noise |
 | Raw strong actions (`ticket_click`, `hide`, `detail_view`, `share`) | 14-30 days | debugging labels and position bias |
-| `personalization_session_summary` | 90-180 days or until folded into profiles | compact training/eval signal without raw volume |
+| `personalization_session_summary` | 90-180 days or until folded into profiles | compact profile signal without raw volume |
+| `personalization_served_list_summary` | 30-90 days or until folded into training/eval rows | compact exposure context for future ranker labels |
 | `daily_interaction_aggregate` | 12 months | product metrics without raw event volume |
 | `visitor_profile_snapshot` | 365 days since last seen, compact only | returning visitor personalization |
 | `recommendation_request/result` debug | 14–30 days | E2E/debug only |
@@ -74,6 +77,7 @@ Retention should run from backend/cron with direct DB credentials or SQL job, no
 MVP indexes are write-friendly:
 
 - compact summaries by `(anon_id, ended_at desc)` for profile aggregation;
+- served-list summaries by `(anon_id, requested_at desc)` and `(session_id, requested_at desc)` for label building;
 - raw telemetry by `occurred_at` only if debug/sampling is enabled;
 - raw telemetry by `(anon_id, occurred_at desc)` only for short-retention profile/debug windows;
 - raw telemetry by `(event_id, occurred_at desc)` only for sampled event analytics;
@@ -82,6 +86,24 @@ MVP indexes are write-friendly:
 - pgvector/HNSW only if server-side vector search is chosen after eval.
 
 Avoid indexes on every JSON field before usage is known. Compact summaries/profile snapshots should dominate storage; raw telemetry volume must remain bounded and disposable.
+
+## Abuse and rate-limit policy
+
+RLS and insert-only policies do not stop abuse by themselves. Before production
+public writes, one of these modes must be explicitly selected:
+
+1. **Preferred production mode:** same-origin endpoint
+   `/api/personalization/summary` validates payloads, rate-limits by IP/session,
+   and inserts with service-role/direct DB credentials. The browser never sees a
+   secret key.
+2. **Static-only canary mode:** direct Supabase insert with publishable key is
+   allowed only with strict payload `CHECK`s, unique client ids, sampled raw
+   telemetry disabled, WAF/CDN rate limits for `/rest/v1`, nightly cleanup, and
+   table-growth alerts.
+
+No mode allows public SELECT by `anon_id` in the anonymous MVP. Server profile
+snapshots are analytics/eval/post-MVP server-ranker evidence until a safe
+same-origin recommendation endpoint exists.
 
 ## Draft SQL
 
@@ -93,7 +115,7 @@ The SQL below is a design artifact. Apply only after review against the current 
 
 create schema if not exists personalization;
 
--- Browser-facing compact session summary. This is the MVP default write path.
+-- Compact session summary. This is the MVP default telemetry payload.
 create table if not exists public.personalization_session_summary (
   id uuid primary key default gen_random_uuid(),
   client_summary_id text not null,
@@ -110,7 +132,7 @@ create table if not exists public.personalization_session_summary (
   consent_state text not null default 'accepted',
   event_counts jsonb not null default '{}'::jsonb,
   positive_tag_delta jsonb not null default '{}'::jsonb,
-  negative_tag_delta jsonb not null default '{}'::jsonb,
+  negative_interest_tag_delta jsonb not null default '{}'::jsonb,
   strong_event_ids jsonb not null default '{}'::jsonb,
   seen_event_ids_sample bigint[] not null default '{}',
   hidden_event_ids bigint[] not null default '{}',
@@ -122,7 +144,7 @@ create table if not exists public.personalization_session_summary (
   constraint personalization_session_summary_payload_chk check (
     length(event_counts::text) <= 2048
     and length(positive_tag_delta::text) <= 4096
-    and length(negative_tag_delta::text) <= 4096
+    and length(negative_interest_tag_delta::text) <= 4096
     and length(strong_event_ids::text) <= 4096
     and cardinality(seen_event_ids_sample) <= 200
     and cardinality(hidden_event_ids) <= 200
@@ -134,25 +156,83 @@ create table if not exists public.personalization_session_summary (
 
 alter table public.personalization_session_summary enable row level security;
 revoke all on public.personalization_session_summary from anon, authenticated;
-grant insert on public.personalization_session_summary to anon;
 grant select, insert, update, delete on public.personalization_session_summary to service_role;
 
-create policy "anon can append compact personalization summaries"
-  on public.personalization_session_summary
-  for insert
-  to anon
-  with check (
-    consent_state = 'accepted'
-    and anon_id is not null
-    and session_id is not null
-    and client_summary_id is not null
-    and length(client_summary_id) <= 120
-  );
+-- Preferred production path: same-origin endpoint inserts with service_role/direct DB.
+-- Enable anon insert only for an explicitly approved static-only canary with
+-- WAF/CDN rate limits, cleanup, and growth alerts:
+-- grant insert on public.personalization_session_summary to anon;
+-- create policy "anon can append compact personalization summaries"
+--   on public.personalization_session_summary
+--   for insert
+--   to anon
+--   with check (
+--     consent_state = 'accepted'
+--     and anon_id is not null
+--     and session_id is not null
+--     and client_summary_id is not null
+--     and length(client_summary_id) <= 120
+--   );
 
 create index if not exists personalization_session_summary_anon_time_idx
   on public.personalization_session_summary (anon_id, ended_at desc);
 create index if not exists personalization_session_summary_received_idx
   on public.personalization_session_summary (received_at desc);
+
+-- Compact exposure context for future learning-to-rank labels. No public SELECT.
+create table if not exists public.personalization_served_list_summary (
+  id uuid primary key default gen_random_uuid(),
+  served_list_id text not null,
+  anon_id uuid not null,
+  session_id uuid not null,
+  requested_at timestamptz not null,
+  received_at timestamptz not null default now(),
+  viewport_class text not null,
+  layout_mode text not null,
+  surface text not null,
+  algorithm_id text not null default 'local_rerank_v1',
+  event_pool_hash text,
+  shown jsonb not null default '[]'::jsonb,
+  debug_sample boolean not null default false,
+  consent_version text not null,
+  consent_state text not null default 'accepted',
+  metadata jsonb not null default '{}'::jsonb,
+  constraint personalization_served_list_consent_chk check (consent_state = 'accepted'),
+  constraint personalization_served_list_viewport_chk check (viewport_class in ('mobile', 'tablet', 'desktop')),
+  constraint personalization_served_list_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),
+  constraint personalization_served_list_shown_chk check (
+    jsonb_typeof(shown) = 'array'
+    and jsonb_array_length(shown) <= 100
+    and length(shown::text) <= 32768
+    and length(metadata::text) <= 2048
+  ),
+  unique (anon_id, served_list_id)
+);
+
+alter table public.personalization_served_list_summary enable row level security;
+revoke all on public.personalization_served_list_summary from anon, authenticated;
+grant select, insert, update, delete on public.personalization_served_list_summary to service_role;
+
+-- Optional static-only canary direct insert; keep disabled by default:
+-- grant insert on public.personalization_served_list_summary to anon;
+-- create policy "anon can append compact served-list summaries"
+--   on public.personalization_served_list_summary
+--   for insert
+--   to anon
+--   with check (
+--     consent_state = 'accepted'
+--     and anon_id is not null
+--     and session_id is not null
+--     and served_list_id is not null
+--     and length(served_list_id) <= 120
+--   );
+
+create index if not exists personalization_served_list_anon_time_idx
+  on public.personalization_served_list_summary (anon_id, requested_at desc);
+create index if not exists personalization_served_list_session_time_idx
+  on public.personalization_served_list_summary (session_id, requested_at desc);
+create index if not exists personalization_served_list_received_idx
+  on public.personalization_served_list_summary (received_at desc);
 
 -- Optional browser-facing raw telemetry for short-retention debug/sampling. No public SELECT.
 create table if not exists public.personalization_interaction_event (
@@ -178,7 +258,7 @@ create table if not exists public.personalization_interaction_event (
   dwell_ms integer,
   metadata jsonb not null default '{}'::jsonb,
   constraint personalization_interaction_event_kind_chk check (event_kind in (
-    'page_view', 'event_impression', 'event_card_click', 'event_detail_view',
+    'page_view', 'valid_impression', 'event_card_click', 'event_detail_view',
     'dwell_checkpoint', 'ticket_click', 'hide_event', 'not_interested',
     'share', 'copy_link', 'recommendation_feed_loaded', 'recommendation_fallback_used'
   )),
@@ -252,20 +332,23 @@ create table if not exists personalization.anonymous_session (
 create table if not exists personalization.event_feature_snapshot (
   event_id bigint primary key,
   stable_slug text not null,
-  feature_version text not null,
+  taxonomy_version text not null,
+  feature_schema_version text not null,
   source_hash text not null,
   event_date date not null,
   city text,
   event_type text,
+  raw_tags text[] not null default '{}',
   normalized_tags text[] not null default '{}',
+  unmapped_tags text[] not null default '{}',
   audience_tags text[] not null default '{}',
-  negative_tags text[] not null default '{}',
+  audience_exclusion_tags text[] not null default '{}',
   venue_key text,
   is_free boolean,
   ticket_status text,
   popularity_baseline numeric(8,5) not null default 0,
-  feature_vector_schema text,
   feature_vector jsonb not null default '[]'::jsonb,
+  vector_dim integer,
   embedding_model text,
   embedding_text text,
   -- Optional after pgvector decision:
@@ -281,9 +364,9 @@ create table if not exists personalization.visitor_profile_snapshot (
   profile_version text not null,
   horizon text not null check (horizon in ('session', 'short', 'mid', 'long')),
   positive_vector jsonb not null default '[]'::jsonb,
-  negative_vector jsonb not null default '[]'::jsonb,
+  negative_interest_vector jsonb not null default '[]'::jsonb,
   positive_tags jsonb not null default '{}'::jsonb,
-  negative_tags jsonb not null default '{}'::jsonb,
+  negative_interest_tags jsonb not null default '{}'::jsonb,
   city_affinity jsonb not null default '{}'::jsonb,
   venue_affinity jsonb not null default '{}'::jsonb,
   price_preference jsonb not null default '{}'::jsonb,
@@ -365,7 +448,7 @@ Anonymous personalization without auth cannot strongly prove that a browser owns
 
 1. static site reads same-origin manifests;
 2. browser stores local profile in localStorage;
-3. browser inserts append-only telemetry after consent;
+3. browser sends compact append-only telemetry after consent, preferably through a same-origin rate-limited endpoint;
 4. backend aggregates profiles and can later publish coarse recommendation manifests or serve a rate-limited endpoint.
 
 Future direct personalized RPC is possible, but it must be treated as a new security design, not a default table SELECT.
