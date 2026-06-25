@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1220" viewBox="0 0 1800 1220" role="img" aria-labelledby="title desc">
+  <title id="title">Anonymous personalization neural flow</title>
+  <desc id="desc">End-to-end flow showing which data each neural model processes for static event page personalization.</desc>
+  <defs>
+    <style>
+      .title{font:700 34px Arial, sans-serif;fill:#111827}.subtitle{font:18px Arial,sans-serif;fill:#4b5563}.box{rx:18;ry:18;stroke-width:2.4}.h{font:700 20px Arial,sans-serif;fill:#111827}.t{font:16px Arial,sans-serif;fill:#374151}.small{font:14px Arial,sans-serif;fill:#4b5563}.model{font:700 17px Arial,sans-serif;fill:#064e3b}.limit{font:14px Arial,sans-serif;fill:#065f46}.arrow{stroke:#374151;stroke-width:2.8;fill:none;marker-end:url(#arrow)}.dashed{stroke-dasharray:8 7}.lane{fill:#f9fafb;stroke:#e5e7eb;stroke-width:2}.laneTitle{font:700 18px Arial,sans-serif;fill:#374151}.no{font:700 15px Arial,sans-serif;fill:#991b1b}.yes{font:700 15px Arial,sans-serif;fill:#166534}
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#374151"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#111827" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1800" height="1220" fill="#ffffff"/>
+  <text x="70" y="64" class="title">Anonymous personalization: neural-model flow</text>
+  <text x="70" y="96" class="subtitle">Static pages stay fast: neural models run offline/batch; online feed/grid uses deterministic reranking.</text>
+
+  <rect x="50" y="130" width="1700" height="260" class="lane"/>
+  <text x="70" y="164" class="laneTitle">Offline event understanding</text>
+
+  <rect x="80" y="205" width="220" height="118" fill="#eff6ff" stroke="#2563eb" class="box" filter="url(#shadow)"/>
+  <text x="105" y="238" class="h">Core event DB</text>
+  <text x="105" y="266" class="t">Fly SQLite</text>
+  <text x="105" y="291" class="small">future accepted events</text>
+  <text x="105" y="314" class="small">title/date/venue/price</text>
+
+  <rect x="365" y="205" width="220" height="118" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
+  <text x="390" y="238" class="h">Static export</text>
+  <text x="390" y="266" class="t">no neural model</text>
+  <text x="390" y="291" class="small">public event manifest</text>
+  <text x="390" y="314" class="small">SEO-safe snapshot</text>
+
+  <rect x="650" y="195" width="275" height="138" fill="#ecfdf5" stroke="#059669" class="box" filter="url(#shadow)"/>
+  <text x="675" y="228" class="h">Semantic enrichment</text>
+  <text x="675" y="257" class="model">gemini-3.1-flash-lite</text>
+  <text x="675" y="283" class="limit">15 RPM / 250k TPM / 500 RPD</text>
+  <text x="675" y="308" class="small">tags, audience, mood, warnings</text>
+  <text x="675" y="329" class="small">embedding_text</text>
+
+  <rect x="990" y="195" width="275" height="138" fill="#fff7ed" stroke="#ea580c" class="box" filter="url(#shadow)"/>
+  <text x="1015" y="228" class="h">Hard review only</text>
+  <text x="1015" y="257" class="model">gemma-4-31b-it</text>
+  <text x="1015" y="283" class="limit">15 RPM / unlimited TPM / 1500 RPD</text>
+  <text x="1015" y="308" class="small">low confidence / conflicts</text>
+  <text x="1015" y="329" class="small">not every event</text>
+
+  <rect x="1330" y="195" width="300" height="138" fill="#ecfeff" stroke="#0891b2" class="box" filter="url(#shadow)"/>
+  <text x="1355" y="228" class="h">Event vectors</text>
+  <text x="1355" y="257" class="model">local feature vector MVP</text>
+  <text x="1355" y="283" class="limit">optional: gemini-embedding-001</text>
+  <text x="1355" y="308" class="small">no extra request by default</text>
+  <text x="1355" y="329" class="small">static vector manifest</text>
+
+  <path d="M300 264 H365" class="arrow"/>
+  <path d="M585 264 H650" class="arrow"/>
+  <path d="M925 264 H990" class="arrow dashed"/>
+  <path d="M1265 264 H1330" class="arrow"/>
+  <path d="M925 343 C1060 385 1240 385 1390 340" class="arrow"/>
+
+  <rect x="50" y="430" width="1700" height="300" class="lane"/>
+  <text x="70" y="464" class="laneTitle">Anonymous behavior and profile building</text>
+
+  <rect x="80" y="510" width="250" height="130" fill="#fefce8" stroke="#ca8a04" class="box" filter="url(#shadow)"/>
+  <text x="105" y="543" class="h">Browser interactions</text>
+  <text x="105" y="571" class="t">after consent OK</text>
+  <text x="105" y="596" class="small">impression, detail, dwell</text>
+  <text x="105" y="619" class="small">ticket click, hide, share</text>
+
+  <rect x="420" y="500" width="285" height="150" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
+  <text x="445" y="533" class="h">Local profile update</text>
+  <text x="445" y="561" class="t">session + short vectors</text>
+  <text x="445" y="586" class="small">positive/negative vectors</text>
+  <text x="445" y="609" class="small">tags, venue, price/time</text>
+  <text x="445" y="632" class="small">seen / hidden ids</text>
+
+  <rect x="790" y="500" width="285" height="150" fill="#eef2ff" stroke="#4f46e5" class="box" filter="url(#shadow)"/>
+  <text x="815" y="533" class="h">Compact summaries</text>
+  <text x="815" y="561" class="t">Supabase, not raw flood</text>
+  <text x="815" y="586" class="small">session_summary rows</text>
+  <text x="815" y="609" class="small">strong actions + deltas</text>
+  <text x="815" y="632" class="small">raw only sampled/debug</text>
+
+  <rect x="1160" y="500" width="285" height="150" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
+  <text x="1185" y="533" class="h">Profile horizons</text>
+  <text x="1185" y="561" class="t">no neural model</text>
+  <text x="1185" y="586" class="small">session / short / mid / long</text>
+  <text x="1185" y="609" class="small">negative kept separate</text>
+  <text x="1185" y="632" class="small">compact profile snapshots</text>
+
+  <path d="M330 575 H420" class="arrow"/>
+  <path d="M330 610 C500 710 680 710 815 650" class="arrow dashed"/>
+  <path d="M1075 575 H1160" class="arrow"/>
+
+  <rect x="50" y="770" width="1700" height="275" class="lane"/>
+  <text x="70" y="804" class="laneTitle">Online personalization hot path</text>
+
+  <rect x="180" y="850" width="300" height="135" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
+  <text x="205" y="883" class="h">Candidate filter</text>
+  <text x="205" y="911" class="t">no neural model</text>
+  <text x="205" y="936" class="small">future, city, ticket status</text>
+  <text x="205" y="959" class="small">exclude hidden / past</text>
+
+  <rect x="610" y="840" width="330" height="155" fill="#f3f4f6" stroke="#6b7280" class="box" filter="url(#shadow)"/>
+  <text x="635" y="873" class="h">Scoring + reranking</text>
+  <text x="635" y="901" class="t">vectors + affinities</text>
+  <text x="635" y="926" class="small">dot session/short/mid/long</text>
+  <text x="635" y="949" class="small">later CatBoost/LightGBM</text>
+  <text x="635" y="972" class="small">diversity + exploration</text>
+
+  <rect x="1070" y="840" width="330" height="155" fill="#eff6ff" stroke="#2563eb" class="box" filter="url(#shadow)"/>
+  <text x="1095" y="873" class="h">Presentation</text>
+  <text x="1095" y="901" class="t">no LLM</text>
+  <text x="1095" y="926" class="small">mobile feed</text>
+  <text x="1095" y="949" class="small">desktop grid/list/modules</text>
+  <text x="1095" y="972" class="small">fallback to static catalog</text>
+
+  <text x="1460" y="875" class="no">No provider call</text>
+  <text x="1460" y="902" class="no">No visitor history sent</text>
+  <text x="1460" y="929" class="yes">Fast static-first UX</text>
+
+  <path d="M1630 333 C1680 465 1660 760 480 880" class="arrow"/>
+  <path d="M705 575 C700 680 620 780 480 895" class="arrow dashed"/>
+  <path d="M1445 575 C1510 680 1480 790 940 890" class="arrow dashed"/>
+  <path d="M480 918 H610" class="arrow"/>
+  <path d="M940 918 H1070" class="arrow"/>
+  <path d="M1235 995 C1130 1120 210 1120 180 640" class="arrow dashed"/>
+
+  <rect x="50" y="1080" width="1700" height="95" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" rx="16"/>
+  <text x="80" y="1115" class="h">Roadmap from analytics, not rejected:</text>
+  <text x="80" y="1145" class="t">MVP learns per-user session/short/mid/long vectors from compact summaries. Later: CatBoost/LightGBM ranker from labels, pgvector/ANN at scale, two-tower after volume.</text>
+</svg>
