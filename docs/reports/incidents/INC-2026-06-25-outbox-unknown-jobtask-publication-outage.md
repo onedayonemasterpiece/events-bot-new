@@ -129,6 +129,22 @@ Publication fanout stopped after Telegram `@kldevents/1275` on 2026-06-24 10:16Z
   - VK catch-up produced managed posts including `https://vk.com/wall-231920894_4356` through `https://vk.com/wall-231920894_4395` from `vk_sync` job results.
   - Evidence artifacts under `artifacts/codex/publication-outage-20260625/` (not committed).
 
+
+### 2026-06-25 second-pass release
+
+- deployed SHA: `a68fd9bbaa5b59a715c7e1f8b5180ba31d2a92e1` (pushed to `origin/main`)
+- deploy path: manual `flyctl deploy --remote-only` from clean `hotfix/inc-2026-06-25-publication-outbox` worktree
+- deployed image: `registry.fly.io/events-bot-new-wngqia:deployment-01KW0CWXRJ667VK42AE9X9WW5G`
+- Fly machine: `683961db016e28`, version `1490`, `1 total, 1 passing`
+- regression checks:
+  - `/tmp/events-bot-hotfix-venv/bin/python -m py_compile main.py main_part2.py source_parsing/handlers.py ticket_sites_queue.py tests/test_ics_pipeline.py tests/test_ticket_sites_queue.py tests/test_job_running_stale.py` — passed
+  - `/tmp/events-bot-hotfix-venv/bin/python -m pytest -q tests/test_ics_pipeline.py::test_ics_upload_uses_direct_storage_endpoint_when_supabase_env_configured tests/test_ticket_sites_queue.py::test_ticket_site_smart_update_schedules_public_fanout tests/test_job_running_stale.py::test_due_jobs_ignore_unknown_task_values_without_crashing tests/test_job_running_stale.py::test_runtime_health_reports_recent_job_outbox_loop_errors` — printed `4 passed, 2 warnings in 0.55s`; command was wrapped in `timeout 20s` and exited `124` because this repo/test environment still hangs during interpreter thread shutdown after pytest summary.
+  - `/tmp/events-bot-hotfix-venv/bin/python -m pytest -q tests/test_ics_pipeline.py::test_publish_ics_both_channels_success tests/test_ics_pipeline.py::test_ics_skips_when_no_change tests/test_job_running_stale.py::test_running_stale_marked_and_replaced` — passed, `3 passed in 1.13s`.
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`, and `tasks.job_outbox_worker_loop=ok`.
+  - runtime mirror active file `/data/runtime_logs/events-bot.log` showed `BOOT_OK` and `WORKER_STATE` after deploy with no active-tail `job_outbox_worker cycle failed` / `LookupError` / `KeyError('message')` matches.
+  - Production qTickets fanout catch-up backed up rows into `codex_backup_20260625_qtickets_fanout_event` and `codex_backup_20260625_qtickets_fanout_joboutbox`, then scheduled `vk_sync` + `tg_event_publish` for events `6399`, `6400`, `6401`, `6402` at `2026-06-26 05:00:00Z` (07:00 Kaliningrad) with Telegram dependencies on Telegraph, calendar post, and VK sync.
+
 ## Prevention
 
 The outbox worker must be robust to stale DB task strings and must not let one unknown enum row block all unrelated publication fanout. Active future event-pipeline jobs must catch up after worker downtime rather than expiring silently. Health must include recent worker-loop exception state so this class of outage is visible without waiting for an operator to notice missing public posts. Calendar upload must use the Storage API endpoint, and accepted active ticket-site/qTickets events must enter managed Telegram/VK fanout instead of being silently page/calendar-only.
