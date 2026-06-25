@@ -269,12 +269,18 @@ neither documents a parameter or method that publishes into the community
 Channel. Therefore `messages.send` is allowed only as a **non-public draft
 delivery to the operator's VK Messenger/Favorites** (`delivery_mode=
 vk_messages_manual_copy_draft`), so the operator can copy the prepared post and
-publish it manually through the VK UI. Draft delivery records
+publish it manually through the VK UI. When the selected event has
+`event.photo_urls`, the draft attaches the first successfully uploaded event
+poster/афишу as a VK message photo; if poster upload fails for all candidate
+URLs, the draft fails instead of silently sending a text-only copy. Draft
+delivery records
 `publish_status='VK_CHANNEL_DRAFT_SENT'`, keeps `public_target_count=0`, and
 creates no public target rows. If the activity is not explicitly in manual-draft
 mode, it still fails closed with
 `reason='vk_community_channel_post_api_unsupported'`. The one CTA link in the
-copy prefers registration/ticket links over Telegraph details pages.
+copy prefers registration/ticket links over Telegraph details pages. Candidate
+selection rotates by exposure count but, among equally suitable events, prefers
+the nearest date/time before applying stable daily shuffling.
 
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
@@ -415,7 +421,9 @@ The initial `80 историй о главном` campaign now includes:
   24-hour window, active window 09:00-21:00. Until VK community Channel posting
   has a verified non-Messenger API path, it sends a manual-copy draft to the
   operator via `VK_AFISHA_CHANNEL_DRAFT_PEER_ID` and never counts that Messenger
-  delivery as public Channel publication;
+  delivery as public Channel publication; the manual draft includes the event
+  poster attachment when available and uses the event registration page as the
+  CTA before falling back to Telegraph;
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.

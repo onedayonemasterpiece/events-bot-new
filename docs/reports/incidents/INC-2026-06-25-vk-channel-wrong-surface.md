@@ -44,6 +44,10 @@ channels and did not contain the target community channel/post.
   `promo_activity.id=30`, invalidated exposure `514` as
   `FAILED_WRONG_SURFACE`, cleared `public_targets_json`, and removed the
   `VK_AFISHA_CHANNEL_PEER_ID` Fly secret.
+- 2026-06-25 08:16 UTC: after operator feedback that the manual draft also
+  needed the event poster and today's `Восприятие новой родины переселенцами`
+  event, a compensated non-public manual draft was sent with one poster
+  attachment and the event registration CTA.
 
 ## Root Cause
 
@@ -93,6 +97,8 @@ channels and did not contain the target community channel/post.
   `VK_CHANNEL_DRAFT_SENT`, and keep `public_target_count=0`.
 - Targeted test proving the draft CTA prefers `ticket_link`/registration links
   over Telegraph URLs.
+- Targeted test proving the manual draft attaches the event poster when
+  `event.photo_urls` is present and uses `messages.send.attachment`.
 - Check `PUBLIC_PROMO_EXPOSURE_STATUSES` excludes `VK_CHANNEL_SENT`.
 - Production DB verification that the wrong exposure is invalidated
   (`FAILED_WRONG_SURFACE`, `public_target_count=0`, empty public targets) and
@@ -107,7 +113,8 @@ channels and did not contain the target community channel/post.
 
 - Tests:
   `tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic`,
-  `tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph`.
+  `tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph`,
+  `tests/test_promo.py::test_vk_channel_manual_draft_sends_poster_attachment`.
 - Production SQL before/after mitigation.
 - Fly secret list after mitigation (name absent; no secret values).
 - Source research links or saved notes for VK API/community Channel behavior.
@@ -137,6 +144,12 @@ channels and did not contain the target community channel/post.
   unavailable, the activity may send the prepared text to the operator's VK
   Messenger/Favorites as `VK_CHANNEL_DRAFT_SENT`. This is a manual-copy draft,
   not Channel delivery; it must remain non-public in campaign accounting.
+- Manual drafts now attach the first successfully uploaded event poster/афишу
+  when the event has media, and fail instead of silently sending text-only if
+  all candidate poster uploads fail.
+- Production canonical event data was repaired for event `5783`
+  (`Великие учителя. Преемственность художественных поколений`): `ticket_link`
+  now points to the registration URL ending in `?register=1`.
 
 ## Follow-up Actions
 
@@ -157,13 +170,27 @@ channels and did not contain the target community channel/post.
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only --detach` from a clean detached `origin/main` worktree.
 - latest Fly release: `v1484`, image `events-bot-new-wngqia:deployment-01KVYX2PVE6RKR7B3PHJJDCMB6`, machine `683961db016e28` started with service check passing.
 - regression checks:
-  - `python -m pytest -q tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`3 passed`).
+  - `python -m pytest -q tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph tests/test_promo.py::test_vk_channel_manual_draft_sends_poster_attachment tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`4 passed`).
   - Deployed/manual behavior check: `VK_CHANNEL_SENT` remains absent from `PUBLIC_PROMO_EXPOSURE_STATUSES`; manual draft uses `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, and CTA prefers event registration/ticket URL.
 - production mitigation/manual-draft verification:
   - `promo_activity.id=30` is enabled with `delivery_mode='vk_messages_manual_copy_draft'` and `VK_AFISHA_CHANNEL_DRAFT_PEER_ID` deployed.
   - `promo_exposure.id=514` remains `FAILED_WRONG_SURFACE`, `public_target_count=0`, `public_targets_json=[]`.
   - `promo_exposure.id=515` was superseded after a first nearest-ranking miss; VK could not delete that self-message (`Access denied: message can not be deleted`), so it is marked `VK_CHANNEL_DRAFT_SUPERSEDED` and remains non-public.
-  - `promo_exposure.id=516` is the valid replacement draft: event `4798` (`Зоопарку — быть!`, 2026-06-26 18:30), `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, CTA `https://kgd80.ru/sobytiya/zooparku-byt-zoopark-trofey-1945-goda-i-odin-iz-pervyh-ochagov-mirnoy-zhizni-v-kaliningrade/?register=1`, Messenger URL `https://vk.com/im?sel=868977531&msgid=264`.
+  - `promo_exposure.id=516` was superseded after the operator clarified that
+    the draft should cover today's event and include an афиша: it is
+    `VK_CHANNEL_DRAFT_SUPERSEDED`, `public_target_count=0`, and remains
+    non-public.
+  - `promo_exposure.id=517` is the current valid manual-copy draft: event
+    `6172` (`Восприятие новой родины переселенцами...`, 2026-06-25 18:30),
+    `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, CTA
+    `https://kgd80.ru/sobytiya/vospriyatie-novoy-rodiny-pereselentsami-kak-vosprinimali-vostochnaya-prussiya/?register=1`,
+    Messenger URL `https://vk.com/im?sel=868977531&msgid=265`, and
+    `attachment_count=1` with poster
+    `https://storage.yandexcloud.net/kenigevents/p/dh16/00/0080a0c0e0c0782012f402b801b208fc003f040f02631a78244018230aa30001.webp`.
+  - Event `5783` `ticket_link` was repaired from `http://kgd80.ru` to
+    `https://kgd80.ru/sobytiya/velikie-uchitelya-preemstvennost-hudozhestvennyh-pokoleniy/?register=1`;
+    pre-repair row is backed up in
+    `codex_backup_event_ticket_20260625_5783`.
 - post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, `promo_vk=ok`; Fly HTTP service check passing.
 - VK API research evidence:
   - Official `https://dev.vk.com/ru/method/messages.send`, `https://dev.vk.com/ru/method/wall.post`, method index, object reference, and sitemap returned no `channel`/`канал`/`Пост в канал` documentation.
