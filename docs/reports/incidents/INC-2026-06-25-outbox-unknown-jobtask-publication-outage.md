@@ -144,6 +144,7 @@ Publication fanout stopped after Telegram `@kldevents/1275` on 2026-06-24 10:16Z
   - `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`, and `tasks.job_outbox_worker_loop=ok`.
   - runtime mirror active file `/data/runtime_logs/events-bot.log` showed `BOOT_OK` and `WORKER_STATE` after deploy with no active-tail `job_outbox_worker cycle failed` / `LookupError` / `KeyError('message')` matches.
   - Production qTickets fanout catch-up backed up rows into `codex_backup_20260625_qtickets_fanout_event` and `codex_backup_20260625_qtickets_fanout_joboutbox`, then scheduled `vk_sync` + `tg_event_publish` for events `6399`, `6400`, `6401`, `6402` at `2026-06-26 05:00:00Z` (07:00 Kaliningrad) with Telegram dependencies on Telegraph, calendar post, and VK sync.
+  - First post-deploy ICS retry batch succeeded through the new direct Storage path: `ics_publish` rows for events `5835`, `5495`, `6263`, `6268`, and `5467` moved from `last_error="'message'"` to `done` with public `https://...supabase.co/storage/v1/object/public/events-ics/...` URLs; dependent `tg_ics_post` rows completed and Telegram event announcements were deferred to `2026-06-26 05:00:00Z` instead of posting after the local publish window. Remaining `last_error="'message'"` ICS rows dropped from 44 to 39 and are scheduled by backoff through `2026-06-25 22:45:54Z`.
 
 ## Prevention
 
