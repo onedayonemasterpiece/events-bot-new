@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-25-vk-channel-wrong-surface.md`
+  - Scope: Promo `vk_channel_publish`, VK community Channel transport, public promo exposure statuses, and any fallback that uses `messages.send`/Messenger for a community Channel request.
+  - Must not regress: `vk_channel_publish` must fail closed and create no public exposure while VK community Channel posting lacks a verified non-Messenger API; `messages.send` peer ids and `vk.com/im?...` URLs must never be counted as VK community Channel delivery.
 - `INC-2026-06-24-vk-past-actuals.md`
   - Scope: Promo VK publication/repost/story/carousel event eligibility, Afisha Engagement debug-shadow scheduling/cleanup, managed `klgdevents` VK/TG fanout gating, and VK postponed queue audits.
   - Must not regress: a managed VK/Promo/Afisha Engagement post must not publish at or after the event start for one-day timed events; date-only debug-shadow copies must publish before the event day; same-day timed events whose start has passed must be excluded from promo candidate selection and `schedule_event_update_tasks` must not enqueue new `vk_sync`/`tg_event_publish` for them.

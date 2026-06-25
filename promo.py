@@ -77,7 +77,6 @@ PUBLIC_PROMO_EXPOSURE_STATUSES = frozenset(
         "PUBLISHED_TEST",
         "TG_PUBLISHED",
         "TG_FORWARDED",
-        "VK_CHANNEL_SENT",
         "DAILY_RECOMMENDED",
     }
 )
@@ -427,12 +426,11 @@ def _csv_ints(value: object) -> list[int]:
 
 
 def _vk_channel_peer_ids(cfg: dict[str, Any]) -> list[int]:
-    """Return explicit VK messenger/channel peer ids from config/env.
+    """Return legacy explicit VK messenger peer ids from config/env.
 
-    VK Channels are messenger-style destinations connected to communities, but
-    the public VK Open API currently documents ``messages.send`` recipients,
-    not channel discovery/posting methods. Until an explicit Channel API is
-    public, this activity must be configured with exact peer ids.
+    This helper is intentionally not used for publication while VK community
+    Channels do not have a documented posting API in Open API.  A messenger
+    ``peer_id`` is not proof that the target is the community Channel surface.
     """
 
     peer_ids = _csv_ints(cfg.get("peer_ids"))
@@ -1036,17 +1034,16 @@ def _initial_80_vk_channel_publish_activity(campaign_id: int) -> PromoActivity:
         max_per_publish=1,
         daily_cap=1,
         selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-        enabled=True,
+        enabled=False,
         config_json={
             "target_group": "klgdevents",
             "target_channel": "Полюбить Калининград Афиша",
-            "peer_id_env": "VK_AFISHA_CHANNEL_PEER_ID",
-            "peer_ids_env": "VK_AFISHA_CHANNEL_PEER_IDS",
             "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
             "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
             "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
             "post_style": "vk_channel_short_event_one_link",
-            "api_contract": "messages.send_peer_id_required_until_public_vk_channels_api",
+            "api_contract": "unsupported_until_documented_vk_community_channel_post_api",
+            "disabled_reason": "messages.send reaches personal Messenger/Favorites, not the community Channels tab",
         },
     )
 
@@ -4904,110 +4901,25 @@ async def run_promo_vk_activities(
 
         elif activity.surface == PROMO_SURFACE_VK_CHANNEL_PUBLISH:
             cfg = _activity_config(activity)
-            target_group_id = await _resolve_vk_group_id(cfg.get("target_group") or activity.profile_key)
-            peer_ids = _vk_channel_peer_ids(cfg)
-            if not target_group_id:
-                results.append(
-                    PromoVkActionResult(
-                        campaign_id,
-                        activity_id,
-                        activity.surface,
-                        0,
-                        "skipped",
-                        reason="target_group_missing",
-                    )
-                )
-                continue
-            if not peer_ids:
-                logger.info(
-                    "promo.vk channel publish skipped: peer id missing campaign_id=%s activity_id=%s",
+            logger.warning(
+                "promo.vk channel publish skipped: unsupported VK community Channel API "
+                "campaign_id=%s activity_id=%s target_group=%s target_channel=%s",
+                campaign_id,
+                activity_id,
+                cfg.get("target_group") or activity.profile_key,
+                cfg.get("target_channel") or activity.profile_key,
+            )
+            results.append(
+                PromoVkActionResult(
                     campaign_id,
                     activity_id,
+                    activity.surface,
+                    0,
+                    "skipped",
+                    reason="vk_community_channel_post_api_unsupported",
                 )
-                continue
-            due_count = _vk_activity_due_count(activity, now_utc)
-            if due_count <= 0:
-                continue
-            recent_exposures = await _activity_day_exposures(
-                db,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
-                now_utc=now_utc,
             )
-            if len(recent_exposures) >= due_count:
-                continue
-            recent_event_ids = {int(exposure.event_id) for exposure in recent_exposures}
-            preferred_ids = _preferred_event_ids_for_date(activity, today)
-            preferred_id_set = set(preferred_ids or [])
-            stats = await _load_public_exposure_stats(
-                db,
-                campaign_id=campaign_id,
-                activity_id=activity_id,
-                event_ids=[int(ev.id) for ev in events],
-            )
-
-            def sort_key(ev: Event) -> tuple[int, int, datetime, str, str, int]:
-                event_id = int(ev.id)
-                count, last_at = stats.get(event_id, (0, None))
-                last_key = last_at or datetime.min.replace(tzinfo=timezone.utc)
-                return (
-                    _preferred_event_rank(activity, today, event_id),
-                    count,
-                    last_key,
-                    _stable_shuffle_key(campaign_id, activity_id, today.isoformat(), ev.id),
-                    str(ev.date or ""),
-                    event_id,
-                )
-
-            candidates = [
-                ev
-                for ev in sorted(events, key=sort_key)
-                if int(ev.id) not in recent_event_ids
-                and (preferred_ids is None or int(ev.id) in preferred_id_set)
-            ]
-            for ev in candidates[:1]:
-                try:
-                    from main import publish_vk_channel_promo_event_publication
-
-                    url = await publish_vk_channel_promo_event_publication(
-                        ev,
-                        db,
-                        bot,
-                        target_group_id=target_group_id,
-                        peer_ids=peer_ids,
-                        channel_ref=str(cfg.get("target_channel") or activity.profile_key or ""),
-                    )
-                    if not url:
-                        raise RuntimeError("VK channel publish returned no URL")
-                    await _record_vk_promo_exposure(
-                        db,
-                        campaign_id=campaign_id,
-                        activity_id=activity_id,
-                        event_id=int(ev.id),
-                        surface=PROMO_SURFACE_VK_CHANNEL_PUBLISH,
-                        placement_kind="rolling_window_channel_publish",
-                        status="VK_CHANNEL_SENT",
-                        url=url,
-                        published_at=now_utc,
-                        details={
-                            "target_group_id": target_group_id,
-                            "target_channel": cfg.get("target_channel") or activity.profile_key,
-                            "target_url": url,
-                            "window_hours": window_hours,
-                            "peer_count": len(peer_ids),
-                            "api_contract": cfg.get("api_contract"),
-                        },
-                        target_type="vk_channel",
-                    )
-                    results.append(
-                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "published", target_url=url)
-                    )
-                except Exception as exc:
-                    logger.exception("promo.vk channel publication failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
-                    results.append(
-                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
-                    )
+            continue
 
         elif activity.surface == PROMO_SURFACE_VK_REPOST:
             cfg = _activity_config(activity)
