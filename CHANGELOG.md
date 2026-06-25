@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Incident / Afisha Engagement inactive fallback (INC-2026-06-25)**: restored the production all-events `afishaengagement` public fallback for `klgdevents` after logs showed ordinary VK publications skipping with `no_active_activity` because campaign `id=10` had expired on 2026-06-20. Reconciled the compensation card for event `6423` to VK `wall-231920894_4495` and documented the regression guard.
 - **Promo campaigns / popular Telegram reposts**: added a weighted-popularity
   `tg_repost` selector for broad daily amplification. It ranks future events by
   `/popular_posts`-style source popularity plus owned VK audience activity from

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-25-afishaengagement-no-active-activity.md`
+  - Scope: Afisha Engagement public all-events fallback for `klgdevents`, production promo campaign/activity date config, runtime `afishaengagement.decision` smoke, and manual catch-up edits of VK postponed posts.
+  - Must not regress: ordinary `klgdevents` VK publication preflight must have an active public Afisha Engagement fallback when rollout is intended; repeated `no_active_activity` decisions while VK posts continue are a regression; manual catch-up must verify whether VK reassigned a postponed post id and reconcile DB URLs.
 - `INC-2026-06-25-outbox-unknown-jobtask-publication-outage.md`
   - Scope: shared `JobOutbox` queue, `JobTask` enum materialization, outbox worker health, stale/TTL catch-up, ICS Supabase Storage upload, ticket-site/qTickets fanout, and Telegram/VK/Telegraph publication fanout.
   - Must not regress: legacy or unknown raw `joboutbox.task` strings must not crash due/running ORM selection; one invalid page/navigation row must not block unrelated `tg_event_publish`/`vk_sync`; active current/future event-pipeline pending jobs must catch up after worker outages instead of expiring solely because the worker was blocked; health/release smoke must include runtime-log evidence for worker-loop failures, `/healthz` `job_outbox_worker_loop` status, direct Storage upload path evidence for ICS, qTickets public-fanout coverage, and public Telegram/VK resume evidence.

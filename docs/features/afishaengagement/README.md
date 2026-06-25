@@ -107,6 +107,11 @@ For the default events VK community, `target_group="klgdevents"` is treated as
 an alias for numeric group id `231920894`, so old human-readable 80-stories
 configs still match Smart Update calls that pass `VK_EVENTS_GROUP_ID`.
 
+Production config note: while the broad all-events fallback remains part of
+the rollout, its campaign must be open-ended or explicitly replaced before its
+`ends_at`; repeated production log decisions with `reason="no_active_activity"`
+for ordinary `klgdevents` VK posts are a regression (`INC-2026-06-25-afishaengagement-no-active-activity`).
+
 Production public CTA rates after the 2026-06-13 rollout:
 
 - `80 историй о главном`: public `apply_rate=0.65`;
