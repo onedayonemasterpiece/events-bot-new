@@ -912,7 +912,7 @@ async def schedule_existing_event_update(db: Database, event_id: int) -> None:
         db,
         event,
         drain_nav=False,
-        skip_vk_sync=True,
+        skip_vk_sync=False,
     )
 
 
@@ -1172,7 +1172,7 @@ async def add_new_event_via_queue(
                     db,
                     saved,
                     drain_nav=False,
-                    skip_vk_sync=True,
+                    skip_vk_sync=False,
                 )
             
             logger.info(

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Incident / publication fanout second pass (INC-2026-06-25)**: fixed the remaining root causes behind page/calendar-only imports and calendar dependency stalls. Configured `ics_publish` now uploads directly to Supabase Storage (`/storage/v1/object/...`, `x-upsert: true`) instead of the shared Supabase Python client path that failed with `KeyError('message')`; ticket-site/qTickets parser Smart Update now schedules managed Telegram/VK fanout (`skip_vk_sync=False`) for accepted active events; `/healthz` now reports recent `job_outbox_worker` loop exceptions as `job_outbox_worker_loop` so a live-but-crashing worker is not green.
+
 - **Incident / publication outbox outage (INC-2026-06-25)**: mitigated the `@kldevents`/`klgdevents` publication stop caused by legacy `telegraph_nav_*` `joboutbox.task` values crashing SQLAlchemy enum materialization. The outbox worker now filters due/running selects to known `JobTask` values before ORM conversion, and active current/future pending event-pipeline jobs are caught up instead of expired after a worker outage. Production mitigation paused only the three blocking legacy rows, re-armed outage-expired active future publication jobs, and verified Telegram/VK catch-up (`@kldevents/1276`, VK `wall-231920894_4356+`).
 - **Promo campaigns / VK Channel manual draft**: `vk_channel_publish` now runs
   as an operator-assisted fallback while VK community Channel posting has no

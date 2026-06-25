@@ -59,6 +59,7 @@
 ### Очередь обновления month/weekend страниц
 
 - Для созданных/обновлённых событий `/parse` использует общий `schedule_event_update_tasks` (как и VK/TG), где `month_pages`/`weekend_pages` ставятся как debounce-задачи с `next_run_at = now + 15 минут`.
+- Принятые активные parser-события считаются пользовательски ценными и по умолчанию попадают в managed Telegram/VK fanout (`skip_vk_sync=False`); исключения должны быть явными продуктово видимыми причинами (`silent`, cancelled/past/started, LLM/manual review blocker), а не скрытым page/calendar-only режимом.
 - В финальном safeguard `_process_parsing_files` гарантирует постановку задач по затронутым месяцам и выходным, и тоже ставит их отложенно (`+15 минут`), чтобы не было немедленной пересборки Telegraph-страниц после массового прогона.
 
 ### Расписание автозапуска

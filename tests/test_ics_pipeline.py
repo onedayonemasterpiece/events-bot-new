@@ -406,3 +406,37 @@ async def test_ics_coalesced_jobs_and_semaphore(tmp_path, monkeypatch):
     )
     assert order[0][0] == 1 and order[1][0] == 2
     assert order[1][1] >= order[0][1]
+
+
+@pytest.mark.asyncio
+async def test_ics_upload_uses_direct_storage_endpoint_when_supabase_env_configured(monkeypatch):
+    calls = []
+
+    class Resp:
+        status_code = 201
+        text = '{"ok":true}'
+
+    def fake_post(url, *, headers, data, timeout):
+        calls.append((url, headers, data, timeout))
+        return Resp()
+
+    monkeypatch.setattr(main, "SUPABASE_URL", "https://example.supabase.co/rest/v1")
+    monkeypatch.setattr(main, "SUPABASE_KEY", "service-key")
+    monkeypatch.setattr(main, "SUPABASE_BUCKET", "events-ics")
+    monkeypatch.setattr(main, "_normalized_supabase_url_source", None)
+    monkeypatch.setattr(main, "_normalized_supabase_url", None)
+
+    import requests
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    url = await main._upload_ics_to_supabase_storage("event-1-2026-06-25.ics", b"BEGIN:VCALENDAR")
+
+    assert url == "https://example.supabase.co/storage/v1/object/public/events-ics/event-1-2026-06-25.ics"
+    assert calls
+    upload_url, headers, body, timeout = calls[0]
+    assert upload_url == "https://example.supabase.co/storage/v1/object/events-ics/event-1-2026-06-25.ics"
+    assert headers["x-upsert"] == "true"
+    assert headers["Content-Type"] == main.ICS_CONTENT_TYPE
+    assert body == b"BEGIN:VCALENDAR"
+    assert timeout == 45

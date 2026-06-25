@@ -427,7 +427,7 @@ async def _smart_update_from_theatre_event(
         db,
         candidate,
         check_source_url=False,
-        schedule_kwargs={"skip_vk_sync": True},
+        schedule_kwargs={"skip_vk_sync": False},
     )
     return str(result.status or ""), int(result.event_id) if result.event_id else None
 

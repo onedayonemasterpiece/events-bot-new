@@ -7930,6 +7930,17 @@ async def _runtime_health_report(
         tasks[name] = status
         if status != "ok" and (ready or startup_grace_exceeded):
             issues.append(f"{name}:{status}")
+    if "job_outbox_worker" in app:
+        worker_loop_status = "unknown"
+        status_fn = globals().get("job_outbox_worker_recent_error_status")
+        if callable(status_fn):
+            try:
+                worker_loop_status = str(status_fn())
+            except Exception as exc:
+                worker_loop_status = f"status_failed:{type(exc).__name__}"
+        tasks["job_outbox_worker_loop"] = worker_loop_status
+        if worker_loop_status != "ok" and (ready or startup_grace_exceeded):
+            issues.append(f"job_outbox_worker_loop:{worker_loop_status}")
 
     add_event_worker_status = _runtime_task_status(app.get("add_event_worker"))
     if add_event_worker_status != "missing":

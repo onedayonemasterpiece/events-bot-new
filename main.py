@@ -126,7 +126,7 @@ from typing import (
     Mapping,
     cast,
 )
-from urllib.parse import urlparse, parse_qs, ParseResult
+from urllib.parse import urlparse, parse_qs, ParseResult, quote
 import uuid
 import textwrap
 # тяжёлый стек подтягиваем только если понадобится
@@ -8303,6 +8303,78 @@ def format_event_caption(ev: Event, *, style: str = "ics") -> tuple[str, str | N
     return "\n".join(lines), "HTML"
 
 
+async def _upload_ics_to_supabase_storage(filename: str, ics_bytes: bytes) -> str | None:
+    """Upload an ICS file to Supabase Storage and return its public URL.
+
+    Production uses the Storage HTTP endpoint directly. This keeps ICS upload
+    independent from the shared Supabase/PostgREST Python client state: the
+    2026-06-25 incident showed the SDK path could attempt `/rest/v1/object/...`
+    and surface a non-actionable `KeyError('message')`. Tests and local dev with
+    only a monkeypatched client still keep the old client fallback when no
+    Supabase base URL/key is configured.
+    """
+
+    if os.getenv("SUPABASE_DISABLED") == "1":
+        return None
+
+    object_path = str(filename or "").strip().lstrip("/")
+    if not object_path:
+        raise ValueError("empty ICS filename")
+
+    base_url = _get_normalized_supabase_url()
+    key = str(SUPABASE_KEY or "").strip()
+    bucket = (SUPABASE_BUCKET or "events-ics").strip() or "events-ics"
+    if base_url and key:
+        quoted_path = "/".join(quote(part, safe="") for part in object_path.split("/"))
+        upload_url = f"{base_url}/storage/v1/object/{bucket}/{quoted_path}"
+        headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": ICS_CONTENT_TYPE,
+            "Content-Disposition": ICS_CONTENT_DISP_TEMPLATE.format(name=object_path),
+            "x-upsert": "true",
+            "cache-control": "public, max-age=3600",
+        }
+
+        def _upload() -> tuple[int, str]:
+            import requests
+
+            resp = requests.post(upload_url, headers=headers, data=ics_bytes, timeout=45)
+            body = ""
+            try:
+                body = str(resp.text or "")[:500]
+            except Exception:
+                body = ""
+            return int(resp.status_code), body
+
+        async with span("http"):
+            async with HTTP_SEMAPHORE:
+                status_code, body = await asyncio.to_thread(_upload)
+        if status_code in {200, 201}:
+            return f"{base_url}/storage/v1/object/public/{bucket}/{quoted_path}"
+        raise RuntimeError(f"supabase storage upload failed status={status_code} body={body}")
+
+    # Local/test compatibility fallback. Production should not normally reach it
+    # because SUPABASE_URL and a service key are configured.
+    client = get_supabase_client()
+    if not client:
+        return None
+    storage = client.storage.from_(bucket)
+    async with span("http"):
+        await asyncio.to_thread(
+            storage.upload,
+            object_path,
+            ics_bytes,
+            {
+                "content-type": ICS_CONTENT_TYPE,
+                "content-disposition": ICS_CONTENT_DISP_TEMPLATE.format(name=object_path),
+                "upsert": "true",
+            },
+        )
+        supabase_url = await asyncio.to_thread(storage.get_public_url, object_path)
+    return str(supabase_url or "").strip() or None
+
+
 async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> bool:
     if (os.getenv("DISABLE_ICS_JOBS") or "").strip().lower() in ("1", "true", "yes", "on"):
         logging.info("ics_publish disabled via DISABLE_ICS_JOBS")
@@ -8341,25 +8413,8 @@ async def ics_publish(event_id: int, db: Database, bot: Bot, progress=None) -> b
             supabase_disabled = os.getenv("SUPABASE_DISABLED") == "1"
             if not supabase_disabled:
                 try:
-                    client = get_supabase_client()
-                    if client:
-                        storage = client.storage.from_(SUPABASE_BUCKET)
-                        async with span("http"):
-                            await asyncio.to_thread(
-                                storage.upload,
-                                filename,
-                                ics_bytes,
-                                {
-                                    "content-type": ICS_CONTENT_TYPE,
-                                    "content-disposition": ICS_CONTENT_DISP_TEMPLATE.format(
-                                        name=filename
-                                    ),
-                                    "upsert": "true",
-                                },
-                            )
-                            supabase_url = await asyncio.to_thread(
-                                storage.get_public_url, filename
-                            )
+                    supabase_url = await _upload_ics_to_supabase_storage(filename, ics_bytes)
+                    if supabase_url:
                         if progress:
                             progress.mark("ics_supabase", "done", supabase_url)
                         logging.info("ics_publish supabase_url=%s", supabase_url)
@@ -16671,6 +16726,49 @@ _EVENT_PROGRESS: dict[int, SimpleNamespace] = {}
 # mapping from coalesce key to events waiting for progress updates
 _EVENT_PROGRESS_KEYS: dict[str, set[int]] = {}
 
+_JOB_OUTBOX_WORKER_HEALTH: dict[str, Any] = {
+    "last_ok_monotonic": None,
+    "last_error_monotonic": None,
+    "last_error": None,
+    "consecutive_errors": 0,
+}
+
+
+def _job_outbox_worker_error_window_sec() -> float:
+    raw = (os.getenv("JOB_OUTBOX_WORKER_HEALTH_ERROR_WINDOW_SEC") or "").strip()
+    try:
+        value = float(raw) if raw else 120.0
+    except ValueError:
+        value = 120.0
+    return max(5.0, value)
+
+
+def _mark_job_outbox_worker_cycle_ok() -> None:
+    _JOB_OUTBOX_WORKER_HEALTH["last_ok_monotonic"] = _time.monotonic()
+    _JOB_OUTBOX_WORKER_HEALTH["consecutive_errors"] = 0
+
+
+def _mark_job_outbox_worker_cycle_error(exc: BaseException) -> None:
+    _JOB_OUTBOX_WORKER_HEALTH["last_error_monotonic"] = _time.monotonic()
+    _JOB_OUTBOX_WORKER_HEALTH["last_error"] = type(exc).__name__
+    _JOB_OUTBOX_WORKER_HEALTH["consecutive_errors"] = int(
+        _JOB_OUTBOX_WORKER_HEALTH.get("consecutive_errors") or 0
+    ) + 1
+
+
+def job_outbox_worker_recent_error_status() -> str:
+    consecutive = int(_JOB_OUTBOX_WORKER_HEALTH.get("consecutive_errors") or 0)
+    if consecutive <= 0:
+        return "ok"
+    last_error_monotonic = _JOB_OUTBOX_WORKER_HEALTH.get("last_error_monotonic")
+    if last_error_monotonic is None:
+        return "ok"
+    age_sec = max(0.0, _time.monotonic() - float(last_error_monotonic))
+    if age_sec > _job_outbox_worker_error_window_sec():
+        return "ok"
+    err = str(_JOB_OUTBOX_WORKER_HEALTH.get("last_error") or "Exception")
+    return f"recent_error:{err}:consecutive={consecutive}:age={age_sec:.1f}s"
+
 
 async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | None:
     async with db.get_session() as session:
@@ -17501,7 +17599,9 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
                 fest_map if fest_map else None,
             )
             await _watch_nav_jobs(db, bot)
-        except Exception:  # pragma: no cover - log unexpected errors
+            _mark_job_outbox_worker_cycle_ok()
+        except Exception as exc:  # pragma: no cover - log unexpected errors
+            _mark_job_outbox_worker_cycle_error(exc)
             logging.exception("job_outbox_worker cycle failed")
         if _time.monotonic() - last_log >= 30.0:
             try:

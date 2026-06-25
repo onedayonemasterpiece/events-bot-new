@@ -19,8 +19,8 @@
 ## Активные regression contracts
 
 - `INC-2026-06-25-outbox-unknown-jobtask-publication-outage.md`
-  - Scope: shared `JobOutbox` queue, `JobTask` enum materialization, outbox worker health, stale/TTL catch-up, and Telegram/VK/Telegraph publication fanout.
-  - Must not regress: legacy or unknown raw `joboutbox.task` strings must not crash due/running ORM selection; one invalid page/navigation row must not block unrelated `tg_event_publish`/`vk_sync`; active current/future event-pipeline pending jobs must catch up after worker outages instead of expiring solely because the worker was blocked; health/release smoke must include runtime-log evidence for worker-loop failures and public Telegram/VK resume evidence.
+  - Scope: shared `JobOutbox` queue, `JobTask` enum materialization, outbox worker health, stale/TTL catch-up, ICS Supabase Storage upload, ticket-site/qTickets fanout, and Telegram/VK/Telegraph publication fanout.
+  - Must not regress: legacy or unknown raw `joboutbox.task` strings must not crash due/running ORM selection; one invalid page/navigation row must not block unrelated `tg_event_publish`/`vk_sync`; active current/future event-pipeline pending jobs must catch up after worker outages instead of expiring solely because the worker was blocked; health/release smoke must include runtime-log evidence for worker-loop failures, `/healthz` `job_outbox_worker_loop` status, direct Storage upload path evidence for ICS, qTickets public-fanout coverage, and public Telegram/VK resume evidence.
 - `INC-2026-06-25-vk-channel-wrong-surface.md`
   - Scope: Promo `vk_channel_publish`, VK community Channel transport, public promo exposure statuses, and any fallback that uses `messages.send`/Messenger for a community Channel request.
   - Must not regress: `vk_channel_publish` must create no public exposure while VK community Channel posting lacks a verified non-Messenger API; `messages.send` peer ids and `vk.com/im?...` URLs may be used only for explicit operator manual-copy drafts (`VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`) and must never be counted as VK community Channel delivery.
