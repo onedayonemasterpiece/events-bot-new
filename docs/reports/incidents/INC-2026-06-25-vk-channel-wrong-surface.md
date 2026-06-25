@@ -150,16 +150,20 @@ channels and did not contain the target community channel/post.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `0de0fbe8` (`fix(promo): fail closed VK channel wrong surface (#10)`), reachable from `origin/main`.
+- deployed SHAs reachable from `origin/main`:
+  - `0de0fbe8` (`fix(promo): fail closed VK channel wrong surface (#10)`) — initial containment.
+  - `c3815bff` (`feat(promo): send VK channel manual drafts (#12)`) — operator manual-copy draft mode and registration-link CTA priority.
+  - `366af059` (`fix(promo): prefer nearest VK channel draft (#13)`) — nearest eligible event before stable shuffling.
 - deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only --detach` from a clean detached `origin/main` worktree.
-- Fly release: `v1480`, image `events-bot-new-wngqia:deployment-01KVYVQKQG6N2YY9NA93YH8QFS`, machine `683961db016e28` started.
+- latest Fly release: `v1484`, image `events-bot-new-wngqia:deployment-01KVYX2PVE6RKR7B3PHJJDCMB6`, machine `683961db016e28` started with service check passing.
 - regression checks:
-  - `python -m pytest -q tests/test_promo.py::test_promo_runner_skips_vk_channel_publish_until_real_channel_api tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`2 passed`).
-  - Deployed code check: `VK_CHANNEL_SENT` is absent from `PUBLIC_PROMO_EXPOSURE_STATUSES`; initial `vk_channel_publish` activity seeds `enabled=False`; helper contains `vk_community_channel_post_api_unsupported`.
-- production mitigation verification:
-  - `promo_activity.id=30` has `enabled=0`.
-  - `promo_exposure.id=514` has `publish_status='FAILED_WRONG_SURFACE'`, `public_target_count=0`, `public_targets_json=[]`.
-  - Fly secrets list no longer includes `VK_AFISHA_CHANNEL_PEER_ID`.
+  - `python -m pytest -q tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph tests/test_partner_promo_menu.py::test_campaign_card_keyboard_has_vk_channel_controls_for_80_campaign` — passed (`3 passed`).
+  - Deployed/manual behavior check: `VK_CHANNEL_SENT` remains absent from `PUBLIC_PROMO_EXPOSURE_STATUSES`; manual draft uses `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, and CTA prefers event registration/ticket URL.
+- production mitigation/manual-draft verification:
+  - `promo_activity.id=30` is enabled with `delivery_mode='vk_messages_manual_copy_draft'` and `VK_AFISHA_CHANNEL_DRAFT_PEER_ID` deployed.
+  - `promo_exposure.id=514` remains `FAILED_WRONG_SURFACE`, `public_target_count=0`, `public_targets_json=[]`.
+  - `promo_exposure.id=515` was superseded after a first nearest-ranking miss; VK could not delete that self-message (`Access denied: message can not be deleted`), so it is marked `VK_CHANNEL_DRAFT_SUPERSEDED` and remains non-public.
+  - `promo_exposure.id=516` is the valid replacement draft: event `4798` (`Зоопарку — быть!`, 2026-06-26 18:30), `VK_CHANNEL_DRAFT_SENT`, `public_target_count=0`, CTA `https://kgd80.ru/sobytiya/zooparku-byt-zoopark-trofey-1945-goda-i-odin-iz-pervyh-ochagov-mirnoy-zhizni-v-kaliningrade/?register=1`, Messenger URL `https://vk.com/im?sel=868977531&msgid=264`.
 - post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, `promo_vk=ok`; Fly HTTP service check passing.
 - VK API research evidence:
   - Official `https://dev.vk.com/ru/method/messages.send`, `https://dev.vk.com/ru/method/wall.post`, method index, object reference, and sitemap returned no `channel`/`канал`/`Пост в канал` documentation.
