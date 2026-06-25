@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 
 from db import Database
@@ -8,6 +10,18 @@ from smart_event_update import EventCandidate, smart_event_update
 
 async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
     return None
+
+
+def test_match_create_prompt_distinguishes_time_conflict_from_multi_session():
+    """INC-2026-06-25: same real event reposts with conflicting source times
+    must be matched for LLM merge, while explicit multi-session schedules stay
+    separate occurrences."""
+
+    src = inspect.getsource(su._llm_match_or_create_bundle)
+    assert "НЕ создавай отдельное событие только из-за этого" in src
+    assert "одно событие с конфликтом/правкой времени" in src
+    assert "один и тот же источник явно перечисляет несколько самостоятельных сеансов" in src
+    assert "для новой самостоятельной occurrence" in src
 
 
 async def _seed_club_znakomstv_event(db: Database) -> int:

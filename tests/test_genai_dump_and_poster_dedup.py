@@ -56,6 +56,23 @@ def test_sanitize_description_output_rejects_dump():
     assert _sanitize_description_output("Обычное описание события.", source_text="src")
 
 
+def test_sanitize_description_output_strips_editor_meta_preamble():
+    leaked = (
+        "Дубль удалён; используйте каноническую карточку события.\n\n"
+        "В предоставленном вами тексте описания содержится только ссылка на сторонний ресурс. "
+        "Согласно вашим правилам, я сохраняю структуру текста.\n\n"
+        "Вот обновленный текст:\n\n"
+        "Дубль удалён. Актуальная карточка события: https://telegra.ph/Spektakl-Evgenij-Onegin-05-28"
+    )
+
+    cleaned = _sanitize_description_output(leaked, source_text="src")
+
+    assert "предоставленном" not in cleaned
+    assert "обновленный текст" not in cleaned
+    assert "Дубль удалён; используйте" in cleaned
+    assert "https://telegra.ph/Spektakl-Evgenij-Onegin-05-28" in cleaned
+
+
 def test_hamming_distance_hex():
     a = "ff" * 32  # 64 hex chars == 256 bits
     b = a[:-1] + "e"  # flip one low bit of the last nibble

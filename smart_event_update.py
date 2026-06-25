@@ -1197,6 +1197,16 @@ def _sanitize_description_output(
     # "Facts for source log" is strictly internal and must never leak publicly.
     # If the LLM emits a whole paragraph that starts with such heading, drop it.
     internal_log_prefix_re = re.compile(r"(?i)^\s*(?:факты\s+для\s+лога|facts\s+for\s+source)\b")
+    llm_editor_meta_re = re.compile(
+        r"(?is)^\s*(?:"
+        r"(?:в\s+)?предоставленн\w+(?:\s+вами)?\s+.*?"
+        r"(?:текст|описани).*?(?:согласно|правил|структур).*|"
+        r"согласно\s+(?:вашим|указанным)\s+правил|"
+        r"(?:вот|ниже)\s+(?:обновл[её]нн(?:ый|ая)|исправленн(?:ый|ая)|отредактированн(?:ый|ая))\s+текст\s*:|"
+        r"(?:обновл[её]нн(?:ый|ая)|исправленн(?:ый|ая)|отредактированн(?:ый|ая))\s+текст\s*:|"
+        r"here\s+is\s+the\s+(?:updated|edited|revised)\s+text\s*:?"
+        r")\s*$"
+    )
 
     parts: list[str] = []
     for para in re.split(r"\n{2,}", raw):
@@ -1218,6 +1228,11 @@ def _sanitize_description_output(
             first = lines[first_idx].strip()
             if internal_log_prefix_re.match(first):
                 # Entire block is internal (facts for /log), drop it.
+                continue
+            if llm_editor_meta_re.match(first):
+                # Public cleanup only: editor/meta preambles like
+                # "Вот обновленный текст:" or "В предоставленном тексте..."
+                # are provider response artifacts, not event content.
                 continue
             if internal_heading_re.match(first):
                 # Drop only the heading line.
@@ -9050,6 +9065,13 @@ async def _llm_match_or_create_bundle(
         "- Если `confidence < threshold`, верни `action=create` и `match_event_id=null`.\n\n"
         "Анти-дубли (важно):\n"
         "- `time=00:00` и/или `time_is_default=true` считай неизвестным временем (слабый якорь, не конфликт).\n"
+        "- Если дата + площадка + название/текст практически совпадают, но источники дают разное время "
+        "(например 10:00 vs 11:00, 19:00 vs 20:00), НЕ создавай отдельное событие только из-за этого: "
+        "обычно это одно событие с конфликтом/правкой времени или разницей сбор/старт. Выбирай `action=match`, "
+        "а конфликт времени должен быть разобран на стадии merge по доверию/свежести источников.\n"
+        "- Исключение: если один и тот же источник явно перечисляет несколько самостоятельных сеансов/показов "
+        "одного события в один день (например `в 14:00 и 17:00`, `12:00 и 16:00`) — это не дубль; выбирай `action=create` "
+        "для новой самостоятельной occurrence.\n"
         "- Если совпадают дата + площадка + контекст (участник/афиша/OCR), но формулировка названия отличается "
         "(общее vs конкретное), это один и тот же ивент: выбирай `action=match`.\n"
         "- Для длинных событий (выставка/ярмарка/экспозиция с `end_date`) пересечение периодов + площадка НЕ означает дубль:\n"

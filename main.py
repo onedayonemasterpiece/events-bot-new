@@ -16851,9 +16851,18 @@ async def _run_due_jobs_once_locked(
     force_notify: bool = False,
 ) -> int:
     now = datetime.now(timezone.utc)
+    # The database has accumulated a few legacy/experimental task strings.
+    # SQLAlchemy Enum conversion raises LookupError for an unknown value while
+    # materializing rows; a single bad row must not crash the whole outbox worker.
+    # Use enum members (SAEnum stores names in this schema) so filtering happens
+    # in SQL before ORM row conversion.
+    known_job_tasks = list(JobTask)
     async with db.get_session() as session:
         running_rows = await session.execute(
-            select(JobOutbox).where(JobOutbox.status == JobStatus.running)
+            select(JobOutbox).where(
+                JobOutbox.status == JobStatus.running,
+                JobOutbox.task.in_(known_job_tasks),
+            )
         )
         running_jobs = [_normalize_job(job) for job in running_rows.scalars().all()]
         stale: list[str] = []
@@ -16905,6 +16914,7 @@ async def _run_due_jobs_once_locked(
             .where(
                 JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
                 JobOutbox.next_run_at <= now,
+                JobOutbox.task.in_(known_job_tasks),
             )
         )
         if only_event is not None:
@@ -16943,6 +16953,31 @@ async def _run_due_jobs_once_locked(
             else:
                 # Regular task: age from updated_at
                 age = (now - obj.updated_at).total_seconds()
+            if age > ttl:
+                if (
+                    obj.status == JobStatus.pending
+                    and obj.event_id is not None
+                    and obj.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                ):
+                    ev = await session.get(Event, int(obj.event_id))
+                    ev_date = (getattr(ev, "date", None) or "").strip() if ev else ""
+                    ev_status = (getattr(ev, "lifecycle_status", None) or "active").strip()
+                    ev_silent = bool(getattr(ev, "silent", False)) if ev else True
+                    today = now.astimezone(LOCAL_TZ).date().isoformat()
+                    if ev and ev_status == "active" and not ev_silent and (not ev_date or ev_date >= today):
+                        # Catch-up after a worker outage/restart: a valid active
+                        # future event should still be publishable even when the
+                        # pending row waited longer than JOB_TTL because the
+                        # whole worker was blocked.
+                        obj.updated_at = now
+                        session.add(obj)
+                        await session.commit()
+                        logging.info(
+                            "OUTBOX_STALE_PENDING_CATCHUP key=%s age=%s",
+                            obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
+                            int(age),
+                        )
+                        age = 0
             if age > ttl:
                 dep_blockers = await _dependency_blockers_for_job(session, obj)
                 if dep_blockers and await _defer_job_until_dependency_retry(
@@ -17034,6 +17069,7 @@ async def _run_due_jobs_once_locked(
                     .where(
                         JobOutbox.event_id == obj.event_id,
                         JobOutbox.id < obj.id,
+                        JobOutbox.task.in_(known_job_tasks),
                         JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
                         JobOutbox.next_run_at <= now,
                     )

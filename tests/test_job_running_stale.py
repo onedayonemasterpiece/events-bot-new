@@ -1,9 +1,66 @@
 import pytest
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 import main
 from main import Database, Event, JobOutbox, JobTask, JobStatus
+
+
+@pytest.mark.asyncio
+async def test_due_jobs_ignore_unknown_task_values_without_crashing(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = Event(
+            title="a",
+            description="d",
+            date="2026-06-25",
+            time="10:00",
+            location_name="x",
+            source_text="s",
+        )
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        now = datetime.now(timezone.utc)
+        await session.execute(
+            text(
+                "INSERT INTO joboutbox "
+                "(event_id, task, payload, status, attempts, updated_at, next_run_at) "
+                "VALUES (:event_id, 'telegraph_nav_month', NULL, 'pending', 0, :now, :now)"
+            ),
+            {"event_id": ev.id, "now": now},
+        )
+        session.add(
+            JobOutbox(
+                event_id=ev.id,
+                task=JobTask.month_pages,
+                status=JobStatus.pending,
+                updated_at=now,
+                next_run_at=now,
+            )
+        )
+        await session.commit()
+
+    calls: list[int] = []
+
+    async def fake_month_pages(event_id: int, db_obj: Database, bot_obj):
+        calls.append(event_id)
+        return True
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "month_pages", fake_month_pages)
+
+    processed = await main._run_due_jobs_once(db, bot=None)
+
+    assert processed == 1
+    assert calls == [ev.id]
+    async with db.get_session() as session:
+        invalid = (
+            await session.execute(
+                text("SELECT status FROM joboutbox WHERE task='telegraph_nav_month'")
+            )
+        ).scalar_one()
+    assert invalid == "pending"
 
 
 @pytest.mark.asyncio
