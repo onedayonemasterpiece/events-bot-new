@@ -129,10 +129,15 @@ The bad value entered before publication: production DB rows `6394` and `6395` w
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: investigation-only reproduction; fix not implemented yet.
-- post-deploy verification: —
+- deployed SHA: `3d9f0bf7056ef07a8fe763a9a36724c71d4ecfc6` (`origin/main`).
+- deploy path: clean worktree `/home/dev/projects/events-bot-new-worktrees/INC-2026-06-26-vk-location-fuzzy-park`, `flyctl deploy --remote-only --app events-bot-new-wngqia`.
+- regression checks:
+  - `python -m py_compile main.py tests/test_known_venue_alias_overwrite.py`;
+  - `pytest -q tests/test_known_venue_alias_overwrite.py` → 8 passed.
+- post-deploy verification:
+  - Fly machine updated and healthy; `/app/main.py` contains the generic-token guard for `парк`/`городской`;
+  - VK API verified posts `4441`, `4444`, and `4523` no longer contain the Зеленоградск venue and show `Городской парк, #Пионерский`;
+  - Telegraph event pages and June/July month pages fetched over HTTP and verified to show `Городской парк, Пионерский`.
 
 ## Prevention
 
