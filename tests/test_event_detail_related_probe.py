@@ -94,6 +94,20 @@ class EventDetailRelatedProbeTest(unittest.TestCase):
             self.assertIn("Балтийский джаз", html)
             self.assertNotIn('data-event-id="100"', html)
 
+    def test_static_fallback_html_handles_no_related_candidates(self) -> None:
+        sample = {"sample": [{"id": 100, "title": "Одинокое событие", "event_type": "лекция", "city": "Калининград", "time": "19:00", "digest": "лекция без похожих событий", "status": "active"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            input_path = tmp_path / "sample.json"
+            input_path.write_text(json.dumps(sample, ensure_ascii=False), encoding="utf-8")
+            report = build_probe(input_path, current_event_id=100, top_k=5)
+            write_outputs(report, tmp_path / "probe", sample)
+
+            self.assertFalse(report["deterministic_checks"]["has_related_candidates"])
+            html = (tmp_path / "probe" / "event_detail_related_static.html").read_text(encoding="utf-8")
+            self.assertIn("Похожих событий пока нет.", html)
+            self.assertNotIn('data-event-id="100"', html)
+
 
 if __name__ == "__main__":
     unittest.main()

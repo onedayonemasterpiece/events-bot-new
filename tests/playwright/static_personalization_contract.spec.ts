@@ -5,7 +5,7 @@ import path from 'node:path';
 const demoHtml = fs.readFileSync(path.resolve(process.cwd(), 'static_site/personalization/demo.html'), 'utf8');
 const personalizationJs = fs.readFileSync(path.resolve(process.cwd(), 'static_site/personalization/personalization.js'), 'utf8');
 
-async function openFixture(page: any, viewport: { width: number; height: number }, options: { backendAvailable?: boolean } = {}) {
+async function openFixture(page: any, viewport: { width: number; height: number }, options: { backendAvailable?: boolean; emptyRelated?: boolean } = {}) {
   await page.setViewportSize(viewport);
   await page.route('https://kenigevents.test/**', async (route: any) => {
     const url = route.request().url();
@@ -17,12 +17,16 @@ async function openFixture(page: any, viewport: { width: number; height: number 
       });
       return;
     }
+    let body = options.backendAvailable === false
+      ? demoHtml.replace('<script src="/personalization/personalization.js"></script>', '<script>window.__backendAvailable = false;</script><script src="/personalization/personalization.js"></script>')
+      : demoHtml;
+    if (options.emptyRelated) {
+      body = body.replace('window.__controller = window.KenigEventsPersonalization.createController({', 'window.__relatedStatic = []; window.__controller = window.KenigEventsPersonalization.createController({');
+    }
     await route.fulfill({
       status: 200,
       contentType: 'text/html; charset=utf-8',
-      body: options.backendAvailable === false
-        ? demoHtml.replace('<script src="/personalization/personalization.js"></script>', '<script>window.__backendAvailable = false;</script><script src="/personalization/personalization.js"></script>')
-        : demoHtml,
+      body,
     });
   });
   await page.goto('https://kenigevents.test/sobytiya/kamernyy-dzhaz-u-morya/');
@@ -122,5 +126,15 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     const telemetry = await page.evaluate(() => (window as any).__telemetry);
     expect(telemetry.some((e: any) => e.event_kind === 'recommendation_fallback_used'
       && e.surface === 'event_detail_related')).toBeTruthy();
+  });
+
+  test('missing related manifest data keeps an empty static module and CTA usable', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, { emptyRelated: true });
+
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'static_related_v1');
+    await expect(page.locator('.related-card')).toHaveCount(0);
+    await expect(page.locator('.related-empty')).toHaveText('Похожих событий пока нет.');
+    await expect(page.getByRole('button', { name: 'Билеты / регистрация' })).toBeEnabled();
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
   });
 });

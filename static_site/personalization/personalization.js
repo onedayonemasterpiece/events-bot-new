@@ -390,9 +390,16 @@
       }
 
       container.replaceChildren();
-      for (const [index, item] of visibleItems.entries()) {
-        const ctx = { emit, hideEvent };
-        container.appendChild(cardRenderer(item, index, ctx));
+      if (!visibleItems.length) {
+        const empty = doc.createElement('p');
+        empty.className = 'related-empty';
+        empty.textContent = 'Похожих событий пока нет.';
+        container.appendChild(empty);
+      } else {
+        for (const [index, item] of visibleItems.entries()) {
+          const ctx = { emit, hideEvent };
+          container.appendChild(cardRenderer(item, index, ctx));
+        }
       }
 
       if (moreButton) {
