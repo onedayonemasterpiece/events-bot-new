@@ -129,7 +129,7 @@ The bad value entered before publication: production DB rows `6394` and `6395` w
 
 ## Release And Closure Evidence
 
-- deployed code SHA: `3d9f0bf7056ef07a8fe763a9a36724c71d4ecfc6` (ancestor of current `origin/main`; later commits only update this incident record).
+- deployed code SHA for this incident: `3d9f0bf7056ef07a8fe763a9a36724c71d4ecfc6` (ancestor of current `origin/main`).
 - deploy path: clean worktree `/home/dev/projects/events-bot-new-worktrees/INC-2026-06-26-vk-location-fuzzy-park`, `flyctl deploy --remote-only --app events-bot-new-wngqia`.
 - regression checks:
   - `python -m py_compile main.py tests/test_known_venue_alias_overwrite.py`;
