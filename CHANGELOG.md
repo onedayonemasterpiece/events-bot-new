@@ -5,6 +5,7 @@
 ### Fixed
 
 - Prevented generic VK venue phrases such as `Городской парк` from being fuzzy-normalized to unrelated known venues in another city.
+- **Promo campaigns / Telegram source amplification**: `tg_event_publish` now counts recent organic Smart Update Telegram event posts toward the daily due slots. When a selected event already has a forwardable `@kldevents` source post, the promo activity self-forwards that original post into the same event-flow channel instead of rendering duplicate copy, preserving Telegram view accumulation on the first post; full promo publication remains the fallback when no source post exists or forwarding fails.
 - **Promo campaigns / Telegram details button marker**: decoupled the `@kldevents`
   `✨ Подробнее` inline button from generic promo campaign membership. The rich
   promo intro can still apply to campaign-covered events, but moving `Подробнее`

@@ -22,6 +22,9 @@ from models import (
     Event,
     EventSource,
     Festival,
+    JobOutbox,
+    JobStatus,
+    JobTask,
     PromoActivity,
     PromoCampaign,
     PromoExposure,
@@ -2445,6 +2448,76 @@ def _tg_message_id_from_url(url: str | None) -> int | None:
         return int(match.group(1))
     except ValueError:
         return None
+
+
+def _tg_url_matches_chat(url: str | None, chat: str | None) -> bool:
+    text = str(url or "").strip().lower()
+    if not text:
+        return False
+    source_name = str(chat or "").strip().lstrip("@").lower()
+    if source_name and f"t.me/{source_name}/" in text:
+        return True
+    # Private/internal channel links do not carry the public username.  Treat
+    # them as forwardable for the configured channel, matching tg_repost source
+    # selection behavior.
+    return "t.me/c/" in text
+
+
+def _tg_source_url_for_chat(ev: Event, chat: str | None) -> str | None:
+    url = str(getattr(ev, "tg_event_post_url", "") or "").strip()
+    if not url or _tg_message_id_from_url(url) is None:
+        return None
+    if not _tg_url_matches_chat(url, chat):
+        return None
+    return url
+
+
+async def _recent_event_tg_organic_posts(
+    db: Database,
+    *,
+    events: list[Event],
+    target_chat: str,
+    since_utc: datetime,
+    until_utc: datetime,
+) -> list[tuple[Event, str, datetime]]:
+    """Return ordinary Telegram event posts in ``target_chat`` within a window.
+
+    ``event.tg_event_post_url`` stores the source message link but does not
+    store the publication timestamp.  For organic Smart Update publications the
+    reliable timestamp is the completed ``JobOutbox.tg_event_publish`` row.  If
+    an old event has only a stored URL and no recent done job, it is not counted
+    as already satisfying today's rolling minimum; the promo publisher may then
+    self-forward that original message instead of rendering a duplicate post.
+    """
+
+    event_by_id = {
+        int(ev.id): ev
+        for ev in events
+        if ev.id is not None and _tg_source_url_for_chat(ev, target_chat)
+    }
+    if not event_by_id:
+        return []
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(JobOutbox.event_id, func.max(JobOutbox.updated_at))
+            .where(JobOutbox.event_id.in_(list(event_by_id)))
+            .where(JobOutbox.task == JobTask.tg_event_publish)
+            .where(JobOutbox.status == JobStatus.done)
+            .where(JobOutbox.updated_at >= since_utc)
+            .where(JobOutbox.updated_at <= until_utc)
+            .group_by(JobOutbox.event_id)
+        )
+        rows = list(res.all())
+    out: list[tuple[Event, str, datetime]] = []
+    for event_id, updated_at in rows:
+        ev = event_by_id.get(int(event_id))
+        if ev is None or updated_at is None:
+            continue
+        url = _tg_source_url_for_chat(ev, target_chat)
+        if not url:
+            continue
+        out.append((ev, url, updated_at))
+    return out
 
 
 async def _recent_event_tg_posts(
@@ -5283,6 +5356,13 @@ async def run_promo_vk_activities(
             due_count = _vk_activity_due_count(activity, now_utc)
             if due_count <= 0:
                 continue
+            organic = await _recent_event_tg_organic_posts(
+                db,
+                events=events,
+                target_chat=target_chat,
+                since_utc=since_utc,
+                until_utc=now_utc,
+            )
             recent_exposures = await _activity_day_exposures(
                 db,
                 campaign_id=campaign_id,
@@ -5290,9 +5370,11 @@ async def run_promo_vk_activities(
                 surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
                 now_utc=now_utc,
             )
-            if len(recent_exposures) >= due_count:
+            satisfied_event_ids = {int(ev.id) for ev, _url, _dt in organic if ev.id is not None}
+            satisfied_event_ids.update(int(exposure.event_id) for exposure in recent_exposures)
+            if len(satisfied_event_ids) >= due_count:
                 continue
-            recent_event_ids = {int(exposure.event_id) for exposure in recent_exposures}
+            recent_event_ids = satisfied_event_ids
             preferred_ids = _preferred_event_ids_for_date(activity, today)
             preferred_id_set = set(preferred_ids or [])
             stats = await _load_public_exposure_stats(
@@ -5325,9 +5407,64 @@ async def run_promo_vk_activities(
                 and (preferred_ids is None or int(ev.id) in preferred_id_set)
             ]
             for ev in candidates[:1]:
+                source_url = _tg_source_url_for_chat(ev, target_chat)
+                if source_url:
+                    try:
+                        url = await _publish_tg_repost(
+                            bot,
+                            source_chat=target_chat,
+                            target_chat=target_chat,
+                            source_url=source_url,
+                        )
+                        if not url:
+                            raise RuntimeError("telegram self-forward returned no URL")
+                        await _record_vk_promo_exposure(
+                            db,
+                            campaign_id=campaign_id,
+                            activity_id=activity_id,
+                            event_id=int(ev.id),
+                            surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+                            placement_kind="rolling_window_self_forward",
+                            status="TG_FORWARDED",
+                            url=url,
+                            published_at=now_utc,
+                            details={
+                                "target_chat": target_chat,
+                                "source_chat": target_chat,
+                                "source_url": source_url,
+                                "target_url": url,
+                                "window_hours": window_hours,
+                                "organic_count": len(organic),
+                                "mode": "self_forward_existing_event_post",
+                            },
+                            target_type="telegram_forward",
+                        )
+                        results.append(
+                            PromoVkActionResult(
+                                campaign_id,
+                                activity_id,
+                                activity.surface,
+                                int(ev.id),
+                                "forwarded",
+                                source_url=source_url,
+                                target_url=url,
+                            )
+                        )
+                        continue
+                    except Exception:
+                        logger.warning(
+                            "promo.tg self-forward failed; fallback to full publish campaign_id=%s activity_id=%s event_id=%s source_url=%s",
+                            campaign_id,
+                            activity_id,
+                            ev.id,
+                            source_url,
+                            exc_info=True,
+                        )
                 try:
                     from main import publish_tg_promo_event_publication
 
+                    if not callable(publish_tg_promo_event_publication):
+                        raise RuntimeError("telegram event publish function unavailable")
                     url = await publish_tg_promo_event_publication(
                         ev,
                         db,
@@ -5350,6 +5487,7 @@ async def run_promo_vk_activities(
                             "target_chat": target_chat,
                             "target_url": url,
                             "window_hours": window_hours,
+                            "organic_count": len(organic),
                         },
                         target_type="telegram_channel",
                     )

@@ -14,6 +14,9 @@ from models import (
     Event,
     EventSource,
     Festival,
+    JobOutbox,
+    JobStatus,
+    JobTask,
     PromoActivity,
     PromoCampaign,
     PromoExposure,
@@ -1806,6 +1809,159 @@ async def test_promo_runner_publishes_and_reposts_telegram_event(tmp_path, monke
     ]
     assert exposures[1].details_json["source_url"] == f"https://t.me/kldevents/{1000 + event_id}"
     assert saved.tg_event_post_url == f"https://t.me/kldevents/{1000 + event_id}"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_self_forwards_existing_source_post(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 14, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Кантата с уже опубликованным постом", "2026-06-14", festival="Кантата")
+        event.tg_event_post_url = "https://t.me/kldevents/777"
+        event.tg_event_post_id = 777
+        event.tg_event_post_mode = "smart_update"
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="Кантата · source amplification",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(day=16),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+            profile_key="kldevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "target_chat": "@kldevents",
+                "active_start_hour": 10,
+                "active_end_hour": 20,
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=event_id))
+        await session.commit()
+
+    published_ids: list[int] = []
+
+    async def fake_publish(ev, db_arg, bot_arg, *, target_chat):
+        published_ids.append(int(ev.id))
+        return f"https://t.me/kldevents/{1000 + int(ev.id)}"
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.forwarded: list[tuple[str, str, int]] = []
+
+        async def forward_message(self, *, chat_id, from_chat_id, message_id):
+            self.forwarded.append((chat_id, from_chat_id, message_id))
+            return SimpleNamespace(message_id=1777)
+
+    bot = DummyBot()
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", fake_publish)
+
+    results = await run_promo_vk_activities(db, bot, now_utc=now_utc)
+
+    assert [(item.surface, item.status, item.event_id, item.source_url, item.target_url) for item in results] == [
+        (
+            PROMO_SURFACE_TG_EVENT_PUBLISH,
+            "forwarded",
+            event_id,
+            "https://t.me/kldevents/777",
+            "https://t.me/kldevents/1777",
+        )
+    ]
+    assert bot.forwarded == [("@kldevents", "@kldevents", 777)]
+    assert published_ids == []
+    async with db.get_session() as session:
+        exposure = (await session.execute(select(PromoExposure))).scalars().one()
+        saved = await session.get(Event, event_id)
+    assert exposure.surface == PROMO_SURFACE_TG_EVENT_PUBLISH
+    assert exposure.publish_status == "TG_FORWARDED"
+    assert exposure.placement_kind == "rolling_window_self_forward"
+    assert exposure.details_json["source_url"] == "https://t.me/kldevents/777"
+    assert exposure.details_json["target_url"] == "https://t.me/kldevents/1777"
+    assert exposure.details_json["mode"] == "self_forward_existing_event_post"
+    assert saved.tg_event_post_url == "https://t.me/kldevents/777"
+    assert saved.tg_event_post_mode == "smart_update"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_tg_event_publish_counts_recent_organic_smart_update_post(tmp_path, monkeypatch) -> None:
+    import main
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now_utc = datetime(2026, 6, 13, 14, 30, tzinfo=timezone.utc)
+
+    async with db.get_session() as session:
+        event = _event("Кантата уже закрыла слот органикой", "2026-06-14", festival="Кантата")
+        event.tg_event_post_url = "https://t.me/kldevents/778"
+        event.tg_event_post_id = 778
+        event.tg_event_post_mode = "smart_update"
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        campaign = PromoCampaign(
+            title="Кантата · organic count",
+            status="active",
+            starts_at=now_utc.replace(hour=0),
+            ends_at=now_utc.replace(day=16),
+            priority=0,
+        )
+        session.add(campaign)
+        await session.flush()
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_TG_EVENT_PUBLISH,
+            profile_key="kldevents",
+            max_per_publish=1,
+            daily_cap=1,
+            config_json={
+                "target_chat": "@kldevents",
+                "active_start_hour": 10,
+                "active_end_hour": 20,
+            },
+        )
+        session.add(activity)
+        session.add(PromoTarget(campaign_id=int(campaign.id), target_type="event", event_id=event_id))
+        session.add(
+            JobOutbox(
+                event_id=event_id,
+                task=JobTask.tg_event_publish,
+                status=JobStatus.done,
+                updated_at=now_utc,
+                next_run_at=now_utc,
+            )
+        )
+        await session.commit()
+
+    class DummyBot:
+        async def forward_message(self, **kwargs):
+            raise AssertionError("recent organic Telegram post must satisfy the due slot")
+
+    async def fake_publish(ev, db_arg, bot_arg, *, target_chat):
+        raise AssertionError("recent organic Telegram post must suppress duplicate publication")
+
+    monkeypatch.setattr(main, "publish_tg_promo_event_publication", fake_publish)
+
+    results = await run_promo_vk_activities(db, DummyBot(), now_utc=now_utc)
+
+    assert results == []
+    async with db.get_session() as session:
+        exposures = (await session.execute(select(PromoExposure))).scalars().all()
+    assert exposures == []
     await db.close()
 
 

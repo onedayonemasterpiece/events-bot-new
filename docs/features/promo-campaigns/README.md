@@ -394,20 +394,30 @@ carousel hooks do not all render in the same color scheme. The activity does
 over these carousel cards; `afishaengagement` remains a separate surface for
 like/comment/repost motivators on event posts.
 
-`tg_event_publish` publishes a full promo event post into a configured Telegram
-event-flow channel, normally `@kldevents`. It is scheduled by the same
-lightweight promo runner as VK activities and respects the same local active
-window / due-slot rules. The activity is intentionally separate from ordinary
-Smart Update Telegram event publication: it creates an explicit campaign post,
-records `promo_exposure.surface='tg_event_publish'` with
-`publish_status='TG_PUBLISHED'`, and stores the resulting source post URL back
-on the event for downstream reposts. Full-body text is sanitized for Telegram
-HTML: Markdown section headings become bold headings, bullets are normalized,
-and raw service markers such as `###`, `**`, or list `*` must not leak to the
-public post. If promoted event media exists, the media is mandatory for the
-public surface: overlong full text is reduced to a concise media caption with
-the `Подробнее` button instead of falling back to a text-only post or exposing a
-long Smart Update bullet dump as the primary public copy.
+`tg_event_publish` keeps a rolling minimum of event-flow channel mentions,
+normally in `@kldevents`, using the same lightweight promo runner as VK
+activities and the same local active window / due-slot rules. It first counts
+recent organic Smart Update Telegram event publications in the target channel
+using completed `JobOutbox.tg_event_publish` rows for events that already have a
+matching `event.tg_event_post_url`, plus today's public promo exposures for that
+activity. If those posts already satisfy the due slots, it does nothing. If a
+slot is still missing and the selected event already has an older source-channel
+post, the activity forwards that original message back into the same target
+channel instead of rendering duplicate text; this preserves cross-message
+Telegram view accounting on the first event post. The self-forward is recorded
+as `promo_exposure.surface='tg_event_publish'`,
+`publish_status='TG_FORWARDED'`, `placement_kind='rolling_window_self_forward'`
+with `details_json.source_url` and `details_json.target_url`, and does not
+replace `event.tg_event_post_url`. Only when no forwardable source-channel post
+exists, or the self-forward fails, the activity falls back to the full promo
+event publication path, records `publish_status='TG_PUBLISHED'`, and stores the
+new source post URL back on the event for downstream reposts. Full-body text is
+sanitized for Telegram HTML: Markdown section headings become bold headings,
+bullets are normalized, and raw service markers such as `###`, `**`, or list
+`*` must not leak to the public post. If promoted event media exists, the media
+is mandatory for the public surface: overlong full text is reduced to a concise
+media caption with the `Подробнее` button instead of falling back to a text-only
+post or exposing a long Smart Update bullet dump as the primary public copy.
 
 `tg_repost` forwards an existing source-channel post, normally
 `@kldevents -> @kenigevents`, instead of rendering a new text post in the
