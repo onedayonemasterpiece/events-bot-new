@@ -22,15 +22,16 @@
 - схема БД/RLS/retention: `docs/features/unsigned-personalization/database.md`;
 - контракт влияния на Smart Update: `docs/features/unsigned-personalization/smart-update-contract.md`;
 - LLM stress scenario на production sample: `docs/features/unsigned-personalization/llm-stress-scenarios.md`;
-- planned implementation/test artifacts before implementation PR:
-  - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
+- MVP-0 reference/probe artifacts in this branch:
+  - Gherkin scenario: `tests/e2e/features/static_site_personalization.feature`;
   - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
-  - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
+  - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;
+  - provider-free probe script: `scripts/build_event_detail_related_probe.py`.
 
 Documentation rule: links to implementation/test artifacts must be accurate. A
-document must not say that a reference client, Gherkin scenario, or Playwright
-test is already added unless that file exists in the same commit/PR. Otherwise
-the link must remain explicitly marked as planned.
+document must not say that a reference client, Gherkin scenario, Playwright
+test, or probe script is already added unless that file exists in the same
+commit/PR. Otherwise the link must remain explicitly marked as planned.
 
 Локальный референс динамики поверх static HTML — соседний проект `/home/dev/projects/kdg80`:
 
@@ -469,13 +470,14 @@ Probe должен ответить минимум:
 9. **Metrics/E2E**: personas, viewport split, no-consent/no-Supabase fallback, cross-persona isolation.
 10. **Rollout**: preview, internal QA, 1-month Telegraph dual-run, canonical switch criteria.
 
-## Planned reference client module and Playwright contract test
+## Reference client module, probe and Playwright contract test
 
-До появления полноценного Astro-приложения нужен reusable browser reference implementation. Если эти файлы не входят в текущий commit/PR, этот раздел является planned contract, а не release evidence:
+До появления полноценного Astro-приложения нужен reusable browser reference implementation. В этой ветке он покрывает MVP-0 `event_detail_related`, а не всю будущую персонализированную главную:
 
-- `static_site/personalization/personalization.js` — local-first controller/ranker/telemetry contract;
-- `static_site/personalization/demo.html` — static demo page that mimics future Astro island wiring;
-- `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract test against the demo/module, not an inline-only mock.
+- `static_site/personalization/personalization.js` — local-first `event_detail_related` controller/ranker/compact telemetry contract;
+- `static_site/personalization/demo.html` — static event page demo that mimics future Astro island wiring;
+- `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract test against the demo/module, not an inline-only mock;
+- `scripts/build_event_detail_related_probe.py` — provider-free reproducible probe for `related_static` candidates, taxonomy warnings, persona checks, event-type diversity cap and cost/latency report.
 
 Проверка:
 
@@ -485,11 +487,25 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Когда файлы будут committed, минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP contract:
+Offline probe example:
+
+```bash
+python3 scripts/build_event_detail_related_probe.py \
+  --input artifacts/codex/static-personalization/real_event_sample_2026-06-24.json \
+  --output artifacts/codex/static-personalization/probe-2026-06-XX \
+  --top-k 12
+```
+
+Local reproducibility check on 2026-06-26 used a 500-event sample exported from
+`db_prod_data.sqlite` to `artifacts/codex/static-personalization/real_event_sample_2026-06-26.json`;
+the provider-free probe returned `ok=true`, `provider_calls=0`, and all three
+persona checks passed after the deterministic event-type diversity cap.
+
+Минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP-0 contract:
 
 - без consent — static fallback и нет telemetry/localStorage profile;
-- mobile после consent — `layout_mode=feed`, local rerank, layout-aware telemetry, hide_event;
-- desktop — `layout_mode=grid`, видимые filters, не mobile feed;
+- mobile после consent — `surface=event_detail_related`, `layout_mode=module`, `presentation=mobile_related`, local rerank, layout-aware telemetry, hide_event;
+- desktop — `layout_mode=module`, `presentation=desktop_related`, module/grid/right rail, не mobile infinite feed;
 - Supabase timeout — local fallback и CTA остаются доступны.
 
 Этот тест не заменяет будущие E2E на реальном `kenigevents.ru`, но уже защищает ключевой контракт персонализации при разработке client island.

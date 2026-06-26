@@ -3,17 +3,21 @@
 > **Status:** design/eval scenario  
 > **Real-data evidence:** `artifacts/codex/static-personalization/real_event_sample_2026-06-24.json` (not committed) from Fly production SQLite read-only probe.
 
-A reproducible prompt pack can be generated offline with:
+A reproducible MVP-0 `event_detail_related` probe can be generated offline with:
 
 ```bash
-python3 scripts/build_personalization_llm_stress_pack.py \
+python3 scripts/build_event_detail_related_probe.py \
   --input artifacts/codex/static-personalization/real_event_sample_2026-06-24.json \
-  --output artifacts/codex/static-personalization/llm_stress_prompt_pack_2026-06-24.json \
-  --limit 24 \
+  --output artifacts/codex/static-personalization/probe-2026-06-XX \
   --top-k 12
 ```
 
-The command performs no provider call; it builds the LLM feature-extraction prompt, persona evaluator prompts, deterministic top-k baselines, and validates the pack shape. Current local validation result: `{"ok": true, "errors": []}`.
+The command performs no provider call; it builds `related_static` candidates, deterministic local rerank persona checks, taxonomy warning summaries, and a cost/latency report. Provider LLM/embedding probes can be layered on the same sample later; they are not required in the page-view hot path.
+
+Additional local reproducibility check on 2026-06-26 used a 500-event sample
+from `db_prod_data.sqlite` and wrote local-only artifacts under
+`artifacts/codex/static-personalization/probe-2026-06-26/`. The deterministic
+probe returned `ok=true`, `provider_calls=0`, and all MVP-0 personas passed.
 
 ## Real data snapshot
 
@@ -49,11 +53,11 @@ probe on the real catalog and store local artifacts under:
 ```text
 artifacts/codex/static-personalization/probe-YYYY-MM-DD/
   event_sample.json
-  enrichment_output_gemini_flash_lite.json
   taxonomy_mapping_report.md
   related_static_candidates.json
   persona_eval_report.md
   cost_latency_report.md
+  probe_report.json
 ```
 
 The probe focuses on `event_detail_related`, the first MVP surface documented in

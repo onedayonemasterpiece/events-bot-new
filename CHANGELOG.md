@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Personalization / event detail related prototype**: added the MVP-0 static event-page reference client/demo, Playwright contract, Gherkin scenario, and provider-free offline probe script for `related_static` candidates, compact served-list telemetry, mobile/desktop module behavior, localStorage rerank after consent, hidden/negative-interest filters, event-type diversity caps, and backend-unavailable fallback.
 - **Personalization / MVP-0 event detail related**: narrowed the first validation milestone to the `event_detail_related` block on a concrete static event page, added the dedicated contract document, fixed the model-selection wording so planned reference JS is not described as implemented, and documented the required real-catalog probe/ranker comparison before Astro implementation.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses

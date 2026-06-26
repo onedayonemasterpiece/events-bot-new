@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KenigEvents event_detail_related MVP-0 demo</title>
+  <style>
+    :root { color-scheme: light; --border: #cbd5e1; --muted: #475569; --bg: #f8fafc; --ink: #0f172a; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; color: var(--ink); background: var(--bg); }
+    .page { max-width: 1120px; margin: 0 auto; padding: 16px; display: grid; gap: 20px; }
+    .event-hero, .related-shell, .desktop-rail { background: white; border: 1px solid var(--border); border-radius: 18px; padding: 18px; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
+    .event-hero h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 48px); line-height: 1.05; }
+    .event-meta, .related-meta, .reason-codes, #status { color: var(--muted); }
+    .primary-cta, button { min-height: 44px; padding: 10px 14px; border-radius: 12px; border: 1px solid #94a3b8; background: #f8fafc; color: #0f172a; font-weight: 650; cursor: pointer; }
+    .primary-cta { background: #0f172a; color: white; border-color: #0f172a; }
+    .related-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+    .related-block { margin-top: 14px; }
+    .related-block.mobile_related, .related-block.tablet_related { display: flex; flex-direction: column; gap: 12px; }
+    .related-block.desktop_related { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .related-card { border: 1px solid var(--border); border-radius: 16px; padding: 14px; background: #fff; min-width: 0; }
+    .related-card h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.2; }
+    .related-card button { margin: 8px 8px 0 0; }
+    .desktop-rail { display: none; }
+    .desktop-layout { display: block; }
+    @media (min-width: 1024px) {
+      .page { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+      .event-hero, .related-shell { grid-column: 1; }
+      .desktop-rail { display: block; grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="event-hero" aria-labelledby="event-title">
+      <p class="event-meta">Калининград · 19:00 · Джаз-клуб</p>
+      <h1 id="event-title">Камерный джаз у моря</h1>
+      <p>Static event page остаётся полезной без JS: описание, дата, место и CTA уже в HTML.</p>
+      <button class="primary-cta" type="button">Билеты / регистрация</button>
+    </section>
+
+    <aside class="desktop-rail" aria-label="Desktop related module">
+      <strong>Desktop module</strong>
+      <p>На desktop related-блок может жить в right rail/grid, а не превращаться в бесконечную мобильную ленту.</p>
+    </aside>
+
+    <section class="related-shell" aria-labelledby="related-title">
+      <div class="related-header">
+        <div>
+          <h2 id="related-title">Похожие события</h2>
+          <div id="status" role="status">static related fallback</div>
+        </div>
+        <div id="consent"><button id="ok" type="button">ОК, персонализировать</button> <button id="reset" type="button">Сбросить</button></div>
+      </div>
+      <div id="related" data-surface="event_detail_related" data-algorithm-id="static_related_v1"></div>
+      <button id="more" type="button" hidden>Показать ещё</button>
+    </section>
+  </main>
+
+  <script src="/personalization/personalization.js"></script>
+  <script>
+    window.__telemetry = [];
+    window.__currentEvent = {
+      event_id: 100,
+      slug: 'kamernyy-dzhaz-u-morya',
+      title: 'Камерный джаз у моря',
+      city: 'Калининград',
+      time_bucket: 'evening',
+      normalized_tags: ['concert', 'jazz', 'live_music', 'evening']
+    };
+    window.__relatedStatic = [
+      { base_similarity: 0.92, reason_codes: ['tag:jazz', 'same_city', 'evening'], event: { event_id: 101, slug: 'baltiyskiy-dzhaz', title: 'Балтийский джазовый вечер', city: 'Калининград', venue_name: 'Филармония', date_label: 'сегодня 20:00', time_bucket: 'evening', event_type: 'concert', normalized_tags: ['concert', 'jazz', 'evening'], status: 'active', popularity_score: 0.5 } },
+      { base_similarity: 0.76, reason_codes: ['same_city', 'tag:live_music'], event: { event_id: 102, slug: 'organ-vecher', title: 'Органный вечер', city: 'Калининград', venue_name: 'Кафедральный собор', date_label: 'завтра 19:00', time_bucket: 'evening', event_type: 'concert', normalized_tags: ['concert', 'classic_music', 'evening'], status: 'active', popularity_score: 0.6 } },
+      { base_similarity: 0.63, reason_codes: ['same_city', 'profile:theatre'], event: { event_id: 103, slug: 'anna-karenina', title: 'Спектакль «Анна Каренина»', city: 'Калининград', venue_name: 'Драмтеатр', date_label: 'пятница 19:00', time_bucket: 'evening', event_type: 'theatre', normalized_tags: ['theatre', 'drama', 'classic'], status: 'active', popularity_score: 0.7 } },
+      { base_similarity: 0.58, reason_codes: ['tag:kids', 'same_city'], event: { event_id: 104, slug: 'kids-toy-workshop', title: 'Детский мастер-класс по игрушке', city: 'Калининград', venue_name: 'Дом творчества', date_label: 'суббота 12:00', time_bucket: 'day', event_type: 'workshop', normalized_tags: ['kids', 'workshop', 'craft'], status: 'active', is_free: true } },
+      { base_similarity: 0.54, reason_codes: ['venue_nearby'], event: { event_id: 105, slug: 'zakulise-teatra', title: 'Экскурсия «Закулисье театра»', city: 'Калининград', venue_name: 'Драмтеатр', date_label: 'воскресенье 18:00', time_bucket: 'evening', event_type: 'excursion', normalized_tags: ['excursion', 'theatre'], status: 'sold_out', ticket_status: 'sold_out' } },
+      { base_similarity: 0.49, reason_codes: ['same_city', 'tag:lecture'], event: { event_id: 106, slug: 'lecture-music-history', title: 'Лекция об истории джаза', city: 'Калининград', venue_name: 'Библиотека', date_label: 'среда 18:30', time_bucket: 'evening', event_type: 'lecture', normalized_tags: ['lecture', 'jazz', 'free'], status: 'active', is_free: true } },
+      { base_similarity: 0.47, reason_codes: ['same_city', 'tag:concert'], event: { event_id: 109, slug: 'swing-open-air', title: 'Свинг open-air на набережной', city: 'Калининград', venue_name: 'Набережная', date_label: 'четверг 19:30', time_bucket: 'evening', event_type: 'concert', normalized_tags: ['concert', 'jazz', 'evening'], status: 'active', popularity_score: 0.45 } },
+      { base_similarity: 0.44, reason_codes: ['same_city', 'free'], event: { event_id: 110, slug: 'music-talk-free', title: 'Бесплатная встреча о музыке', city: 'Калининград', venue_name: 'Культурный центр', date_label: 'суббота 18:00', time_bucket: 'evening', event_type: 'lecture', normalized_tags: ['lecture', 'live_music', 'free', 'evening'], status: 'active', is_free: true } },
+      { base_similarity: 0.97, reason_codes: ['same_series'], is_other_date: true, event: { event_id: 107, slug: 'kamernyy-dzhaz-u-morya-2', title: 'Камерный джаз у моря — другая дата', city: 'Калининград', event_type: 'concert', normalized_tags: ['concert', 'jazz'], status: 'active' } },
+      { base_similarity: 0.86, reason_codes: ['cancelled'], event: { event_id: 108, slug: 'cancelled-jazz', title: 'Отменённый джазовый сет', city: 'Калининград', event_type: 'concert', normalized_tags: ['concert', 'jazz'], status: 'cancelled' } }
+    ];
+    window.__controller = window.KenigEventsPersonalization.createController({
+      currentEvent: window.__currentEvent,
+      relatedStatic: window.__relatedStatic,
+      container: '#related',
+      status: '#status',
+      consentButton: '#ok',
+      resetButton: '#reset',
+      moreButton: '#more',
+      backendAvailable: window.__backendAvailable !== false,
+      defaultProfile: {
+        positive_tags: { jazz: 0.9, concert: 0.4, evening: 0.2 },
+        negative_interest_tags: { kids: 0.9, workshop: 0.4 },
+        city_affinity: { 'Калининград': 1 },
+        hidden_event_ids: [],
+        recent_event_ids: []
+      },
+      telemetrySink: function (event) { window.__telemetry.push(event); }
+    });
+    window.__controller.render();
+  </script>
+</body>
+</html>

@@ -271,20 +271,19 @@ Google Event structured data требует добавлять required properti
 3. После consent:
    - localStorage хранит lightweight anonymous profile;
    - same-origin endpoint/Supabase пишет compact telemetry; server snapshots используются для analytics/post-MVP ranker, не как обязательный browser read в MVP;
-   - client-side island может удалить явно неинтересные события и подгрузить персональную ленту.
+   - client-side island может удалить явно неинтересные события и локально переупорядочить `event_detail_related`; персональная главная/лента остаётся later.
 4. Если Supabase/API не отвечает быстро, страница остаётся в fallback режиме.
 
 Performance rule: персонализация не должна блокировать first contentful paint, indexing или CTA.
 
-Planned reference implementation для будущего Astro island:
+Reference implementation for MVP-0 contract:
 
-- `static_site/personalization/personalization.js` — browser-only local-first rerank/telemetry controller;
-- `static_site/personalization/demo.html` — static demo page;
-- `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract.
+- `static_site/personalization/personalization.js` — browser-only local-first `event_detail_related` rerank/telemetry controller;
+- `static_site/personalization/demo.html` — static event page demo;
+- `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract;
+- `scripts/build_event_detail_related_probe.py` — provider-free offline probe for `related_static` candidates and persona checks.
 
-Если эти файлы не входят в тот же commit/PR, они считаются planned artifacts, а
-не release evidence. Перед merge implementation PR нужно либо добавить их, либо
-убрать ссылки.
+These artifacts are a contract/prototype before full Astro integration; they are not production deployment evidence for `kenigevents.ru`.
 
 Подробности: `docs/features/unsigned-personalization/README.md`.
 

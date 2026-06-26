@@ -213,12 +213,16 @@ features:
     database_design: docs/features/unsigned-personalization/database.md
     smart_update_contract: docs/features/unsigned-personalization/smart-update-contract.md
     llm_stress_scenarios: docs/features/unsigned-personalization/llm-stress-scenarios.md
+    event_detail_probe: scripts/build_event_detail_related_probe.py
     related_static_site: docs/features/static-site-pages/README.md
-    planned_reference_client: static_site/personalization/personalization.js
-    planned_reference_demo: static_site/personalization/demo.html
-    planned_playwright_contract: tests/playwright/static_personalization_contract.spec.ts
-    planned_gherkin: tests/e2e/features/static_site_personalization.feature
-    entrypoints: []
+    reference_client: static_site/personalization/personalization.js
+    reference_demo: static_site/personalization/demo.html
+    playwright_contract: tests/playwright/static_personalization_contract.spec.ts
+    gherkin: tests/e2e/features/static_site_personalization.feature
+    entrypoints:
+      - static_site/personalization/personalization.js
+      - static_site/personalization/demo.html
+      - scripts/build_event_detail_related_probe.py
   telegram_monitoring:
     status: implemented
     docs: docs/features/telegram-monitoring/README.md

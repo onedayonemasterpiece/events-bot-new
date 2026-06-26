@@ -196,10 +196,11 @@ Acceptance is not “the model feels smart”. Required checks:
 
 ## Browser prototype before Astro implementation
 
-Before full Astro integration, create the planned reference artifacts:
+Before full Astro integration, keep the reference artifacts passing:
 
 - `static_site/personalization/demo.html`;
 - `static_site/personalization/personalization.js`;
-- `tests/playwright/static_personalization_contract.spec.ts`.
+- `tests/playwright/static_personalization_contract.spec.ts`;
+- `scripts/build_event_detail_related_probe.py`.
 
-The demo should cover only this MVP-0 surface first: static related block, consent, local profile, hide/not interested, mobile module, desktop module, Supabase timeout fallback.
+The demo covers only this MVP-0 surface first: static related block, consent, local profile, hide/not interested, mobile module, desktop module, backend/Supabase timeout fallback. The probe covers provider-free static candidates, taxonomy warnings, persona checks, event-type diversity cap and cost/latency summary.
