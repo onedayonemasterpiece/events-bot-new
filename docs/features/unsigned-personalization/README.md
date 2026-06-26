@@ -22,10 +22,12 @@
 - схема БД/RLS/retention: `docs/features/unsigned-personalization/database.md`;
 - контракт влияния на Smart Update: `docs/features/unsigned-personalization/smart-update-contract.md`;
 - LLM stress scenario на production sample: `docs/features/unsigned-personalization/llm-stress-scenarios.md`;
-- planned implementation/test artifacts before implementation PR:
-  - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
-  - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
-  - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
+- MVP-0 probe report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
+- generated static manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`;
+- probe script: `scripts/probe_event_detail_related.py`;
+- Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
+- reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
+- Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
 
 Documentation rule: links to implementation/test artifacts must be accurate. A
 document must not say that a reference client, Gherkin scenario, or Playwright
@@ -416,7 +418,8 @@ MVP-0 contract:
 
 - `surface = event_detail_related`;
 - `layout_mode = module`;
-- `algorithm_id = static_related_v1 | local_related_rerank_v1 | semantic_related_v1`;
+- `algorithm_id = static_related_v1 | local_related_rerank_v1 | local_related_rerank_v1_fallback | semantic_related_v1`;
+- `layout_mode = module`, а device-specific представление задаётся `presentation_mode = vertical_related | grid_related`;
 - similarity к текущему событию доминирует над long-term profile;
 - other dates of the same event уходят в “Другие даты”, не в related;
 - hidden/cancelled/current events не показываются;
@@ -424,27 +427,23 @@ MVP-0 contract:
 
 Детальный контракт: `docs/features/unsigned-personalization/event-detail-related.md`.
 
-## Validation probes before implementation PR
+## Validation probes before Astro implementation PR
 
-Проектирование не считается завершённым, пока нет маленьких проверок на реальном каталоге. Нужен probe на production sample (`377` future events зафиксированы в `llm-stress-scenarios.md`) с локальными артефактами под `artifacts/codex/static-personalization/probe-YYYY-MM-DD/`:
+Проектирование не считается завершённым, пока нет маленьких проверок на реальном каталоге. MVP-0 probe уже оформлен для `event_detail_related`:
 
-```text
-event_sample.json
-enrichment_output_gemini_flash_lite.json
-taxonomy_mapping_report.md
-related_static_candidates.json
-persona_eval_report.md
-cost_latency_report.md
-```
+- script: `scripts/probe_event_detail_related.py`;
+- report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
+- generated manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`;
+- input evidence: production SQLite snapshot `artifacts/db/event_quality_audit_20260624_prod.sqlite` (not committed).
 
-Probe должен ответить минимум:
+Probe отвечает минимум:
 
-- сколько событий проходит schema validation;
-- сколько `unmapped_tags` и каких taxonomy gaps не хватает;
-- сколько `type_description_mismatch`, `weak_description`, `location_ambiguous`;
-- сколько related-кандидатов выглядят абсурдно;
+- сколько future active events участвует;
+- проходят ли hard invariants: no current/cancelled/hidden in related;
+- понижаются ли `negative_interest_tags`;
+- соблюдаются ли diversity caps;
 - хватает ли локального feature-vector без semantic embeddings;
-- даёт ли `gemini-embedding-001` или local/Kaggle multilingual baseline заметное улучшение top-k.
+- нужен ли `semantic_related_v1` в MVP-0.
 
 Сравниваемые rankers:
 
@@ -452,7 +451,13 @@ Probe должен ответить минимум:
 2. `local_related_rerank_v1` — static related + localStorage profile + negative interests.
 3. `semantic_related_v1` — static/local features + semantic embedding similarity; eval only, not online dependency.
 
-До Astro implementation нужен browser reference prototype из planned artifacts (`personalization.js`, `demo.html`, Playwright contract). Сначала он покрывает `event_detail_related`, а не всю персонализированную главную.
+Browser reference prototype уже покрывает `event_detail_related`, а не всю персонализированную главную:
+
+- `static_site/personalization/personalization.js`;
+- `static_site/personalization/demo.html`;
+- `tests/playwright/static_personalization_contract.spec.ts`.
+
+Последний локальный contract run: `4 passed`.
 
 ## Implementation work breakdown
 
@@ -469,9 +474,9 @@ Probe должен ответить минимум:
 9. **Metrics/E2E**: personas, viewport split, no-consent/no-Supabase fallback, cross-persona isolation.
 10. **Rollout**: preview, internal QA, 1-month Telegraph dual-run, canonical switch criteria.
 
-## Planned reference client module and Playwright contract test
+## Reference client module and Playwright contract test
 
-До появления полноценного Astro-приложения нужен reusable browser reference implementation. Если эти файлы не входят в текущий commit/PR, этот раздел является planned contract, а не release evidence:
+До появления полноценного Astro-приложения есть reusable browser reference implementation для MVP-0:
 
 - `static_site/personalization/personalization.js` — local-first controller/ranker/telemetry contract;
 - `static_site/personalization/demo.html` — static demo page that mimics future Astro island wiring;
@@ -485,12 +490,12 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Когда файлы будут committed, минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP contract:
+Минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP-0 contract:
 
-- без consent — static fallback и нет telemetry/localStorage profile;
-- mobile после consent — `layout_mode=feed`, local rerank, layout-aware telemetry, hide_event;
-- desktop — `layout_mode=grid`, видимые filters, не mobile feed;
-- Supabase timeout — local fallback и CTA остаются доступны.
+- без consent — static related fallback и нет telemetry/localStorage profile;
+- mobile после consent — `surface=event_detail_related`, `layout_mode=module`, `presentation_mode=vertical_related`, local rerank, served-list telemetry, hide_event;
+- desktop — `presentation_mode=grid_related`, не mobile feed/infinite feed, current-event context dominates long-term profile;
+- telemetry endpoint/Supabase timeout — local fallback и CTA/buttons остаются доступны.
 
 Этот тест не заменяет будущие E2E на реальном `kenigevents.ru`, но уже защищает ключевой контракт персонализации при разработке client island.
 

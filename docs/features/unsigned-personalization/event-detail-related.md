@@ -1,6 +1,6 @@
 # Event Detail Related Recommendations
 
-> **Status:** MVP-0 product/technical contract, not implemented
+> **Status:** MVP-0 product/technical contract + browser reference prototype
 > **Surface:** `event_detail_related`
 > **Primary goal:** prove personalization as a small enhancement to a useful static event page before designing a personalized home feed.
 
@@ -58,25 +58,73 @@ Mandatory filters/guards:
 - avoid too many cards from one venue;
 - avoid filling every slot with concerts when close alternatives exist.
 
-Manifest shape:
+Manifest shape (`docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json` is a generated example from the real catalog probe):
 
 ```json
 {
-  "event_id": 123,
+  "schema_version": "event-detail-related-v1",
+  "feature_schema_version": "event-detail-related-v1",
+  "surface": "event_detail_related",
+  "algorithm_id": "static_related_v1",
+  "generated_at": "2026-06-26T00:00:00Z",
+  "current_event": {
+    "event_id": 123,
+    "title": "Камерный джаз",
+    "category": "music",
+    "tags": ["jazz", "live_music", "evening"],
+    "city": "Калининград",
+    "location_name": "Дом искусств",
+    "date": "2026-07-12"
+  },
   "related_static": [
     {
       "event_id": 456,
+      "title": "Камерный джаз на крыше",
+      "category": "music",
+      "tags": ["jazz", "live_music", "evening"],
+      "audience_exclusion_tags": [],
+      "city": "Калининград",
+      "location_name": "Roof Hall",
+      "date": "2026-07-14",
+      "status": "available",
+      "lifecycle_status": "active",
+      "is_free": false,
       "base_similarity": 0.82,
       "reason_codes": ["same_category:music", "tag:jazz", "same_city"]
-    },
-    {
-      "event_id": 789,
-      "base_similarity": 0.74,
-      "reason_codes": ["tag:evening", "venue_nearby"]
     }
   ]
 }
 ```
+
+Candidate fields:
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `event_id`, `title` | yes | stable canonical event id from Fly SQLite; no Supabase ids |
+| `category`, `tags` | yes | controlled taxonomy values; no free-form LLM tags in serving |
+| `audience_exclusion_tags` | yes, can be empty | event-side “not suited for” hints, not user dislikes |
+| `city`, `location_name`, `date` | yes | used for context and display |
+| `status`, `lifecycle_status` | yes | cancelled/postponed/duplicate/merged are hard-excluded |
+| `is_free` / price band | recommended | used for light price affinity |
+| `base_similarity` | yes | static related score normalized to `0..1` |
+| `reason_codes` | yes | compact explainability and telemetry evidence |
+
+Static score formula used by the probe/reference contract:
+
+```text
+static_related_score =
+  0.28 * same_category
++ 0.24 * tag_overlap_jaccard
++ 0.12 * same_city
++ 0.12 * date_proximity
++ 0.06 * same_venue
++ 0.05 * price_band_match
+- 0.20 * sold_out_penalty
+```
+
+The exact weights are allowed to change after probes, but the invariants are not:
+current/cancelled/past/linked-date duplicates are excluded, and `reason_codes`
+must explain why a candidate entered the static fallback.
 
 ## Local rerank formula
 
@@ -86,20 +134,35 @@ Draft formula:
 
 ```text
 personalized_related_score =
-  0.45 * similarity_to_current_event
-+ 0.20 * user_profile_similarity
-+ 0.10 * same_city_or_distance_match
-+ 0.08 * date_time_match
-+ 0.05 * price_match
-+ 0.05 * freshness_or_popularity
-+ 0.04 * diversity_bonus
-+ 0.03 * exploration_bonus
-- negative_interest_penalty
-- fatigue_penalty
+  0.80 * static_related_score
++ 0.10 * local_profile_affinity
++ 0.04 * price_match
++ 0.03 * time_match
++ 0.02 * exploration_bonus
+- 0.55 * negative_interest_match
+- 0.18 * fatigue_penalty
+- 0.20 * sold_out_penalty
 - explicit_hide_hard_filter
 ```
 
 Guardrail: if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary.
+
+Local profile fields consumed by MVP-0:
+
+```json
+{
+  "profile_version": "anon-profile-v1",
+  "feature_schema_version": "event-detail-related-v1",
+  "anon_id": "opaque-random-id",
+  "session_id": "opaque-random-id",
+  "positive_tags": {"jazz": 1.0, "live_music": 0.6},
+  "negative_interest_tags": {"kids": 1.0},
+  "hidden_event_ids": [12345],
+  "seen_event_ids": [222],
+  "seen_venue_ids": ["venue-or-name"],
+  "price_preferences": {"prefer_free": false}
+}
+```
 
 ## Served-list summary
 
@@ -127,6 +190,39 @@ Every rendered/reranked related block should be summarizable without storing raw
 ```
 
 This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context.
+
+Session summary and strong actions stay compact:
+
+```json
+{
+  "event_kind": "session_summary",
+  "surface": "event_detail_related",
+  "viewport_class": "mobile",
+  "layout_mode": "module",
+  "presentation_mode": "vertical_related",
+  "algorithm_id": "local_related_rerank_v1",
+  "event_counts": {
+    "served_list_summary": 1,
+    "related_card_click": 1,
+    "hide_event": 1
+  },
+  "strong_event_ids": {
+    "related_card_click": [456],
+    "hide_event": [789]
+  }
+}
+```
+
+```json
+{
+  "event_kind": "related_card_click",
+  "surface": "event_detail_related",
+  "event_id": 456,
+  "rank": 0,
+  "served_list_id": "uuid",
+  "algorithm_id": "local_related_rerank_v1"
+}
+```
 
 ## Mobile vs desktop presentation
 
@@ -196,10 +292,42 @@ Acceptance is not “the model feels smart”. Required checks:
 
 ## Browser prototype before Astro implementation
 
-Before full Astro integration, create the planned reference artifacts:
+Before full Astro integration, the reference artifacts are:
 
 - `static_site/personalization/demo.html`;
 - `static_site/personalization/personalization.js`;
 - `tests/playwright/static_personalization_contract.spec.ts`.
 
-The demo should cover only this MVP-0 surface first: static related block, consent, local profile, hide/not interested, mobile module, desktop module, Supabase timeout fallback.
+The demo covers only this MVP-0 surface first: static related block, consent,
+local profile, hide/not interested, mobile module, desktop module, telemetry
+endpoint/Supabase timeout fallback.
+
+Verification:
+
+```bash
+NODE_PATH=/opt/node-v22.22.3-linux-x64/lib/node_modules \
+PLAYWRIGHT_HTML_OPEN=never \
+npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
+```
+
+Last local run: `4 passed`.
+
+## Real catalog probe
+
+Probe script:
+
+```bash
+python3 scripts/probe_event_detail_related.py \
+  --db artifacts/db/event_quality_audit_20260624_prod.sqlite \
+  --today 2026-06-26
+```
+
+Outputs:
+
+- report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
+- manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`.
+
+Current decision: local feature vectors are sufficient for MVP-0. Do not add a
+semantic embedding provider to the browser or required build path. Keep
+`semantic_related_v1` as a later offline comparison only if golden-persona
+quality shows the local vector is not enough.

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KenigEvents event_detail_related personalization demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; color: #0f172a; background: #f8fafc; }
+    main { max-width: 1040px; margin: 0 auto; }
+    .event { border: 1px solid #cbd5e1; border-radius: 18px; padding: 18px; background: white; margin-bottom: 18px; }
+    .consent { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+    .related { gap: 12px; margin-top: 12px; }
+    .related--vertical_related { display: flex; flex-direction: column; }
+    .related--grid_related { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .related-card { border: 1px solid #cbd5e1; border-radius: 14px; padding: 12px; background: white; }
+    .related-card h3 { font-size: 16px; margin: 0 0 6px; }
+    .meta, .reasons, #status { color: #475569; font-size: 13px; }
+    button { min-height: 40px; padding: 8px 12px; border-radius: 10px; border: 1px solid #94a3b8; background: #f8fafc; margin-right: 6px; }
+    @media (max-width: 767px) { .related--grid_related { display: flex; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="event">
+      <p>Событие</p>
+      <h1>Камерный джаз в малом зале</h1>
+      <p>Концерт современной инструментальной музыки вечером в Калининграде.</p>
+      <button type="button">Купить билет</button>
+    </article>
+
+    <section aria-labelledby="related-title">
+      <h2 id="related-title">Похожие события</h2>
+      <div class="consent"><span>Включить anonymous personalization?</span> <button id="ok" type="button">ОК</button><button id="reset" type="button">Сбросить</button></div>
+      <div id="status" role="status"></div>
+      <div id="related" data-surface="event_detail_related" data-algorithm-id="static_related_v1"></div>
+    </section>
+  </main>
+  <script src="/personalization/personalization.js"></script>
+  <script>
+    window.__telemetry = [];
+    window.__relatedManifest = {
+      schema_version: 'event-detail-related-v1',
+      feature_schema_version: 'event-detail-related-v1',
+      generated_at: '2026-06-26T00:00:00Z',
+      surface: 'event_detail_related',
+      algorithm_id: 'static_related_v1',
+      current_event: {
+        event_id: 101,
+        title: 'Камерный джаз в малом зале',
+        category: 'music',
+        tags: ['jazz', 'live_music', 'instrumental', 'evening'],
+        city: 'Калининград',
+        status: 'available'
+      },
+      related_static: [
+        {event_id: 203, title: 'Детский музыкальный спектакль', category: 'kids', tags: ['kids', 'family', 'live_music'], audience_exclusion_tags: [], city: 'Калининград', location_name: 'Дом искусств', date: '2026-07-02', status: 'available', lifecycle_status: 'active', base_similarity: 0.95, reason_codes: ['same_city', 'tag:live_music', 'same_category:music']},
+        {event_id: 201, title: 'Камерный джаз на крыше', category: 'music', tags: ['jazz', 'live_music', 'evening'], city: 'Калининград', location_name: 'Roof Hall', date: '2026-07-03', status: 'available', lifecycle_status: 'active', base_similarity: 0.92, reason_codes: ['same_category:music', 'tag:jazz', 'same_city']},
+        {event_id: 204, title: 'Рок-концерт у моря', category: 'music', tags: ['rock', 'live_music', 'evening'], city: 'Светлогорск', location_name: 'Янтарь холл', date: '2026-07-04', status: 'available', lifecycle_status: 'active', base_similarity: 0.78, reason_codes: ['same_category:music', 'tag:live_music']},
+        {event_id: 202, title: 'Спектакль «Анна Каренина»', category: 'theatre', tags: ['theatre', 'drama', 'evening'], city: 'Калининград', location_name: 'Драмтеатр', date: '2026-07-05', status: 'available', lifecycle_status: 'active', base_similarity: 0.74, reason_codes: ['tag:evening', 'same_city']},
+        {event_id: 205, title: 'Бесплатная лекция о музыке', category: 'lecture', tags: ['lecture', 'free', 'music'], city: 'Калининград', location_name: 'Библиотека', date: '2026-07-06', is_free: true, status: 'available', lifecycle_status: 'active', base_similarity: 0.70, reason_codes: ['same_city', 'tag:music']},
+        {event_id: 208, title: 'Джазовый джем в баре', category: 'music', tags: ['jazz', 'nightlife', 'live_music'], city: 'Калининград', location_name: 'Бар Бастион', date: '2026-07-06', status: 'available', lifecycle_status: 'active', base_similarity: 0.68, reason_codes: ['tag:jazz', 'same_city']},
+        {event_id: 101, title: 'Камерный джаз в малом зале', category: 'music', tags: ['jazz'], city: 'Калининград', status: 'available', lifecycle_status: 'active', base_similarity: 1.0, reason_codes: ['self_should_be_filtered']},
+        {event_id: 209, title: 'Отменённый концерт', category: 'music', tags: ['jazz'], city: 'Калининград', status: 'cancelled', lifecycle_status: 'cancelled', base_similarity: 0.99, reason_codes: ['cancelled_should_be_filtered']}
+      ]
+    };
+    window.__personalizationController = window.KenigEventsPersonalization.createEventDetailRelatedController({
+      manifest: window.__relatedManifest,
+      container: '#related',
+      status: '#status',
+      consentButton: '#ok',
+      resetButton: '#reset',
+      backendAvailable: window.__backendAvailable !== false,
+      telemetrySink: function (event) { window.__telemetry.push(event); }
+    });
+    window.__personalizationController.render();
+  </script>
+</body>
+</html>

@@ -35,10 +35,10 @@ Official references:
 The MVP write path should be **compact summaries first**, not a raw event firehose:
 
 - `public.personalization_session_summary` — compact session/profile deltas after consent;
-- `public.personalization_served_list_summary` — compact exposure context per feed/list chunk for future ranker labels;
+- `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Preferred production path: same-origin endpoint validates/rate-limits payload and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**.
+Preferred production path: same-origin endpoint validates/rate-limits payload and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`, and put `presentation_mode` / `current_event_id` into `metadata` if the table is not extended with dedicated columns.
 
 ### Private schema `personalization`
 

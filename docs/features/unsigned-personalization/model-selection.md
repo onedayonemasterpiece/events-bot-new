@@ -21,7 +21,7 @@ Selected minimal set:
 
 | Job | Selected model/tool | Why this, not heavier | Runtime status |
 | --- | --- | --- | --- |
-| Online ranking | Deterministic formula `local_rerank_v1`; later CatBoost/LightGBM only after logs | Cheapest, explainable, no provider latency/quota risk; matches source analytics MVP recommendation | Designed; reference JS contract planned before implementation PR; no provider call |
+| Online ranking | Deterministic formula `local_related_rerank_v1` for MVP-0 `event_detail_related`; later broader `local_rerank_v1`/CatBoost only after logs | Cheapest, explainable, no provider latency/quota risk; matches source analytics MVP recommendation | Reference JS + Playwright contract exist; no provider call |
 | Event semantic enrichment | `gemini-3.1-flash-lite` as primary; `gemma-4-31b-it` only as quality fallback/review for ambiguous rows | Source analytics asked for younger/simple models; Lite is the cheapest stable managed candidate with a limiter row; 31B is reserved for hard cases | Live provider + Supabase limiter smoke passed |
 | Event vectors / similarity baseline | Local deterministic feature vectors first; `gemini-embedding-001` only as optional semantic embedding eval/upgrade | Normalized tags/categories/audience/price/time/venue from enrichment can be vectorized locally; external embeddings cost extra requests and are not required for MVP | Local vector needs no provider; Google embedding live-smoked if we later enable it |
 | Local/open embedding option | `EmbeddingGemma` is accepted as future offline/local candidate, not selected for immediate MVP | It fits the source analytics idea (small 308M multilingual embedding model), but current repo env lacks HF token and local `torch`/`sentence-transformers`; Google API does not expose it as a simple managed model here | Not available in current local access path |
@@ -72,7 +72,7 @@ Responsive requirement: “feed” is the **mobile** discovery pattern. Desktop 
 | Store event features: tags, category, venue, price/time, embedding | Accepted for design | DB/design docs contain `event_feature_snapshot`; canonical event facts remain in Fly SQLite. |
 | Store behavior with action type, dwell, source, position, device | Accepted | Personalization telemetry design records layout/device/context and weighted actions after consent. |
 | Maintain session/short/mid/long interest profiles with time decay | Accepted, staged | MVP starts with local short/session profile; Supabase profile snapshots can add mid/long horizons later. |
-| Keep negative interests separately | Accepted | Reference ranker handles hidden/negative tags separately from positive affinity. |
+| Keep negative interests separately | Accepted | Reference ranker handles hidden events and `negative_interest_tags` separately from positive affinity. |
 | MVP: embedding/vector representation + weighted user profile + vector/search/scoring formula | Accepted with a narrower first step | Use local feature vectors + deterministic scoring first; external semantic embeddings are evaluated offline before adding pgvector/vector DB. |
 | Candidate generation / scoring / reranking pipeline | Accepted conceptually | MVP collapses this into filter + score + diversity/freshness/exploration; full ANN retrieval is later. |
 | CatBoost/LightGBM/XGBoost ranker after logs | Deferred | No training data yet; packages are not in current requirements/base env. Add after telemetry volume exists. |

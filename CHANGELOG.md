@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Personalization / MVP-0 event detail related**: narrowed the first validation milestone to the `event_detail_related` block on a concrete static event page, added the dedicated contract document, fixed the model-selection wording so planned reference JS is not described as implemented, and documented the required real-catalog probe/ranker comparison before Astro implementation.
+- **Personalization / MVP-0 event detail related**: completed the first validation milestone around the `event_detail_related` block on a concrete static event page: documented the manifest/static score/local rerank/telemetry contract, added a generated manifest example and real-catalog probe report, implemented the browser reference JS/demo, added Gherkin + Playwright contract tests (`4 passed`), and decided that local feature vectors are sufficient for MVP-0 while semantic embeddings remain offline eval only.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with

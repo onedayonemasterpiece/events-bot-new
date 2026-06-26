@@ -1,0 +1,193 @@
+{
+  "schema_version": "event-detail-related-v1",
+  "feature_schema_version": "event-detail-related-v1",
+  "surface": "event_detail_related",
+  "algorithm_id": "static_related_v1",
+  "generated_at": "2026-06-26T14:12:06Z",
+  "current_event": {
+    "event_id": 2400,
+    "title": "Bel Suono: шоу трёх роялей «Нам 15 лет!»",
+    "category": "music",
+    "tags": [
+      "classical_music",
+      "evening",
+      "live_music",
+      "music",
+      "rock",
+      "ticketed"
+    ],
+    "city": "Светлогорск",
+    "location_name": "Янтарь холл",
+    "date": "2026-07-10"
+  },
+  "related_static": [
+    {
+      "event_id": 5878,
+      "title": "Песни СССР",
+      "category": "music",
+      "tags": [
+        "classical_music",
+        "evening",
+        "live_music",
+        "music",
+        "ticketed"
+      ],
+      "city": "Светлогорск",
+      "location_name": "Янтарь холл",
+      "date": "2026-07-11",
+      "status": "sale",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.8244,
+      "reason_codes": [
+        "same_category:music",
+        "tag:classical_music",
+        "tag:evening",
+        "tag:live_music",
+        "tag:music",
+        "same_city",
+        "same_venue",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 5495,
+      "title": "Вадим Самойлов с симфоническим оркестром",
+      "category": "music",
+      "tags": [
+        "classical_music",
+        "evening",
+        "live_music",
+        "music",
+        "rock",
+        "ticketed"
+      ],
+      "city": "Светлогорск",
+      "location_name": "Янтарь холл",
+      "date": "2026-06-27",
+      "status": "sale",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.8146,
+      "reason_codes": [
+        "same_category:music",
+        "tag:classical_music",
+        "tag:evening",
+        "tag:live_music",
+        "tag:music",
+        "same_city",
+        "same_venue",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 2872,
+      "title": "Я люблю тебя, жизнь!",
+      "category": "music",
+      "tags": [
+        "classical_music",
+        "evening",
+        "live_music",
+        "music",
+        "ticketed"
+      ],
+      "city": "Светлогорск",
+      "location_name": "Янтарь холл, Ленина 11, Светлогорск",
+      "date": "2026-06-26",
+      "status": "sale",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.7116,
+      "reason_codes": [
+        "same_category:music",
+        "tag:classical_music",
+        "tag:evening",
+        "tag:live_music",
+        "tag:music",
+        "same_city",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 4779,
+      "title": "Любовь в стиле джаз",
+      "category": "cinema",
+      "tags": [
+        "cinema",
+        "classic",
+        "classical_music",
+        "drama",
+        "evening",
+        "jazz",
+        "live_music",
+        "music",
+        "theatre",
+        "ticketed"
+      ],
+      "city": "Калининград",
+      "location_name": "Музыкальный театр",
+      "date": "2026-07-10",
+      "status": "available",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.2791,
+      "reason_codes": [
+        "tag:classical_music",
+        "tag:evening",
+        "tag:live_music",
+        "tag:music",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 4040,
+      "title": "ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ",
+      "category": "theatre",
+      "tags": [
+        "evening",
+        "theatre"
+      ],
+      "city": "Светлогорск",
+      "location_name": "Янтарь холл, Ленина 11, Светлогорск",
+      "date": "2026-06-30",
+      "status": "available",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.2788,
+      "reason_codes": [
+        "tag:evening",
+        "same_city",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 6219,
+      "title": "Акварельная открытка «Домик у моря»",
+      "category": "workshop",
+      "tags": [
+        "family",
+        "kids",
+        "ticketed",
+        "workshop"
+      ],
+      "city": "Светлогорск",
+      "location_name": "Телеграф",
+      "date": "2026-06-28",
+      "status": "available",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.2644,
+      "reason_codes": [
+        "tag:ticketed",
+        "same_city",
+        "date_near",
+        "price_band_match"
+      ]
+    }
+  ]
+}
