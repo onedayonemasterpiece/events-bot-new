@@ -159,6 +159,8 @@ future runs to story-message forwarding.
   - verification showed message `4172` has `MessageMediaStory` with `message_media_story_id=338`, and story `338` has caption `Видеоанонс #759 · 26 июня`;
   - operator observation showed this commented story-message started a separate-looking view counter; the implementation was tightened to send `telegram_story_message` with `message=""` so it is a clean story share/forward and not a commented story-message;
   - CrumpleVideo production target timing was tightened to keep `tg:@kenigevents:story-message` 10 minutes (`delay_seconds=600`) after the successful `@kenigevents` story repost, with no comment/message;
+  - 10-minute timing deploy: commit `91dc216a` was pushed to `origin/main` and deployed as image `registry.fly.io/events-bot-new-wngqia:deployment-01KW1Q40MTY22BX6MS6KXQTMX5`; post-deploy `/healthz` returned `ok=true`, `ready=true`, `issues=[]`; Fly SSH env probe showed `tg:@kenigevents:story-message` has `transport=telegram_story_message`, `mode=repost_previous`, `delay_seconds=600`, `required=true`;
+  - focused regression after the timing change: `.venv/bin/python -m pytest tests/test_video_announce_story_publish.py tests/test_kaggle_story_publish.py -q` -> `36 passed`; `git diff --check` -> clean;
   - the test artifact was removed: message `4172` and story `338` were deleted, and `@kenigevents` had no active stories immediately after cleanup.
 
 ## Prevention
