@@ -70,8 +70,8 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
         profile_version: 'anon-profile-v1',
         feature_schema_version: 'event-detail-related-v1',
         taxonomy_version: 'event-taxonomy-v1',
-        anon_id: 'anon-test',
-        session_id: 'session-test',
+        anon_id: '11111111-1111-4111-8111-111111111111',
+        session_id: '22222222-2222-4222-8222-222222222222',
         positive_tags: { jazz: 1.0, live_music: 0.6, evening: 0.2 },
         negative_interest_tags: { kids: 1.0 },
         hidden_event_ids: ['208'],
@@ -131,6 +131,8 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     expect(profile.profile_version).toBe('anon-profile-v1');
     expect(profile.feature_schema_version).toBe('event-detail-related-v1');
     expect(profile.taxonomy_version).toBe('event-taxonomy-v1');
+    expect(profile.anon_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(profile.session_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     expect(profile.positive_tags).toEqual({});
     expect(profile.negative_interest_tags).toEqual({});
     await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'local_related_rerank_v1');
@@ -176,6 +178,27 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
   });
 
+  test('profile with prefixed non-UUID ids is rejected before DB-compatible telemetry', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, {
+      preloadedProfile: {
+        consent_ok: true,
+        profile_version: 'anon-profile-v1',
+        feature_schema_version: 'event-detail-related-v1',
+        taxonomy_version: 'event-taxonomy-v1',
+        anon_id: 'anon-prefixed-id',
+        session_id: 'session-prefixed-id',
+        positive_tags: { jazz: 1 },
+        negative_interest_tags: { kids: 1 },
+        hidden_event_ids: ['208'],
+      },
+    });
+
+    await expect(page.locator('#status')).toHaveText('static related fallback');
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'static_related_v1');
+    await expect(page.locator('.related-card').first()).toContainText('Детский музыкальный спектакль');
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
+  });
+
   test('blocked localStorage does not break the page or enable trusted personalization', async ({ page }) => {
     await openFixture(page, { width: 375, height: 812 }, { breakStorage: true });
     await expect(page.locator('#status')).toHaveText('static related fallback');
@@ -193,8 +216,8 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
         profile_version: 'anon-profile-v1',
         feature_schema_version: 'event-detail-related-v1',
         taxonomy_version: 'event-taxonomy-v1',
-        anon_id: 'anon-desktop',
-        session_id: 'session-desktop',
+        anon_id: '33333333-3333-4333-8333-333333333333',
+        session_id: '44444444-4444-4444-8444-444444444444',
         positive_tags: { theatre: 1.0, drama: 0.8 },
         negative_interest_tags: { kids: 0.9 },
         hidden_event_ids: [],
@@ -222,7 +245,7 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     await expect(page.getByRole('button', { name: 'Подробнее' }).first()).toBeEnabled();
     await page.getByRole('button', { name: 'Подробнее' }).first().click();
     const telemetry = await page.evaluate(() => (window as any).__telemetry);
-    expect(telemetry.some((e: any) => e.event_kind === 'recommendation_fallback_used')).toBeTruthy();
-    expect(telemetry.some((e: any) => e.event_kind === 'related_card_click')).toBeTruthy();
+    expect(telemetry.some((e: any) => e.event_kind === 'recommendation_fallback_used' && e.trusted_remote === false)).toBeTruthy();
+    expect(telemetry.some((e: any) => e.event_kind === 'related_card_click' && e.trusted_remote === false)).toBeTruthy();
   });
 });

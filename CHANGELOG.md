@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Personalization / MVP-0 event detail related hardening**: accepted the external review downgrade from “complete” to engineering-spike readiness, hardened the reference JS (`audience_exclusion_tags` no longer feed negative-interest scoring, demo seed moved out of core, strict profile schema/legacy `negative_tags` rejection, `taxonomy_version` compatibility, safe localStorage wrappers, stable `served_list_id`/`served_list_hash`, resize/render served-summary dedupe), expanded the real-catalog probe to 40 anchors and 10 golden personas with quality WARNs called out instead of hidden, added the bot/automation contract, production integration plan, static event-page interface reference board and transparent Gemini 3.5 Flash critical review, and updated Playwright coverage to `8 passed`.
+- **Personalization / thin-runtime architectural gate**: converted the production integration plan into a Fly.io 2GB thin-runtime gate (web serves static/API only; Smart Update/static builds, LLM/ML, embeddings and bulk analytics stay in worker/CI jobs), tightened the Supabase contract to compact accepted rows with client-payload -> DB mapping and no direct production browser writes, made browser `anon_id`/`session_id` UUID-compatible, bounded served-list dedupe state, separated trusted telemetry from debug-only local fallback, refreshed docs for bot endpoint tests/retention/CTA/promo/anti-bubble gates, and expanded Playwright coverage to `9 passed`.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with

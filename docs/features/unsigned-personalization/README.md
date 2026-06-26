@@ -18,7 +18,7 @@
 Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
-Production integration plan: `docs/features/unsigned-personalization/production-integration.md`.
+Thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
 
 Дополнительные проектные артефакты:
 
@@ -33,7 +33,7 @@ Production integration plan: `docs/features/unsigned-personalization/production-
 - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;
 - anti-bot/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`;
 - static event page interface references: `docs/features/static-site-pages/interface-references.md`;
-- production integration plan: `docs/features/unsigned-personalization/production-integration.md`.
+- thin-runtime architectural gate / production integration: `docs/features/unsigned-personalization/production-integration.md`.
 
 Documentation rule: links to implementation/test artifacts must be accurate. A
 document must not say that a reference client, Gherkin scenario, or Playwright
@@ -93,15 +93,15 @@ Traceability for the review:
 ## Принятые решения на MVP
 
 - Авторизации нет.
-- Используется anonymous visitor id + session id.
+- Используется anonymous visitor id + session id; пока SQL использует `uuid`, оба значения должны быть UUID-compatible без префиксов.
 - Consent banner допустим: простой “ОК” включает analytics/personalization.
 - Personalization state живёт в двух местах:
   - localStorage — лёгкий, быстрый, browser-local профиль;
-  - Supabase/Postgres — compact telemetry, debugging/eval, aggregates, and server snapshots for analytics/post-MVP ranker (not a browser read dependency in MVP).
+  - Supabase/Postgres — compact accepted telemetry, debugging/eval, aggregates, and server snapshots for analytics/post-MVP ranker (not a browser read dependency in MVP).
 - Supabase не является source of truth для событий; event catalog приходит из Fly SQLite через static export/snapshots.
 - Персонализация должна иметь fallback: если Supabase/API недоступен, пользователь видит обычный static feed.
-- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а same-origin endpoint/Supabase используется для записи compact telemetry, analytics/server profile aggregation и future fallback/personal refresh.
-- Первый проверочный MVP surface — `event_detail_related` на странице конкретного события: static fallback “Похожие события” + local rerank after consent. Персонализированная главная/бесконечная лента не входит в MVP-0.
+- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а same-origin endpoint используется для записи compact telemetry; Supabase не является массовым read/write path из браузера.
+- Первый проверочный MVP surface — `event_detail_related` на странице конкретного события: static fallback “Похожие события” + local rerank after consent. Персонализированная главная/бесконечная лента не входит в MVP-0. Fly web runtime остаётся thin: static/API минимум, без LLM/ML/static-build/analytics aggregation в hot path.
 
 ## Что оптимизируем
 
@@ -172,7 +172,8 @@ algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experimen
 
 ```json
 {
-  "anon_id": "uuid-or-random-opaque-id",
+  "anon_id": "uuid-v4-compatible",
+  "session_id": "uuid-v4-compatible",
   "consent_ok": true,
   "profile_version": "anon-profile-v1",
   "feature_schema_version": "event-features-v1",
@@ -195,16 +196,16 @@ algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experimen
 ```
 
 Не хранить секреты, токены backend, raw source texts, большие payloads. Если
-`profile_version`, `feature_schema_version`, `taxonomy_version` или `vector_dim`
-несовместимы с текущим manifest — выполнить reset или migrate-known-fields-only.
-UX обязан иметь действие «Сбросить персонализацию».
+`profile_version`, `feature_schema_version`, `taxonomy_version`, `vector_dim`,
+`anon_id` или `session_id` несовместимы с текущим manifest/DB contract — выполнить
+reset или migrate-known-fields-only. UX обязан иметь действие «Сбросить персонализацию».
 
 ### Supabase/Postgres
 
 Черновые сущности:
 
-- `anonymous_visitor` — opaque id, first/last seen, consent state/version;
-- `anonymous_session` — session id, visitor id, started/ended, device/context, rollup state;
+- `anonymous_visitor` — UUID anonymous id, first/last seen, consent state/version;
+- `anonymous_session` — UUID session id, visitor id, started/ended, device/context, rollup state;
 - `personalization_session_summary` — основной browser-facing append-only payload: компактный итог сессии/интервала, а не каждое событие скролла;
 - `personalization_served_list_summary` — compact exposure/served-list summary для обучения будущего ranker;
 - `interaction_event` — опциональная sampled/debug raw telemetry, выключена по умолчанию для слабых impression/skip;
@@ -215,9 +216,9 @@ UX обязан иметь действие «Сбросить персонал�
 
 Raw telemetry не является основным продуктовым хранилищем: иначе free tier
 Supabase быстро заполнится. Базовый ориентир: weak raw impressions/skips
-выключены или sampled с retention 0–7 дней; strong raw actions — 14–30 дней;
-`personalization_session_summary` — 90–180 дней или до сворачивания в профиль;
-`personalization_served_list_summary` — 30–90 дней или до обучения/агрегации;
+выключены; strong raw actions — 30–90 дней;
+`personalization_session_summary` — 30–90 дней или до сворачивания в профиль;
+`personalization_served_list_summary` — 14–30 дней full, затем daily aggregate;
 profile snapshots / daily aggregates — дольше, потому что они компактные.
 
 ## Interaction events

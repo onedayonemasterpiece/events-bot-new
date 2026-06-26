@@ -154,6 +154,7 @@ Guardrails:
 - legacy profiles containing `negative_tags` or missing/mismatched `feature_schema_version` / `taxonomy_version` are incompatible and fall back to static order until reset/migration;
 - telemetry endpoint unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
 - localStorage unavailable/corrupted means no profile mutation and static fallback.
+- `anon_id` and `session_id` must be UUID-compatible while the database schema uses `uuid` columns; legacy prefixed ids are incompatible and fall back to static order until reset/migration.
 
 Local profile fields consumed by MVP-0:
 
@@ -162,8 +163,8 @@ Local profile fields consumed by MVP-0:
   "profile_version": "anon-profile-v1",
   "feature_schema_version": "event-detail-related-v1",
   "taxonomy_version": "event-taxonomy-v1",
-  "anon_id": "opaque-random-id",
-  "session_id": "opaque-random-id",
+  "anon_id": "uuid-v4-compatible",
+  "session_id": "uuid-v4-compatible",
   "positive_tags": {"jazz": 1.0, "live_music": 0.6},
   "negative_interest_tags": {"kids": 1.0},
   "hidden_event_ids": [12345],
@@ -179,7 +180,7 @@ Every rendered/reranked related block should be summarizable without storing raw
 
 ```json
 {
-  "served_list_id": "uuid",
+  "served_list_id": "opaque-text-id",
   "anon_id": "uuid",
   "session_id": "uuid",
   "surface": "event_detail_related",
@@ -199,7 +200,7 @@ Every rendered/reranked related block should be summarizable without storing raw
 }
 ```
 
-This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context. The reference client creates `served_list_id` before rendering cards, attaches the same id/hash to strong actions, and dedupes repeated `served_list_summary` emissions by `served_list_hash` for the configured window so resize/re-render does not create a raw firehose.
+This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context. The production endpoint maps `shown[]` JSON into compact arrays/reason masks before DB insert; full reason JSON is debug/sample-only. The reference client creates `served_list_id` before rendering cards, attaches the same id/hash to strong actions, dedupes repeated `served_list_summary` emissions by `served_list_hash` for the configured window, and keeps that in-memory dedupe map bounded so resize/re-render does not create a raw firehose. When `backendAvailable=false`, the reference client disables trusted telemetry and can emit local debug-only records only through `debugTelemetrySink`.
 
 Session summary and strong actions stay compact:
 
@@ -229,7 +230,7 @@ Session summary and strong actions stay compact:
   "surface": "event_detail_related",
   "event_id": 456,
   "rank": 0,
-  "served_list_id": "uuid",
+  "served_list_id": "opaque-text-id",
   "served_list_hash": "stable-list-hash",
   "algorithm_id": "local_related_rerank_v1"
 }

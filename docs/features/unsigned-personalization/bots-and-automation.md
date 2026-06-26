@@ -32,13 +32,13 @@ Personalization is disabled when any of these is true:
 - same-origin telemetry endpoint is unavailable for trusted telemetry/server mutation;
 - request exceeds rate/shape limits or lands in quarantine.
 
-For crawler/preview/monitor/bot/no-consent/schema-mismatch cases, disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation. If only the telemetry endpoint is unavailable, trusted telemetry/server writes are disabled, but a consented compatible localStorage profile may still run local rerank as a local fallback; CTA/navigation must remain usable.
+For crawler/preview/monitor/bot/no-consent/schema-mismatch cases, disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation. If only the telemetry endpoint is unavailable, trusted telemetry/server writes are disabled, but a consented compatible localStorage profile may still run local rerank as a local fallback; CTA/navigation must remain usable. Reference/demo code may record local debug-only events, but they must be marked as not trusted remote telemetry and must not reach Supabase/profile updates.
 
 ## Accepted telemetry payloads
 
 MVP-0 accepts compact, append-only payloads only:
 
-- `served_list_summary` — one row per meaningful list exposure, with `served_list_id`, `served_list_hash`, `surface`, `viewport_class`, `layout_mode`, `algorithm_id`, current event id and shown ids/scores/reason codes;
+- `served_list_summary` — one row per meaningful list exposure, with `served_list_id`, `served_list_hash`, `surface`, `viewport_class`, `layout_mode`, `algorithm_id`, current event id and compact shown ids/scores/reason masks; full reason JSON is debug/sample-only;
 - strong actions: `related_card_click`, `ticket_click`, `hide_event`, `not_interested`, `share`, `copy_link`;
 - `session_summary` — periodic compact rollup, not raw scroll firehose.
 
@@ -66,7 +66,7 @@ Initial budgets:
 - endpoint rate limit by anon id + session id + IP prefix + actor class;
 - cap one visible `event_detail_related` served summary per render list hash;
 - cap strong actions per session/event;
-- reject payloads above the documented schema size; target `<8 KB` for served-list and `<4 KB` for session summary.
+- reject payloads above the documented schema size; endpoint hard cap `8-16 KB`, accepted served-list target `<2 KB`, session summary target `<1-3 KB`.
 
 ## Endpoint policy
 
@@ -74,14 +74,28 @@ Use a same-origin endpoint first:
 
 ```text
 POST /api/personalization/summary
-  validate schema/version
-  classify actor/trust
-  rate-limit/dedupe
-  write accepted compact row or quarantine row
-  return 204
+  read body with 8-16 KB hard cap
+  validate schema/version/taxonomy/UUID ids/consent
+  classify actor/trust; crawler_verified requires UA + reverse DNS/IP allowlist where available
+  rate-limit/dedupe with bounded maps
+  map client payload to compact DB row; never insert browser JSON directly
+  write accepted compact row or tiny quarantine row with short DB timeout
+  return 204/202 for accepted or normal dropped telemetry
 ```
 
 The browser must not use the Supabase secret key. Direct public Supabase writes are a fallback only after RLS/policies/rate limits are proven and still must expose only insert-only summary tables/views, not raw profile internals.
+
+Endpoint test matrix before canary:
+
+| Scenario | Required behavior |
+| --- | --- |
+| preview/social UA | drop with `204`, no accepted DB row |
+| Googlebot-like UA without verification | never mark `crawler_verified` from UA alone |
+| no consent or missing taxonomy/profile version | drop/quarantine, no profile update |
+| oversized payload | reject/drop before DB insert |
+| repeated `served_list_hash` | dedupe before DB insert |
+| click before served list | quarantine/drop |
+| many summaries/minute | rate-limit with bounded memory |
 
 ## SEO and preview safety
 

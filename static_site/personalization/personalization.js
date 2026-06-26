@@ -10,6 +10,7 @@
   const LOCAL_ALGORITHM_ID = 'local_related_rerank_v1';
   const LOCAL_FALLBACK_ALGORITHM_ID = 'local_related_rerank_v1_fallback';
   const DEFAULT_SERVED_LIST_DEDUPE_MS = 30 * 60 * 1000;
+  const DEFAULT_MAX_SERVED_LIST_HASHES = 100;
 
   const DEFAULT_WEIGHTS = {
     staticContext: 0.80,
@@ -137,6 +138,7 @@
     if (profile.profile_version !== PROFILE_VERSION) return false;
     if (profile.feature_schema_version !== expectedFeatureSchema) return false;
     if (profile.taxonomy_version !== expectedTaxonomy) return false;
+    if (!isUuid(profile.anon_id) || !isUuid(profile.session_id)) return false;
     // Legacy field is intentionally rejected. Migrate/reset before scoring.
     if (Object.prototype.hasOwnProperty.call(profile, 'negative_tags')) return false;
     return true;
@@ -338,6 +340,25 @@
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function isUuid(value) {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  function createUuid() {
+    const cryptoObj = (global.crypto || {});
+    if (cryptoObj.randomUUID) return cryptoObj.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (cryptoObj.getRandomValues) {
+      cryptoObj.getRandomValues(bytes);
+    } else {
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   function stableHash(value) {
     const text = typeof value === 'string' ? value : JSON.stringify(value);
     let hash = 2166136261;
@@ -423,8 +444,8 @@
       profile_version: PROFILE_VERSION,
       feature_schema_version: FEATURE_SCHEMA_VERSION,
       taxonomy_version: TAXONOMY_VERSION,
-      anon_id: randomId('anon'),
-      session_id: randomId('session'),
+      anon_id: createUuid(),
+      session_id: createUuid(),
       positive_tags: {},
       negative_interest_tags: {},
       hidden_event_ids: [],
@@ -448,7 +469,11 @@
     const consentButton = typeof opts.consentButton === 'string' ? doc.querySelector(opts.consentButton) : opts.consentButton;
     const resetButton = typeof opts.resetButton === 'string' ? doc.querySelector(opts.resetButton) : opts.resetButton;
     const telemetrySink = typeof opts.telemetrySink === 'function' ? opts.telemetrySink : function noop() {};
+    const debugTelemetrySink = typeof opts.debugTelemetrySink === 'function' ? opts.debugTelemetrySink : function noop() {};
+    const trustedTelemetryEnabled = opts.backendAvailable !== false;
     const servedListDedupeMs = opts.servedListDedupeMs == null ? DEFAULT_SERVED_LIST_DEDUPE_MS : Number(opts.servedListDedupeMs);
+    const requestedMaxServedListHashes = opts.maxServedListHashes == null ? DEFAULT_MAX_SERVED_LIST_HASHES : Number(opts.maxServedListHashes);
+    const maxServedListHashes = Number.isFinite(requestedMaxServedListHashes) ? Math.max(1, requestedMaxServedListHashes) : DEFAULT_MAX_SERVED_LIST_HASHES;
     const actionCounts = {};
     const servedListByHash = new Map();
     let lastRenderedViewportClass = null;
@@ -456,6 +481,14 @@
 
     function profile() {
       return readProfile(storage, storageKey);
+    }
+
+    function emitTrustedTelemetry(event) {
+      if (trustedTelemetryEnabled) {
+        telemetrySink(event);
+        return;
+      }
+      debugTelemetrySink(Object.assign({ trusted_remote: false, local_debug: true }, event));
     }
 
     function baseContext(algorithmId) {
@@ -473,8 +506,20 @@
       };
     }
 
+    function pruneServedListState(now) {
+      for (const [key, value] of servedListByHash) {
+        if (now - value.emittedAt > servedListDedupeMs) servedListByHash.delete(key);
+      }
+      while (servedListByHash.size >= maxServedListHashes) {
+        const oldestKey = servedListByHash.keys().next().value;
+        if (oldestKey == null) break;
+        servedListByHash.delete(oldestKey);
+      }
+    }
+
     function servedListState(hash) {
       const now = Date.now();
+      pruneServedListState(now);
       const existing = servedListByHash.get(hash);
       if (existing && now - existing.emittedAt <= servedListDedupeMs) {
         return { servedListId: existing.servedListId, shouldEmit: false };
@@ -505,7 +550,7 @@
       details.textContent = 'Подробнее';
       details.addEventListener('click', () => {
         actionCounts.related_card_click = (actionCounts.related_card_click || 0) + 1;
-        telemetrySink(createStrongAction('related_card_click', item, ctx));
+        emitTrustedTelemetry(createStrongAction('related_card_click', item, ctx));
       });
       const hide = doc.createElement('button');
       hide.type = 'button';
@@ -517,7 +562,7 @@
         const persisted = writeProfile(storage, storageKey, Object.assign({}, current, { hidden_event_ids: hidden, updated_at: new Date().toISOString() }));
         if (persisted) {
           actionCounts.hide_event = (actionCounts.hide_event || 0) + 1;
-          telemetrySink(createStrongAction('hide_event', item, ctx));
+          emitTrustedTelemetry(createStrongAction('hide_event', item, ctx));
         }
         render();
       });
@@ -560,8 +605,8 @@
       for (const item of ranked) container.appendChild(renderCard(item, ctx));
       if (hasLocalProfile && shouldEmitServedList) {
         const summary = createServedListSummary(ranked, manifest, ctx);
-        telemetrySink(summary);
-        if (opts.backendAvailable === false) telemetrySink(createStrongAction('recommendation_fallback_used', null, ctx));
+        emitTrustedTelemetry(summary);
+        if (opts.backendAvailable === false) emitTrustedTelemetry(createStrongAction('recommendation_fallback_used', null, ctx));
       }
       return ranked;
     }
@@ -621,6 +666,8 @@
     createServedListSummary,
     createStrongAction,
     createSessionSummary,
+    isUuid,
+    createUuid,
     createEmptyProfile,
     createEventDetailRelatedController,
     createController: createEventDetailRelatedController,

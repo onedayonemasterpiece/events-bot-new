@@ -236,8 +236,8 @@ Compact `session_summary` example:
 
 ```json
 {
-  "anon_id": "opaque-id",
-  "session_id": "opaque-session",
+  "anon_id": "uuid-v4-compatible",
+  "session_id": "uuid-v4-compatible",
   "started_at": "2026-06-25T10:00:00Z",
   "ended_at": "2026-06-25T10:08:00Z",
   "viewport_class": "mobile",
@@ -252,7 +252,7 @@ Compact `session_summary` example:
   "positive_tag_delta": {"jazz": 0.42, "live_music": 0.31},
   "negative_interest_tag_delta": {"kids": 0.66},
   "strong_event_ids": {"ticket_click": [123], "hide_event": [789]},
-  "served_list_ids": ["served-list-uuid"],
+  "served_list_ids": ["served-list-opaque-text-id"],
   "seen_event_ids_sample": [123, 456, 789],
   "profile_delta_vector": [0.02, -0.01, 0.07],
   "client_summary_version": "profile-v1"
@@ -260,8 +260,7 @@ Compact `session_summary` example:
 ```
 
 This gives enough signal to update local/server profile snapshots without storing
-every scroll event. Raw impressions can be sampled or retained for a few days
-only when debugging position bias.
+every scroll event. Raw impressions stay off by default and can be sampled briefly only when debugging position bias.
 
 For future CatBoost/LightGBM training, compact profile summaries are still not
 enough: the system must know what was actually shown. Therefore MVP telemetry
@@ -269,19 +268,19 @@ also needs a compact served-list summary per feed/list chunk:
 
 ```json
 {
-  "served_list_id": "opaque-uuid",
-  "anon_id": "opaque-id",
-  "session_id": "opaque-session",
+  "served_list_id": "opaque-text-id",
+  "anon_id": "uuid-v4-compatible",
+  "session_id": "uuid-v4-compatible",
   "requested_at": "2026-06-25T10:03:00Z",
   "surface": "home_feed",
   "viewport_class": "mobile",
   "layout_mode": "feed",
   "algorithm_id": "local_rerank_v1",
   "event_pool_hash": "sha256",
-  "shown": [
-    {"event_id": 123, "rank": 0, "score": 0.812, "reason_codes": ["tag:jazz", "time:evening"]},
-    {"event_id": 456, "rank": 1, "score": 0.744, "reason_codes": ["fresh", "weekend"]}
-  ],
+  "shown_event_ids": [123, 456],
+  "shown_ranks": [0, 1],
+  "shown_score_0_1000": [812, 744],
+  "shown_reason_mask": [5, 18],
   "debug_sample": false
 }
 ```
@@ -313,7 +312,8 @@ Minimum browser/local profile:
 
 ```json
 {
-  "anon_id": "opaque-id",
+  "anon_id": "uuid-v4-compatible",
+  "session_id": "uuid-v4-compatible",
   "profile_version": "anon-profile-v1",
   "feature_schema_version": "event-features-v1",
   "taxonomy_version": "event-taxonomy-v1",

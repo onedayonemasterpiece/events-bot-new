@@ -1,8 +1,8 @@
 # Personalization Database Design
 
-> **Status:** design/draft, SQL not applied yet  
-> **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)  
-> **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions.
+> **Status:** design/draft, SQL not applied yet; aligned with the thin-runtime architectural gate
+> **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)
+> **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions or static rebuild queues.
 
 ## Current capacity snapshot
 
@@ -12,6 +12,16 @@ As of 2026-06-24 the separate personalization Supabase database is effectively e
 - approximate free space vs 500 MB decimal free tier: `~489.54 MB`;
 - PostgreSQL: `17.6`;
 - installed extensions include `pgcrypto`, `uuid-ossp`, `pg_stat_statements`; `pgvector` is not required for MVP and should be enabled only if vector search moves into Postgres.
+
+## Architectural gate constraints
+
+This schema is not a raw telemetry sink. It is shaped by `production-integration.md`:
+
+- browser `anon_id` and `session_id` are UUID-compatible when SQL columns are `uuid`; legacy prefixed ids are rejected/reset by the client before trusted telemetry;
+- browser payloads are never inserted directly as DB rows; the same-origin endpoint validates, annotates, compacts and may drop/quarantine before insert;
+- accepted served-list rows target `<2 KB`; full reason-code JSON is sampled/debug-only;
+- direct browser -> Supabase writes are off by default and canary-only;
+- retention/aggregation jobs run from backend/worker/SQL jobs, not from the web page.
 
 ## Supabase constraints that shape the schema
 
@@ -38,7 +48,7 @@ The MVP write path should be **compact summaries first**, not a raw event fireho
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`, and put `presentation_mode` / `current_event_id` into `metadata` if the table is not extended with dedicated columns. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
+Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, maps the client contract to the server row contract, and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`; `presentation_mode` and `current_event_id` are dedicated columns on served-list summaries and metadata fields elsewhere. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
 
 ### Private schema `personalization`
 
@@ -58,21 +68,37 @@ The static site reads event catalog/recommendation manifests from same-origin JS
 
 ## Retention policy
 
-Default MVP retention and storage policy:
+Default MVP retention and storage policy is intentionally stricter than the earlier broad plan because the Supabase free-tier budget is small:
 
-| Data | Retention | Reason |
+| Data | Retention | Storage shape / reason |
 | --- | ---: | --- |
-| Raw weak `interaction_event` impressions/skips | off by default or sampled; 0-7 days | avoid filling 500 MB with scroll noise |
-| Raw strong actions (`ticket_click`, `hide`, `detail_view`, `share`) | 14-30 days | debugging labels and position bias |
-| `personalization_session_summary` | 90-180 days or until folded into profiles | compact profile signal without raw volume |
-| `personalization_served_list_summary` | 30-90 days or until folded into training/eval rows | compact exposure context for future ranker labels |
+| Raw weak `interaction_event` impressions/skips | off | avoid filling 500 MB with scroll noise |
+| Raw strong actions (`ticket_click`, `hide`, `detail_view`, `share`) | 30-90 days | meaningful labels only; still compact |
+| `personalization_session_summary` | 30-90 days full, then fold into profile/aggregate | compact profile signal without raw volume |
+| `personalization_served_list_summary` | 14-30 days full, then daily aggregate | exposure context; accepted row target `<2 KB` |
 | `daily_interaction_aggregate` | 12 months | product metrics without raw event volume |
 | `visitor_profile_snapshot` | 365 days since last seen, compact only | returning visitor personalization |
-| `recommendation_request/result` debug | 14–30 days | E2E/debug only |
-| `telemetry_quarantine` compact evidence | 7–30 days | abuse/debug; excluded from training and metrics |
+| `recommendation_request/result` debug | 14-30 days | E2E/debug only |
+| `telemetry_quarantine` compact evidence | 7-14 days | abuse/debug; excluded from training and metrics |
 | `event_feature_snapshot` | while event is future + static retention window | ranking features tied to event lifecycle |
 
-Retention should run from backend/cron with direct DB credentials or SQL job, not from browser. Raw telemetry must be deleted or aggregated before it can threaten the free-tier cap.
+Retention should run from backend/cron/SQL jobs with direct DB credentials, not from browser. Raw telemetry must be deleted or aggregated before it can threaten the free-tier cap.
+
+## Client payload -> accepted row mapping
+
+The browser client may emit a convenient JSON payload for local/demo use, but the production endpoint maps it to compact SQL fields:
+
+| Client field | Server handling |
+| --- | --- |
+| `anon_id`, `session_id` | must be UUIDs when SQL columns are `uuid`; invalid values drop/quarantine before DB |
+| `served_list_id`, `served_list_hash` | opaque text ids; dedupe key with `(anon_id, served_list_id)` / repeated hash limits |
+| `shown[].event_id` | `shown_event_ids bigint[]`, max 24 for `event_detail_related` MVP |
+| `shown[].rank` | `shown_ranks smallint[]` |
+| `shown[].personal_score/base_similarity` | compact `shown_score_0_1000 smallint[]` after normalization |
+| `shown[].reason_codes` | `shown_reason_mask integer[]`; full reason JSON only when `debug_sample=true` |
+| promo flags | `promo_event_ids bigint[]` and metadata flags; promo rows never train as organic interest by default |
+| `presentation_mode`, `current_event_id` | dedicated columns on served-list summary |
+| `consent_version`, `actor_class`, `trust_state`, `requested_at` | server-attached/validated, not trusted from browser alone |
 
 ## Index strategy
 
@@ -191,6 +217,7 @@ create index if not exists personalization_session_summary_received_idx
   on public.personalization_session_summary (received_at desc);
 
 -- Compact exposure context for future learning-to-rank labels. No public SELECT.
+-- The endpoint maps client `shown[]` JSON into arrays/bitmasks before insert.
 create table if not exists public.personalization_served_list_summary (
   id uuid primary key default gen_random_uuid(),
   served_list_id text not null,
@@ -201,11 +228,18 @@ create table if not exists public.personalization_served_list_summary (
   received_at timestamptz not null default now(),
   viewport_class text not null,
   layout_mode text not null,
+  presentation_mode text,
   surface text not null,
+  current_event_id bigint,
   algorithm_id text not null default 'local_rerank_v1',
   event_pool_hash text,
-  shown jsonb not null default '[]'::jsonb,
+  shown_event_ids bigint[] not null default '{}',
+  shown_ranks smallint[] not null default '{}',
+  shown_score_0_1000 smallint[] not null default '{}',
+  shown_reason_mask integer[] not null default '{}',
+  promo_event_ids bigint[] not null default '{}',
   debug_sample boolean not null default false,
+  debug_shown jsonb not null default '[]'::jsonb,
   consent_version text not null,
   consent_state text not null default 'accepted',
   actor_class text not null default 'unknown',
@@ -216,11 +250,16 @@ create table if not exists public.personalization_served_list_summary (
   constraint personalization_served_list_actor_chk check (actor_class in ('human_likely', 'unknown')),
   constraint personalization_served_list_viewport_chk check (viewport_class in ('mobile', 'tablet', 'desktop')),
   constraint personalization_served_list_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),
-  constraint personalization_served_list_shown_chk check (
-    jsonb_typeof(shown) = 'array'
-    and jsonb_array_length(shown) <= 100
-    and length(shown::text) <= 32768
-    and length(metadata::text) <= 2048
+  constraint personalization_served_list_cardinality_chk check (
+    cardinality(shown_event_ids) <= 100
+    and cardinality(shown_event_ids) = cardinality(shown_ranks)
+    and cardinality(shown_event_ids) = cardinality(shown_score_0_1000)
+    and cardinality(shown_event_ids) = cardinality(shown_reason_mask)
+    and cardinality(promo_event_ids) <= 20
+    and jsonb_typeof(debug_shown) = 'array'
+    and (debug_sample or jsonb_array_length(debug_shown) = 0)
+    and length(debug_shown::text) <= 8192
+    and length(metadata::text) <= 1024
   ),
   unique (anon_id, served_list_id)
 );
@@ -266,7 +305,7 @@ create table if not exists personalization.telemetry_quarantine (
   payload_size integer not null,
   metadata jsonb not null default '{}'::jsonb,
   constraint telemetry_quarantine_trust_chk check (trust_state in ('quarantined', 'dropped', 'diagnostic')),
-  constraint telemetry_quarantine_size_chk check (payload_size between 0 and 131072 and length(metadata::text) <= 2048)
+  constraint telemetry_quarantine_size_chk check (payload_size between 0 and 16384 and length(metadata::text) <= 1024)
 );
 
 -- Optional browser-facing raw telemetry for short-retention debug/sampling. No public SELECT.
@@ -308,7 +347,7 @@ create table if not exists public.personalization_interaction_event (
   constraint personalization_interaction_actor_chk check (actor_class in ('human_likely', 'unknown')),
   constraint personalization_position_chk check (position is null or position >= 0),
   constraint personalization_dwell_chk check (dwell_ms is null or dwell_ms between 0 and 86400000),
-  constraint personalization_metadata_size_chk check (length(metadata::text) <= 4096),
+  constraint personalization_metadata_size_chk check (length(metadata::text) <= 2048),
   unique (anon_id, client_event_id)
 );
 
