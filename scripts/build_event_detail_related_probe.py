@@ -20,9 +20,11 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from dataclasses import dataclass
+import html
 import json
 from pathlib import Path
 import re
+import sqlite3
 import time
 from typing import Any
 
@@ -97,6 +99,21 @@ class EventFeature:
     quality_warnings: tuple[str, ...]
 
 
+SQLITE_EVENT_COLUMNS = (
+    "id",
+    "title",
+    "description",
+    "date",
+    "time",
+    "location_name",
+    "city",
+    "event_type",
+    "is_free",
+    "search_digest",
+    "ticket_status",
+)
+
+
 def _text(row: dict[str, Any]) -> str:
     return " ".join(
         str(row.get(key) or "")
@@ -156,13 +173,45 @@ def infer_feature(row: dict[str, Any]) -> EventFeature | None:
     )
 
 
-def load_events(path: Path, limit: int | None = None) -> list[EventFeature]:
+def load_input_rows(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     rows = data.get("sample") if isinstance(data, dict) else data
     if not isinstance(rows, list):
         raise ValueError("input must be a JSON list or object with sample[]")
-    events = [feature for row in rows[:limit] if isinstance(row, dict) for feature in [infer_feature(row)] if feature]
+    return [dict(row) for row in rows[:limit] if isinstance(row, dict)]
+
+
+def load_sqlite_rows(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    try:
+        columns = {row[1] for row in con.execute("PRAGMA table_info(event)")}
+        if not columns:
+            raise ValueError("SQLite DB must contain event table")
+        selected = [column for column in SQLITE_EVENT_COLUMNS if column in columns]
+        if "id" not in selected or "title" not in selected:
+            raise ValueError("event table must contain at least id and title")
+        sql = f"SELECT {', '.join(selected)} FROM event ORDER BY date, time, id"
+        if limit is not None:
+            sql += " LIMIT ?"
+            rows = con.execute(sql, (limit,)).fetchall()
+        else:
+            rows = con.execute(sql).fetchall()
+    finally:
+        con.close()
+    result = [dict(row) for row in rows]
+    for row in result:
+        row.setdefault("status", "active")
+    return result
+
+
+def load_events(path: Path, limit: int | None = None) -> list[EventFeature]:
+    events = events_from_rows(load_input_rows(path, limit))
     return events
+
+
+def events_from_rows(rows: list[dict[str, Any]]) -> list[EventFeature]:
+    return [feature for row in rows if isinstance(row, dict) for feature in [infer_feature(row)] if feature]
 
 
 def jaccard(left: set[str] | frozenset[str], right: set[str] | frozenset[str]) -> float:
@@ -206,6 +255,22 @@ def base_similarity(current: EventFeature, candidate: EventFeature) -> tuple[flo
     return round(max(0.0, min(1.0, score)), 6), reasons
 
 
+def event_to_public(event: EventFeature) -> dict[str, Any]:
+    return {
+        "event_id": event.event_id,
+        "title": event.title,
+        "city": event.city,
+        "venue_name": event.venue_name,
+        "date": event.date,
+        "time": event.time,
+        "event_type": event.event_type,
+        "normalized_tags": sorted(event.tags),
+        "status": event.status,
+        "ticket_status": event.ticket_status,
+        "is_free": event.is_free,
+    }
+
+
 def apply_event_type_diversity(rows: list[dict[str, Any]], *, window: int = 10, max_per_type: int = 5) -> list[dict[str, Any]]:
     """Keep the first visible window from being dominated by one event type.
 
@@ -245,6 +310,7 @@ def static_related_for(current: EventFeature, events: list[EventFeature], top_k:
             "city": candidate.city,
             "tags": sorted(candidate.tags),
             "ticket_status": candidate.ticket_status,
+            "event": event_to_public(candidate),
         })
     rows.sort(key=lambda row: (-row["base_similarity"], row["event_id"]))
     rows = apply_event_type_diversity(rows)
@@ -324,9 +390,9 @@ def markdown_taxonomy_report(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_probe(input_path: Path, *, current_event_id: int | None = None, limit: int | None = None, top_k: int = 12) -> dict[str, Any]:
+def build_probe_from_rows(rows: list[dict[str, Any]], *, current_event_id: int | None = None, top_k: int = 12) -> dict[str, Any]:
     start = time.perf_counter()
-    events = load_events(input_path, limit)
+    events = events_from_rows(rows)
     if not events:
         raise ValueError("no usable events in sample")
     current = next((event for event in events if event.event_id == current_event_id), events[0])
@@ -345,6 +411,7 @@ def build_probe(input_path: Path, *, current_event_id: int | None = None, limit:
         "surface": "event_detail_related",
         "layout_mode": "module",
         "current_event_id": current.event_id,
+        "current_event": event_to_public(current),
         "rankers_compared": ["static_related_v1", "local_related_rerank_v1"],
         "semantic_related_v1": "planned_eval_only_not_hot_path",
         "events_total": len(events),
@@ -362,11 +429,58 @@ def build_probe(input_path: Path, *, current_event_id: int | None = None, limit:
     }
 
 
-def write_outputs(report: dict[str, Any], output_dir: Path, input_path: Path) -> None:
+def build_probe(input_path: Path, *, current_event_id: int | None = None, limit: int | None = None, top_k: int = 12) -> dict[str, Any]:
+    return build_probe_from_rows(load_input_rows(input_path, limit), current_event_id=current_event_id, top_k=top_k)
+
+
+def static_page_payload(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "surface": "event_detail_related",
+        "layout_mode": "module",
+        "algorithm_id": "static_related_v1",
+        "current_event": report.get("current_event"),
+        "related_static": report["related_static_candidates"]["related_static"],
+    }
+
+
+def render_static_related_html(report: dict[str, Any]) -> str:
+    payload = static_page_payload(report)
+    cards: list[str] = []
+    for item in payload["related_static"]:
+        event = item.get("event") or {}
+        event_id = html.escape(str(event.get("event_id") or item.get("event_id") or ""))
+        title = html.escape(str(event.get("title") or f"Событие {event_id}"))
+        city = html.escape(str(event.get("city") or ""))
+        venue = html.escape(str(event.get("venue_name") or ""))
+        date = html.escape(" ".join(str(part or "") for part in (event.get("date"), event.get("time"))).strip())
+        reasons = html.escape(", ".join(str(reason) for reason in item.get("reason_codes") or []))
+        meta = " · ".join(part for part in (city, date, venue) if part)
+        cards.append(
+            f'    <article class="related-card" data-event-id="{event_id}">\n'
+            f"      <h3>{title}</h3>\n"
+            f'      <p class="related-meta">{meta}</p>\n'
+            f'      <p class="reason-codes">{reasons}</p>\n'
+            "    </article>"
+        )
+    if not cards:
+        cards.append('    <p class="related-empty">Похожих событий пока нет.</p>')
+    return (
+        '<section class="event-detail-related" data-surface="event_detail_related" '
+        'data-layout-mode="module" data-algorithm-id="static_related_v1">\n'
+        "  <h2>Похожие события</h2>\n"
+        '  <div class="related-block">\n'
+        + "\n".join(cards)
+        + "\n  </div>\n"
+        "</section>\n"
+    )
+
+
+def write_outputs(report: dict[str, Any], output_dir: Path, sample_data: dict[str, Any]) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    data = json.loads(input_path.read_text(encoding="utf-8"))
-    (output_dir / "event_sample.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "event_sample.json").write_text(json.dumps(sample_data, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "related_static_candidates.json").write_text(json.dumps(report["related_static_candidates"], ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "event_detail_related_payload.json").write_text(json.dumps(static_page_payload(report), ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "event_detail_related_static.html").write_text(render_static_related_html(report), encoding="utf-8")
     (output_dir / "probe_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "persona_eval_report.md").write_text(markdown_persona_report(report["persona_eval"]), encoding="utf-8")
     (output_dir / "taxonomy_mapping_report.md").write_text(markdown_taxonomy_report(report["taxonomy_report"]), encoding="utf-8")
@@ -382,14 +496,18 @@ def write_outputs(report: dict[str, Any], output_dir: Path, input_path: Path) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument("--input", type=Path)
+    parser.add_argument("--sqlite-db", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--current-event-id", type=int)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--top-k", type=int, default=12)
     args = parser.parse_args()
-    report = build_probe(args.input, current_event_id=args.current_event_id, limit=args.limit, top_k=args.top_k)
-    write_outputs(report, args.output, args.input)
+    if bool(args.input) == bool(args.sqlite_db):
+        parser.error("provide exactly one of --input or --sqlite-db")
+    rows = load_sqlite_rows(args.sqlite_db, args.limit) if args.sqlite_db else load_input_rows(args.input, args.limit)
+    report = build_probe_from_rows(rows, current_event_id=args.current_event_id, top_k=args.top_k)
+    write_outputs(report, args.output, {"sample": rows})
     print(json.dumps({"ok": report["ok"], "events_total": report["events_total"], "current_event_id": report["current_event_id"]}, ensure_ascii=False))
 
 

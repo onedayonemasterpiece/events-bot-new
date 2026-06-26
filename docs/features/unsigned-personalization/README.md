@@ -431,11 +431,13 @@ MVP-0 contract:
 
 ```text
 event_sample.json
-enrichment_output_gemini_flash_lite.json
 taxonomy_mapping_report.md
 related_static_candidates.json
+event_detail_related_payload.json
+event_detail_related_static.html
 persona_eval_report.md
 cost_latency_report.md
+probe_report.json
 ```
 
 Probe должен ответить минимум:
@@ -453,7 +455,7 @@ Probe должен ответить минимум:
 2. `local_related_rerank_v1` — static related + localStorage profile + negative interests.
 3. `semantic_related_v1` — static/local features + semantic embedding similarity; eval only, not online dependency.
 
-До Astro implementation нужен browser reference prototype из planned artifacts (`personalization.js`, `demo.html`, Playwright contract). Сначала он покрывает `event_detail_related`, а не всю персонализированную главную.
+До Astro implementation нужен browser reference prototype (`personalization.js`, `demo.html`, Playwright contract) и offline static payload/snippet generator. Сначала они покрывают `event_detail_related`, а не всю персонализированную главную.
 
 ## Implementation work breakdown
 
@@ -477,7 +479,7 @@ Probe должен ответить минимум:
 - `static_site/personalization/personalization.js` — local-first `event_detail_related` controller/ranker/compact telemetry contract;
 - `static_site/personalization/demo.html` — static event page demo that mimics future Astro island wiring;
 - `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract test against the demo/module, not an inline-only mock;
-- `scripts/build_event_detail_related_probe.py` — provider-free reproducible probe for `related_static` candidates, taxonomy warnings, persona checks, event-type diversity cap and cost/latency report.
+- `scripts/build_event_detail_related_probe.py` — provider-free reproducible probe for `related_static` candidates, taxonomy warnings, persona checks, event-type diversity cap, static fallback payload/snippet and cost/latency report.
 
 Проверка:
 
@@ -496,10 +498,22 @@ python3 scripts/build_event_detail_related_probe.py \
   --top-k 12
 ```
 
-Local reproducibility check on 2026-06-26 used a 500-event sample exported from
-`db_prod_data.sqlite` to `artifacts/codex/static-personalization/real_event_sample_2026-06-26.json`;
-the provider-free probe returned `ok=true`, `provider_calls=0`, and all three
-persona checks passed after the deterministic event-type diversity cap.
+SQLite catalog probe example, without a pre-exported JSON sample:
+
+```bash
+python3 scripts/build_event_detail_related_probe.py \
+  --sqlite-db db_prod_data.sqlite \
+  --output artifacts/codex/static-personalization/probe-2026-06-XX \
+  --limit 500 \
+  --top-k 12
+```
+
+The probe writes both machine and static-page fallback artifacts:
+`event_detail_related_payload.json` and `event_detail_related_static.html`.
+Local reproducibility check on 2026-06-26 used `--sqlite-db db_prod_data.sqlite`
+with `--limit 500`; the provider-free probe returned `ok=true`,
+`provider_calls=0`, and all three persona checks passed after the deterministic
+event-type diversity cap.
 
 Минимальная проверка должна проходить Playwright/contract test. Тест фиксирует текущий MVP-0 contract:
 

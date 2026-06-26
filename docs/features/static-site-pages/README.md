@@ -281,7 +281,7 @@ Reference implementation for MVP-0 contract:
 - `static_site/personalization/personalization.js` — browser-only local-first `event_detail_related` rerank/telemetry controller;
 - `static_site/personalization/demo.html` — static event page demo;
 - `tests/playwright/static_personalization_contract.spec.ts` — Playwright contract;
-- `scripts/build_event_detail_related_probe.py` — provider-free offline probe for `related_static` candidates and persona checks.
+- `scripts/build_event_detail_related_probe.py` — provider-free offline probe for `related_static` candidates, persona checks, and static fallback payload/snippet (`event_detail_related_payload.json`, `event_detail_related_static.html`) from JSON or SQLite catalog input.
 
 These artifacts are a contract/prototype before full Astro integration; they are not production deployment evidence for `kenigevents.ru`.
 

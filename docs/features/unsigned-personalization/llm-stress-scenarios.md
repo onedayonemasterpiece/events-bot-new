@@ -12,10 +12,24 @@ python3 scripts/build_event_detail_related_probe.py \
   --top-k 12
 ```
 
-The command performs no provider call; it builds `related_static` candidates, deterministic local rerank persona checks, taxonomy warning summaries, and a cost/latency report. Provider LLM/embedding probes can be layered on the same sample later; they are not required in the page-view hot path.
+Or directly from a local SQLite event catalog:
 
-Additional local reproducibility check on 2026-06-26 used a 500-event sample
-from `db_prod_data.sqlite` and wrote local-only artifacts under
+```bash
+python3 scripts/build_event_detail_related_probe.py \
+  --sqlite-db db_prod_data.sqlite \
+  --output artifacts/codex/static-personalization/probe-2026-06-XX \
+  --limit 500 \
+  --top-k 12
+```
+
+The command performs no provider call; it builds `related_static` candidates, a
+static fallback payload/snippet, deterministic local rerank persona checks,
+taxonomy warning summaries, and a cost/latency report. Provider LLM/embedding
+probes can be layered on the same sample later; they are not required in the
+page-view hot path.
+
+Additional local reproducibility check on 2026-06-26 used
+`--sqlite-db db_prod_data.sqlite --limit 500` and wrote local-only artifacts under
 `artifacts/codex/static-personalization/probe-2026-06-26/`. The deterministic
 probe returned `ok=true`, `provider_calls=0`, and all MVP-0 personas passed.
 
@@ -55,6 +69,8 @@ artifacts/codex/static-personalization/probe-YYYY-MM-DD/
   event_sample.json
   taxonomy_mapping_report.md
   related_static_candidates.json
+  event_detail_related_payload.json
+  event_detail_related_static.html
   persona_eval_report.md
   cost_latency_report.md
   probe_report.json
