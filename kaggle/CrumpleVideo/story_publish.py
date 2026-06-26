@@ -1212,9 +1212,10 @@ async def _story_targets_report(
                         )
                     source_peer = previous_story["peer"]
                     source_story_id = int(previous_story["story_id"])
-                    caption = str(
-                        target_cfg.get("caption") or config.get("caption") or ""
-                    ).strip()
+                    # Keep the feed post a clean story forward/share: adding a
+                    # message caption makes Telegram render an ordinary commented
+                    # story-message with a separate post view counter. The story
+                    # itself already carries its caption.
                     media = types.InputMediaStory(peer=source_peer, id=source_story_id)
                     target_report["source_story_id"] = source_story_id
                     target_report["source_peer"] = previous_story.get("peer_ref")
@@ -1223,7 +1224,7 @@ async def _story_targets_report(
                         functions.messages.SendMediaRequest(
                             peer=peer,
                             media=media,
-                            message=caption,
+                            message="",
                         )
                     )
                     target_report["message_id"] = _extract_message_id(result)

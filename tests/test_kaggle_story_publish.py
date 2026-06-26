@@ -414,7 +414,7 @@ async def test_telegram_story_message_target_forwards_previous_story_to_channel(
     story_message = client.sent_media_requests[0]
     assert story_message["peer"] == "peer:@kenigevents"
     assert story_message["media"] == {"peer": "peer:@kenigevents", "id": 101}
-    assert story_message["message"] == "Видеоанонс #677 · 15 июня"
+    assert story_message["message"] == ""
     assert client.sent_requests[1]["fwd_from_story"] == 101
 
 

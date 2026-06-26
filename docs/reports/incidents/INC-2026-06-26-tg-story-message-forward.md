@@ -155,9 +155,10 @@ future runs to story-message forwarding.
   - because CherryFlash session `#759` started before the fix and still had the old `telegram_chat` target, an operator-scoped E2E Telethon account with `@kenigevents` admin rights was used for a manual proof;
   - source raw post: `https://t.me/kenigevents/4170`;
   - manual story upload produced `story_id=338` in `@kenigevents`;
-  - `messages.SendMediaRequest(media=InputMediaStory(peer=@kenigevents, id=338))` produced channel message `https://t.me/kenigevents/4172`;
+  - `messages.SendMediaRequest(media=InputMediaStory(peer=@kenigevents, id=338), message="Видеоанонс #759 · 26 июня")` produced channel message `https://t.me/kenigevents/4172`;
   - verification showed message `4172` has `MessageMediaStory` with `message_media_story_id=338`, and story `338` has caption `Видеоанонс #759 · 26 июня`;
-  - Telegram did not preserve the `message=` text as a separate channel-feed caption for the story-message; the caption is attached to the story itself.
+  - operator observation showed this commented story-message started a separate-looking view counter; the implementation was tightened to send `telegram_story_message` with `message=""` so it is a clean story share/forward and not a commented story-message;
+  - the test artifact was removed: message `4172` and story `338` were deleted, and `@kenigevents` had no active stories immediately after cleanup.
 
 ## Prevention
 
