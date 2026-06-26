@@ -136,7 +136,7 @@ CrumpleVideo/Blender. Этот документ собирает требова�
 ### Telegram story-to-channel publication
 
 - For production `/v tomorrow` (`CrumpleVideo`), the Telegram channel feed post must be a forward/share of the already-published story, not a separate raw MP4 upload.
-- Ordered Telegram contract: upload the first story target (`me`), repost it to the required `@kenigevents` story target, then send that same story into the `@kenigevents` channel body through `telegram_story_message` with an empty comment/message; downstream story fanout such as `@lovekenig` continues to use `repost_previous`.
+- Ordered Telegram contract: upload the first story target (`me`), repost it to the required `@kenigevents` story target, then after a 10-minute delay (`delay_seconds=600`) send that same story into the `@kenigevents` channel body through `telegram_story_message` with an empty comment/message; downstream story fanout such as `@lovekenig` continues to use `repost_previous`.
 - The `telegram_story_message` target is required for final publish status, but it must not become the pre-render gate: render preflight remains tied to the story upload/repost capability checks.
 
 ### Состав и источник афиш

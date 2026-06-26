@@ -158,6 +158,7 @@ future runs to story-message forwarding.
   - `messages.SendMediaRequest(media=InputMediaStory(peer=@kenigevents, id=338), message="Видеоанонс #759 · 26 июня")` produced channel message `https://t.me/kenigevents/4172`;
   - verification showed message `4172` has `MessageMediaStory` with `message_media_story_id=338`, and story `338` has caption `Видеоанонс #759 · 26 июня`;
   - operator observation showed this commented story-message started a separate-looking view counter; the implementation was tightened to send `telegram_story_message` with `message=""` so it is a clean story share/forward and not a commented story-message;
+  - CrumpleVideo production target timing was tightened to keep `tg:@kenigevents:story-message` 10 minutes (`delay_seconds=600`) after the successful `@kenigevents` story repost, with no comment/message;
   - the test artifact was removed: message `4172` and story `338` were deleted, and `@kenigevents` had no active stories immediately after cleanup.
 
 ## Prevention

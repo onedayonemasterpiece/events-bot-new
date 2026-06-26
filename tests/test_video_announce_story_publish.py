@@ -602,7 +602,7 @@ async def test_build_story_publish_config_preserves_crumple_story_message_target
             '[{"peer":"me","delay_seconds":0,"mode":"upload"},'
             '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous","required":true},'
             '{"peer":"@kenigevents","label":"tg:@kenigevents:story-message",'
-            '"delay_seconds":30,"mode":"repost_previous",'
+            '"delay_seconds":600,"mode":"repost_previous",'
             '"transport":"telegram_story_message","required":true},'
             '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous","required":true}]'
         ),
@@ -633,7 +633,7 @@ async def test_build_story_publish_config_preserves_crumple_story_message_target
         {
             "peer": "@kenigevents",
             "label": "tg:@kenigevents:story-message",
-            "delay_seconds": 30,
+            "delay_seconds": 600,
             "mode": "repost_previous",
             "required": True,
             "transport": "telegram_story_message",
