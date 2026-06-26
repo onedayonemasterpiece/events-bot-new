@@ -151,6 +151,14 @@ future runs to story-message forwarding.
   - Fly SSH code/env probe confirmed `/app/video_announce/scenario.py` contains `telegram_story_message`, `/app/kaggle/CrumpleVideo/story_publish.py` contains `functions.messages.SendMediaRequest`, and production `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` contains required `tg:@kenigevents:story-message`.
 - caveat: CherryFlash session `#759` started before this deploy and its persisted/dataset targets still contain the old `transport=telegram_chat` post target; the fix applies to new sessions unless `#759` is manually compensated after its story id is available.
 
+- manual live verification on 2026-06-26:
+  - because CherryFlash session `#759` started before the fix and still had the old `telegram_chat` target, an operator-scoped E2E Telethon account with `@kenigevents` admin rights was used for a manual proof;
+  - source raw post: `https://t.me/kenigevents/4170`;
+  - manual story upload produced `story_id=338` in `@kenigevents`;
+  - `messages.SendMediaRequest(media=InputMediaStory(peer=@kenigevents, id=338))` produced channel message `https://t.me/kenigevents/4172`;
+  - verification showed message `4172` has `MessageMediaStory` with `message_media_story_id=338`, and story `338` has caption `Видеоанонс #759 · 26 июня`;
+  - Telegram did not preserve the `message=` text as a separate channel-feed caption for the story-message; the caption is attached to the story itself.
+
 ## Prevention
 
 Keep the story-first/feed-forward distinction explicit: `telegram_chat` is only
