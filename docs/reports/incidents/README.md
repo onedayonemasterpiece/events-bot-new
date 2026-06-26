@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-26-vk-location-reference-fuzzy-park.md`
+  - Scope: VK auto-import/reference location normalization and public `klgdevents`/`@kldevents` event posts where a generic municipal venue such as `Городской парк` is fuzzy-bound to an unrelated known venue in another city. Must not regress: single generic tokens (`городской`, `парк`, `центр`, `культура`, `искусство`) must not be enough to canonicalize an unknown venue; source/poster-grounded `Пионерский, городской парк` must remain Pionersky unless an explicit curated alias/address supports another venue.
 - `INC-2026-06-26-tg-story-message-forward.md`
   - Scope: CherryFlash/CrumpleVideo Telegram story-to-channel feed fanout, `telegram_story_message` transport, `popular_review` target generation, CrumpleVideo `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, and Kaggle story helper/notebook sync.
   - Must not regress: production channel-feed video posts must be produced from the previous successful Telegram story via `InputMediaStory`/`messages.SendMediaRequest`, not by raw `send_file()` MP4 upload; `telegram_chat` remains allowed only for intentional raw test-post targets.

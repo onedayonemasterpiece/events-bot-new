@@ -65,6 +65,27 @@ def test_unknown_venue_left_alone() -> None:
     }
 
 
+def test_generic_city_park_not_fuzzy_bound_to_zelenogradsk_culture_center() -> None:
+    """Regression for INC-2026-06-26.
+
+    Source text can say only "Пионерский, городской парк".  A generic
+    municipal-park phrase must not be bound to the known Зеленоградск venue
+    merely because both strings contain the word "городской".
+    """
+
+    payload = {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+    main._normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "Городской парк",
+        "location_address": None,
+        "city": "Пионерский",
+    }
+
+
 def test_known_venue_without_alias_still_normalises_when_address_empty() -> None:
     payload = {"location_name": "Янтарь холл", "location_address": None, "city": None}
     main._normalise_event_location_from_reference(payload)

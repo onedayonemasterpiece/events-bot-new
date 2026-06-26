@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevented generic VK venue phrases such as `Городской парк` from being fuzzy-normalized to unrelated known venues in another city.
+
 - **CherryFlash/CrumpleVideo Telegram story-message forward**: replaced CherryFlash's raw `telegram_chat` MP4 post to `@kenigevents` with `telegram_story_message`, which posts the previous successful Telegram story into the channel feed via `InputMediaStory`/`messages.SendMediaRequest` with an empty message/comment. The same required story-message target was added to the production CrumpleVideo `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` after the `@kenigevents` story repost, so both products publish story first and then forward/share that story into the channel body instead of uploading a separate post.
 
 - **Incident / Afisha Engagement inactive fallback (INC-2026-06-25)**: restored the production all-events `afishaengagement` public fallback for `klgdevents` after logs showed ordinary VK publications skipping with `no_active_activity` because campaign `id=10` had expired on 2026-06-20. Reconciled the compensation card for event `6423` to VK `wall-231920894_4495` and documented the regression guard.
