@@ -5,6 +5,7 @@
 ### Fixed
 
 - Replaced the single Telegram-only Telegraph footer link with a compact three-line `Полюбить Калининград` social footer linking both Telegram channels, both VK communities, and the VK Afisha channel.
+- **CrumpleVideo missing video output (INC-2026-06-26)**: hardened the Kaggle notebook against missing static asset mount paths by searching all `/kaggle/input/*` roots, added required intro fonts to the per-session dataset fallback, and made the notebook fail hard when the final mp4 is not produced instead of reporting a green `render_done`/`report_written` status.
 - Prevented generic VK venue phrases such as `Городской парк` from being fuzzy-normalized to unrelated known venues in another city.
 - **Promo campaigns / Telegram source amplification**: `tg_event_publish` now counts recent organic Smart Update Telegram event posts toward the daily due slots. When a selected event already has a forwardable `@kldevents` source post, the promo activity self-forwards that original post into the same event-flow channel instead of rendering duplicate copy, preserving Telegram view accumulation on the first post; full promo publication remains the fallback when no source post exists or forwarding fails.
 - **Promo campaigns / Telegram details button marker**: decoupled the `@kldevents`
@@ -2645,6 +2646,7 @@
 
 ### Fixed
 
+- **CrumpleVideo missing video output (INC-2026-06-26)**: hardened the Kaggle notebook against missing static asset mount paths by searching all `/kaggle/input/*` roots, added required intro fonts to the per-session dataset fallback, and made the notebook fail hard when the final mp4 is not produced instead of reporting a green `render_done`/`report_written` status.
 ## [1.3.7] - 2025-12-31
 
 ### Added

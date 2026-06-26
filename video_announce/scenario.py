@@ -4413,6 +4413,9 @@ class VideoAnnounceScenario:
         final_path = Path(__file__).resolve().parent / "crumple_references" / "Final.png"
         assets = [
             (assets_dir / font_name, tmp_path / font_name),
+            (assets_dir / "Benzin-Bold.ttf", tmp_path / "Benzin-Bold.ttf"),
+            (assets_dir / "Oswald-VariableFont_wght.ttf", tmp_path / "Oswald-VariableFont_wght.ttf"),
+            (assets_dir / "DrukCyr-Bold.ttf", tmp_path / "DrukCyr-Bold.ttf"),
             (final_path, tmp_path / "Final.png"),
             (cygre_dir / "Cygre-Medium.ttf", tmp_path / "Cygre-Medium.ttf"),
             (cygre_dir / "Cygre-Regular.ttf", tmp_path / "Cygre-Regular.ttf"),

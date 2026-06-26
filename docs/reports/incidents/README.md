@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-26-crumple-missing-video-output.md`
+  - Scope: CrumpleVideo Kaggle notebook asset discovery, intro font loading, per-session dataset assets, final mp4 production, and fail-fast status behavior for scheduled `/v tomorrow` runs.
+  - Must not regress: required intro fonts must be available either from the static Kaggle assets dataset or the session dataset; the notebook must search concrete `/kaggle/input/*` mounts rather than a single hardcoded path; if `crumple_video_final.mp4` is not produced, the notebook must fail hard instead of reporting `render_done/report_written` as a successful run.
 - `INC-2026-06-26-vk-location-reference-fuzzy-park.md`
   - Scope: VK auto-import/reference location normalization and public `klgdevents`/`@kldevents` event posts where a generic municipal venue such as `Городской парк` is fuzzy-bound to an unrelated known venue in another city. Must not regress: single generic tokens (`городской`, `парк`, `центр`, `культура`, `искусство`) must not be enough to canonicalize an unknown venue; source/poster-grounded `Пионерский, городской парк` must remain Pionersky unless an explicit curated alias/address supports another venue.
 - `INC-2026-06-26-tg-story-message-forward.md`

@@ -97,3 +97,18 @@ def test_embedded_helpers_match_repo_sources():
     assert "Poster preflight summary: sources" in source
     assert "render readiness:" in source
     assert 'local_path = posters_dir / f"tg_{idx}_{fname}"' not in source
+
+def test_notebook_searches_kaggle_inputs_for_intro_fonts_and_fails_fast():
+    notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
+    all_source = "\n".join(
+        "".join(cell.get("source") or [])
+        for cell in notebook.get("cells", [])
+        if cell.get("cell_type") == "code"
+    )
+
+    assert 'required_font_names = {' in all_source
+    assert 'input_root = Path("/kaggle/input")' in all_source
+    assert 'Required CrumpleVideo intro font not found' in all_source
+    assert 'raise RuntimeError("CrumpleVideo pipeline failed before producing final video")' in all_source
+    assert all_source.count("def _log_poster_preflight(source_reports, scene_reports):") == 1
+    assert all_source.count("_log_poster_preflight(poster_source_reports, scene_reports)") == 1
