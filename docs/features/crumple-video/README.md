@@ -133,6 +133,12 @@ CrumpleVideo/Blender. Этот документ собирает требова�
   - сам текст остаётся статичным, а “живым” остаётся только очень тихий touch cue;
   - CTA композится под слоем бумаги, поэтому при unfold бумага естественно перекрывает подсказку и она не остаётся поверх сцены.
 
+### Telegram story-to-channel publication
+
+- For production `/v tomorrow` (`CrumpleVideo`), the Telegram channel feed post must be a forward/share of the already-published story, not a separate raw MP4 upload.
+- Ordered Telegram contract: upload the first story target (`me`), repost it to the required `@kenigevents` story target, then send that same story into the `@kenigevents` channel body through `telegram_story_message`; downstream story fanout such as `@lovekenig` continues to use `repost_previous`.
+- The `telegram_story_message` target is required for final publish status, but it must not become the pre-render gate: render preflight remains tied to the story upload/repost capability checks.
+
 ### Состав и источник афиш
 
 - Тестовый запуск:

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-26-tg-story-message-forward.md`
+  - Scope: CherryFlash/CrumpleVideo Telegram story-to-channel feed fanout, `telegram_story_message` transport, `popular_review` target generation, CrumpleVideo `VIDEO_ANNOUNCE_STORY_TARGETS_JSON`, and Kaggle story helper/notebook sync.
+  - Must not regress: production channel-feed video posts must be produced from the previous successful Telegram story via `InputMediaStory`/`messages.SendMediaRequest`, not by raw `send_file()` MP4 upload; `telegram_chat` remains allowed only for intentional raw test-post targets.
 - `INC-2026-06-25-afishaengagement-no-active-activity.md`
   - Scope: Afisha Engagement public all-events fallback for `klgdevents`, production promo campaign/activity date config, runtime `afishaengagement.decision` smoke, and manual catch-up edits of VK postponed posts.
   - Must not regress: ordinary `klgdevents` VK publication preflight must have an active public Afisha Engagement fallback when rollout is intended; repeated `no_active_activity` decisions while VK posts continue are a regression; manual catch-up must verify whether VK reassigned a postponed post id and reconcile DB URLs.

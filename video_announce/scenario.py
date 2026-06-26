@@ -143,12 +143,13 @@ def build_popular_review_story_caption(
 def apply_popular_review_story_caption(
     selection_params: dict[str, Any], *, session_id: int
 ) -> dict[str, Any]:
-    """Attach the session/date caption to CherryFlash public post targets.
+    """Attach the session/date caption to CherryFlash public channel-forward targets.
 
     The VK wall target intentionally keeps its placeholder caption so
     build_story_publish_config() can expand it into the richer VK caption with
-    hashtags while using ``story_caption`` as the title. Telegram chat posts do
-    not have such an expansion layer, so their target caption is filled here.
+    hashtags while using ``story_caption`` as the title. Telegram chat/story
+    message targets do not have such an expansion layer, so their target
+    caption is filled here.
     """
 
     params = dict(selection_params)
@@ -162,7 +163,7 @@ def apply_popular_review_story_caption(
             targets.append(raw_target)
             continue
         target = dict(raw_target)
-        if target.get("transport") == "telegram_chat":
+        if target.get("transport") in {"telegram_chat", "telegram_story_message"}:
             target["caption"] = caption
         targets.append(target)
     params["story_targets_override"] = targets
@@ -2365,10 +2366,11 @@ class VideoAnnounceScenario:
                     "peer": "@kenigevents",
                     "label": "tg:@kenigevents:post",
                     "delay_seconds": 30,
-                    "mode": "upload",
-                    "transport": "telegram_chat",
+                    "mode": "repost_previous",
+                    "transport": "telegram_story_message",
                     "caption": "Видеоанонс",
                     "blocking": False,
+                    "required": True,
                 },
                 {
                     "peer": "club231828790",

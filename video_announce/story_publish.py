@@ -430,7 +430,7 @@ def _dedupe_targets(targets: list[StoryTarget]) -> list[StoryTarget]:
     for target in targets:
         if target.transport == "telegram_business":
             key = f"business:{target.business_connection_hash}"
-        elif target.transport in {"vk_story", "vk_wall", "vk_wall_story", "telegram_chat"}:
+        elif target.transport in {"vk_story", "vk_wall", "vk_wall_story", "telegram_chat", "telegram_story_message"}:
             key = f"{target.transport}:{target.peer.casefold()}"
         else:
             key = f"telethon:{target.peer.casefold()}"
@@ -477,7 +477,7 @@ def _parse_targets_json_env(env_key: str) -> list[StoryTarget]:
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
-            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "telegram_story_message", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
             caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")
@@ -561,7 +561,7 @@ def _parse_selection_targets(selection_params: dict[str, Any] | None) -> list[St
             raw_mode = str(item.get("mode") or item.get("publish_mode") or "upload").strip().lower()
             mode = raw_mode if raw_mode in {"upload", "repost_previous"} else "upload"
             raw_transport = str(item.get("transport") or "telethon").strip().lower()
-            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
+            transport = raw_transport if raw_transport in {"telethon", "telegram_business", "telegram_chat", "telegram_story_message", "vk_story", "vk_wall", "vk_wall_story"} else "telethon"
             caption = str(item.get("caption") or "").strip()
             caption_variant = str(item.get("caption_variant") or "").strip().casefold()
             raw_blocking = item.get("blocking")

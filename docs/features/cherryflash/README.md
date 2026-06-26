@@ -683,6 +683,7 @@ This section captures the latest intro-direction request as an explicit delta to
 - The current ordered chain interleaves Telegram and VK surfaces with short
   per-target pauses so VK users do not wait for the whole Telegram fanout:
   - upload primary Telegram story to `@kenigevents`;
+  - forward that just-published story into the `@kenigevents` channel feed as a story-message post (not as a separate raw MP4 upload);
   - after `300` seconds publish the same video as a VK wall post in `https://vk.com/club231828790`;
   - after `300` seconds repost the Telegram story to `@lovekenig`;
   - after `300` seconds publish VK story in `https://vk.com/club231828790`;
@@ -737,6 +738,7 @@ This section captures the latest intro-direction request as an explicit delta to
     of the CherryFlash override;
   - the `vk_wall` caption for `club231828790` is generated from the ready event selection: `Видеоанонс`, then VK hashtags for all selected-event cities, selected dates (`#17мая` and `#17_мая`), plus `#анонс #анонс39 #кудапойтиКалининград #афишакалининград`;
   - `VK_ACCESS_TOKEN5` is copied into encrypted Kaggle story secrets as the VK user token for those VK publish targets;
+  - `telegram_story_message` uses the previous successful Telegram story as `InputMediaStory` and sends that story into a channel/chat feed; it must not call the raw `send_file()`/MP4 upload path.
   - target-local failures are reported per target but do not cancel unrelated fanout surfaces unless that target is explicitly marked both blocking/required.
   - Business targets are resolved from `TELEGRAM_BUSINESS_CONNECTIONS_FILE` and a runtime DB allowlist in `setting.video_announce_story_business_targets`; personal account handles must stay out of repo env/docs/code.
   - Business targets are optional fanout for CherryFlash: missing boosts, missing rights, or a missing Business connection must be visible in the per-target report but must not prevent Telegram channel targets, VK wall posts, or VK stories from proceeding.

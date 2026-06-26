@@ -593,13 +593,27 @@ def _extract_story_id(result: Any) -> int | None:
 
 def _extract_message_id(result: Any) -> int | None:
     if isinstance(result, (list, tuple)) and result:
-        return _extract_message_id(result[0])
+        for item in result:
+            message_id = _extract_message_id(item)
+            if message_id is not None:
+                return message_id
+        return None
     message_id = getattr(result, "id", None)
     if message_id is not None:
         try:
             return int(message_id)
         except Exception:
             return None
+    message = getattr(result, "message", None)
+    if message is not None:
+        message_id = _extract_message_id(message)
+        if message_id is not None:
+            return message_id
+    updates = getattr(result, "updates", None)
+    if updates:
+        message_id = _extract_message_id(updates)
+        if message_id is not None:
+            return message_id
     if isinstance(result, dict):
         for key in ("id", "message_id"):
             if key in result:
@@ -607,6 +621,11 @@ def _extract_message_id(result: Any) -> int | None:
                     return int(result[key])
                 except Exception:
                     return None
+        for key in ("message", "updates"):
+            if key in result:
+                message_id = _extract_message_id(result[key])
+                if message_id is not None:
+                    return message_id
     return None
 
 
@@ -1178,6 +1197,52 @@ async def _story_targets_report(
                     )
                 else:
                     log(f"✅ Business story preflight passed for {label}")
+                target_report["ok"] = True
+                report["targets"].append(target_report)
+                continue
+            if transport == "telegram_story_message":
+                if client is None:
+                    raise RuntimeError(telegram_auth_error or "Telethon client unavailable")
+                peer = await client.get_input_entity(peer_ref)
+                target_report["effective_peer"] = peer_ref
+                if media_path is not None:
+                    if not previous_story:
+                        raise RuntimeError(
+                            "telegram_story_message target requires a successful prior story target"
+                        )
+                    source_peer = previous_story["peer"]
+                    source_story_id = int(previous_story["story_id"])
+                    caption = str(
+                        target_cfg.get("caption") or config.get("caption") or ""
+                    ).strip()
+                    media = types.InputMediaStory(peer=source_peer, id=source_story_id)
+                    target_report["source_story_id"] = source_story_id
+                    target_report["source_peer"] = previous_story.get("peer_ref")
+                    target_report["source_label"] = previous_story.get("label")
+                    result = await client(
+                        functions.messages.SendMediaRequest(
+                            peer=peer,
+                            media=media,
+                            message=caption,
+                        )
+                    )
+                    target_report["message_id"] = _extract_message_id(result)
+                    target_report["result"] = (
+                        result.to_dict() if hasattr(result, "to_dict") else str(result)
+                    )
+                    log(
+                        f"✅ Telegram story forwarded to chat {label}"
+                        + (
+                            f" (message_id={target_report['message_id']})"
+                            if target_report.get("message_id") is not None
+                            else ""
+                        )
+                    )
+                else:
+                    log(
+                        f"✅ Telegram story-message preflight passed for {label} "
+                        f"(peer={peer_ref})"
+                    )
                 target_report["ok"] = True
                 report["targets"].append(target_report)
                 continue

@@ -213,6 +213,11 @@ class _FakeSendStoryRequest:
         self.kwargs = kwargs
 
 
+class _FakeSendMediaRequest:
+    def __init__(self, **kwargs):  # noqa: ANN003
+        self.kwargs = kwargs
+
+
 class _FakeCanSendResult:
     def __init__(self, peer: str):
         self.peer = peer
@@ -226,6 +231,7 @@ class _FakeStoryClient:
         self.boost_fail_peers = boost_fail_peers
         self.story_ids = story_ids
         self.sent_requests: list[dict[str, object]] = []
+        self.sent_media_requests: list[dict[str, object]] = []
         self.sent_files: list[dict[str, object]] = []
 
     async def get_me(self) -> SimpleNamespace:
@@ -248,6 +254,9 @@ class _FakeStoryClient:
                 story_id=self.story_ids[peer],
                 to_dict=lambda: {"story_id": self.story_ids[peer]},
             )
+        if isinstance(request, _FakeSendMediaRequest):
+            self.sent_media_requests.append(request.kwargs)
+            return SimpleNamespace(id=9101, to_dict=lambda: {"id": 9101})
         raise AssertionError(f"Unexpected request: {request!r}")
 
     async def send_file(self, peer, file, **kwargs):  # noqa: ANN001,ANN003
@@ -258,6 +267,7 @@ class _FakeStoryClient:
 def _patch_story_request_types(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(helper.functions.stories, "CanSendStoryRequest", _FakeCanSendStoryRequest)
     monkeypatch.setattr(helper.functions.stories, "SendStoryRequest", _FakeSendStoryRequest)
+    monkeypatch.setattr(helper.functions.messages, "SendMediaRequest", _FakeSendMediaRequest)
     monkeypatch.setattr(
         helper.types,
         "InputPrivacyValueAllowAll",
@@ -350,6 +360,62 @@ async def test_story_publish_continues_after_non_blocking_fanout_failure(
     assert len(client.sent_requests) == 2
     assert client.sent_requests[1]["fwd_from_story"] == 101
     assert client.sent_requests[1]["fwd_from_id"] == "peer:@kenigevents"
+
+
+@pytest.mark.asyncio
+async def test_telegram_story_message_target_forwards_previous_story_to_channel(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_story_request_types(monkeypatch)
+
+    async def _fake_input_media_for_path(*_args, **_kwargs):  # noqa: ANN002,ANN003
+        return "uploaded-media"
+
+    monkeypatch.setattr(helper, "_input_media_for_path", _fake_input_media_for_path)
+    monkeypatch.setattr(helper, "_extract_story_id", lambda result: result.story_id)
+
+    client = _FakeStoryClient(
+        boost_fail_peers=set(),
+        story_ids={"peer:@kenigevents": 101},
+    )
+    media_path = tmp_path / "story.mp4"
+    media_path.write_bytes(b"video")
+
+    report = await helper._story_targets_report(
+        client,
+        auth={},
+        config={
+            "targets": [
+                {"peer": "@kenigevents", "mode": "upload"},
+                {
+                    "peer": "@kenigevents",
+                    "label": "tg:@kenigevents:story-message",
+                    "transport": "telegram_story_message",
+                    "mode": "repost_previous",
+                    "caption": "Видеоанонс #677 · 15 июня",
+                    "required": True,
+                },
+                {"peer": "@lovekenig", "mode": "repost_previous"},
+            ]
+        },
+        log=lambda *_args, **_kwargs: None,
+        phase="publish",
+        media_path=media_path,
+        honor_delays=False,
+    )
+
+    assert report["ok"] is True
+    assert report["targets"][1]["transport"] == "telegram_story_message"
+    assert report["targets"][1]["message_id"] == 9101
+    assert report["targets"][1]["source_story_id"] == 101
+    assert len(client.sent_requests) == 2
+    assert len(client.sent_media_requests) == 1
+    story_message = client.sent_media_requests[0]
+    assert story_message["peer"] == "peer:@kenigevents"
+    assert story_message["media"] == {"peer": "peer:@kenigevents", "id": 101}
+    assert story_message["message"] == "Видеоанонс #677 · 15 июня"
+    assert client.sent_requests[1]["fwd_from_story"] == 101
 
 
 @pytest.mark.asyncio

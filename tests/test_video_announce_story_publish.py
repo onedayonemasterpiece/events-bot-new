@@ -111,7 +111,7 @@ def test_popular_review_story_caption_uses_session_number_and_day_month():
     )
 
 
-def test_apply_popular_review_story_caption_fills_public_telegram_post_only():
+def test_apply_popular_review_story_caption_fills_public_story_message_only():
     scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
 
     selection_params = scenario._popular_review_selection_params()
@@ -122,7 +122,7 @@ def test_apply_popular_review_story_caption_fills_public_telegram_post_only():
 
     assert params["story_caption"] == "Видеоанонс #677 · 15 июня"
     targets = params["story_targets_override"]
-    assert targets[1]["transport"] == "telegram_chat"
+    assert targets[1]["transport"] == "telegram_story_message"
     assert targets[1]["caption"] == "Видеоанонс #677 · 15 июня"
     assert targets[2]["transport"] == "vk_wall"
     assert targets[2]["caption"] == "Видеоанонс"
@@ -147,10 +147,11 @@ def test_popular_review_selection_params_enable_story_publish_with_repost_target
             "peer": "@kenigevents",
             "label": "tg:@kenigevents:post",
             "delay_seconds": 30,
-            "mode": "upload",
-            "transport": "telegram_chat",
+            "mode": "repost_previous",
+            "transport": "telegram_story_message",
             "caption": "Видеоанонс",
             "blocking": False,
+            "required": True,
         },
         {
             "peer": "club231828790",
@@ -205,7 +206,7 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
     assert config is not None
     assert "auth_source" in config
     assert config["targets"][0]["blocking"] is False
-    assert config["targets"][1]["transport"] == "telegram_chat"
+    assert config["targets"][1]["transport"] == "telegram_story_message"
     assert config["caption"] == "Видеоанонс #677 · 17 мая"
     assert config["targets"][1]["caption"] == "Видеоанонс #677 · 17 мая"
     vk_wall_target = config["targets"][2]
@@ -219,7 +220,7 @@ async def test_popular_review_story_config_keeps_vk_targets_and_nonblocking_prim
         for target in config["targets"]
     ] == [
         ("@kenigevents", "telethon"),
-        ("@kenigevents", "telegram_chat"),
+        ("@kenigevents", "telegram_story_message"),
         ("club231828790", "vk_wall"),
         ("@lovekenig", "telethon"),
         ("club231828790", "vk_wall_story"),
@@ -593,13 +594,16 @@ async def test_business_story_targets_are_allowed_for_kenigsberg(monkeypatch, tm
 
 
 @pytest.mark.asyncio
-async def test_build_story_publish_config_preserves_self_blocking_target(monkeypatch):
+async def test_build_story_publish_config_preserves_crumple_story_message_target(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_ENABLED", "1")
     monkeypatch.setenv(
         "VIDEO_ANNOUNCE_STORY_TARGETS_JSON",
         (
             '[{"peer":"me","delay_seconds":0,"mode":"upload"},'
             '{"peer":"@kenigevents","delay_seconds":0,"mode":"repost_previous","required":true},'
+            '{"peer":"@kenigevents","label":"tg:@kenigevents:story-message",'
+            '"delay_seconds":30,"mode":"repost_previous",'
+            '"transport":"telegram_story_message","required":true},'
             '{"peer":"@lovekenig","delay_seconds":600,"mode":"repost_previous","required":true}]'
         ),
     )
@@ -625,6 +629,14 @@ async def test_build_story_publish_config_preserves_self_blocking_target(monkeyp
             "delay_seconds": 0,
             "mode": "repost_previous",
             "required": True,
+        },
+        {
+            "peer": "@kenigevents",
+            "label": "tg:@kenigevents:story-message",
+            "delay_seconds": 30,
+            "mode": "repost_previous",
+            "required": True,
+            "transport": "telegram_story_message",
         },
         {
             "peer": "@lovekenig",
