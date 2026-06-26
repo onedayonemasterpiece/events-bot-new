@@ -27,6 +27,11 @@
 - `docs/features/guide-excursions-monitoring/README.md` — мониторинг экскурсионных анонсов гидов, отдельный digest track и публикация в тестовый канал
 - `docs/features/telegram-business-stories/README.md` — Telegram Business webhook contract, encrypted connection cache и публикация сторис через Bot API
 
+## Research / rollout
+
+- `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
+- `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: localStorage + Supabase telemetry/profile без auth в MVP
+
 ## Как добавлять новую фичу
 
 1. Создай `docs/features/<feature>/README.md`.

@@ -193,6 +193,31 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  static_site_pages:
+    status: design
+    docs: docs/features/static-site-pages/README.md
+    legacy_requirements: docs/features/static-site-pages/requitements.md
+    related_backlog: docs/backlog/features/static-event-pages/README.md
+    related_personalization: docs/features/unsigned-personalization/README.md
+    target_domain: https://kenigevents.ru/
+    entrypoints: []
+  unsigned_personalization:
+    status: design
+    docs: docs/features/unsigned-personalization/README.md
+    research: docs/features/unsigned-personalization/alanytics.md
+    taxonomy: docs/features/unsigned-personalization/taxonomy.md
+    model_selection: docs/features/unsigned-personalization/model-selection.md
+    neural_flow: docs/features/unsigned-personalization/neural-flow.md
+    neural_flow_diagram: docs/features/unsigned-personalization/assets/neural-flow.svg
+    database_design: docs/features/unsigned-personalization/database.md
+    smart_update_contract: docs/features/unsigned-personalization/smart-update-contract.md
+    llm_stress_scenarios: docs/features/unsigned-personalization/llm-stress-scenarios.md
+    related_static_site: docs/features/static-site-pages/README.md
+    planned_reference_client: static_site/personalization/personalization.js
+    planned_reference_demo: static_site/personalization/demo.html
+    planned_playwright_contract: tests/playwright/static_personalization_contract.spec.ts
+    planned_gherkin: tests/e2e/features/static_site_personalization.feature
+    entrypoints: []
   telegram_monitoring:
     status: implemented
     docs: docs/features/telegram-monitoring/README.md

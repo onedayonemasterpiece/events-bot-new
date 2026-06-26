@@ -1,3 +1,9 @@
+> **Source research draft.** This file preserves the initial analytical proposal.
+> Canonical implementation decisions are in `README.md`, `neural-flow.md`,
+> `taxonomy.md`, `database.md`, and `model-selection.md`. In particular, legacy
+> examples that used one broad `negative_tags` concept are superseded by
+> `event.audience_exclusion_tags` and `user.negative_interest_tags`.
+
 Как строится выявление и долгосрочный контроль интересов пользователя просматривающего анонсы
 Вводная: некая система собирает информация о социальном поведении пользователя при просмотре афиш. Пользователь приходит смотреть афиши допустим регулярно, как из просмотренного им сформировать выдачу для него более релеватную?
 
@@ -465,7 +471,7 @@ LLM/embedding-модель → офлайн-обогащение и вектор
       {"tag": "jazz", "delta": 0.08, "confidence": 0.86},
       {"tag": "instrumental_music", "delta": 0.04, "confidence": 0.74}
     ],
-    "negative_tags": [
+    "negative_interest_tags": [
       {"tag": "children_events", "delta": -0.12, "confidence": 0.91}
     ],
     "price_range_update": {
@@ -583,7 +589,7 @@ hide_weight = -8.0
   "positive_vector_long": [...],
   "negative_vector_long": [...],
   "positive_tags": {"jazz": 0.81},
-  "negative_tags": {"kids": 0.72}
+  "negative_interest_tags": {"kids": 0.72}
 }
 
 При ранжировании:
@@ -862,7 +868,7 @@ session depth
    - short_vector
    - long_vector
    - tag_affinity
-   - negative_tags
+   - negative_interest_tags
    - venue_affinity
    - price/time preferences
 

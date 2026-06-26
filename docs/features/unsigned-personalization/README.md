@@ -41,15 +41,28 @@ the link must remain explicitly marked as planned.
 
 ## External review hardening
 
-Feedback from the first external review is accepted into the design:
+Feedback from the external review is accepted into the design:
 
 - taxonomy/schema comes before LLM enrichment; LLM tags are proposals, not production taxonomy;
-- `negative_tags` is no longer shared between event fields and user dislikes; use `audience_exclusion_tags` for events and `negative_interest_tags` for visitors;
+- legacy `negative_tags` is no longer shared between event fields and user dislikes; use `audience_exclusion_tags` for events and `negative_interest_tags` for visitors;
 - compact telemetry now includes both `session_summary` and `served_list_summary`, so future rankers get exposure context;
 - server profile snapshots are analytics/post-MVP ranker evidence, not an MVP browser-read dependency while public SELECT by `anon_id` is forbidden;
 - public Supabase writes require abuse/rate-limit/cleanup/growth-alert controls, with same-origin endpoint preferred for production;
 - LLM eval is reviewer evidence only; deterministic assertions and human/golden personas are required for acceptance;
 - early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path.
+
+Traceability for the review:
+
+| Review point | Design response |
+| --- | --- |
+| Missing implementation/test links in an immutable commit | Links to `static_site/*`, Gherkin and Playwright are marked as planned unless the files are in the same implementation PR. |
+| Tag drift / LLM-invented tags | `taxonomy.md` defines controlled categories/tags/aliases; `neural-flow.md` puts taxonomy/schema before LLM enrichment. |
+| Event exclusion vs user dislike ambiguity | Event field is `audience_exclusion_tags`; user field is `negative_interest_tags`; original research wording is treated as legacy. |
+| Need exposure context for future ranker training | `database.md` and `neural-flow.md` add `personalization_served_list_summary` / `served_list_id`. |
+| Server profile snapshots do not power anonymous MVP reads | MVP product path is local-first; server snapshots are analytics/post-MVP evidence only. |
+| Public Supabase insert abuse risk | Production preference is same-origin rate-limited endpoint; direct anon insert is canary-only with caps/cleanup/alerts. |
+| Embeddings should be evaluated early, but not online | Early offline comparison against `gemini-embedding-001` and local/Kaggle candidates is an MVP hardening gate. |
+| LLM eval is not enough | Acceptance requires deterministic assertions + human/golden personas + optional LLM reviewer. |
 
 ## Принятые решения на MVP
 

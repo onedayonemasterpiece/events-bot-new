@@ -55,7 +55,7 @@ gemini-embedding-001]
 | Stage | Data in | Model/tool | Data out | Limit source for planned model |
 | --- | --- | --- | --- | --- |
 | Static export | `event_id`, title, date/time, venue, city, price/free, age, short digest, source URL | No LLM | compact manifest rows | none |
-| Semantic enrichment | public event fields + source/search digest only; no visitor profile | `gemini-3.1-flash-lite` | tags, audience hints, mood/format, negative tags, confidence, warnings, `embedding_text` | **Supabase limiter:** `13 RPM / 240000 TPM / 450 RPD` |
+| Semantic enrichment | public event fields + source/search digest only; no visitor profile | `gemini-3.1-flash-lite` | controlled tags, audience hints, mood/format, `audience_exclusion_tags`, confidence, warnings, `embedding_text` | **Supabase limiter:** `13 RPM / 240000 TPM / 450 RPD` |
 | Hard review | only rows with low confidence/conflicts + Lite output | `gemma-4-31b-it` with `thinking_level=MINIMAL`, `include_thoughts=false` | corrected enrichment + warnings; no canonical fact overwrite without guardrails | **Supabase limiter:** `15 RPM / unlimited TPM / 1500 RPD` |
 | Local vectorization | normalized enrichment features: tags/category/audience/mood/price/time/venue/city | deterministic sparse/hashed vector builder | `feature_vector` + schema version | no provider limit; no external request |
 | Online feed/rank | static feature snapshot + local anonymous profile/action weights + viewport/layout | `local_rerank_v1` deterministic JS/SQL scoring | ranked list; mobile feed and desktop grid/list can use different layout triggers | none |
