@@ -18673,7 +18673,7 @@ async def get_source_page_text(path: str) -> str:
     html_content = page.get("content") or page.get("content_html") or ""
     html_content = apply_ics_link(html_content, None)
     html_content = apply_month_nav(html_content, None)
-    html_content = html_content.replace(FOOTER_LINK_HTML, "")
+    html_content = strip_footer_link(html_content)
     html_content = html_content.replace(f"<p>{CONTENT_SEPARATOR}</p>", f"\n{CONTENT_SEPARATOR}\n")
     html_content = html_content.replace("<br/>", "\n").replace("<br>", "\n")
     html_content = re.sub(r"</p>\s*<p>", "\n", html_content)
@@ -19779,7 +19779,7 @@ async def build_source_page_content(
     if event_footer_html and page_mode != "history":
         html_content = html_content.rstrip() + BODY_SPACER_HTML + event_footer_html
     if page_mode == "history":
-        html_content = html_content.replace(FOOTER_LINK_HTML, "").rstrip()
+        html_content = strip_footer_link(html_content)
         html_content = re.sub(
             r'(?:<p>(?:&nbsp;|&#8203;)</p>)?<p><a href="https://t\.me/kgdstories">[^<]+</a></p>',
             "",

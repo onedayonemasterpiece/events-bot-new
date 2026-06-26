@@ -7459,7 +7459,12 @@ BODY_DIVIDER_HTML = "<!--BODY_DIVIDER--><hr>"
 
 FOOTER_LINK_HTML = (
     BODY_SPACER_HTML
-    + '<p><a href="https://t.me/kenigevents">Полюбить Калининград Анонсы</a></p>'
+    + "<p><b>Полюбить Калининград</b></p>"
+    + '<p>Telegram: <a href="https://t.me/kenigevents">Анонсы</a> · '
+    + '<a href="https://t.me/kldevents">Афиша</a></p>'
+    + '<p>ВК: <a href="https://vk.com/kenigeventsofficial">Анонсы</a> · '
+    + '<a href="https://vk.com/klgdevents">Афиша</a> · '
+    + '<a href="https://vk.ru/im/channels/-239844596">канал Афиши</a></p>'
     + BODY_SPACER_HTML
 )
 
@@ -7690,12 +7695,32 @@ def apply_festival_nav(
     return html_content, True, removed_legacy_blocks, legacy_markers_replaced
 
 
-def apply_footer_link(html_content: str) -> str:
-    """Ensure the Telegram channel link footer is present once."""
-    pattern = re.compile(
-        r'(?:<p>(?:&nbsp;|&#8203;)</p>)?<p><a href="https://t\.me/kenigevents">[^<]+</a></p><p>(?:&nbsp;|&#8203;)</p>'
+def strip_footer_link(html_content: str) -> str:
+    """Remove the common editorial Telegraph footer if it is already present."""
+    spacer = r"<p>(?:&nbsp;|&#8203;|\u200b)</p>"
+    legacy_footer_re = re.compile(
+        rf"(?:{spacer}\s*)?<p><a href=\"https://t\.me/kenigevents\">[^<]+</a></p>\s*{spacer}",
+        flags=re.IGNORECASE,
     )
-    html_content = pattern.sub("", html_content).rstrip()
+    social_footer_re = re.compile(
+        rf"(?:{spacer}\s*)?"
+        r"<p><(?:b|strong)>Полюбить Калининград</(?:b|strong)></p>\s*"
+        r"<p>Telegram:\s*<a href=\"https://t\.me/kenigevents\">Анонсы</a>\s*·\s*"
+        r"<a href=\"https://t\.me/kldevents\">Афиша</a></p>\s*"
+        r"<p>ВК:\s*<a href=\"https://vk\.com/kenigeventsofficial\">Анонсы</a>\s*·\s*"
+        r"<a href=\"https://vk\.com/klgdevents\">Афиша</a>\s*·\s*"
+        r"<a href=\"https://vk\.ru/im/channels/-239844596\">канал Афиши</a></p>\s*"
+        rf"{spacer}",
+        flags=re.IGNORECASE,
+    )
+    html_content = social_footer_re.sub("", html_content)
+    html_content = legacy_footer_re.sub("", html_content)
+    return html_content.rstrip()
+
+
+def apply_footer_link(html_content: str) -> str:
+    """Ensure the common editorial Telegraph footer is present once."""
+    html_content = strip_footer_link(html_content)
     return html_content + FOOTER_LINK_HTML
 
 
