@@ -134,14 +134,17 @@ VK message `https://vk.com/im?sel=868977531&msgid=287` as the affected record.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `005bec6c` (reachable from `origin/main`; Fly release `v1500`, image `events-bot-new-wngqia:deployment-01KW2WJVJB1G24K9XMPZYN75BW`)
+- deploy path: PR #19 squash-merged to `main`, then manual `flyctl deploy -a events-bot-new-wngqia --remote-only --detach` from a clean detached `origin/main` worktree.
 - regression checks:
   - `python -m pytest -q tests/test_promo.py::test_promo_runner_sends_vk_channel_manual_draft_nonpublic tests/test_promo.py::test_vk_channel_manual_draft_prefers_registration_link_over_telegraph tests/test_promo.py::test_vk_channel_manual_draft_refuses_80_stories_telegraph_fallback tests/test_promo.py::test_vk_channel_manual_draft_extracts_registration_link_from_source_text tests/test_promo.py::test_vk_channel_manual_draft_sends_poster_attachment` — passed locally (`5 passed`).
 - production mitigation evidence:
   - `event.id=4417.ticket_link` = `https://kgd80.ru/sobytiya/kaliningradskiy-morskoy-torgovyy-port-yarkie-stranitsy-sovetskoy-istorii-i-sovremennost/?register=1`.
   - `promo_exposure.id=541.details_json.cta_url` equals the same URL.
   - VK API `messages.getById(message_ids=287)` returned text and link attachment with the same registration URL.
+- post-deploy verification:
+  - `/healthz` returned `ok=true`, `ready=true`, DB `ok`, scheduler `ok`, and `promo_vk=ok`.
+  - Production code smoke raised `VkChannelManualDraftMissingRegistrationLink` for an `80 историй о главном` draft with registration wording but only Telegraph URL.
 
 ## Prevention
 
