@@ -5,8 +5,20 @@ import path from 'node:path';
 const demoHtml = fs.readFileSync(path.resolve(process.cwd(), 'static_site/personalization/demo.html'), 'utf8');
 const personalizationJs = fs.readFileSync(path.resolve(process.cwd(), 'static_site/personalization/personalization.js'), 'utf8');
 
-async function openFixture(page: any, viewport: { width: number; height: number }, options: { backendAvailable?: boolean; seedProfile?: Record<string, unknown> } = {}) {
+type FixtureOptions = {
+  backendAvailable?: boolean;
+  seedProfile?: Record<string, unknown>;
+  preloadedProfile?: Record<string, unknown>;
+  disableDemoSeed?: boolean;
+};
+
+async function openFixture(page: any, viewport: { width: number; height: number }, options: FixtureOptions = {}) {
   await page.setViewportSize(viewport);
+  if (options.preloadedProfile) {
+    await page.addInitScript((profile: Record<string, unknown>) => {
+      window.localStorage.setItem('ke_personalization_profile', JSON.stringify(profile));
+    }, options.preloadedProfile);
+  }
   await page.route('https://kenigevents.test/**', async (route: any) => {
     const url = route.request().url();
     if (url.endsWith('/personalization/personalization.js')) {
@@ -20,6 +32,7 @@ async function openFixture(page: any, viewport: { width: number; height: number 
     let body = demoHtml;
     const injected: string[] = [];
     if (options.backendAvailable === false) injected.push('window.__backendAvailable = false;');
+    if (options.disableDemoSeed) injected.push('window.__disableDemoSeed = true;');
     if (options.seedProfile) injected.push(`window.__seedProfile = ${JSON.stringify(options.seedProfile)};`);
     if (injected.length) {
       body = body.replace('<script src="/personalization/personalization.js"></script>', `<script>${injected.join('\n')}</script><script src="/personalization/personalization.js"></script>`);
@@ -48,7 +61,7 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
   });
 
-  test('mobile consent reranks locally, downranks negative interests and emits compact served-list telemetry', async ({ page }) => {
+  test('mobile consent reranks locally, keeps event exclusions separate from negative interests, and dedupes served-list telemetry', async ({ page }) => {
     await openFixture(page, { width: 375, height: 812 }, {
       seedProfile: {
         consent_ok: true,
@@ -71,9 +84,10 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     await expect(page.locator('[data-event-id="208"]')).toHaveCount(0);
 
     const topIds = await page.locator('.related-card').evaluateAll((nodes: Element[]) => nodes.slice(0, 3).map((node) => node.getAttribute('data-event-id')));
+    expect(topIds.slice(0, 2)).toEqual(['201', '210']);
     expect(topIds).not.toContain('203');
 
-    const telemetry = await page.evaluate(() => (window as any).__telemetry);
+    let telemetry = await page.evaluate(() => (window as any).__telemetry);
     const served = telemetry.find((e: any) => e.event_kind === 'served_list_summary');
     expect(served).toBeTruthy();
     expect(served.surface).toBe('event_detail_related');
@@ -81,13 +95,61 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     expect(served.presentation_mode).toBe('vertical_related');
     expect(served.algorithm_id).toBe('local_related_rerank_v1');
     expect(served.current_event_id).toBe(101);
+    expect(served.served_list_id).toBeTruthy();
+    expect(served.served_list_hash).toBeTruthy();
     expect(served.shown.some((item: any) => item.event_id === 101 || item.event_id === 209)).toBeFalsy();
+    const adultJazz = served.shown.find((item: any) => item.event_id === 210);
+    expect(adultJazz).toBeTruthy();
+    expect(adultJazz.reason_codes).not.toContain('profile:negative_interest_penalty');
+
+    await page.setViewportSize({ width: 390, height: 812 });
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.filter((e: any) => e.event_kind === 'served_list_summary').length)).toBe(1);
+
+    await page.locator('.related-card').first().getByRole('button', { name: 'Подробнее' }).click();
+    telemetry = await page.evaluate(() => (window as any).__telemetry);
+    const click = telemetry.find((e: any) => e.event_kind === 'related_card_click');
+    expect(click).toBeTruthy();
+    expect(click.served_list_id).toBe(served.served_list_id);
+    expect(click.served_list_hash).toBe(served.served_list_hash);
 
     await page.locator('[data-event-id="203"]').getByRole('button', { name: 'Не интересно' }).click();
     await expect(page.locator('[data-event-id="203"]')).toHaveCount(0);
     const afterHide = await page.evaluate(() => ({ telemetry: (window as any).__telemetry, profile: JSON.parse(window.localStorage.getItem('ke_personalization_profile') || '{}') }));
     expect(afterHide.profile.hidden_event_ids).toContain('203');
     expect(afterHide.telemetry.some((e: any) => e.event_kind === 'hide_event' && e.event_id === 203)).toBeTruthy();
+  });
+
+  test('demo seed is outside core: no-seed consent creates an empty compatible profile', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, { disableDemoSeed: true });
+    await page.locator('#ok').click();
+
+    const profile = await page.evaluate(() => JSON.parse(window.localStorage.getItem('ke_personalization_profile') || '{}'));
+    expect(profile.consent_ok).toBe(true);
+    expect(profile.profile_version).toBe('anon-profile-v1');
+    expect(profile.feature_schema_version).toBe('event-detail-related-v1');
+    expect(profile.positive_tags).toEqual({});
+    expect(profile.negative_interest_tags).toEqual({});
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'local_related_rerank_v1');
+    await expect(page.locator('.related-card').first()).toContainText('Детский музыкальный спектакль');
+  });
+
+  test('legacy profile without strict feature schema is rejected instead of silently scoring negative_tags', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, {
+      preloadedProfile: {
+        consent_ok: true,
+        profile_version: 'anon-profile-v1',
+        anon_id: 'anon-legacy',
+        session_id: 'session-legacy',
+        positive_tags: { jazz: 1 },
+        negative_tags: { kids: 1 },
+        hidden_event_ids: ['208'],
+      },
+    });
+
+    await expect(page.locator('#status')).toHaveText('static related fallback');
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'static_related_v1');
+    await expect(page.locator('.related-card').first()).toContainText('Детский музыкальный спектакль');
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
   });
 
   test('desktop uses related module/grid behavior, not a mobile infinite feed', async ({ page }) => {

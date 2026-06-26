@@ -3,54 +3,23 @@
   "feature_schema_version": "event-detail-related-v1",
   "surface": "event_detail_related",
   "algorithm_id": "static_related_v1",
-  "generated_at": "2026-06-26T14:12:06Z",
+  "generated_at": "2026-06-26T21:06:37Z",
   "current_event": {
-    "event_id": 2400,
-    "title": "Bel Suono: шоу трёх роялей «Нам 15 лет!»",
+    "event_id": 2872,
+    "title": "Я люблю тебя, жизнь!",
     "category": "music",
     "tags": [
       "classical_music",
       "evening",
       "live_music",
       "music",
-      "rock",
       "ticketed"
     ],
     "city": "Светлогорск",
-    "location_name": "Янтарь холл",
-    "date": "2026-07-10"
+    "location_name": "Янтарь холл, Ленина 11, Светлогорск",
+    "date": "2026-06-26"
   },
   "related_static": [
-    {
-      "event_id": 5878,
-      "title": "Песни СССР",
-      "category": "music",
-      "tags": [
-        "classical_music",
-        "evening",
-        "live_music",
-        "music",
-        "ticketed"
-      ],
-      "city": "Светлогорск",
-      "location_name": "Янтарь холл",
-      "date": "2026-07-11",
-      "status": "sale",
-      "lifecycle_status": "active",
-      "is_free": false,
-      "base_similarity": 0.8244,
-      "reason_codes": [
-        "same_category:music",
-        "tag:classical_music",
-        "tag:evening",
-        "tag:live_music",
-        "tag:music",
-        "same_city",
-        "same_venue",
-        "date_near",
-        "price_band_match"
-      ]
-    },
     {
       "event_id": 5495,
       "title": "Вадим Самойлов с симфоническим оркестром",
@@ -63,13 +32,14 @@
         "rock",
         "ticketed"
       ],
+      "audience_exclusion_tags": [],
       "city": "Светлогорск",
       "location_name": "Янтарь холл",
       "date": "2026-06-27",
       "status": "sale",
       "lifecycle_status": "active",
       "is_free": false,
-      "base_similarity": 0.8146,
+      "base_similarity": 0.7644,
       "reason_codes": [
         "same_category:music",
         "tag:classical_music",
@@ -77,14 +47,13 @@
         "tag:live_music",
         "tag:music",
         "same_city",
-        "same_venue",
         "date_near",
         "price_band_match"
       ]
     },
     {
-      "event_id": 2872,
-      "title": "Я люблю тебя, жизнь!",
+      "event_id": 5878,
+      "title": "Песни СССР",
       "category": "music",
       "tags": [
         "classical_music",
@@ -93,13 +62,14 @@
         "music",
         "ticketed"
       ],
+      "audience_exclusion_tags": [],
       "city": "Светлогорск",
-      "location_name": "Янтарь холл, Ленина 11, Светлогорск",
-      "date": "2026-06-26",
+      "location_name": "Янтарь холл",
+      "date": "2026-07-11",
       "status": "sale",
       "lifecycle_status": "active",
       "is_free": false,
-      "base_similarity": 0.7116,
+      "base_similarity": 0.7487,
       "reason_codes": [
         "same_category:music",
         "tag:classical_music",
@@ -112,33 +82,29 @@
       ]
     },
     {
-      "event_id": 4779,
-      "title": "Любовь в стиле джаз",
-      "category": "cinema",
+      "event_id": 3000,
+      "title": "Моя Мишель",
+      "category": "music",
       "tags": [
-        "cinema",
-        "classic",
-        "classical_music",
-        "drama",
         "evening",
-        "jazz",
         "live_music",
-        "music",
-        "theatre",
-        "ticketed"
+        "music"
       ],
-      "city": "Калининград",
-      "location_name": "Музыкальный театр",
-      "date": "2026-07-10",
+      "audience_exclusion_tags": [],
+      "city": "Светлогорск",
+      "location_name": "Янтарь холл, Ленина 11, Светлогорск",
+      "date": "2026-08-08",
       "status": "available",
       "lifecycle_status": "active",
       "is_free": false,
-      "base_similarity": 0.2791,
+      "base_similarity": 0.6695,
       "reason_codes": [
-        "tag:classical_music",
+        "same_category:music",
         "tag:evening",
         "tag:live_music",
         "tag:music",
+        "same_city",
+        "same_venue",
         "date_near",
         "price_band_match"
       ]
@@ -151,37 +117,74 @@
         "evening",
         "theatre"
       ],
+      "audience_exclusion_tags": [],
       "city": "Светлогорск",
       "location_name": "Янтарь холл, Ленина 11, Светлогорск",
       "date": "2026-06-30",
       "status": "available",
       "lifecycle_status": "active",
       "is_free": false,
-      "base_similarity": 0.2788,
+      "base_similarity": 0.3692,
       "reason_codes": [
         "tag:evening",
         "same_city",
+        "same_venue",
         "date_near",
         "price_band_match"
       ]
     },
     {
-      "event_id": 6219,
-      "title": "Акварельная открытка «Домик у моря»",
-      "category": "workshop",
+      "event_id": 3730,
+      "title": "Симфоническая пятница",
+      "category": "exhibition",
       "tags": [
-        "family",
-        "kids",
-        "ticketed",
-        "workshop"
+        "classical_music",
+        "evening",
+        "exhibition",
+        "live_music",
+        "museum",
+        "music",
+        "ticketed"
       ],
-      "city": "Светлогорск",
-      "location_name": "Телеграф",
-      "date": "2026-06-28",
+      "audience_exclusion_tags": [],
+      "city": "Калининград",
+      "location_name": "Кафедральный собор, Остров Канта, #Калининград",
+      "date": "2026-06-26",
       "status": "available",
       "lifecycle_status": "active",
       "is_free": false,
-      "base_similarity": 0.2644,
+      "base_similarity": 0.3414,
+      "reason_codes": [
+        "tag:classical_music",
+        "tag:evening",
+        "tag:live_music",
+        "tag:music",
+        "date_near",
+        "price_band_match"
+      ]
+    },
+    {
+      "event_id": 6326,
+      "title": "🕰️ Экскурсия «В потоке времени»",
+      "category": "lecture",
+      "tags": [
+        "excursion",
+        "family",
+        "free",
+        "kids",
+        "lecture",
+        "local_history",
+        "ticketed",
+        "tourist_friendly"
+      ],
+      "audience_exclusion_tags": [],
+      "city": "Светлогорск",
+      "location_name": "Дом-музей Германа Брахерта",
+      "date": "2026-06-26",
+      "status": "available",
+      "lifecycle_status": "active",
+      "is_free": false,
+      "base_similarity": 0.31,
       "reason_codes": [
         "tag:ticketed",
         "same_city",

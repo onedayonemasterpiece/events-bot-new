@@ -38,6 +38,21 @@
   <script src="/personalization/personalization.js"></script>
   <script>
     window.__telemetry = [];
+    if (!window.__disableDemoSeed && !window.__seedProfile) {
+      window.__seedProfile = {
+        consent_ok: true,
+        profile_version: 'anon-profile-v1',
+        feature_schema_version: 'event-detail-related-v1',
+        anon_id: 'anon-demo',
+        session_id: 'session-demo',
+        positive_tags: {jazz: 1.0, live_music: 0.6, evening: 0.2},
+        negative_interest_tags: {kids: 1.0},
+        hidden_event_ids: ['208'],
+        seen_event_ids: [],
+        seen_venue_ids: [],
+        price_preferences: {prefer_free: false}
+      };
+    }
     window.__relatedManifest = {
       schema_version: 'event-detail-related-v1',
       feature_schema_version: 'event-detail-related-v1',
@@ -55,6 +70,7 @@
       related_static: [
         {event_id: 203, title: 'Детский музыкальный спектакль', category: 'kids', tags: ['kids', 'family', 'live_music'], audience_exclusion_tags: [], city: 'Калининград', location_name: 'Дом искусств', date: '2026-07-02', status: 'available', lifecycle_status: 'active', base_similarity: 0.95, reason_codes: ['same_city', 'tag:live_music', 'same_category:music']},
         {event_id: 201, title: 'Камерный джаз на крыше', category: 'music', tags: ['jazz', 'live_music', 'evening'], city: 'Калининград', location_name: 'Roof Hall', date: '2026-07-03', status: 'available', lifecycle_status: 'active', base_similarity: 0.92, reason_codes: ['same_category:music', 'tag:jazz', 'same_city']},
+        {event_id: 210, title: 'Взрослый вечерний джаз', category: 'music', tags: ['jazz', 'live_music', 'evening'], audience_exclusion_tags: ['kids'], city: 'Калининград', location_name: 'Jazz Club', date: '2026-07-03', status: 'available', lifecycle_status: 'active', base_similarity: 0.91, reason_codes: ['same_category:music', 'tag:jazz', 'same_city']},
         {event_id: 204, title: 'Рок-концерт у моря', category: 'music', tags: ['rock', 'live_music', 'evening'], city: 'Светлогорск', location_name: 'Янтарь холл', date: '2026-07-04', status: 'available', lifecycle_status: 'active', base_similarity: 0.78, reason_codes: ['same_category:music', 'tag:live_music']},
         {event_id: 202, title: 'Спектакль «Анна Каренина»', category: 'theatre', tags: ['theatre', 'drama', 'evening'], city: 'Калининград', location_name: 'Драмтеатр', date: '2026-07-05', status: 'available', lifecycle_status: 'active', base_similarity: 0.74, reason_codes: ['tag:evening', 'same_city']},
         {event_id: 205, title: 'Бесплатная лекция о музыке', category: 'lecture', tags: ['lecture', 'free', 'music'], city: 'Калининград', location_name: 'Библиотека', date: '2026-07-06', is_free: true, status: 'available', lifecycle_status: 'active', base_similarity: 0.70, reason_codes: ['same_city', 'tag:music']},

@@ -38,7 +38,7 @@ The MVP write path should be **compact summaries first**, not a raw event fireho
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Preferred production path: same-origin endpoint validates/rate-limits payload and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`, and put `presentation_mode` / `current_event_id` into `metadata` if the table is not extended with dedicated columns.
+Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`, and put `presentation_mode` / `current_event_id` into `metadata` if the table is not extended with dedicated columns. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
 
 ### Private schema `personalization`
 
@@ -49,6 +49,7 @@ All derived and debug data lives outside exposed schemas:
 - `personalization.event_feature_snapshot` — event ranking features exported from Fly SQLite + offline enrichment;
 - `personalization.visitor_profile_snapshot` — compact session/short/mid/long profile horizons, each with positive and negative vectors/maps;
 - `personalization.recommendation_request` and `recommendation_result` — debug/eval evidence;
+- `personalization.telemetry_quarantine` — compact rejected/suspicious payload evidence with `actor_class`, reason and size/hash only; no raw source texts;
 - served-list summaries are kept in `public` only as append-only compact telemetry; backend jobs can fold them into private training/eval tables later;
 - `personalization.daily_interaction_aggregate` — retention-safe analytics;
 - `personalization.e2e_persona` — synthetic test personas and expected top-k.
@@ -68,6 +69,7 @@ Default MVP retention and storage policy:
 | `daily_interaction_aggregate` | 12 months | product metrics without raw event volume |
 | `visitor_profile_snapshot` | 365 days since last seen, compact only | returning visitor personalization |
 | `recommendation_request/result` debug | 14–30 days | E2E/debug only |
+| `telemetry_quarantine` compact evidence | 7–30 days | abuse/debug; excluded from training and metrics |
 | `event_feature_snapshot` | while event is future + static retention window | ranking features tied to event lifecycle |
 
 Retention should run from backend/cron with direct DB credentials or SQL job, not from browser. Raw telemetry must be deleted or aggregated before it can threaten the free-tier cap.
@@ -103,7 +105,12 @@ public writes, one of these modes must be explicitly selected:
 
 No mode allows public SELECT by `anon_id` in the anonymous MVP. Server profile
 snapshots are analytics/eval/post-MVP server-ranker evidence until a safe
-same-origin recommendation endpoint exists.
+same-origin recommendation endpoint exists. Accepted payloads must carry or be
+annotated with `actor_class` (`human_likely`, `unknown`, `preview_bot`,
+`crawler_verified`, `monitor`, `bot_likely`, `automation_suspected`) and
+`trust_state` (`accepted`, `quarantined`, `dropped`, `diagnostic`). Only
+`accepted` human/unknown consented summaries can update profiles or training
+sets.
 
 ## Draft SQL
 
@@ -130,6 +137,8 @@ create table if not exists public.personalization_session_summary (
   algorithm_id text not null default 'local_rerank_v1',
   consent_version text not null,
   consent_state text not null default 'accepted',
+  actor_class text not null default 'unknown',
+  trust_state text not null default 'accepted',
   event_counts jsonb not null default '{}'::jsonb,
   positive_tag_delta jsonb not null default '{}'::jsonb,
   negative_interest_tag_delta jsonb not null default '{}'::jsonb,
@@ -140,6 +149,8 @@ create table if not exists public.personalization_session_summary (
   client_summary_version text not null,
   metadata jsonb not null default '{}'::jsonb,
   constraint personalization_session_summary_consent_chk check (consent_state = 'accepted'),
+  constraint personalization_session_summary_trust_chk check (trust_state = 'accepted'),
+  constraint personalization_session_summary_actor_chk check (actor_class in ('human_likely', 'unknown')),
   constraint personalization_session_summary_time_chk check (ended_at >= started_at),
   constraint personalization_session_summary_payload_chk check (
     length(event_counts::text) <= 2048
@@ -183,6 +194,7 @@ create index if not exists personalization_session_summary_received_idx
 create table if not exists public.personalization_served_list_summary (
   id uuid primary key default gen_random_uuid(),
   served_list_id text not null,
+  served_list_hash text,
   anon_id uuid not null,
   session_id uuid not null,
   requested_at timestamptz not null,
@@ -196,8 +208,12 @@ create table if not exists public.personalization_served_list_summary (
   debug_sample boolean not null default false,
   consent_version text not null,
   consent_state text not null default 'accepted',
+  actor_class text not null default 'unknown',
+  trust_state text not null default 'accepted',
   metadata jsonb not null default '{}'::jsonb,
   constraint personalization_served_list_consent_chk check (consent_state = 'accepted'),
+  constraint personalization_served_list_trust_chk check (trust_state = 'accepted'),
+  constraint personalization_served_list_actor_chk check (actor_class in ('human_likely', 'unknown')),
   constraint personalization_served_list_viewport_chk check (viewport_class in ('mobile', 'tablet', 'desktop')),
   constraint personalization_served_list_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),
   constraint personalization_served_list_shown_chk check (
@@ -234,6 +250,25 @@ create index if not exists personalization_served_list_session_time_idx
 create index if not exists personalization_served_list_received_idx
   on public.personalization_served_list_summary (received_at desc);
 
+-- Compact quarantine evidence. Private schema only; never used for training/profile updates.
+create table if not exists personalization.telemetry_quarantine (
+  id uuid primary key default gen_random_uuid(),
+  received_at timestamptz not null default now(),
+  actor_class text not null,
+  trust_state text not null default 'quarantined',
+  surface text,
+  event_kind text,
+  reason_code text not null,
+  anon_id_hash text,
+  session_id_hash text,
+  ip_prefix_hash text,
+  payload_hash text not null,
+  payload_size integer not null,
+  metadata jsonb not null default '{}'::jsonb,
+  constraint telemetry_quarantine_trust_chk check (trust_state in ('quarantined', 'dropped', 'diagnostic')),
+  constraint telemetry_quarantine_size_chk check (payload_size between 0 and 131072 and length(metadata::text) <= 2048)
+);
+
 -- Optional browser-facing raw telemetry for short-retention debug/sampling. No public SELECT.
 create table if not exists public.personalization_interaction_event (
   id uuid primary key default gen_random_uuid(),
@@ -255,6 +290,8 @@ create table if not exists public.personalization_interaction_event (
   algorithm_id text not null default 'static_fallback',
   consent_version text not null,
   consent_state text not null default 'accepted',
+  actor_class text not null default 'unknown',
+  trust_state text not null default 'accepted',
   dwell_ms integer,
   metadata jsonb not null default '{}'::jsonb,
   constraint personalization_interaction_event_kind_chk check (event_kind in (
@@ -265,6 +302,8 @@ create table if not exists public.personalization_interaction_event (
   constraint personalization_viewport_chk check (viewport_class in ('mobile', 'tablet', 'desktop')),
   constraint personalization_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),
   constraint personalization_consent_chk check (consent_state = 'accepted'),
+  constraint personalization_interaction_trust_chk check (trust_state = 'accepted'),
+  constraint personalization_interaction_actor_chk check (actor_class in ('human_likely', 'unknown')),
   constraint personalization_position_chk check (position is null or position >= 0),
   constraint personalization_dwell_chk check (dwell_ms is null or dwell_ms between 0 and 86400000),
   constraint personalization_metadata_size_chk check (length(metadata::text) <= 4096),

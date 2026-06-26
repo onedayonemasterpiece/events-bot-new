@@ -8,6 +8,7 @@
   const STATIC_ALGORITHM_ID = 'static_related_v1';
   const LOCAL_ALGORITHM_ID = 'local_related_rerank_v1';
   const LOCAL_FALLBACK_ALGORITHM_ID = 'local_related_rerank_v1_fallback';
+  const DEFAULT_SERVED_LIST_DEDUPE_MS = 30 * 60 * 1000;
 
   const DEFAULT_WEIGHTS = {
     staticContext: 0.80,
@@ -62,13 +63,13 @@
     return manifest.event_id != null ? manifest.event_id : null;
   }
 
-  function candidateTags(candidate) {
+  function candidatePositiveMatchingTags(candidate) {
     if (!candidate) return [];
     const values = [];
     for (const key of ['category', 'event_type']) {
       if (candidate[key]) values.push(String(candidate[key]));
     }
-    for (const key of ['tags', 'audience_tags', 'format_tags', 'time_tags', 'price_tags', 'audience_exclusion_tags']) {
+    for (const key of ['tags', 'audience_tags', 'format_tags', 'time_tags', 'price_tags']) {
       for (const item of toArray(candidate[key])) values.push(String(item));
     }
     for (const reason of toArray(candidate.reason_codes)) {
@@ -79,6 +80,15 @@
     return Array.from(new Set(values.filter(Boolean)));
   }
 
+  function candidateExclusionTags(candidate) {
+    return Array.from(new Set(toArray(candidate && candidate.audience_exclusion_tags).map(String).filter(Boolean)));
+  }
+
+  // Backward helper name: returns only matching/interest tags, not exclusions.
+  function candidateTags(candidate) {
+    return candidatePositiveMatchingTags(candidate);
+  }
+
   function profileHasConsent(profile) {
     return Boolean(profile && profile.consent_ok === true);
   }
@@ -86,8 +96,11 @@
   function isCompatibleProfile(profile, featureSchemaVersion) {
     if (!profileHasConsent(profile)) return false;
     const expected = featureSchemaVersion || FEATURE_SCHEMA_VERSION;
-    if (!profile.feature_schema_version) return true; // old draft profile in local demo; migrate later.
-    return profile.feature_schema_version === expected;
+    if (profile.profile_version !== PROFILE_VERSION) return false;
+    if (profile.feature_schema_version !== expected) return false;
+    // Legacy field is intentionally rejected. Migrate/reset before scoring.
+    if (Object.prototype.hasOwnProperty.call(profile, 'negative_tags')) return false;
+    return true;
   }
 
   function readProfile(storage, storageKey) {
@@ -156,19 +169,15 @@
     const positive = collectWeightedProfileMap(profile || {}, 'positive_tags');
     const positiveCategories = collectWeightedProfileMap(profile || {}, 'positive_categories');
     let sum = 0;
-    for (const tag of candidateTags(candidate)) sum += mapScore(positive, tag);
+    for (const tag of candidatePositiveMatchingTags(candidate)) sum += mapScore(positive, tag);
     if (candidate && candidate.category) sum += mapScore(positiveCategories, candidate.category);
     return Math.min(1.5, sum / 2);
   }
 
   function negativeInterestPenalty(candidate, profile) {
     const negative = collectWeightedProfileMap(profile || {}, 'negative_interest_tags');
-    // Temporary compatibility with old draft profiles; canonical field is negative_interest_tags.
-    if (profile && profile.negative_tags && !profile.negative_interest_tags) {
-      for (const [key, value] of Object.entries(profile.negative_tags)) negative[key] = Number(value || 0);
-    }
     let penalty = 0;
-    for (const tag of candidateTags(candidate)) penalty += Math.max(0, mapScore(negative, tag));
+    for (const tag of candidatePositiveMatchingTags(candidate)) penalty += Math.max(0, mapScore(negative, tag));
     return Math.min(1.5, penalty);
   }
 
@@ -292,10 +301,33 @@
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function stableHash(value) {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function createServedListHash(ranked, manifest, context, profile) {
+    return stableHash({
+      surface: SURFACE_EVENT_DETAIL_RELATED,
+      current_event_id: currentEventId(manifest),
+      algorithm_id: context.algorithmId,
+      profile_version: profile && profile.profile_version,
+      feature_schema_version: profile && profile.feature_schema_version,
+      event_ids: ranked.map((item) => item.event_id),
+    });
+  }
+
   function createServedListSummary(ranked, manifest, context) {
+    const servedListId = context.servedListId || randomId('served');
     return {
       event_kind: 'served_list_summary',
-      served_list_id: randomId('served'),
+      served_list_id: servedListId,
+      served_list_hash: context.servedListHash || null,
       anon_id: context.anonId || null,
       session_id: context.sessionId || null,
       surface: SURFACE_EVENT_DETAIL_RELATED,
@@ -320,6 +352,7 @@
       event_id: item && item.event_id != null ? item.event_id : null,
       rank: item && item.rank != null ? item.rank : null,
       served_list_id: context.servedListId || null,
+      served_list_hash: context.servedListHash || null,
       surface: SURFACE_EVENT_DETAIL_RELATED,
       viewport_class: context.viewportClass,
       layout_mode: context.layoutMode,
@@ -346,15 +379,15 @@
     };
   }
 
-  function defaultProfile(seed) {
+  function createEmptyProfile(seed) {
     return Object.assign({
       consent_ok: true,
       profile_version: PROFILE_VERSION,
       feature_schema_version: FEATURE_SCHEMA_VERSION,
       anon_id: randomId('anon'),
       session_id: randomId('session'),
-      positive_tags: { jazz: 0.95, live_music: 0.75, evening: 0.35 },
-      negative_interest_tags: { kids: 0.9 },
+      positive_tags: {},
+      negative_interest_tags: {},
       hidden_event_ids: [],
       seen_event_ids: [],
       seen_venue_ids: [],
@@ -376,14 +409,15 @@
     const consentButton = typeof opts.consentButton === 'string' ? doc.querySelector(opts.consentButton) : opts.consentButton;
     const resetButton = typeof opts.resetButton === 'string' ? doc.querySelector(opts.resetButton) : opts.resetButton;
     const telemetrySink = typeof opts.telemetrySink === 'function' ? opts.telemetrySink : function noop() {};
+    const servedListDedupeMs = opts.servedListDedupeMs == null ? DEFAULT_SERVED_LIST_DEDUPE_MS : Number(opts.servedListDedupeMs);
     const actionCounts = {};
-    let lastServedListId = null;
+    const servedListByHash = new Map();
 
     function profile() {
       return readProfile(storage, storageKey);
     }
 
-    function context(algorithmId) {
+    function baseContext(algorithmId) {
       const width = Number(win.innerWidth || 1024);
       const currentProfile = profile();
       return {
@@ -393,8 +427,20 @@
         algorithmId,
         anonId: currentProfile && currentProfile.anon_id,
         sessionId: currentProfile && currentProfile.session_id,
-        servedListId: lastServedListId,
+        servedListId: null,
+        servedListHash: null,
       };
+    }
+
+    function servedListState(hash) {
+      const now = Date.now();
+      const existing = servedListByHash.get(hash);
+      if (existing && now - existing.emittedAt <= servedListDedupeMs) {
+        return { servedListId: existing.servedListId, shouldEmit: false };
+      }
+      const next = { servedListId: randomId('served'), emittedAt: now };
+      servedListByHash.set(hash, next);
+      return { servedListId: next.servedListId, shouldEmit: true };
     }
 
     function renderCard(item, ctx) {
@@ -442,11 +488,19 @@
       const hasLocalProfile = isCompatibleProfile(currentProfile, manifest.feature_schema_version);
       let algorithmId = hasLocalProfile ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID;
       if (hasLocalProfile && opts.backendAvailable === false) algorithmId = LOCAL_FALLBACK_ALGORITHM_ID;
-      const ctx = context(algorithmId);
+      const ctxBase = baseContext(algorithmId);
       const rankedAll = rankEventDetailRelated(manifest, hasLocalProfile ? currentProfile : null, opts.rankOptions || {});
-      const defaultLimit = ctx.viewportClass === 'mobile' ? 6 : 4;
+      const defaultLimit = ctxBase.viewportClass === 'mobile' ? 6 : 4;
       const limit = opts.limit == null ? defaultLimit : Number(opts.limit);
       const ranked = rankedAll.slice(0, limit);
+      let ctx = ctxBase;
+      let shouldEmitServedList = false;
+      if (hasLocalProfile) {
+        const servedListHash = createServedListHash(ranked, manifest, ctxBase, currentProfile);
+        const state = servedListState(servedListHash);
+        shouldEmitServedList = state.shouldEmit;
+        ctx = Object.assign({}, ctxBase, { servedListId: state.servedListId, servedListHash });
+      }
       container.className = `related related--${ctx.presentationMode}`;
       container.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;
       container.dataset.algorithmId = algorithmId;
@@ -460,17 +514,16 @@
       }
       container.replaceChildren();
       for (const item of ranked) container.appendChild(renderCard(item, ctx));
-      if (hasLocalProfile) {
+      if (hasLocalProfile && shouldEmitServedList) {
         const summary = createServedListSummary(ranked, manifest, ctx);
-        lastServedListId = summary.served_list_id;
         telemetrySink(summary);
-        if (opts.backendAvailable === false) telemetrySink(createStrongAction('recommendation_fallback_used', null, Object.assign({}, ctx, { servedListId: lastServedListId })));
+        if (opts.backendAvailable === false) telemetrySink(createStrongAction('recommendation_fallback_used', null, ctx));
       }
       return ranked;
     }
 
     function acceptConsent(seedProfile) {
-      writeProfile(storage, storageKey, defaultProfile(seedProfile || opts.defaultProfile || win.__seedProfile));
+      writeProfile(storage, storageKey, createEmptyProfile(seedProfile || opts.defaultProfile || win.__seedProfile));
       render();
     }
 
@@ -489,7 +542,11 @@
       resetPersonalization,
       readProfile: profile,
       rank: () => rankEventDetailRelated(manifest, profile(), opts.rankOptions || {}),
-      createSessionSummary: () => createSessionSummary(profile(), actionCounts, context(profileHasConsent(profile()) ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID)),
+      createSessionSummary: () => {
+        const current = profile();
+        const algorithmId = isCompatibleProfile(current, manifest.feature_schema_version) ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID;
+        return createSessionSummary(current, actionCounts, baseContext(algorithmId));
+      },
     };
   }
 
@@ -502,13 +559,17 @@
     viewportClass,
     relatedPresentationMode,
     relatedLayoutMode,
+    candidatePositiveMatchingTags,
+    candidateExclusionTags,
+    candidateTags,
+    isCompatibleProfile,
     scoreRelatedCandidate,
     rankEventDetailRelated,
     createServedListSummary,
     createStrongAction,
     createSessionSummary,
+    createEmptyProfile,
     createEventDetailRelatedController,
-    // Backward alias for older docs/tests while the prototype is still standalone.
     createController: createEventDetailRelatedController,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

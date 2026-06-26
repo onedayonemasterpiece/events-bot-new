@@ -1,8 +1,8 @@
 # Event Detail Related Recommendations
 
-> **Status:** MVP-0 product/technical contract + browser reference prototype
+> **Status:** MVP-0 product/technical contract + hardened browser reference prototype
 > **Surface:** `event_detail_related`
-> **Primary goal:** prove personalization as a small enhancement to a useful static event page before designing a personalized home feed.
+> **Primary goal:** validate personalization as a small enhancement to a useful static event page before designing a personalized home feed.
 
 ## Why MVP starts here
 
@@ -13,10 +13,10 @@ Reason: an event detail page already gives strong context. If the visitor opens 
 Product readiness wording:
 
 ```text
-Architectural design is stabilized, but product/technical validation is not passed yet.
+MVP-0 is ready for an engineering implementation spike; product-quality validation is not passed yet.
 ```
 
-That means concept churn should stop, but implementation must begin with small validation probes: real catalog sample, test personas, static related block, and browser prototype.
+That means concept churn should stop, but implementation must continue through bounded validation: expanded real-catalog probe, test/golden personas, static related block, browser prototype, bot/automation guardrails and later human top-10 review.
 
 ## MVP-0 page contract
 
@@ -36,8 +36,9 @@ Page behavior:
    - `hidden_event_ids` are hard-filtered;
    - `negative_interest_tags` are removed/downranked;
    - if Supabase/API is unavailable, CTA and fallback related block remain intact.
+4. Crawlers, preview bots and suspicious automation receive static fallback only and cannot write trusted telemetry; see `bots-and-automation.md`.
 
-No online LLM call is allowed in the page-view hot path.
+No online LLM call, vector DB call or provider embedding call is allowed in the page-view hot path.
 
 ## Static related candidate generation
 
@@ -102,7 +103,7 @@ Candidate fields:
 | --- | --- | --- |
 | `event_id`, `title` | yes | stable canonical event id from Fly SQLite; no Supabase ids |
 | `category`, `tags` | yes | controlled taxonomy values; no free-form LLM tags in serving |
-| `audience_exclusion_tags` | yes, can be empty | event-side “not suited for” hints, not user dislikes |
+| `audience_exclusion_tags` | yes, can be empty | event-side “not suited for” hints, never user dislikes and never `negative_interest_tags` scoring input |
 | `city`, `location_name`, `date` | yes | used for context and display |
 | `status`, `lifecycle_status` | yes | cancelled/postponed/duplicate/merged are hard-excluded |
 | `is_free` / price band | recommended | used for light price affinity |
@@ -145,7 +146,11 @@ personalized_related_score =
 - explicit_hide_hard_filter
 ```
 
-Guardrail: if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary.
+Guardrails:
+
+- if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary;
+- `audience_exclusion_tags` belong to the event and are not user dislikes. A 18+/adult jazz event with `audience_exclusion_tags: ["kids"]` must not be penalized for a visitor whose `negative_interest_tags.kids` means “do not show me children's events”;
+- legacy profiles containing `negative_tags` or missing `feature_schema_version` are incompatible and fall back to static order until reset/migration.
 
 Local profile fields consumed by MVP-0:
 
@@ -177,6 +182,7 @@ Every rendered/reranked related block should be summarizable without storing raw
   "layout_mode": "module",
   "current_event_id": 123,
   "algorithm_id": "local_related_rerank_v1",
+  "served_list_hash": "stable-list-hash",
   "shown": [
     {
       "event_id": 456,
@@ -189,7 +195,7 @@ Every rendered/reranked related block should be summarizable without storing raw
 }
 ```
 
-This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context.
+This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context. The reference client creates `served_list_id` before rendering cards, attaches the same id/hash to strong actions, and dedupes repeated `served_list_summary` emissions by `served_list_hash` for the configured window so resize/re-render does not create a raw firehose.
 
 Session summary and strong actions stay compact:
 
@@ -220,6 +226,7 @@ Session summary and strong actions stay compact:
   "event_id": 456,
   "rank": 0,
   "served_list_id": "uuid",
+  "served_list_hash": "stable-list-hash",
   "algorithm_id": "local_related_rerank_v1"
 }
 ```
@@ -300,7 +307,7 @@ Before full Astro integration, the reference artifacts are:
 
 The demo covers only this MVP-0 surface first: static related block, consent,
 local profile, hide/not interested, mobile module, desktop module, telemetry
-endpoint/Supabase timeout fallback.
+endpoint/Supabase timeout fallback, strict profile compatibility, event-exclusion separation from user negative interests, served-list id/hash lifecycle and resize/render telemetry dedupe.
 
 Verification:
 
@@ -310,7 +317,7 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Last local run: `4 passed`.
+Last local run: `6 passed` (Playwright Chromium).
 
 ## Real catalog probe
 
@@ -327,7 +334,4 @@ Outputs:
 - report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
 - manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`.
 
-Current decision: local feature vectors are sufficient for MVP-0. Do not add a
-semantic embedding provider to the browser or required build path. Keep
-`semantic_related_v1` as a later offline comparison only if golden-persona
-quality shows the local vector is not enough.
+Current decision: local feature vectors are sufficient for the MVP-0 **engineering spike**, not proven final recommendation quality. The expanded probe keeps safety invariants green but still has negative-interest quality WARN rows, so taxonomy/ranking tuning and human top-10 review remain required. Do not add a semantic embedding provider to the browser or required build path. Keep `semantic_related_v1` as a later offline comparison only after expanded automated probe plus human/golden top-10 review show a measured quality need.

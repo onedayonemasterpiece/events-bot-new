@@ -29,6 +29,8 @@
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
 - MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.
+- Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
+- Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
 - Исследовательская заметка по рекомендациям/LLM: `docs/features/unsigned-personalization/alanytics.md`.
 - Dual DB routing skill: `.codex/skills/events-bot-dual-db/SKILL.md`.
 
@@ -88,7 +90,7 @@ Supabase/Postgres personalization DB
   → recommendation cache/RPC
 ```
 
-Критичный SEO/GEO контент должен быть в готовом HTML. Client-side JS разрешён только для улучшения опыта после первого рендера: consent, analytics, localStorage profile, personal feed.
+Критичный SEO/GEO контент должен быть в готовом HTML. Client-side JS разрешён только для улучшения опыта после первого рендера: consent, analytics, localStorage profile, personal feed. Search/preview/AI crawlers and suspicious automation receive the genuine static fallback and must not influence personalization telemetry/training (`docs/features/unsigned-personalization/bots-and-automation.md`).
 
 ## Граница двух БД
 
@@ -151,7 +153,7 @@ Supabase/Postgres personalization DB
 - полное описание;
 - фото/видео, если доступны;
 - “Другие даты”;
-- “Похожие события” — статический fallback и первый MVP-0 personalization surface;
+- “Похожие события” — статический fallback и первый MVP-0 personalization surface (`event_detail_related`);
 - персональная лента/главная после consent и client-side hydration — later, не стартовый MVP-0.
 
 ## Discovery UX: mobile feed vs desktop-native layout
@@ -181,6 +183,8 @@ surface        = home_feed | event_detail_related | category_page | date_page | 
 position       = index/card slot within current surface
 algorithm_id   = static_fallback | local_rerank_v1 | rpc_personal_v1 | experiment_key
 ```
+
+Reference board for page/continuation mechanics: `docs/features/static-site-pages/interface-references.md`. It is a comparison checklist, not proof of usability; mobile/desktop layouts still need a real prototype review.
 
 Acceptance criteria для первой реализации:
 

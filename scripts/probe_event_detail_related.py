@@ -3,8 +3,9 @@
 
 The probe intentionally does not call online LLMs or embedding providers. It uses
 current canonical event fields (event_type, topics, title/search_digest, city,
-venue, price/status) to validate whether a cheap static+local vector baseline can
-satisfy the MVP-0 invariants before heavier semantic embeddings are introduced.
+venue, price/status) to check whether a cheap static+local vector baseline can
+safely enter an MVP-0 engineering spike before heavier semantic embeddings are
+introduced as an offline quality comparison.
 """
 from __future__ import annotations
 
@@ -69,20 +70,55 @@ TITLE_TAGS = [
     (r"open[ -]?air|парк|пляж|коса|улиц", "outdoor"),
 ]
 
-NEGATIVE_PERSONAS = {
+GOLDEN_PERSONAS = {
     "music_no_kids": {
         "positive_tags": {"jazz": 1.0, "live_music": 0.7, "evening": 0.25, "music": 0.4},
         "negative_interest_tags": {"kids": 1.0, "family": 0.6},
         "price_preferences": {"prefer_free": False},
     },
-    "theatre_no_nightlife": {
-        "positive_tags": {"theatre": 1.0, "drama": 0.5, "classic": 0.3, "evening": 0.2},
-        "negative_interest_tags": {"nightlife": 1.0, "rock": 0.4},
+    "theatre_evening": {
+        "positive_tags": {"theatre": 1.0, "drama": 0.6, "classic": 0.3, "evening": 0.3},
+        "negative_interest_tags": {"nightlife": 0.8, "rock": 0.4},
         "price_preferences": {"prefer_free": False},
     },
-    "family_free": {
-        "positive_tags": {"kids": 0.9, "family": 0.9, "free": 0.5, "outdoor": 0.2},
+    "family_weekend": {
+        "positive_tags": {"kids": 0.9, "family": 0.9, "outdoor": 0.2, "free": 0.2},
         "negative_interest_tags": {"nightlife": 0.9, "adult": 0.7},
+        "price_preferences": {"prefer_free": False},
+    },
+    "tourist_free_walks": {
+        "positive_tags": {"tourist_friendly": 1.0, "tour": 0.9, "local_history": 0.7, "free": 0.5, "outdoor": 0.3},
+        "negative_interest_tags": {"nightlife": 0.7, "sport": 0.4},
+        "price_preferences": {"prefer_free": True},
+    },
+    "museum_exhibitions": {
+        "positive_tags": {"museum": 1.0, "exhibition": 0.9, "classic": 0.2, "local_history": 0.2},
+        "negative_interest_tags": {"nightlife": 0.8, "rock": 0.4},
+        "price_preferences": {"prefer_free": False},
+    },
+    "cinema_low_price": {
+        "positive_tags": {"cinema": 1.0, "evening": 0.3, "free": 0.2},
+        "negative_interest_tags": {"kids": 0.5, "nightlife": 0.4},
+        "price_preferences": {"prefer_free": True},
+    },
+    "standup_nightlife": {
+        "positive_tags": {"standup": 1.0, "comedy": 0.8, "nightlife": 0.6, "evening": 0.4},
+        "negative_interest_tags": {"kids": 0.9, "classic": 0.4},
+        "price_preferences": {"prefer_free": False},
+    },
+    "classical_music": {
+        "positive_tags": {"classical_music": 1.0, "live_music": 0.6, "classic": 0.4, "evening": 0.2},
+        "negative_interest_tags": {"rock": 0.8, "nightlife": 0.5},
+        "price_preferences": {"prefer_free": False},
+    },
+    "workshops_lectures": {
+        "positive_tags": {"workshop": 0.9, "lecture": 0.8, "psychology": 0.3, "networking": 0.2},
+        "negative_interest_tags": {"nightlife": 0.6, "kids": 0.3},
+        "price_preferences": {"prefer_free": False},
+    },
+    "local_weekend": {
+        "positive_tags": {"local_history": 0.7, "festival": 0.6, "outdoor": 0.5, "market": 0.3, "free": 0.3},
+        "negative_interest_tags": {"nightlife": 0.4},
         "price_preferences": {"prefer_free": True},
     },
 }
@@ -112,6 +148,7 @@ class EventFeature:
             "title": self.title,
             "category": self.category,
             "tags": sorted(self.tags),
+            "audience_exclusion_tags": [],
             "city": self.city,
             "location_name": self.venue,
             "date": self.date_raw,
@@ -362,24 +399,56 @@ def apply_diversity(rows: list[tuple], score_index: int = 1, max_category: int =
     return result + postponed
 
 
-def choose_anchors(events: list[EventFeature]) -> list[EventFeature]:
-    wanted = ["music", "theatre", "kids", "excursion", "cinema", "festival"]
-    anchors = []
+def choose_anchors(events: list[EventFeature], target: int = 40) -> list[EventFeature]:
+    """Pick a balanced automated golden-smoke set, not a final quality benchmark."""
+    wanted = [
+        "music",
+        "theatre",
+        "kids",
+        "excursion",
+        "cinema",
+        "festival",
+        "exhibition",
+        "lecture",
+        "workshop",
+        "nightlife",
+        "sport",
+        "other",
+    ]
+    by_category: dict[str, list[EventFeature]] = defaultdict(list)
+    ordered = sorted(events, key=lambda event: (event.event_date or date.max, event.category, event.event_id))
+    for event in ordered:
+        key = event.category if event.category in wanted else "other"
+        by_category[key].append(event)
+
+    anchors: list[EventFeature] = []
     seen: set[int] = set()
-    for category in wanted:
-        for event in events:
-            if event.category == category and event.event_id not in seen:
-                anchors.append(event)
-                seen.add(event.event_id)
+    while len(anchors) < target:
+        added = False
+        for category in wanted:
+            bucket = by_category.get(category) or []
+            while bucket and bucket[0].event_id in seen:
+                bucket.pop(0)
+            if not bucket:
+                continue
+            event = bucket.pop(0)
+            anchors.append(event)
+            seen.add(event.event_id)
+            added = True
+            if len(anchors) >= target:
                 break
-    if len(anchors) < 6:
-        for event in events[:20]:
-            if event.event_id not in seen:
-                anchors.append(event)
-                seen.add(event.event_id)
-            if len(anchors) >= 6:
+        if not added:
+            break
+
+    if len(anchors) < target:
+        for event in ordered:
+            if event.event_id in seen:
+                continue
+            anchors.append(event)
+            seen.add(event.event_id)
+            if len(anchors) >= target:
                 break
-    return anchors[:6]
+    return anchors[:target]
 
 
 def summarize_top(rows: list[tuple], limit: int = 5) -> list[dict[str, Any]]:
@@ -408,6 +477,8 @@ def checks(anchor: EventFeature, static_rows: list[tuple], local_rows: list[tupl
     cat_counts = Counter(row[0].category for row in local_rows[:10])
     venue_counts = Counter(row[0].venue for row in local_rows[:10])
     return {
+        "static_top10_non_empty": bool(static_ids),
+        "local_top10_non_empty": bool(local_ids),
         "current_not_in_static_top10": anchor.event_id not in static_ids,
         "current_not_in_local_top10": anchor.event_id not in local_ids,
         "hidden_not_in_local_top10": not (hidden & set(local_ids)),
@@ -448,7 +519,12 @@ def markdown_report(report: dict[str, Any]) -> str:
         f"- DB: `{report['db_path']}`",
         f"- Probe date: `{report['today']}`",
         f"- Future active events loaded: **{report['future_active_events']}**",
-        f"- Anchors evaluated: **{len(report['anchors'])}**",
+        f"- Anchors evaluated: **{len(report['anchors'])}** (target: **{report.get('anchor_target')}**, balanced by category where possible)",
+        f"- Golden personas rotated: **{len(report.get('personas', []))}** — {', '.join(report.get('personas', []))}",
+        "",
+        "## Scope and caveat",
+        "",
+        "This is an expanded automated golden-smoke probe: it checks hard invariants and obvious ranking regressions on 30–50 anchors. It is **not** a human/editorial proof of recommendation quality. Product-quality acceptance still requires manual top-10 review by persona, plus separate mobile/desktop UX review on the real page.",
         "",
         "## Ranker variants",
         "",
@@ -465,9 +541,17 @@ def markdown_report(report: dict[str, Any]) -> str:
             all_checks[key].append(bool(value))
     lines.append("| Check | Passed anchors | Result |")
     lines.append("| --- | ---: | --- |")
+    warning_rows = []
     for key, values in all_checks.items():
         passed = sum(values)
+        if passed != len(values):
+            warning_rows.append(key)
         lines.append(f"| `{key}` | {passed}/{len(values)} | {'PASS' if passed == len(values) else 'WARN'} |")
+    if warning_rows:
+        lines.extend([
+            "",
+            f"Warnings: {', '.join(f'`{key}`' for key in warning_rows)}. Treat these as quality/taxonomy backlog evidence, not as production acceptance. Safety invariants still need to remain green before implementation.",
+        ])
     lines.extend(["", "## Anchor samples", ""])
     for anchor in report["anchors"]:
         lines.append(f"### {anchor['anchor_id']} — {anchor['anchor_title']} (`{anchor['category']}`)")
@@ -485,9 +569,9 @@ def markdown_report(report: dict[str, Any]) -> str:
     lines.extend([
         "## Decision on semantic embeddings",
         "",
-        "For MVP-0, the local feature-vector baseline is sufficient to build and test `event_detail_related`: it passes the hard invariants on the real future-event sample and requires no provider calls in the browser. Semantic embeddings are **not** required for the first implementation.",
+        "For MVP-0, the local feature-vector baseline is sufficient for an **engineering implementation spike** of `event_detail_related`: it keeps provider calls out of the browser and passes the core safety invariants on the real future-event sample. Any WARN rows above remain backlog evidence for taxonomy/ranking tuning. This does **not** prove final product quality.",
         "",
-        "Keep `semantic_related_v1` as the next offline comparison only after controlled LLM taxonomy enrichment exists for all future events. The current production catalog already has useful `event_type`/`topics`, but those fields are still uneven; embeddings should be justified by a golden-persona quality delta, not by architecture preference.",
+        "Keep `semantic_related_v1` as an offline comparison after controlled taxonomy enrichment and human/golden top-10 review. Embeddings should be justified by a measured quality delta against the local baseline, not by architecture preference.",
     ])
     return "\n".join(lines) + "\n"
 
@@ -498,20 +582,23 @@ def main() -> int:
     parser.add_argument("--today", default=TODAY_DEFAULT.isoformat())
     parser.add_argument("--report", default="docs/features/unsigned-personalization/event-detail-related-probe.md")
     parser.add_argument("--sample", default="docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json")
+    parser.add_argument("--anchor-target", type=int, default=40, help="Number of balanced anchors for automated golden-smoke probe; keep 30-50 for MVP-0")
     args = parser.parse_args()
 
     db_path = Path(args.db)
     today = date.fromisoformat(args.today)
     events = load_catalog(db_path, today)
-    anchors = choose_anchors(events)
+    anchors = choose_anchors(events, target=max(1, args.anchor_target))
     report: dict[str, Any] = {
         "db_path": str(db_path),
         "today": today.isoformat(),
         "future_active_events": len(events),
+        "anchor_target": args.anchor_target,
+        "personas": list(GOLDEN_PERSONAS),
         "anchors": [],
     }
     sample_manifest = None
-    personas = list(NEGATIVE_PERSONAS.items())
+    personas = list(GOLDEN_PERSONAS.items())
     for index, anchor in enumerate(anchors):
         static_rows = static_related(anchor, events, limit=24)
         persona_name, persona = personas[index % len(personas)]

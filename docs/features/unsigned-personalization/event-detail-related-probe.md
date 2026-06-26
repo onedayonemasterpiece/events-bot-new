@@ -7,7 +7,12 @@
 - DB: `artifacts/db/event_quality_audit_20260624_prod.sqlite`
 - Probe date: `2026-06-26`
 - Future active events loaded: **296**
-- Anchors evaluated: **6**
+- Anchors evaluated: **40** (target: **40**, balanced by category where possible)
+- Golden personas rotated: **10** — music_no_kids, theatre_evening, family_weekend, tourist_free_walks, museum_exhibitions, cinema_low_price, standup_nightlife, classical_music, workshops_lectures, local_weekend
+
+## Scope and caveat
+
+This is an expanded automated golden-smoke probe: it checks hard invariants and obvious ranking regressions on 30–50 anchors. It is **not** a human/editorial proof of recommendation quality. Product-quality acceptance still requires manual top-10 review by persona, plus separate mobile/desktop UX review on the real page.
 
 ## Ranker variants
 
@@ -19,54 +24,490 @@
 
 | Check | Passed anchors | Result |
 | --- | ---: | --- |
-| `current_not_in_static_top10` | 6/6 | PASS |
-| `current_not_in_local_top10` | 6/6 | PASS |
-| `hidden_not_in_local_top10` | 6/6 | PASS |
-| `negative_interest_top5_count_le_1` | 6/6 | PASS |
-| `category_diversity_cap_top10` | 6/6 | PASS |
-| `venue_diversity_cap_top10` | 6/6 | PASS |
+| `static_top10_non_empty` | 40/40 | PASS |
+| `local_top10_non_empty` | 40/40 | PASS |
+| `current_not_in_static_top10` | 40/40 | PASS |
+| `current_not_in_local_top10` | 40/40 | PASS |
+| `hidden_not_in_local_top10` | 40/40 | PASS |
+| `negative_interest_top5_count_le_1` | 36/40 | WARN |
+| `category_diversity_cap_top10` | 40/40 | PASS |
+| `venue_diversity_cap_top10` | 40/40 | PASS |
+
+Warnings: `negative_interest_top5_count_le_1`. Treat these as quality/taxonomy backlog evidence, not as production acceptance. Safety invariants still need to remain green before implementation.
 
 ## Anchor samples
 
-### 2400 — Bel Suono: шоу трёх роялей «Нам 15 лет!» (`music`)
+### 2872 — Я люблю тебя, жизнь! (`music`)
 
-Persona: `music_no_kids`; hidden id: `6311`
-
-Static top 5:
-- #0 `5878` Песни СССР — `music`, score `0.8244`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
-- #1 `5495` Вадим Самойлов с симфоническим оркестром — `music`, score `0.8146`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
-- #2 `2872` Я люблю тебя, жизнь! — `music`, score `0.7116`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
-- #3 `4779` Любовь в стиле джаз — `cinema`, score `0.2791`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
-- #4 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.2788`, reasons `tag:evening, same_city, date_near, price_band_match`
-
-Local rerank top 5:
-- #0 `5878` Песни СССР — `music`, score `0.727`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
-- #1 `5495` Вадим Самойлов с симфоническим оркестром — `music`, score `0.7192`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
-- #2 `2872` Я люблю тебя, жизнь! — `music`, score `0.6368`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
-- #3 `4779` Любовь в стиле джаз — `cinema`, score `0.3408`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, date_near`
-- #4 `4780` Музыкальная комедия «Любовь в стиле джаз» — `cinema`, score `0.3064`, reasons `tag:classical_music, tag:live_music, tag:music, tag:ticketed, date_near`
-
-### 3103 — 15 августа в "Янтарь-холл" спектакль "Папа". (`theatre`)
-
-Persona: `theatre_no_nightlife`; hidden id: `6259`
+Persona: `music_no_kids`; hidden id: `6333`
 
 Static top 5:
-- #0 `5778` 🎭 Спектакль «Любовь по-французски или Просто Бэби» — `theatre`, score `0.6549`, reasons `same_category:theatre, tag:evening, tag:family, tag:theatre`
-- #1 `6010` Музыкальный спектакль «Гуси-лебеди: перезагрузка» — `theatre`, score `0.6538`, reasons `same_category:theatre, tag:family, tag:theatre, same_city`
-- #2 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.6234`, reasons `same_category:theatre, tag:evening, tag:theatre, same_city`
-- #3 `3000` Моя Мишель — `music`, score `0.304`, reasons `tag:evening, same_city, date_near, price_band_match`
-- #4 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.2222`, reasons `tag:family, same_city, date_near, price_band_match`
+- #0 `5495` Вадим Самойлов с симфоническим оркестром — `music`, score `0.7644`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
+- #1 `5878` Песни СССР — `music`, score `0.7487`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
+- #2 `3000` Моя Мишель — `music`, score `0.6695`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #3 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.3692`, reasons `tag:evening, same_city, same_venue, date_near`
+- #4 `3730` Симфоническая пятница — `exhibition`, score `0.3414`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
 
 Local rerank top 5:
-- #0 `5778` 🎭 Спектакль «Любовь по-французски или Просто Бэби» — `theatre`, score `0.6239`, reasons `same_category:theatre, tag:evening, tag:family, tag:theatre, same_city`
-- #1 `6010` Музыкальный спектакль «Гуси-лебеди: перезагрузка» — `theatre`, score `0.573`, reasons `same_category:theatre, tag:family, tag:theatre, same_city, same_venue`
-- #2 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.5587`, reasons `same_category:theatre, tag:evening, tag:theatre, same_city, date_near`
-- #3 `3000` Моя Мишель — `music`, score `0.2532`, reasons `tag:evening, same_city, date_near, price_band_match, profile:positive_affinity`
-- #4 `5756` Женитьба: Закулисье театра — `excursion`, score `0.2505`, reasons `tag:evening, tag:theatre, date_near, price_band_match, profile:positive_affinity`
+- #0 `5495` Вадим Самойлов с симфоническим оркестром — `music`, score `0.679`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #1 `5878` Песни СССР — `music`, score `0.6665`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #2 `3000` Моя Мишель — `music`, score `0.6031`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, same_city`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.3406`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, date_near`
+- #4 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.3079`, reasons `tag:evening, same_city, same_venue, date_near, price_band_match`
+
+### 4825 — Спектакль «Путешествие налегке» (`theatre`)
+
+Persona: `theatre_evening`; hidden id: `6334`
+
+Static top 5:
+- #0 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.79`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #1 `5851` Ужин в музее — `theatre`, score `0.714`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #2 `5268` Город нашей юности — `theatre`, score `0.6652`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:family`
+- #3 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.402`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history`
+- #4 `6333` Дегустация сыров и вин — `food`, score `0.3991`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+
+Local rerank top 5:
+- #0 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.697`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #1 `5851` Ужин в музее — `theatre`, score `0.6362`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #2 `5268` Город нашей юности — `theatre`, score `0.5972`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:family, tag:local_history`
+- #3 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.4316`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history, same_city`
+- #4 `5754` Мастер и Маргарита: Экскурсия «Закулисье театра» — `excursion`, score `0.3528`, reasons `tag:evening, tag:excursion, tag:theatre, tag:ticketed, same_city`
+
+### 6122 — 🏟️ «Утренник на Балтике» (`kids`)
+
+Persona: `family_weekend`; hidden id: `6268`
+
+Static top 5:
+- #0 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.5406`, reasons `same_category:kids, tag:evening, tag:family, tag:free`
+- #1 `6061` Психологический клуб для подростков — `kids`, score `0.528`, reasons `same_category:kids, tag:kids, same_city, date_near`
+- #2 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.4957`, reasons `tag:active, tag:family, tag:free, tag:kids`
+- #3 `6350` LAST SOS — `festival`, score `0.4318`, reasons `tag:active, tag:evening, tag:family, tag:free`
+- #4 `3398` Хиты Советского Мира — `kids`, score `0.4071`, reasons `same_category:kids, tag:evening, tag:family, tag:kids`
+
+Local rerank top 5:
+- #0 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.5325`, reasons `same_category:kids, tag:evening, tag:family, tag:free, tag:kids`
+- #1 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.5066`, reasons `tag:active, tag:family, tag:free, tag:kids, same_city`
+- #2 `6061` Психологический клуб для подростков — `kids`, score `0.4674`, reasons `same_category:kids, tag:kids, same_city, date_near, profile:positive_affinity`
+- #3 `3398` Хиты Советского Мира — `kids`, score `0.4157`, reasons `same_category:kids, tag:evening, tag:family, tag:kids, date_near`
+- #4 `6314` 🥳 Детский фестиваль «Матушка-земля» — `market`, score `0.3706`, reasons `tag:active, tag:family, tag:kids, tag:outdoor, same_city`
+
+### 5322 — Экскурсия «Закулисье театра» (`excursion`)
+
+Persona: `tourist_free_walks`; hidden id: `6335`
+
+Static top 5:
+- #0 `6006` Романтика города К — `excursion`, score `0.6992`, reasons `same_category:excursion, tag:evening, tag:excursion, tag:lecture`
+- #1 `5756` Женитьба: Закулисье театра — `excursion`, score `0.6848`, reasons `same_category:excursion, tag:evening, tag:excursion, tag:lecture`
+- #2 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.5164`, reasons `same_category:excursion, tag:excursion, tag:tour, tag:tourist_friendly`
+- #3 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.47`, reasons `tag:evening, tag:excursion, tag:theatre, tag:tourist_friendly`
+- #4 `6243` Лекция «Вернусь — расскажу...» — `lecture`, score `0.4271`, reasons `tag:evening, tag:excursion, tag:lecture, tag:tourist_friendly`
+
+Local rerank top 5:
+- #0 `6006` Романтика города К — `excursion`, score `0.6894`, reasons `same_category:excursion, tag:evening, tag:excursion, tag:lecture, tag:tour`
+- #1 `5756` Женитьба: Закулисье театра — `excursion`, score `0.6428`, reasons `same_category:excursion, tag:evening, tag:excursion, tag:lecture, tag:theatre`
+- #2 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.5431`, reasons `same_category:excursion, tag:excursion, tag:tour, tag:tourist_friendly, date_near`
+- #3 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.461`, reasons `tag:evening, tag:excursion, tag:theatre, tag:tourist_friendly, same_city`
+- #4 `6243` Лекция «Вернусь — расскажу...» — `lecture`, score `0.4267`, reasons `tag:evening, tag:excursion, tag:lecture, tag:tourist_friendly, same_city`
+
+### 6267 — 🏖 «НА КУРОРТЕ» (`cinema`)
+
+Persona: `museum_exhibitions`; hidden id: `6350`
+
+Static top 5:
+- #0 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.809`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
+- #1 `6338` Киноклуб "Минус век" — `cinema`, score `0.6444`, reasons `same_category:cinema, tag:cinema, tag:evening, tag:excursion`
+- #2 `4779` Любовь в стиле джаз — `cinema`, score `0.6396`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
+- #3 `4825` Спектакль «Путешествие налегке» — `theatre`, score `0.402`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history`
+- #4 `3741` 🎶 Дыхание континентов — `music`, score `0.3873`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history`
+
+Local rerank top 5:
+- #0 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.6572`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
+- #1 `6338` Киноклуб "Минус век" — `cinema`, score `0.5255`, reasons `same_category:cinema, tag:cinema, tag:evening, tag:excursion, tag:local_history`
+- #2 `4779` Любовь в стиле джаз — `cinema`, score `0.5217`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.3609`, reasons `tag:evening, tag:live_music, tag:music, same_city, date_near`
+- #4 `4825` Спектакль «Путешествие налегке» — `theatre`, score `0.3316`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history, same_city`
+
+### 6350 — LAST SOS (`festival`)
+
+Persona: `cinema_low_price`; hidden id: `5964`
+
+Static top 5:
+- #0 `6346` День молодёжи — `festival`, score `0.6953`, reasons `same_category:festival, tag:evening, tag:festival, tag:free`
+- #1 `6345` ВЕЛОДЕНЬ — `festival`, score `0.616`, reasons `same_category:festival, tag:active, tag:family, tag:festival`
+- #2 `4795` Run sos run! — `festival`, score `0.6059`, reasons `same_category:festival, tag:active, tag:evening, tag:festival`
+- #3 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4318`, reasons `tag:active, tag:evening, tag:family, tag:free`
+- #4 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.41`, reasons `tag:active, tag:family, tag:free, tag:kids`
+
+Local rerank top 5:
+- #0 `6321` 🎬 Кинопоказ «Рождённый атомом» — `cinema`, score `0.3468`, reasons `tag:free, same_city, date_near, price_band_match, profile:positive_affinity`
+- #1 `6346` День молодёжи — `festival`, score `0.3463`, reasons `same_category:festival, tag:evening, tag:festival, tag:free, tag:kids`
+- #2 `4798` Зоопарку — быть! — `lecture`, score `0.3354`, reasons `tag:evening, tag:free, tag:outdoor, same_city, date_near`
+- #3 `4795` Run sos run! — `festival`, score `0.3298`, reasons `same_category:festival, tag:active, tag:evening, tag:festival, tag:free`
+- #4 `6026` Презентация книги "Несоверщённый вид" — `lecture`, score `0.329`, reasons `tag:evening, tag:free, same_city, date_near, price_band_match`
+
+### 3730 — Симфоническая пятница (`exhibition`)
+
+Persona: `standup_nightlife`; hidden id: `6310`
+
+Static top 5:
+- #0 `3864` Фестиваль Pianissimo: Константин Хачикян — `exhibition`, score `0.619`, reasons `same_category:exhibition, tag:classical_music, tag:evening, tag:exhibition`
+- #1 `4240` Классика русского искусства — `exhibition`, score `0.5578`, reasons `same_category:exhibition, tag:classical_music, tag:exhibition, tag:museum`
+- #2 `2999` Международная строительная выставка для строительного кластера — `exhibition`, score `0.5516`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city`
+- #3 `5479` Розовый натюрморт К. Петрова-Водкина — `music`, score `0.4792`, reasons `tag:classical_music, tag:evening, tag:exhibition, tag:live_music`
+- #4 `5480` Розовый натюрморт К. Петрова-Водкина — `music`, score `0.4702`, reasons `tag:classical_music, tag:evening, tag:exhibition, tag:live_music`
+
+Local rerank top 5:
+- #0 `3864` Фестиваль Pianissimo: Константин Хачикян — `exhibition`, score `0.5152`, reasons `same_category:exhibition, tag:classical_music, tag:evening, tag:exhibition, tag:live_music`
+- #1 `4240` Классика русского искусства — `exhibition`, score `0.4462`, reasons `same_category:exhibition, tag:classical_music, tag:exhibition, tag:museum, same_city`
+- #2 `2999` Международная строительная выставка для строительного кластера — `exhibition`, score `0.4413`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city, date_near`
+- #3 `5479` Розовый натюрморт К. Петрова-Водкина — `music`, score `0.4034`, reasons `tag:classical_music, tag:evening, tag:exhibition, tag:live_music, same_city`
+- #4 `5480` Розовый натюрморт К. Петрова-Водкина — `music`, score `0.3961`, reasons `tag:classical_music, tag:evening, tag:exhibition, tag:live_music, same_city`
+
+### 4798 — Зоопарку — быть! (`lecture`)
+
+Persona: `classical_music`; hidden id: `6334`
+
+Static top 5:
+- #0 `4759` Влияние планировочных решений на качество жизни на примере старого и нового Калининграда — `lecture`, score `0.8146`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free`
+- #1 `5656` Калининград корабельный — от первых дней к вершинам славы судостроительного завода Янтарь — `lecture`, score `0.7835`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free`
+- #2 `4417` Калининградский морской торговый порт: история и современность — `lecture`, score `0.7268`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free`
+- #3 `6353` 🎼 Концерт к 80-летию Калининградской области — `music`, score `0.3893`, reasons `tag:excursion, tag:free, tag:local_history, tag:outdoor`
+- #4 `5966` Гала-концерт к 80-летию региона: Олег и Родион Газмановы, группа «Браво» — `music`, score `0.3853`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history`
+
+Local rerank top 5:
+- #0 `4759` Влияние планировочных решений на качество жизни на примере старого и нового Калининграда — `lecture`, score `0.6617`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free, tag:lecture`
+- #1 `5656` Калининград корабельный — от первых дней к вершинам славы судостроительного завода Янтарь — `lecture`, score `0.6368`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free, tag:lecture`
+- #2 `4417` Калининградский морской торговый порт: история и современность — `lecture`, score `0.5914`, reasons `same_category:lecture, tag:evening, tag:excursion, tag:free, tag:lecture`
+- #3 `5966` Гала-концерт к 80-летию региона: Олег и Родион Газмановы, группа «Браво» — `music`, score `0.3483`, reasons `tag:evening, tag:excursion, tag:free, tag:local_history, same_city`
+- #4 `6353` 🎼 Концерт к 80-летию Калининградской области — `music`, score `0.3415`, reasons `tag:excursion, tag:free, tag:local_history, tag:outdoor, same_city`
+
+### 6160 — Мастер-класс от художницы Марии Ждан (`workshop`)
+
+Persona: `workshops_lectures`; hidden id: `6299`
+
+Static top 5:
+- #0 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.6791`, reasons `same_category:workshop, tag:family, tag:kids, tag:ticketed`
+- #1 `6038` 🌿 Мастер-класс «Плетение из бумажной лозы» — `workshop`, score `0.6244`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #2 `6195` 🎨 Мастер-класс «Фрида: портрет в цветах» — `workshop`, score `0.6244`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #3 `6040` 🎭 Спектакль «Отель на отшибе» — `theatre`, score `0.3391`, reasons `same_city, same_venue, date_near, price_band_match`
+- #4 `6274` Квартирник «Звезда по имени Цой» — `music`, score `0.2891`, reasons `same_city, same_venue, date_near`
+
+Local rerank top 5:
+- #0 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.4233`, reasons `same_category:workshop, tag:family, tag:kids, tag:ticketed, tag:workshop`
+- #1 `6038` 🌿 Мастер-класс «Плетение из бумажной лозы» — `workshop`, score `0.3795`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, date_near`
+- #2 `6195` 🎨 Мастер-класс «Фрида: портрет в цветах» — `workshop`, score `0.3795`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, date_near`
+- #3 `6040` 🎭 Спектакль «Отель на отшибе» — `theatre`, score `0.2713`, reasons `same_city, same_venue, date_near, price_band_match`
+- #4 `6274` Квартирник «Звезда по имени Цой» — `music`, score `0.2313`, reasons `same_city, same_venue, date_near`
+
+### 6348 — Decadance (`nightlife`)
+
+Persona: `local_weekend`; hidden id: `6006`
+
+Static top 5:
+- #0 `5981` Школьный дискач — `nightlife`, score `0.7244`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #1 `6311` Ваш лучший выпускной — `nightlife`, score `0.7244`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #2 `6334` Пикник у Elevator — `nightlife`, score `0.6791`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #3 `6116` Hawaiian Love party — `music`, score `0.3804`, reasons `tag:evening, tag:nightlife, same_city, date_near`
+- #4 `5836` Drum'N'Bass — `music`, score `0.37`, reasons `tag:evening, tag:nightlife, same_city, date_near`
+
+Local rerank top 5:
+- #0 `5981` Школьный дискач — `nightlife`, score `0.3595`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city, date_near`
+- #1 `6311` Ваш лучший выпускной — `nightlife`, score `0.3595`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city, date_near`
+- #2 `6334` Пикник у Elevator — `nightlife`, score `0.3483`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city, date_near`
+- #3 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3207`, reasons `tag:evening, same_city, date_near, price_band_match, profile:positive_affinity`
+- #4 `6297` Открытое море — `festival`, score `0.3165`, reasons `tag:evening, same_city, date_near, price_band_match, profile:positive_affinity`
+
+### 5510 — 🎈 Детская игровая программа с аниматорами (`sport`)
+
+Persona: `music_no_kids`; hidden id: `6349`
+
+Static top 5:
+- #0 `6213` Международный день йоги — `sport`, score `0.7092`, reasons `same_category:sport, tag:active, tag:free, tag:outdoor`
+- #1 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4957`, reasons `tag:active, tag:family, tag:free, tag:kids`
+- #2 `6350` LAST SOS — `festival`, score `0.41`, reasons `tag:active, tag:family, tag:free, tag:kids`
+- #3 `6314` 🥳 Детский фестиваль «Матушка-земля» — `market`, score `0.3491`, reasons `tag:active, tag:family, tag:kids, tag:outdoor`
+- #4 `6346` День молодёжи — `festival`, score `0.3324`, reasons `tag:free, tag:kids, same_city, date_near`
+
+Local rerank top 5:
+- #0 `6213` Международный день йоги — `sport`, score `0.5674`, reasons `same_category:sport, tag:active, tag:free, tag:outdoor, tag:sport`
+- #1 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.3325`, reasons `tag:free, tag:outdoor, same_city, date_near, profile:positive_affinity`
+- #2 `6293` 🎉 День молодежи — `music`, score `0.2803`, reasons `tag:active, tag:free, tag:outdoor, tag:sport, date_near`
+- #3 `4798` Зоопарку — быть! — `lecture`, score `0.2707`, reasons `tag:free, tag:outdoor, same_city, date_near, price_band_match`
+- #4 `6306` Встреча Трансформационного Театра — `lecture`, score `0.2614`, reasons `tag:free, same_city, date_near, price_band_match, profile:positive_affinity`
+
+### 6333 — Дегустация сыров и вин (`food`)
+
+Persona: `theatre_evening`; hidden id: `6248`
+
+Static top 5:
+- #0 `6343` Сырно-винная дегустация — `food`, score `0.87`, reasons `same_category:food, tag:evening, tag:excursion, tag:food`
+- #1 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.44`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #2 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.4344`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #3 `5851` Ужин в музее — `theatre`, score `0.4233`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #4 `3741` 🎶 Дыхание континентов — `music`, score `0.4178`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+
+Local rerank top 5:
+- #0 `6343` Сырно-винная дегустация — `food`, score `0.711`, reasons `same_category:food, tag:evening, tag:excursion, tag:food, tag:local_history`
+- #1 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.417`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #2 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.4125`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #3 `5851` Ужин в музее — `theatre`, score `0.4037`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #4 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.39`, reasons `tag:evening, tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
+
+### 4130 — Кальмания (`music`)
+
+Persona: `family_weekend`; hidden id: `6006`
+
+Static top 5:
+- #0 `6247` 🎶 Концерт «Ретро 30–50-х» — `music`, score `0.762`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #1 `6328` Концерт Ильи Папояна — `music`, score `0.762`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #2 `5615` ГРАНД КОНЦЕРТ — `music`, score `0.7564`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #3 `6252` Женщины Мира. Война — `theatre`, score `0.434`, reasons `tag:evening, tag:theatre, tag:ticketed, same_city`
+- #4 `6276` Женщины Мира. Война — `theatre`, score `0.434`, reasons `tag:evening, tag:theatre, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6247` 🎶 Концерт «Ретро 30–50-х» — `music`, score `0.6096`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, tag:ticketed`
+- #1 `6328` Концерт Ильи Папояна — `music`, score `0.6096`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, tag:ticketed`
+- #2 `5615` ГРАНД КОНЦЕРТ — `music`, score `0.6051`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, tag:theatre`
+- #3 `3867` Замок, Игры, Два Шута — `theatre`, score `0.3643`, reasons `tag:evening, tag:theatre, tag:ticketed, same_city, date_near`
+- #4 `6252` Женщины Мира. Война — `theatre`, score `0.3472`, reasons `tag:evening, tag:theatre, tag:ticketed, same_city, date_near`
+
+### 5128 — 🎭 Спектакль «НЕ КАНТовать» (`theatre`)
+
+Persona: `tourist_free_walks`; hidden id: `6348`
+
+Static top 5:
+- #0 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.8644`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #1 `4727` Аудиоспектакль «Путешествие налегке» — `theatre`, score `0.8591`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #2 `5851` Ужин в музее — `theatre`, score `0.7757`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #3 `6333` Дегустация сыров и вин — `food`, score `0.44`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #4 `6343` Сырно-винная дегустация — `food`, score `0.44`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+
+Local rerank top 5:
+- #0 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.7765`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #1 `4727` Аудиоспектакль «Путешествие налегке» — `theatre`, score `0.7723`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #2 `5851` Ужин в музее — `theatre`, score `0.7056`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #3 `6006` Романтика города К — `excursion`, score `0.4654`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #4 `6333` Дегустация сыров и вин — `food`, score `0.437`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+
+### 6061 — Психологический клуб для подростков (`kids`)
+
+Persona: `museum_exhibitions`; hidden id: `6338`
+
+Static top 5:
+- #0 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.528`, reasons `same_category:kids, tag:kids, same_city, date_near`
+- #1 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.4558`, reasons `same_category:kids, tag:kids, tag:lecture, same_city`
+- #2 `3398` Хиты Советского Мира — `kids`, score `0.4544`, reasons `same_category:kids, tag:kids, tag:ticketed, date_near`
+- #3 `6331` Встреча про женское здоровье с Еленой Орловой — `lecture`, score `0.3892`, reasons `tag:lecture, tag:ticketed, same_city, date_near`
+- #4 `6340` BREAKUP AND HEARTBREAK + GAMES — `lecture`, score `0.372`, reasons `tag:lecture, tag:psychology, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4224`, reasons `same_category:kids, tag:kids, same_city, date_near`
+- #1 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.3747`, reasons `same_category:kids, tag:kids, tag:lecture, same_city, date_near`
+- #2 `3398` Хиты Советского Мира — `kids`, score `0.3635`, reasons `same_category:kids, tag:kids, tag:ticketed, date_near, price_band_match`
+- #3 `5478` Розовый натюрморт К. Петрова-Водкина — `music`, score `0.3609`, reasons `tag:lecture, tag:ticketed, same_city, date_near, price_band_match`
+- #4 `6052` Мастер-класс «Пробегающий пейзаж» — `workshop`, score `0.351`, reasons `tag:ticketed, same_city, date_near, price_band_match, profile:positive_affinity`
+
+### 6341 — Экскурсия по ферме «Козья горка» (`excursion`)
+
+Persona: `cinema_low_price`; hidden id: `6061`
+
+Static top 5:
+- #0 `6342` Экскурсия с дегустацией сыров — `excursion`, score `0.87`, reasons `same_category:excursion, tag:excursion, tag:family, tag:kids`
+- #1 `6006` Романтика города К — `excursion`, score `0.5674`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:ticketed`
+- #2 `6352` 🧹 Субботник в «Грёза Хуторе» — `excursion`, score `0.4655`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
+- #3 `6326` 🕰️ Экскурсия «В потоке времени» — `lecture`, score `0.4444`, reasons `tag:excursion, tag:family, tag:kids, tag:local_history`
+- #4 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.3744`, reasons `tag:family, tag:kids, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6006` Романтика города К — `excursion`, score `0.4689`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:ticketed, tag:tour`
+- #1 `6352` 🧹 Субботник в «Грёза Хуторе» — `excursion`, score `0.4224`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly, date_near`
+- #2 `6342` Экскурсия с дегустацией сыров — `excursion`, score `0.421`, reasons `same_category:excursion, tag:excursion, tag:family, tag:kids, tag:local_history`
+- #3 `6338` Киноклуб "Минус век" — `cinema`, score `0.2778`, reasons `tag:excursion, tag:local_history, tag:ticketed, tag:tourist_friendly, date_near`
+- #4 `2872` Я люблю тебя, жизнь! — `music`, score `0.26`, reasons `tag:ticketed, same_city, date_near, price_band_match, profile:positive_affinity`
+
+### 6321 — 🎬 Кинопоказ «Рождённый атомом» (`cinema`)
+
+Persona: `standup_nightlife`; hidden id: `5738`
+
+Static top 5:
+- #0 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.5581`, reasons `same_category:cinema, tag:cinema, tag:free, same_city`
+- #1 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.5543`, reasons `same_category:cinema, tag:cinema, tag:free, same_city`
+- #2 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `0.5434`, reasons `same_category:cinema, tag:cinema, same_city, date_near`
+- #3 `6026` Презентация книги "Несоверщённый вид" — `lecture`, score `0.41`, reasons `tag:free, tag:lecture, same_city, date_near`
+- #4 `6306` Встреча Трансформационного Театра — `lecture`, score `0.3804`, reasons `tag:free, tag:lecture, same_city, date_near`
+
+Local rerank top 5:
+- #0 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `0.4547`, reasons `same_category:cinema, tag:cinema, same_city, date_near, profile:positive_affinity`
+- #1 `6026` Презентация книги "Несоверщённый вид" — `lecture`, score `0.348`, reasons `tag:free, tag:lecture, same_city, date_near, price_band_match`
+- #2 `6306` Встреча Трансформационного Театра — `lecture`, score `0.3243`, reasons `tag:free, tag:lecture, same_city, date_near, price_band_match`
+- #3 `5077` Калининград и область как кинодекорация — история съёмок художественных фильмов в регионе — `lecture`, score `0.3071`, reasons `tag:cinema, tag:free, tag:lecture, same_city, date_near`
+- #4 `6188` 🌿 Фримаркет в Бастионе — `market`, score `0.2713`, reasons `tag:free, same_city, date_near, price_band_match`
+
+### 6297 — Открытое море (`festival`)
+
+Persona: `classical_music`; hidden id: `6278`
+
+Static top 5:
+- #0 `6308` Морской фестиваль «Открытое море: 80 лет морской истории» — `festival`, score `0.7071`, reasons `same_category:festival, tag:excursion, tag:festival, tag:local_history`
+- #1 `6346` День молодёжи — `festival`, score `0.6267`, reasons `same_category:festival, tag:evening, tag:festival, tag:live_music`
+- #2 `6350` LAST SOS — `festival`, score `0.583`, reasons `same_category:festival, tag:evening, tag:festival, tag:live_music`
+- #3 `3741` 🎶 Дыхание континентов — `music`, score `0.47`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history`
+- #4 `6287` Концерт, посвященный 100-летию Ольги Воронец — `music`, score `0.4644`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history`
+
+Local rerank top 5:
+- #0 `6308` Морской фестиваль «Открытое море: 80 лет морской истории» — `festival`, score `0.5657`, reasons `same_category:festival, tag:excursion, tag:festival, tag:local_history, tag:tourist_friendly`
+- #1 `6346` День молодёжи — `festival`, score `0.5413`, reasons `same_category:festival, tag:evening, tag:festival, tag:live_music, tag:music`
+- #2 `4008` 🎤 Концерт в тоне "ля" — `music`, score `0.4455`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history, same_city`
+- #3 `3741` 🎶 Дыхание континентов — `music`, score `0.416`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history, same_city`
+- #4 `6287` Концерт, посвященный 100-летию Ольги Воронец — `music`, score `0.4115`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history, same_city`
+
+### 2999 — Международная строительная выставка для строительного кластера (`exhibition`)
+
+Persona: `workshops_lectures`; hidden id: `6299`
+
+Static top 5:
+- #0 `3864` Фестиваль Pianissimo: Константин Хачикян — `exhibition`, score `0.5739`, reasons `same_category:exhibition, tag:excursion, tag:exhibition, tag:local_history`
+- #1 `3730` Симфоническая пятница — `exhibition`, score `0.5516`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city`
+- #2 `4240` Классика русского искусства — `exhibition`, score `0.5196`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city`
+- #3 `5661` 🎹 Готическая сюита — `music`, score `0.35`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
+- #4 `6300` «А где мне взять такую песню…» Концерт к 100-летию Ольги Воронец — `music`, score `0.3469`, reasons `tag:excursion, tag:exhibition, tag:local_history, tag:museum`
+
+Local rerank top 5:
+- #0 `3864` Фестиваль Pianissimo: Константин Хачикян — `exhibition`, score `0.4592`, reasons `same_category:exhibition, tag:excursion, tag:exhibition, tag:local_history, tag:museum`
+- #1 `3730` Симфоническая пятница — `exhibition`, score `0.4413`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city, date_near`
+- #2 `4240` Классика русского искусства — `exhibition`, score `0.4157`, reasons `same_category:exhibition, tag:exhibition, tag:museum, same_city, date_near`
+- #3 `5783` Великие учителя. Преемственность художественных поколений — `lecture`, score `0.3041`, reasons `tag:excursion, tag:exhibition, tag:local_history, tag:museum, same_city`
+- #4 `5826` 🏰 Экскурсия «Оплот независимости и пива» — `lecture`, score `0.2942`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city, date_near`
+
+### 6026 — Презентация книги "Несоверщённый вид" (`lecture`)
+
+Persona: `local_weekend`; hidden id: `6267`
+
+Static top 5:
+- #0 `6306` Встреча Трансформационного Театра — `lecture`, score `0.7444`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture`
+- #1 `4798` Зоопарку — быть! — `lecture`, score `0.6729`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture`
+- #2 `4417` Калининградский морской торговый порт: история и современность — `lecture`, score `0.6411`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture`
+- #3 `6321` 🎬 Кинопоказ «Рождённый атомом» — `cinema`, score `0.41`, reasons `tag:free, tag:lecture, same_city, date_near`
+- #4 `6346` День молодёжи — `festival`, score `0.353`, reasons `tag:evening, tag:free, same_city, date_near`
+
+Local rerank top 5:
+- #0 `4798` Зоопарку — быть! — `lecture`, score `0.6533`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture, same_city`
+- #1 `6306` Встреча Трансформационного Театра — `lecture`, score `0.6505`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture, same_city`
+- #2 `4417` Калининградский морской торговый порт: история и современность — `lecture`, score `0.6029`, reasons `same_category:lecture, tag:evening, tag:free, tag:lecture, same_city`
+- #3 `6321` 🎬 Кинопоказ «Рождённый атомом» — `cinema`, score `0.383`, reasons `tag:free, tag:lecture, same_city, date_near, price_band_match`
+- #4 `6346` День молодёжи — `festival`, score `0.3674`, reasons `tag:evening, tag:free, same_city, date_near, price_band_match`
+
+### 6038 — 🌿 Мастер-класс «Плетение из бумажной лозы» (`workshop`)
+
+Persona: `music_no_kids`; hidden id: `5510`
+
+Static top 5:
+- #0 `6195` 🎨 Мастер-класс «Фрида: портрет в цветах» — `workshop`, score `0.69`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #1 `6196` 🎨 Мастер-класс «Слушай и пиши: Ван Гог» — `workshop`, score `0.63`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #2 `6160` Мастер-класс от художницы Марии Ждан — `workshop`, score `0.6244`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #3 `6322` 🌾 День валяния в сене — `market`, score `0.25`, reasons `tag:family, tag:kids, tag:workshop, date_near`
+- #4 `6314` 🥳 Детский фестиваль «Матушка-земля» — `market`, score `0.2444`, reasons `tag:family, tag:kids, tag:workshop, date_near`
+
+Local rerank top 5:
+- #0 `6313` Ржавый дракон — `festival`, score `0.2557`, reasons `tag:workshop, date_near, price_band_match, profile:positive_affinity`
+- #1 `6333` Дегустация сыров и вин — `food`, score `0.1654`, reasons `tag:workshop, date_near, price_band_match, profile:positive_affinity`
+- #2 `6343` Сырно-винная дегустация — `food`, score `0.1654`, reasons `tag:workshop, date_near, price_band_match, profile:positive_affinity`
+- #3 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `-0.1585`, reasons `tag:family, date_near, price_band_match, profile:positive_affinity, profile:negative_interest_penalty`
+- #4 `6195` 🎨 Мастер-класс «Фрида: портрет в цветах» — `workshop`, score `-0.273`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, date_near`
+
+### 5981 — Школьный дискач (`nightlife`)
+
+Persona: `theatre_evening`; hidden id: `5803`
+
+Static top 5:
+- #0 `6311` Ваш лучший выпускной — `nightlife`, score `0.87`, reasons `same_category:nightlife, tag:evening, tag:nightlife, tag:ticketed`
+- #1 `6348` Decadance — `nightlife`, score `0.7244`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #2 `6334` Пикник у Elevator — `nightlife`, score `0.6604`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #3 `6116` Hawaiian Love party — `music`, score `0.434`, reasons `tag:evening, tag:nightlife, tag:ticketed, same_city`
+- #4 `5836` Drum'N'Bass — `music`, score `0.4044`, reasons `tag:evening, tag:nightlife, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6252` Женщины Мира. Война — `theatre`, score `0.3885`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #1 `6276` Женщины Мира. Война — `theatre`, score `0.3885`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #2 `3867` Замок, Игры, Два Шута — `theatre`, score `0.3693`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #3 `6310` Архитектурно-урбанистическая студия. Занятие 3 — `workshop`, score `0.3227`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #4 `6030` Лекция «Ангелы и демоны Врубеля» — `lecture`, score `0.3193`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+
+### 6213 — Международный день йоги (`sport`)
+
+Persona: `family_weekend`; hidden id: `6349`
+
+Static top 5:
+- #0 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.7092`, reasons `same_category:sport, tag:active, tag:free, tag:outdoor`
+- #1 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4063`, reasons `tag:active, tag:free, tag:outdoor, tag:sport`
+- #2 `6353` 🎼 Концерт к 80-летию Калининградской области — `music`, score `0.3978`, reasons `tag:free, tag:outdoor, same_city, same_venue`
+- #3 `5965` Концерт к 80-летию региона: местные коллективы и кавер-группы — `music`, score `0.3711`, reasons `tag:free, same_city, same_venue, date_near`
+- #4 `6350` LAST SOS — `festival`, score `0.3475`, reasons `tag:active, tag:free, tag:outdoor, tag:sport`
+
+Local rerank top 5:
+- #0 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.6774`, reasons `same_category:sport, tag:active, tag:free, tag:outdoor, tag:sport`
+- #1 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4351`, reasons `tag:active, tag:free, tag:outdoor, tag:sport, same_city`
+- #2 `6353` 🎼 Концерт к 80-летию Калининградской области — `music`, score `0.3382`, reasons `tag:free, tag:outdoor, same_city, same_venue, date_near`
+- #3 `6314` 🥳 Детский фестиваль «Матушка-земля» — `market`, score `0.3257`, reasons `tag:active, tag:outdoor, tag:sport, same_city, date_near`
+- #4 `6345` ВЕЛОДЕНЬ — `festival`, score `0.3132`, reasons `tag:active, tag:outdoor, tag:sport, same_city, date_near`
+
+### 6343 — Сырно-винная дегустация (`food`)
+
+Persona: `tourist_free_walks`; hidden id: `6248`
+
+Static top 5:
+- #0 `6333` Дегустация сыров и вин — `food`, score `0.87`, reasons `same_category:food, tag:evening, tag:excursion, tag:food`
+- #1 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.44`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #2 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.4344`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #3 `5851` Ужин в музее — `theatre`, score `0.4233`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+- #4 `3741` 🎶 Дыхание континентов — `music`, score `0.4178`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed`
+
+Local rerank top 5:
+- #0 `6333` Дегустация сыров и вин — `food`, score `0.781`, reasons `same_category:food, tag:evening, tag:excursion, tag:food, tag:local_history`
+- #1 `6006` Романтика города К — `excursion`, score `0.452`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #2 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.437`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #3 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.4325`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+- #4 `5851` Ужин в музее — `theatre`, score `0.4237`, reasons `tag:evening, tag:excursion, tag:local_history, tag:ticketed, same_city`
+
+### 5202 — Pianissimo: Илья Папоян (`music`)
+
+Persona: `museum_exhibitions`; hidden id: `6310`
+
+Static top 5:
+- #0 `6332` Концерт Ильи Папояна — `music`, score `0.8248`, reasons `same_category:music, tag:classical_music, tag:evening, tag:kids`
+- #1 `5201` 🎹 Концерт «Фестиваль Pianissimo: Константин Емельянов» — `music`, score `0.8017`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
+- #2 `5836` Drum'N'Bass — `music`, score `0.72`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.4233`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #4 `6349` Morrison - Рок Пикник — `nightlife`, score `0.3804`, reasons `tag:evening, tag:live_music, tag:music, tag:outdoor`
+
+Local rerank top 5:
+- #0 `6332` Концерт Ильи Папояна — `music`, score `0.6599`, reasons `same_category:music, tag:classical_music, tag:evening, tag:kids, tag:live_music`
+- #1 `5201` 🎹 Концерт «Фестиваль Pianissimo: Константин Емельянов» — `music`, score `0.6414`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #2 `3730` Симфоническая пятница — `exhibition`, score `0.4337`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, same_city`
+- #3 `6030` Лекция «Ангелы и демоны Врубеля» — `lecture`, score `0.304`, reasons `tag:evening, tag:outdoor, tag:ticketed, same_city, date_near`
+- #4 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.2966`, reasons `tag:evening, tag:live_music, tag:music, tag:outdoor, same_city`
+
+### 5738 — Соня, уйди! (`theatre`)
+
+Persona: `cinema_low_price`; hidden id: `6248`
+
+Static top 5:
+- #0 `5373` Концерт артиста Вертинского — `theatre`, score `0.7986`, reasons `same_category:theatre, tag:classic, tag:drama, tag:evening`
+- #1 `5290` Мюзикл «Алиса в Стране чудес» — `theatre`, score `0.7378`, reasons `same_category:theatre, tag:classic, tag:drama, tag:evening`
+- #2 `5964` Музыкальный спектакль «Душа» — `theatre`, score `0.6962`, reasons `same_category:theatre, tag:classic, tag:drama, tag:evening`
+- #3 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.3804`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre`
+- #4 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3638`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre`
+
+Local rerank top 5:
+- #0 `5373` Концерт артиста Вертинского — `theatre`, score `0.6538`, reasons `same_category:theatre, tag:classic, tag:drama, tag:evening, tag:theatre`
+- #1 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.3793`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre, same_city`
+- #2 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3661`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre, same_city`
+- #3 `5658` Спектакль «Гараж» — `cinema`, score `0.3463`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre, same_city`
+- #4 `5290` Мюзикл «Алиса в Стране чудес» — `theatre`, score `0.3302`, reasons `same_category:theatre, tag:classic, tag:drama, tag:evening, tag:theatre`
 
 ### 3398 — Хиты Советского Мира (`kids`)
 
-Persona: `family_free`; hidden id: `6312`
+Persona: `standup_nightlife`; hidden id: `6312`
 
 Static top 5:
 - #0 `5878` Песни СССР — `music`, score `0.5158`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
@@ -76,68 +517,248 @@ Static top 5:
 - #4 `2872` Я люблю тебя, жизнь! — `music`, score `0.3974`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
 
 Local rerank top 5:
-- #0 `5827` 🎻 Концертная программа «Странная струнная сказка» — `music`, score `0.4984`, reasons `tag:classical_music, tag:family, tag:kids, tag:live_music, same_city`
-- #1 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4907`, reasons `same_category:kids, tag:evening, tag:family, tag:kids, date_near`
-- #2 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.4398`, reasons `same_category:kids, tag:evening, tag:family, tag:kids, date_near`
-- #3 `5878` Песни СССР — `music`, score `0.4127`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, same_city`
-- #4 `6061` Психологический клуб для подростков — `kids`, score `0.4085`, reasons `same_category:kids, tag:kids, tag:ticketed, date_near, price_band_match`
+- #0 `5878` Песни СССР — `music`, score `0.4327`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, same_city`
+- #1 `2872` Я люблю тебя, жизнь! — `music`, score `0.338`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, same_city`
+- #2 `4040` ЛЮБОВНИЧКИ 2 ПРОДОЛЖЕНИЕ — `theatre`, score `0.2342`, reasons `tag:evening, same_city, date_near, price_band_match, profile:positive_affinity`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.2115`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, date_near`
+- #4 `6257` Музыкальное лото: Летнее — `other`, score `0.1928`, reasons `tag:classical_music, tag:evening, tag:ticketed, date_near, price_band_match`
 
-### 3177 — Золотой дубль (`excursion`)
+### 6342 — Экскурсия с дегустацией сыров (`excursion`)
 
-Persona: `music_no_kids`; hidden id: `6215`
-
-Static top 5:
-- #0 `6006` Романтика города К — `excursion`, score `0.54`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
-- #1 `5781` Экскурсия «Закулисье театра» — `excursion`, score `0.5101`, reasons `same_category:excursion, tag:excursion, tag:tourist_friendly, same_city`
-- #2 `5754` Мастер и Маргарита: Экскурсия «Закулисье театра» — `excursion`, score `0.5034`, reasons `same_category:excursion, tag:excursion, tag:tourist_friendly, same_city`
-- #3 `6339` Киноклуб "Минус век" — `cinema`, score `0.362`, reasons `tag:cinema, tag:excursion, tag:local_history, tag:tourist_friendly`
-- #4 `6308` Морской фестиваль «Открытое море: 80 лет морской истории» — `festival`, score `0.314`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
-
-Local rerank top 5:
-- #0 `6006` Романтика города К — `excursion`, score `0.4445`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
-- #1 `5754` Мастер и Маргарита: Экскурсия «Закулисье театра» — `excursion`, score `0.4152`, reasons `same_category:excursion, tag:excursion, tag:tourist_friendly, same_city, date_near`
-- #2 `5781` Экскурсия «Закулисье театра» — `excursion`, score `0.4081`, reasons `same_category:excursion, tag:excursion, tag:tourist_friendly, same_city, date_near`
-- #3 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3126`, reasons `tag:cinema, tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
-- #4 `6339` Киноклуб "Минус век" — `cinema`, score `0.2896`, reasons `tag:cinema, tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
-
-### 4779 — Любовь в стиле джаз (`cinema`)
-
-Persona: `theatre_no_nightlife`; hidden id: `3864`
+Persona: `classical_music`; hidden id: `6061`
 
 Static top 5:
-- #0 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.6746`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
-- #1 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.6396`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
-- #2 `5658` Спектакль «Гараж» — `cinema`, score `0.6361`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
-- #3 `4783` Мюзикл «Алые паруса» — `theatre`, score `0.46`, reasons `tag:classic, tag:classical_music, tag:drama, tag:evening`
-- #4 `5525` Орфей и Эвридика — `theatre`, score `0.4443`, reasons `tag:classic, tag:drama, tag:jazz, tag:live_music`
+- #0 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.87`, reasons `same_category:excursion, tag:excursion, tag:family, tag:kids`
+- #1 `6006` Романтика города К — `excursion`, score `0.5674`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:ticketed`
+- #2 `6352` 🧹 Субботник в «Грёза Хуторе» — `excursion`, score `0.4655`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
+- #3 `6326` 🕰️ Экскурсия «В потоке времени» — `lecture`, score `0.4444`, reasons `tag:excursion, tag:family, tag:kids, tag:local_history`
+- #4 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.3744`, reasons `tag:family, tag:kids, tag:ticketed, same_city`
 
 Local rerank top 5:
-- #0 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.6397`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
-- #1 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.6117`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
-- #2 `5658` Спектакль «Гараж» — `cinema`, score `0.6089`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
-- #3 `4783` Мюзикл «Алые паруса» — `theatre`, score `0.468`, reasons `tag:classic, tag:classical_music, tag:drama, tag:evening, same_city`
-- #4 `5291` Мюзикл «Алиса в Стране чудес» — `theatre`, score `0.3915`, reasons `tag:classic, tag:drama, tag:evening, tag:theatre, same_city`
+- #0 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.696`, reasons `same_category:excursion, tag:excursion, tag:family, tag:kids, tag:local_history`
+- #1 `6006` Романтика города К — `excursion`, score `0.4639`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:ticketed, tag:tour`
+- #2 `6352` 🧹 Субботник в «Грёза Хуторе» — `excursion`, score `0.3724`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly, date_near`
+- #3 `6326` 🕰️ Экскурсия «В потоке времени» — `lecture`, score `0.3555`, reasons `tag:excursion, tag:family, tag:kids, tag:local_history, same_city`
+- #4 `2872` Я люблю тебя, жизнь! — `music`, score `0.335`, reasons `tag:ticketed, same_city, date_near, price_band_match, profile:positive_affinity`
 
-### 4689 — Фестиваль добровольчества #МЫВМЕСТЕ (`festival`)
+### 6268 — 🕵️‍♂️ «Союз Рыжих» (`cinema`)
 
-Persona: `family_free`; hidden id: `6314`
+Persona: `workshops_lectures`; hidden id: `6315`
 
 Static top 5:
-- #0 `6346` День молодёжи — `festival`, score `0.5841`, reasons `same_category:festival, tag:festival, tag:free, tag:kids`
-- #1 `6312` Цепрус — `festival`, score `0.58`, reasons `same_category:festival, tag:festival, tag:other, same_city`
-- #2 `6350` LAST SOS — `festival`, score `0.5475`, reasons `same_category:festival, tag:festival, tag:free, tag:kids`
-- #3 `4759` Влияние планировочных решений на качество жизни на примере старого и нового Калининграда — `lecture`, score `0.27`, reasons `tag:free, same_city, date_near, price_band_match`
-- #4 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.2696`, reasons `tag:free, tag:kids, same_city, date_near`
+- #0 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.809`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
+- #1 `4779` Любовь в стиле джаз — `cinema`, score `0.6746`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
+- #2 `4780` Музыкальная комедия «Любовь в стиле джаз» — `cinema`, score `0.6516`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama`
+- #3 `6134` Трио-Jazz и Анна Гринь — `music`, score `0.39`, reasons `tag:evening, tag:jazz, tag:live_music, tag:music`
+- #4 `5615` ГРАНД КОНЦЕРТ — `music`, score `0.386`, reasons `tag:evening, tag:live_music, tag:music, tag:theatre`
 
 Local rerank top 5:
-- #0 `6346` День молодёжи — `festival`, score `0.5773`, reasons `same_category:festival, tag:festival, tag:free, tag:kids, same_city`
-- #1 `6312` Цепрус — `festival`, score `0.474`, reasons `same_category:festival, tag:festival, tag:other, same_city, date_near`
-- #2 `5510` 🎈 Детская игровая программа с аниматорами — `sport`, score `0.3807`, reasons `tag:free, tag:kids, same_city, date_near, price_band_match`
-- #3 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.3764`, reasons `tag:free, tag:kids, same_city, date_near, price_band_match`
-- #4 `5376` 🌍 Акция «Регион, возрождённый всей страной» — `kids`, score `0.3449`, reasons `tag:free, tag:kids, same_city, date_near, price_band_match`
+- #0 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.6472`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
+- #1 `4779` Любовь в стиле джаз — `cinema`, score `0.5397`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:evening`
+- #2 `4780` Музыкальная комедия «Любовь в стиле джаз» — `cinema`, score `0.5213`, reasons `same_category:cinema, tag:cinema, tag:classic, tag:drama, tag:jazz`
+- #3 `6030` Лекция «Ангелы и демоны Врубеля» — `lecture`, score `0.3475`, reasons `tag:evening, tag:outdoor, same_city, same_venue, date_near`
+- #4 `6134` Трио-Jazz и Анна Гринь — `music`, score `0.312`, reasons `tag:evening, tag:jazz, tag:live_music, tag:music, same_city`
+
+### 6308 — Морской фестиваль «Открытое море: 80 лет морской истории» (`festival`)
+
+Persona: `local_weekend`; hidden id: `6349`
+
+Static top 5:
+- #0 `6297` Открытое море — `festival`, score `0.7071`, reasons `same_category:festival, tag:excursion, tag:festival, tag:local_history`
+- #1 `6346` День молодёжи — `festival`, score `0.5467`, reasons `same_category:festival, tag:festival, same_city, date_near`
+- #2 `6350` LAST SOS — `festival`, score `0.5316`, reasons `same_category:festival, tag:festival, same_city, date_near`
+- #3 `6243` Лекция «Вернусь — расскажу...» — `lecture`, score `0.4044`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
+- #4 `5826` 🏰 Экскурсия «Оплот независимости и пива» — `lecture`, score `0.4044`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
+
+Local rerank top 5:
+- #0 `6297` Открытое море — `festival`, score `0.6307`, reasons `same_category:festival, tag:excursion, tag:festival, tag:local_history, tag:tourist_friendly`
+- #1 `6346` День молодёжи — `festival`, score `0.5223`, reasons `same_category:festival, tag:festival, same_city, date_near, profile:positive_affinity`
+- #2 `5826` 🏰 Экскурсия «Оплот независимости и пива» — `lecture`, score `0.3585`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city, date_near`
+- #3 `6243` Лекция «Вернусь — расскажу...» — `lecture`, score `0.3585`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city, date_near`
+- #4 `6315` 🏰 Экскурсия по бывшей пивоварне «Понарт» — `lecture`, score `0.3495`, reasons `tag:excursion, tag:local_history, tag:tourist_friendly, same_city, date_near`
+
+### 3864 — Фестиваль Pianissimo: Константин Хачикян (`exhibition`)
+
+Persona: `music_no_kids`; hidden id: `5803`
+
+Static top 5:
+- #0 `3730` Симфоническая пятница — `exhibition`, score `0.619`, reasons `same_category:exhibition, tag:classical_music, tag:evening, tag:exhibition`
+- #1 `4240` Классика русского искусства — `exhibition`, score `0.6119`, reasons `same_category:exhibition, tag:classical_music, tag:exhibition, tag:museum`
+- #2 `2999` Международная строительная выставка для строительного кластера — `exhibition`, score `0.5739`, reasons `same_category:exhibition, tag:excursion, tag:exhibition, tag:local_history`
+- #3 `3797` Галопом по эпохам — `music`, score `0.4371`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history`
+- #4 `3742` Звучащие сады: концерт органистки Терезы Восканян — `music`, score `0.4318`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history`
+
+Local rerank top 5:
+- #0 `3730` Симфоническая пятница — `exhibition`, score `0.5627`, reasons `same_category:exhibition, tag:classical_music, tag:evening, tag:exhibition, tag:live_music`
+- #1 `4240` Классика русского искусства — `exhibition`, score `0.4896`, reasons `same_category:exhibition, tag:classical_music, tag:exhibition, tag:museum, same_city`
+- #2 `2999` Международная строительная выставка для строительного кластера — `exhibition`, score `0.4592`, reasons `same_category:exhibition, tag:excursion, tag:exhibition, tag:local_history, tag:museum`
+- #3 `3797` Галопом по эпохам — `music`, score `0.4172`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history, same_city`
+- #4 `3742` Звучащие сады: концерт органистки Терезы Восканян — `music`, score `0.413`, reasons `tag:evening, tag:excursion, tag:live_music, tag:local_history, same_city`
+
+### 6030 — Лекция «Ангелы и демоны Врубеля» (`lecture`)
+
+Persona: `theatre_evening`; hidden id: `6338`
+
+Static top 5:
+- #0 `6331` Встреча про женское здоровье с Еленой Орловой — `lecture`, score `0.6844`, reasons `same_category:lecture, tag:lecture, tag:ticketed, same_city`
+- #1 `5803` Суперспособности: выдумка и реальность — `lecture`, score `0.6616`, reasons `same_category:lecture, tag:evening, tag:lecture, tag:ticketed`
+- #2 `6112` Живая встреча с Алексеем Мышкиным — `lecture`, score `0.6422`, reasons `same_category:lecture, tag:evening, tag:lecture, tag:ticketed`
+- #3 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `0.3991`, reasons `tag:evening, tag:outdoor, tag:ticketed, same_city`
+- #4 `5836` Drum'N'Bass — `music`, score `0.3929`, reasons `tag:evening, tag:outdoor, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6331` Встреча про женское здоровье с Еленой Орловой — `lecture`, score `0.5475`, reasons `same_category:lecture, tag:lecture, tag:ticketed, same_city, date_near`
+- #1 `5803` Суперспособности: выдумка и реальность — `lecture`, score `0.5443`, reasons `same_category:lecture, tag:evening, tag:lecture, tag:ticketed, same_city`
+- #2 `6112` Живая встреча с Алексеем Мышкиным — `lecture`, score `0.5288`, reasons `same_category:lecture, tag:evening, tag:lecture, tag:ticketed, same_city`
+- #3 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.4175`, reasons `tag:evening, tag:outdoor, same_city, same_venue, date_near`
+- #4 `6252` Женщины Мира. Война — `theatre`, score `0.3738`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+
+### 6195 — 🎨 Мастер-класс «Фрида: портрет в цветах» (`workshop`)
+
+Persona: `family_weekend`; hidden id: `5510`
+
+Static top 5:
+- #0 `6196` 🎨 Мастер-класс «Слушай и пиши: Ван Гог» — `workshop`, score `0.81`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #1 `6197` 🎨 Мастер-класс «Магритт: портрет с секретом» — `workshop`, score `0.7684`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #2 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.7444`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop`
+- #3 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.35`, reasons `tag:family, tag:kids, same_city, date_near`
+- #4 `6342` Экскурсия с дегустацией сыров — `excursion`, score `0.35`, reasons `tag:family, tag:kids, same_city, date_near`
+
+Local rerank top 5:
+- #0 `6196` 🎨 Мастер-класс «Слушай и пиши: Ван Гог» — `workshop`, score `0.738`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, same_city`
+- #1 `6197` 🎨 Мастер-класс «Магритт: портрет с секретом» — `workshop`, score `0.7047`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, same_city`
+- #2 `6219` Акварельная открытка «Домик у моря» — `workshop`, score `0.6855`, reasons `same_category:workshop, tag:family, tag:kids, tag:workshop, same_city`
+- #3 `6326` 🕰️ Экскурсия «В потоке времени» — `lecture`, score `0.3702`, reasons `tag:family, tag:kids, same_city, date_near, price_band_match`
+- #4 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.37`, reasons `tag:family, tag:kids, same_city, date_near, price_band_match`
+
+### 6311 — Ваш лучший выпускной (`nightlife`)
+
+Persona: `tourist_free_walks`; hidden id: `5803`
+
+Static top 5:
+- #0 `5981` Школьный дискач — `nightlife`, score `0.87`, reasons `same_category:nightlife, tag:evening, tag:nightlife, tag:ticketed`
+- #1 `6348` Decadance — `nightlife`, score `0.7244`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #2 `6334` Пикник у Elevator — `nightlife`, score `0.6604`, reasons `same_category:nightlife, tag:evening, tag:nightlife, same_city`
+- #3 `6116` Hawaiian Love party — `music`, score `0.434`, reasons `tag:evening, tag:nightlife, tag:ticketed, same_city`
+- #4 `5836` Drum'N'Bass — `music`, score `0.4044`, reasons `tag:evening, tag:nightlife, tag:ticketed, same_city`
+
+Local rerank top 5:
+- #0 `6006` Романтика города К — `excursion`, score `0.3972`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #1 `6338` Киноклуб "Минус век" — `cinema`, score `0.365`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #2 `6333` Дегустация сыров и вин — `food`, score `0.3605`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #3 `6343` Сырно-винная дегустация — `food`, score `0.3605`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+- #4 `6252` Женщины Мира. Война — `theatre`, score `0.3235`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+
+### 6314 — 🥳 Детский фестиваль «Матушка-земля» (`market`)
+
+Persona: `museum_exhibitions`; hidden id: `6335`
+
+Static top 5:
+- #0 `6215` Книжный остров — 2026 — `market`, score `0.5796`, reasons `same_category:market, tag:kids, tag:market, tag:workshop`
+- #1 `6322` 🌾 День валяния в сене — `market`, score `0.5644`, reasons `same_category:market, tag:family, tag:kids, tag:market`
+- #2 `6323` 🌿 Празднование Ивана Купала на Каупе — `market`, score `0.556`, reasons `same_category:market, tag:family, tag:kids, tag:market`
+- #3 `6030` Лекция «Ангелы и демоны Врубеля» — `lecture`, score `0.37`, reasons `tag:outdoor, same_city, same_venue, date_near`
+- #4 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3614`, reasons `tag:outdoor, same_city, same_venue, date_near`
+
+Local rerank top 5:
+- #0 `6215` Книжный остров — 2026 — `market`, score `0.5587`, reasons `same_category:market, tag:kids, tag:market, tag:workshop, same_city`
+- #1 `6322` 🌾 День валяния в сене — `market`, score `0.4515`, reasons `same_category:market, tag:family, tag:kids, tag:market, tag:other`
+- #2 `6323` 🌿 Празднование Ивана Купала на Каупе — `market`, score `0.4448`, reasons `same_category:market, tag:family, tag:kids, tag:market, tag:other`
+- #3 `6267` 🏖 «НА КУРОРТЕ» — `cinema`, score `0.3091`, reasons `tag:outdoor, same_city, same_venue, date_near, price_band_match`
+- #4 `6030` Лекция «Ангелы и демоны Врубеля» — `lecture`, score `0.296`, reasons `tag:outdoor, same_city, same_venue, date_near, price_band_match`
+
+### 5776 — Симфоническая пятница: Концерт музыки Йозефа Гайдна (`music`)
+
+Persona: `cinema_low_price`; hidden id: `6006`
+
+Static top 5:
+- #0 `6275` Петр Чухнов (фортепиано) — `music`, score `0.7444`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #1 `5197` Концерт Ростислава Чебыкина — `music`, score `0.7391`, reasons `same_category:music, tag:evening, tag:live_music, tag:music`
+- #2 `5267` Великие истории романтизма — `music`, score `0.7363`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.4271`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #4 `6297` Открытое море — `festival`, score `0.3744`, reasons `tag:evening, tag:live_music, tag:music, same_city`
+
+Local rerank top 5:
+- #0 `6275` Петр Чухнов (фортепиано) — `music`, score `0.6105`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, same_city`
+- #1 `5197` Концерт Ростислава Чебыкина — `music`, score `0.6063`, reasons `same_category:music, tag:evening, tag:live_music, tag:music, same_city`
+- #2 `5267` Великие истории романтизма — `music`, score `0.604`, reasons `same_category:music, tag:classical_music, tag:evening, tag:live_music, tag:music`
+- #3 `3730` Симфоническая пятница — `exhibition`, score `0.3567`, reasons `tag:classical_music, tag:evening, tag:live_music, tag:music, same_city`
+- #4 `6268` 🕵️‍♂️ «Союз Рыжих» — `cinema`, score `0.3549`, reasons `tag:evening, tag:live_music, tag:music, same_city, date_near`
+
+### 5851 — Ужин в музее (`theatre`)
+
+Persona: `standup_nightlife`; hidden id: `6310`
+
+Static top 5:
+- #0 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.7757`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #1 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.7701`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history`
+- #2 `6252` Женщины Мира. Война — `theatre`, score `0.6729`, reasons `same_category:theatre, tag:evening, tag:theatre, tag:ticketed`
+- #3 `6338` Киноклуб "Минус век" — `cinema`, score `0.4644`, reasons `tag:classical_music, tag:evening, tag:excursion, tag:local_history`
+- #4 `4008` 🎤 Концерт в тоне "ля" — `music`, score `0.4391`, reasons `tag:classical_music, tag:evening, tag:excursion, tag:local_history`
+
+Local rerank top 5:
+- #0 `5128` 🎭 Спектакль «НЕ КАНТовать» — `theatre`, score `0.6406`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #1 `4826` Спектакль «Путешествие налегке» — `theatre`, score `0.6361`, reasons `same_category:theatre, tag:evening, tag:excursion, tag:local_history, tag:theatre`
+- #2 `6252` Женщины Мира. Война — `theatre`, score `0.5583`, reasons `same_category:theatre, tag:evening, tag:theatre, tag:ticketed, same_city`
+- #3 `6338` Киноклуб "Минус век" — `cinema`, score `0.3915`, reasons `tag:classical_music, tag:evening, tag:excursion, tag:local_history, same_city`
+- #4 `6335` Алексей Шамутило — `other`, score `0.3804`, reasons `tag:evening, tag:ticketed, same_city, date_near, price_band_match`
+
+### 5376 — 🌍 Акция «Регион, возрождённый всей страной» (`kids`)
+
+Persona: `classical_music`; hidden id: `3934`
+
+Static top 5:
+- #0 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.5406`, reasons `same_category:kids, tag:evening, tag:family, tag:free`
+- #1 `6061` Психологический клуб для подростков — `kids`, score `0.4558`, reasons `same_category:kids, tag:kids, tag:lecture, same_city`
+- #2 `3398` Хиты Советского Мира — `kids`, score `0.356`, reasons `same_category:kids, tag:evening, tag:family, tag:kids`
+- #3 `5656` Калининград корабельный — от первых дней к вершинам славы судостроительного завода Янтарь — `lecture`, score `0.347`, reasons `tag:evening, tag:excursion, tag:free, tag:lecture`
+- #4 `4417` Калининградский морской торговый порт: история и современность — `lecture`, score `0.3462`, reasons `tag:evening, tag:excursion, tag:free, tag:lecture`
+
+Local rerank top 5:
+- #0 `6122` 🏟️ «Утренник на Балтике» — `kids`, score `0.4425`, reasons `same_category:kids, tag:evening, tag:family, tag:free, tag:kids`
+- #1 `3398` Хиты Советского Мира — `kids`, score `0.3748`, reasons `same_category:kids, tag:evening, tag:family, tag:kids, date_near`
+- #2 `6061` Психологический клуб для подростков — `kids`, score `0.3647`, reasons `same_category:kids, tag:kids, tag:lecture, same_city, date_near`
+- #3 `3864` Фестиваль Pianissimo: Константин Хачикян — `exhibition`, score `0.2909`, reasons `tag:evening, tag:excursion, tag:local_history, tag:tourist_friendly, same_city`
+- #4 `5656` Калининград корабельный — от первых дней к вершинам славы судостроительного завода Янтарь — `lecture`, score `0.2876`, reasons `tag:evening, tag:excursion, tag:free, tag:lecture, same_city`
+
+### 6352 — 🧹 Субботник в «Грёза Хуторе» (`excursion`)
+
+Persona: `workshops_lectures`; hidden id: `6333`
+
+Static top 5:
+- #0 `6341` Экскурсия по ферме «Козья горка» — `excursion`, score `0.4655`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
+- #1 `6342` Экскурсия с дегустацией сыров — `excursion`, score `0.4655`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
+- #2 `6006` Романтика города К — `excursion`, score `0.4495`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly`
+- #3 `4798` Зоопарку — быть! — `lecture`, score `0.2978`, reasons `tag:excursion, tag:free, tag:local_history, tag:outdoor`
+- #4 `6213` Международный день йоги — `sport`, score `0.2817`, reasons `tag:active, tag:free, tag:outdoor, tag:sport`
+
+Local rerank top 5:
+- #0 `6006` Романтика города К — `excursion`, score `0.3996`, reasons `same_category:excursion, tag:excursion, tag:local_history, tag:tourist_friendly, date_near`
+- #1 `4798` Зоопарку — быть! — `lecture`, score `0.2782`, reasons `tag:excursion, tag:free, tag:local_history, tag:outdoor, date_near`
+- #2 `4759` Влияние планировочных решений на качество жизни на примере старого и нового Калининграда — `lecture`, score `0.2409`, reasons `tag:excursion, tag:free, tag:local_history, tag:outdoor, date_near`
+- #3 `5258` 🚶 Экскурсия по Светлогорску — `lecture`, score `0.2356`, reasons `tag:excursion, tag:free, tag:local_history, tag:tourist_friendly, date_near`
+- #4 `6213` Международный день йоги — `sport`, score `0.2254`, reasons `tag:active, tag:free, tag:outdoor, tag:sport, date_near`
+
+### 6279 — Пляж | The Beach (`cinema`)
+
+Persona: `local_weekend`; hidden id: `4825`
+
+Static top 5:
+- #0 `6304` Кино у моря: Пляж — `cinema`, score `0.87`, reasons `same_category:cinema, tag:active, tag:cinema, tag:lecture`
+- #1 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `0.5164`, reasons `same_category:cinema, tag:cinema, tag:outdoor, tag:ticketed`
+- #2 `6338` Киноклуб "Минус век" — `cinema`, score `0.4869`, reasons `same_category:cinema, tag:cinema, tag:ticketed, date_near`
+- #3 `5194` 🎨 Мастер-класс «Сердце» — `workshop`, score `0.3111`, reasons `tag:ticketed, same_city, date_near, price_band_match`
+- #4 `6019` 🎻 Симфония стиля на берегу Балтики — `music`, score `0.3016`, reasons `tag:ticketed, same_city, date_near, price_band_match`
+
+Local rerank top 5:
+- #0 `6304` Кино у моря: Пляж — `cinema`, score `0.721`, reasons `same_category:cinema, tag:active, tag:cinema, tag:lecture, tag:other`
+- #1 `5555` 🎬 «Сентиментальная ценность» — `cinema`, score `0.4381`, reasons `same_category:cinema, tag:cinema, tag:outdoor, tag:ticketed, date_near`
+- #2 `6338` Киноклуб "Минус век" — `cinema`, score `0.4245`, reasons `same_category:cinema, tag:cinema, tag:ticketed, date_near, price_band_match`
+- #3 `6314` 🥳 Детский фестиваль «Матушка-земля» — `market`, score `0.2515`, reasons `tag:active, tag:other, tag:outdoor, tag:quiz, date_near`
+- #4 `5194` 🎨 Мастер-класс «Сердце» — `workshop`, score `0.2489`, reasons `tag:ticketed, same_city, date_near, price_band_match`
 
 ## Decision on semantic embeddings
 
-For MVP-0, the local feature-vector baseline is sufficient to build and test `event_detail_related`: it passes the hard invariants on the real future-event sample and requires no provider calls in the browser. Semantic embeddings are **not** required for the first implementation.
+For MVP-0, the local feature-vector baseline is sufficient for an **engineering implementation spike** of `event_detail_related`: it keeps provider calls out of the browser and passes the core safety invariants on the real future-event sample. Any WARN rows above remain backlog evidence for taxonomy/ranking tuning. This does **not** prove final product quality.
 
-Keep `semantic_related_v1` as the next offline comparison only after controlled LLM taxonomy enrichment exists for all future events. The current production catalog already has useful `event_type`/`topics`, but those fields are still uneven; embeddings should be justified by a golden-persona quality delta, not by architecture preference.
+Keep `semantic_related_v1` as an offline comparison after controlled taxonomy enrichment and human/golden top-10 review. Embeddings should be justified by a measured quality delta against the local baseline, not by architecture preference.

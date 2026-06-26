@@ -1,6 +1,6 @@
 # Anonymous Personalization for Static Event Pages
 
-> **Status:** product/system design, not implemented  
+> **Status:** MVP-0 design hardened; ready for engineering implementation spike, not product-quality proven
 > **MVP:** anonymous-only, no auth, consent/banner with “OK” before personalization telemetry  
 > **Primary product goal:** пользователь быстрее находит интересное событие, чем у конкурентов.
 
@@ -16,6 +16,8 @@
 Итоговый флоу с нейросетями и стадиями внедрения: `docs/features/unsigned-personalization/neural-flow.md`.
 Картинка-схема флоу: `docs/features/unsigned-personalization/assets/neural-flow.svg`.
 Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
+Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
+UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
 
 Дополнительные проектные артефакты:
 
@@ -27,7 +29,9 @@
 - probe script: `scripts/probe_event_detail_related.py`;
 - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
 - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
-- Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`.
+- Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;
+- anti-bot/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`;
+- static event page interface references: `docs/features/static-site-pages/interface-references.md`.
 
 Documentation rule: links to implementation/test artifacts must be accurate. A
 document must not say that a reference client, Gherkin scenario, or Playwright
@@ -44,7 +48,18 @@ the link must remain explicitly marked as planned.
 
 ## External review hardening
 
-Feedback from the external review is accepted into the design:
+Feedback from the external review is accepted into the design. The latest review changed the conclusion from “complete” to a narrower statement: MVP-0 is ready for an engineering implementation spike, while recommendation quality, bot resistance and real mobile/desktop usability remain to be proven.
+
+Must-fix items now reflected in the reference artifacts:
+
+- `audience_exclusion_tags` are event exclusions only and never feed user `negative_interest_tags` scoring;
+- production core no longer seeds demo preferences; demo seed lives in `demo.html`;
+- `served_list_id` / `served_list_hash` are created before card rendering and reused by strong actions;
+- `served_list_summary` is deduped by list hash to avoid resize/render telemetry spam;
+- legacy `negative_tags` profiles are rejected instead of silently scored;
+- incompatible profiles without `feature_schema_version` fall back to static related order.
+
+Earlier accepted design points remain:
 
 - taxonomy/schema comes before LLM enrichment; LLM tags are proposals, not production taxonomy;
 - legacy `negative_tags` is no longer shared between event fields and user dislikes; use `audience_exclusion_tags` for events and `negative_interest_tags` for visitors;
@@ -54,12 +69,14 @@ Feedback from the external review is accepted into the design:
 - LLM eval is reviewer evidence only; deterministic assertions and human/golden personas are required for acceptance;
 - early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path;
 - MVP-0 starts from `event_detail_related` on an event page, not from a personalized homepage/feed.
+- Bot/preview/search actors get static fallback only and cannot train personalization; see `bots-and-automation.md`.
+- The expanded probe is an automated golden-smoke, not a human quality proof.
 
 Traceability for the review:
 
 | Review point | Design response |
 | --- | --- |
-| Missing implementation/test links in an immutable commit | Links to `static_site/*`, Gherkin and Playwright are marked as planned unless the files are in the same implementation PR. |
+| Missing implementation/test links in an immutable commit | Links to `static_site/*`, Gherkin and Playwright point to concrete files in this branch; planned-only links must stay explicitly marked. |
 | Tag drift / LLM-invented tags | `taxonomy.md` defines controlled categories/tags/aliases; `neural-flow.md` puts taxonomy/schema before LLM enrichment. |
 | Event exclusion vs user dislike ambiguity | Event field is `audience_exclusion_tags`; user field is `negative_interest_tags`; original research wording is treated as legacy. |
 | Need exposure context for future ranker training | `database.md` and `neural-flow.md` add `personalization_served_list_summary` / `served_list_id`. |
@@ -442,8 +459,8 @@ Probe отвечает минимум:
 - проходят ли hard invariants: no current/cancelled/hidden in related;
 - понижаются ли `negative_interest_tags`;
 - соблюдаются ли diversity caps;
-- хватает ли локального feature-vector без semantic embeddings;
-- нужен ли `semantic_related_v1` в MVP-0.
+- проходит ли local feature baseline hard-invariants as an engineering spike candidate;
+- нужен ли `semantic_related_v1` после human/golden top-10 review, а не по архитектурной привычке.
 
 Сравниваемые rankers:
 
@@ -457,7 +474,7 @@ Browser reference prototype уже покрывает `event_detail_related`, а
 - `static_site/personalization/demo.html`;
 - `tests/playwright/static_personalization_contract.spec.ts`.
 
-Последний локальный contract run: `4 passed`.
+Последний локальный contract run: `6 passed` (Playwright Chromium).
 
 ## Implementation work breakdown
 
@@ -494,6 +511,10 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 
 - без consent — static related fallback и нет telemetry/localStorage profile;
 - mobile после consent — `surface=event_detail_related`, `layout_mode=module`, `presentation_mode=vertical_related`, local rerank, served-list telemetry, hide_event;
+- event-side `audience_exclusion_tags` do not trigger `negative_interest_tags` penalties;
+- strong actions reuse the same `served_list_id` / `served_list_hash` as the served summary;
+- repeated resize/render does not spam `served_list_summary`;
+- no-seed consent creates an empty profile, and legacy `negative_tags` profiles are rejected;
 - desktop — `presentation_mode=grid_related`, не mobile feed/infinite feed, current-event context dominates long-term profile;
 - telemetry endpoint/Supabase timeout — local fallback и CTA/buttons остаются доступны.
 

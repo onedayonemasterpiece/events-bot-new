@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Personalization / MVP-0 event detail related**: completed the first validation milestone around the `event_detail_related` block on a concrete static event page: documented the manifest/static score/local rerank/telemetry contract, added a generated manifest example and real-catalog probe report, implemented the browser reference JS/demo, added Gherkin + Playwright contract tests (`4 passed`), and decided that local feature vectors are sufficient for MVP-0 while semantic embeddings remain offline eval only.
+- **Personalization / MVP-0 event detail related hardening**: accepted the external review downgrade from “complete” to engineering-spike readiness, hardened the reference JS (`audience_exclusion_tags` no longer feed negative-interest scoring, demo seed moved out of core, strict profile schema/legacy `negative_tags` rejection, stable `served_list_id`/`served_list_hash`, resize/render served-summary dedupe), expanded the real-catalog probe to 40 anchors and 10 golden personas with quality WARNs called out instead of hidden, added the bot/automation contract and static event-page interface reference board, and updated Playwright coverage to `6 passed`.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with
