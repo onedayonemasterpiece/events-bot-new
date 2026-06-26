@@ -41,6 +41,52 @@ The real sample includes useful stress cases:
 - type/text inconsistencies, for example a kinopokaz row whose digest/description looked like a concert — enrichment must flag, not silently repair;
 - non-standard sport/outdoor/excursion events that should not be forced into culture-only tags.
 
+## Required MVP-0 probe: event detail related
+
+The next validation step is not another conceptual rewrite. Run a small offline
+probe on the real catalog and store local artifacts under:
+
+```text
+artifacts/codex/static-personalization/probe-YYYY-MM-DD/
+  event_sample.json
+  enrichment_output_gemini_flash_lite.json
+  taxonomy_mapping_report.md
+  related_static_candidates.json
+  persona_eval_report.md
+  cost_latency_report.md
+```
+
+The probe focuses on `event_detail_related`, the first MVP surface documented in
+`event-detail-related.md`. It must answer:
+
+- how many sampled events pass schema validation;
+- how many tags remain unmapped and which taxonomy gaps appear;
+- how many rows get `type_description_mismatch`, `weak_description`,
+  `location_ambiguous`, or similar warnings;
+- how many static related candidates are obviously wrong;
+- whether local deterministic feature vectors are enough for useful top-k;
+- whether `gemini-embedding-001` or a local/Kaggle multilingual embedding
+  baseline materially improves related-event top-k.
+
+Compare three rankers on the same sample:
+
+| Ranker | Purpose | Online dependency |
+| --- | --- | --- |
+| `static_related_v1` | current-event similarity + deterministic rules | none |
+| `local_related_rerank_v1` | static related + localStorage profile + negative interests | none |
+| `semantic_related_v1` | static/local features + semantic embedding similarity | eval only, not hot path |
+
+Deterministic acceptance checks must run before any LLM reviewer:
+
+- current event is not in related;
+- cancelled events are excluded;
+- sold-out behavior follows documented downrank/filter rule;
+- other dates are separate;
+- hidden events never show;
+- negative-interest tags do not dominate top 5;
+- top 10 respects event-type/venue diversity caps;
+- mobile and desktop layouts are evaluated separately.
+
 ## What the LLM is allowed to do
 
 Offline enrichment may create ranking features:

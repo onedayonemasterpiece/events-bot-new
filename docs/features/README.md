@@ -30,7 +30,7 @@
 ## Research / rollout
 
 - `docs/features/static-site-pages/README.md` — проектируемые static-first event pages на `kenigevents.ru` с SEO/GEO, sitemap, JSON-LD и временным Telegraph dual-run
-- `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: localStorage + Supabase telemetry/profile без auth в MVP
+- `docs/features/unsigned-personalization/README.md` — anonymous personalization для static event pages: MVP-0 `event_detail_related`, localStorage + Supabase telemetry/profile без auth
 
 ## Как добавлять новую фичу
 

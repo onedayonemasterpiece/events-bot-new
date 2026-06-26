@@ -207,6 +207,7 @@ features:
     research: docs/features/unsigned-personalization/alanytics.md
     taxonomy: docs/features/unsigned-personalization/taxonomy.md
     model_selection: docs/features/unsigned-personalization/model-selection.md
+    event_detail_related: docs/features/unsigned-personalization/event-detail-related.md
     neural_flow: docs/features/unsigned-personalization/neural-flow.md
     neural_flow_diagram: docs/features/unsigned-personalization/assets/neural-flow.svg
     database_design: docs/features/unsigned-personalization/database.md

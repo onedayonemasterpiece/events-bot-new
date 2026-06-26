@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Personalization / MVP-0 event detail related**: narrowed the first validation milestone to the `event_detail_related` block on a concrete static event page, added the dedicated contract document, fixed the model-selection wording so planned reference JS is not described as implemented, and documented the required real-catalog probe/ranker comparison before Astro implementation.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with

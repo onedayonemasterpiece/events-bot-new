@@ -28,6 +28,7 @@
 
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
+- MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 - Исследовательская заметка по рекомендациям/LLM: `docs/features/unsigned-personalization/alanytics.md`.
 - Dual DB routing skill: `.codex/skills/events-bot-dual-db/SKILL.md`.
 
@@ -150,8 +151,8 @@ Supabase/Postgres personalization DB
 - полное описание;
 - фото/видео, если доступны;
 - “Другие даты”;
-- “Похожие события” — статический fallback;
-- персональная лента после consent и client-side hydration.
+- “Похожие события” — статический fallback и первый MVP-0 personalization surface;
+- персональная лента/главная после consent и client-side hydration — later, не стартовый MVP-0.
 
 ## Discovery UX: mobile feed vs desktop-native layout
 
@@ -237,6 +238,27 @@ Google Event structured data требует добавлять required properti
 - Yandex указывает, что 404/403/410 удаляются из поиска после обнаружения роботом, а ускорение возможно через Yandex Webmaster; для `noindex` также нельзя блокировать страницу в `robots.txt`, иначе робот не увидит инструкции: <https://yandex.com/support/webmaster/en/yandex-indexing/removing-from-index>.
 
 Открытый вопрос: точный retention для прошедших событий `kenigevents.ru` — 30/60/90 дней или архив навсегда для качественных страниц. До финального решения дефолт проектирования: **оставлять прошедшую страницу доступной минимум 30 дней**, убрать её из активных лент сразу после окончания события, а sitemap-размещение менять по правилам archive/retention.
+
+## MVP-0: event page related block
+
+Первый проверочный шаг персонализации — страница конкретного события, а не главная лента:
+
+```text
+/sobytiya/<slug>/
+  -> static HTML event page
+  -> static “Похожие события” block
+  -> optional local rerank after consent
+```
+
+Требования к static site renderer:
+
+- при build/export для каждого future active event подготовить `related_static` candidates;
+- HTML должен показывать fallback related block без JS/Supabase;
+- “Другие даты” рендерятся отдельным блоком и не смешиваются с “Похожие события”;
+- client island может после consent переупорядочить уже полезный block, но не должен ломать CTA/SEO;
+- desktop рендерит related как module/right rail/grid, mobile — короткий vertical block + “Показать ещё”.
+
+Детальный contract: `docs/features/unsigned-personalization/event-detail-related.md`.
 
 ## Personalization MVP на статической странице
 

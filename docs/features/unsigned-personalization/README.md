@@ -15,6 +15,7 @@
 Контролируемая таксономия признаков: `docs/features/unsigned-personalization/taxonomy.md`.
 Итоговый флоу с нейросетями и стадиями внедрения: `docs/features/unsigned-personalization/neural-flow.md`.
 Картинка-схема флоу: `docs/features/unsigned-personalization/assets/neural-flow.svg`.
+Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 
 Дополнительные проектные артефакты:
 
@@ -49,7 +50,8 @@ Feedback from the external review is accepted into the design:
 - server profile snapshots are analytics/post-MVP ranker evidence, not an MVP browser-read dependency while public SELECT by `anon_id` is forbidden;
 - public Supabase writes require abuse/rate-limit/cleanup/growth-alert controls, with same-origin endpoint preferred for production;
 - LLM eval is reviewer evidence only; deterministic assertions and human/golden personas are required for acceptance;
-- early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path.
+- early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path;
+- MVP-0 starts from `event_detail_related` on an event page, not from a personalized homepage/feed.
 
 Traceability for the review:
 
@@ -63,6 +65,7 @@ Traceability for the review:
 | Public Supabase insert abuse risk | Production preference is same-origin rate-limited endpoint; direct anon insert is canary-only with caps/cleanup/alerts. |
 | Embeddings should be evaluated early, but not online | Early offline comparison against `gemini-embedding-001` and local/Kaggle candidates is an MVP hardening gate. |
 | LLM eval is not enough | Acceptance requires deterministic assertions + human/golden personas + optional LLM reviewer. |
+| MVP too broad for first proof | Add MVP-0 surface `event_detail_related`: static related block first, local rerank after consent, browser prototype before full Astro integration. |
 
 ## Принятые решения на MVP
 
@@ -75,6 +78,7 @@ Traceability for the review:
 - Supabase не является source of truth для событий; event catalog приходит из Fly SQLite через static export/snapshots.
 - Персонализация должна иметь fallback: если Supabase/API недоступен, пользователь видит обычный static feed.
 - Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а same-origin endpoint/Supabase используется для записи compact telemetry, analytics/server profile aggregation и future fallback/personal refresh.
+- Первый проверочный MVP surface — `event_detail_related` на странице конкретного события: static fallback “Похожие события” + local rerank after consent. Персонализированная главная/бесконечная лента не входит в MVP-0.
 
 ## Что оптимизируем
 
@@ -389,6 +393,66 @@ MVP banner:
 - ссылка “Подробнее” на будущую privacy page;
 - до ОК не писать персональные telemetry events в Supabase, кроме строго необходимого non-personal operational event, если он нужен;
 - пользователь должен иметь возможность сбросить локальную персонализацию.
+
+## MVP-0 surface: event detail related recommendations
+
+Первый персонализируемый surface — не главная страница и не бесконечная лента, а блок “Похожие события” на странице конкретного события:
+
+```text
+/sobytiya/<slug>/
+  -> static event page
+  -> static fallback “Похожие события”
+  -> optional local rerank after consent, if a compatible localStorage profile exists
+```
+
+Почему так:
+
+- у страницы события уже есть контекст, поэтому cold start проще;
+- fallback block полезен без JS/API/consent;
+- контекст текущего события можно валидировать на реальном каталоге и synthetic personas;
+- ошибки персонализации ограничены маленьким блоком, а не всей главной страницей.
+
+MVP-0 contract:
+
+- `surface = event_detail_related`;
+- `layout_mode = module`;
+- `algorithm_id = static_related_v1 | local_related_rerank_v1 | semantic_related_v1`;
+- similarity к текущему событию доминирует над long-term profile;
+- other dates of the same event уходят в “Другие даты”, не в related;
+- hidden/cancelled/current events не показываются;
+- desktop использует modules/grid/right rail, mobile — короткий vertical block + “Показать ещё”.
+
+Детальный контракт: `docs/features/unsigned-personalization/event-detail-related.md`.
+
+## Validation probes before implementation PR
+
+Проектирование не считается завершённым, пока нет маленьких проверок на реальном каталоге. Нужен probe на production sample (`377` future events зафиксированы в `llm-stress-scenarios.md`) с локальными артефактами под `artifacts/codex/static-personalization/probe-YYYY-MM-DD/`:
+
+```text
+event_sample.json
+enrichment_output_gemini_flash_lite.json
+taxonomy_mapping_report.md
+related_static_candidates.json
+persona_eval_report.md
+cost_latency_report.md
+```
+
+Probe должен ответить минимум:
+
+- сколько событий проходит schema validation;
+- сколько `unmapped_tags` и каких taxonomy gaps не хватает;
+- сколько `type_description_mismatch`, `weak_description`, `location_ambiguous`;
+- сколько related-кандидатов выглядят абсурдно;
+- хватает ли локального feature-vector без semantic embeddings;
+- даёт ли `gemini-embedding-001` или local/Kaggle multilingual baseline заметное улучшение top-k.
+
+Сравниваемые rankers:
+
+1. `static_related_v1` — current-event similarity + deterministic rules.
+2. `local_related_rerank_v1` — static related + localStorage profile + negative interests.
+3. `semantic_related_v1` — static/local features + semantic embedding similarity; eval only, not online dependency.
+
+До Astro implementation нужен browser reference prototype из planned artifacts (`personalization.js`, `demo.html`, Playwright contract). Сначала он покрывает `event_detail_related`, а не всю персонализированную главную.
 
 ## Implementation work breakdown
 
