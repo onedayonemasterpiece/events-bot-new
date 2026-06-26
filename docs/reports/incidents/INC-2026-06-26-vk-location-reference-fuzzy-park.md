@@ -110,7 +110,7 @@ The bad value entered before publication: production DB rows `6394` and `6395` w
   - `https://telegra.ph/Solnaya-programma-Ili-Krestoverova-06-25`;
   - `https://telegra.ph/Koncert-Ulichnye-melodii-06-25`;
   - `https://telegra.ph/Koncert-Ulichnye-melodii-06-25-2`.
-- Edited already-published Telegram event captions for `6391` (`https://t.me/c/3954607218/1315`) and `6395` (`https://t.me/c/3954607218/1281`) through the established `publish_tg_event_announcement` path; event `6394` had no Telegram event post yet and remains pending for normal corrected publication.
+- Edited already-published Telegram event captions for `6391` (`https://t.me/c/3954607218/1315`) and `6395` (`https://t.me/c/3954607218/1281`) through the established `publish_tg_event_announcement` path; then published the pending corrected Telegram event post for `6394` at `https://t.me/c/3954607218/1318`.
 - Rebuilt month pages for June and July 2026. Verification found `6391`, `6394`, and `6395` rendered as `Городской парк, Пионерский`.
 
 ## Corrective Actions
