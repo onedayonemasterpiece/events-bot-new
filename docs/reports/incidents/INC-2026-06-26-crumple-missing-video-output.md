@@ -127,14 +127,14 @@ for auditability.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- deployed SHA: `814534f7`, pushed to `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --remote-only` from branch `fix/tg-story-forward-channel-20260626`; image `registry.fly.io/events-bot-new-wngqia:deployment-01KW2RXQ3MGDHSHH8ZHPPCSE6X`.
 - regression checks:
   - `.venv/bin/python -m pytest tests/test_video_announce_crumple_assets.py tests/test_crumple_build_notebook.py tests/test_video_announce_story_publish.py tests/test_kaggle_story_publish.py -q` -> `40 passed`
   - `.venv/bin/python kaggle/CrumpleVideo/build_notebook.py`
   - `.venv/bin/python -m py_compile video_announce/scenario.py`
   - `git diff --check`
-- post-deploy verification: pending
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `issues=[]`; Fly SSH code probe confirmed `/app/video_announce/scenario.py` includes `Benzin-Bold.ttf`, `/app/kaggle/CrumpleVideo/crumple_video.ipynb` includes all-input asset scan and fail-fast `CrumpleVideo pipeline failed before producing final video`, and `/app/kaggle/CrumpleVideo/build_notebook.py` includes duplicate preflight helper cleanup.
 
 ## Prevention
 
