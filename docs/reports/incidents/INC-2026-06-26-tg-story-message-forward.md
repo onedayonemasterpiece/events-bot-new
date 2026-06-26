@@ -139,10 +139,17 @@ future runs to story-message forwarding.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `458484546ddd93de1a1db9cfe8fe239f70ab89c1`, pushed to `origin/main`.
+- deploy path: manual `flyctl deploy -a events-bot-new-wngqia --config fly.toml --remote-only` from clean branch `fix/tg-story-forward-channel-20260626`; Fly release version `1492`, image `registry.fly.io/events-bot-new-wngqia:deployment-01KW1H3SEA26M127TPY1P3C9Y7`.
+- regression checks:
+  - `.venv/bin/python -m pytest tests/test_kaggle_story_publish.py tests/test_video_announce_story_publish.py tests/test_crumple_build_notebook.py -q` -> `38 passed`;
+  - `.venv/bin/python kaggle/CrumpleVideo/build_notebook.py`;
+  - `.venv/bin/python -m py_compile video_announce/scenario.py video_announce/story_publish.py kaggle/CrumpleVideo/story_publish.py`;
+  - `git diff --check`.
+- post-deploy verification:
+  - `curl https://events-bot-new-wngqia.fly.dev/healthz` returned `ok=true`, `ready=true`, no issues;
+  - Fly SSH code/env probe confirmed `/app/video_announce/scenario.py` contains `telegram_story_message`, `/app/kaggle/CrumpleVideo/story_publish.py` contains `functions.messages.SendMediaRequest`, and production `VIDEO_ANNOUNCE_STORY_TARGETS_JSON` contains required `tg:@kenigevents:story-message`.
+- caveat: CherryFlash session `#759` started before this deploy and its persisted/dataset targets still contain the old `transport=telegram_chat` post target; the fix applies to new sessions unless `#759` is manually compensated after its story id is available.
 
 ## Prevention
 
