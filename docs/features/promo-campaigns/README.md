@@ -286,9 +286,13 @@ delivery records
 creates no public target rows. If the activity is not explicitly in manual-draft
 mode, it still fails closed with
 `reason='vk_community_channel_post_api_unsupported'`. The one CTA link in the
-copy prefers registration/ticket links over Telegraph details pages. Candidate
-selection rotates by exposure count but, among equally suitable events, prefers
-the nearest date/time before applying stable daily shuffling.
+copy prefers registration/ticket links over Telegraph details pages. For
+registration-required events, including the `80 историй о главном` campaign,
+Telegraph is not an acceptable CTA fallback: if no direct registration/ticket
+URL is present in `event.ticket_link`/registration fields or source text, the
+manual draft is skipped/failed instead of sending a misleading details link.
+Candidate selection rotates by exposure count but, among equally suitable
+events, prefers the nearest date/time before applying stable daily shuffling.
 
 `vk_story` watches the same kind of source-community event posts and publishes a
 caption-free image story into a configured target community. The story media is
@@ -458,8 +462,8 @@ The initial `80 историй о главном` campaign now includes:
   has a verified non-Messenger API path, it sends a manual-copy draft to the
   operator via `VK_AFISHA_CHANNEL_DRAFT_PEER_ID` and never counts that Messenger
   delivery as public Channel publication; the manual draft includes the event
-  poster attachment when available and uses the event registration page as the
-  CTA before falling back to Telegraph;
+  poster attachment when available and must use the event registration page as
+  the CTA rather than a Telegraph details page;
 - `vk_repost` from `https://vk.com/klgdevents` to
   `https://vk.com/kenigeventsofficial`, `max_per_publish=1`, `daily_cap=1`,
   24-hour window, active window 09:00-21:00, and 72-hour source-post dedup.
