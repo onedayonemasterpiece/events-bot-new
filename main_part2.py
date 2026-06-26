@@ -4368,23 +4368,81 @@ async def publish_tg_promo_event_publication(
     return _tg_channel_message_link(target_chat, int(sent.message_id))
 
 
-def _single_event_link(event: Event) -> str:
+class VkChannelManualDraftMissingRegistrationLink(RuntimeError):
+    """A manual VK Channel draft needs a direct registration/ticket CTA."""
+
+
+def _single_event_link(
+    event: Event,
+    *,
+    allow_details_fallback: bool = True,
+) -> str:
     """Pick exactly one public URL for compact channel-style event promos."""
 
-    for attr in (
-        "ticket_link",
-        "ticket_url",
-        "registration_link",
-        "registration_url",
-        "telegraph_url",
-        "source_url",
-        "source_vk_post_url",
-        "ics_url",
-    ):
+    for attr in ("ticket_link", "ticket_url", "registration_link", "registration_url"):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value.startswith(("http://", "https://")):
+            return value
+    direct_text_link = _registration_or_ticket_link_from_event_text(event)
+    if direct_text_link:
+        return direct_text_link
+    if not allow_details_fallback:
+        return ""
+    for attr in ("telegraph_url", "source_post_url", "source_url", "source_vk_post_url", "ics_url"):
         value = str(getattr(event, attr, "") or "").strip()
         if value.startswith(("http://", "https://")):
             return value
     return ""
+
+
+def _registration_or_ticket_link_from_event_text(event: Event) -> str:
+    url_pattern = re.compile(r"https?://[^\s<>()\"']+", re.IGNORECASE)
+    text_fields: list[str] = []
+    for attr in ("source_text", "description", "search_digest", "short_description"):
+        value = str(getattr(event, attr, "") or "").strip()
+        if value:
+            text_fields.append(value)
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str) and raw_source_texts.strip():
+        try:
+            parsed = json.loads(raw_source_texts)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            text_fields.extend(str(item or "") for item in parsed)
+    elif isinstance(raw_source_texts, (list, tuple)):
+        text_fields.extend(str(item or "") for item in raw_source_texts)
+
+    prioritized: list[str] = []
+    fallback: list[str] = []
+    for text in text_fields:
+        lower = text.lower()
+        for match in url_pattern.finditer(text):
+            url = match.group(0).rstrip(".,;:!?)]}")
+            start, end = match.span()
+            context = lower[max(0, start - 80) : min(len(lower), end + 80)]
+            if any(word in context for word in ("регистра", "билет", "ticket", "register")):
+                prioritized.append(url)
+            else:
+                fallback.append(url)
+    return (prioritized or fallback or [""])[0]
+
+
+def _vk_channel_manual_draft_requires_direct_cta(event: Event) -> bool:
+    festival = str(getattr(event, "festival", "") or "").strip().lower()
+    if "80 истор" in festival and "главн" in festival:
+        return True
+    haystack_parts = [
+        str(getattr(event, attr, "") or "")
+        for attr in ("source_text", "description", "search_digest", "short_description")
+    ]
+    raw_source_texts = getattr(event, "source_texts", None)
+    if isinstance(raw_source_texts, str):
+        haystack_parts.append(raw_source_texts)
+    elif isinstance(raw_source_texts, (list, tuple)):
+        haystack_parts.extend(str(item or "") for item in raw_source_texts)
+    haystack = "\n".join(haystack_parts).lower()
+    return any(word in haystack for word in ("регистра", "билет", "ticket", "register"))
 
 
 def _strip_urls_for_channel_text(value: str) -> str:
@@ -4426,7 +4484,12 @@ def build_vk_channel_promo_event_publication_message(event: Event) -> str:
             body = body[:217].rstrip() + "…"
         lines.extend(["", body])
 
-    link = _single_event_link(event)
+    requires_direct_cta = _vk_channel_manual_draft_requires_direct_cta(event)
+    link = _single_event_link(event, allow_details_fallback=not requires_direct_cta)
+    if requires_direct_cta and not link:
+        raise VkChannelManualDraftMissingRegistrationLink(
+            "vk_channel_manual_draft_missing_registration_link"
+        )
     if link:
         lines.extend(["", link])
     return "\n".join(lines).strip()

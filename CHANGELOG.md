@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- **Incident / VK Channel draft Telegraph CTA (INC-2026-06-26)**: manual
+  `vk_channel_publish` drafts now fail/skip registration-required events,
+  including `80 историй о главном`, when no direct registration/ticket URL is
+  available instead of falling back to Telegraph details pages. The draft link
+  picker can recover registration URLs embedded in source text and the runner
+  continues to the next candidate after a missing-CTA skip. Production event
+  `4417` and exposure `541` were repaired to the `kgd80.ru/.../?register=1`
+  CTA, and the VK Favorites draft `msgid=287` was edited in place.
 - Replaced the single Telegram-only Telegraph footer link with a compact three-line `Полюбить Калининград` social footer linking both Telegram channels, both VK communities, and the VK Afisha channel.
 - **CrumpleVideo missing video output (INC-2026-06-26)**: hardened the Kaggle notebook against missing static asset mount paths by searching all `/kaggle/input/*` roots, added required intro fonts to the per-session dataset fallback, and made the notebook fail hard when the final mp4 is not produced instead of reporting a green `render_done`/`report_written` status.
 - Prevented generic VK venue phrases such as `Городской парк` from being fuzzy-normalized to unrelated known venues in another city.

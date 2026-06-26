@@ -5722,9 +5722,12 @@ async def run_promo_vk_activities(
                 if int(ev.id) not in recent_event_ids
                 and (preferred_ids is None or int(ev.id) in preferred_id_set)
             ]
-            for ev in candidates[:1]:
+            for ev in candidates:
                 try:
-                    from main import publish_vk_channel_promo_event_publication
+                    from main import (
+                        VkChannelManualDraftMissingRegistrationLink,
+                        publish_vk_channel_promo_event_publication,
+                    )
 
                     url = await publish_vk_channel_promo_event_publication(
                         ev,
@@ -5763,11 +5766,24 @@ async def run_promo_vk_activities(
                     results.append(
                         PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "draft_sent", target_url=url)
                     )
+                    break
+                except VkChannelManualDraftMissingRegistrationLink as exc:
+                    logger.warning(
+                        "promo.vk channel manual draft skipped missing direct CTA campaign_id=%s activity_id=%s event_id=%s",
+                        campaign_id,
+                        activity_id,
+                        ev.id,
+                    )
+                    results.append(
+                        PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
+                    )
+                    continue
                 except Exception as exc:
                     logger.exception("promo.vk channel manual draft failed campaign_id=%s activity_id=%s event_id=%s", campaign_id, activity_id, ev.id)
                     results.append(
                         PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", reason=str(exc) or type(exc).__name__)
                     )
+                    break
 
         elif activity.surface == PROMO_SURFACE_VK_REPOST:
             cfg = _activity_config(activity)

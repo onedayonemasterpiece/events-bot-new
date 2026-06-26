@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-26-vk-channel-draft-telegraph-cta.md`
+  - Scope: VK Channel manual-copy draft CTA selection for registration-required promo events, especially `80 историй о главном`. Must not regress: Telegraph details pages must not be used as the one CTA when the event/campaign requires registration; missing direct registration/ticket links must fail/skip instead of producing a misleading draft; source-text registration URLs may be used as direct CTAs.
 - `INC-2026-06-26-crumple-missing-video-output.md`
   - Scope: CrumpleVideo Kaggle notebook asset discovery, intro font loading, per-session dataset assets, final mp4 production, and fail-fast status behavior for scheduled `/v tomorrow` runs.
   - Must not regress: required intro fonts must be available either from the static Kaggle assets dataset or the session dataset; the notebook must search concrete `/kaggle/input/*` mounts rather than a single hardcoded path; if `crumple_video_final.mp4` is not produced, the notebook must fail hard instead of reporting `render_done/report_written` as a successful run.

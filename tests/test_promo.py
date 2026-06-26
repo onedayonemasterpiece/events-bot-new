@@ -2062,6 +2062,35 @@ def test_vk_channel_manual_draft_prefers_registration_link_over_telegraph() -> N
     assert "https://telegra.ph/story" not in message
 
 
+def test_vk_channel_manual_draft_refuses_80_stories_telegraph_fallback() -> None:
+    import main
+
+    event = _event("История без ссылки", "2026-07-07", festival="80 историй о главном")
+    event.source_text = "Открыли регистрацию на лекцию. Бесплатно, по регистрации."
+    event.telegraph_url = "https://telegra.ph/story"
+    event.ticket_link = None
+
+    with pytest.raises(main.VkChannelManualDraftMissingRegistrationLink):
+        main.build_vk_channel_promo_event_publication_message(event)
+
+
+def test_vk_channel_manual_draft_extracts_registration_link_from_source_text() -> None:
+    import main
+
+    event = _event("История со ссылкой", "2026-07-07", festival="80 историй о главном")
+    event.source_text = (
+        "Открыли регистрацию: "
+        "https://kgd80.ru/sobytiya/example/?register=1"
+    )
+    event.telegraph_url = "https://telegra.ph/story"
+    event.ticket_link = None
+
+    message = main.build_vk_channel_promo_event_publication_message(event)
+
+    assert "https://kgd80.ru/sobytiya/example/?register=1" in message
+    assert "https://telegra.ph/story" not in message
+
+
 @pytest.mark.asyncio
 async def test_vk_channel_manual_draft_sends_poster_attachment(monkeypatch) -> None:
     import main
