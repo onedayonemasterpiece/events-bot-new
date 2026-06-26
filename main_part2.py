@@ -5140,6 +5140,24 @@ async def resolve_tg_event_promo_highlight(event: Event, db: Database | None) ->
     return int(event_id) in promo_ids
 
 
+async def resolve_tg_event_button_highlight(event: Event, db: Database | None) -> bool:
+    event_id = getattr(event, "id", None)
+    if not db or event_id is None:
+        return False
+    try:
+        from promo import resolve_tg_button_highlight_event_ids
+
+        highlight_ids = await resolve_tg_button_highlight_event_ids(db)
+    except Exception:
+        logging.warning(
+            "tg_event: button-highlight resolver failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return False
+    return int(event_id) in highlight_ids
+
+
 def build_tg_event_announcement(
     event: Event,
     text: str,
@@ -5147,7 +5165,10 @@ def build_tg_event_announcement(
     *,
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
 ) -> str:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
     title_text, emoji_part = _normalize_title_and_emoji(event.title, event.emoji)
     lines: list[str] = [f"<b>{html.escape((emoji_part + title_text).strip())}</b>"]
 
@@ -5199,7 +5220,7 @@ def build_tg_event_announcement(
     )
     footer_links: list[str] = []
     details_url = _tg_event_details_url(event)
-    if details_url and not promo_highlight:
+    if details_url and not details_button_highlight:
         footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">🔎 Подробнее</a>')
     elif details_url and include_calendar_link:
         footer_links.append(f'<a href="{html.escape(details_url, quote=True)}">✨ Подробнее</a>')
@@ -5359,7 +5380,10 @@ async def build_tg_event_announcement_for_publish(
     force_caption_limit: bool = False,
     include_calendar_link: bool = False,
     promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
 ) -> tuple[str, bool]:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
     hook_text = await build_tg_event_hook_text(
         event,
         text,
@@ -5371,6 +5395,7 @@ async def build_tg_event_announcement_for_publish(
         festival=festival,
         include_calendar_link=include_calendar_link,
         promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
     )
     if _tg_html_visible_len(message_html) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
         return message_html, hook_text != text
@@ -5383,6 +5408,7 @@ async def build_tg_event_announcement_for_publish(
         festival=festival,
         include_calendar_link=include_calendar_link,
         promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
     )
     room = TG_EVENT_CAPTION_VISIBLE_LIMIT - _tg_html_visible_len(base_without_body) - 8
     for body_limit in (room, 600, 500, 420, 340, 260, 180, 120, 80, 0):
@@ -5393,6 +5419,7 @@ async def build_tg_event_announcement_for_publish(
             festival=festival,
             include_calendar_link=include_calendar_link,
             promo_highlight=promo_highlight,
+            details_button_highlight=details_button_highlight,
         )
         if _tg_html_visible_len(candidate) <= TG_EVENT_CAPTION_VISIBLE_LIMIT:
             return candidate, True
@@ -5403,13 +5430,20 @@ def _tg_event_publish_media_urls(event: Event) -> list[str]:
     return _unique_tg_media_urls(getattr(event, "photo_urls", None) or [])[:TG_EVENT_MAX_MEDIA]
 
 
-def build_tg_event_source_hash(event: Event, text: str, *, promo_highlight: bool = False) -> str:
+def build_tg_event_source_hash(
+    event: Event,
+    text: str,
+    *,
+    promo_highlight: bool = False,
+    details_button_highlight: bool = False,
+) -> str:
     media_signature = "\n".join(_tg_event_publish_media_urls(event))
     return content_hash(
         "\n".join(
             [
                 TG_EVENT_REWRITE_PROMPT_VERSION,
                 f"promo_highlight={bool(promo_highlight)}",
+                f"details_button_highlight={bool(details_button_highlight)}",
                 str(getattr(event, "title", "") or ""),
                 str(getattr(event, "date", "") or ""),
                 str(getattr(event, "time", "") or ""),
@@ -5498,10 +5532,13 @@ def build_tg_event_reply_markup(
     event: Event,
     *,
     promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
 ) -> types.InlineKeyboardMarkup | None:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
     rows: list[list[types.InlineKeyboardButton]] = []
     details_url = _tg_event_details_url(event)
-    if promo_highlight and details_url:
+    if details_button_highlight and details_url:
         rows.append(
             [
                 types.InlineKeyboardButton(
@@ -5556,7 +5593,10 @@ async def publish_tg_event_announcement(
     bot: Bot | None,
     *,
     promo_highlight: bool = False,
+    details_button_highlight: bool | None = None,
 ) -> tuple[str | None, int | None, str | None, str | None]:
+    if details_button_highlight is None:
+        details_button_highlight = promo_highlight
     if not bot or not _tg_event_publish_enabled():
         return None, None, None, None
     target = _tg_event_channel_target()
@@ -5568,6 +5608,7 @@ async def publish_tg_event_announcement(
         event,
         text,
         promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
     )
     photo_urls = (
         await _dedupe_event_photo_urls_for_publish(
@@ -5601,8 +5642,13 @@ async def publish_tg_event_announcement(
         force_caption_limit=bool(chunks),
         include_calendar_link=desired_mode == "album_caption",
         promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
     )
-    reply_markup = build_tg_event_reply_markup(event, promo_highlight=promo_highlight)
+    reply_markup = build_tg_event_reply_markup(
+        event,
+        promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
+    )
     message_text, message_entities = telegram_event_html_to_text_entities(message_html)
 
     if existing_id and existing_mode in {"text", "album_caption", "photo_caption"}:

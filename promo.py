@@ -50,6 +50,7 @@ PROMO_SURFACE_VIDEO_GENERAL = "video_general"
 PROMO_SURFACE_DAILY_RECOMMEND_TODAY = "daily_recommend_today"
 PROMO_SURFACE_VK_PUBLICATION = "vk_publication"
 PROMO_SURFACE_TG_EVENT_PUBLISH = "tg_event_publish"
+PROMO_SURFACE_TG_BUTTON_HIGHLIGHT = "tg_button_highlight"
 PROMO_SURFACE_TG_REPOST = "tg_repost"
 PROMO_SURFACE_VK_CHANNEL_PUBLISH = "vk_channel_publish"
 PROMO_SURFACE_VK_REPOST = "vk_repost"
@@ -66,6 +67,7 @@ PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
+PROMO_TG_BUTTON_HIGHLIGHT_PROFILE = "kldevents:details-button"
 PROMO_VK_80_AFISHAENGAGEMENT_LEGACY_PROFILES = {
     "klgdevents:motivation:80stories",
 }
@@ -675,6 +677,7 @@ async def _create_campaign_with_target(
                     selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
                     enabled=True,
                 ),
+                _default_tg_button_highlight_activity(int(campaign.id)),
             ]
         )
         await session.commit()
@@ -997,6 +1000,7 @@ async def create_partner_event_promo_campaign(
             )
         session.add(target)
         session.add(activity)
+        session.add(_default_tg_button_highlight_activity(campaign_id))
         await session.commit()
         await session.refresh(campaign)
 
@@ -1093,6 +1097,29 @@ async def add_partner_activity_to_campaign(
         f"Добавил активность к #{campaign.id}: {spec.surface}"
         + (f"/{spec.profile_key}" if spec.profile_key else "")
         + f" · {spec.count} показ(ов).",
+    )
+
+
+def _default_tg_button_highlight_activity(
+    campaign_id: int,
+    *,
+    enabled: bool = True,
+) -> PromoActivity:
+    """Marker activity enabling the inline `✨ Подробнее` button on normal TG posts."""
+
+    return PromoActivity(
+        campaign_id=campaign_id,
+        surface=PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
+        profile_key=PROMO_TG_BUTTON_HIGHLIGHT_PROFILE,
+        max_per_publish=1,
+        daily_cap=None,
+        selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+        enabled=enabled,
+        config_json={
+            "target_chat": "@kldevents",
+            "button_text": "✨ Подробнее",
+            "purpose": "move_details_link_to_inline_button",
+        },
     )
 
 
@@ -1319,6 +1346,7 @@ async def ensure_initial_80_stories_campaign(
                     target_group="kenigeventsofficial",
                 ),
                 _initial_80_afishaengagement_activity(int(existing.id)),
+                _default_tg_button_highlight_activity(int(existing.id)),
             ):
                 key = (str(required.surface or ""), str(required.profile_key or ""))
                 current = existing_by_key.get(key)
@@ -1436,6 +1464,7 @@ async def ensure_initial_80_stories_campaign(
                     target_group="kenigeventsofficial",
                 ),
                 _initial_80_afishaengagement_activity(int(campaign.id)),
+                _default_tg_button_highlight_activity(int(campaign.id)),
             ]
         )
         await session.commit()
@@ -1525,6 +1554,17 @@ async def ensure_kraftmarket_langeanna_campaign(
                     enabled=True,
                 )
             )
+            changed = True
+        button_activity = (
+            await session.execute(
+                select(PromoActivity)
+                .where(PromoActivity.campaign_id == campaign_id)
+                .where(PromoActivity.surface == PROMO_SURFACE_TG_BUTTON_HIGHLIGHT)
+                .where(PromoActivity.profile_key == PROMO_TG_BUTTON_HIGHLIGHT_PROFILE)
+            )
+        ).scalars().first()
+        if button_activity is None:
+            session.add(_default_tg_button_highlight_activity(campaign_id))
             changed = True
         if changed:
             await session.commit()
@@ -2133,6 +2173,54 @@ async def resolve_campaign_promo_event_ids(
                             PromoCampaign.ends_at >= now_utc,
                         )
                     )
+                    .order_by(PromoCampaign.created_at, PromoTarget.id)
+                )
+            ).all()
+        )
+
+    result: set[int] = set()
+    for campaign, target in rows:
+        events = await _events_for_target(
+            db,
+            target=target,
+            campaign=campaign,
+            today=today,
+            now_utc=now_utc,
+        )
+        for ev in events:
+            if ev.id is not None:
+                result.add(int(ev.id))
+    return result
+
+
+async def resolve_tg_button_highlight_event_ids(
+    db: Database,
+    *,
+    now_utc: datetime | None = None,
+) -> set[int]:
+    """Return events whose campaign explicitly enables TG details-button highlight."""
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
+    await ensure_initial_80_stories_campaign(db, now_utc=now_utc)
+
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(PromoCampaign, PromoTarget)
+                    .join(PromoActivity, PromoActivity.campaign_id == PromoCampaign.id)
+                    .join(PromoTarget, PromoTarget.campaign_id == PromoCampaign.id)
+                    .where(PromoCampaign.status == "active")
+                    .where(PromoCampaign.starts_at <= now_utc)
+                    .where(
+                        or_(
+                            PromoCampaign.ends_at.is_(None),
+                            PromoCampaign.ends_at >= now_utc,
+                        )
+                    )
+                    .where(PromoActivity.surface == PROMO_SURFACE_TG_BUTTON_HIGHLIGHT)
+                    .where(PromoActivity.enabled.is_(True))
                     .order_by(PromoCampaign.created_at, PromoTarget.id)
                 )
             ).all()

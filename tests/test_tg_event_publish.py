@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 import main
-from models import PromoCampaign, PromoTarget
+from models import PromoActivity, PromoCampaign, PromoTarget
+from promo import PROMO_SURFACE_TG_BUTTON_HIGHLIGHT, PROMO_TG_BUTTON_HIGHLIGHT_PROFILE
 
 
 class DummyTgBot:
@@ -284,12 +285,12 @@ def test_tg_event_promo_text_for_publish_combines_context_sources():
 
 
 @pytest.mark.asyncio
-async def test_tg_event_promo_highlight_uses_any_active_campaign(tmp_path):
+async def test_tg_event_button_highlight_requires_enabled_activity(tmp_path):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
-    now = main.datetime(2026, 6, 12, 10, 0, tzinfo=main.timezone.utc)
+    now = main.datetime(2026, 6, 20, 10, 0, tzinfo=main.timezone.utc)
 
-    event = _event(date="2026-06-20")
+    event = _event(date="2026-07-20")
     async with db.get_session() as session:
         session.add(event)
         await session.commit()
@@ -298,7 +299,7 @@ async def test_tg_event_promo_highlight_uses_any_active_campaign(tmp_path):
             title="Любая промо-кампания",
             status="active",
             starts_at=now,
-            ends_at=main.datetime(2026, 6, 30, 23, 59, tzinfo=main.timezone.utc),
+            ends_at=main.datetime(2026, 7, 30, 23, 59, tzinfo=main.timezone.utc),
         )
         session.add(campaign)
         await session.commit()
@@ -312,12 +313,39 @@ async def test_tg_event_promo_highlight_uses_any_active_campaign(tmp_path):
         )
         await session.commit()
         event_id = int(event.id)
+        campaign_id = int(campaign.id)
 
     async with db.get_session() as session:
         stored = await session.get(main.Event, event_id)
 
     assert stored is not None
     assert await main.resolve_tg_event_promo_highlight(stored, db) is True
+    assert await main.resolve_tg_event_button_highlight(stored, db) is False
+
+    async with db.get_session() as session:
+        session.add(
+            PromoActivity(
+                campaign_id=campaign_id,
+                surface=PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
+                profile_key=PROMO_TG_BUTTON_HIGHLIGHT_PROFILE,
+                enabled=True,
+            )
+        )
+        await session.commit()
+    assert await main.resolve_tg_event_button_highlight(stored, db) is True
+
+    async with db.get_session() as session:
+        activity = (
+            await session.execute(
+                main.select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign_id,
+                    PromoActivity.surface == PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
+                )
+            )
+        ).scalars().one()
+        activity.enabled = False
+        await session.commit()
+    assert await main.resolve_tg_event_button_highlight(stored, db) is False
     await db.close()
 
 
@@ -596,7 +624,7 @@ async def test_same_day_linked_events_use_one_publish_anchor(tmp_path, monkeypat
 
     published = {}
 
-    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False):
+    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False, details_button_highlight=False):
         published["event_id"] = int(event.id)
         published["time"] = event.time
         return "https://t.me/kldevents/999", 999, "text", "same-day-hash"
@@ -659,7 +687,7 @@ async def test_same_source_feeding_series_uses_one_schedule_publish_anchor(tmp_p
 
     published = {}
 
-    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False):
+    async def fake_publish(event, text, db_arg, bot, *, promo_highlight=False, details_button_highlight=False):
         published["event_id"] = int(event.id)
         published["title"] = event.title
         published["text"] = text

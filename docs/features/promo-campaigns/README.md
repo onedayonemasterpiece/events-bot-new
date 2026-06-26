@@ -30,8 +30,9 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
 - `promo_activity`: where the campaign can act. MVP surfaces are
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
   `daily_recommend_today`, `vk_publication`, `vk_festival_carousel`,
-  `tg_event_publish`, `tg_repost`, `vk_channel_publish`, `vk_repost`, `vk_story`, and
-  `afishaengagement`. Social activity parameters live in
+  `tg_event_publish`, `tg_repost`, `tg_button_highlight`,
+  `vk_channel_publish`, `vk_repost`, `vk_story`, and `afishaengagement`.
+  Social activity parameters live in
   `promo_activity.config_json` (`target_group`, `source_group`, `target_chat`,
   `source_chat`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
   policy). `vk_publication`, `tg_event_publish`, and
@@ -41,13 +42,18 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   For publication surfaces, a configured date acts as that day's allow-list:
   once those ids are exhausted, the runner does not fill remaining daily slots
   with later programme dates.
-- Telegram event publishing is channel-default behavior, not a separate
-  campaign activity: when an event is covered by any active `promo_target`, the
-  `@kldevents` publisher renders that event with its promo intro/CTA style.
-  Campaign authors must not add a separate `tg_event_publish` activity just to
-  make ordinary Telegram copy richer. The `tg_event_publish` promo activity is
-  only for an explicit extra campaign slot in an event-flow channel; its output
-  can then be used as a source by `tg_repost`.
+- Telegram event publishing has two independent promo effects. Richer `@kldevents`
+  intro copy is channel-default behavior: when an event is covered by any active
+  `promo_target`, the publisher may use the promo-intro prompt/context without
+  requiring a `tg_event_publish` activity. Moving `Подробнее` from the text
+  footer into the inline `✨ Подробнее` button is **not** implied by campaign
+  membership; it is controlled by the marker activity
+  `promo_activity.surface='tg_button_highlight'` /
+  `profile_key='kldevents:details-button'`. Default campaign constructors add
+  that marker enabled, but operators can disable that activity for broad
+  campaigns where the extra button is too noisy. The `tg_event_publish` promo
+  activity is only for an explicit extra campaign slot in an event-flow channel;
+  its output can then be used as a source by `tg_repost`.
 - `promo_exposure`: normalized exposure audit rows. MVP writes video exposure
   rows when a promoted video item reaches a viewer-facing publication target:
   `PUBLISHED_MAIN`, or the scheduled CherryFlash target that is still stored by
@@ -405,7 +411,10 @@ long Smart Update bullet dump as the primary public copy.
 
 `tg_repost` forwards an existing source-channel post, normally
 `@kldevents -> @kenigevents`, instead of rendering a new text post in the
-daily/digest channel. It looks at the promoted event's stored
+daily/digest channel. It does not by itself enable the source post's
+`✨ Подробнее` button; broad popular-forward campaigns should keep their separate
+`tg_button_highlight` marker disabled when every source post would otherwise get
+a large extra button. It looks at the promoted event's stored
 `event.tg_event_post_url` and recent `tg_event_publish` exposures, applies
 `dedup_hours` to source URLs, forwards with Telegram Bot API, and records
 `promo_exposure.surface='tg_repost'` / `publish_status='TG_FORWARDED'` with

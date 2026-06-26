@@ -39,7 +39,9 @@
   creating a new post in the daily/digest channel.
 - `tg_repost` must preserve the channel-role split: event-flow channels can
   receive full event posts, while daily/digest channels receive only selected
-  forwards or editorial daily blocks.
+  forwards or editorial daily blocks. A repost activity by itself must not
+  change buttons on the source `@kldevents` post; button highlighting is
+  controlled only by the separate `tg_button_highlight` marker activity.
 
 ## Формат
 
@@ -52,7 +54,15 @@
 - Для пунктов приёма, сбора, переработки, волонтёрских и других городских полезных акций intro должен объяснять практическую пользу, действие и важные ограничения. Если `event.description` явно противоречит utility/source text (например обещает музыкальные номера, театральную программу или билеты для события `Приём шин`), Telegram publisher использует `event.source_text` как более надёжный источник для intro.
 - Та же конфликтная `event.description` не участвует в подборе type-хештегов Telegram-поста, чтобы в utility/service caption не попадали теги вроде `#спектакль` из галлюцинированного описания.
 - Строка локации выводит город как хештег (`📍 Площадка, адрес, #Калининград`), поэтому нижняя hashtag line больше не дублирует городской тег и оставляет дату, компактный городской тег афиши (`#афишакалининград`), до нескольких ключевых type-тегов (`#лекция`, `#спектакль`, `#показ`, `#концерт`, ...), фестивальный тег.
-- Обычный non-promo footer сохраняет текущий контракт канала. В promo-режиме `Подробнее` уходит в inline-кнопку `✨ Подробнее`, чтобы CTA не конкурировал с текстом промо; `Подписаться` и `Вконтакте` не добавляются в event captions.
+- Обычный non-promo footer сохраняет текущий контракт канала. Inline-кнопка
+  `✨ Подробнее` управляется отдельной promo-активностью
+  `promo_activity.surface='tg_button_highlight'` /
+  `profile_key='kldevents:details-button'`: если активность включена для
+  кампании, покрывающей событие, ссылка `Подробнее` уходит из текста в кнопку;
+  если активности нет или она выключена, `🔎 Подробнее` остаётся текстовой
+  ссылкой даже при promo-intro. Это позволяет оставить богатый promo intro от
+  кампании, но отключить громоздкую кнопку для широких механик вроде
+  `tg_repost`. `Подписаться` и `Вконтакте` не добавляются в event captions.
 - Если у события есть календарь, пост получает inline-кнопку вида `📅 <дата или диапазон> <время> · Добавить в календарь`. Публичный CTA должен вести на открываемую аудиторией ссылку: публичный Telegram calendar-post URL (`https://t.me/<username>/<id>`) предпочтительнее, но приватные внутренние `https://t.me/c/...` ссылки asset-канала не считаются публичными и заменяются на `event.ics_url`. Новые `tg_ics_post` записи сохраняют username-ссылку, если asset-канал зарегистрирован с `username`.
 - Source posts that look like third-party ticket giveaways (`розыгрыш` / `разыгрываем` / `выиграть` + `билет` / `пригласительный`) are fallback content for managed Telegram/VK event publication only when Smart Update has not produced substantial cleaned non-giveaway event copy. If Smart Update extracted a real event body after removing raffle mechanics, the event still receives the normal Telegram event post and managed VK dependency even when the raw source mentioned a giveaway.
 - Если структурной цены, билетной ссылки, sold-out статуса и явного признака бесплатности нет, билетная строка не выводится.

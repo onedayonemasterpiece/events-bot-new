@@ -20746,6 +20746,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
 
     promo_highlight = await resolve_tg_event_promo_highlight(ev, db)
+    details_button_highlight = await resolve_tg_event_button_highlight(ev, db)
     text_for_tg = select_tg_event_text_for_publish(
         ev,
         promo_highlight=promo_highlight,
@@ -20756,6 +20757,7 @@ async def job_publish_tg_event_post(event_id: int, db: Database, bot: Bot | None
         db,
         bot,
         promo_highlight=promo_highlight,
+        details_button_highlight=details_button_highlight,
     )
     if not url and not source_hash:
         return False

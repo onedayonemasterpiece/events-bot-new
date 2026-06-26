@@ -30,6 +30,7 @@ from promo import (
     PROMO_SURFACE_AFISHA_ENGAGEMENT,
     PROMO_POLICY_WEIGHTED_POPULARITY,
     PROMO_TARGET_TYPE_ALL,
+    PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
     PROMO_SURFACE_TG_EVENT_PUBLISH,
     PROMO_SURFACE_TG_REPOST,
     PROMO_SURFACE_VK_FESTIVAL_CAROUSEL,
@@ -228,6 +229,7 @@ async def test_create_festival_promo_requires_existing_future_events(tmp_path) -
         "daily_highlight",
         "telegraph_month",
         "telegraph_weekend",
+        PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
     }
     await db.close()
 
@@ -359,6 +361,17 @@ async def test_initial_80_stories_campaign_priority_and_any_position_policy(tmp_
     assert afisha_activity.config_json["cta_templates"]["by_event_type"]["*"]["likes"] == [
         "Поставь лайк ❤️, если уже зарегистрировался на {THIS_EVENT}."
     ]
+    async with db.get_session() as session:
+        button_activity = (
+            await session.execute(
+                select(PromoActivity).where(
+                    PromoActivity.campaign_id == campaign.id,
+                    PromoActivity.surface == PROMO_SURFACE_TG_BUTTON_HIGHLIGHT,
+                )
+            )
+        ).scalars().one()
+    assert button_activity.enabled is True
+    assert button_activity.profile_key == "kldevents:details-button"
     await db.close()
 
 
@@ -2794,7 +2807,7 @@ async def test_tg_chat_author_target_matches_only_that_author(tmp_path) -> None:
     today = now_utc.date()
 
     campaign = await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
-    # Idempotent: second call keeps a single target + activity.
+    # Idempotent: second call keeps a single target and one activity per default surface.
     await ensure_kraftmarket_langeanna_campaign(db, now_utc=now_utc)
 
     async with db.get_session() as session:
@@ -2810,11 +2823,13 @@ async def test_tg_chat_author_target_matches_only_that_author(tmp_path) -> None:
                 select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
             )
         ).scalars().all()
-        assert len(activities) == 1
-        assert activities[0].surface == "video_general"
-        assert activities[0].profile_key is None
-        assert int(activities[0].max_per_publish) == 1
-        assert activities[0].selection_policy == PROMO_POLICY_GUARANTEED_ANY_POSITION
+        activities_by_surface = {activity.surface: activity for activity in activities}
+        assert set(activities_by_surface) == {"video_general", PROMO_SURFACE_TG_BUTTON_HIGHLIGHT}
+        video_activity = activities_by_surface["video_general"]
+        assert video_activity.profile_key is None
+        assert int(video_activity.max_per_publish) == 1
+        assert video_activity.selection_policy == PROMO_POLICY_GUARANTEED_ANY_POSITION
+        assert activities_by_surface[PROMO_SURFACE_TG_BUTTON_HIGHLIGHT].enabled is True
 
         # Matching event: kraftmarket39 chat + langeanna author.
         ev_match = _event("Большой крафт-маркет «Полюбить 39»", "2026-06-20")
@@ -2845,7 +2860,13 @@ async def test_tg_chat_author_target_matches_only_that_author(tmp_path) -> None:
         await session.commit()
         target = targets[0]
 
-    matched = await _events_for_target(db, target=target, campaign=campaign, today=today)
+    matched = await _events_for_target(
+        db,
+        target=target,
+        campaign=campaign,
+        today=today,
+        now_utc=now_utc,
+    )
     matched_ids = {int(e.id) for e in matched}
     assert int(ev_match.id) in matched_ids
     assert int(ev_other.id) not in matched_ids
