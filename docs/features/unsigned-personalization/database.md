@@ -296,8 +296,10 @@ create table if not exists public.personalization_interaction_event (
   metadata jsonb not null default '{}'::jsonb,
   constraint personalization_interaction_event_kind_chk check (event_kind in (
     'page_view', 'valid_impression', 'event_card_click', 'event_detail_view',
-    'dwell_checkpoint', 'ticket_click', 'hide_event', 'not_interested',
-    'share', 'copy_link', 'recommendation_feed_loaded', 'recommendation_fallback_used'
+    'dwell_checkpoint', 'ticket_click', 'register_click', 'source_click',
+    'calendar_add', 'ics_download', 'map_click', 'hide_event', 'not_interested',
+    'share', 'share_native', 'copy_link', 'share_copy_link',
+    'recommendation_feed_loaded', 'recommendation_fallback_used'
   )),
   constraint personalization_viewport_chk check (viewport_class in ('mobile', 'tablet', 'desktop')),
   constraint personalization_layout_chk check (layout_mode in ('feed', 'grid', 'list', 'module', 'detail')),

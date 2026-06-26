@@ -10,6 +10,7 @@ type FixtureOptions = {
   seedProfile?: Record<string, unknown>;
   preloadedProfile?: Record<string, unknown>;
   disableDemoSeed?: boolean;
+  breakStorage?: boolean;
 };
 
 async function openFixture(page: any, viewport: { width: number; height: number }, options: FixtureOptions = {}) {
@@ -32,6 +33,7 @@ async function openFixture(page: any, viewport: { width: number; height: number 
     let body = demoHtml;
     const injected: string[] = [];
     if (options.backendAvailable === false) injected.push('window.__backendAvailable = false;');
+    if (options.breakStorage) injected.push("Object.defineProperty(window, 'localStorage', { configurable: true, get: function () { throw new Error('blocked storage'); } });");
     if (options.disableDemoSeed) injected.push('window.__disableDemoSeed = true;');
     if (options.seedProfile) injected.push(`window.__seedProfile = ${JSON.stringify(options.seedProfile)};`);
     if (injected.length) {
@@ -67,6 +69,7 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
         consent_ok: true,
         profile_version: 'anon-profile-v1',
         feature_schema_version: 'event-detail-related-v1',
+        taxonomy_version: 'event-taxonomy-v1',
         anon_id: 'anon-test',
         session_id: 'session-test',
         positive_tags: { jazz: 1.0, live_music: 0.6, evening: 0.2 },
@@ -127,6 +130,7 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     expect(profile.consent_ok).toBe(true);
     expect(profile.profile_version).toBe('anon-profile-v1');
     expect(profile.feature_schema_version).toBe('event-detail-related-v1');
+    expect(profile.taxonomy_version).toBe('event-taxonomy-v1');
     expect(profile.positive_tags).toEqual({});
     expect(profile.negative_interest_tags).toEqual({});
     await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'local_related_rerank_v1');
@@ -152,12 +156,43 @@ test.describe('event_detail_related MVP-0 personalization contract', () => {
     await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
   });
 
+  test('profile with matching feature schema but missing taxonomy_version is rejected', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, {
+      preloadedProfile: {
+        consent_ok: true,
+        profile_version: 'anon-profile-v1',
+        feature_schema_version: 'event-detail-related-v1',
+        anon_id: 'anon-no-taxonomy',
+        session_id: 'session-no-taxonomy',
+        positive_tags: { jazz: 1 },
+        negative_interest_tags: { kids: 1 },
+        hidden_event_ids: ['208'],
+      },
+    });
+
+    await expect(page.locator('#status')).toHaveText('static related fallback');
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'static_related_v1');
+    await expect(page.locator('.related-card').first()).toContainText('Детский музыкальный спектакль');
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
+  });
+
+  test('blocked localStorage does not break the page or enable trusted personalization', async ({ page }) => {
+    await openFixture(page, { width: 375, height: 812 }, { breakStorage: true });
+    await expect(page.locator('#status')).toHaveText('static related fallback');
+    await page.locator('#ok').click();
+    await expect(page.locator('#status')).toHaveText('static related fallback');
+    await expect(page.locator('#related')).toHaveAttribute('data-algorithm-id', 'static_related_v1');
+    await expect(page.locator('.related-card').first()).toContainText('Детский музыкальный спектакль');
+    await expect.poll(() => page.evaluate(() => (window as any).__telemetry.length)).toBe(0);
+  });
+
   test('desktop uses related module/grid behavior, not a mobile infinite feed', async ({ page }) => {
     await openFixture(page, { width: 1440, height: 900 }, {
       seedProfile: {
         consent_ok: true,
         profile_version: 'anon-profile-v1',
         feature_schema_version: 'event-detail-related-v1',
+        taxonomy_version: 'event-taxonomy-v1',
         anon_id: 'anon-desktop',
         session_id: 'session-desktop',
         positive_tags: { theatre: 1.0, drama: 0.8 },

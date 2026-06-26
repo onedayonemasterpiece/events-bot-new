@@ -31,6 +31,7 @@
 - MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
+- Production integration plan for personalization, promo, Smart Update rebuilds, analytics and CTA: `docs/features/unsigned-personalization/production-integration.md`.
 - Исследовательская заметка по рекомендациям/LLM: `docs/features/unsigned-personalization/alanytics.md`.
 - Dual DB routing skill: `.codex/skills/events-bot-dual-db/SKILL.md`.
 

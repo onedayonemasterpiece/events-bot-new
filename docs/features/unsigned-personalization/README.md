@@ -18,6 +18,7 @@
 Контракт первого проверочного surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 Антибот/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`.
 UI reference board для static event pages: `docs/features/static-site-pages/interface-references.md`.
+Production integration plan: `docs/features/unsigned-personalization/production-integration.md`.
 
 Дополнительные проектные артефакты:
 
@@ -31,7 +32,8 @@ UI reference board для static event pages: `docs/features/static-site-pages/i
 - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
 - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;
 - anti-bot/automation contract: `docs/features/unsigned-personalization/bots-and-automation.md`;
-- static event page interface references: `docs/features/static-site-pages/interface-references.md`.
+- static event page interface references: `docs/features/static-site-pages/interface-references.md`;
+- production integration plan: `docs/features/unsigned-personalization/production-integration.md`.
 
 Documentation rule: links to implementation/test artifacts must be accurate. A
 document must not say that a reference client, Gherkin scenario, or Playwright
@@ -57,7 +59,9 @@ Must-fix items now reflected in the reference artifacts:
 - `served_list_id` / `served_list_hash` are created before card rendering and reused by strong actions;
 - `served_list_summary` is deduped by list hash to avoid resize/render telemetry spam;
 - legacy `negative_tags` profiles are rejected instead of silently scored;
-- incompatible profiles without `feature_schema_version` fall back to static related order.
+- incompatible profiles without `feature_schema_version` or `taxonomy_version` fall back to static related order;
+- localStorage unavailable/corrupt paths keep static fallback instead of breaking the page;
+- resize rerender is debounced and only rerenders on viewport-class breakpoint changes.
 
 Earlier accepted design points remain:
 
@@ -474,7 +478,7 @@ Browser reference prototype уже покрывает `event_detail_related`, а
 - `static_site/personalization/demo.html`;
 - `tests/playwright/static_personalization_contract.spec.ts`.
 
-Последний локальный contract run: `6 passed` (Playwright Chromium).
+Последний локальный contract run: `8 passed` (Playwright Chromium).
 
 ## Implementation work breakdown
 
@@ -514,7 +518,8 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 - event-side `audience_exclusion_tags` do not trigger `negative_interest_tags` penalties;
 - strong actions reuse the same `served_list_id` / `served_list_hash` as the served summary;
 - repeated resize/render does not spam `served_list_summary`;
-- no-seed consent creates an empty profile, and legacy `negative_tags` profiles are rejected;
+- no-seed consent creates an empty profile, legacy `negative_tags` profiles and missing `taxonomy_version` profiles are rejected;
+- blocked localStorage does not enable trusted personalization;
 - desktop — `presentation_mode=grid_related`, не mobile feed/infinite feed, current-event context dominates long-term profile;
 - telemetry endpoint/Supabase timeout — local fallback и CTA/buttons остаются доступны.
 

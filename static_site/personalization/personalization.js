@@ -4,6 +4,7 @@
   const DEFAULT_STORAGE_KEY = 'ke_personalization_profile';
   const PROFILE_VERSION = 'anon-profile-v1';
   const FEATURE_SCHEMA_VERSION = 'event-detail-related-v1';
+  const TAXONOMY_VERSION = 'event-taxonomy-v1';
   const SURFACE_EVENT_DETAIL_RELATED = 'event_detail_related';
   const STATIC_ALGORITHM_ID = 'static_related_v1';
   const LOCAL_ALGORITHM_ID = 'local_related_rerank_v1';
@@ -27,6 +28,42 @@
       return JSON.parse(raw);
     } catch (_) {
       return fallback;
+    }
+  }
+
+  function getSafeStorage(win, explicitStorage) {
+    if (explicitStorage) return explicitStorage;
+    try {
+      return win && win.localStorage ? win.localStorage : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function safeStorageGet(storage, key) {
+    try {
+      return storage ? storage.getItem(key) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function safeStorageSet(storage, key, value) {
+    try {
+      if (!storage) return false;
+      storage.setItem(key, value);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function safeStorageRemove(storage, key) {
+    try {
+      if (storage) storage.removeItem(key);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -93,24 +130,24 @@
     return Boolean(profile && profile.consent_ok === true);
   }
 
-  function isCompatibleProfile(profile, featureSchemaVersion) {
+  function isCompatibleProfile(profile, featureSchemaVersion, taxonomyVersion) {
     if (!profileHasConsent(profile)) return false;
-    const expected = featureSchemaVersion || FEATURE_SCHEMA_VERSION;
+    const expectedFeatureSchema = featureSchemaVersion || FEATURE_SCHEMA_VERSION;
+    const expectedTaxonomy = taxonomyVersion || TAXONOMY_VERSION;
     if (profile.profile_version !== PROFILE_VERSION) return false;
-    if (profile.feature_schema_version !== expected) return false;
+    if (profile.feature_schema_version !== expectedFeatureSchema) return false;
+    if (profile.taxonomy_version !== expectedTaxonomy) return false;
     // Legacy field is intentionally rejected. Migrate/reset before scoring.
     if (Object.prototype.hasOwnProperty.call(profile, 'negative_tags')) return false;
     return true;
   }
 
   function readProfile(storage, storageKey) {
-    if (!storage) return null;
-    return safeJsonParse(storage.getItem(storageKey), null);
+    return safeJsonParse(safeStorageGet(storage, storageKey), null);
   }
 
   function writeProfile(storage, storageKey, profile) {
-    if (!storage) return;
-    storage.setItem(storageKey, JSON.stringify(profile));
+    return safeStorageSet(storage, storageKey, JSON.stringify(profile));
   }
 
   function mapScore(map, key) {
@@ -270,7 +307,7 @@
   function rankEventDetailRelated(manifest, profile, options) {
     const opts = options || {};
     const candidates = toArray(manifest && (manifest.related_static || manifest.candidates));
-    const activeProfile = isCompatibleProfile(profile, manifest && manifest.feature_schema_version) ? profile : null;
+    const activeProfile = isCompatibleProfile(profile, manifest && manifest.feature_schema_version, manifest && manifest.taxonomy_version) ? profile : null;
     const scored = [];
     for (const candidate of candidates) {
       if (!isEligibleCandidate(candidate, manifest, activeProfile)) continue;
@@ -318,6 +355,7 @@
       algorithm_id: context.algorithmId,
       profile_version: profile && profile.profile_version,
       feature_schema_version: profile && profile.feature_schema_version,
+      taxonomy_version: profile && profile.taxonomy_version,
       event_ids: ranked.map((item) => item.event_id),
     });
   }
@@ -384,6 +422,7 @@
       consent_ok: true,
       profile_version: PROFILE_VERSION,
       feature_schema_version: FEATURE_SCHEMA_VERSION,
+      taxonomy_version: TAXONOMY_VERSION,
       anon_id: randomId('anon'),
       session_id: randomId('session'),
       positive_tags: {},
@@ -401,7 +440,7 @@
     const doc = opts.document || global.document;
     const win = opts.window || global.window || global;
     if (!doc) throw new Error('document is required');
-    const storage = opts.storage || win.localStorage;
+    const storage = getSafeStorage(win, opts.storage);
     const storageKey = opts.storageKey || DEFAULT_STORAGE_KEY;
     const manifest = opts.manifest || win.__relatedManifest || { related_static: [] };
     const container = typeof opts.container === 'string' ? doc.querySelector(opts.container) : opts.container;
@@ -412,6 +451,8 @@
     const servedListDedupeMs = opts.servedListDedupeMs == null ? DEFAULT_SERVED_LIST_DEDUPE_MS : Number(opts.servedListDedupeMs);
     const actionCounts = {};
     const servedListByHash = new Map();
+    let lastRenderedViewportClass = null;
+    let resizeTimer = null;
 
     function profile() {
       return readProfile(storage, storageKey);
@@ -473,9 +514,11 @@
       hide.addEventListener('click', () => {
         const current = profile() || {};
         const hidden = Array.from(new Set(toArray(current.hidden_event_ids).map(asId).concat([asId(item.event_id)])));
-        writeProfile(storage, storageKey, Object.assign({}, current, { hidden_event_ids: hidden, updated_at: new Date().toISOString() }));
-        actionCounts.hide_event = (actionCounts.hide_event || 0) + 1;
-        telemetrySink(createStrongAction('hide_event', item, ctx));
+        const persisted = writeProfile(storage, storageKey, Object.assign({}, current, { hidden_event_ids: hidden, updated_at: new Date().toISOString() }));
+        if (persisted) {
+          actionCounts.hide_event = (actionCounts.hide_event || 0) + 1;
+          telemetrySink(createStrongAction('hide_event', item, ctx));
+        }
         render();
       });
       card.append(title, meta, reasons, details, hide);
@@ -485,7 +528,7 @@
     function render() {
       if (!container) return [];
       const currentProfile = profile();
-      const hasLocalProfile = isCompatibleProfile(currentProfile, manifest.feature_schema_version);
+      const hasLocalProfile = isCompatibleProfile(currentProfile, manifest.feature_schema_version, manifest.taxonomy_version);
       let algorithmId = hasLocalProfile ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID;
       if (hasLocalProfile && opts.backendAvailable === false) algorithmId = LOCAL_FALLBACK_ALGORITHM_ID;
       const ctxBase = baseContext(algorithmId);
@@ -507,6 +550,7 @@
       container.dataset.viewportClass = ctx.viewportClass;
       container.dataset.layoutMode = ctx.layoutMode;
       container.dataset.presentationMode = ctx.presentationMode;
+      lastRenderedViewportClass = ctx.viewportClass;
       if (status) {
         status.textContent = !hasLocalProfile
           ? 'static related fallback'
@@ -528,13 +572,21 @@
     }
 
     function resetPersonalization() {
-      if (storage) storage.removeItem(storageKey);
+      safeStorageRemove(storage, storageKey);
       render();
     }
 
     if (consentButton) consentButton.addEventListener('click', () => acceptConsent(win.__seedProfile || opts.defaultProfile));
     if (resetButton) resetButton.addEventListener('click', resetPersonalization);
-    if (win.addEventListener) win.addEventListener('resize', render);
+    function handleResize() {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const nextViewportClass = viewportClass(Number(win.innerWidth || 1024));
+        if (nextViewportClass !== lastRenderedViewportClass) render();
+      }, Number(opts.resizeDebounceMs == null ? 200 : opts.resizeDebounceMs));
+    }
+
+    if (win.addEventListener) win.addEventListener('resize', handleResize);
 
     return {
       render,
@@ -544,7 +596,7 @@
       rank: () => rankEventDetailRelated(manifest, profile(), opts.rankOptions || {}),
       createSessionSummary: () => {
         const current = profile();
-        const algorithmId = isCompatibleProfile(current, manifest.feature_schema_version) ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID;
+        const algorithmId = isCompatibleProfile(current, manifest.feature_schema_version, manifest.taxonomy_version) ? LOCAL_ALGORITHM_ID : STATIC_ALGORITHM_ID;
         return createSessionSummary(current, actionCounts, baseContext(algorithmId));
       },
     };
@@ -554,6 +606,7 @@
     DEFAULT_STORAGE_KEY,
     PROFILE_VERSION,
     FEATURE_SCHEMA_VERSION,
+    TAXONOMY_VERSION,
     STATIC_ALGORITHM_ID,
     LOCAL_ALGORITHM_ID,
     viewportClass,

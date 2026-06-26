@@ -29,10 +29,10 @@ Personalization is disabled when any of these is true:
 - incompatible `profile_version`, `feature_schema_version`, `taxonomy_version` or legacy fields such as `negative_tags`;
 - localStorage unavailable or corrupted;
 - manifest schema mismatch;
-- same-origin telemetry endpoint is unavailable;
+- same-origin telemetry endpoint is unavailable for trusted telemetry/server mutation;
 - request exceeds rate/shape limits or lands in quarantine.
 
-Disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation.
+For crawler/preview/monitor/bot/no-consent/schema-mismatch cases, disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation. If only the telemetry endpoint is unavailable, trusted telemetry/server writes are disabled, but a consented compatible localStorage profile may still run local rerank as a local fallback; CTA/navigation must remain usable.
 
 ## Accepted telemetry payloads
 

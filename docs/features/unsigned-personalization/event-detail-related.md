@@ -65,6 +65,7 @@ Manifest shape (`docs/features/unsigned-personalization/samples/event-detail-rel
 {
   "schema_version": "event-detail-related-v1",
   "feature_schema_version": "event-detail-related-v1",
+  "taxonomy_version": "event-taxonomy-v1",
   "surface": "event_detail_related",
   "algorithm_id": "static_related_v1",
   "generated_at": "2026-06-26T00:00:00Z",
@@ -150,7 +151,9 @@ Guardrails:
 
 - if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary;
 - `audience_exclusion_tags` belong to the event and are not user dislikes. A 18+/adult jazz event with `audience_exclusion_tags: ["kids"]` must not be penalized for a visitor whose `negative_interest_tags.kids` means “do not show me children's events”;
-- legacy profiles containing `negative_tags` or missing `feature_schema_version` are incompatible and fall back to static order until reset/migration.
+- legacy profiles containing `negative_tags` or missing/mismatched `feature_schema_version` / `taxonomy_version` are incompatible and fall back to static order until reset/migration;
+- telemetry endpoint unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
+- localStorage unavailable/corrupted means no profile mutation and static fallback.
 
 Local profile fields consumed by MVP-0:
 
@@ -158,6 +161,7 @@ Local profile fields consumed by MVP-0:
 {
   "profile_version": "anon-profile-v1",
   "feature_schema_version": "event-detail-related-v1",
+  "taxonomy_version": "event-taxonomy-v1",
   "anon_id": "opaque-random-id",
   "session_id": "opaque-random-id",
   "positive_tags": {"jazz": 1.0, "live_music": 0.6},
@@ -317,7 +321,7 @@ PLAYWRIGHT_HTML_OPEN=never \
 npx playwright test tests/playwright/static_personalization_contract.spec.ts --browser=chromium --reporter=line
 ```
 
-Last local run: `6 passed` (Playwright Chromium).
+Last local run: `8 passed` (Playwright Chromium).
 
 ## Real catalog probe
 
@@ -334,4 +338,4 @@ Outputs:
 - report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
 - manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`.
 
-Current decision: local feature vectors are sufficient for the MVP-0 **engineering spike**, not proven final recommendation quality. The expanded probe keeps safety invariants green but still has negative-interest quality WARN rows, so taxonomy/ranking tuning and human top-10 review remain required. Do not add a semantic embedding provider to the browser or required build path. Keep `semantic_related_v1` as a later offline comparison only after expanded automated probe plus human/golden top-10 review show a measured quality need.
+Current decision: local feature vectors are sufficient for the MVP-0 **engineering spike**, not proven final recommendation quality. Production integration details live in `production-integration.md`. The expanded probe keeps safety invariants green but still has negative-interest quality WARN rows, so taxonomy/ranking tuning and human top-10 review remain required. Do not add a semantic embedding provider to the browser or required build path. Keep `semantic_related_v1` as a later offline comparison only after expanded automated probe plus human/golden top-10 review show a measured quality need.

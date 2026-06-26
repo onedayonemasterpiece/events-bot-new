@@ -210,6 +210,8 @@ features:
     model_selection: docs/features/unsigned-personalization/model-selection.md
     event_detail_related: docs/features/unsigned-personalization/event-detail-related.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
+    production_integration: docs/features/unsigned-personalization/production-integration.md
+    gemini_review_2026_06_26: docs/features/unsigned-personalization/gemini-review-2026-06-26.md
     neural_flow: docs/features/unsigned-personalization/neural-flow.md
     neural_flow_diagram: docs/features/unsigned-personalization/assets/neural-flow.svg
     database_design: docs/features/unsigned-personalization/database.md

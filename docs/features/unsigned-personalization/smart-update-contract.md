@@ -33,6 +33,10 @@ Personalization telemetry must not influence:
 
 Reason: clicks and hides are user preference signals, not factual evidence. Using them inside Smart Update would create feedback loops: popular but wrong events could become harder to repair, while niche but correct events could be suppressed.
 
+## Static page rebuild contract
+
+Static pages are rebuilt from Fly SQLite after Smart Update commits canonical event changes. A change in title/date/time/venue/address/price/ticket status/lifecycle/media/description/search digest/event type/topics/linked dates should enqueue a core SQLite static rebuild request. The builder then refreshes event HTML, related manifests, sitemap/JSON-LD and affected neighbouring manifests atomically. Personalization telemetry never edits Smart Update facts; it can only produce downstream review signals. Detailed flow: `docs/features/unsigned-personalization/production-integration.md`.
+
 ## Requirements that personalization adds to Smart Update
 
 MVP adds only export/observability requirements, not extraction logic requirements:

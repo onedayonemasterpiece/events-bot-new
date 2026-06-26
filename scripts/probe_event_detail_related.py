@@ -492,6 +492,7 @@ def build_manifest_sample(anchor: EventFeature, static_rows: list[tuple]) -> dic
     return {
         "schema_version": "event-detail-related-v1",
         "feature_schema_version": "event-detail-related-v1",
+        "taxonomy_version": "event-taxonomy-v1",
         "surface": "event_detail_related",
         "algorithm_id": "static_related_v1",
         "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),

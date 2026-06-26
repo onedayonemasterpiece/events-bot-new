@@ -1,9 +1,10 @@
 {
   "schema_version": "event-detail-related-v1",
   "feature_schema_version": "event-detail-related-v1",
+  "taxonomy_version": "event-taxonomy-v1",
   "surface": "event_detail_related",
   "algorithm_id": "static_related_v1",
-  "generated_at": "2026-06-26T21:06:37Z",
+  "generated_at": "2026-06-26T22:04:14Z",
   "current_event": {
     "event_id": 2872,
     "title": "Я люблю тебя, жизнь!",
