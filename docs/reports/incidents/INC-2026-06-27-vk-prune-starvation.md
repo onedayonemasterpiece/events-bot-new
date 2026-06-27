@@ -124,7 +124,7 @@ past live posts could remain visible and recommendable.
 
 ## Follow-up Actions
 
-- [ ] Deploy the code fix from a clean worktree and record reachable
+- [x] Deploy the code fix from a clean worktree and record reachable
   `origin/main` SHA.
 - [ ] After the next natural scheduled prune tick, verify logs show recent past
   candidates are not starved.
@@ -133,10 +133,32 @@ past live posts could remain visible and recommendable.
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `e510e617f8fecee06f42c1033dcdca15719c626e`
+  (`origin/main`, also `origin/hotfix/vk-past-cleanup-20260627`).
+- deploy path: clean linked worktree
+  `/home/dev/projects/events-bot-new-worktrees/vk-past-cleanup-20260627`,
+  branch `hotfix/vk-past-cleanup-20260627`, `flyctl deploy --config fly.toml
+  --app events-bot-new-wngqia --remote-only`.
+- Fly evidence: image
+  `registry.fly.io/events-bot-new-wngqia:deployment-01KW4EA7RJZS628CC7SNWD1M6M`,
+  machine `683961db016e28`, Fly version `1505`, checks `1 total, 1 passing`.
+- regression checks:
+  - `/home/dev/projects/events-bot-popular-tg-reposts-deploy/.venv/bin/python -m py_compile main_part2.py tests/test_vk_post_prune.py` — passed.
+  - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/dev/projects/events-bot-popular-tg-reposts-deploy/.venv/bin/python -m pytest -q -p pytest_asyncio.plugin tests/test_vk_post_prune.py` — `17 passed in 12.07s`.
+- production mitigation evidence:
+  - backup table: `codex_backup_vk_prune_starvation_20260627_event`.
+  - deleted 12 recent-window live/deletable managed posts; VK post-delete
+    verification returned `Пост удалён` for all 12 ids.
+  - `event_id=6129` after repair:
+    `source_vk_post_url=NULL`, `vk_repost_url=NULL`.
+  - `wall-231920894_3678` after repair returned `Пост удалён`.
+  - recent-window audit after repair:
+    `recent_deletable=[]`, `recent_missing=235`, protected repost rows:
+    `event_id=5202` and `event_id=6094`.
+  - `PRAGMA quick_check=ok`.
+- post-deploy verification:
+  - in-machine `http://127.0.0.1:8080/healthz` returned HTTP `200`,
+    `ready=true`, `db=ok`, scheduler/task statuses `ok`, `issues=[]`.
 
 ## Prevention
 
