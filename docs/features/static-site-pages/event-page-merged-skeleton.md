@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v19/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,16 +9,16 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v18/data/discovery/5878.json>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v18/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v18/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v19/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v19/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v19/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v19/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v19/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v19/data/discovery/5878.json>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v19/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v19/robots.txt>
 
-Runbook/code map: [Astro SSG preview](astro-preview.md). Counter freshness: [Event reaction counters](reaction-counters.md). Footer contract: the site footer contains visible/crawlable social links with icons for Telegram, VK and Max; Telegraph uses the same destinations as plain links without icons.
+Runbook/code map: [Astro SSG preview](astro-preview.md). Hero lab: [Event hero lab](event-hero-lab-2026-06-27.md). Counter freshness: [Event reaction counters](reaction-counters.md). Footer contract: the site footer contains visible/crawlable social links with icons for Telegram, VK and Max; Telegraph uses the same destinations as plain links without icons.
 
 ## 1. Platform decision
 
@@ -79,10 +79,10 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 
 20. Breadcrumbs: `Афиша > Светлогорск > Концерты` or best available taxonomy.
 21. `H1` event title in the main column on all viewports.
-22. Hero image policy is OCR-safe, not one-size-fits-all: verified `visual_only` media may reserve/fill a vertical `4:5` frame; `ocr_text` and `unknown` media must render in their natural image aspect ratio so text is readable and not distorted/cropped.
-23. Poster crop policy: when OCR/text is present or unknown, the full image is visible with no crop, no fixed wrapper, no `object-fit: contain` over a duplicate background, no blur fill and no repeated image edges. Only verified text-free/no-meaningful-OCR visual media may use `object-fit: cover` inside a vertical `4:5` frame. This applies to hero, discovery cards and listing thumbnails.
+22. Hero image policy is OCR-safe, not one-size-fits-all: `ocr_text` and `unknown` use `poster-stage` (full poster inside an intentional solid/tinted slab, no crop, no overlay H1, no duplicate/backdrop/blur); verified `visual_only` uses `photo-cover`; no-image uses `fallback-art`. H1 and primary CTA stay in HTML document flow below the visual and must be visible in the first mobile decision area.
+23. Poster crop policy for cards/listings: when OCR/text is present or unknown, the full image renders in its natural aspect ratio with no crop, no fixed wrapper, no `object-fit: contain` over a duplicate background, no blur fill and no repeated image edges. Only verified text-free/no-meaningful-OCR visual media may use `object-fit: cover` inside a vertical `4:5` frame.
 24. Badges only for known fields: event type, lifecycle/status, festival; do not render empty/null badges.
-25. Top facts: date/time, venue, city/address and ticket status.
+25. Top hero decision area: status, H1, primary CTA/share/calendar when eligible, then date/time and place facts. CTA is intentionally above the facts on mobile so the action is not pushed below the first decision threshold.
 26. Mobile/high-priority summary: `search_digest` in 1–2 sentences before long description.
 27. Long description rendered visibly from trusted sanitized markdown/HTML; it must not be hidden in a collapsed disclosure by default because it is useful for both people and SEO/GEO.
 28. Fact block `<dl>` contains only non-empty verified fields: type, date, venue, city, age limit, duration, Pushkin card, organizer.
@@ -93,8 +93,8 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 33. Every discovery card has explicit feedback controls: large like button in the lower-right/right-thumb zone with current aggregate like count, toggle unlike, and a lower-priority “Не интересно” negative control. These labels are product actions, not hidden technical anti-bubble copy.
 34. Visible likes must be honest: `likes_count = source_likes_count + service_likes_count`. `source_likes_count` is aggregated from already collected TG/VK/source-post metrics tied to the event; `service_likes_count` is first-party KenigEvents likes from the personalization store. A local like increments the visible count immediately for the current visitor and later becomes service aggregate after ingest. The source/service split is a technical/audit field and must not be rendered in public HTML/UI; users and crawlers see only the total count.
 35. Calendar action links directly to `.ics`, but appears on the event detail/primary transaction area only for short/one-day events (`end_date` empty or equal to `start_date`). Feed/preview cards must not show a calendar icon because the bottom row must fit reliably on mobile.
-36. The card bottom action row contains exactly `Не интересно`, share and like. The share action always shows a VK-like outlined repost/share arrow and `Поделиться` label; share and like counts are visible only when positive. After a successful like the share action may be highlighted, but it must not float over content or overlap the like button. Native Web Share is tried first, copy fallback increments local share evidence.
-37. Hero, card and listing media use the same OCR-safe media mode from `image_text_mode`: `visual_only` / no-meaningful-OCR posters use `cover` in a strict vertical `4:5` frame; `ocr_text` and `unknown` posters use natural image aspect ratio without duplicate/backdrop underlays. Blur fill, repeated image edges, black letterbox-as-design and OCR crop are forbidden.
+36. Variant A card overlay row contains `Не интересно`, share and like. Variant B split-actions has utility actions inside the card and an under-card right-aligned row where share/like are icon actions, not circular/pill buttons; the like stays last on the right. The share action always shows a VK-like outlined repost/share arrow and accessible `Поделиться` label; share and like counts are visible only when positive. After a successful like the share action may be highlighted, but it must not float over content or overlap the like button. Native Web Share is tried first, copy fallback increments local share evidence.
+37. Hero, card and listing media consume the same `image_text_mode`, but presentation differs by surface: hero may use `poster-stage` contain inside a solid slab to keep OCR posters whole and H1/CTA visible; cards/listings use natural image aspect ratio for `ocr_text|unknown`; `visual_only` uses cover in strict vertical `4:5` card/listing frames and `photo-cover` hero. Blur fill, repeated image edges, duplicate underlays, black letterbox-as-design and OCR crop are forbidden.
 38. Cards are full-clickable for users via JS (`data-card-href`) while keeping real crawlable HTML anchors on media/title for SEO/GEO. The old explicit `Открыть` card button is omitted as redundant UI noise. Single tap/click navigates immediately. Double-tap like is not part of the accepted interaction because it conflicts with reliable full-card navigation; likes use the explicit button.
 39. `Не интересно` turns the current card into a grey explanatory plate and keeps it in place for orientation; subsequent page loads/personalized surfaces may remove or demote similar events.
 40. Explicit-feedback rerank must preserve scroll orientation: the acted-on card and all cards above it do not move during the current interaction; only cards below that anchor may be re-ordered.

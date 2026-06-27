@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Static site pages / event hero v19**: published `preview-20260627-event-pages-v19` with a deterministic strong event hero (`poster-stage` for OCR/unknown posters, `photo-cover` for visual-only images, `fallback-art` for no image), a `/lab/hero/` QA route, Gemini Pro + Opus review traceability, CTA-before-facts mobile decision order, and icon-style under-card share/like controls for the split-actions A/B variant.
+
 - **Static site pages / event-card UI A/B v18**: added preview `preview-20260627-event-pages-v18` with page-level feed-card variants: A keeps one overlay action row, B tests a two-row card with calendar/negative utility actions inside and right-aligned share + thumb-reachable like under the card; preview checks now cover both variants, feed calendar gating and parseable JSON-LD.
 
 - **Static site / Telegraph social footer v17**: added the shared editorial social footer to the Astro site with Telegram/VK/Max SVG icons and crawlable links (`@kenigevents`, `@kldevents`, `kenigeventsofficial`, `klgdevents`, VK channel, Max); added the Max link to the plain Telegraph footer and footer idempotency tests; preview target is `preview-20260627-event-pages-v17`.

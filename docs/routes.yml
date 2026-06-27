@@ -210,12 +210,13 @@ features:
     astro_preview: docs/features/static-site-pages/astro-preview.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
+    event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v17/__preview/
+    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v19/__preview/
     entrypoints:
       - site/package.json
       - site/astro.config.mjs
@@ -225,6 +226,7 @@ features:
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/data/discovery/[eventId].json.ts
+      - site/src/pages/lab/hero/index.astro
       - site/src/pages/sitemap.xml.ts
       - site/src/pages/robots.txt.ts
       - site/src/layouts/EventLayout.astro

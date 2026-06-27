@@ -16,18 +16,18 @@
 - плюс: карточка компактнее, поведение ближе к текущему v17;
 - риск: нижняя строка конкурирует с контентом карточки и хуже масштабируется при добавлении действий.
 
-Preview: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/>
+Preview: <https://kenigevents.ru/preview-20260627-event-pages-v19/sobytiya/pesni-sssr-svetlogorsk-5878/>
 
 ### B — `split-actions`
 
 Тестовый вариант на странице event `6322` «День валяния в сене»:
 
 - первая строка внутри карточки: `В календарь` только для calendar-eligible/one-day событий + вторичное `Не интересно`;
-- вторая строка под карточкой, выровненная вправо: `Поделиться` + крупный лайк последним элементом справа;
-- плюс: меньше случайного снятия лайка, легче вернуть календарь, share имеет текстовую подпись;
-- риск: карточка становится выше и между карточками появляется больше воздуха.
+- вторая строка под карточкой, выровненная вправо: `Поделиться` + лайк последним элементом справа; визуально это icon actions без кругляшков/pill-фона, но с 44px hit area;
+- плюс: меньше случайного снятия лайка, легче вернуть календарь, share сохраняет accessible подпись, но под карточкой выглядит как иконка;
+- риск: карточка становится выше и между карточками появляется больше воздуха; без подписи под карточкой share может быть менее очевиден, поэтому это именно A/B-кандидат.
 
-Preview: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/den-valyaniya-v-sene-romanovo-6322/>
+Preview: <https://kenigevents.ru/preview-20260627-event-pages-v19/sobytiya/den-valyaniya-v-sene-romanovo-6322/>
 
 ## Продуктовая гипотеза
 
@@ -39,7 +39,7 @@ B должен быть сильнее для мобильной ленты, е�
 - UX: лайк справа снизу, share вызывает native share/copy fallback, calendar есть только у однодневных событий.
 - Архитектура: вариант задаётся на уровне страницы события (`data-feed-card-variant`) и применяется ко всем preloaded + JSON-hydrated карточкам одной ленты, чтобы сравнение было честным.
 - SEO/GEO: карточки по-прежнему имеют реальные `<a>` на media/title; full-card click добавляется JS поверх, без nested anchor.
-- Проверки: `site/scripts/check-preview.mjs` контролирует оба варианта, Event JSON-LD, calendar gating, absence of zero counters, media ratio rules и static-10 + JSON hydration contract.
+- Проверки: `site/scripts/check-preview.mjs` контролирует оба варианта, under-card icon styling, Event JSON-LD, calendar gating, absence of zero counters, media ratio rules, hero modes и static-10 + JSON hydration contract.
 
 ## Артефакты локальной визуальной проверки
 

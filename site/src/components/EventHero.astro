@@ -1,16 +1,70 @@
 ---
+import Icon from './Icon.astro';
+import CalendarLink from './CalendarLink.astro';
 import type { PreviewEvent } from '../lib/types';
-interface Props { event: PreviewEvent }
-const { event } = Astro.props;
-const preservePoster = event.image_text_mode !== 'visual_only';
-const heroClass = ['hero-media', preservePoster ? 'hero-media--preserve' : 'hero-media--cover'].join(' ');
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible } from '../lib/events';
+
+export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
+interface Props {
+  event: PreviewEvent;
+  modeOverride?: HeroMode;
+  headingTag?: 'h1' | 'h2' | 'h3';
+}
+
+const { event, modeOverride, headingTag = 'h1' } = Astro.props;
+const HeadingTag = headingTag;
+const derivedMode: HeroMode = event.image_url ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
+const heroMode = modeOverride || derivedMode;
+const dateTimeLabel = displayDateTime(event);
+const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
+const ctaHref = event.ticket.href;
+const ctaLabel = eventTicketActionLabel(event);
+const canonicalUrl = eventAbsoluteUrl(event);
+const shareText = [dateTimeLabel, event.venue_name || event.city].filter(Boolean).join(' · ');
+const statusText = [event.event_type, event.ticket.price_label || event.status_label].filter(Boolean).join(' · ');
+const canAddToCalendar = isCalendarEligible(event);
+const tint = (() => {
+  const haystack = [event.event_type, ...(event.topics || [])].join(' ').toLowerCase();
+  if (/концерт|музык|симфон/u.test(haystack)) return 'warm';
+  if (/выстав|музей|презента/u.test(haystack)) return 'deep';
+  if (/ярмарк|семейн|водн|дет/u.test(haystack)) return 'cool';
+  return 'neutral';
+})();
+const heroClass = ['event-hero', `event-hero--${heroMode}`].join(' ');
+const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
+const ctaIsExternal = isExternalHttpUrl(ctaHref);
 ---
-<div class={heroClass}>
-  {event.image_url ? (
-    <img src={event.image_url} alt={event.image_alt} loading="eager" decoding="async" />
-  ) : (
-    <div class="hero-fallback" role="img" aria-label={`Обложка без изображения: ${event.title}`}>
-      <strong>{event.title}</strong>
+<section class={heroClass} data-event-hero data-hero-mode={heroMode} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
+  <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
+    {event.image_url && heroMode !== 'fallback-art' ? (
+      <img
+        class="event-hero__image"
+        src={event.image_url}
+        alt={heroAlt}
+        loading="eager"
+        decoding="async"
+        fetchpriority="high"
+      />
+    ) : (
+      <div class="event-hero__fallback" aria-hidden="true">
+        <span>{event.event_type || 'событие'}</span>
+        <strong>{event.title}</strong>
+      </div>
+    )}
+  </div>
+
+  <div class="event-hero__decision">
+    {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
+    <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
+    <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
+      {ctaHref && <a class="cta-button" href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
+      {canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
+      <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
     </div>
-  )}
-</div>
+    <div class="event-hero__facts" aria-label="Главные факты события">
+      <div class="event-hero__fact"><span aria-hidden="true">Когда</span><strong>{dateTimeLabel}</strong></div>
+      <div class="event-hero__fact"><span aria-hidden="true">Где</span><strong>{placeLabel}</strong></div>
+    </div>
+    {event.summary && <p class="event-hero__summary">{event.summary}</p>}
+  </div>
+</section>

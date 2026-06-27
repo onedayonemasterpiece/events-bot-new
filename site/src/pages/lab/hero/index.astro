@@ -1,0 +1,48 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import EventHero, { type HeroMode } from '../../../components/EventHero.astro';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
+
+const events = getEvents();
+const modes: Array<{ mode: HeroMode; label: string }> = [
+  { mode: 'poster-stage', label: 'Poster Stage / safe contain' },
+  { mode: 'photo-cover', label: 'Photo Cover / safe crop' },
+  { mode: 'fallback-art', label: 'Fallback art' },
+];
+const title = `Hero lab | ${SITE_NAME}`;
+const description = 'Preview hero lab for static event pages: poster-stage, photo-cover and fallback hero modes.';
+const canonicalUrl = absoluteUrl('/lab/hero/');
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Hero lab</p>
+          <h1>Hero страницы события</h1>
+          <p class="lead">Лаборатория noindex preview: проверяем сильный mobile decision hero на реальных 10 событиях. Default production candidate — <strong>Poster Stage</strong> для OCR/unknown и <strong>Photo Cover</strong> только для visual-only/safe-crop.</p>
+          <div class="source-links">
+            <a href={withBase('/__preview/')}>Preview index</a>
+            <a href={withBase('/sobytiya/pesni-sssr-svetlogorsk-5878/')}>Control event</a>
+          </div>
+        </div>
+      </section>
+
+      {modes.map(({ mode, label }) => (
+        <section class="section-card" style="margin-top: 1rem;">
+          <div class="section-card__inner">
+            <h2>{label}</h2>
+            <p class="muted-note">Forced mode: <code>{mode}</code>. В lab заголовки внутри hero рендерятся как h3, чтобы на странице был один H1.</p>
+            <div class="hero-lab-grid">
+              {events.map((event) => (
+                <article class="hero-lab-item" data-hero-lab-item data-event-id={event.id}>
+                  <EventHero event={event} modeOverride={mode} headingTag="h3" />
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      ))}
+    </div>
+  </main>
+</EventLayout>

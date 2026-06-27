@@ -4,10 +4,8 @@ import EventHero from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
-import CalendarLink from '../../components/CalendarLink.astro';
-import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'overlay-controls' | 'split-actions';
 const FEED_VARIANT_BY_EVENT_ID: Record<number, FeedCardVariant> = {
@@ -35,12 +33,9 @@ const title = eventTitle(event);
 const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
 const ctaHref = event.ticket.href;
 const ctaLabel = eventTicketActionLabel(event);
-const dateLabel = displayDate(event);
-const dateTimeLabel = displayDateTime(event);
-const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
-const canAddToCalendar = isCalendarEligible(event);
 const feedCardVariant = FEED_VARIANT_BY_EVENT_ID[event.id] || 'overlay-controls';
 const feedVariantLabel = FEED_VARIANT_LABELS[feedCardVariant];
+const stickyDateLabel = displayDateTime(event);
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData}>
   <main id="main">
@@ -53,27 +48,9 @@ const feedVariantLabel = FEED_VARIANT_LABELS[feedCardVariant];
         {event.event_type && <span>{event.event_type}</span>}
       </nav>
       <div class="event-grid">
-        <article class="main-col section-card">
-          <div class="section-card__inner">
-            <p class="eyebrow">Событие</p>
-            <h1>{event.title}</h1>
-            <div class="badge-row" aria-label="Ключевые признаки события">
-              <span class="badge badge--status">{event.status_label}</span>
-              {event.event_type && <span class="badge">{event.event_type}</span>}
-              {event.festival && <span class="badge">{event.festival}</span>}
-              {event.ticket.price_label && <span class="badge">{event.ticket.price_label}</span>}
-            </div>
+        <article class="main-col section-card section-card--hero">
+          <div class="section-card__inner section-card__inner--hero">
             <EventHero event={event} />
-            <p class="lead">{event.summary}</p>
-            <div class="facts-quick facts-quick--compact" aria-label="Главные факты">
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Когда</strong><span>{dateTimeLabel}</span></div></div>
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Где</strong><span>{[event.venue_name, event.city].filter(Boolean).join(' · ') || 'уточняется'}</span></div></div>
-            </div>
-            <div class="source-links event-main-actions" aria-label="Быстрые действия">
-              {ctaHref && <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
-              {canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
-              <button type="button" class="secondary-button native-share-button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
-            </div>
           </div>
         </article>
         <div class="side-col">
@@ -129,7 +106,7 @@ const feedVariantLabel = FEED_VARIANT_LABELS[feedCardVariant];
   {ctaHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
-        <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{dateTimeLabel}</span></div>
+        <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{stickyDateLabel}</span></div>
         <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>
       </div>
     </div>

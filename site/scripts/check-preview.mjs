@@ -16,6 +16,7 @@ const required = [
   'robots.txt',
   'favicon.svg',
   'preview-build.json',
+  'lab/hero/index.html',
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -43,7 +44,7 @@ if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error(
 if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 4:5 cover media shell');
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
-if (/object-fit:\s*contain/u.test(controlHtml)) throw new Error('OCR-safe media must use natural image ratio, not contain over a fixed frame');
+if (/event-card__media-shell--preserve[\s\S]{0,500}object-fit:\s*contain/iu.test(controlHtml)) throw new Error('OCR-safe card media must use natural image ratio, not contain over a fixed frame');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
 if (controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('Variant A control feed unexpectedly shows calendar buttons');
 if (!controlVisibleHtml.includes('data-feed-card-variant="overlay-controls"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Control page must expose A/B variant A overlay-controls cards');
@@ -54,6 +55,9 @@ if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
+if (!controlHtml.includes('data-event-hero') || !controlHtml.includes('data-hero-mode="poster-stage"') || !controlHtml.includes('data-hero-image-text-mode="ocr_text"')) throw new Error('Control event must render OCR-safe poster-stage decision hero');
+if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
+if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
 for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [4913, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
   const item = eventsData.events.find((event) => event.id === id);
   if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
@@ -148,11 +152,15 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
-if (/object-fit:\s*contain/u.test(css)) throw new Error('OCR-safe media must not use contain over a fixed frame');
+if (/event-card__media-shell--preserve[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('OCR-safe card media must not use contain over a fixed frame');
+if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
+if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
+if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');
 if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual-only cover media must use vertical 4:5 ratio');
 if (/aspect-ratio:3\/4/u.test(css.replace(/\s+/g, ''))) throw new Error('Old 3:4 visual-only ratio leaked into CSS');
 
@@ -187,8 +195,9 @@ const badHtmlPatterns = [
 for (const event of eventsData.events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
   const visibleHtml = stripGeneratedCode(html);
-  const heroExpected = event.image_text_mode === 'visual_only' ? 'hero-media hero-media--cover' : 'hero-media hero-media--preserve';
-  if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero media mode mismatch for ${event.image_text_mode}`);
+  const heroExpected = event.image_url ? (event.image_text_mode === 'visual_only' ? 'data-hero-mode="photo-cover"' : 'data-hero-mode="poster-stage"') : 'data-hero-mode="fallback-art"';
+  if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero mode mismatch for ${event.image_text_mode}`);
+  if (!html.includes(`data-hero-image-text-mode="${event.image_text_mode}"`)) throw new Error(`Event ${event.id} hero misses image_text_mode marker`);
   if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);
   const ownCalendarHref = `sobytiya/${event.slug}/event.ics`;
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
