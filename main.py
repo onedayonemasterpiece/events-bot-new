@@ -18672,7 +18672,11 @@ async def update_telegraph_event_page(
                     eid=ev.id,
                 )
             except Exception as edit_err:
-                # Fallback: if edit fails (e.g., PAGE_ACCESS_DENIED), create new page
+                # Fallback only for pages created under another Telegraph token.
+                # Transient errors/flood control must not create replacement pages and
+                # silently orphan already-published links.
+                if "PAGE_ACCESS_DENIED" not in str(edit_err):
+                    raise
                 logging.warning(
                     "Telegraph edit failed for event %d (path=%s): %s. Creating new page.",
                     ev.id,

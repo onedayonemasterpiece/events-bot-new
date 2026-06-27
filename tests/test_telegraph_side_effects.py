@@ -93,6 +93,54 @@ async def test_update_event_page_edits_without_create(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_update_event_page_does_not_create_replacement_on_flood(tmp_path, monkeypatch):
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        ev = m.Event(
+            title="T",
+            description="D",
+            date="2025-09-01",
+            time="12:00",
+            location_name="Loc",
+            source_text="SRC",
+            telegraph_path="abc",
+            telegraph_url="https://telegra.ph/abc",
+        )
+        session.add(ev)
+        await session.commit()
+        eid = ev.id
+
+    async def fake_bspc(*a, **k):
+        return "<p>x</p>", "", ""
+
+    monkeypatch.setattr(m, "build_source_page_content", fake_bspc)
+    monkeypatch.setattr(m, "get_telegraph_token", lambda: "t")
+    monkeypatch.setattr(m, "Telegraph", FakeTG)
+    monkeypatch.setattr(m, "telegraph_call", fake_call)
+    create_calls = []
+
+    async def fake_create(*a, **k):
+        create_calls.append(1)
+        return {"url": "https://telegra.ph/new", "path": "new"}
+
+    async def fake_edit(tg, path, **k):
+        raise RuntimeError("Flood control exceeded. Retry in 1592 seconds")
+
+    monkeypatch.setattr(m, "telegraph_create_page", fake_create)
+    monkeypatch.setattr(m, "telegraph_edit_page", fake_edit)
+
+    with pytest.raises(RuntimeError, match="Flood control exceeded"):
+        await m.update_telegraph_event_page(eid, db, None)
+    assert create_calls == []
+    async with db.get_session() as session:
+        refreshed = await session.get(m.Event, eid)
+        assert refreshed.telegraph_path == "abc"
+        assert refreshed.telegraph_url == "https://telegra.ph/abc"
+
+
+@pytest.mark.asyncio
 async def test_navigation_builds_do_not_touch_events(tmp_path, monkeypatch):
     m = importlib.reload(orig_main)
     db = m.Database(str(tmp_path / "db.sqlite"))
