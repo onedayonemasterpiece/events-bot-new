@@ -237,6 +237,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VIDEO_ANNOUNCE_STORY_PERIOD_SECONDS` – story TTL passed to Telegram (default `86400`).
 - `KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS` – active resource-lease TTL written on live `alive` callbacks (default `10800`).
 - `KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS` – minimum interval for storing another `alive` row in `kaggle_run_event` for the same phase while still updating the ledger every callback (default `300`).
+- `KAGGLE_STATUS_RESOURCE_ACQUIRE_ATTEMPTS` / `KAGGLE_STATUS_RESOURCE_ACQUIRE_TIMEOUT_SEC` / `KAGGLE_STATUS_RESOURCE_ACQUIRE_RETRY_DELAY_SEC` – Kaggle helper bounded retry policy for critical resource-lease callbacks such as `telegram_session:s22` (defaults: `4` attempts, `20s` per callback, `3s` base backoff). Confirmed `resource_action=blocked` still fails closed immediately.
 - `ENABLE_FESTIVAL_QUEUE` – enable festival queue schedule (disabled by default; next release keep off).
 - `FESTIVAL_QUEUE_TIMES_LOCAL` / `FESTIVAL_QUEUE_TZ` – festival queue schedule times (default `03:30,16:30` local).
 - `FESTIVAL_QUEUE_LIMIT` – optional limit of queue items per run.

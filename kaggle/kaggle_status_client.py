@@ -42,6 +42,24 @@ def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name)
+    try:
+        value = int(str(raw).strip()) if raw is not None else int(default)
+    except Exception:
+        value = int(default)
+    return max(minimum, min(maximum, value))
+
+
+def _float_env(name: str, default: float, *, minimum: float, maximum: float) -> float:
+    raw = os.getenv(name)
+    try:
+        value = float(str(raw).strip()) if raw is not None else float(default)
+    except Exception:
+        value = float(default)
+    return max(minimum, min(maximum, value))
+
+
 def _find_file(filename: str, roots: list[Path] | None = None) -> Path | None:
     roots = roots or [Path("/kaggle/input"), Path("/kaggle/working"), Path.cwd()]
     for root in roots:
@@ -250,13 +268,35 @@ class KaggleStatusClient:
         return response or {"ok": False, "error": error}
 
     def acquire_resource(self, key: str, *, ttl_seconds: int = 7200) -> bool:
-        result = self.event(
-            "resource_acquire",
-            phase="preflight",
-            status="running",
-            resource={"key": key, "action": "acquire", "ttl_seconds": ttl_seconds},
-        )
-        return result.get("resource_action") == "acquired"
+        attempts = _int_env("KAGGLE_STATUS_RESOURCE_ACQUIRE_ATTEMPTS", 4, minimum=1, maximum=8)
+        timeout = _float_env("KAGGLE_STATUS_RESOURCE_ACQUIRE_TIMEOUT_SEC", 20.0, minimum=1.0, maximum=60.0)
+        base_delay = _float_env("KAGGLE_STATUS_RESOURCE_ACQUIRE_RETRY_DELAY_SEC", 3.0, minimum=0.0, maximum=30.0)
+        event_uid = f"resource_acquire:{key}"
+        last_result: dict[str, Any] = {"ok": False, "error": "not attempted"}
+        for attempt in range(1, attempts + 1):
+            result = self.event(
+                "resource_acquire",
+                event_uid=event_uid,
+                phase="preflight",
+                status="running",
+                progress={"attempt": attempt, "attempts_total": attempts},
+                resource={"key": key, "action": "acquire", "ttl_seconds": ttl_seconds},
+                timeout=timeout,
+            )
+            last_result = result
+            action = result.get("resource_action")
+            if action == "acquired":
+                return True
+            if action == "blocked":
+                return False
+            if attempt < attempts:
+                self.log(
+                    "[kaggle_status] resource_acquire retry "
+                    f"key={key} attempt={attempt}/{attempts} result={result}"
+                )
+                time.sleep(base_delay * attempt)
+        self.log(f"[kaggle_status] resource_acquire failed key={key} result={last_result}")
+        return False
 
     def release_resource(self, key: str) -> None:
         self.event(

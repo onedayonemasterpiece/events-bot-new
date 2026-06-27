@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-27-tg-monitoring-kaggle-callback-timeout.md`
+  - Scope: scheduled `tg_monitoring`, Kaggle status callbacks, S22 Telegram session resource lease preflight, and compensating reruns after a missed Telegram Monitoring slot.
+  - Must not regress: transient `/internal/kaggle/run-event` callback timeouts must not immediately masquerade as a confirmed busy `telegram_session:s22`; `resource_action=blocked` must still fail closed; a failed daily Telegram Monitoring slot requires same-day catch-up evidence that sources/messages were actually scanned.
 - `INC-2026-06-27-telegraph-footer-backfill-content-loss.md`
   - Scope: Telegraph event-page bulk maintenance/backfills, python-telegraph `get_page(..., return_html=True)` response handling, and social footer rollout.
   - Must not regress: existing Telegraph page body must never be treated as empty because HTML is in `content` instead of `content_html`; bulk footer/nav/image fixes require a canary plus public content-preservation smoke before editing all active/future pages.

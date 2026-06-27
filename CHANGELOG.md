@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Incident / Telegram Monitoring Kaggle callback timeout (INC-2026-06-27)**: Kaggle status `resource_acquire` now retries transient callback timeouts before failing the S22 Telegram-session lease preflight, while still blocking on a confirmed active holder. This prevents a temporary `/internal/kaggle/run-event` timeout from aborting the daily Telegram Monitoring run as a false `Required Kaggle resource is busy`.
 - **Incident / VK past-post prune starvation (INC-2026-06-27)**: `vk_post_prune`
   now prioritizes the freshest ended events before applying `VK_POST_PRUNE_LIMIT`,
   so old missing/repost-protected managed VK URLs cannot starve newly-past live

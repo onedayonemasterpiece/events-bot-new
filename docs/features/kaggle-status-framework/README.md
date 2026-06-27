@@ -121,6 +121,16 @@ example `telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY` or
 `telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1`; monitoring jobs that use
 the shared S22 session still use `telegram_session:s22`. A live lease blocks
 another run from using the same auth bundle until it expires or is released.
+Resource acquisition is fail-closed only after bounded callback attempts. The
+Kaggle helper retries transient `/internal/kaggle/run-event` timeouts for
+`resource_acquire` before aborting, while an explicit `resource_action=blocked`
+response still stops immediately. Defaults are
+`KAGGLE_STATUS_RESOURCE_ACQUIRE_ATTEMPTS=4`,
+`KAGGLE_STATUS_RESOURCE_ACQUIRE_TIMEOUT_SEC=20`, and
+`KAGGLE_STATUS_RESOURCE_ACQUIRE_RETRY_DELAY_SEC=3`. Local
+`kaggle_status_events.jsonl` records each attempt with a stable
+`resource_acquire:<key>` event UID so callback transport failures are
+distinguishable from a real busy holder.
 
 For long CPU renders, `alive` callbacks renew active leases for the same
 `run_id` (`KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS`, default `10800`) so a valid

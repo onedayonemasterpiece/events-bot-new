@@ -488,3 +488,52 @@ def test_kaggle_status_client_redacts_token_in_local_jsonl(tmp_path):
     ]
     assert rows[0]["payload"]["token"] == "<redacted>"
     assert "secret-token" not in json.dumps(rows, ensure_ascii=False)
+
+
+def test_kaggle_status_client_retries_resource_acquire_callback_timeout(tmp_path, monkeypatch):
+    KaggleStatusClient = _load_status_client_class()
+    monkeypatch.setenv("KAGGLE_STATUS_RESOURCE_ACQUIRE_ATTEMPTS", "3")
+    monkeypatch.setenv("KAGGLE_STATUS_RESOURCE_ACQUIRE_TIMEOUT_SEC", "0.1")
+    monkeypatch.setenv("KAGGLE_STATUS_RESOURCE_ACQUIRE_RETRY_DELAY_SEC", "0")
+    calls = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001
+            return False
+
+        def read(self):
+            return b'{"ok": true, "resource_action": "acquired"}'
+
+    def fake_urlopen(request, timeout=10.0):  # noqa: ANN001
+        calls.append((request, timeout))
+        if len(calls) < 3:
+            raise TimeoutError("The read operation timed out")
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = KaggleStatusClient(
+        {
+            "run_id": "tg_monitor:retry",
+            "session_id": None,
+            "kind": "telegram_monitor",
+            "notebook": "TelegramMonitor",
+            "callback_url": "https://example.test/internal/kaggle/run-event",
+            "token": "secret-token",
+        },
+        output_dir=tmp_path,
+        log=lambda _message: None,
+    )
+
+    assert client.acquire_resource("telegram_session:s22", ttl_seconds=600) is True
+    assert len(calls) == 3
+    assert all(timeout == 1.0 for _request, timeout in calls)
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "kaggle_status_events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["payload"]["progress"]["attempt"] for row in rows] == [1, 2, 3]
+    assert len({row["payload"]["event_uid"] for row in rows}) == 1
+    assert rows[-1]["response"]["resource_action"] == "acquired"
