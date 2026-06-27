@@ -1,6 +1,6 @@
 # Event reaction counters — source likes, service likes and static pages
 
-> **Status:** architecture decision for the next implementation slice. Preview `v13` shows total counters from a committed fixture, hides zero like/share counts in UI, and still treats production scanner-to-Supabase sync plus counter manifests as not implemented yet.
+> **Status:** architecture decision for the next implementation slice. Preview `v14` shows total counters from a committed fixture, hides zero like/share counts in UI, and still treats production scanner-to-Supabase sync plus counter manifests as not implemented yet.
 > **Related DB:** separate personalization Supabase/Postgres project, not the core Fly SQLite database.
 
 ## Product rule

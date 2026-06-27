@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v13/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v14/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,13 +9,13 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v13/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v13/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v13/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v14/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v14/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v14/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v14/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v14/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v14/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v14/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md). Counter freshness: [Event reaction counters](reaction-counters.md).
 
@@ -89,9 +89,9 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 30. `H2` “Смотрите дальше”: one mobile-first vertical discovery feed that combines high-similarity candidates with bounded diversity slots as an invisible ranking rule; current/past/expired and same-occurrence/other-date events are excluded by freshness gate.
 31. Every discovery card has explicit feedback controls: large like button in the lower-right/right-thumb zone with current aggregate like count, toggle unlike, and a lower-priority “Не интересно” negative control. These labels are product actions, not hidden technical anti-bubble copy.
 32. Visible likes must be honest: `likes_count = source_likes_count + service_likes_count`. `source_likes_count` is aggregated from already collected TG/VK/source-post metrics tied to the event; `service_likes_count` is first-party KenigEvents likes from the personalization store. A local like increments the visible count immediately for the current visitor and later becomes service aggregate after ingest. The source/service split is a technical/audit field and must not be rendered in public HTML/UI; users and crawlers see only the total count.
-33. Card calendar action is icon-led and links directly to `.ics`, but it appears only for short/one-day events (`end_date` empty or equal to `start_date`). Multi-day exhibitions/long-running events do not show “В календарь” on the card or primary action block.
-34. The card bottom action row contains `Не интересно`, optional calendar, share and like. The share action always shows a VK-like outlined repost/share arrow and `Поделиться` label; share and like counts are visible only when positive. After a successful like the share action may be highlighted, but it must not float over content or overlap the like button. Native Web Share is tried first, copy fallback increments local share evidence.
-35. Hero, card and listing media use the same OCR-safe media mode from `image_text_mode`: `visual_only` / no-OCR posters use `cover` in a strict vertical `3:4` frame; `ocr_text` and `unknown` posters use natural image aspect ratio without duplicate/backdrop underlays. Blur fill, repeated image edges, black letterbox-as-design and OCR crop are forbidden.
+33. Calendar action links directly to `.ics`, but appears on the event detail/primary transaction area only for short/one-day events (`end_date` empty or equal to `start_date`). Feed/preview cards must not show a calendar icon because the bottom row must fit reliably on mobile.
+34. The card bottom action row contains exactly `Не интересно`, share and like. The share action always shows a VK-like outlined repost/share arrow and `Поделиться` label; share and like counts are visible only when positive. After a successful like the share action may be highlighted, but it must not float over content or overlap the like button. Native Web Share is tried first, copy fallback increments local share evidence.
+35. Hero, card and listing media use the same OCR-safe media mode from `image_text_mode`: `visual_only` / no-meaningful-OCR posters use `cover` in a strict vertical `3:4` frame; `ocr_text` and `unknown` posters use natural image aspect ratio without duplicate/backdrop underlays. Blur fill, repeated image edges, black letterbox-as-design and OCR crop are forbidden.
 36. Cards are full-clickable for users via JS (`data-card-href`) while keeping real crawlable HTML anchors on media/title for SEO/GEO. The old explicit `Открыть` card button is omitted as redundant UI noise. Single tap/click navigates immediately. Double-tap like is not part of the accepted interaction because it conflicts with reliable full-card navigation; likes use the explicit button.
 37. `Не интересно` turns the current card into a grey explanatory plate and keeps it in place for orientation; subsequent page loads/personalized surfaces may remove or demote similar events.
 38. Explicit-feedback rerank must preserve scroll orientation: the acted-on card and all cards above it do not move during the current interaction; only cards below that anchor may be re-ordered.
@@ -105,7 +105,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 43. Primary CTA is a real `href`: `Купить билет`, `Зарегистрироваться`, `Позвонить`, `Открыть пост организатора`, or status-only for sold-out/cancelled.
 44. For `ticket_status=sale` and valid `ticket_link`, show `Купить билет`.
 45. Status indicator uses text plus color/icon: tickets in sale, free, sold out, cancelled/postponed.
-46. `.ics` calendar link works without JS, is shown only for short/one-day events, and should be served as `text/calendar` with inline content disposition.
+46. `.ics` calendar link works without JS, is shown only on the detail/primary transaction area for short/one-day events, and should be served as `text/calendar` with inline content disposition. It is intentionally omitted from feed/preview cards.
 47. Source-only CTAs use clear copy such as `Открыть пост организатора`, not ambiguous `Уточнить регистрацию`.
 48. Share button is visible by default and attempts native Web Share API first; duplicate Telegram/VK/WhatsApp share pills are not shown on the event page. If native share is unavailable, the single share button copies the URL.
 
@@ -126,7 +126,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 58. No visible reorder/jump after the related block is in viewport except direct response to an explicit user action such as like/not-interested.
 59. Current event, past events and expired lifecycle statuses are excluded.
 60. “Другие даты” is separated from recommendations.
-    - Related/event cards must not use nested anchors: media/title/action links are separate, and every card has a visual slot plus `.ics` calendar action.
+    - Related/event cards must not use nested anchors: media/title/action links are separate, every card has a visual slot, and `.ics` calendar actions stay on the detail page instead of the card row.
 
 ## 10. P0 acceptance gates
 

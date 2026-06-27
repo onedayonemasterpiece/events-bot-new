@@ -1,13 +1,11 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAbsoluteUrl, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
+import { eventAbsoluteUrl, eventHref } from '../lib/events';
 interface Props { event: PreviewEvent; label?: string }
 const { event, label } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
-const calendarHref = eventCalendarHref(event);
-const canAddToCalendar = isCalendarEligible(event);
 const absolute = eventAbsoluteUrl(event);
 const metaLabel = [label, event.display_date + (event.display_time ? ` · ${event.display_time}` : '')].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
@@ -19,7 +17,7 @@ const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
 const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
-const feedbackClass = ['event-card__feedback', canAddToCalendar ? '' : 'event-card__feedback--no-calendar'].filter(Boolean).join(' ');
+const feedbackClass = 'event-card__feedback';
 ---
 <article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${event.display_date}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
@@ -40,11 +38,6 @@ const feedbackClass = ['event-card__feedback', canAddToCalendar ? '' : 'event-ca
       <Icon name="dislike" />
       <span>Не интересно</span>
     </button>
-    {canAddToCalendar && (
-      <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}>
-        <Icon name="calendar" />
-      </a>
-    )}
     <button
       type="button"
       class="feedback-button feedback-button--share"

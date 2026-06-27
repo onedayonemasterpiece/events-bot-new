@@ -13,16 +13,16 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v13/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v13/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v13/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v13/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v14/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v14/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v14/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v14/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v14/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v14/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v14/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v14/__preview/>
 
-Preview `v13` keeps the consultant P0 hardening and explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions only for one-day/short events, single native-share-first button, favicon, prefetch for static links, and sticky CTA hiding when the user reaches the feed. Media rule after the v13 regression fix: `visual_only` images use a strict vertical `3:4` cover frame; `ocr_text` and `unknown` images in hero/card/listing render as the actual image in its natural aspect ratio, with no crop, no fixed `3:4` frame, no `contain` over a duplicate underlay, no blur/backdrop fill and no repeated image edges. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. Likes still animate from the explicit like button. `Не интересно` turns the card into a grey explanatory plate until the next page/reload. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split.
+Preview `v14` keeps the consultant P0 hardening and explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, single native-share-first button, favicon, prefetch for static links, and sticky CTA hiding when the user reaches the feed. Media rule after the v14 fix: selected preview images with **no meaningful OCR** (`visual_only`) use a strict vertical `3:4` cover frame; this is now enforced for `С чего начинается Родина`, `Симфоническая пятница`, `День валяния в сене` and `Точка и линия`. `ocr_text` and `unknown` images in hero/card/listing render as the actual image in its natural aspect ratio, with no crop, no fixed `3:4` frame, no `contain` over a duplicate underlay, no blur/backdrop fill and no repeated image edges. Feed-card calendar buttons were removed because the three-action row did not fit reliably on mobile; calendar remains on the event detail page / primary action area. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. Likes still animate from the explicit like button. `Не интересно` turns the card into a grey explanatory plate until the next page/reload. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`.
 

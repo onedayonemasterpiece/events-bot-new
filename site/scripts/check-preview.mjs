@@ -42,8 +42,7 @@ if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdr
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/object-fit:\s*contain/u.test(controlHtml)) throw new Error('OCR-safe media must use natural image ratio, not contain over a fixed frame');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
-if (!controlHtml.includes('feedback-button--calendar')) throw new Error('Control related cards miss calendar action for short one-day events');
-if (!controlHtml.includes('event-card__feedback--no-calendar')) throw new Error('Control related cards must hide calendar action for multi-day events');
+if (controlHtml.includes('feedback-button--calendar')) throw new Error('Discovery/feed cards must not show calendar buttons; calendar stays on detail page');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
@@ -51,6 +50,10 @@ if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
+for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [4913, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
+  const item = eventsData.events.find((event) => event.id === id);
+  if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
+}
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
