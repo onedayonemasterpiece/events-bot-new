@@ -33,6 +33,7 @@ During the Max social-link rollout for Telegraph event footers, a production one
 - 2026-06-27 ~20:24 UTC: restored event `6473` with `update_telegraph_event_page`; DB content-hash commit hit SQLite lock after the Telegraph edit, but public content was restored.
 - 2026-06-27 ~20:25 UTC: started full restore with `update_telegraph_event_page`; restored early batch pages, then stopped when Telegraph flood control returned a long wait (~1953s).
 - 2026-06-27 ~20:30 UTC: added code-level guard `telegraph_page_html()` and tests so future code reads the correct python-telegraph field.
+- 2026-06-27 ~20:35 UTC: a fast restore attempt for event `5878` hit Telegraph flood control; existing fallback incorrectly created a replacement page. Reverted DB `5878` back to the original public Telegraph path and added a code fix so flood/transient edit errors no longer create replacement pages.
 
 ## Root Cause
 
@@ -90,19 +91,21 @@ During the Max social-link rollout for Telegraph event footers, a production one
 - Added `telegraph_page_html(page)` to centralize python-telegraph response handling and prefer `content` for `return_html=True`.
 - Replaced direct `content_html` readers in Telegraph maintenance paths with `telegraph_page_html()`.
 - Added unit coverage for the python-telegraph `content` key and `content_html` fallback.
+- Restricted event-page replacement fallback to `PAGE_ACCESS_DENIED`; Telegraph flood-control/transient edit failures now fail without creating new pages or orphaning already-published links.
 
 ## Follow-up Actions
 
 - [ ] Complete restoration of all active/future Telegraph event pages after Telegraph flood control clears.
+- [x] Revert event `5878` DB path from the accidental replacement page back to the original public path (`codex_backup_20260627_telegraph_footer_5878_path`).
 - [ ] Add a reusable checked maintenance script for social-footer backfills with canary mode, content-length guard, and post-edit public verification.
 - [ ] Add an operational runbook note: never bulk-edit Telegraph pages from `content_html`; use `telegraph_page_html()` / canonical renderer.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending `flyctl deploy` from clean hotfix worktree
-- regression checks: pending full restore and public smoke
-- post-deploy verification: pending
+- deployed SHA: `ab0f6aa9` (`origin/main`) for the flood-control replacement guard; `0f9d0f0a` for `telegraph_page_html()`.
+- deploy path: manual `flyctl deploy` from clean `hotfix/social-footer-max-20260627` worktree.
+- regression checks: `pytest -q tests/test_festival_nav.py tests/test_telegraph_side_effects.py` → `21 passed`; full restore/public smoke still pending.
+- post-deploy verification: `/healthz` OK after deploy; full Telegraph restoration pending flood-control clearance.
 
 ## Prevention
 
