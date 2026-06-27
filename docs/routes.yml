@@ -199,6 +199,7 @@ features:
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md
+    event_page_product_design: docs/features/static-site-pages/event-page-product-design.md
     interface_references: docs/features/static-site-pages/interface-references.md
     target_domain: https://kenigevents.ru/
     target_bucket: kenigevents.ru
