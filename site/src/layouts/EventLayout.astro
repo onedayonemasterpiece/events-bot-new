@@ -126,6 +126,28 @@ const FOOTER_SOCIAL_LINKS = [
       .brand__name { font-weight: 800; letter-spacing: -0.02em; }
       .brand__name--mobile-tag { display: none; }
       .brand__sub { color: var(--muted); font-size: 0.82rem; }
+      .mobile-discovery-menu { display: none; }
+      .mobile-discovery-menu__summary { list-style: none; cursor: pointer; }
+      .mobile-discovery-menu__summary::-webkit-details-marker { display: none; }
+      .mobile-discovery-menu__panel { display: block; }
+      .mobile-discovery-menu__nav { display: grid; gap: 0.7rem; }
+      .mobile-discovery-menu__prompt { color: var(--primary-strong); font-size: 0.78rem; font-weight: 900; letter-spacing: 0.095em; text-transform: uppercase; }
+      .mobile-discovery-menu__links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+      .mobile-discovery-menu__links a {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.52rem 0.68rem;
+        border-radius: 999px;
+        border: 1px solid rgba(121, 48, 20, 0.16);
+        background: #fff7eb;
+        color: var(--primary-strong);
+        text-decoration: none;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+      .mobile-discovery-menu__links a:hover { background: #fff; color: var(--text); }
       .site-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
       .site-nav a {
         min-height: 44px;
@@ -447,6 +469,88 @@ const FOOTER_SOCIAL_LINKS = [
         .side-col { display: none; }
       }
       @media (max-width: 759px) {
+        body.hero-chrome-immersive::before { opacity: 0; }
+        .brand--desktop { display: none; }
+        .mobile-discovery-menu {
+          position: relative;
+          display: block;
+          pointer-events: auto;
+        }
+        .mobile-discovery-menu__summary {
+          position: relative;
+          z-index: 2;
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.42rem;
+          padding: 0.52rem 0.84rem;
+          border: 1px solid rgba(255,255,255,0.14);
+          border-radius: 999px;
+          background: linear-gradient(160deg, #793014 0%, #a54821 100%);
+          color: #fffdf8;
+          box-shadow: 0 14px 30px rgba(121, 48, 20, 0.26), 0 1px 0 rgba(255,255,255,0.12) inset;
+          text-decoration: none;
+          touch-action: manipulation;
+        }
+        .mobile-discovery-menu__kicker {
+          font-size: 0.58rem;
+          font-weight: 850;
+          line-height: 1.05;
+          letter-spacing: 0.055em;
+          text-transform: uppercase;
+          opacity: 0.9;
+        }
+        .mobile-discovery-menu__name {
+          font-size: 1.08rem;
+          font-weight: 950;
+          line-height: 0.92;
+          letter-spacing: -0.06em;
+        }
+        .mobile-discovery-menu__label {
+          display: grid;
+          gap: 0.04rem;
+        }
+        .mobile-discovery-menu__chevron {
+          font-size: 1.05rem;
+          line-height: 1;
+          transition: transform 180ms ease;
+        }
+        .mobile-discovery-menu[open] .mobile-discovery-menu__chevron {
+          transform: rotate(180deg);
+        }
+        .mobile-discovery-menu__panel {
+          position: fixed;
+          z-index: 1;
+          inset: 0 0 auto 0;
+          width: 100vw;
+          overflow: hidden;
+          padding: calc(env(safe-area-inset-top) + 4.85rem) max(0.85rem, env(safe-area-inset-right)) 0.86rem max(0.85rem, env(safe-area-inset-left));
+          border: 0;
+          border-bottom: 1px solid rgba(121, 48, 20, 0.14);
+          border-radius: 0 0 26px 26px;
+          background: linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(255, 247, 235, 0.97) 100%);
+          color: var(--text);
+          box-shadow: 0 18px 46px rgba(34, 26, 20, 0.20);
+          transform: translate3d(0, -112%, 0);
+          opacity: 0;
+          pointer-events: none;
+          transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease, box-shadow 280ms ease;
+        }
+        .mobile-discovery-menu[open] .mobile-discovery-menu__panel {
+          transform: translate3d(0, 0, 0);
+          opacity: 1;
+          pointer-events: auto;
+        }
+        @starting-style {
+          .mobile-discovery-menu[open] .mobile-discovery-menu__panel {
+            transform: translate3d(0, -112%, 0);
+            opacity: 0;
+          }
+        }
+        .mobile-discovery-menu__nav {
+          width: min(100%, 520px);
+          margin: 0 auto;
+        }
         body.hero-chrome-immersive .site-header {
           position: fixed;
           inset-inline: 0;
@@ -464,54 +568,40 @@ const FOOTER_SOCIAL_LINKS = [
           padding-top: 0;
           display: block;
         }
-        body.hero-chrome-immersive .brand {
+        body.hero-chrome-immersive .mobile-discovery-menu {
           position: absolute;
           left: max(0.85rem, env(safe-area-inset-left));
           top: calc(-1.15rem + env(safe-area-inset-top));
+          width: min(calc(100vw - 1.7rem), 390px);
+          pointer-events: auto;
+        }
+        body.hero-chrome-immersive .mobile-discovery-menu__summary {
           width: 7.7rem;
           min-height: 5.55rem;
           padding: 1.45rem 0.76rem 0.58rem;
           justify-content: end;
           border-radius: 0 0 10px 10px;
-          background: linear-gradient(160deg, #793014 0%, #a54821 100%);
-          color: #fffdf8;
-          box-shadow: 0 18px 34px rgba(121, 48, 20, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
-          pointer-events: auto;
-          text-shadow: none;
+          box-shadow: 0 20px 42px rgba(72, 45, 25, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
         }
-        body.hero-chrome-immersive .brand::after {
-          content: "";
-          position: absolute;
-          left: 0.58rem;
-          right: 0.58rem;
-          bottom: -0.28rem;
-          height: 0.28rem;
-          border-radius: 999px;
-          background: rgba(121, 48, 20, 0.76);
-        }
-        body.hero-chrome-immersive .brand__name--desktop,
-        body.hero-chrome-immersive .brand__sub {
-          display: none;
-        }
-        body.hero-chrome-immersive .brand__name--mobile-tag {
-          display: grid;
-          gap: 0.16rem;
-          color: #fff;
-          letter-spacing: 0;
-        }
-        body.hero-chrome-immersive .brand__tag-kicker {
+        body.hero-chrome-immersive .mobile-discovery-menu__kicker {
           font-size: 0.56rem;
-          font-weight: 850;
-          line-height: 1.05;
-          letter-spacing: 0.055em;
-          text-transform: uppercase;
-          opacity: 0.9;
         }
-        body.hero-chrome-immersive .brand__tag-main {
+        body.hero-chrome-immersive .mobile-discovery-menu__name {
           font-size: 1.24rem;
-          font-weight: 950;
           line-height: 0.9;
-          letter-spacing: -0.065em;
+        }
+        body.hero-chrome-immersive .mobile-discovery-menu__chevron {
+          position: absolute;
+          right: 0.46rem;
+          bottom: 0.44rem;
+          width: 1.02rem;
+          height: 1.02rem;
+          display: grid;
+          place-items: center;
+          border-radius: 999px;
+          background: rgba(255, 253, 248, 0.16);
+          font-size: 0.88rem;
+          opacity: 0.86;
         }
         body.hero-chrome-immersive .site-nav {
           display: none;
@@ -532,38 +622,25 @@ const FOOTER_SOCIAL_LINKS = [
           align-items: center;
           justify-content: space-between;
         }
-        body.hero-chrome-immersive.is-past-hero .brand {
-          position: static;
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu {
+          position: relative;
+          width: auto;
+        }
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__summary {
           width: auto;
           min-height: 44px;
-          padding: 0;
-          border-radius: 0;
-          background: transparent;
-          color: var(--text);
-          box-shadow: none;
+          padding: 0.48rem 0.75rem;
+          border-radius: 999px;
+          box-shadow: 0 10px 24px rgba(121, 48, 20, 0.18);
         }
-        body.hero-chrome-immersive.is-past-hero .brand::after {
-          display: none;
-        }
-        body.hero-chrome-immersive.is-past-hero .brand__name--desktop {
-          display: none;
-        }
-        body.hero-chrome-immersive.is-past-hero .brand__name--mobile-tag {
-          display: grid;
-          color: var(--text);
-          gap: 0.02rem;
-          letter-spacing: 0;
-        }
-        body.hero-chrome-immersive.is-past-hero .brand__tag-kicker {
-          color: var(--muted);
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__kicker {
           font-size: 0.58rem;
         }
-        body.hero-chrome-immersive.is-past-hero .brand__tag-main {
-          color: var(--text);
-          font-size: 1.08rem;
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__name {
+          font-size: 1.05rem;
         }
-        body.hero-chrome-immersive.is-past-hero .brand__sub {
-          display: none;
+        body.hero-chrome-immersive.is-past-hero .mobile-discovery-menu__chevron {
+          position: static;
         }
         body.hero-chrome-immersive.is-past-hero .site-nav {
           display: flex;
@@ -639,9 +716,10 @@ const FOOTER_SOCIAL_LINKS = [
           max-height: min(64dvh, 560px);
           aspect-ratio: auto;
         }
+        .event-hero--photo-cinematic-sheet.event-hero--photo-cover .event-hero__image,
         .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__image {
-          height: 118%;
-          transform: translate3d(0, var(--hero-parallax-y, 0px), 0) scale(var(--hero-parallax-scale, 1.075));
+          height: 132%;
+          transform: translate3d(0, var(--hero-parallax-y, -64px), 0) scale(1.14);
           transform-origin: center;
           will-change: transform;
         }
@@ -749,7 +827,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
-        .event-hero--photo-parallax-sheet .event-hero__image { transform: none !important; }
+        .event-hero--photo-cover .event-hero__image { transform: none !important; }
       }
     </style>
   </head>
@@ -757,14 +835,29 @@ const FOOTER_SOCIAL_LINKS = [
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
-        <a class="brand" href={withBase('/__preview/')} aria-label={`${SITE_NAME}: preview index`}>
+        <a class="brand brand--desktop" href={withBase('/__preview/')} aria-label={`${SITE_NAME}: preview index`}>
           <span class="brand__name brand__name--desktop">{SITE_NAME}</span>
-          <span class="brand__name brand__name--mobile-tag" aria-hidden="true">
-            <span class="brand__tag-kicker">Полюбить Калининград</span>
-            <span class="brand__tag-main">Анонсы</span>
-          </span>
           <span class="brand__sub">афиша событий</span>
         </a>
+        <details class="mobile-discovery-menu" data-mobile-discovery-menu>
+          <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
+            <span class="mobile-discovery-menu__label">
+              <span class="mobile-discovery-menu__kicker">Полюбить Калининград</span>
+              <span class="mobile-discovery-menu__name">Анонсы</span>
+            </span>
+            <span class="mobile-discovery-menu__chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
+            <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
+              <span class="mobile-discovery-menu__prompt">Куда пойти</span>
+              <div class="mobile-discovery-menu__links">
+                <a href={withBase('/segodnya/')}>Сегодня</a>
+                <a href={withBase('/vyhodnye/')}>Выходные</a>
+                <a href={withBase('/__preview/')}>Все анонсы</a>
+              </div>
+            </nav>
+          </div>
+        </details>
         <nav class="site-nav" aria-label="Основная навигация preview">
           <a href={withBase('/segodnya/')}>Сегодня</a>
           <a href={withBase('/vyhodnye/')}>Выходные</a>
@@ -1911,6 +2004,21 @@ const FOOTER_SOCIAL_LINKS = [
           window.addEventListener('resize', request, { passive: true });
         }
 
+        function hydrateMobileDiscoveryMenu() {
+          const menu = document.querySelector('[data-mobile-discovery-menu]');
+          if (!menu) return;
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') menu.removeAttribute('open');
+          });
+          document.addEventListener('click', (event) => {
+            if (!menu.hasAttribute('open')) return;
+            if (!menu.contains(event.target)) menu.removeAttribute('open');
+          });
+          menu.querySelectorAll('a').forEach((link) => {
+            link.addEventListener('click', () => menu.removeAttribute('open'));
+          });
+        }
+
         function renderFeedbackReport() {
           const root = document.querySelector('[data-feedback-report]');
           if (!root) return;
@@ -1948,23 +2056,22 @@ const FOOTER_SOCIAL_LINKS = [
         }, { passive: true });
 
         function hydrateHeroParallax() {
-          const heroes = Array.from(document.querySelectorAll('.event-hero--photo-parallax-sheet .event-hero__visual'));
+          const heroes = Array.from(document.querySelectorAll('.event-hero--photo-cover:is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual'));
           if (!heroes.length) return;
           if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
           let ticking = false;
+          const maxOffset = 64;
           const update = () => {
             ticking = false;
-            const viewport = window.innerHeight || 800;
             heroes.forEach((visual) => {
               const image = visual.querySelector('.event-hero__image');
               if (!image) return;
               const rect = visual.getBoundingClientRect();
-              if (rect.bottom < -80 || rect.top > viewport + 80) return;
-              const progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
-              const offset = (progress - 0.5) * 74;
-              const scale = 1.07 + progress * 0.065;
+              const viewport = window.innerHeight || 800;
+              if (rect.bottom < -120 || rect.top > viewport + 120) return;
+              const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
+              const offset = -maxOffset + progress * maxOffset * 2;
               image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`);
-              image.style.setProperty('--hero-parallax-scale', scale.toFixed(3));
             });
           };
           const request = () => {
@@ -1978,6 +2085,7 @@ const FOOTER_SOCIAL_LINKS = [
         }
 
         hydrateImmersiveHeader();
+        hydrateMobileDiscoveryMenu();
         hydrateHeroParallax();
         applyFeedbackState();
       })();

@@ -19,6 +19,41 @@
 
 Historic consultant artifacts for v19 are stored under `artifacts/codex/hero-consultation-v19/`. The user-supplied v20 critique is treated as the corrective brief: build a **composition lab**, not another image-mode lab.
 
+
+
+## v24 sliding discovery row correction
+
+The v23 top sheet was rejected visually because it behaved like a floating popover/card. v24 keeps the useful brand tag handle but changes the interaction model: opening the tag reveals a **full-width additional navigation row sliding down from the top edge**. This is the intended product direction for a future richer menu with `Сегодня`, `Выходные` and later real category/collection routes.
+
+Implementation contract:
+
+- still no-JS-first: the handle remains a native `<details>`/`<summary>` control and links are crawlable HTML anchors;
+- the revealed area is `position: fixed` + `width: 100vw` with a top-row/tray treatment, not a centered/floating card;
+- motion uses only `transform`/`opacity` (`translate3d(0, -112%, 0)` → `translate3d(0, 0, 0)`) with `@starting-style`, so the row visually slides from above;
+- the terracotta tag stays above the row as the visual handle; the row itself uses the site warm surface palette;
+- only real generated destinations are shown for now: `Сегодня`, `Выходные`, `Все анонсы`; no dead category chips until corresponding static routes exist.
+
+## v23 mobile discovery top sheet and motion correction
+
+The v23 pass turns the hero brand tag into a no-JS-first mobile discovery top sheet instead of a decorative-only label. The component is a native `<details data-mobile-discovery-menu>`:
+
+- closed state: the same terracotta service tag over the hero;
+- open state: a top sheet over the hero with real generated links only: `Сегодня`, `Выходные`, `Все анонсы`;
+- no dead category chips are rendered until the corresponding static routes exist;
+- JS enhancement only closes on Escape, outside click and link click; navigation remains available without JS;
+- preview/debug links are not mixed into this user-facing top sheet.
+
+The v23 pass also removes two visual artifacts from the hero area:
+
+- the decorative `brand::after` stripe is gone; the tag uses only shadow/elevation;
+- `body.hero-chrome-immersive::before` is disabled on mobile to remove the 1px fixed grid/top stripe over the hero.
+
+Parallax policy is clarified:
+
+- OCR/unknown poster heroes do **not** get parallax, because the poster must stay fully readable and un-cropped;
+- verified `visual_only` photo-cover heroes (`photo-cinematic-sheet` and `photo-parallax-sheet`) get parallax;
+- dynamic zoom was removed because it produced a visible scale jump at the end of movement. The remaining scale is constant (`scale(1.14)`) only to reserve safe edges, while the visible motion is a stronger vertical offset (`±64px`).
+
 ## v22 edge-to-edge / brand-color correction
 
 После проверки v21 отдельно зафиксировано: TASS был только референсом формы бирки, а не палитры, и hero image должен быть защищён от любых layout gutters. Поэтому v22 меняет brand tag на палитру сайта (`#793014` → `#a54821`) и делает mobile hero container/article full-viewport, а visual/image центрируется через `left: 50% + translateX(-50%)` с `width/min-width: 100vw`. Acceptance теперь проверяет именно bbox hero image `x=0,width=viewport`, а не только наличие CSS `100vw`.
@@ -68,7 +103,7 @@ Default event mapping in the current preview:
 
 ## Mobile header and breadcrumbs
 
-For event pages v22 uses `heroChrome="immersive"`:
+For event pages v24 keeps `heroChrome="immersive"` and adds the menu-enabled sliding navigation row:
 
 - while the hero is visible on mobile, the full site header is replaced by the compact top brand tag; it is fixed over the image, but no longer reserves vertical space before the hero;
 - after the hero leaves the viewport, JS toggles `body.is-past-hero` and reveals the full fixed header with navigation;
@@ -98,13 +133,13 @@ Preview routes:
 - `/lab/hero/review/` — public noindex review route with live 390×844 iframe frames grouped by event. It compares several compositions on the same event: `5878 × {poster-billboard, poster-attached-card, compact-ticketing}`, `6322 × {photo-cinematic-sheet, photo-parallax-sheet, compact-ticketing}`, and `4913 × {photo-cinematic-sheet, poster-attached-card}`.
 - `/lab/hero/review/<case>/` — individual full-page review cases used by those iframes.
 
-Public v22 URLs:
+Public v24 URLs:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v22/__preview/>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/>
-- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/review/>
-- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v22/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/review/6322-photo-parallax-sheet/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v24/__preview/>
+- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v24/lab/hero/>
+- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v24/lab/hero/review/>
+- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v24/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v24/lab/hero/review/6322-photo-parallax-sheet/>
 
 ## Acceptance checks
 
@@ -113,14 +148,14 @@ Public v22 URLs:
 - `lab/hero/index.html` and `lab/hero/review/index.html` exist and are in sitemap;
 - representative same-event review cases exist and are in sitemap;
 - control event `5878` renders `data-hero-mode="poster-stage"`, `data-hero-composition="poster-billboard"`, and `data-hero-image-text-mode="ocr_text"`;
-- event pages include the mobile brand tag and `is-past-hero` header transition contract;
+- event pages include the mobile sliding discovery navigation row and `is-past-hero` header transition contract;
 - every event page has exactly one visible `H1` and a composition marker;
 - event hero is rendered before after-hero breadcrumbs in HTML;
 - visual-only events render `photo-cover`; OCR/unknown events render `poster-stage`;
 - no `blur(`, duplicate/backdrop poster fill, repeated `--poster-image`, `media-backdrop`, `image-backdrop`, old `3:4` ratio, or fragile `100vh` leaks into CSS/HTML;
 - `poster-stage` hero has `object-fit: contain`, and `photo-cover` hero has `object-fit: cover`;
 - poster billboard visual **and image itself** are full viewport width on mobile;
-- parallax experiment is present with reduced-motion guard and uses zoom/scale variables;
+- visual-only cinematic/parallax heroes have a reduced-motion-aware parallax hydrator with constant scale and stronger vertical offset;
 - split-actions under-card share/like remain transparent icon-style controls, not pill buttons.
 
-Playwright smoke evidence for v22 is stored under `artifacts/codex/hero-impact-v21/` and checks: poster image bbox `x=0,width=390` on 390px viewport, top brand tag bbox protruding from the upper edge, full header after `is-past-hero`, parallax transform/scale change on scroll, same-event review iframe count, and screenshots for control/parallax/review states.
+Playwright smoke evidence for v24 is stored under `artifacts/codex/hero-impact-v24/` and checks: poster image bbox `x=0,width=390` on 390px viewport, the terracotta discovery tag protruding from the upper edge, the no-JS sliding navigation row opening with real links, the 1px/mobile-grid stripe disabled over the hero, full header after `is-past-hero`, constant-scale parallax vertical transform change on a visual-only event, same-event review iframe count, and screenshots for control/menu/parallax states.
