@@ -24,6 +24,9 @@
 - `INC-2026-06-27-valeria-duplicate-publication.md`
   - Scope: Smart Update LLM-first duplicate matching, title-only deterministic vetoes, and managed TG/VK fanout for same real event rows.
   - Must not regress: a high-confidence LLM match with same date/venue and no explicit time conflict must not be overruled solely by `unrelated_titles`; `Валерия` and `Концерт Валерии` must merge as one event instead of producing duplicate public posts.
+- `INC-2026-06-27-vk-prune-starvation.md`
+  - Scope: managed `klgdevents` past-event cleanup, `vk_post_prune` capped batches, and VK recommendation hygiene.
+  - Must not regress: old missing/repost-protected managed VK URLs must not starve fresh past live posts behind `VK_POST_PRUNE_LIMIT`; recent past posts without reposts/comments must be prioritized and removed from the feed.
 - `INC-2026-06-26-vk-channel-draft-telegraph-cta.md`
   - Scope: VK Channel manual-copy draft CTA selection for registration-required promo events, especially `80 историй о главном`. Must not regress: Telegraph details pages must not be used as the one CTA when the event/campaign requires registration; missing direct registration/ticket links must fail/skip instead of producing a misleading draft; source-text registration URLs may be used as direct CTAs.
 - `INC-2026-06-26-crumple-missing-video-output.md`

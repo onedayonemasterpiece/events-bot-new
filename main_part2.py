@@ -7330,10 +7330,14 @@ async def prune_past_event_vk_posts(
     today_str = (now or datetime.now(LOCAL_TZ)).date().isoformat()
 
     # 1. Collect past/non-active events that still carry a managed klgdevents post URL.
+    # Prioritize the freshest ended events.  Historical rows can include many
+    # already-missing or repost-protected VK URLs; if those occupy the capped
+    # batch forever, newly-past posts remain live and VK may recommend them.
     async with db.get_session() as session:
         rows = (
             await session.execute(
-                select(Event.id, Event.source_vk_post_url).where(
+                select(Event.id, Event.source_vk_post_url)
+                .where(
                     Event.source_vk_post_url.is_not(None),
                     or_(
                         and_(
@@ -7343,6 +7347,7 @@ async def prune_past_event_vk_posts(
                         Event.lifecycle_status != "active",
                     ),
                 )
+                .order_by(Event.date.desc(), Event.id.desc())
             )
         ).all()
 

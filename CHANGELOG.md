@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Incident / VK past-post prune starvation (INC-2026-06-27)**: `vk_post_prune`
+  now prioritizes the freshest ended events before applying `VK_POST_PRUNE_LIMIT`,
+  so old missing/repost-protected managed VK URLs cannot starve newly-past live
+  posts such as `Ведущий ребёнка` behind the capped batch. Production mitigation
+  deleted 12 verified recent stale `klgdevents` posts with zero reposts/comments
+  and cleared their managed URLs after a row backup.
 - **Release drift / Smart Update dedup adjudicator (INC-2026-05-30)**: restored the previously side-branch-only widened-recall LLM dedup adjudicator into `origin/main` so create-path imports that miss the exact anchor shortlist still get an LLM same-event decision before creating a duplicate. The restored guard keeps hard factual vetoes for time/source multi-session conflicts and generic-ticket false friends, but follows the current LLM-first policy by not using title-only drift to veto high-confidence non-conflicting matches.
 - **Incident / Valeria duplicate publication (INC-2026-06-27)**: Smart Update no longer lets title-only deterministic guards overrule a high-confidence LLM duplicate match when date/venue/time anchors do not conflict. Russian one-character title inflection now covers cases such as `Валерия` vs `Концерт Валерии`, preventing duplicate managed Telegram/VK fanout for one real event.
 - **Incident / VK Channel draft Telegraph CTA (INC-2026-06-26)**: manual

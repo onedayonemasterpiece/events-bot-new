@@ -3,6 +3,8 @@
 See ``docs/features/vk-publishing/autodeletevkposts.md`` for the safety contract.
 """
 
+from datetime import datetime
+
 import pytest
 
 import main
@@ -346,6 +348,49 @@ async def test_prune_limit_caps_candidates(tmp_path, monkeypatch):
     assert stats["candidates"] == 3
     assert stats["deleted"] == 2
     assert len(deletes) == 2
+
+
+@pytest.mark.asyncio
+async def test_prune_limit_prioritizes_freshly_past_events_over_old_missing_backlog(
+    tmp_path, monkeypatch
+):
+    """Old missing rows must not starve newly-past live posts behind the cap."""
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    # More old missing rows than the production cap.
+    for pid in range(1000, 1301):
+        await _add_event(
+            db,
+            date="2020-01-01",
+            source_vk_post_url=_wall_url(pid),
+        )
+    target_event_id = await _add_event(
+        db,
+        title="Freshly past",
+        date="2020-01-02",
+        source_vk_post_url=_wall_url(9999),
+    )
+
+    deletes: list = []
+    _patch_vk(
+        monkeypatch,
+        posts_by_id={9999: {"reposts": {"count": 0}, "comments": {"count": 0}}},
+        deletes=deletes,
+    )
+
+    stats = await main.prune_past_event_vk_posts(
+        db,
+        now=datetime(2020, 1, 3, tzinfo=main.LOCAL_TZ),
+        limit=300,
+    )
+
+    assert stats["candidates"] == 302
+    assert stats["deleted"] == 1
+    assert deletes == [(OWNER_ID, 9999)]
+    async with db.get_session() as session:
+        stored = await session.get(Event, target_event_id)
+    assert stored.source_vk_post_url is None
 
 
 @pytest.mark.asyncio
