@@ -1,9 +1,10 @@
-# Critical Self + Gemini Review — write-path hardening
+# Critical Self + External Consultant Review — write-path hardening
 
 > **Date:** 2026-06-27
 > **Commit under review:** `634a896c` (`docs: allow gated supabase rpc ingest path`)
 > **Scope:** anonymous personalization MVP-0, static event pages, Supabase/Postgres telemetry write path.
 > **Status:** review artifact, not an acceptance decision. Current state remains **engineering-spike ready only**; not canary-ready and not production-ready.
+> **Model-validity correction:** the raw Gemini Flash-Lite outputs in this file are **supplementary probe material only**. They are not a valid external consultant review. Valid Gemini consultation requires `gemini-3-pro-preview` or `gemini-3.1-pro-preview`; both were retried and blocked by provider quota on 2026-06-27.
 
 ## Reviewed evidence
 
@@ -100,22 +101,57 @@ Gemini is useful as a critical reviewer, but several suggestions must not be cop
 - “Hard filter all negative-interest tags” is product-sensitive: explicit hide/not-interested can be a hard veto, but inferred negative interests may need decay/thresholding to avoid a new filter bubble. Promo must never override `audience_exclusion_tags` or explicit user hides.
 - A browser-sent “bot score” is not trusted. Only same-origin/server code can attach a trusted bot/trust decision; pure browser→Supabase RPC must derive trust server-side or fail closed.
 
-## Gemini request transparency
+## External consultant request transparency
 
-Gemini was asked to be critical, not agreeable, and to treat the docs as not production-ready unless executable gates prove otherwise.
+### Policy applied after correction
 
-Model attempts:
+For external architecture/product/security consultation in this project, valid consultant sources are:
+
+- Gemini Pro class only: `gemini-3-pro-preview` or `gemini-3.1-pro-preview`;
+- Opus through Antigravity/agy: `a-opus`;
+- Opus through Claude Code project alias `Opus` when Claude access/tariff is active.
+
+Gemini Flash/Flash-Lite/Lite outputs may be useful probes, but they do not satisfy the external-consultant requirement and must not be used as acceptance evidence.
+
+### Gemini Pro retry evidence
+
+A Pro-only retry was attempted after the operator clarified the policy. The same full review prompt was used; it was countable but not generatable under the current project quota/capacity.
 
 | Attempt | Result |
 | --- | --- |
-| `gemini-3.5-flash` | HTTP 503 twice; not used as final evidence. |
-| `gemini-2.5-pro` | HTTP 429/quota unavailable in this project; not used. |
-| `gemini-3.1-flash-lite` | Main review selected; response id `GJA_arGlHNvZxN8P9OWjkAY`. |
-| `gemini-3.1-flash-lite` | Focused security/RLS review; response id `2JA_ao-SFvyH28oPos6muAQ`. |
-| `gemini-3.1-flash-lite` | Focused product/UX/quality review; response id `35A_aqjcDI2qnsEP-or24AU`. |
-| `gemini-2.5-flash` | Backup response; shorter/less actionable than the selected `3.1-flash-lite` review. |
+| `gemini-3.1-pro-preview` `countTokens` via `GOOGLE_API_KEY` | HTTP 200, `totalTokens=53751`. |
+| `gemini-3.1-pro-preview` `generateContent` via `GOOGLE_API_KEY`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY4` | HTTP 429 `RESOURCE_EXHAUSTED` on every key. |
+| `gemini-3-pro-preview` `generateContent` via `GOOGLE_API_KEY`, `GOOGLE_API_KEY2`, `GOOGLE_API_KEY3`, `GOOGLE_API_KEY4` | HTTP 429 `RESOURCE_EXHAUSTED` on every key. |
 
-Main selected usage metadata:
+Artifact evidence, with secret values omitted, is stored outside git:
+
+- `artifacts/codex/unsigned-personalization-review-2026-06-27/gemini_pro_attempts_2026-06-27.md`
+- `artifacts/codex/unsigned-personalization-review-2026-06-27/gemini_pro_attempts_2026-06-27.json`
+
+Conclusion: **Gemini Pro external review is blocked**, not completed. Do not cite the Flash-Lite response below as a Gemini consultant review.
+
+### Opus/a-opus consultation evidence
+
+A short Opus consultation through Antigravity/agy (`a-opus`) was run to validate the policy correction and patch points. It recommended exactly the current correction: add an external-consultant policy to `AGENTS.md`, cross-reference it from Claude/Codex docs, and reclassify this document's Flash-Lite answer as supplementary probe material.
+
+Artifact evidence is stored outside git:
+
+- `artifacts/codex/unsigned-personalization-review-2026-06-27/a_opus_policy_consultation_2026-06-27.md`
+
+### Earlier non-authoritative Gemini probe
+
+Before the policy correction, the following lower-tier probes were run. They remain below for transparency only:
+
+| Attempt | Result |
+| --- | --- |
+| `gemini-3.5-flash` | HTTP 503 twice; not valid consultant evidence. |
+| `gemini-2.5-pro` | HTTP 429/quota unavailable; also not allowed by the corrected project policy. |
+| `gemini-3.1-flash-lite` | Main probe response; response id `GJA_arGlHNvZxN8P9OWjkAY`; supplementary only. |
+| `gemini-3.1-flash-lite` | Focused security/RLS probe; response id `2JA_ao-SFvyH28oPos6muAQ`; supplementary only. |
+| `gemini-3.1-flash-lite` | Focused product/UX probe; response id `35A_aqjcDI2qnsEP-or24AU`; supplementary only. |
+| `gemini-2.5-flash` | Backup probe; shorter/less actionable; supplementary only. |
+
+Earlier Flash-Lite usage metadata:
 
 ```json
 {
@@ -132,11 +168,11 @@ Main selected usage metadata:
     ],
     "serviceTier": "standard"
   },
-  "note": "deep prompt used after gemini-3.5-flash 503 twice"
+  "note": "supplementary probe only; not a valid external consultant review"
 }
 ```
 
-## Gemini main review — raw response
+## Gemini Flash-Lite supplementary probe — raw response
 
 ```text
 Это ревью архитектуры, основанное на предоставленных документах. Мой вердикт: **архитектура находится в состоянии «декларативного оптимизма»**. Документы описывают идеальную систему, но текущие артефакты (SQL, тесты, контракты) — это лишь каркас, который не прошел проверку на реальную нагрузку и безопасность.
@@ -206,7 +242,7 @@ PR должен содержать только файлы в `supabase/migratio
 **Итого:** Вы слишком много внимания уделяете описанию "как это будет работать" и слишком мало — "как это сломается". Сфокусируйтесь на **SQL-тестах безопасности**, иначе ваш Supabase станет свалкой JSON-мусора через 48 часов после запуска.
 ```
 
-## Gemini focused security/RLS review — raw response
+## Gemini Flash-Lite focused security/RLS supplementary probe — raw response
 
 ```text
 Этот security review сфокусирован на **write-path** и **Postgres/Supabase** безопасности.
@@ -277,7 +313,7 @@ SELECT public.ingest_personalization_summary_v1(p_served_list_hash => 'abc', ...
 **Вердикт:** Не начинайте canary, пока не будет автоматизированного теста, который пытается сделать `SELECT * FROM public.personalization_served_list_summary` под ролью `anon` и получает `permission denied`. Это ваш главный "gate".
 ```
 
-## Gemini focused product/UX review — raw response
+## Gemini Flash-Lite focused product/UX supplementary probe — raw response
 
 ```text
 Этот обзор сфокусирован на критических точках, где архитектурный дизайн расходится с production-реальностью.

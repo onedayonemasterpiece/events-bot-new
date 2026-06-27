@@ -80,6 +80,17 @@
 - В shared-config запрещены встроенные Claude subagents, чтобы делегация не уходила в `Haiku`/`Sonnet`; для делегации оставляй только `Opus`.
 - Не переключай Claude на `Sonnet`/`Haiku`, если пользователь явно не попросил изменить эту политику.
 
+## External consultant policy (Gemini Pro / Opus)
+
+- Для внешних консультаций, архитектурной критики, deep review и acceptance/gate review по проектным решениям допускаются только:
+  - **Gemini Pro class:** `gemini-3-pro-preview` или `gemini-3.1-pro-preview`;
+  - **Opus through Antigravity/agy:** локальная команда `a-opus`;
+  - **Opus through Claude Code:** проектный alias `Opus` из `.claude/agents/Opus.md` (если тариф/доступ активен).
+- Gemini Flash / Flash-Lite / Lite / Gemma / embeddings / OpenAI и прочие модели можно использовать как вспомогательные probes, smoke checks или bulk enrichment, но **нельзя** представлять их результат как полноценное external consultant review.
+- Если `gemini-3-pro-preview` и `gemini-3.1-pro-preview` недоступны (`429`, `503`, quota/capacity/billing), зафиксируй blocker evidence: точный model id, HTTP/status, provider error, redacted key lane/env name, дату и ссылку на artifact. Не подменяй Pro-review Flash/Lite-ответом и не закрывай задачу как “Gemini review complete”.
+- Если Gemini Pro недоступен, допустимая замена для внешней консультации — `a-opus` или Claude `Opus`. Если Opus тоже недоступен из-за тарифа/авторизации, это отдельный blocker, а не повод понижать класс модели.
+- В документации явно маркируй невалидные или низкоклассовые ответы как `supplementary probe material`, а не `external consultant review`.
+
 ## Артефакты и временные файлы
 
 - Любые результаты прогонов, дампы, логи, pid, локальные sqlite, выгрузки и т.п. → `artifacts/` (см. `artifacts/README.md`).

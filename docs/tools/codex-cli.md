@@ -101,3 +101,10 @@ codex exec --output-schema ./schema.json -o artifacts/codex/reports/report.json 
 - Gemma 4 migration playbook: `.codex/skills/gemma-4-migration-playbook/SKILL.md`
   - использовать, когда нужно мигрировать stage-oriented pipeline в этом репозитории с `Gemma 3` на `Gemma 4` или проверить rollout по образцу `guide-excursions`;
   - skill не заменяет канонические docs: он маршрутизирует к ним и собирает в одном месте proven migration contract, anti-patterns и regression checks.
+
+## External consultant calls
+
+- Gemini consultant reviews are valid only on `gemini-3-pro-preview` or `gemini-3.1-pro-preview`; record quota/capacity blockers instead of substituting Flash/Lite.
+- Opus consultation can be requested through Antigravity/agy: `a-opus --print --print-timeout 10m < artifacts/codex/tasks/prompt.md`.
+- Claude Code Opus consultation should use the project `Opus` alias from `.claude/agents/Opus.md` when the Claude tariff/access is active.
+- Save prompts and raw outputs under `artifacts/codex/<task>/`; commit only concise syntheses or canonical docs, not raw artifacts.

@@ -13,6 +13,7 @@
 - Use `Opus` for consultation, architecture review, prompt critique, and substantial rework.
 - When the user asks for "Opus", "consultation", "second opinion", or "доработай через Opus", delegate to the `Opus` subagent instead of changing the main session model ad hoc.
 - For LLM-quality tasks, prefer asking `Opus` for concrete prompt-family edits, schema tightening, and `lollipop`-style stage decomposition rather than broad high-level architecture commentary.
+- For external consultant reviews, follow `AGENTS.md`: Gemini review must use `gemini-3-pro-preview` or `gemini-3.1-pro-preview`; Flash/Lite outputs are supplementary probes only. If Gemini Pro is unavailable, use `a-opus`/Antigravity or this project `Opus` alias when access is active, otherwise record a blocker.
 
 ## Working Rules
 - Start with the canonical project docs: `AGENTS.md`, `docs/README.md`, and `docs/routes.yml`.
