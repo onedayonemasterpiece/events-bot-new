@@ -1,6 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import EventHero from '../../components/EventHero.astro';
+import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
 import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
@@ -8,6 +8,13 @@ import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/s
 import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'overlay-controls' | 'split-actions';
+const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
+  5878: 'poster-billboard',
+  6322: 'photo-cinematic-sheet',
+  4913: 'poster-attached-card',
+  5370: 'photo-parallax-sheet',
+  4512: 'photo-parallax-sheet',
+};
 const FEED_VARIANT_BY_EVENT_ID: Record<number, FeedCardVariant> = {
   5878: 'overlay-controls',
   6322: 'split-actions',
@@ -36,27 +43,32 @@ const ctaLabel = eventTicketActionLabel(event);
 const feedCardVariant = FEED_VARIANT_BY_EVENT_ID[event.id] || 'overlay-controls';
 const feedVariantLabel = FEED_VARIANT_LABELS[feedCardVariant];
 const stickyDateLabel = displayDateTime(event);
+const fallbackHeroComposition: HeroComposition = event.image_url
+  ? (event.image_text_mode === 'visual_only' ? 'photo-cinematic-sheet' : 'poster-billboard')
+  : 'compact-ticketing';
+const heroComposition = HERO_COMPOSITION_BY_EVENT_ID[event.id] || fallbackHeroComposition;
 ---
-<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData}>
+<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData} heroChrome="immersive">
   <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={withBase('/__preview/')}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
-        {event.city && <span aria-hidden="true">/</span>}
-        {event.event_type && <span>{event.event_type}</span>}
-      </nav>
+    <div class="page-shell page-shell--event-impact">
       <div class="event-grid">
-        <article class="main-col section-card section-card--hero">
+        <article class="main-col section-card section-card--hero section-card--impact-hero">
           <div class="section-card__inner section-card__inner--hero">
-            <EventHero event={event} />
+            <EventHero event={event} composition={heroComposition} />
           </div>
         </article>
         <div class="side-col">
           <EventCtaPanel event={event} />
         </div>
       </div>
+
+      <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        {event.city && <a href={withBase(`/__preview/?city=${encodeURIComponent(event.city)}`)}>{event.city}</a>}
+        {event.city && <span aria-hidden="true">/</span>}
+        {event.event_type && <span>{event.event_type}</span>}
+      </nav>
 
       <section class="section-card section-card--quiet" style="margin-top: 1rem;">
         <div class="section-card__inner">

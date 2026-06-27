@@ -5,16 +5,24 @@ import type { PreviewEvent } from '../lib/types';
 import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, isExternalHttpUrl, isCalendarEligible } from '../lib/events';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
+export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
 interface Props {
   event: PreviewEvent;
   modeOverride?: HeroMode;
+  composition?: HeroComposition;
   headingTag?: 'h1' | 'h2' | 'h3';
 }
 
-const { event, modeOverride, headingTag = 'h1' } = Astro.props;
+const { event, modeOverride, composition, headingTag = 'h1' } = Astro.props;
 const HeadingTag = headingTag;
 const derivedMode: HeroMode = event.image_url ? (event.image_text_mode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
+const derivedComposition: HeroComposition = heroMode === 'fallback-art'
+  ? 'compact-ticketing'
+  : heroMode === 'photo-cover'
+    ? 'photo-cinematic-sheet'
+    : 'poster-billboard';
+const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = event.ticket.href;
@@ -30,11 +38,11 @@ const tint = (() => {
   if (/ярмарк|семейн|водн|дет/u.test(haystack)) return 'cool';
   return 'neutral';
 })();
-const heroClass = ['event-hero', `event-hero--${heroMode}`].join(' ');
+const heroClass = ['event-hero', `event-hero--${heroMode}`, `event-hero--${heroComposition}`].join(' ');
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
 ---
-<section class={heroClass} data-event-hero data-hero-mode={heroMode} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
+<section class={heroClass} data-event-hero data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={event.image_text_mode} data-hero-tint={tint}>
   <div class="event-hero__visual" aria-label={heroMode === 'fallback-art' ? `Обложка без изображения: ${event.title}` : undefined}>
     {event.image_url && heroMode !== 'fallback-art' ? (
       <img

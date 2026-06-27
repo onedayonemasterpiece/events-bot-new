@@ -15,6 +15,7 @@ export const GET: APIRoute = () => {
     { loc: absoluteUrl('/segodnya/'), lastmod: now },
     { loc: absoluteUrl('/vyhodnye/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
+    { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
     ...getEvents().map((event) => ({ loc: absoluteUrl(eventPath(event)), lastmod: normalizeLastmod(event.updated_at, now) })),
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map((entry) => `  <url><loc>${entry.loc}</loc><lastmod>${entry.lastmod}</lastmod></url>`).join('\n')}\n</urlset>\n`;

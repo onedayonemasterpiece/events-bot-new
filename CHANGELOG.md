@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Static site pages / event hero composition v20**: published `preview-20260627-event-pages-v20` with a real mobile hero composition pass: full-bleed 100vw hero visuals, explicit `data-hero-composition` variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`), immersive mobile header, breadcrumbs moved below/hidden from the first mobile screen, dominant primary CTA with secondary calendar/share, sticky CTA suppressed over the hero, `/lab/hero/` composition lab and `/lab/hero/review/` live viewport review route while preserving OCR no-crop/no-blur policy and no runtime OCR/ML.
+
 - **Static site pages / event hero v19**: published `preview-20260627-event-pages-v19` with a deterministic strong event hero (`poster-stage` for OCR/unknown posters, `photo-cover` for visual-only images, `fallback-art` for no image), a `/lab/hero/` QA route, Gemini Pro + Opus review traceability, CTA-before-facts mobile decision order, and icon-style under-card share/like controls for the split-actions A/B variant.
 
 - **Static site pages / event-card UI A/B v18**: added preview `preview-20260627-event-pages-v18` with page-level feed-card variants: A keeps one overlay action row, B tests a two-row card with calendar/negative utility actions inside and right-aligned share + thumb-reachable like under the card; preview checks now cover both variants, feed calendar gating and parseable JSON-LD.

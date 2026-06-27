@@ -8,11 +8,13 @@ interface Props {
   canonicalUrl: string;
   ogImage?: string | null;
   structuredData?: unknown[];
+  heroChrome?: 'standard' | 'immersive';
 }
 
-const { title, description, canonicalUrl, ogImage, structuredData = [] } = Astro.props;
+const { title, description, canonicalUrl, ogImage, structuredData = [], heroChrome = 'standard' } = Astro.props;
 const robots = 'noindex,nofollow,noarchive';
 const safeDescription = description || 'Анонс события в Калининградской области.';
+const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 
 const FOOTER_SOCIAL_LINKS = [
   { network: 'Telegram', label: 'Анонсы', href: 'https://t.me/kenigevents', icon: 'telegram' },
@@ -170,6 +172,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
       .badge--status { background: var(--accent-soft); color: #0f544f; border-color: rgba(15, 118, 110, 0.2); }
       .section-card--hero { overflow: hidden; }
+      .section-card--impact-hero { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
       .section-card__inner--hero { padding: 0; }
       .event-hero { display: grid; overflow: hidden; border-radius: inherit; background: var(--surface-strong); }
       .event-hero__visual {
@@ -198,7 +201,7 @@ const FOOTER_SOCIAL_LINKS = [
       .event-hero__fallback { display: grid; gap: 0.85rem; place-items: center; }
       .event-hero__fallback span { font-weight: 850; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.78; }
       .event-hero__fallback strong { max-width: 15ch; font-size: clamp(1.8rem, 8vw, 3.4rem); line-height: 0.96; letter-spacing: -0.05em; }
-      .event-hero__decision { display: grid; gap: 0.75rem; padding: clamp(1rem, 4vw, 1.45rem); background: linear-gradient(180deg, #fffdf8, #fff8ef); }
+      .event-hero__decision { position: relative; z-index: 2; display: grid; gap: 0.75rem; padding: clamp(1rem, 4vw, 1.45rem); background: linear-gradient(180deg, #fffdf8, #fff8ef); }
       .event-hero__eyebrow { margin: 0; color: var(--primary-strong); font-size: 0.76rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; }
       .event-hero__title { max-width: 18ch; font-size: clamp(1.8rem, 7vw, 3.7rem); }
       .event-hero__facts { display: grid; gap: 0.55rem; }
@@ -360,6 +363,30 @@ const FOOTER_SOCIAL_LINKS = [
       .hero-lab-item { border: 1px solid rgba(121,48,20,0.12); border-radius: 24px; overflow: hidden; background: #fffdf8; }
       .hero-lab-item .event-hero { border-radius: 24px; }
       .hero-lab-item .event-hero__title { font-size: clamp(1.35rem, 5.6vw, 2rem); }
+      .hero-lab-item__meta { display: grid; gap: 0.25rem; padding: 0.85rem 1rem; border-top: 1px solid rgba(121,48,20,0.10); color: var(--muted); font-size: 0.9rem; }
+      .hero-lab-item__meta strong { color: var(--text); }
+      .hero-lab-item__meta a { color: var(--primary-strong); font-weight: 820; }
+      .hero-review-grid { display: grid; gap: 1rem; margin-top: 1rem; }
+      .hero-review-card { overflow: hidden; }
+      .hero-phone-frame {
+        width: min(100%, 430px);
+        margin: 0.9rem auto 0;
+        padding: 0.7rem;
+        border-radius: 32px;
+        background: #15110f;
+        box-shadow: 0 24px 60px rgba(34,26,20,0.24);
+        overflow: auto;
+      }
+      .hero-phone-frame iframe {
+        display: block;
+        width: 390px;
+        max-width: 100%;
+        height: 844px;
+        margin: 0 auto;
+        border: 0;
+        border-radius: 24px;
+        background: #fff8ed;
+      }
       .discovery-load-more { margin: 1rem auto 0; width: min(100%, 320px); }
       .personalization-consent { position: fixed; left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 30; display: none; gap: 0.8rem; align-items: center; justify-content: space-between; width: min(680px, calc(100% - 2rem)); margin: 0 auto; padding: 0.85rem 1rem; border: 1px solid rgba(121,48,20,0.18); border-radius: 22px; background: rgba(255,253,248,0.98); box-shadow: 0 18px 46px rgba(72,45,25,0.2); color: var(--text); }
       .personalization-consent.is-visible { display: flex; }
@@ -408,6 +435,7 @@ const FOOTER_SOCIAL_LINKS = [
         .facts-quick { grid-template-columns: repeat(2, 1fr); }
         .preview-ab__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .hero-lab-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .hero-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .event-hero__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .action-grid { grid-template-columns: 1fr 1fr; }
         .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -416,6 +444,140 @@ const FOOTER_SOCIAL_LINKS = [
       }
       @media (max-width: 1023px) {
         .side-col { display: none; }
+      }
+      @media (max-width: 759px) {
+        body.hero-chrome-immersive .site-header {
+          position: absolute;
+          inset-inline: 0;
+          top: 0;
+          z-index: 18;
+          border-bottom: 0;
+          background: linear-gradient(180deg, rgba(20, 15, 12, 0.62), rgba(20, 15, 12, 0));
+          color: #fff;
+        }
+        body.hero-chrome-immersive .site-header__inner {
+          min-height: 64px;
+          padding-top: env(safe-area-inset-top);
+        }
+        body.hero-chrome-immersive .brand,
+        body.hero-chrome-immersive .site-nav a {
+          color: #fff;
+          text-decoration: none;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.28);
+        }
+        body.hero-chrome-immersive .brand__sub { color: rgba(255,255,255,0.78); }
+        body.hero-chrome-immersive .site-nav a { border-color: rgba(255,255,255,0.24); background: rgba(24,18,14,0.32); }
+        body.hero-chrome-immersive main { padding-top: 0; }
+        body.hero-chrome-immersive .page-shell--event-impact { width: min(100% - 24px, 1180px); }
+        body.hero-chrome-immersive .crumbs--after-hero { display: none; }
+        .event-hero--poster-billboard,
+        .event-hero--poster-attached-card,
+        .event-hero--photo-cinematic-sheet,
+        .event-hero--photo-parallax-sheet {
+          overflow: visible;
+          border-radius: 0;
+          background: transparent;
+        }
+        .event-hero--poster-billboard .event-hero__visual,
+        .event-hero--poster-attached-card .event-hero__visual,
+        .event-hero--photo-cinematic-sheet .event-hero__visual,
+        .event-hero--photo-parallax-sheet .event-hero__visual {
+          width: 100vw;
+          margin-left: calc(50% - 50vw);
+          margin-right: calc(50% - 50vw);
+          border-radius: 0;
+        }
+        .event-hero--poster-billboard.event-hero--poster-stage .event-hero__visual,
+        .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
+          min-height: min(60dvh, 540px);
+          max-height: min(60dvh, 540px);
+          padding: calc(3.75rem + env(safe-area-inset-top)) 0.75rem 1.35rem;
+          align-items: center;
+        }
+        .event-hero--poster-billboard.event-hero--poster-stage .event-hero__image,
+        .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__image {
+          width: auto;
+          max-width: min(calc(100vw - 1.5rem), 430px);
+          max-height: calc(min(60dvh, 540px) - 5.1rem - env(safe-area-inset-top));
+          object-fit: contain;
+          object-position: center bottom;
+          border-radius: 20px;
+        }
+        .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
+          min-height: min(64dvh, 560px);
+          max-height: min(64dvh, 560px);
+          padding-bottom: 2.8rem;
+        }
+        .event-hero--photo-cinematic-sheet.event-hero--photo-cover .event-hero__visual,
+        .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__visual {
+          min-height: min(64dvh, 560px);
+          max-height: min(64dvh, 560px);
+          aspect-ratio: auto;
+        }
+        .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__image {
+          height: 110%;
+          transform: translate3d(0, 0, 0) scale(1.03);
+          transform-origin: center;
+          will-change: transform;
+        }
+        .event-hero--compact-ticketing {
+          border-radius: 24px;
+          background: var(--surface-strong);
+          box-shadow: var(--shadow);
+        }
+        .event-hero--compact-ticketing .event-hero__visual {
+          min-height: 260px;
+          max-height: min(44dvh, 380px);
+          border-radius: 24px 24px 0 0;
+        }
+        .event-hero--poster-billboard .event-hero__decision,
+        .event-hero--poster-attached-card .event-hero__decision,
+        .event-hero--photo-cinematic-sheet .event-hero__decision,
+        .event-hero--photo-parallax-sheet .event-hero__decision {
+          width: min(calc(100vw - 1.5rem), 680px);
+          margin: -1.35rem auto 0;
+          border: 1px solid rgba(121,48,20,0.14);
+          border-radius: 26px;
+          background: linear-gradient(180deg, #fffdf8 0%, #fff7ea 100%);
+          box-shadow: 0 18px 42px rgba(37,24,15,0.18);
+        }
+        .event-hero--poster-attached-card .event-hero__decision { margin-top: -2.15rem; }
+        .event-hero--photo-cinematic-sheet .event-hero__decision { margin-top: -3.25rem; }
+        .event-hero--photo-parallax-sheet .event-hero__decision { margin-top: -4rem; }
+        .event-hero--poster-billboard .event-hero__decision::before,
+        .event-hero--poster-attached-card .event-hero__decision::before,
+        .event-hero--photo-cinematic-sheet .event-hero__decision::before,
+        .event-hero--photo-parallax-sheet .event-hero__decision::before {
+          content: "";
+          position: absolute;
+          left: 1.1rem;
+          right: 1.1rem;
+          top: -0.42rem;
+          height: 0.84rem;
+          border-radius: 999px;
+          background: var(--primary);
+          box-shadow: 0 10px 22px rgba(121,48,20,0.22);
+        }
+        .event-hero__actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.55rem;
+          margin-top: 0;
+        }
+        .event-hero__actions .cta-button {
+          grid-column: 1 / -1;
+          width: 100%;
+          font-size: 1rem;
+          box-shadow: 0 14px 28px rgba(121,48,20,0.22);
+        }
+        .event-hero__actions .secondary-button {
+          width: 100%;
+          background: #fff;
+          border-color: rgba(121,48,20,0.18);
+        }
+        .event-hero__facts { gap: 0.45rem; }
+        .event-hero__fact { padding: 0.58rem 0.65rem; }
+        .event-hero__summary { display: none; }
       }
       @media (min-width: 1024px) {
         main { padding-top: 2rem; padding-bottom: 3rem; }
@@ -429,6 +591,7 @@ const FOOTER_SOCIAL_LINKS = [
         .event-main-actions { display: none; }
         .cards-grid--immersive { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .hero-lab-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .hero-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .cards-grid--feed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .mobile-sticky-cta { display: none; }
         footer { padding-bottom: 2rem; }
@@ -439,6 +602,8 @@ const FOOTER_SOCIAL_LINKS = [
         .page-shell { width: min(100% - 24px, 1180px); }
         .section-card { border-radius: 22px; }
         .section-card__inner { padding: 1rem; }
+        .section-card--impact-hero { border-radius: 0; }
+        .section-card__inner--hero { padding: 0; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
         .event-card__feedback { grid-template-columns: 48px minmax(118px, 1fr) 82px; gap: 0.28rem; left: 0.56rem; right: 0.56rem; }
@@ -459,10 +624,11 @@ const FOOTER_SOCIAL_LINKS = [
       }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+        .event-hero--photo-parallax-sheet .event-hero__image { transform: none !important; }
       }
     </style>
   </head>
-  <body>
+  <body class={bodyClass}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -1573,11 +1739,28 @@ const FOOTER_SOCIAL_LINKS = [
 
         const sticky = document.querySelector('[data-sticky-cta]');
         const marker = document.querySelector('[data-hide-sticky-after]');
+        let stickyHiddenByFeed = false;
+        let stickyHiddenByHero = false;
+        const updateStickyCtaVisibility = () => {
+          if (!sticky) return;
+          sticky.classList.toggle('is-hidden', Boolean(stickyHiddenByFeed || stickyHiddenByHero));
+        };
         if (sticky && marker && 'IntersectionObserver' in window) {
           const observer = new IntersectionObserver((entries) => {
-            sticky.classList.toggle('is-hidden', entries.some((entry) => entry.isIntersecting));
+            stickyHiddenByFeed = entries.some((entry) => entry.isIntersecting);
+            updateStickyCtaVisibility();
           }, { rootMargin: '0px 0px -18% 0px', threshold: 0.01 });
           observer.observe(marker);
+        }
+        const heroForSticky = document.querySelector('[data-event-hero]');
+        if (sticky && heroForSticky && 'IntersectionObserver' in window) {
+          stickyHiddenByHero = true;
+          updateStickyCtaVisibility();
+          const heroObserver = new IntersectionObserver((entries) => {
+            stickyHiddenByHero = entries.some((entry) => entry.isIntersecting);
+            updateStickyCtaVisibility();
+          }, { rootMargin: '-16% 0px -54% 0px', threshold: 0.01 });
+          heroObserver.observe(heroForSticky);
         }
 
         function renderFeedbackReport() {
@@ -1616,6 +1799,35 @@ const FOOTER_SOCIAL_LINKS = [
           }
         }, { passive: true });
 
+        function hydrateHeroParallax() {
+          const heroes = Array.from(document.querySelectorAll('.event-hero--photo-parallax-sheet .event-hero__visual'));
+          if (!heroes.length) return;
+          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+          let ticking = false;
+          const update = () => {
+            ticking = false;
+            const viewport = window.innerHeight || 800;
+            heroes.forEach((visual) => {
+              const image = visual.querySelector('.event-hero__image');
+              if (!image) return;
+              const rect = visual.getBoundingClientRect();
+              if (rect.bottom < -80 || rect.top > viewport + 80) return;
+              const progress = (viewport / 2 - (rect.top + rect.height / 2)) / Math.max(viewport, 1);
+              const offset = Math.max(-22, Math.min(22, progress * 38));
+              image.style.transform = `translate3d(0, ${offset}px, 0) scale(1.045)`;
+            });
+          };
+          const request = () => {
+            if (ticking) return;
+            ticking = true;
+            window.requestAnimationFrame(update);
+          };
+          update();
+          document.addEventListener('scroll', request, { passive: true });
+          window.addEventListener('resize', request, { passive: true });
+        }
+
+        hydrateHeroParallax();
         applyFeedbackState();
       })();
     </script>

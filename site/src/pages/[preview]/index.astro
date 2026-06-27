@@ -10,6 +10,10 @@ export function getStaticPaths() {
 const events = getEvents();
 const variantA = events.find((event) => event.id === 5878);
 const variantB = events.find((event) => event.id === 6322) || events.find((event) => event.id === 4913);
+const heroPoster = events.find((event) => event.id === 5878);
+const heroAttached = events.find((event) => event.id === 4913);
+const heroPhoto = events.find((event) => event.id === 6322);
+const heroParallax = events.find((event) => event.id === 5370) || events.find((event) => event.id === 4512);
 const build = getPreviewBuild();
 const canonicalUrl = absoluteUrl('/__preview/');
 const title = `Preview статических страниц событий | ${SITE_NAME}`;
@@ -34,6 +38,38 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <a href={withBase('/sitemap.xml')}>sitemap.xml</a>
             <a href={withBase('/robots.txt')}>robots.txt</a>
             <a href={withBase('/lab/hero/')}>Hero lab</a>
+            <a href={withBase('/lab/hero/review/')}>Hero viewport review</a>
+          </div>
+
+          <div class="preview-ab" aria-label="A/B/C/D сравнение hero события">
+            <h2>UI-варианты hero события</h2>
+            <div class="preview-ab__grid">
+              {heroPoster && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroPoster.slug}/`)}>
+                  <strong>A · Poster Billboard</strong>
+                  <span>Полная OCR-афиша без crop, 100vw hero slab и H1/CTA sheet снизу.</span>
+                </a>
+              )}
+              {heroAttached && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroAttached.slug}/`)}>
+                  <strong>B · Poster Attached Card</strong>
+                  <span>Более смелый attach/overlap с сохранением no-crop политики для афиш.</span>
+                </a>
+              )}
+              {heroPhoto && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroPhoto.slug}/`)}>
+                  <strong>C · Photo Cinematic Sheet</strong>
+                  <span>visual_only: крупное cover-изображение и decision sheet, без H1 поверх картинки.</span>
+                </a>
+              )}
+              {heroParallax && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroParallax.slug}/`)}>
+                  <strong>D · Photo Parallax Sheet</strong>
+                  <span>Эксперимент с мягким parallax для visual_only и reduced-motion guard.</span>
+                </a>
+              )}
+            </div>
+            <p class="muted-note">Сравнение привязано к разным event pages: можно открыть каждое событие и почувствовать первый экран, а не смотреть технический image-mode.</p>
           </div>
 
           <div class="preview-ab" aria-label="A/B сравнение карточек ленты">
