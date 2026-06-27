@@ -9,21 +9,22 @@
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/segodnya/`, `/vyhodnye/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
+Для медиа export обязан передавать `image_text_mode` из существующего OCR/media-контура: `ocr_text` и `unknown` рендерятся в натуральном соотношении без crop/backdrop, `visual_only` допускает cover-кроп в вертикальной 3:4 карточке. Astro build сам OCR не запускает.
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v11/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v11/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v11/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v11/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v11/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v11/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v11/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v11/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v13/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v13/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v13/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v13/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v13/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v13/__preview/>
 
-Preview `v11` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions only for one-day/short events, single native-share-first button, favicon, prefetch for static links, sticky CTA hiding when the user reaches the feed, and a poster media rule: every hero/card/listing media frame is strict vertical `3:4`; if OCR/text is present or unknown, the full poster must be preserved without crop; only verified visual-only media may fill/crop that `3:4` frame. Preview `v11` also replaces the post-like bubble with a non-overlapping share action in the bottom row: the VK-like outlined share arrow always shows `Поделиться + count`, calls the native system share sheet, and increments a local share count. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap likes the card with a heart burst; `Не интересно` turns the card into a grey explanatory plate until the next page/reload. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. Hero and feed media share the same vertical rule: `visual_only` uses cover, while `ocr_text`/`unknown` keeps the full poster visible with `contain` over a non-blurred same-poster cover underlay, so there is no OCR crop and no blur fill.
+Preview `v13` keeps the consultant P0 hardening and explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions only for one-day/short events, single native-share-first button, favicon, prefetch for static links, and sticky CTA hiding when the user reaches the feed. Media rule after the v13 regression fix: `visual_only` images use a strict vertical `3:4` cover frame; `ocr_text` and `unknown` images in hero/card/listing render as the actual image in its natural aspect ratio, with no crop, no fixed `3:4` frame, no `contain` over a duplicate underlay, no blur/backdrop fill and no repeated image edges. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. Likes still animate from the explicit like button. `Не интересно` turns the card into a grey explanatory plate until the next page/reload. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split.
 
-Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
+Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`.
 
 ## Цель продукта
 

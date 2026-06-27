@@ -16,13 +16,15 @@ const sharesCount = event.shares_count ?? Math.max(0, Math.round(likesCount * 0.
 const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover'].join(' ');
-const posterStyle = event.image_url ? `--poster-image: url('${event.image_url}')` : undefined;
+const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
+const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
+const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const feedbackClass = ['event-card__feedback', canAddToCalendar ? '' : 'event-card__feedback--no-calendar'].filter(Boolean).join(' ');
 ---
 <article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${event.display_date}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
-      <span class={mediaShellClass} style={posterStyle}>
+      <span class={mediaShellClass}>
         <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
       </span>
     ) : (
@@ -57,11 +59,11 @@ const feedbackClass = ['event-card__feedback', canAddToCalendar ? '' : 'event-ca
     >
       <Icon name="share" />
       <span class="share-label" data-share-label>Поделиться</span>
-      <span class="feedback-count" data-share-count>{sharesCount}</span>
+      <span class="feedback-count" data-share-count>{shareCountLabel}</span>
     </button>
-    <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Поставить лайк: ${event.title}. Сейчас ${likesCount}`}>
+    <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
       <Icon name="heart" />
-      <span class="feedback-count" data-feedback-count>{likesCount}</span>
+      <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
     </button>
   </div>
 

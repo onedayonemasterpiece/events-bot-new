@@ -159,11 +159,11 @@ const safeDescription = description || 'Анонс события в Калин�
         font-weight: 700;
       }
       .badge--status { background: var(--accent-soft); color: #0f544f; border-color: rgba(15, 118, 110, 0.2); }
-      .hero-media { margin: 1rem auto 0; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: #15110f; max-height: min(78dvh, 820px); }
-      .hero-media--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; }
+      .hero-media { margin: 1rem auto 0; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: #15110f; }
+      .hero-media--cover { position: relative; aspect-ratio: 3 / 4; max-height: min(78dvh, 820px); background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; }
       .hero-media--cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .hero-media--preserve { position: relative; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.48), rgba(12,10,9,0.48)), var(--poster-image); background-size: cover; background-position: center; }
-      .hero-media--preserve img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+      .hero-media--preserve { background: #15110f; }
+      .hero-media--preserve img { display: block; width: 100%; height: auto; }
       .hero-fallback { width: 100%; height: 100%; display: grid; place-items: center; padding: 1.5rem; color: #fff; text-align: center; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.32), transparent 20rem), linear-gradient(135deg, #8a3f23, #1d5f5a); }
       .hero-fallback strong { display:block; max-width: 18ch; font-size: clamp(1.5rem, 5vw, 3.2rem); line-height: 1; letter-spacing: -0.04em; }
       .facts-quick { display: grid; gap: 0.65rem; margin-top: 0.85rem; }
@@ -202,7 +202,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
       .icon { width: 1.15em; height: 1.15em; flex: 0 0 auto; fill: currentColor; }
-      .icon--share { fill: none; }
+      .icon--share { fill: currentColor; stroke: none; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
       .native-share-button { cursor: pointer; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
@@ -237,8 +237,8 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card__media-shell { display: block; width: 100%; overflow: hidden; background: #15110f; }
       .event-card__media-shell--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
       .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .event-card__media-shell--preserve { position: relative; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.52), rgba(12,10,9,0.52)), var(--poster-image); background-size: cover; background-position: center; }
-      .event-card__media-shell--preserve .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+      .event-card__media-shell--preserve { background: #15110f; }
+      .event-card__media-shell--preserve .event-card__media { display: block; width: 100%; height: auto; }
       .event-card__fallback { min-height: 100%; display: grid; align-content: space-between; gap: 0.7rem; padding: 1rem; color: rgba(255,255,255,0.9); font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
       .event-card__fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem 0.85rem 4.85rem; }
@@ -252,6 +252,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card__feedback--no-calendar { grid-template-columns: 52px minmax(126px, 1fr) 88px; }
       .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: 900; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
       .feedback-button .icon { width: 1.25rem; height: 1.25rem; }
+      .feedback-count:empty { display: none; }
       .feedback-button--like { min-width: 88px; padding: 0.44rem 0.58rem; font-size: 1.04rem; }
       .feedback-button--calendar { padding: 0.48rem; text-decoration: none; color: rgba(255,255,255,0.94); }
       .feedback-button--calendar .icon { width: 1.18rem; height: 1.18rem; }
@@ -279,8 +280,8 @@ const safeDescription = description || 'Анонс события в Калин�
       .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
       .listing-item__media--cover { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background: linear-gradient(135deg, #8a3f23, #0f766e); }
       .listing-item__media--cover .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .listing-item__media--preserve { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.52), rgba(12,10,9,0.52)), var(--poster-image); background-size: cover; background-position: center; }
-      .listing-item__media--preserve .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+      .listing-item__media--preserve { background: #15110f; }
+      .listing-item__media--preserve .listing-item__image { display: block; width: 100%; height: auto; }
       .listing-item__fallback { width: 100%; height: 100%; min-height: 138px; display: grid; place-items: center; color: #fff; padding: 0.7rem; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.07em; }
       .listing-item__body { min-width: 0; display: grid; gap: 0.42rem; align-content: center; }
       .listing-item__meta { display: flex; flex-wrap: wrap; gap: 0.4rem; color: var(--muted); font-size: 0.84rem; font-weight: 800; }
@@ -385,8 +386,6 @@ const safeDescription = description || 'Анонс события в Калин�
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         let shareCalloutTimer = 0;
-        let pendingCardNavigation = 0;
-        let lastCardTap = { id: '', ts: 0 };
 
         function readJson(key, fallback) {
           try {
@@ -521,6 +520,11 @@ const safeDescription = description || 'Анонс события в Калин�
           }).forEach((card) => feed.appendChild(card));
         }
 
+        function formatCount(value) {
+          const number = Number(value || 0);
+          return number > 0 ? String(number) : '';
+        }
+
         function applyFeedbackState(options = {}) {
           const map = state();
           const cards = document.querySelectorAll('[data-event-card]');
@@ -533,14 +537,16 @@ const safeDescription = description || 'Анонс события в Калин�
               const base = Number(button.dataset.baseCount || '0');
               const localLike = current.liked ? 1 : 0;
               button.setAttribute('aria-pressed', current.liked ? 'true' : 'false');
-              button.setAttribute('aria-label', `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${card.dataset.eventTitle || 'событие'}. Сейчас ${base + localLike}`);
+              const total = base + localLike;
+              const title = card.dataset.eventTitle || 'событие';
+              button.setAttribute('aria-label', total > 0 ? `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${title}. Сейчас ${total}` : `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${title}`);
               const count = button.querySelector('[data-feedback-count]');
-              if (count) count.textContent = String(base + localLike);
+              if (count) count.textContent = formatCount(total);
             });
             card.querySelectorAll('[data-share-count]').forEach((count) => {
               const shareButton = count.closest('[data-native-share]');
               const base = Number(shareButton?.dataset.shareBaseCount || '0');
-              count.textContent = String(base + Number(current.shares || 0));
+              count.textContent = formatCount(base + Number(current.shares || 0));
             });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
@@ -655,19 +661,7 @@ const safeDescription = description || 'Анонс события в Калин�
           const href = card.dataset.cardHref;
           if (!href) return;
           event.preventDefault();
-          window.clearTimeout(pendingCardNavigation);
-          const now = Date.now();
-          const isDoubleTap = (event.detail >= 2) || (lastCardTap.id === String(card.dataset.eventId || '') && now - lastCardTap.ts < 320);
-          lastCardTap = { id: String(card.dataset.eventId || ''), ts: now };
-          if (isDoubleTap) {
-            setCardLike(card, true, 'double_tap_like_event');
-            lastCardTap = { id: '', ts: 0 };
-            return;
-          }
-          const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-          pendingCardNavigation = window.setTimeout(() => {
-            location.href = href;
-          }, isCoarsePointer ? 260 : 0);
+          location.href = href;
         });
 
         document.addEventListener('keydown', (event) => {

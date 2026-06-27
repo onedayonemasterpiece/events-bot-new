@@ -14,10 +14,9 @@ const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const ctaLabel = eventTicketActionLabel(event);
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__media--preserve' : 'listing-item__media--cover'].join(' ');
-const posterStyle = event.image_url ? `--poster-image: url('${event.image_url}')` : undefined;
 ---
 <article class="listing-item">
-  <a class={mediaLinkClass} href={href} style={posterStyle} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class={mediaLinkClass} href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
       <img class="listing-item__image" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
     ) : (

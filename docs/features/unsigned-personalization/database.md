@@ -46,7 +46,7 @@ Official references:
 
 The MVP write path should be **compact summaries first**, not a raw event firehose:
 
-- `public.personalization_event_reaction_counter` — **applied 2026-06-27** compact public aggregate for event-card counters. It stores `source_likes_count` (TG/VK/source-post metrics imported by backend) and `service_likes_count` (first-party KenigEvents likes) in the same row, with generated `likes_count = source_likes_count + service_likes_count`. Browser/Data API roles may select only `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`; source/service split, source views and metadata remain backend-only. UI copy must show only total counts.
+- `public.personalization_event_reaction_counter` — **applied 2026-06-27** compact public aggregate for event-card counters. It stores `source_likes_count` (TG/VK/source-post metrics imported by backend) and `service_likes_count` (first-party KenigEvents likes) in the same row, with generated `likes_count = source_likes_count + service_likes_count`. Browser/Data API roles may select only `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`; source/service split, source views and metadata remain backend-only. UI copy must show only total counts. Long-lived first-party reactions should be folded from a bounded state table, not from an infinite raw log.
 - `public.personalization_session_summary` — compact session/profile deltas after consent;
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.

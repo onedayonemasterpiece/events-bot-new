@@ -220,6 +220,8 @@ reset или migrate-known-fields-only. UX обязан иметь действ�
 - `personalization_served_list_summary` — compact exposure/served-list summary для обучения будущего ranker;
 - `personalization_event_reaction` — компактный raw-журнал **только сильных явных действий** (`like_event`, `unlike_event`, `not_interested`, `undo_not_interested`) с временем, anonymous/session id, event id, surface и position; из него строится отчёт “сколько лайков сделал конкретный anonymous visitor и когда”;
 - `personalization_event_reaction_counter` / static aggregate snapshot — счётчики лайков/негативных реакций по событию для показа на карточках и статического build/export. Для лайков источник и сервис хранятся консистентно в одной строке: `source_likes_count` (импортированные реакции из TG/VK/source posts) + `service_likes_count` (первые лайки KenigEvents) = generated `likes_count`; публичный UI/Data API показывает только общий `likes_count`, без технической разбивки;
+- `personalization_event_reaction_state` — одна строка на `(anon_id, event_id)` с текущим явным состоянием, чтобы повторные toggle-действия не раздували долгоживущие таблицы;
+- `personalization_visitor_reaction_daily` — компактный дневной rollup по anonymous visitor для отчётов после очистки raw-журнала;
 - `interaction_event` — опциональная sampled/debug raw telemetry, выключена по умолчанию для слабых impression/skip;
 - `visitor_profile_snapshot` — compact `session`/`short`/`mid`/`long` profile horizons; each snapshot keeps positive vectors/maps and the separate negative-interest axis; в MVP это analytics/eval/post-MVP server-ranker evidence, а не browser read dependency;
 - `event_feature_snapshot` — lightweight snapshot event features for ranking;

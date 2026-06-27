@@ -36,18 +36,21 @@ if (/\bnull\b/.test(controlHtml)) throw new Error('Rendered HTML contains litera
 if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-prone event-card anchor leaked');
 if (!controlHtml.includes('data-card-href=')) throw new Error('Event cards must expose full-card navigation href');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
-if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error('Text/OCR poster cards must preserve full poster without crop');
+if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error('Text/OCR poster cards must preserve full natural poster ratio without crop');
 if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 3:4 cover media shell');
-if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || /blur\(/u.test(controlHtml)) throw new Error('Blur/backdrop poster fill leaked into event page');
+if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
+if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
+if (/object-fit:\s*contain/u.test(controlHtml)) throw new Error('OCR-safe media must use natural image ratio, not contain over a fixed frame');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
 if (!controlHtml.includes('feedback-button--calendar')) throw new Error('Control related cards miss calendar action for short one-day events');
 if (!controlHtml.includes('event-card__feedback--no-calendar')) throw new Error('Control related cards must hide calendar action for multi-day events');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
+if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.45-4.8')) throw new Error('Share/repost icon must use the VK-like outline path, not the old arrow stroke');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
-if (!controlHtml.includes('double_tap_like_event') || !controlHtml.includes('like-burst')) throw new Error('Control page misses double-tap like affordance');
+if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
@@ -87,7 +90,8 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
-if (/media-backdrop|image-backdrop|blur\(/u.test(css)) throw new Error('Blur/backdrop poster fill leaked into CSS');
+if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
+if (/object-fit:\s*contain/u.test(css)) throw new Error('OCR-safe media must not use contain over a fixed frame');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
 for (const event of eventsData.events) {
@@ -119,6 +123,9 @@ const badHtmlPatterns = [
 ];
 for (const event of eventsData.events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  const heroExpected = event.image_text_mode === 'visual_only' ? 'hero-media hero-media--cover' : 'hero-media hero-media--preserve';
+  if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero media mode mismatch for ${event.image_text_mode}`);
+  if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);
   const ownCalendarHref = `sobytiya/${event.slug}/event.ics`;
   const calendarEligible = !event.end_date || event.end_date === event.start_date;
   if (calendarEligible && !html.includes(ownCalendarHref)) throw new Error(`Short event ${event.id} misses own calendar link`);
