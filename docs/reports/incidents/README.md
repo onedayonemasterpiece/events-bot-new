@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-05-30-active-duplicate-events-recall-gate.md`
+  - Scope: Smart Update duplicate recall when exact location/time gates miss same real events; widened candidate recall, LLM dedup adjudication, and safety rails for multi-session/source-time conflicts.
+  - Must not regress: after ordinary match/create, rescue, and pre-create probes fail, a same-date/date-adjacent plausible duplicate must still be visible to an LLM adjudicator; high-confidence same-event decisions may merge only when date/venue/time/source-session safety checks do not conflict; explicit same-source multi-session schedules must remain separate.
 - `INC-2026-06-27-valeria-duplicate-publication.md`
   - Scope: Smart Update LLM-first duplicate matching, title-only deterministic vetoes, and managed TG/VK fanout for same real event rows.
   - Must not regress: a high-confidence LLM match with same date/venue and no explicit time conflict must not be overruled solely by `unrelated_titles`; `Валерия` and `Концерт Валерии` must merge as one event instead of producing duplicate public posts.
