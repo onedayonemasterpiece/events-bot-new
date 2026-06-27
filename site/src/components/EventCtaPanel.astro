@@ -11,6 +11,7 @@ const absolute = eventAbsoluteUrl(event);
 const tgShare = `https://t.me/share/url?url=${encodeURIComponent(absolute)}&text=${encodeURIComponent(event.title)}`;
 const vkShare = `https://vk.com/share.php?url=${encodeURIComponent(absolute)}`;
 const whatsappShare = `https://wa.me/?text=${encodeURIComponent(`${event.title} ${absolute}`)}`;
+const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
 ---
 <aside class="section-card cta-panel" aria-label="Билеты и действия">
@@ -38,6 +39,7 @@ const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
         <span class="cta-button" aria-disabled="true">{event.ticket.label}</span>
       )}
       <CalendarLink event={event} />
+      <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}>Поделиться</button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
     <div>

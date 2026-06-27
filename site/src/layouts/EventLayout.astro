@@ -75,8 +75,8 @@ const safeDescription = description || 'Анонс события в Калин�
         position: fixed;
         inset: 0;
         pointer-events: none;
-        opacity: 0.24;
-        background-image: linear-gradient(rgba(121, 48, 20, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(121, 48, 20, 0.035) 1px, transparent 1px);
+        opacity: 0.1;
+        background-image: linear-gradient(rgba(121, 48, 20, 0.035) 1px, transparent 1px);
         background-size: 28px 28px;
       }
       a { color: inherit; text-decoration-thickness: 0.08em; text-underline-offset: 0.18em; }
@@ -137,14 +137,15 @@ const safeDescription = description || 'Анонс события в Калин�
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow);
       }
-      .section-card__inner { padding: clamp(1rem, 3.5vw, 2rem); }
-      .eyebrow { color: var(--primary-strong); font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; margin: 0 0 0.65rem; }
+      .section-card--quiet { box-shadow: none; background: rgba(255, 253, 248, 0.74); }
+      .section-card__inner { padding: clamp(0.85rem, 2.8vw, 1.55rem); }
+      .eyebrow { color: var(--primary-strong); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.5rem; }
       h1, h2, h3 { line-height: 1.08; letter-spacing: -0.035em; margin: 0; }
-      h1 { font-size: clamp(2rem, 8vw, 4.7rem); max-width: 12ch; overflow-wrap: anywhere; }
-      h2 { font-size: clamp(1.55rem, 4vw, 2.35rem); margin-bottom: 0.9rem; }
+      h1 { font-size: clamp(1.8rem, 6vw, 3.7rem); max-width: 16ch; overflow-wrap: anywhere; }
+      h2 { font-size: clamp(1.35rem, 3.4vw, 2rem); margin-bottom: 0.8rem; }
       h3 { font-size: 1.18rem; margin: 1.35rem 0 0.55rem; }
-      .lead { font-size: clamp(1.04rem, 2.4vw, 1.28rem); color: #44362d; max-width: 62ch; margin: 1rem 0 0; }
-      .badge-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 0; }
+      .lead { font-size: clamp(1rem, 2.2vw, 1.18rem); color: #44362d; max-width: 58ch; margin: 0.85rem 0 0; }
+      .badge-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.8rem 0 0; }
       .badge {
         min-height: 32px;
         display: inline-flex;
@@ -158,16 +159,17 @@ const safeDescription = description || 'Анонс события в Калин�
         font-weight: 700;
       }
       .badge--status { background: var(--accent-soft); color: #0f544f; border-color: rgba(15, 118, 110, 0.2); }
-      .hero-media { margin-top: 1.35rem; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: linear-gradient(135deg, #d9c4ad, #8b4a2a); aspect-ratio: 16 / 9; }
-      .hero-media img { width: 100%; height: 100%; object-fit: cover; }
+      .hero-media { margin-top: 1rem; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; aspect-ratio: 4 / 5; max-height: min(72dvh, 760px); }
+      .hero-media img { width: 100%; height: 100%; object-fit: contain; }
       .hero-fallback { width: 100%; height: 100%; display: grid; place-items: center; padding: 1.5rem; color: #fff; text-align: center; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.32), transparent 20rem), linear-gradient(135deg, #8a3f23, #1d5f5a); }
       .hero-fallback strong { display:block; max-width: 18ch; font-size: clamp(1.5rem, 5vw, 3.2rem); line-height: 1; letter-spacing: -0.04em; }
-      .facts-quick { display: grid; gap: 0.75rem; margin-top: 1rem; }
-      .quick-fact { display: flex; gap: 0.7rem; padding: 0.8rem; border-radius: 18px; background: rgba(242, 231, 215, 0.72); min-width: 0; }
+      .facts-quick { display: grid; gap: 0.65rem; margin-top: 0.85rem; }
+      .facts-quick--compact { grid-template-columns: 1fr; }
+      .quick-fact { display: flex; gap: 0.65rem; padding: 0.7rem; border-radius: 16px; background: rgba(242, 231, 215, 0.64); min-width: 0; }
       .quick-fact__mark { width: 0.45rem; flex: 0 0 0.45rem; border-radius: 999px; background: var(--primary); }
       .quick-fact strong { display: block; font-size: 0.82rem; color: var(--muted); font-weight: 700; }
       .quick-fact span { display: block; overflow-wrap: anywhere; }
-      .prose { margin-top: 1.2rem; color: #3b3029; max-width: 70ch; }
+      .prose { margin-top: 1rem; color: #3b3029; max-width: 68ch; }
       .prose p { margin: 0 0 0.95rem; }
       .prose blockquote { margin: 0 0 1rem; padding: 1rem 1.1rem; border-left: 4px solid var(--primary); background: #fff4e6; border-radius: 0 18px 18px 0; color: #33251d; }
       .prose ul { margin: 0 0 1rem 1.2rem; padding: 0; }
@@ -197,30 +199,42 @@ const safeDescription = description || 'Анонс события в Калин�
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
+      .native-share-button { display: none; cursor: pointer; }
+      .has-native-share .native-share-button { display: inline-flex; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
       .share-list a { min-height: 44px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.45rem 0.75rem; border: 1px solid var(--line); background: #fff; color: var(--primary-strong); text-decoration: none; font-weight: 750; }
-      .muted-note { color: var(--muted); font-size: 0.9rem; margin: 0.75rem 0 0; }
-      .cards-grid { display: grid; gap: 0.85rem; }
-      .event-card { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: rgba(255,255,255,0.78); text-decoration: none; min-height: 132px; }
-      .event-card:hover { border-color: rgba(165,72,33,0.42); box-shadow: 0 12px 26px rgba(72,45,25,0.09); }
-      .event-card__meta { color: var(--muted); font-weight: 700; font-size: 0.9rem; }
-      .event-card__title { font-weight: 850; line-height: 1.16; font-size: 1.04rem; overflow-wrap: anywhere; }
-      .event-card__footer { color: var(--primary-strong); font-weight: 800; font-size: 0.9rem; }
+      .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
+      .cards-grid { display: grid; gap: 0.9rem; }
+      .cards-grid--feed { grid-template-columns: 1fr; }
+      .event-card { display: grid; overflow: hidden; border: 1px solid rgba(121,48,20,0.13); border-radius: 28px; background: #15110f; color: #fff; text-decoration: none; min-height: 0; box-shadow: 0 14px 34px rgba(72,45,25,0.16); }
+      .event-card:hover { border-color: rgba(165,72,33,0.48); box-shadow: 0 18px 38px rgba(72,45,25,0.2); }
+      .event-card__media { display: block; width: 100%; aspect-ratio: 4 / 5; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
+      .event-card__media img { width: 100%; height: 100%; object-fit: cover; }
+      .event-card__fallback { width: 100%; height: 100%; display: grid; place-items: center; padding: 1rem; color: rgba(255,255,255,0.9); font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
+      .event-card__body { display: grid; gap: 0.45rem; padding: 0.9rem; }
+      .event-card__meta { color: rgba(255,255,255,0.74); font-weight: 750; font-size: 0.88rem; }
+      .event-card__title { color: #fff; font-weight: 900; line-height: 1.08; font-size: clamp(1.1rem, 4.5vw, 1.55rem); overflow-wrap: anywhere; }
+      .event-card__footer { color: rgba(255,255,255,0.84); font-weight: 760; font-size: 0.9rem; }
       .sponsor-card { border-style: dashed; background: linear-gradient(135deg, #fff, #fff4e6); }
-      .source-links { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1rem; }
-      .source-links a { min-height: 44px; display: inline-flex; align-items: center; padding: 0.45rem 0.7rem; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--primary-strong); background: #fff; }
+      .source-links { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
+      .source-links a, .source-links button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.45rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--primary-strong); background: #fff; font: inherit; font-weight: 850; }
+      .source-links .cta-button { color: var(--primary-text); background: var(--primary); border-color: transparent; padding: 0.75rem 1rem; }
       .mobile-sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 0.7rem max(1rem, env(safe-area-inset-left)) calc(0.7rem + env(safe-area-inset-bottom)); background: rgba(255, 253, 248, 0.94); border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(72,45,25,0.12); }
       .mobile-sticky-cta__inner { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: center; }
       .mobile-sticky-cta__title { min-width: 0; }
       .mobile-sticky-cta__title strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .mobile-sticky-cta__title span { display: block; color: var(--muted); font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       footer { position: relative; z-index: 1; border-top: 1px solid var(--line); padding: 2rem 0 6rem; color: var(--muted); }
+      .details-disclosure summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 900; font-size: 1.08rem; }
+      .details-disclosure summary::marker { color: var(--primary); }
       .preview-warning { margin: 1rem 0; border: 1px solid rgba(161,98,7,0.24); background: #fff8db; color: #5a3b06; border-radius: 18px; padding: 0.8rem 1rem; }
 
       @media (min-width: 760px) {
-        .facts-quick { grid-template-columns: repeat(3, 1fr); }
+        .facts-quick { grid-template-columns: repeat(2, 1fr); }
         .action-grid { grid-template-columns: 1fr 1fr; }
         .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .cards-grid--feed { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .hero-media { aspect-ratio: 16 / 10; }
       }
       @media (min-width: 1024px) {
         main { padding-top: 2rem; padding-bottom: 3rem; }
@@ -250,7 +264,7 @@ const safeDescription = description || 'Анонс события в Калин�
       <div class="site-header__inner">
         <a class="brand" href={withBase('/__preview/')} aria-label={`${SITE_NAME}: preview index`}>
           <span class="brand__name">{SITE_NAME}</span>
-          <span class="brand__sub">статичный preview</span>
+          <span class="brand__sub">афиша событий</span>
         </a>
         <nav class="site-nav" aria-label="Основная навигация preview">
           <a href={withBase('/__preview/#today')}>Сегодня</a>
@@ -267,5 +281,26 @@ const safeDescription = description || 'Анонс события в Калин�
         <p>Домен: {SITE_ORIGIN}. Все preview canonical URL содержат текущий prefix.</p>
       </div>
     </footer>
+
+    <script is:inline>
+      (() => {
+        if (!('share' in navigator)) return;
+        document.documentElement.classList.add('has-native-share');
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-native-share]');
+          if (!button) return;
+          event.preventDefault();
+          try {
+            await navigator.share({
+              title: button.dataset.shareTitle || document.title,
+              text: button.dataset.shareText || '',
+              url: button.dataset.shareUrl || location.href,
+            });
+          } catch (_) {
+            // User cancelled or browser refused; keep fallback share links visible.
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

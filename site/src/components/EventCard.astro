@@ -3,9 +3,19 @@ import type { PreviewEvent } from '../lib/types';
 import { eventHref } from '../lib/events';
 interface Props { event: PreviewEvent; label?: string }
 const { event, label } = Astro.props;
+const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 ---
-<a class="event-card" href={eventHref(event)}>
-  <span class="event-card__meta">{label || event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
-  <span class="event-card__title">{event.title}</span>
-  <span class="event-card__footer">{[event.city, event.venue_name].filter(Boolean).join(' · ')}</span>
+<a class="event-card" href={eventHref(event)} aria-label={`${event.title}: ${event.display_date}`}>
+  <span class="event-card__media">
+    {event.image_url ? (
+      <img src={event.image_url} alt="" width="720" height="900" loading="lazy" decoding="async" />
+    ) : (
+      <span class="event-card__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
+    )}
+  </span>
+  <span class="event-card__body">
+    <span class="event-card__meta">{label || event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
+    <span class="event-card__title">{event.title}</span>
+    {place && <span class="event-card__footer">{place}</span>}
+  </span>
 </a>

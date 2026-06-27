@@ -12,12 +12,12 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v1/__preview/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v1/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v1/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v1/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v2/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v2/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v2/__preview/>
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 

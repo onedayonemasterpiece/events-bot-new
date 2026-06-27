@@ -6,7 +6,7 @@ import EventCtaPanel from '../../components/EventCtaPanel.astro';
 import EventCard from '../../components/EventCard.astro';
 import CalendarLink from '../../components/CalendarLink.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { eventAbsoluteUrl, eventHref, getEventBySlug, getEvents, getOtherDates, getRelatedEvents, withBase } from '../../lib/events';
+import { eventAbsoluteUrl, getEventBySlug, getEvents, getOtherDates, getRelatedEvents, withBase } from '../../lib/events';
 
 export function getStaticPaths() {
   return getEvents().map((event) => ({ params: { slug: event.slug } }));
@@ -23,13 +23,11 @@ const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
 const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
 const ctaHref = event.ticket.href;
+const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData}>
   <main id="main">
     <div class="page-shell">
-      <div class="preview-warning" role="note">
-        Preview: страница закрыта от индексации. Canonical ведёт на текущий preview URL, не на production URL.
-      </div>
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={withBase('/__preview/')}>Афиша</a>
         <span aria-hidden="true">/</span>
@@ -49,15 +47,15 @@ const ctaHref = event.ticket.href;
               {event.ticket.price_label && <span class="badge">{event.ticket.price_label}</span>}
             </div>
             <EventHero event={event} />
-            <div class="facts-quick" aria-label="Главные факты">
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Дата и время</strong><span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span></div></div>
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Место</strong><span>{[event.venue_name, event.city].filter(Boolean).join(' · ') || 'уточняется'}</span></div></div>
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Действие</strong><span>{event.ticket.label}</span></div></div>
-            </div>
             <p class="lead">{event.summary}</p>
+            <div class="facts-quick facts-quick--compact" aria-label="Главные факты">
+              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Когда</strong><span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span></div></div>
+              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Где</strong><span>{[event.venue_name, event.city].filter(Boolean).join(' · ') || 'уточняется'}</span></div></div>
+            </div>
             <div class="source-links" aria-label="Быстрые действия">
-              {ctaHref && <a href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{event.ticket.label}</a>}
+              {ctaHref && <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{event.ticket.label}</a>}
               <CalendarLink event={event} className="secondary-button" />
+              <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}>Поделиться</button>
             </div>
           </div>
         </article>
@@ -66,22 +64,17 @@ const ctaHref = event.ticket.href;
         </div>
       </div>
 
-      <section class="section-card" style="margin-top: 1rem;">
+      <section class="section-card section-card--quiet" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <h2>Описание</h2>
-          <div class="prose" set:html={event.description_html} />
-        </div>
-      </section>
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <h2>Факты для планирования</h2>
-          <EventFacts event={event} />
-          <div class="source-links" aria-label="Источники данных">
-            {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
-            {event.telegraph_url && <a href={event.telegraph_url} target="_blank" rel="noopener noreferrer nofollow">Telegraph fallback</a>}
-          </div>
-          {event.data_quality_notes.length > 0 && <p class="muted-note">Preview показывает graceful fallback для данных: {event.data_quality_notes.join(', ')}.</p>}
+          <details class="details-disclosure">
+            <summary>Описание и факты</summary>
+            <div class="prose" set:html={event.description_html} />
+            <EventFacts event={event} />
+            <div class="source-links" aria-label="Источники данных">
+              {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
+              {event.telegraph_url && <a href={event.telegraph_url} target="_blank" rel="noopener noreferrer nofollow">Telegraph</a>}
+            </div>
+          </details>
         </div>
       </section>
 
@@ -89,7 +82,7 @@ const ctaHref = event.ticket.href;
         <section class="section-card" style="margin-top: 1rem;">
           <div class="section-card__inner">
             <h2>Другие даты</h2>
-            <div class="cards-grid">
+            <div class="cards-grid cards-grid--feed">
               {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
             </div>
           </div>
@@ -99,20 +92,18 @@ const ctaHref = event.ticket.href;
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Похожие события</h2>
-          <div class="cards-grid">
+          <div class="cards-grid cards-grid--feed">
             {similar.map((candidate) => <EventCard event={candidate} />)}
           </div>
-          <p class="muted-note">Статический fallback без Supabase, LLM и client-side API. Позже consented personalization сможет только мягко переупорядочивать такой пул.</p>
         </div>
       </section>
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <h2>Другие жанры рядом</h2>
-          <div class="cards-grid">
+          <h2>Попробовать другое</h2>
+          <div class="cards-grid cards-grid--feed">
             {explore.map((candidate) => <EventCard event={candidate} label="Открыть новое" />)}
           </div>
-          <p class="muted-note">Анти-пузырь вынесен отдельно: не смешиваем discovery-карточки с похожими событиями.</p>
         </div>
       </section>
     </div>
