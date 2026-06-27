@@ -12,7 +12,7 @@ const dateTimeLabel = displayDateTime(event);
 const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
 const likesCount = event.likes_count || 0;
-const sharesCount = event.shares_count ?? Math.max(0, Math.round(likesCount * 0.18));
+const sharesCount = event.shares_count ?? 0;
 const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover'].join(' ');

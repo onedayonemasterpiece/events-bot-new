@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v15/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v16/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,14 +9,14 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v15/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v15/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v15/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v15/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v15/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v15/data/discovery/5878.json>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v15/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v15/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v16/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v16/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v16/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v16/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v16/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v16/data/discovery/5878.json>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v16/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v16/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md). Counter freshness: [Event reaction counters](reaction-counters.md).
 
@@ -89,7 +89,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 29. Source/provenance and temporary Telegraph dual-run link appear below facts/description.
 30. “Другие даты” shows only same event occurrence group and only future/active occurrences.
 31. `H2` “Смотрите дальше”: one mobile-first vertical discovery feed that combines high-similarity candidates with bounded diversity slots as an invisible ranking rule; current/past/expired and same-occurrence/other-date events are excluded by freshness gate.
-32. Each generated event page should preload up to 10 discovery candidates in static HTML. After JS activation, local personalization may hide preloaded cards already marked `not_interested`; then the page may perform exactly one automatic lightweight same-origin fetch from `/data/discovery/<event_id>.json` to restore the visible pool. Further expansion must be explicit through `Показать ещё`, not infinite automatic loading.
+32. Each generated event page should preload up to 10 discovery candidates in static HTML (or all eligible candidates if the compact fixture has fewer). After JS activation, only a consented compatible local profile may filter/rerank: remove `hidden_event_ids` / `not_interested_event_ids` / strong `negative_interest_tags` from those preloaded cards, then perform exactly one automatic lightweight same-origin fetch from `/data/discovery/<event_id>.json` (`event_detail_related` manifest with `related_static[]`) to restore the visible pool. Further expansion must be explicit through `Показать ещё`, not infinite automatic loading.
 33. Every discovery card has explicit feedback controls: large like button in the lower-right/right-thumb zone with current aggregate like count, toggle unlike, and a lower-priority “Не интересно” negative control. These labels are product actions, not hidden technical anti-bubble copy.
 34. Visible likes must be honest: `likes_count = source_likes_count + service_likes_count`. `source_likes_count` is aggregated from already collected TG/VK/source-post metrics tied to the event; `service_likes_count` is first-party KenigEvents likes from the personalization store. A local like increments the visible count immediately for the current visitor and later becomes service aggregate after ingest. The source/service split is a technical/audit field and must not be rendered in public HTML/UI; users and crawlers see only the total count.
 35. Calendar action links directly to `.ics`, but appears on the event detail/primary transaction area only for short/one-day events (`end_date` empty or equal to `start_date`). Feed/preview cards must not show a calendar icon because the bottom row must fit reliably on mobile.
@@ -124,7 +124,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 
 56. “Смотрите дальше” starts as static HTML; no required `/api/v1/related` or Supabase call in the first production slice. A generated same-origin JSON manifest is acceptable as a cacheable static top-up after first paint.
 57. Explicit `like_event` / `unlike_event` / `not_interested` actions are strong personalization signals and may update local ranking immediately after consent.
-58. Later consented personalization may rerank/hide within the static candidate pool and top up from same-origin JSON; live RPC/personal ranker remains a later gated slice.
+58. MVP personalization on this surface is local and manifest-based: `rankEventDetailRelated` uses the static score as the dominant signal and the consented local profile as a modifier. Live RPC/personal ranker remains a later gated slice.
 59. No personalization-dependent content above the fold.
 60. No visible reorder/jump after the related block is in viewport except direct response to an explicit user action such as like/not-interested.
 61. Current event, past events and expired lifecycle statuses are excluded.

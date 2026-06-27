@@ -18,6 +18,18 @@ MVP-0 is ready for an engineering implementation spike; product-quality validati
 
 That means concept churn should stop, but implementation must continue through bounded validation: expanded real-catalog probe, test/golden personas, static related block, browser prototype, bot/automation guardrails and later human top-10 review.
 
+
+## Current Astro preview implementation (`preview-20260627-event-pages-v16`)
+
+The current static event-page preview implements this contract as a local/browser slice, not as a Supabase write path yet:
+
+1. Static HTML renders the event page and up to 10 `event_detail_related` cards from the build-time manifest. If the compact preview fixture has fewer eligible future events after excluding the current event/linked dates, it renders all available candidates; production target remains 10.
+2. `/data/discovery/<event_id>.json` is now an `event-detail-related-v1` manifest with `current_event` and `related_static[]`, not a display-only `events[]` payload.
+3. Before consent, no trusted profile is created and the static fallback remains unchanged.
+4. After consent, the browser creates/uses `ke_personalization_profile` with UUID-compatible `anon_id` and `session_id`; legacy prefixed ids and profiles missing `feature_schema_version`/`taxonomy_version` are ignored.
+5. On activation with a compatible profile, the client removes hard-hidden / `not_interested` / strong negative-interest matches from the preloaded cards, reorders by local `rankEventDetailRelated`, performs one same-origin JSON top-up, then exposes only `Показать ещё` for additional cards.
+6. Strong actions (`like_event`, `unlike_event`, `not_interested`, `undo_not_interested`, `share_event`) are written only to compact local debug storage for the preview, with `served_list_id` / `served_list_hash` attached. Mapping this into Supabase remains the production telemetry slice.
+
 ## MVP-0 page contract
 
 URL shape:

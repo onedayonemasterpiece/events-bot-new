@@ -57,6 +57,63 @@ export interface PreviewEvent {
   updated_at: string | null;
 }
 
+export interface EventFeatureSummary {
+  event_id: number;
+  title: string;
+  category: string;
+  tags: string[];
+  audience_exclusion_tags: string[];
+  city: string | null;
+  location_name: string | null;
+  date: string;
+}
+
+export interface DiscoveryDisplayPayload {
+  href: string;
+  absolute_url: string;
+  event_type: string | null;
+  image_url: string | null;
+  image_alt: string;
+  image_text_mode: PreviewEvent['image_text_mode'];
+  display_date: string;
+  display_time: string | null;
+  display_date_time: string;
+  city: string | null;
+  venue_name: string | null;
+  place: string;
+  status_label: string;
+  price_label: string | null;
+  likes_count: number;
+  shares_count: number;
+}
+
+export interface RelatedManifestCandidate extends EventFeatureSummary {
+  status: string;
+  lifecycle_status: string;
+  is_free: boolean;
+  base_similarity: number;
+  static_score: number;
+  reason_codes: string[];
+  exploration_candidate: boolean;
+  display: DiscoveryDisplayPayload;
+}
+
+export interface EventDetailRelatedManifest {
+  version: number;
+  schema_version: 'event-detail-related-v1';
+  feature_schema_version: 'event-detail-related-v1';
+  taxonomy_version: 'event-taxonomy-v1';
+  surface: 'event_detail_related';
+  algorithm_id: 'static_related_v1';
+  generated_at: string;
+  event_id: number;
+  strategy: 'static_related_manifest_v1';
+  preload_target: number;
+  page_size: number;
+  current_event: EventFeatureSummary;
+  related_static: RelatedManifestCandidate[];
+}
+
 export interface PreviewData {
   build: {
     generated_at: string;

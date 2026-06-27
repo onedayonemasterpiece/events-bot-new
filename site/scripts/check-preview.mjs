@@ -30,10 +30,12 @@ const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) throw new Error('Missing control event 5878');
 if (control.slug !== 'pesni-sssr-svetlogorsk-5878') throw new Error(`Unexpected control slug: ${control.slug}`);
 const controlHtml = readFileSync(join(root, `sobytiya/${control.slug}/index.html`), 'utf8');
+const stripGeneratedCode = (html) => html.replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<style[\s\S]*?<\/style>/giu, '');
+const controlVisibleHtml = stripGeneratedCode(controlHtml);
 if (!controlHtml.includes('noindex,nofollow,noarchive')) throw new Error('Missing preview robots meta');
 if (controlHtml.includes('https://kenigevents.ru/sobytiya/pesni-sssr-svetlogorsk-5878/')) throw new Error('Production canonical leaked into preview page');
 if (!controlHtml.includes(`https://kenigevents.ru/${buildId}/sobytiya/pesni-sssr-svetlogorsk-5878/`)) throw new Error('Preview canonical missing for control page');
-if (/\bnull\b/.test(controlHtml)) throw new Error('Rendered HTML contains literal null');
+if (/\bnull\b/.test(controlVisibleHtml)) throw new Error('Rendered HTML contains literal null outside scripts/styles');
 if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-prone event-card anchor leaked');
 if (!controlHtml.includes('data-card-href=')) throw new Error('Event cards must expose full-card navigation href');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
@@ -58,7 +60,10 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
-if (!controlHtml.includes('data-discovery-src') || !controlHtml.includes('data-discovery-load-more') || !controlHtml.includes('hydrateDiscoveryFeeds')) throw new Error('Control page misses static-seed + JSON discovery hydration contract');
+if (!controlHtml.includes('data-discovery-feed') || controlHtml.includes('data-personalized-feed') || !controlHtml.includes('data-discovery-src') || !controlHtml.includes('data-discovery-load-more') || !controlHtml.includes('hydrateDiscoveryFeeds')) throw new Error('Control page misses static-10 + personalization JSON discovery hydration contract');
+if (!controlHtml.includes('ke_personalization_profile') || controlHtml.includes('ke_profile_id_v1') || controlHtml.includes('anon-${')) throw new Error('Control page must use compatible UUID personalization profile, not legacy/prefixed ids');
+if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankEventDetailRelated') || !controlHtml.includes('served_list_id') || !controlHtml.includes('createServedListSummary')) throw new Error('Control page misses event_detail_related local-rerank/served-list contract');
+if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
@@ -72,9 +77,20 @@ if (controlHtml.includes('<details class="details-disclosure"')) throw new Error
 if (controlHtml.includes('11 июля 2026')) throw new Error('Visible current-year date should omit year in event UI');
 const discoveryJson = JSON.parse(readFileSync(join(root, `data/discovery/${control.id}.json`), 'utf8'));
 if (discoveryJson.preload_target !== 10 || discoveryJson.page_size !== 10) throw new Error('Discovery JSON must declare 10-item preload/page contract');
-if (!Array.isArray(discoveryJson.events) || discoveryJson.events.length < 5) throw new Error('Discovery JSON must contain candidate events for light client hydration');
-if (discoveryJson.events.some((item) => item.id === control.id)) throw new Error('Discovery JSON must not include current event');
-if (discoveryJson.events.some((item) => /2026\b/u.test(item.display_date) && !/2027\b/u.test(item.display_date))) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
+if (discoveryJson.schema_version !== 'event-detail-related-v1' || discoveryJson.feature_schema_version !== 'event-detail-related-v1') throw new Error('Discovery JSON must use event-detail-related schema contract');
+if (discoveryJson.taxonomy_version !== 'event-taxonomy-v1' || discoveryJson.surface !== 'event_detail_related' || discoveryJson.algorithm_id !== 'static_related_v1') throw new Error('Discovery JSON misses surface/taxonomy/algorithm contract');
+if (!discoveryJson.current_event || discoveryJson.current_event.event_id !== control.id) throw new Error('Discovery JSON must include current_event summary');
+if (!Array.isArray(discoveryJson.related_static) || discoveryJson.related_static.length < 5) throw new Error('Discovery JSON must contain related_static candidate manifest for light client hydration');
+if ('events' in discoveryJson) throw new Error('Discovery JSON must expose related_static manifest, not legacy events payload');
+for (const item of discoveryJson.related_static) {
+  if (item.event_id === control.id) throw new Error('Discovery JSON must not include current event');
+  for (const field of ['event_id', 'title', 'category', 'tags', 'audience_exclusion_tags', 'status', 'lifecycle_status', 'base_similarity', 'reason_codes', 'display']) {
+    if (!(field in item)) throw new Error(`Discovery candidate missing ${field}`);
+  }
+  if (!Array.isArray(item.tags) || !Array.isArray(item.audience_exclusion_tags) || !Array.isArray(item.reason_codes)) throw new Error('Discovery candidate tag/reason fields must be arrays');
+  if (typeof item.base_similarity !== 'number' || item.base_similarity < 0 || item.base_similarity > 1) throw new Error('Discovery candidate base_similarity must be 0..1');
+  if (/2026\b/u.test(item.display?.display_date || '') && !/2027\b/u.test(item.display?.display_date || '')) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
+}
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
   if (!ics.includes(needle)) throw new Error(`Control ICS missing ${needle}`);
@@ -137,6 +153,7 @@ const badHtmlPatterns = [
 ];
 for (const event of eventsData.events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  const visibleHtml = stripGeneratedCode(html);
   const heroExpected = event.image_text_mode === 'visual_only' ? 'hero-media hero-media--cover' : 'hero-media hero-media--preserve';
   if (!html.includes(heroExpected)) throw new Error(`Event ${event.id} hero media mode mismatch for ${event.image_text_mode}`);
   if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(html)) throw new Error(`Event ${event.id} renders zero reaction counter`);
@@ -145,7 +162,7 @@ for (const event of eventsData.events) {
   if (calendarEligible && !html.includes(ownCalendarHref)) throw new Error(`Short event ${event.id} misses own calendar link`);
   if (!calendarEligible && html.includes(ownCalendarHref)) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
   for (const [label, pattern] of badHtmlPatterns) {
-    if (pattern.test(html)) throw new Error(`Rendered page ${event.id} contains ${label}`);
+    if (pattern.test(visibleHtml)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }
   if (!event.address && html.includes('Открыть на карте')) throw new Error(`Weak-address event ${event.id} shows map CTA`);
   if (event.ticket.kind === 'source' && !event.ticket.is_free && html.includes('Билеты в продаже')) {

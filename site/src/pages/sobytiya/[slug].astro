@@ -95,8 +95,16 @@ const canAddToCalendar = isCalendarEligible(event);
       <section id="discovery-feed" class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
           <h2>Смотрите дальше</h2>
-          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">В HTML сразу предзагружены до 10 событий. После запуска скрипта лента убирает явно неинтересное и один раз мягко догружает подходящие варианты из JSON; дальше — только по кнопке.</p>
-          <div class="cards-grid cards-grid--immersive" data-personalized-feed data-current-event-id={event.id} data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}>
+          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">В HTML сразу предзагружены до 10 событий. После согласия и запуска скрипта блок применяет локальный профиль интересов, убирает неподходящее, один раз догружает релевантные варианты из JSON; дальше — только по кнопке.</p>
+          <div
+            class="cards-grid cards-grid--immersive"
+            data-discovery-feed
+            data-surface="event_detail_related"
+            data-layout-mode="module"
+            data-algorithm-id="static_related_v1"
+            data-current-event-id={event.id}
+            data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
+          >
             {discoveryFeed.map((candidate) => <EventCard event={candidate} />)}
           </div>
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>

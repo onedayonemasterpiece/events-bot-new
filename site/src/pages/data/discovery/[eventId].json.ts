@@ -1,4 +1,4 @@
-import { getEventById, getEvents, getPreloadedDiscoveryEvents, toDiscoveryEventPayload } from '../../../lib/events';
+import { buildEventDetailRelatedManifest, getEventById, getEvents } from '../../../lib/events';
 
 export function getStaticPaths() {
   return getEvents().map((event) => ({ params: { eventId: String(event.id) } }));
@@ -13,20 +13,9 @@ export function GET({ params }: { params: { eventId?: string } }) {
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     });
   }
-  const events = getPreloadedDiscoveryEvents(event, 30).map(toDiscoveryEventPayload);
+  const manifest = buildEventDetailRelatedManifest(event, 30);
   return new Response(
-    JSON.stringify(
-      {
-        version: 1,
-        event_id: event.id,
-        strategy: 'static_seed_then_personalized_client_filter_v1',
-        preload_target: 10,
-        page_size: 10,
-        events,
-      },
-      null,
-      0,
-    ),
+    JSON.stringify(manifest, null, 0),
     {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',

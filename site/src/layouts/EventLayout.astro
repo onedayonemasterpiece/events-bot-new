@@ -292,6 +292,12 @@ const safeDescription = description || 'Анонс события в Калин�
       .source-links a, .source-links button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.45rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--primary-strong); background: #fff; font: inherit; font-weight: 850; }
       .source-links .cta-button { color: var(--primary-text); background: var(--primary); border-color: transparent; padding: 0.75rem 1rem; }
       .discovery-load-more { margin: 1rem auto 0; width: min(100%, 320px); }
+      .personalization-consent { position: fixed; left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 30; display: none; gap: 0.8rem; align-items: center; justify-content: space-between; width: min(680px, calc(100% - 2rem)); margin: 0 auto; padding: 0.85rem 1rem; border: 1px solid rgba(121,48,20,0.18); border-radius: 22px; background: rgba(255,253,248,0.98); box-shadow: 0 18px 46px rgba(72,45,25,0.2); color: var(--text); }
+      .personalization-consent.is-visible { display: flex; }
+      .personalization-consent p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+      .personalization-consent strong { display: block; color: var(--text); }
+      .personalization-consent__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: flex-end; }
+      .personalization-consent .secondary-button, .personalization-consent .cta-button { min-height: 42px; padding: 0.45rem 0.85rem; white-space: nowrap; }
       .mobile-sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 0.7rem max(1rem, env(safe-area-inset-left)) calc(0.7rem + env(safe-area-inset-bottom)); background: rgba(255, 253, 248, 0.94); border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(72,45,25,0.12); transition: transform 180ms ease, opacity 180ms ease; }
       .mobile-sticky-cta.is-hidden { transform: translateY(120%); opacity: 0; pointer-events: none; }
       .mobile-sticky-cta__inner { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: center; }
@@ -376,14 +382,36 @@ const safeDescription = description || 'Анонс события в Калин�
 
     <script is:inline>
       (() => {
-        const PROFILE_KEY = 'ke_profile_id_v1';
-        const STATE_KEY = 'ke_event_feedback_state_v1';
+        const PROFILE_KEY = 'ke_personalization_profile';
         const LOG_KEY = 'ke_event_feedback_log_v1';
         const SHARE_PROMPT_KEY = 'ke_like_share_prompt_count_v1';
+        const PROFILE_VERSION = 'anon-profile-v1';
+        const FEATURE_SCHEMA_VERSION = 'event-detail-related-v1';
+        const TAXONOMY_VERSION = 'event-taxonomy-v1';
+        const SURFACE_EVENT_DETAIL_RELATED = 'event_detail_related';
+        const STATIC_ALGORITHM_ID = 'static_related_v1';
+        const LOCAL_ALGORITHM_ID = 'local_related_rerank_v1';
+        const LOCAL_FALLBACK_ALGORITHM_ID = 'local_related_rerank_v1_fallback';
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
+        const DEFAULT_PRELOAD_TARGET = 10;
+        const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
+        const DEFAULT_WEIGHTS = {
+          staticContext: 0.80,
+          profileAffinity: 0.10,
+          priceMatch: 0.04,
+          timeMatch: 0.03,
+          explicitLike: 0.60,
+          exploration: 0.02,
+          negativeInterest: 0.55,
+          fatigue: 0.18,
+          soldOut: 0.20,
+        };
         const sessionPinnedNotInterested = new Set();
+        const discoveryStores = new WeakMap();
+        const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
+        let pendingConsentAction = null;
 
         function readJson(key, fallback) {
           try {
@@ -397,39 +425,636 @@ const safeDescription = description || 'Анонс события в Калин�
         function writeJson(key, value) {
           try {
             localStorage.setItem(key, JSON.stringify(value));
+            return true;
           } catch (_) {
-            // localStorage can be disabled in private/webview modes; UI remains usable.
+            return false;
           }
         }
 
-        function profileId() {
+        function toArray(value) {
+          return Array.isArray(value) ? value : [];
+        }
+
+        function asId(value) {
+          return value == null ? null : String(value);
+        }
+
+        function unique(values) {
+          return Array.from(new Set(toArray(values).filter((value) => value != null).map((value) => String(value)).filter(Boolean)));
+        }
+
+        function viewportClass(width) {
+          if (width < 768) return 'mobile';
+          if (width < 1024) return 'tablet';
+          return 'desktop';
+        }
+
+        function relatedPresentationMode(width) {
+          return viewportClass(width) === 'mobile' ? 'vertical_related' : 'grid_related';
+        }
+
+        function relatedLayoutMode() {
+          return 'module';
+        }
+
+        function isUuid(value) {
+          return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+        }
+
+        function createUuid() {
+          const cryptoObj = globalThis.crypto || {};
+          if (cryptoObj.randomUUID) return cryptoObj.randomUUID();
+          const bytes = new Uint8Array(16);
+          if (cryptoObj.getRandomValues) {
+            cryptoObj.getRandomValues(bytes);
+          } else {
+            for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+          }
+          bytes[6] = (bytes[6] & 0x0f) | 0x40;
+          bytes[8] = (bytes[8] & 0x3f) | 0x80;
+          const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+          return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        }
+
+        function randomId(prefix) {
+          return `${prefix}-${createUuid()}`;
+        }
+
+        function stableHash(value) {
+          const text = typeof value === 'string' ? value : JSON.stringify(value);
+          let hash = 2166136261;
+          for (let index = 0; index < text.length; index += 1) {
+            hash ^= text.charCodeAt(index);
+            hash = Math.imul(hash, 16777619);
+          }
+          return (hash >>> 0).toString(16);
+        }
+
+        function createEmptyProfile(seed) {
+          return {
+            consent_ok: true,
+            profile_version: PROFILE_VERSION,
+            feature_schema_version: FEATURE_SCHEMA_VERSION,
+            taxonomy_version: TAXONOMY_VERSION,
+            anon_id: createUuid(),
+            session_id: createUuid(),
+            positive_tags: {},
+            negative_interest_tags: {},
+            liked_event_ids: [],
+            not_interested_event_ids: [],
+            hidden_event_ids: [],
+            seen_event_ids: [],
+            seen_venue_ids: [],
+            price_preferences: { prefer_free: false },
+            share_counts: {},
+            updated_at: new Date().toISOString(),
+            ...(seed || {}),
+          };
+        }
+
+        function profileHasConsent(profile) {
+          return Boolean(profile && profile.consent_ok === true);
+        }
+
+        function isCompatibleProfile(profile, featureSchemaVersion = FEATURE_SCHEMA_VERSION, taxonomyVersion = TAXONOMY_VERSION) {
+          if (!profileHasConsent(profile)) return false;
+          if (profile.profile_version !== PROFILE_VERSION) return false;
+          if (profile.feature_schema_version !== (featureSchemaVersion || FEATURE_SCHEMA_VERSION)) return false;
+          if (profile.taxonomy_version !== (taxonomyVersion || TAXONOMY_VERSION)) return false;
+          if (!isUuid(profile.anon_id) || !isUuid(profile.session_id)) return false;
+          if (Object.prototype.hasOwnProperty.call(profile, 'negative_tags')) return false;
+          return true;
+        }
+
+        function readProfile() {
+          return readJson(PROFILE_KEY, null);
+        }
+
+        function activeProfile(manifest) {
+          const profile = readProfile();
+          return isCompatibleProfile(profile, manifest?.feature_schema_version, manifest?.taxonomy_version) ? profile : null;
+        }
+
+        function saveProfile(profile) {
+          return writeJson(PROFILE_KEY, profile);
+        }
+
+        function ensureProfileAfterConsent(seed) {
+          const existing = readProfile();
+          if (isCompatibleProfile(existing)) return existing;
+          const profile = createEmptyProfile(seed);
+          saveProfile(profile);
+          return profile;
+        }
+
+        function consentBanner() {
+          let banner = document.querySelector('[data-personalization-consent]');
+          if (banner) return banner;
+          banner = document.createElement('div');
+          banner.className = 'personalization-consent';
+          banner.dataset.personalizationConsent = 'true';
+          banner.setAttribute('role', 'dialog');
+          banner.setAttribute('aria-live', 'polite');
+          banner.innerHTML = `<p><strong>Настроить рекомендации?</strong> Лайки и отметки «не интересно» сохранятся только в этом браузере и помогут убрать неподходящее.</p><div class="personalization-consent__actions"><button type="button" class="secondary-button" data-personalization-consent-dismiss>Пока нет</button><button type="button" class="cta-button" data-personalization-consent-accept>ОК</button></div>`;
+          document.body.appendChild(banner);
+          banner.querySelector('[data-personalization-consent-dismiss]')?.addEventListener('click', () => {
+            pendingConsentAction = null;
+            banner.classList.remove('is-visible');
+          });
+          banner.querySelector('[data-personalization-consent-accept]')?.addEventListener('click', async () => {
+            ensureProfileAfterConsent();
+            banner.classList.remove('is-visible');
+            const action = pendingConsentAction;
+            pendingConsentAction = null;
+            await applyFeedbackState();
+            if (typeof action === 'function') setTimeout(action, 0);
+          });
+          return banner;
+        }
+
+        function requestConsent(action) {
+          pendingConsentAction = action || null;
+          consentBanner().classList.add('is-visible');
+        }
+
+        function mapScore(map, key) {
+          if (!map || key == null) return 0;
+          const value = map[key];
+          const num = Number(value || 0);
+          return Number.isFinite(num) ? num : 0;
+        }
+
+        function collectWeightedProfileMap(profile, fieldName) {
+          const result = { ...(profile && profile[fieldName] ? profile[fieldName] : {}) };
+          const horizons = [
+            ['session', 1.0],
+            ['short', 0.65],
+            ['mid', 0.35],
+            ['long', 0.20],
+          ];
+          for (const [horizon, weight] of horizons) {
+            const section = profile && profile[horizon];
+            if (!section || !section[fieldName]) continue;
+            for (const [key, value] of Object.entries(section[fieldName])) {
+              result[key] = mapScore(result, key) + Number(value || 0) * weight;
+            }
+          }
+          return result;
+        }
+
+        function candidateId(candidate) {
+          return candidate && (candidate.event_id != null ? candidate.event_id : candidate.id);
+        }
+
+        function currentEventId(manifest) {
+          if (!manifest) return null;
+          if (manifest.current_event && manifest.current_event.event_id != null) return manifest.current_event.event_id;
+          return manifest.event_id != null ? manifest.event_id : null;
+        }
+
+        function displayOf(candidate) {
+          return candidate && candidate.display ? candidate.display : (candidate || {});
+        }
+
+        function candidatePositiveMatchingTags(candidate) {
+          if (!candidate) return [];
+          const display = displayOf(candidate);
+          const values = [];
+          for (const key of ['category', 'event_type']) {
+            if (candidate[key]) values.push(String(candidate[key]));
+            if (display[key]) values.push(String(display[key]));
+          }
+          for (const key of ['tags', 'audience_tags', 'format_tags', 'time_tags', 'price_tags']) {
+            for (const item of toArray(candidate[key])) values.push(String(item));
+          }
+          for (const reason of toArray(candidate.reason_codes)) {
+            const text = String(reason);
+            if (text.startsWith('tag:')) values.push(text.slice(4));
+            if (text.startsWith('same_category:')) values.push(text.slice('same_category:'.length));
+          }
+          return unique(values);
+        }
+
+        function hiddenSet(profile) {
+          return new Set([
+            ...toArray(profile && profile.hidden_event_ids).map(asId),
+            ...toArray(profile && profile.not_interested_event_ids).map(asId),
+          ]);
+        }
+
+        function likedSet(profile) {
+          return new Set(toArray(profile && profile.liked_event_ids).map(asId));
+        }
+
+        function staticCandidateScore(candidate) {
+          const raw = candidate && (candidate.static_score != null ? candidate.static_score : candidate.base_similarity);
+          const score = Number(raw || 0);
+          if (!Number.isFinite(score)) return 0;
+          return Math.max(0, Math.min(1, score));
+        }
+
+        function isCancelledLike(candidate) {
+          const lifecycle = String((candidate && candidate.lifecycle_status) || '').toLowerCase();
+          const status = String((candidate && (candidate.status || candidate.ticket_status)) || '').toLowerCase();
+          return ['cancelled', 'postponed', 'duplicate', 'merged'].includes(lifecycle) || ['cancelled', 'postponed'].includes(status);
+        }
+
+        function tagAffinity(candidate, profile) {
+          const positive = collectWeightedProfileMap(profile || {}, 'positive_tags');
+          const positiveCategories = collectWeightedProfileMap(profile || {}, 'positive_categories');
+          let sum = 0;
+          for (const tag of candidatePositiveMatchingTags(candidate)) sum += mapScore(positive, tag);
+          if (candidate && candidate.category) sum += mapScore(positiveCategories, candidate.category);
+          return Math.min(1.5, sum / 2);
+        }
+
+        function negativeInterestPenalty(candidate, profile) {
+          const negative = collectWeightedProfileMap(profile || {}, 'negative_interest_tags');
+          let penalty = 0;
+          for (const tag of candidatePositiveMatchingTags(candidate)) penalty += Math.max(0, mapScore(negative, tag));
+          return Math.min(1.5, penalty);
+        }
+
+        function priceMatch(candidate, profile) {
+          if (!profile || !profile.price_preferences) return 0;
+          if (profile.price_preferences.prefer_free && candidate && candidate.is_free) return 1;
+          return 0;
+        }
+
+        function timeMatch(candidate, profile) {
+          const prefs = collectWeightedProfileMap(profile || {}, 'positive_time_tags');
+          let score = 0;
+          for (const tag of toArray(candidate && candidate.time_tags)) score += mapScore(prefs, tag);
+          for (const tag of candidatePositiveMatchingTags(candidate)) {
+            if (tag === 'evening' || tag === 'daytime') score += mapScore(prefs, tag);
+          }
+          return Math.min(1, score);
+        }
+
+        function fatiguePenalty(candidate, profile) {
+          if (!profile) return 0;
+          const id = asId(candidateId(candidate));
+          const venue = asId(candidate && (candidate.venue_id || candidate.location_name));
+          let penalty = 0;
+          if (new Set(toArray(profile.seen_event_ids).map(asId)).has(id)) penalty += 0.7;
+          if (venue && new Set(toArray(profile.seen_venue_ids).map(asId)).has(venue)) penalty += 0.35;
+          return Math.min(1, penalty);
+        }
+
+        function isEligibleCandidate(candidate, manifest, profile) {
+          if (!candidate) return false;
+          const id = candidateId(candidate);
+          if (id == null) return false;
+          if (asId(id) === asId(currentEventId(manifest))) return false;
+          if (isCancelledLike(candidate)) return false;
+          if (profileHasConsent(profile) && hiddenSet(profile).has(asId(id))) return false;
+          if (profileHasConsent(profile) && negativeInterestPenalty(candidate, profile) >= NEGATIVE_HARD_FILTER_THRESHOLD) return false;
+          return true;
+        }
+
+        function scoreRelatedCandidate(candidate, manifest, profile) {
+          const weights = DEFAULT_WEIGHTS;
+          const base = staticCandidateScore(candidate);
+          if (!profileHasConsent(profile)) {
+            return { score: base, base_similarity: base, reason_codes: toArray(candidate && candidate.reason_codes).slice() };
+          }
+          const affinity = tagAffinity(candidate, profile);
+          const negative = negativeInterestPenalty(candidate, profile);
+          const fatigue = fatiguePenalty(candidate, profile);
+          const price = priceMatch(candidate, profile);
+          const time = timeMatch(candidate, profile);
+          const soldOut = String((candidate && (candidate.status || candidate.ticket_status)) || '').toLowerCase() === 'sold_out' ? 1 : 0;
+          const exploration = candidate && candidate.exploration_candidate ? 1 : 0;
+          const explicitLike = likedSet(profile).has(asId(candidateId(candidate))) ? 1 : 0;
+          const score =
+            weights.staticContext * base +
+            weights.profileAffinity * affinity +
+            weights.priceMatch * price +
+            weights.timeMatch * time +
+            weights.explicitLike * explicitLike +
+            weights.exploration * exploration -
+            weights.negativeInterest * negative -
+            weights.fatigue * fatigue -
+            weights.soldOut * soldOut;
+          const reasonCodes = toArray(candidate && candidate.reason_codes).slice();
+          if (affinity > 0) reasonCodes.push('profile:positive_affinity');
+          if (explicitLike > 0) reasonCodes.push('profile:explicit_like');
+          if (negative > 0) reasonCodes.push('profile:negative_interest_penalty');
+          if (fatigue > 0) reasonCodes.push('profile:fatigue_penalty');
+          if (price > 0) reasonCodes.push('profile:price_match');
+          return { score, base_similarity: base, reason_codes: unique(reasonCodes) };
+        }
+
+        function applyDiversity(sorted, options = {}) {
+          const maxSameCategory = options.maxSameCategory == null ? 3 : Number(options.maxSameCategory);
+          const maxSameVenue = options.maxSameVenue == null ? 2 : Number(options.maxSameVenue);
+          const result = [];
+          const postponed = [];
+          const categoryCounts = new Map();
+          const venueCounts = new Map();
+          for (const item of sorted) {
+            const candidate = item.candidate;
+            const category = candidate.category || candidate.event_type || 'unknown';
+            const venue = candidate.venue_id || candidate.location_name || 'unknown';
+            const catCount = categoryCounts.get(category) || 0;
+            const venueCount = venueCounts.get(venue) || 0;
+            if (catCount >= maxSameCategory || venueCount >= maxSameVenue) {
+              postponed.push({ ...item, diversity_postponed: true });
+              continue;
+            }
+            result.push(item);
+            categoryCounts.set(category, catCount + 1);
+            venueCounts.set(venue, venueCount + 1);
+          }
+          return result.concat(postponed);
+        }
+
+        function rankEventDetailRelated(manifest, profile, options = {}) {
+          const candidates = toArray(manifest && (manifest.related_static || manifest.candidates || manifest.events));
+          const active = isCompatibleProfile(profile, manifest && manifest.feature_schema_version, manifest && manifest.taxonomy_version) ? profile : null;
+          const scored = [];
+          for (const candidate of candidates) {
+            if (!isEligibleCandidate(candidate, manifest, active)) continue;
+            const scoreInfo = scoreRelatedCandidate(candidate, manifest, active);
+            scored.push({ candidate, score: scoreInfo.score, base_similarity: scoreInfo.base_similarity, reason_codes: scoreInfo.reason_codes });
+          }
+          scored.sort((left, right) => {
+            const byScore = right.score - left.score;
+            if (byScore !== 0) return byScore;
+            const byBase = right.base_similarity - left.base_similarity;
+            if (byBase !== 0) return byBase;
+            return Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0);
+          });
+          return applyDiversity(scored, options).map((item, index) => ({
+            event_id: candidateId(item.candidate),
+            candidate: item.candidate,
+            rank: index,
+            personal_score: Number(item.score.toFixed(4)),
+            base_similarity: Number(item.base_similarity.toFixed(4)),
+            reason_codes: item.reason_codes,
+            diversity_postponed: Boolean(item.diversity_postponed),
+          }));
+        }
+
+        function normalizeManifest(payload, feed) {
+          if (payload && Array.isArray(payload.related_static)) return payload;
+          const events = toArray(payload && payload.events).map((item, index) => ({
+            event_id: item.id ?? item.event_id,
+            title: item.title || 'Событие',
+            category: item.event_type || 'event',
+            tags: unique([item.event_type]),
+            audience_exclusion_tags: [],
+            city: item.city || null,
+            location_name: item.venue_name || null,
+            date: item.date || item.display_date || '',
+            status: item.status_label || 'available',
+            lifecycle_status: 'active',
+            is_free: item.price_label === 'Бесплатно',
+            base_similarity: Math.max(0, 1 - index * 0.01),
+            static_score: Math.max(0, 1 - index * 0.01),
+            reason_codes: ['legacy_json_payload'],
+            exploration_candidate: false,
+            display: item,
+          }));
+          return {
+            version: payload?.version || 1,
+            schema_version: FEATURE_SCHEMA_VERSION,
+            feature_schema_version: FEATURE_SCHEMA_VERSION,
+            taxonomy_version: TAXONOMY_VERSION,
+            surface: SURFACE_EVENT_DETAIL_RELATED,
+            algorithm_id: STATIC_ALGORITHM_ID,
+            event_id: Number(feed?.dataset.currentEventId || payload?.event_id || 0),
+            current_event: { event_id: Number(feed?.dataset.currentEventId || payload?.event_id || 0), title: document.title, category: 'event', tags: [], audience_exclusion_tags: [], city: null, location_name: null, date: '' },
+            preload_target: Number(payload?.preload_target || DEFAULT_PRELOAD_TARGET),
+            page_size: Number(payload?.page_size || DEFAULT_PRELOAD_TARGET),
+            related_static: events,
+          };
+        }
+
+        async function ensureDiscoveryStore(feed) {
+          const existing = discoveryStores.get(feed);
+          if (existing) return existing;
+          const source = feed.dataset.discoverySrc;
+          const store = { manifest: null, ranked: [], fetched: false, autoLoaded: false };
+          discoveryStores.set(feed, store);
+          if (!source) return store;
           try {
-            const existing = localStorage.getItem(PROFILE_KEY);
-            if (existing) return existing;
-            const generated = crypto.randomUUID ? crypto.randomUUID() : `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            localStorage.setItem(PROFILE_KEY, generated);
-            return generated;
+            const response = await fetch(source, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return store;
+            const payload = await response.json();
+            store.manifest = normalizeManifest(payload, feed);
+            store.fetched = true;
           } catch (_) {
-            return 'anon-local-unavailable';
+            store.fetched = false;
           }
+          return store;
         }
 
-        function state() {
-          return readJson(STATE_KEY, {});
+        function candidateById(store, eventId) {
+          const id = asId(eventId);
+          return toArray(store && store.manifest && store.manifest.related_static).find((candidate) => asId(candidateId(candidate)) === id) || null;
         }
 
-        function saveState(next) {
-          writeJson(STATE_KEY, next);
+        function contextForFeed(feed, manifest, profile, algorithmId) {
+          const width = Number(window.innerWidth || 1024);
+          return {
+            anonId: profile && profile.anon_id || null,
+            sessionId: profile && profile.session_id || null,
+            viewportClass: viewportClass(width),
+            layoutMode: relatedLayoutMode(),
+            presentationMode: relatedPresentationMode(width),
+            surface: SURFACE_EVENT_DETAIL_RELATED,
+            currentEventId: currentEventId(manifest) || Number(feed?.dataset.currentEventId || 0),
+            algorithmId,
+            servedListId: null,
+            servedListHash: null,
+          };
         }
 
-        function appendLog(entry) {
+        function createServedListHash(ranked, manifest, context, profile) {
+          return stableHash({
+            surface: SURFACE_EVENT_DETAIL_RELATED,
+            current_event_id: currentEventId(manifest),
+            algorithm_id: context.algorithmId,
+            profile_version: profile && profile.profile_version,
+            feature_schema_version: profile && profile.feature_schema_version,
+            taxonomy_version: profile && profile.taxonomy_version,
+            event_ids: ranked.map((item) => item.event_id),
+          });
+        }
+
+        function createServedListSummary(ranked, manifest, context) {
+          return {
+            event_kind: 'served_list_summary',
+            served_list_id: context.servedListId || randomId('served'),
+            served_list_hash: context.servedListHash || null,
+            anon_id: context.anonId || null,
+            session_id: context.sessionId || null,
+            surface: SURFACE_EVENT_DETAIL_RELATED,
+            viewport_class: context.viewportClass,
+            layout_mode: context.layoutMode,
+            presentation_mode: context.presentationMode,
+            current_event_id: currentEventId(manifest),
+            algorithm_id: context.algorithmId,
+            shown: ranked.map((item) => ({
+              event_id: item.event_id,
+              rank: item.rank,
+              base_similarity: item.base_similarity,
+              personal_score: item.personal_score,
+              reason_codes: toArray(item.reason_codes).slice(0, 8),
+            })),
+          };
+        }
+
+        function createStrongAction(kind, item, context, extra = {}) {
+          return {
+            event_kind: kind,
+            event_id: item && item.event_id != null ? item.event_id : null,
+            rank: item && item.rank != null ? item.rank : null,
+            served_list_id: context?.servedListId || null,
+            served_list_hash: context?.servedListHash || null,
+            surface: SURFACE_EVENT_DETAIL_RELATED,
+            viewport_class: context?.viewportClass || viewportClass(window.innerWidth || 1024),
+            layout_mode: context?.layoutMode || relatedLayoutMode(),
+            presentation_mode: context?.presentationMode || relatedPresentationMode(window.innerWidth || 1024),
+            algorithm_id: context?.algorithmId || LOCAL_FALLBACK_ALGORITHM_ID,
+            ...extra,
+          };
+        }
+
+        function appendLog(entry, profile, context) {
+          if (!isCompatibleProfile(profile)) return;
           const log = readJson(LOG_KEY, []);
-          log.push({ profile_id: profileId(), page: location.pathname, ts: new Date().toISOString(), ...entry });
+          log.push({
+            profile_id: profile.anon_id,
+            anon_id: profile.anon_id,
+            session_id: profile.session_id,
+            page: location.pathname,
+            ts: new Date().toISOString(),
+            ...entry,
+            ...(context || {}),
+          });
           writeJson(LOG_KEY, log.slice(-MAX_LOG));
         }
 
-        function eventState(map, eventId) {
-          return map[String(eventId)] || { liked: false, not_interested: false, shares: 0 };
+        function formatCount(value) {
+          const number = Number(value || 0);
+          return number > 0 ? String(number) : '';
+        }
+
+        function escapeHtml(value) {
+          return String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
+        }
+
+        function normalizeDisplayCandidate(item) {
+          const candidate = item && item.candidate ? item.candidate : item;
+          const display = displayOf(candidate);
+          const id = candidateId(candidate);
+          const title = candidate?.title || display.title || 'Событие';
+          return {
+            id,
+            title,
+            href: display.href || candidate?.href || '#',
+            absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+            event_type: display.event_type || candidate?.category || 'событие',
+            image_url: display.image_url || null,
+            image_alt: display.image_alt || `Афиша события «${title}»`,
+            image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
+            display_date: display.display_date || candidate?.date || '',
+            display_time: display.display_time || null,
+            display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
+            city: display.city || candidate?.city || null,
+            venue_name: display.venue_name || candidate?.location_name || null,
+            place: display.place || [display.city || candidate?.city, display.venue_name || candidate?.location_name].filter(Boolean).join(' · '),
+            status_label: display.status_label || candidate?.status || '',
+            price_label: display.price_label || null,
+            likes_count: Number(display.likes_count || 0),
+            shares_count: Number(display.shares_count || 0),
+            rank: item && item.rank != null ? item.rank : '',
+            personal_score: item && item.personal_score != null ? item.personal_score : '',
+          };
+        }
+
+        function eventCardHtml(item) {
+          const data = normalizeDisplayCandidate(item);
+          const preserve = data.image_text_mode !== 'visual_only';
+          const mediaClass = preserve ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover';
+          const likes = Number(data.likes_count || 0);
+          const shares = Number(data.shares_count || 0);
+          const likeCount = formatCount(likes);
+          const shareCount = formatCount(shares);
+          const status = data.price_label || data.status_label || '';
+          const image = data.image_url
+            ? `<span class="event-card__media-shell ${mediaClass}"><img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async"></span>`
+            : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
+          return `<article class="event-card" data-event-card data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
+            <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
+            <div class="event-card__feedback" aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">
+              <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" aria-pressed="false" aria-label="${escapeHtml(`Не интересно: ${data.title}`)}"><svg class="icon icon--dislike" aria-hidden="true" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M335.003,63.091v278.283h93.308V63.091H335.003z M393.245,303.962h-21.439v-19.534h21.439V303.962z"></path><polygon points="459.307,105.002 459.307,316.643 512,316.643 512,105.002"></polygon><path d="M302.309,263.539V115.813l-67.165-27.147c0,0-22.86-7.855-47.864-7.855H30.249c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244H61.17v0.002H30.244C13.546,266.22,0,279.756,0,296.463v1.318c0,16.704,13.541,30.245,30.244,30.245h108.455l-45.595,74.1c-8.745,14.222-4.308,32.848,9.914,41.605l1.115,0.686c14.232,8.756,32.859,4.319,41.615-9.903l59.966-97.461c1.396-2.268,3.405-4.094,5.796-5.266l90.748-44.473l0.057-0.028v-23.746H302.309z"></path></svg><span>Не интересно</span></button>
+              <button type="button" class="feedback-button feedback-button--share" data-native-share data-share-event-id="${escapeHtml(data.id)}" data-share-event-title="${escapeHtml(data.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(data.title)}" data-share-text="${escapeHtml([data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '))}" data-share-url="${escapeHtml(data.absolute_url)}" aria-label="${escapeHtml(`Поделиться событием: ${data.title}`)}"><svg class="icon icon--share" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M11.996 3.725A2.15 2.15 0 0 0 10 5.87l-.001 2.117-.02.005a9.904 9.904 0 0 0-7.827 10.721c.083.811 1.116 1.103 1.611.455l.187-.237a9.08 9.08 0 0 1 5.836-3.265l.213-.026.001 2.494a2.15 2.15 0 0 0 3.476 1.692l7.824-6.132a2.15 2.15 0 0 0 0-3.384l-7.824-6.132a2.15 2.15 0 0 0-1.326-.458zm.154 1.795a.35.35 0 0 1 .216.075l7.824 6.132a.35.35 0 0 1 0 .55l-7.824 6.133a.35.35 0 0 1-.566-.276l-.001-3.447a.9.9 0 0 0-.915-.9l-.233.004-.342.017a10.9 10.9 0 0 0-6.119 2.365l-.174.144.024-.135a8.1 8.1 0 0 1 6.968-6.537.9.9 0 0 0 .791-.893L11.8 5.87a.35.35 0 0 1 .35-.35"></path></svg><span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>
+              <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${data.title}. Сейчас ${likes}` : `Поставить лайк: ${data.title}`)}"><svg class="icon icon--heart" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3z"></path></svg><span class="feedback-count" data-feedback-count>${likeCount}</span></button>
+            </div>
+            <div class="event-card__body"><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
+          </article>`;
+        }
+
+        function visibleFeedCardCount(feed) {
+          return Array.from(feed.querySelectorAll(':scope > [data-event-card]')).filter((card) => !card.hidden).length;
+        }
+
+        function eventState(profile, eventId) {
+          const id = asId(eventId);
+          if (!profile || !id) return { liked: false, not_interested: false, shares: 0 };
+          return {
+            liked: likedSet(profile).has(id),
+            not_interested: hiddenSet(profile).has(id),
+            shares: Number((profile.share_counts || {})[id] || 0),
+          };
+        }
+
+        function setMembership(profile, field, eventId, enabled) {
+          const id = asId(eventId);
+          const set = new Set(toArray(profile[field]).map(asId).filter(Boolean));
+          if (enabled) set.add(id);
+          else set.delete(id);
+          profile[field] = Array.from(set);
+        }
+
+        function bumpTagMap(map, tags, delta) {
+          const next = { ...(map || {}) };
+          for (const tag of unique(tags).slice(0, 8)) {
+            const value = Math.max(0, Math.min(5, mapScore(next, tag) + delta));
+            if (value > 0) next[tag] = Number(value.toFixed(3));
+            else delete next[tag];
+          }
+          return next;
+        }
+
+        function updateProfileForAction(profile, eventId, action, candidate) {
+          const next = { ...profile, share_counts: { ...(profile.share_counts || {}) } };
+          const tags = candidatePositiveMatchingTags(candidate);
+          if (action === 'like_event') {
+            setMembership(next, 'liked_event_ids', eventId, true);
+            setMembership(next, 'not_interested_event_ids', eventId, false);
+            setMembership(next, 'hidden_event_ids', eventId, false);
+            next.positive_tags = bumpTagMap(next.positive_tags, tags, 0.45);
+          } else if (action === 'unlike_event') {
+            setMembership(next, 'liked_event_ids', eventId, false);
+          } else if (action === 'not_interested') {
+            setMembership(next, 'not_interested_event_ids', eventId, true);
+            setMembership(next, 'hidden_event_ids', eventId, true);
+            setMembership(next, 'liked_event_ids', eventId, false);
+            next.negative_interest_tags = bumpTagMap(next.negative_interest_tags, tags, 0.7);
+          } else if (action === 'undo_not_interested') {
+            setMembership(next, 'not_interested_event_ids', eventId, false);
+            setMembership(next, 'hidden_event_ids', eventId, false);
+            next.negative_interest_tags = bumpTagMap(next.negative_interest_tags, tags, -0.35);
+          } else if (action === 'share_event') {
+            const id = asId(eventId);
+            next.share_counts[id] = Number(next.share_counts[id] || 0) + 1;
+          }
+          next.updated_at = new Date().toISOString();
+          return next;
         }
 
         function hideLikeShareCallouts() {
@@ -470,163 +1095,30 @@ const safeDescription = description || 'Анонс события в Калин�
           setTimeout(() => burst.remove(), 950);
         }
 
-        function setCardLike(card, liked, action = 'like_event') {
-          const eventId = card?.dataset.eventId;
-          if (!eventId) return;
-          const map = state();
-          const current = eventState(map, eventId);
-          if (Boolean(current.liked) === Boolean(liked)) {
-            if (liked) {
-              animateLikeBurst(card);
-              showLikeShareCallout(card);
-            }
-            return;
-          }
-          const title = card.dataset.eventTitle || '';
-          map[String(eventId)] = { ...current, liked: Boolean(liked), not_interested: liked ? false : current.not_interested };
-          appendLog({ event_id: Number(eventId), event_title: title, action });
-          saveState(map);
-          applyFeedbackState({ anchorEventId: eventId });
-          if (liked) {
-            animateLikeBurst(card);
-            showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
-          } else {
-            hideLikeShareCallouts();
-          }
+        function cardRankedItem(card, store) {
+          const id = asId(card?.dataset.eventId);
+          return toArray(store?.ranked).find((item) => asId(item.event_id) === id) || null;
         }
 
-        function rerankFeed(feed, map, anchorEventId) {
-          const cards = Array.from(feed.querySelectorAll(':scope > [data-event-card]'));
-          const score = (value) => (value.liked ? 100 : 0) - (value.not_interested ? 100 : 0);
-          if (anchorEventId) {
-            const anchorIndex = cards.findIndex((card) => String(card.dataset.eventId) === String(anchorEventId));
-            if (anchorIndex >= 0) {
-              const frozen = cards.slice(0, anchorIndex + 1);
-              const tail = cards.slice(anchorIndex + 1).sort((a, b) => {
-                const av = eventState(map, a.dataset.eventId);
-                const bv = eventState(map, b.dataset.eventId);
-                return score(bv) - score(av);
-              });
-              [...frozen, ...tail].forEach((card) => feed.appendChild(card));
-              return;
-            }
-          }
-          cards.sort((a, b) => {
-            const av = eventState(map, a.dataset.eventId);
-            const bv = eventState(map, b.dataset.eventId);
-            return score(bv) - score(av);
-          }).forEach((card) => feed.appendChild(card));
+        function contextForCard(card) {
+          const feed = card?.closest('[data-discovery-feed]');
+          const summary = feed ? servedListByFeed.get(feed) : null;
+          return {
+            servedListId: summary?.served_list_id || null,
+            servedListHash: summary?.served_list_hash || null,
+            viewportClass: summary?.viewport_class || viewportClass(window.innerWidth || 1024),
+            layoutMode: summary?.layout_mode || relatedLayoutMode(),
+            presentationMode: summary?.presentation_mode || relatedPresentationMode(window.innerWidth || 1024),
+            algorithmId: summary?.algorithm_id || feed?.dataset.effectiveAlgorithmId || LOCAL_FALLBACK_ALGORITHM_ID,
+          };
         }
 
-        function formatCount(value) {
-          const number = Number(value || 0);
-          return number > 0 ? String(number) : '';
-        }
-
-        function escapeHtml(value) {
-          return String(value || '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char] || char));
-        }
-
-        function eventCardHtml(item) {
-          const preserve = item.image_text_mode !== 'visual_only';
-          const mediaClass = preserve ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover';
-          const likes = Number(item.likes_count || 0);
-          const shares = Number(item.shares_count || 0);
-          const likeCount = likes > 0 ? String(likes) : '';
-          const shareCount = shares > 0 ? String(shares) : '';
-          const status = item.price_label || item.status_label || '';
-          const image = item.image_url
-            ? `<span class="event-card__media-shell ${mediaClass}"><img class="event-card__media" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.image_alt || `Афиша события «${item.title}»`)}" loading="lazy" decoding="async"></span>`
-            : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(item.display_date)}</span><strong>${escapeHtml(item.event_type || 'событие')}</strong>${item.city ? `<span>${escapeHtml(item.city)}</span>` : ''}</span>`;
-          return `<article class="event-card" data-event-card data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" data-card-href="${escapeHtml(item.href)}" tabindex="0" aria-label="${escapeHtml(`${item.title}: ${item.display_date}`)}">
-            <a class="event-card__media-link" href="${escapeHtml(item.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${item.title}`)}">${image}</a>
-            <div class="event-card__feedback" aria-label="${escapeHtml(`Оценить событие: ${item.title}`)}">
-              <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" aria-pressed="false" aria-label="${escapeHtml(`Не интересно: ${item.title}`)}"><svg class="icon icon--dislike" aria-hidden="true" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M335.003,63.091v278.283h93.308V63.091H335.003z M393.245,303.962h-21.439v-19.534h21.439V303.962z"></path><polygon points="459.307,105.002 459.307,316.643 512,316.643 512,105.002"></polygon><path d="M302.309,263.539V115.813l-67.165-27.147c0,0-22.86-7.855-47.864-7.855H30.249c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244H61.17v0.002H30.244C13.546,266.22,0,279.756,0,296.463v1.318c0,16.704,13.541,30.245,30.244,30.245h108.455l-45.595,74.1c-8.745,14.222-4.308,32.848,9.914,41.605l1.115,0.686c14.232,8.756,32.859,4.319,41.615-9.903l59.966-97.461c1.396-2.268,3.405-4.094,5.796-5.266l90.748-44.473l0.057-0.028v-23.746H302.309z"></path></svg><span>Не интересно</span></button>
-              <button type="button" class="feedback-button feedback-button--share" data-native-share data-share-event-id="${item.id}" data-share-event-title="${escapeHtml(item.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(item.title)}" data-share-text="${escapeHtml([item.display_date, item.display_time, item.venue_name || item.city].filter(Boolean).join(' · '))}" data-share-url="${escapeHtml(item.absolute_url)}" aria-label="${escapeHtml(`Поделиться событием: ${item.title}`)}"><svg class="icon icon--share" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M11.996 3.725A2.15 2.15 0 0 0 10 5.87l-.001 2.117-.02.005a9.904 9.904 0 0 0-7.827 10.721c.083.811 1.116 1.103 1.611.455l.187-.237a9.08 9.08 0 0 1 5.836-3.265l.213-.026.001 2.494a2.15 2.15 0 0 0 3.476 1.692l7.824-6.132a2.15 2.15 0 0 0 0-3.384l-7.824-6.132a2.15 2.15 0 0 0-1.326-.458zm.154 1.795a.35.35 0 0 1 .216.075l7.824 6.132a.35.35 0 0 1 0 .55l-7.824 6.133a.35.35 0 0 1-.566-.276l-.001-3.447a.9.9 0 0 0-.915-.9l-.233.004-.342.017a10.9 10.9 0 0 0-6.119 2.365l-.174.144.024-.135a8.1 8.1 0 0 1 6.968-6.537.9.9 0 0 0 .791-.893L11.8 5.87a.35.35 0 0 1 .35-.35"></path></svg><span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>
-              <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${item.title}. Сейчас ${likes}` : `Поставить лайк: ${item.title}`)}"><svg class="icon icon--heart" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3z"></path></svg><span class="feedback-count" data-feedback-count>${likeCount}</span></button>
-            </div>
-            <div class="event-card__body"><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(item.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div><a class="event-card__title" href="${escapeHtml(item.href)}" data-prefetch>${escapeHtml(item.title)}</a>${item.place ? `<span class="event-card__footer">${escapeHtml(item.place)}</span>` : ''}</div>
-          </article>`;
-        }
-
-        function visibleFeedCardCount(feed) {
-          return Array.from(feed.querySelectorAll(':scope > [data-event-card]')).filter((card) => !card.hidden).length;
-        }
-
-        function filterFeedByInterest(feed, map, anchorEventId) {
-          feed.querySelectorAll(':scope > [data-event-card]').forEach((card) => {
-            const eventId = String(card.dataset.eventId || '');
-            const current = eventState(map, eventId);
-            const isCurrentPagePlate = sessionPinnedNotInterested.has(eventId) || String(anchorEventId || '') === eventId;
-            card.hidden = Boolean(current.not_interested) && !isCurrentPagePlate;
-          });
-        }
-
-        const discoveryStores = new WeakMap();
-
-        async function ensureDiscoveryStore(feed) {
-          const existing = discoveryStores.get(feed);
-          if (existing) return existing;
-          const source = feed.dataset.discoverySrc;
-          const store = { events: [], cursor: 0, fetched: false, autoLoaded: false };
-          discoveryStores.set(feed, store);
-          if (!source) return store;
-          try {
-            const response = await fetch(source, { headers: { Accept: 'application/json' } });
-            if (!response.ok) return store;
-            const payload = await response.json();
-            store.events = Array.isArray(payload.events) ? payload.events : [];
-            store.fetched = true;
-          } catch (_) {
-            store.fetched = false;
-          }
-          return store;
-        }
-
-        function appendDiscoveryEvents(feed, store, options = {}) {
-          const map = state();
-          const existingIds = new Set(Array.from(feed.querySelectorAll(':scope > [data-event-card]')).map((card) => String(card.dataset.eventId || '')));
-          const pageSize = Number(options.pageSize || 10);
-          let added = 0;
-          while (store.cursor < store.events.length && added < pageSize) {
-            const item = store.events[store.cursor];
-            store.cursor += 1;
-            if (!item || existingIds.has(String(item.id))) continue;
-            if (eventState(map, item.id).not_interested) continue;
-            feed.insertAdjacentHTML('beforeend', eventCardHtml(item));
-            existingIds.add(String(item.id));
-            added += 1;
-          }
-          applyFeedbackState({ skipDiscoveryHydration: true });
-          return added;
-        }
-
-        async function hydrateDiscoveryFeeds({ automatic = false } = {}) {
-          const feeds = Array.from(document.querySelectorAll('[data-personalized-feed]'));
-          for (const feed of feeds) {
-            const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
-            const store = await ensureDiscoveryStore(feed);
-            if (automatic && store.autoLoaded) continue;
-            if (automatic) store.autoLoaded = true;
-            const target = 10;
-            if (automatic && visibleFeedCardCount(feed) >= target) {
-              if (button && store.cursor < store.events.length) button.hidden = false;
-              continue;
-            }
-            appendDiscoveryEvents(feed, store, { pageSize: target });
-            if (button) button.hidden = store.cursor >= store.events.length;
-          }
-        }
-
-
-        function applyFeedbackState(options = {}) {
-          const map = state();
-          const cards = document.querySelectorAll('[data-event-card]');
-          cards.forEach((card) => {
+        function syncCardsFeedbackState(profile) {
+          document.querySelectorAll('[data-event-card]').forEach((card) => {
             const eventId = card.dataset.eventId;
-            const current = eventState(map, eventId);
+            const current = eventState(profile, eventId);
             card.classList.toggle('is-liked', Boolean(current.liked));
-            card.classList.toggle('is-not-interested', Boolean(current.not_interested));
+            card.classList.toggle('is-not-interested', Boolean(current.not_interested) && !card.hidden);
             card.querySelectorAll('[data-feedback-action="like"]').forEach((button) => {
               const base = Number(button.dataset.baseCount || '0');
               const localLike = current.liked ? 1 : 0;
@@ -648,63 +1140,193 @@ const safeDescription = description || 'Анонс события в Калин�
               button.setAttribute('aria-label', `${title}: ${card.dataset.eventTitle || 'событие'}`);
             });
           });
-          document.querySelectorAll('[data-personalized-feed]').forEach((feed) => {
-            filterFeedByInterest(feed, map, options.anchorEventId);
-            rerankFeed(feed, map, options.anchorEventId);
+        }
+
+        function cardEligibleAfterProfile(card, store, profile, anchorEventId) {
+          if (!profile) return true;
+          const id = asId(card.dataset.eventId);
+          const isCurrentPagePlate = sessionPinnedNotInterested.has(id) || asId(anchorEventId) === id;
+          if (hiddenSet(profile).has(id)) return isCurrentPagePlate;
+          const candidate = candidateById(store, id);
+          if (candidate && negativeInterestPenalty(candidate, profile) >= NEGATIVE_HARD_FILTER_THRESHOLD) return false;
+          return true;
+        }
+
+        function reorderExistingCards(feed, ranked, anchorEventId) {
+          const cards = Array.from(feed.querySelectorAll(':scope > [data-event-card]'));
+          const rankMap = new Map(ranked.map((item) => [asId(item.event_id), item.rank]));
+          const sortCards = (items) => items.sort((a, b) => {
+            const ar = rankMap.has(asId(a.dataset.eventId)) ? rankMap.get(asId(a.dataset.eventId)) : 9999;
+            const br = rankMap.has(asId(b.dataset.eventId)) ? rankMap.get(asId(b.dataset.eventId)) : 9999;
+            return ar - br;
           });
+          if (anchorEventId != null) {
+            const anchorIndex = cards.findIndex((card) => asId(card.dataset.eventId) === asId(anchorEventId));
+            if (anchorIndex >= 0) {
+              const frozen = cards.slice(0, anchorIndex + 1);
+              const tail = sortCards(cards.slice(anchorIndex + 1));
+              [...frozen, ...tail].forEach((card) => feed.appendChild(card));
+              return;
+            }
+          }
+          sortCards(cards).forEach((card) => feed.appendChild(card));
+        }
+
+        function appendDiscoveryEvents(feed, store, count) {
+          const profile = activeProfile(store.manifest);
+          const existingIds = new Set(Array.from(feed.querySelectorAll(':scope > [data-event-card]')).map((card) => asId(card.dataset.eventId)));
+          let added = 0;
+          for (const item of toArray(store.ranked)) {
+            if (added >= count) break;
+            const id = asId(item.event_id);
+            if (!id || existingIds.has(id)) continue;
+            if (!isEligibleCandidate(item.candidate, store.manifest, profile)) continue;
+            feed.insertAdjacentHTML('beforeend', eventCardHtml(item));
+            existingIds.add(id);
+            added += 1;
+          }
+          syncCardsFeedbackState(profile);
+          return added;
+        }
+
+        function hasMoreCandidates(feed, store) {
+          const existingIds = new Set(Array.from(feed.querySelectorAll(':scope > [data-event-card]')).map((card) => asId(card.dataset.eventId)));
+          return toArray(store.ranked).some((item) => !existingIds.has(asId(item.event_id)));
+        }
+
+        async function syncFeedWithManifest(feed, options = {}) {
+          const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
+          const store = await ensureDiscoveryStore(feed);
+          if (!store.manifest) {
+            syncCardsFeedbackState(activeProfile());
+            if (button) button.hidden = true;
+            return;
+          }
+          const profile = activeProfile(store.manifest);
+          const hasLocalProfile = Boolean(profile);
+          const algorithmId = hasLocalProfile ? LOCAL_FALLBACK_ALGORITHM_ID : STATIC_ALGORITHM_ID;
+          store.ranked = rankEventDetailRelated(store.manifest, profile, { maxSameCategory: 3, maxSameVenue: 2 });
+          feed.dataset.effectiveAlgorithmId = algorithmId;
+          feed.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;
+          feed.dataset.layoutMode = relatedLayoutMode();
+          feed.dataset.presentationMode = relatedPresentationMode(window.innerWidth || 1024);
+          feed.dataset.algorithmId = algorithmId;
+          reorderExistingCards(feed, store.ranked, options.anchorEventId);
+          feed.querySelectorAll(':scope > [data-event-card]').forEach((card) => {
+            card.hidden = !cardEligibleAfterProfile(card, store, profile, options.anchorEventId);
+            const item = cardRankedItem(card, store);
+            if (item) {
+              card.dataset.rank = String(item.rank);
+              card.dataset.score = String(item.personal_score);
+            }
+          });
+          if (options.automatic && !store.autoLoaded) {
+            store.autoLoaded = true;
+            const target = Number(store.manifest.preload_target || DEFAULT_PRELOAD_TARGET);
+            while (visibleFeedCardCount(feed) < target) {
+              const added = appendDiscoveryEvents(feed, store, 1);
+              if (!added) break;
+            }
+          } else if (!options.automatic) {
+            appendDiscoveryEvents(feed, store, Number(store.manifest.page_size || DEFAULT_PRELOAD_TARGET));
+          }
+          syncCardsFeedbackState(profile);
+          const visibleRanked = Array.from(feed.querySelectorAll(':scope > [data-event-card]'))
+            .filter((card) => !card.hidden)
+            .map((card) => cardRankedItem(card, store))
+            .filter(Boolean);
+          const context = contextForFeed(feed, store.manifest, profile, algorithmId);
+          context.servedListHash = createServedListHash(visibleRanked, store.manifest, context, profile);
+          context.servedListId = randomId('served');
+          const summary = createServedListSummary(visibleRanked, store.manifest, context);
+          servedListByFeed.set(feed, summary);
+          if (button) button.hidden = !hasMoreCandidates(feed, store);
+        }
+
+        async function hydrateDiscoveryFeeds({ automatic = false, anchorEventId = null } = {}) {
+          const feeds = Array.from(document.querySelectorAll('[data-discovery-feed]'));
+          for (const feed of feeds) {
+            await syncFeedWithManifest(feed, { automatic, anchorEventId });
+          }
+        }
+
+        async function applyFeedbackState(options = {}) {
+          const profile = readProfile();
+          syncCardsFeedbackState(profile);
           if (!options.skipDiscoveryHydration) {
-            hydrateDiscoveryFeeds({ automatic: true });
+            await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
           renderFeedbackReport();
         }
 
-        document.addEventListener('click', (event) => {
+        async function handleFeedbackButton(button) {
+          const eventId = button.dataset.eventId;
+          if (!eventId) return;
+          const card = button.closest('[data-event-card]');
+          const feed = card?.closest('[data-discovery-feed]');
+          const store = feed ? await ensureDiscoveryStore(feed) : null;
+          const profile = activeProfile(store?.manifest);
+          if (!profile) {
+            requestConsent(() => handleFeedbackButton(button));
+            return;
+          }
+          const candidate = store ? candidateById(store, eventId) : null;
+          const current = eventState(profile, eventId);
+          const title = button.dataset.eventTitle || card?.dataset.eventTitle || '';
+          let action = null;
+          let shouldShowSharePrompt = false;
+          if (button.dataset.feedbackAction === 'like') {
+            const liked = !current.liked;
+            action = liked ? 'like_event' : 'unlike_event';
+            shouldShowSharePrompt = liked;
+          } else if (button.dataset.feedbackAction === 'not_interested') {
+            const notInterested = !current.not_interested;
+            action = notInterested ? 'not_interested' : 'undo_not_interested';
+            if (notInterested) sessionPinnedNotInterested.add(asId(eventId));
+            else sessionPinnedNotInterested.delete(asId(eventId));
+            hideLikeShareCallouts();
+          }
+          if (!action) return;
+          const next = updateProfileForAction(profile, eventId, action, candidate);
+          saveProfile(next);
+          const context = contextForCard(card);
+          const item = card && store ? cardRankedItem(card, store) : { event_id: Number(eventId), rank: null };
+          appendLog(createStrongAction(action, item, context, { event_title: title, action }), next);
+          await applyFeedbackState({ anchorEventId: eventId });
+          if (action === 'like_event') {
+            animateLikeBurst(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
+          }
+          if (shouldShowSharePrompt) {
+            showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
+          } else if (action === 'unlike_event') {
+            hideLikeShareCallouts();
+          }
+        }
+
+        document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-feedback-action]');
           if (!button) return;
           event.preventDefault();
           event.stopPropagation();
-          const eventId = button.dataset.eventId;
-          if (!eventId) return;
-          const map = state();
-          const current = eventState(map, eventId);
-          const card = button.closest('[data-event-card]');
-          const title = button.dataset.eventTitle || card?.dataset.eventTitle || '';
-          let shouldShowSharePrompt = false;
-          if (button.dataset.feedbackAction === 'like') {
-            const liked = !current.liked;
-            map[String(eventId)] = { ...current, liked, not_interested: liked ? false : current.not_interested };
-            appendLog({ event_id: Number(eventId), event_title: title, action: liked ? 'like_event' : 'unlike_event' });
-            shouldShowSharePrompt = liked;
-            if (liked) animateLikeBurst(card);
-            if (!liked) hideLikeShareCallouts();
-          } else if (button.dataset.feedbackAction === 'not_interested') {
-            const notInterested = !current.not_interested;
-            map[String(eventId)] = { ...current, liked: notInterested ? false : current.liked, not_interested: notInterested };
-            if (notInterested) {
-              sessionPinnedNotInterested.add(String(eventId));
-            } else {
-              sessionPinnedNotInterested.delete(String(eventId));
-            }
-            appendLog({ event_id: Number(eventId), event_title: title, action: notInterested ? 'not_interested' : 'undo_not_interested' });
-            hideLikeShareCallouts();
-          }
-          saveState(map);
-          applyFeedbackState({ anchorEventId: eventId });
-          if (shouldShowSharePrompt) {
-            showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
-          }
+          await handleFeedbackButton(button);
         });
 
-        function recordShare(button) {
+        async function recordShare(button) {
           const eventId = button.dataset.shareEventId || button.closest('[data-event-card]')?.dataset.eventId;
           if (!eventId) return;
-          const map = state();
-          const current = eventState(map, eventId);
-          const title = button.dataset.shareEventTitle || button.dataset.shareTitle || button.closest('[data-event-card]')?.dataset.eventTitle || '';
-          map[String(eventId)] = { ...current, shares: Number(current.shares || 0) + 1 };
-          saveState(map);
-          appendLog({ event_id: Number(eventId), event_title: title, action: 'share_event' });
-          applyFeedbackState({ anchorEventId: eventId });
+          const card = button.closest('[data-event-card]');
+          const feed = card?.closest('[data-discovery-feed]');
+          const store = feed ? await ensureDiscoveryStore(feed) : null;
+          const profile = activeProfile(store?.manifest);
+          if (!profile) return;
+          const title = button.dataset.shareEventTitle || button.dataset.shareTitle || card?.dataset.eventTitle || '';
+          const candidate = store ? candidateById(store, eventId) : null;
+          const next = updateProfileForAction(profile, eventId, 'share_event', candidate);
+          saveProfile(next);
+          const context = contextForCard(card);
+          const item = card && store ? cardRankedItem(card, store) : { event_id: Number(eventId), rank: null };
+          appendLog(createStrongAction('share_event', item, context, { event_title: title, action: 'share_event' }), next);
+          await applyFeedbackState({ anchorEventId: eventId });
         }
 
         document.addEventListener('click', async (event) => {
@@ -720,7 +1342,7 @@ const safeDescription = description || 'Анонс события в Калин�
                 text: button.dataset.shareText || '',
                 url,
               });
-              recordShare(button);
+              await recordShare(button);
               return;
             } catch (_) {
               return;
@@ -732,7 +1354,7 @@ const safeDescription = description || 'Анонс события в Калин�
             const original = label.textContent;
             label.textContent = 'Ссылка скопирована';
             setTimeout(() => { label.textContent = original || 'Поделиться'; }, 1800);
-            recordShare(button);
+            await recordShare(button);
           } catch (_) {
             location.href = url;
           }
@@ -798,17 +1420,15 @@ const safeDescription = description || 'Анонс события в Калин�
           if (anchor) prefetch(anchor.href);
         }, { passive: true });
         const idle = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
-        idle(() => document.querySelectorAll('[data-personalized-feed] a[data-prefetch]').forEach((anchor) => prefetch(anchor.href)));
+        idle(() => document.querySelectorAll('[data-discovery-feed] a[data-prefetch]').forEach((anchor) => prefetch(anchor.href)));
 
         document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-discovery-load-more]');
           if (!button) return;
           event.preventDefault();
-          const feed = button.parentElement?.querySelector('[data-personalized-feed]');
+          const feed = button.parentElement?.querySelector('[data-discovery-feed]');
           if (!feed) return;
-          const store = await ensureDiscoveryStore(feed);
-          appendDiscoveryEvents(feed, store, { pageSize: 10 });
-          button.hidden = store.cursor >= store.events.length;
+          await syncFeedWithManifest(feed, { automatic: false });
         });
 
         const sticky = document.querySelector('[data-sticky-cta]');
@@ -823,21 +1443,22 @@ const safeDescription = description || 'Анонс события в Калин�
         function renderFeedbackReport() {
           const root = document.querySelector('[data-feedback-report]');
           if (!root) return;
-          const map = state();
+          const profileData = readProfile();
+          const valid = isCompatibleProfile(profileData);
           const log = readJson(LOG_KEY, []);
-          const activeLikes = Object.values(map).filter((item) => item?.liked).length;
-          const activeNegative = Object.values(map).filter((item) => item?.not_interested).length;
-          const localShares = Object.values(map).reduce((sum, item) => sum + Number(item?.shares || 0), 0);
+          const activeLikes = valid ? toArray(profileData.liked_event_ids).length : 0;
+          const activeNegative = valid ? toArray(profileData.not_interested_event_ids).length : 0;
+          const localShares = valid ? Object.values(profileData.share_counts || {}).reduce((sum, item) => sum + Number(item || 0), 0) : 0;
           const profile = root.querySelector('[data-feedback-profile]');
           const summary = root.querySelector('[data-feedback-summary]');
           const list = root.querySelector('[data-feedback-log]');
-          if (profile) profile.textContent = profileId();
+          if (profile) profile.textContent = valid ? profileData.anon_id : 'нет согласия / нет совместимого профиля';
           if (summary) summary.textContent = `Активных лайков: ${activeLikes}. “Не интересно”: ${activeNegative}. Локальных шеров: ${localShares}. Сырых событий в локальном журнале: ${log.length}.`;
           if (list) {
             list.innerHTML = '';
             log.slice().reverse().slice(0, 30).forEach((item) => {
               const li = document.createElement('li');
-              li.textContent = `${item.ts} · ${item.action} · #${item.event_id} ${item.event_title || ''}`;
+              li.textContent = `${item.ts} · ${item.action || item.event_kind} · #${item.event_id} ${item.event_title || ''}`;
               list.appendChild(li);
             });
             if (!log.length) {
