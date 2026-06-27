@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Incident / Valeria duplicate publication (INC-2026-06-27)**: Smart Update no longer lets title-only deterministic guards overrule a high-confidence LLM duplicate match when date/venue/time anchors do not conflict. Russian one-character title inflection now covers cases such as `Валерия` vs `Концерт Валерии`, preventing duplicate managed Telegram/VK fanout for one real event.
 - **Incident / VK Channel draft Telegraph CTA (INC-2026-06-26)**: manual
   `vk_channel_publish` drafts now fail/skip registration-required events,
   including `80 историй о главном`, when no direct registration/ticket URL is

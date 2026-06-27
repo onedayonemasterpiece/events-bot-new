@@ -96,6 +96,31 @@ async def _seed_yantar_trofimov_event(db: Database) -> int:
         return int(ev.id or 0)
 
 
+async def _seed_yantar_valeria_event(db: Database) -> int:
+    async with db.get_session() as session:
+        ev = Event(
+            title="Концерт Валерии",
+            description="Существующая карточка концерта Валерии.",
+            date="2026-07-01",
+            time="",
+            location_name="Янтарь холл",
+            location_address="Ленина 11",
+            city="Светлогорск",
+            event_type="концерт",
+            ticket_link="https://янтарьхолл.рф",
+            source_text=(
+                "Концерт Народной артистки России ВАЛЕРИИ, запланированный на 29 мая, "
+                "переносится на 1 июля. Все купленные билеты действительны."
+            ),
+            source_post_url="https://t.me/yantarholl/4584",
+            telegraph_url="https://telegra.ph/Koncert-Valerii-05-20",
+            telegraph_path="Koncert-Valerii-05-20",
+        )
+        session.add(ev)
+        await session.commit()
+        return int(ev.id or 0)
+
+
 async def _seed_tretyakov_art_breakfast_event(db: Database) -> int:
     async with db.get_session() as session:
         ev = Event(
@@ -255,6 +280,83 @@ async def test_citywide_music_night_location_drift_reaches_llm_match(tmp_path, m
                 )
             ).scalars().all()
             assert [int(row.id or 0) for row in rows] == [eid]
+    finally:
+        await db.close()
+
+
+def test_title_related_allows_russian_inflection_artist_title() -> None:
+    assert su._titles_look_related("Валерия", "Концерт Валерии") is True
+    assert su._titles_look_related("🎤 Концерт Валерии", "Валерия") is True
+
+
+@pytest.mark.asyncio
+async def test_high_confidence_llm_match_is_not_vetoed_by_title_wrapper_drift(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+        eid = await _seed_yantar_valeria_event(db)
+
+        async def fake_match_or_create_bundle(candidate, events, **kwargs):
+            assert [int(ev.id or 0) for ev in events] == [eid]
+            return {
+                "action": "match",
+                "match_event_id": eid,
+                "confidence": 1.0,
+                "reason_short": (
+                    "Полное совпадение артиста, даты и площадки; новый источник "
+                    "добавляет время концерта."
+                ),
+            }
+
+        async def fake_merge_event(*args, **kwargs):
+            return {
+                "description": "Народная артистка России Валерия выступит в Янтарь-холле.",
+                "added_facts": ["Время концерта: 19:00"],
+                "duplicate_facts": [],
+                "conflict_facts": [],
+                "skipped_conflicts": [],
+            }
+
+        monkeypatch.setattr(su, "_llm_match_or_create_bundle", fake_match_or_create_bundle)
+        monkeypatch.setattr(su, "_llm_merge_event", fake_merge_event)
+
+        candidate = EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/yantarholl/4727",
+            source_chat_username="yantarholl",
+            source_message_id=4727,
+            source_text=(
+                "1 июля в Янтарь-холле с сольным концертом выступит Народная артистка "
+                "России — Валерия. Среди главных хитов артистки — «Часики», "
+                "«Нежность моя», «Таю». Билеты на сайте Янтарь-холла."
+            ),
+            title="Большой сольный вечер",
+            date="2026-07-01",
+            time="19:00",
+            location_name="Янтарь холл",
+            location_address="Ленина 11",
+            city="Светлогорск",
+            event_type="концерт",
+            ticket_link="https://янтарьхолл.рф/afisha/valeriya-solnyy-kontsert%2001%2007/",
+        )
+
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+
+        assert result.status == "merged"
+        assert int(result.event_id or 0) == eid
+        async with db.get_session() as session:
+            rows = (
+                await session.execute(
+                    su.select(Event).where(Event.date == "2026-07-01").order_by(Event.id)
+                )
+            ).scalars().all()
+            assert [int(ev.id or 0) for ev in rows] == [eid]
     finally:
         await db.close()
 

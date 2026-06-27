@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-27-valeria-duplicate-publication.md`
+  - Scope: Smart Update LLM-first duplicate matching, title-only deterministic vetoes, and managed TG/VK fanout for same real event rows.
+  - Must not regress: a high-confidence LLM match with same date/venue and no explicit time conflict must not be overruled solely by `unrelated_titles`; `Валерия` and `Концерт Валерии` must merge as one event instead of producing duplicate public posts.
 - `INC-2026-06-26-vk-channel-draft-telegraph-cta.md`
   - Scope: VK Channel manual-copy draft CTA selection for registration-required promo events, especially `80 историй о главном`. Must not regress: Telegraph details pages must not be used as the one CTA when the event/campaign requires registration; missing direct registration/ticket links must fail/skip instead of producing a misleading draft; source-text registration URLs may be used as direct CTAs.
 - `INC-2026-06-26-crumple-missing-video-output.md`
@@ -545,3 +548,4 @@
    - follow-up actions.
 4. Инцидент не считается дисциплинированно закрытым, пока fix не в проде, не достижим из `origin/main`, не покрыт regression evidence и не заведены follow-up actions.
 5. Для source-import / Smart Update quality incidents regression evidence обязано включать replay сырых offending source artifacts через production import path + Smart Update на prod snapshot/shadow DB. Prompt diff, unit tests или ручной SQL-аудит без такого replay не являются достаточным closure.
+

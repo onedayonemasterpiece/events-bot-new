@@ -10530,10 +10530,67 @@ def _titles_look_related(a: str | None, b: str | None) -> bool:
         return False
     overlap = toks_a & toks_b
     if not overlap:
+        # Russian event titles frequently differ only by inflection when one
+        # source names the artist/object directly and another wraps it into an
+        # event-type title, e.g. "Валерия" vs "Концерт Валерии".
+        #
+        # This is still a narrow title-similarity check: _token_is_grounded()
+        # only allows exact tokens or a one-character suffix/stem relation for
+        # sufficiently long tokens, so it does not turn title matching into a
+        # broad semantic decision maker.
+        fuzzy_overlap = {
+            ta
+            for ta in toks_a
+            if _token_is_grounded(ta, toks_b)
+            or any(_token_is_grounded(tb, {ta}) for tb in toks_b)
+        }
+        overlap_count = len(fuzzy_overlap)
+    else:
+        overlap_count = len(overlap)
+    if not overlap_count:
         return False
     denom = max(1, min(len(toks_a), len(toks_b)))
-    coverage = len(overlap) / denom
-    return coverage >= 0.6 or (len(overlap) >= 2 and coverage >= 0.45)
+    coverage = overlap_count / denom
+    return coverage >= 0.6 or (overlap_count >= 2 and coverage >= 0.45)
+
+
+def _llm_high_confidence_anchor_match_ok(
+    candidate: "EventCandidate",
+    event_db: "Event",
+    *,
+    confidence: float | None,
+    is_canonical_site: bool,
+) -> bool:
+    """Return True when an LLM match is protected from title-only vetoes.
+
+    LLM-first matching must not be undone by a primitive title-token guard when
+    the model is very confident and hard factual anchors do not conflict. The
+    deterministic layer remains a safety rail for factual conflicts; it is not
+    allowed to be the semantic decision maker for harmless title wording drift.
+    """
+
+    try:
+        conf = float(confidence or 0.0)
+    except Exception:
+        conf = 0.0
+    if conf < 0.95:
+        return False
+
+    cand_date = str(getattr(candidate, "date", "") or "").strip()
+    event_date = str(getattr(event_db, "date", "") or "").strip()
+    if cand_date and event_date and cand_date != event_date:
+        return False
+
+    if getattr(candidate, "location_name", None) and getattr(event_db, "location_name", None):
+        if not _event_candidate_location_matches(event_db, candidate):
+            return False
+
+    cand_time = _candidate_anchor_time(candidate, is_canonical_site=is_canonical_site)
+    event_time = _event_anchor_time(event_db)
+    if _has_explicit_time_conflict(cand_time, event_time):
+        return False
+
+    return True
 
 
 def _normalize_time_for_match(value: str | None) -> str:
@@ -13225,10 +13282,19 @@ async def _smart_event_update_impl(
                     if match_event is None:
                         confidence = 0.0
                         match_reason = "llm_bad_match_id"
-                    elif len(shortlist) == 1 and not _single_candidate_auto_match_ok(
-                        candidate,
-                        match_event,
-                        is_canonical_site=is_canonical_site,
+                    elif (
+                        len(shortlist) == 1
+                        and not _single_candidate_auto_match_ok(
+                            candidate,
+                            match_event,
+                            is_canonical_site=is_canonical_site,
+                        )
+                        and not _llm_high_confidence_anchor_match_ok(
+                            candidate,
+                            match_event,
+                            confidence=confidence,
+                            is_canonical_site=is_canonical_site,
+                        )
                     ):
                         match_event = None
                         match_reason = "llm_single_candidate_sanity_reject"
@@ -13244,10 +13310,19 @@ async def _smart_event_update_impl(
                         if confidence < threshold:
                             match_event = None
                             match_reason = f"llm_conf_{confidence:.2f}<={threshold:.2f}"
-                        elif len(shortlist) == 1 and not _single_candidate_auto_match_ok(
-                            candidate,
-                            match_event,
-                            is_canonical_site=is_canonical_site,
+                        elif (
+                            len(shortlist) == 1
+                            and not _single_candidate_auto_match_ok(
+                                candidate,
+                                match_event,
+                                is_canonical_site=is_canonical_site,
+                            )
+                            and not _llm_high_confidence_anchor_match_ok(
+                                candidate,
+                                match_event,
+                                confidence=confidence,
+                                is_canonical_site=is_canonical_site,
+                            )
                         ):
                             match_event = None
                             match_reason = "llm_single_candidate_sanity_reject"
@@ -13265,10 +13340,19 @@ async def _smart_event_update_impl(
                     if confidence < threshold:
                         match_event = None
                         match_reason = f"llm_conf_{confidence:.2f}<={threshold:.2f}"
-                    elif len(shortlist) == 1 and not _single_candidate_auto_match_ok(
-                        candidate,
-                        match_event,
-                        is_canonical_site=is_canonical_site,
+                    elif (
+                        len(shortlist) == 1
+                        and not _single_candidate_auto_match_ok(
+                            candidate,
+                            match_event,
+                            is_canonical_site=is_canonical_site,
+                        )
+                        and not _llm_high_confidence_anchor_match_ok(
+                            candidate,
+                            match_event,
+                            confidence=confidence,
+                            is_canonical_site=is_canonical_site,
+                        )
                     ):
                         match_event = None
                         match_reason = "llm_single_candidate_sanity_reject"
@@ -13309,7 +13393,13 @@ async def _smart_event_update_impl(
                         )
                 except Exception:
                     safe_single = False
-                if not safe_single:
+                safe_llm_anchor_match = _llm_high_confidence_anchor_match_ok(
+                    candidate,
+                    match_event,
+                    confidence=confidence,
+                    is_canonical_site=False,
+                )
+                if not safe_single and not safe_llm_anchor_match:
                     logger.warning(
                         "smart_update.match_overruled reason=unrelated_titles source_type=%s source_url=%s candidate_title=%s existing_id=%s existing_title=%s",
                         candidate.source_type,
@@ -13320,6 +13410,16 @@ async def _smart_event_update_impl(
                     )
                     match_event = None
                     match_reason = "unrelated_titles"
+                elif safe_llm_anchor_match:
+                    logger.info(
+                        "smart_update.title_guard_not_vetoed reason=llm_high_confidence_anchor_match source_type=%s source_url=%s candidate_title=%s existing_id=%s existing_title=%s confidence=%.2f",
+                        candidate.source_type,
+                        candidate.source_url,
+                        _clip_title(candidate.title),
+                        getattr(match_event, "id", None),
+                        _clip_title(getattr(match_event, "title", None)),
+                        float(confidence or 0.0),
+                    )
 
     # Rescue-match: match/create bundle can decide "create" when candidate title is weak,
     # even though the produced bundle title clearly matches an existing event in the shortlist.
