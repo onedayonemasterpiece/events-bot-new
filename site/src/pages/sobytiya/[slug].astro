@@ -18,10 +18,9 @@ if (!event) {
 }
 const similar = getRelatedEvents(event, 'similar');
 const explore = getRelatedEvents(event, 'explore');
-const discoveryFeed = [
-  ...similar.map((candidate) => ({ event: candidate, label: null })),
-  ...explore.map((candidate) => ({ event: candidate, label: 'Открыть новое' })),
-];
+const discoveryFeed = [...similar, ...explore].filter(
+  (candidate, index, candidates) => candidates.findIndex((item) => item.id === candidate.id) === index,
+);
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
@@ -97,7 +96,7 @@ const shareText = [event.display_date, event.display_time, event.venue_name || e
           <h2>Смотрите дальше</h2>
           <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">Ещё события, которые можно быстро открыть, добавить в календарь или отправить друзьям.</p>
           <div class="cards-grid cards-grid--immersive">
-            {discoveryFeed.map((item) => <EventCard event={item.event} label={item.label || undefined} />)}
+            {discoveryFeed.map((candidate) => <EventCard event={candidate} />)}
           </div>
         </div>
       </section>

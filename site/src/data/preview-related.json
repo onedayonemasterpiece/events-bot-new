@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-06-27T11:58:28Z",
-  "algorithm": "static_preview_v1: same event_type/city for similar, different event_type for anti-bubble exploration",
+  "algorithm": "static_preview_v2: same event_type/city candidates plus bounded diversity slots inside one discovery feed; diversification is an internal ranking constraint, not a visible block",
   "related": {
     "5878": {
       "similar": [

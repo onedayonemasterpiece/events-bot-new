@@ -36,7 +36,7 @@ if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
 if (!controlHtml.includes('event-card__actions')) throw new Error('Control related cards miss quick actions');
 if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');
-if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое')) throw new Error('Control page still renders split related/explore blocks');
+if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
 if (controlHtml.includes('<details class="details-disclosure"')) throw new Error('Control description is hidden in a details disclosure');
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');

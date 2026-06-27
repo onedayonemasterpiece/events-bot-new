@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v4/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v5/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,13 +9,13 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v4/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v4/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v4/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v4/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v4/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v4/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v4/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v5/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v5/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v5/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v5/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v5/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v5/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v5/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md).
 
@@ -42,7 +42,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 - desktop uses an 8/4 grid, but sidebar is only transactional: date, place, status, CTA, actions, facts;
 - mobile uses one-column decision flow plus sticky bottom CTA after the main CTA scrolls out;
 - `search_digest` appears high on mobile before long description;
-- anti-bubble exploration is a separate static block, not mixed into “Похожие”; the public UI label is **«Попробовать другое»** instead of the internal working label «Другие жанры рядом»;
+- diversity/anti-bubble is a ranking and composition constraint inside the continuation feed, not a separate user-facing block; labels such as «Попробовать другое», «Другие жанры рядом» or «Открыть новое» must not appear in the event-detail UI;
 - promo is omitted by default; if present, it is one clearly labeled native/static card and never an unlabeled recommendation;
 - omit MVP over-engineering: client-side related API, FAQ schema, gallery/lightbox, hidden LLM fragments, `llms.txt` as a release blocker, complex promo frequency cap, save action and dark mode.
 
@@ -85,7 +85,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 26. Fact block `<dl>` contains only non-empty verified fields: type, date, venue, city, age limit, duration, Pushkin card, organizer.
 27. Source/provenance and temporary Telegraph dual-run link appear below facts/description.
 28. “Другие даты” shows only same event occurrence group and only future/active occurrences.
-29. `H2` “Смотрите дальше”: one mobile-first vertical discovery feed that combines similar events and a small number of anti-bubble exploration cards; current/past/expired and same-occurrence/other-date events are excluded by freshness gate.
+29. `H2` “Смотрите дальше”: one mobile-first vertical discovery feed that combines high-similarity candidates with bounded diversity slots as an invisible ranking rule; current/past/expired and same-occurrence/other-date events are excluded by freshness gate.
 30. Desktop renders the same continuation candidates as a normal grid; horizontal mobile rails are not the event-detail continuation pattern.
 31. Promo is omitted by default. If a real campaign exists, show at most one clearly labeled `Партнёр`/`Реклама` native card after organic context, not between H1/facts and primary CTA and not as an unlabeled related item.
 

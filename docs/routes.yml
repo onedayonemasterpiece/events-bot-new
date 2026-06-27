@@ -212,7 +212,7 @@ features:
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v4/__preview/
+    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v5/__preview/
     entrypoints:
       - site/package.json
       - site/astro.config.mjs
