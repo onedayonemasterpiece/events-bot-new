@@ -30,6 +30,8 @@
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
 - MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.
 - Product/UI spec for the first event page vertical slice: `docs/features/static-site-pages/event-page-product-design.md`.
+- Independent Opus UI/UX variant for the event page: `docs/features/static-site-pages/opus-event-page-ui-ux-2026-06-27.md`.
+- Consultant comparison brief for Variant A vs Variant B: `docs/features/static-site-pages/event-page-ui-ux-comparison-brief.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
 - Production integration plan for personalization, promo, Smart Update rebuilds, analytics and CTA: `docs/features/unsigned-personalization/production-integration.md`.
