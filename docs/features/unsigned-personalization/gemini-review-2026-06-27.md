@@ -134,6 +134,10 @@ Conclusion: **Gemini Pro external review is blocked**, not completed. Do not cit
 
 A short Opus consultation through Antigravity/agy (`a-opus`) was run to validate the policy correction and patch points. It recommended exactly the current correction: add an external-consultant policy to `AGENTS.md`, cross-reference it from Claude/Codex docs, and reclassify this document's Flash-Lite answer as supplementary probe material.
 
+The full Opus architecture gate review is committed separately:
+
+- `docs/features/unsigned-personalization/opus-review-2026-06-27.md`
+
 Artifact evidence is stored outside git:
 
 - `artifacts/codex/unsigned-personalization-review-2026-06-27/a_opus_policy_consultation_2026-06-27.md`

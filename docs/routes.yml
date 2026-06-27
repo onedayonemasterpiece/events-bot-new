@@ -213,6 +213,7 @@ features:
     production_integration: docs/features/unsigned-personalization/production-integration.md
     gemini_review_2026_06_26: docs/features/unsigned-personalization/gemini-review-2026-06-26.md
     gemini_review_2026_06_27: docs/features/unsigned-personalization/gemini-review-2026-06-27.md
+    opus_review_2026_06_27: docs/features/unsigned-personalization/opus-review-2026-06-27.md
     neural_flow: docs/features/unsigned-personalization/neural-flow.md
     neural_flow_diagram: docs/features/unsigned-personalization/assets/neural-flow.svg
     database_design: docs/features/unsigned-personalization/database.md
