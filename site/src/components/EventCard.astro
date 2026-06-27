@@ -15,11 +15,12 @@ const sharesCount = event.shares_count ?? Math.max(0, Math.round(likesCount * 0.
 const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover'].join(' ');
+const posterStyle = event.image_url ? `--poster-image: url('${event.image_url}')` : undefined;
 ---
-<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} aria-label={`${event.title}: ${event.display_date}`}>
+<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${event.display_date}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
-      <span class={mediaShellClass}>
+      <span class={mediaShellClass} style={posterStyle}>
         <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
       </span>
     ) : (
@@ -35,6 +36,9 @@ const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card
       <Icon name="dislike" />
       <span>Не интересно</span>
     </button>
+    <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}>
+      <Icon name="calendar" />
+    </a>
     <button
       type="button"
       class="feedback-button feedback-button--share"
@@ -64,9 +68,6 @@ const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card
     </div>
     <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     {place && <span class="event-card__footer">{place}</span>}
-    <div class="event-card__actions" aria-label={`Быстрые действия: ${event.title}`}>
-      <a href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>В календарь</span></a>
-      <a href={href} data-prefetch>Открыть</a>
-    </div>
+
   </div>
 </article>

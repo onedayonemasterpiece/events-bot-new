@@ -159,8 +159,11 @@ const safeDescription = description || 'Анонс события в Калин�
         font-weight: 700;
       }
       .badge--status { background: var(--accent-soft); color: #0f544f; border-color: rgba(15, 118, 110, 0.2); }
-      .hero-media { margin-top: 1rem; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; aspect-ratio: 4 / 5; max-height: min(72dvh, 760px); }
-      .hero-media img { width: 100%; height: 100%; object-fit: contain; }
+      .hero-media { margin: 1rem auto 0; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: #15110f; max-height: min(78dvh, 820px); }
+      .hero-media--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; }
+      .hero-media--cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+      .hero-media--preserve { position: relative; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.48), rgba(12,10,9,0.48)), var(--poster-image); background-size: cover; background-position: center; }
+      .hero-media--preserve img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
       .hero-fallback { width: 100%; height: 100%; display: grid; place-items: center; padding: 1.5rem; color: #fff; text-align: center; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.32), transparent 20rem), linear-gradient(135deg, #8a3f23, #1d5f5a); }
       .hero-fallback strong { display:block; max-width: 18ch; font-size: clamp(1.5rem, 5vw, 3.2rem); line-height: 1; letter-spacing: -0.04em; }
       .facts-quick { display: grid; gap: 0.65rem; margin-top: 0.85rem; }
@@ -234,7 +237,8 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card__media-shell { display: block; width: 100%; overflow: hidden; background: #15110f; }
       .event-card__media-shell--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
       .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .event-card__media-shell--preserve .event-card__media { display: block; width: 100%; height: auto; }
+      .event-card__media-shell--preserve { position: relative; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.52), rgba(12,10,9,0.52)), var(--poster-image); background-size: cover; background-position: center; }
+      .event-card__media-shell--preserve .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
       .event-card__fallback { min-height: 100%; display: grid; align-content: space-between; gap: 0.7rem; padding: 1rem; color: rgba(255,255,255,0.9); font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
       .event-card__fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem 0.85rem 4.85rem; }
@@ -244,25 +248,31 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card__title { color: #fff; text-decoration: none; font-weight: 900; line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .event-card__title:hover { text-decoration: underline; text-decoration-thickness: 0.08em; }
       .event-card__footer { color: rgba(255,255,255,0.84); font-weight: 760; font-size: 0.86rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 3; display: flex; align-items: flex-end; justify-content: space-between; gap: 0.45rem; pointer-events: none; }
+      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 6; display: grid; grid-template-columns: 52px 52px minmax(118px, 1fr) 74px; align-items: end; gap: 0.38rem; pointer-events: none; }
       .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: 900; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
       .feedback-button .icon { width: 1.25rem; height: 1.25rem; }
       .feedback-button--like { min-width: 74px; padding: 0.52rem 0.74rem; font-size: 1.04rem; }
-      .feedback-button--share { min-width: 60px; padding: 0.5rem 0.62rem; color: rgba(229,235,244,0.94); font-size: 0.95rem; }
+      .feedback-button--calendar { padding: 0.48rem; text-decoration: none; color: rgba(255,255,255,0.94); }
+      .feedback-button--calendar .icon { width: 1.18rem; height: 1.18rem; }
+      .feedback-button--share { min-width: 0; padding: 0.5rem 0.55rem; color: rgba(229,235,244,0.96); font-size: 0.84rem; white-space: nowrap; }
       .feedback-button--share .icon { width: 1.28rem; height: 1.28rem; }
-      .feedback-button--share .share-label { display: none; }
-      .event-card.is-share-prompt .feedback-button--share { min-width: 156px; color: #261a13; background: rgba(255, 253, 248, 0.97); border-color: rgba(255,255,255,0.48); transform: translateY(-2px); }
+      .feedback-button--share .share-label { display: inline; }
+      .event-card.is-share-prompt .feedback-button--share { color: #261a13; background: rgba(255, 253, 248, 0.97); border-color: rgba(255,255,255,0.48); transform: translateY(-2px); }
       .event-card.is-share-prompt .feedback-button--share .share-label { display: inline; }
       .feedback-button--negative { min-width: 52px; padding: 0.48rem 0.62rem; color: rgba(255,255,255,0.88); font-size: 0.72rem; }
       .feedback-button--negative .icon { width: 1rem; height: 1rem; }
       .feedback-button[aria-pressed="true"] { border-color: rgba(255,255,255,0.48); }
       .feedback-button--like[aria-pressed="true"] { color: #fff; background: #c93434; }
       .feedback-button--negative[aria-pressed="true"] { color: #1f1712; background: #f7efe3; }
-      .event-card.is-not-interested { opacity: 0.58; filter: saturate(0.65); }
-      .event-card.is-not-interested .event-card__title::after { content: " · скрыто из персональной выдачи"; color: rgba(255,255,255,0.7); font-weight: 700; }
-      .event-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem; margin-top: 0.25rem; }
-      .event-card__actions a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 0.35rem 0.45rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; font-size: 0.76rem; font-weight: 850; text-align: center; }
-      .event-card__actions a:hover { background: rgba(255,255,255,0.18); }
+      .event-card.is-not-interested { filter: grayscale(1) saturate(0.08); }
+      .event-card.is-not-interested::before { content: ""; position: absolute; inset: 0; z-index: 4; background: rgba(43,43,43,0.78); pointer-events: none; }
+      .event-card.is-not-interested::after { content: "Вы пометили: не интересует"; position: absolute; left: 1rem; right: 1rem; top: 50%; z-index: 5; transform: translateY(-50%); padding: 0.95rem 1rem; border: 1px solid rgba(255,255,255,0.25); border-radius: 18px; background: rgba(245,245,245,0.92); color: #2d2d2d; font-weight: 950; text-align: center; pointer-events: none; box-shadow: 0 12px 28px rgba(0,0,0,0.22); }
+      .like-burst { position: absolute; left: 50%; top: 48%; z-index: 7; pointer-events: none; transform: translate(-50%, -50%); }
+      .like-burst span { position: absolute; left: 0; top: 0; color: #fff; text-shadow: 0 8px 22px rgba(0,0,0,0.45); font-size: 2rem; animation: heart-fly 760ms ease-out forwards; }
+      .like-burst span:nth-child(2) { color: #ffdfdf; animation-delay: 40ms; --x: -42px; --r: -16deg; }
+      .like-burst span:nth-child(3) { color: #ffb7b7; animation-delay: 80ms; --x: 38px; --r: 14deg; }
+      .like-burst span:nth-child(4) { color: #fff4f4; animation-delay: 120ms; --x: 4px; --r: 8deg; }
+      @keyframes heart-fly { from { opacity: 0; transform: translate(-50%, -20%) scale(0.7) rotate(0deg); } 18% { opacity: 1; } to { opacity: 0; transform: translate(calc(-50% + var(--x, 0px)), -150px) scale(1.25) rotate(var(--r, 0deg)); } }
       .listing-stack { display: grid; gap: 0.85rem; }
       .listing-item { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 0.85rem; align-items: stretch; padding: 0.75rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
       .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
@@ -325,8 +335,9 @@ const safeDescription = description || 'Анонс события в Калин�
         .section-card__inner { padding: 1rem; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
-        .feedback-button--share { min-width: 58px; padding-inline: 0.56rem; }
-        .event-card.is-share-prompt .feedback-button--share { min-width: 144px; }
+        .event-card__feedback { grid-template-columns: 52px 48px minmax(116px, 1fr) 74px; gap: 0.32rem; }
+        .feedback-button--share { padding-inline: 0.46rem; font-size: 0.82rem; }
+        .feedback-button--share .icon { width: 1.18rem; height: 1.18rem; }
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
         .listing-item { grid-template-columns: 88px minmax(0, 1fr); gap: 0.65rem; padding: 0.65rem; }
@@ -371,6 +382,8 @@ const safeDescription = description || 'Анонс события в Калин�
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         let shareCalloutTimer = 0;
+        let pendingCardNavigation = 0;
+        let lastCardTap = { id: '', ts: 0 };
 
         function readJson(key, fallback) {
           try {
@@ -440,6 +453,46 @@ const safeDescription = description || 'Анонс события в Калин�
           shareCalloutTimer = window.setTimeout(() => {
             card.classList.remove('is-share-prompt');
           }, 4000);
+        }
+
+        function animateLikeBurst(card) {
+          if (!card) return;
+          card.querySelectorAll('.like-burst').forEach((node) => node.remove());
+          const burst = document.createElement('span');
+          burst.className = 'like-burst';
+          burst.setAttribute('aria-hidden', 'true');
+          for (let index = 0; index < 4; index += 1) {
+            const heart = document.createElement('span');
+            heart.textContent = '♥';
+            burst.appendChild(heart);
+          }
+          card.appendChild(burst);
+          setTimeout(() => burst.remove(), 950);
+        }
+
+        function setCardLike(card, liked, action = 'like_event') {
+          const eventId = card?.dataset.eventId;
+          if (!eventId) return;
+          const map = state();
+          const current = eventState(map, eventId);
+          if (Boolean(current.liked) === Boolean(liked)) {
+            if (liked) {
+              animateLikeBurst(card);
+              showLikeShareCallout(card);
+            }
+            return;
+          }
+          const title = card.dataset.eventTitle || '';
+          map[String(eventId)] = { ...current, liked: Boolean(liked), not_interested: liked ? false : current.not_interested };
+          appendLog({ event_id: Number(eventId), event_title: title, action });
+          saveState(map);
+          applyFeedbackState({ anchorEventId: eventId });
+          if (liked) {
+            animateLikeBurst(card);
+            showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
+          } else {
+            hideLikeShareCallouts();
+          }
         }
 
         function rerankFeed(feed, map, anchorEventId) {
@@ -513,6 +566,7 @@ const safeDescription = description || 'Анонс события в Калин�
             map[String(eventId)] = { ...current, liked, not_interested: liked ? false : current.not_interested };
             appendLog({ event_id: Number(eventId), event_title: title, action: liked ? 'like_event' : 'unlike_event' });
             shouldShowSharePrompt = liked;
+            if (liked) animateLikeBurst(card);
             if (!liked) hideLikeShareCallouts();
           } else if (button.dataset.feedbackAction === 'not_interested') {
             const notInterested = !current.not_interested;
@@ -583,6 +637,40 @@ const safeDescription = description || 'Анонс события в Калин�
             setTimeout(() => { label.textContent = original || 'Скопировать ссылку'; }, 1800);
           } catch (_) {
             location.href = url;
+          }
+        });
+
+        function isCardInteractiveTarget(target) {
+          return Boolean(target.closest('a, button, input, textarea, select, summary, [role="button"], [data-native-share], [data-feedback-action]'));
+        }
+
+        document.addEventListener('click', (event) => {
+          const card = event.target.closest('[data-event-card]');
+          if (!card || isCardInteractiveTarget(event.target)) return;
+          const href = card.dataset.cardHref;
+          if (!href) return;
+          event.preventDefault();
+          window.clearTimeout(pendingCardNavigation);
+          const now = Date.now();
+          const isDoubleTap = (event.detail >= 2) || (lastCardTap.id === String(card.dataset.eventId || '') && now - lastCardTap.ts < 320);
+          lastCardTap = { id: String(card.dataset.eventId || ''), ts: now };
+          if (isDoubleTap) {
+            setCardLike(card, true, 'double_tap_like_event');
+            lastCardTap = { id: '', ts: 0 };
+            return;
+          }
+          const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+          pendingCardNavigation = window.setTimeout(() => {
+            location.href = href;
+          }, isCoarsePointer ? 260 : 0);
+        });
+
+        document.addEventListener('keydown', (event) => {
+          const card = event.target.closest('[data-event-card]');
+          if (!card || event.target !== card) return;
+          if (event.key === 'Enter') {
+            const href = card.dataset.cardHref;
+            if (href) location.href = href;
           }
         });
 

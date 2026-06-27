@@ -12,16 +12,16 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v9/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v9/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v9/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v9/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v9/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v9/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v9/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v9/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v10/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v10/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v10/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v10/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v10/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v10/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v10/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v10/__preview/>
 
-Preview `v9` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions, single native-share-first button, favicon, prefetch for static links, sticky CTA hiding when the user reaches the feed, and a poster media rule: if OCR/text is present or unknown, the full poster must be preserved without crop; only verified visual-only media may fill/crop the 3:4 card frame. Preview `v9` also replaces the post-like bubble with a non-overlapping expanded share button in the bottom action row: after a successful like, the VK-like share arrow button grows to `Поделиться + count`, calls the native system share sheet, and increments a local share count. Explicit feedback rerank freezes the acted-on card and everything above it. Media handling is strict: `visual_only` posters keep a 3:4 cover frame; `ocr_text`/`unknown` posters render at their natural aspect ratio with no crop, no empty contain-bars and no blur/backdrop fill.
+Preview `v10` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions, single native-share-first button, favicon, prefetch for static links, sticky CTA hiding when the user reaches the feed, and a poster media rule: if OCR/text is present or unknown, the full poster must be preserved without crop; only verified visual-only media may fill/crop the 3:4 card frame. Preview `v10` also replaces the post-like bubble with a non-overlapping share action in the bottom row: the VK-like outlined share arrow always shows `Поделиться + count`, calls the native system share sheet, and increments a local share count. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap likes the card with a heart burst; `Не интересно` turns the card into a grey explanatory plate until the next page/reload. Hero and feed media share the same vertical rule: every media frame is 3:4; `visual_only` uses cover, while `ocr_text`/`unknown` keeps the full poster visible with `contain` over a non-blurred same-poster cover underlay, so there is no OCR crop and no blur fill.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 

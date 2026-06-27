@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Static site pages / card UX and hero media v10**: published `preview-20260627-event-pages-v10` with shared hero/card 3:4 media rules, no-blur OCR-preserving poster rendering, full-card JS navigation while keeping crawlable media/title anchors, bottom-row calendar/share/like controls without the redundant `Открыть` card button, permanent share label/count, grey `Не интересно` plate, and double-tap like heart-burst animation.
 - **Static site pages / share count and poster media rules**: published `preview-20260627-event-pages-v9` with a separate VK-like share arrow button and visible share count on feed cards, post-like expansion of the share button instead of an overlapping bubble, native-share/copy share logging, strict 3:4 cover media only for `visual_only` posters, and natural-ratio no-crop/no-blur rendering for `ocr_text` and `unknown` posters.
 - **Static site pages / post-like share callout**: published `preview-20260627-event-pages-v8` with a Gemini Pro-reviewed non-layout-shifting share callout after successful likes, paper-plane native-share icon, session-limited share prompts, and anchored explicit-feedback rerank so the acted-on card and cards above it do not move.
 - **Static site pages / OCR-safe poster media**: published `preview-20260627-event-pages-v7` with `image_text_mode` metadata and card/list media rules that preserve full posters when OCR/text is present or unknown, while allowing verified visual-only images to fill the vertical 3:4 frame.
