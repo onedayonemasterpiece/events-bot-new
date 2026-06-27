@@ -85,6 +85,8 @@ export interface DiscoveryDisplayPayload {
   price_label: string | null;
   likes_count: number;
   shares_count: number;
+  calendar_href: string;
+  calendar_eligible: boolean;
 }
 
 export interface RelatedManifestCandidate extends EventFeatureSummary {

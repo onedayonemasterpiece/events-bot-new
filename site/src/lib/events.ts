@@ -314,6 +314,8 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     price_label: event.ticket.price_label,
     likes_count: likesCount,
     shares_count: event.shares_count ?? 0,
+    calendar_href: eventCalendarHref(event),
+    calendar_eligible: isCalendarEligible(event),
   };
 }
 
@@ -394,6 +396,8 @@ export interface DiscoveryEventPayloadItem {
   price_label: string | null;
   likes_count: number;
   shares_count: number;
+  calendar_href: string;
+  calendar_eligible: boolean;
 }
 
 export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
@@ -417,6 +421,8 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     price_label: event.ticket.price_label,
     likes_count: likesCount,
     shares_count: event.shares_count ?? 0,
+    calendar_href: eventCalendarHref(event),
+    calendar_eligible: isCalendarEligible(event),
   };
 }
 

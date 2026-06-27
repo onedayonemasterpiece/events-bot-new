@@ -45,7 +45,8 @@ if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdr
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/object-fit:\s*contain/u.test(controlHtml)) throw new Error('OCR-safe media must use natural image ratio, not contain over a fixed frame');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
-if (controlHtml.includes('feedback-button--calendar')) throw new Error('Discovery/feed cards must not show calendar buttons; calendar stays on detail page');
+if (controlVisibleHtml.includes('feedback-button--calendar')) throw new Error('Variant A control feed unexpectedly shows calendar buttons');
+if (!controlVisibleHtml.includes('data-feed-card-variant="overlay-controls"') || !controlVisibleHtml.includes('event-card__feedback event-card__feedback--overlay')) throw new Error('Control page must expose A/B variant A overlay-controls cards');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
@@ -57,6 +58,9 @@ for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], 
   const item = eventsData.events.find((event) => event.id === id);
   if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
 }
+const jsonLdItems = [...controlHtml.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/giu)].map((match) => JSON.parse(match[1]));
+if (!jsonLdItems.some((item) => typeof item['@type'] === 'string' && item['@type'].endsWith('Event'))) throw new Error('Control page must contain parseable Event-class JSON-LD');
+if (!jsonLdItems.some((item) => item['@type'] === 'BreadcrumbList')) throw new Error('Control page must contain parseable BreadcrumbList JSON-LD');
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
@@ -82,6 +86,7 @@ for (const cls of ['site-footer__social', 'social-icon--telegram', 'social-icon-
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
 if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');
+if (!controlHtml.includes('Preview A/B:')) throw new Error('Control page misses visible A/B preview variant note');
 if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое') || controlHtml.includes('Открыть новое')) throw new Error('Control page still exposes split/exploration labels instead of one neutral discovery feed');
 if (controlHtml.includes('Уточнить регистрацию')) throw new Error('Ambiguous registration CTA leaked');
 if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share-list UI leaked');
@@ -101,10 +106,24 @@ for (const item of discoveryJson.related_static) {
   for (const field of ['event_id', 'title', 'category', 'tags', 'audience_exclusion_tags', 'status', 'lifecycle_status', 'base_similarity', 'reason_codes', 'display']) {
     if (!(field in item)) throw new Error(`Discovery candidate missing ${field}`);
   }
+  for (const field of ['calendar_href', 'calendar_eligible']) {
+    if (!(field in item.display)) throw new Error(`Discovery candidate display missing ${field}`);
+  }
   if (!Array.isArray(item.tags) || !Array.isArray(item.audience_exclusion_tags) || !Array.isArray(item.reason_codes)) throw new Error('Discovery candidate tag/reason fields must be arrays');
   if (typeof item.base_similarity !== 'number' || item.base_similarity < 0 || item.base_similarity > 1) throw new Error('Discovery candidate base_similarity must be 0..1');
   if (/2026\b/u.test(item.display?.display_date || '') && !/2027\b/u.test(item.display?.display_date || '')) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
 }
+
+const splitControl = eventsData.events.find((event) => event.id === 6322);
+if (!splitControl) throw new Error('Missing split-actions A/B event 6322');
+const splitHtml = readFileSync(join(root, `sobytiya/${splitControl.slug}/index.html`), 'utf8');
+const splitVisibleHtml = stripGeneratedCode(splitHtml);
+if (!splitVisibleHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('A/B variant B page must render split-actions cards');
+if (!splitVisibleHtml.includes('event-card__utility-row')) throw new Error('A/B variant B page misses utility row inside cards');
+if (!splitVisibleHtml.includes('event-card__feedback event-card__feedback--under')) throw new Error('A/B variant B page misses under-card right-aligned action row');
+if (!splitVisibleHtml.includes('feedback-button--calendar')) throw new Error('A/B variant B page must expose feed calendar buttons for one-day eligible cards');
+if (!splitHtml.includes('data-feed-card-variant="split-actions"')) throw new Error('A/B variant B page must keep variant marker for hydrated JSON cards');
+
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
   if (!ics.includes(needle)) throw new Error(`Control ICS missing ${needle}`);

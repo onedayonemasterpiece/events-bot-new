@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v17/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,14 +9,14 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v17/__preview/>
-- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v17/segodnya/>
-- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v17/vyhodnye/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v17/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v17/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v17/data/discovery/5878.json>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v17/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v17/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v18/data/discovery/5878.json>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v18/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v18/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md). Counter freshness: [Event reaction counters](reaction-counters.md). Footer contract: the site footer contains visible/crawlable social links with icons for Telegram, VK and Max; Telegraph uses the same destinations as plain links without icons.
 

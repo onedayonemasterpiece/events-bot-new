@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v17`
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v17/__preview/>
+> **Build ID:** `preview-20260627-event-pages-v18`
+> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry persistence, no server-side personalization API and no LLM fragments in rendered HTML. The first discovery hydration is a static same-origin JSON manifest, not a live ranking service.
 
@@ -10,15 +10,15 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v17/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v17/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v17/vyhodnye/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v17/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v17/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v17/data/discovery/5878.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v17/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v17/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v17/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v18/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v18/vyhodnye/>
+- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v18/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Control discovery JSON: <https://kenigevents.ru/preview-20260627-event-pages-v18/data/discovery/5878.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v18/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v18/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v18/__preview/>
 
 ## Code layout
 
@@ -85,7 +85,7 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v17/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260627-event-pages-v18/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD only from visible facts.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
 
@@ -94,16 +94,18 @@ Disallow: /
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v17 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v17 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v17 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v18 npm run build:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v18 npm run check:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v18 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
 
 ## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260627-event-pages-v17` keeps the event page mobile/feed-oriented and feedback-aware:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. The current `preview-20260627-event-pages-v18` keeps the event page mobile/feed-oriented and feedback-aware:
+
+A/B feed-card UI is now part of the preview contract: event `5878` uses Variant A (`overlay-controls`), event `6322` uses Variant B (`split-actions`) with calendar utility action inside eligible cards and right-aligned share + like under the card. See `event-card-ui-ab-2026-06-27.md`.
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
 - hero/card/listing media follows the OCR-safe v15 rule: selected images with no meaningful OCR use `image_text_mode=visual_only` and cover/crop inside a strict vertical 4:5 frame; `image_text_mode=ocr_text|unknown` renders the actual image at its natural aspect ratio with no crop, no fixed cover frame, no duplicate/backdrop underlay and no blur fill;
@@ -114,7 +116,7 @@ The first public preview (`preview-20260627-event-pages-v1`) was superseded afte
 - a favicon is emitted from the selected SVG calendar/heart motif so browser/share surfaces have a site icon.
 
 
-After direct product review, `preview-20260627-event-pages-v17` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
+After direct product review, `preview-20260627-event-pages-v18` rolls back the UX regressions introduced by the split recommendation rails and adds the first static-seed/client-hydration discovery contract:
 
 - event description is visible HTML again, not hidden behind a collapsed `<details>` block;
 - event continuation is one vertical mobile-first discovery feed (`Смотрите дальше`), not two horizontal scroll blocks and not a visible “try something else” module;
@@ -135,7 +137,7 @@ After direct product review, `preview-20260627-event-pages-v17` rolls back the U
 - explicit-feedback rerank is viewport-stable: after a user action, the acted-on card and all cards above it keep their positions; only cards below the action anchor may be re-ordered.
 - same-year visible dates omit the year (`11 июля · 21:30`), while cross-year ranges keep the year on both sides (`12 июня 2026 — до 28 марта 2027`).
 
-After consultant review, `preview-20260627-event-pages-v17` additionally hardens the first discovery layer:
+After consultant review, `preview-20260627-event-pages-v18` additionally hardens the first discovery layer:
 
 - header links now open real static `/segodnya/` and `/vyhodnye/` pages, not QA anchors;
 - related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot and direct page link; `.ics` calendar action is deliberately kept on the detail page, not in feed cards;
@@ -145,9 +147,9 @@ After consultant review, `preview-20260627-event-pages-v17` additionally hardens
 - raw markdown/facts artifacts, hashtags in venue names, `null`/`undefined`/`NaN`, sitemap entries and all event `.ics` files are covered by `npm run check:preview`.
 
 
-## v16/v17 personalization-contract correction
+## v16/v17 personalization-contract correction + v18 UI A/B
 
-`preview-20260627-event-pages-v17` corrects the discovery implementation from a display-only JSON top-up to the documented `event_detail_related` contract:
+`preview-20260627-event-pages-v18` corrects the discovery implementation from a display-only JSON top-up to the documented `event_detail_related` contract:
 
 - `/data/discovery/<event_id>.json` now returns `schema_version`, `feature_schema_version`, `taxonomy_version`, `surface`, `algorithm_id`, `current_event` and `related_static[]` candidates with `category`, `tags`, `audience_exclusion_tags`, `base_similarity`, `reason_codes` and nested display data.
 - Static HTML still preloads up to 10 cards (the compact 10-event fixture can yield fewer for the control page because the current event is excluded; production target is 10 when enough eligible future events exist).
@@ -157,7 +159,7 @@ After consultant review, `preview-20260627-event-pages-v17` additionally hardens
 
 ## Verified on 2026-06-27
 
-`curl` checks returned HTTP 200 for the v17 preview index, control event, `/data/discovery/5878.json`, `sitemap.xml` and other required static files. The control discovery JSON was checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1` and `related_static[]`. `npm run check:preview` passed for `preview-20260627-event-pages-v17`, including footer social link/icon guards. Playwright proof (`artifacts/codex/static-site-social-footer-v17/`) verified the footer rendering: all six social links have the expected hrefs/accessible labels, Telegram/VK/Max SVG icons render at chip size with CSS applied, and the mobile footer remains readable. The unchanged consent/rerank flow keeps the v16 proof baseline.
+`npm run check:preview` passed for `preview-20260627-event-pages-v18`: the control discovery JSON is checked for `schema_version=event-detail-related-v1`, `surface=event_detail_related`, `algorithm_id=static_related_v1`, `related_static[]`, display calendar fields, source/social counter consistency, footer social links/icons, parseable Event-class JSON-LD and both feed-card UI variants. Playwright screenshots for the UI A/B check are stored locally under `artifacts/codex/static-site-ui-ab-v18/` (not committed): mobile/desktop Variant A for event `5878`, Variant B for event `6322`, and the preview index comparison block.
 
 ## Counter freshness plan
 

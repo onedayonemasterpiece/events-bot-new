@@ -9,6 +9,17 @@ import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
 import { displayDate, displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
 
+type FeedCardVariant = 'overlay-controls' | 'split-actions';
+const FEED_VARIANT_BY_EVENT_ID: Record<number, FeedCardVariant> = {
+  5878: 'overlay-controls',
+  6322: 'split-actions',
+  4913: 'split-actions',
+};
+const FEED_VARIANT_LABELS: Record<FeedCardVariant, string> = {
+  'overlay-controls': 'A: одна строка действий поверх карточки',
+  'split-actions': 'B: служебная строка внутри + лайк/поделиться под карточкой справа',
+};
+
 export function getStaticPaths() {
   return getEvents().map((event) => ({ params: { slug: event.slug } }));
 }
@@ -28,6 +39,8 @@ const dateLabel = displayDate(event);
 const dateTimeLabel = displayDateTime(event);
 const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const canAddToCalendar = isCalendarEligible(event);
+const feedCardVariant = FEED_VARIANT_BY_EVENT_ID[event.id] || 'overlay-controls';
+const feedVariantLabel = FEED_VARIANT_LABELS[feedCardVariant];
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData}>
   <main id="main">
@@ -95,7 +108,7 @@ const canAddToCalendar = isCalendarEligible(event);
       <section id="discovery-feed" class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
           <h2>Смотрите дальше</h2>
-          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">В HTML сразу предзагружены до 10 событий. После согласия и запуска скрипта блок применяет локальный профиль интересов, убирает неподходящее, один раз догружает релевантные варианты из JSON; дальше — только по кнопке.</p>
+          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">В HTML сразу предзагружены до 10 событий. После согласия и запуска скрипта блок применяет локальный профиль интересов, убирает неподходящее, один раз догружает релевантные варианты из JSON; дальше — только по кнопке. Preview A/B: <strong>{feedVariantLabel}</strong>.</p>
           <div
             class="cards-grid cards-grid--immersive"
             data-discovery-feed
@@ -104,8 +117,9 @@ const canAddToCalendar = isCalendarEligible(event);
             data-algorithm-id="static_related_v1"
             data-current-event-id={event.id}
             data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
+            data-feed-card-variant={feedCardVariant}
           >
-            {discoveryFeed.map((candidate) => <EventCard event={candidate} />)}
+            {discoveryFeed.map((candidate) => <EventCard event={candidate} variant={feedCardVariant} />)}
           </div>
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>

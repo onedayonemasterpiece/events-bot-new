@@ -8,6 +8,8 @@ export function getStaticPaths() {
 }
 
 const events = getEvents();
+const variantA = events.find((event) => event.id === 5878);
+const variantB = events.find((event) => event.id === 6322) || events.find((event) => event.id === 4913);
 const build = getPreviewBuild();
 const canonicalUrl = absoluteUrl('/__preview/');
 const title = `Preview статических страниц событий | ${SITE_NAME}`;
@@ -31,6 +33,25 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <a href={withBase('/vyhodnye/')}>Выходные</a>
             <a href={withBase('/sitemap.xml')}>sitemap.xml</a>
             <a href={withBase('/robots.txt')}>robots.txt</a>
+          </div>
+
+          <div class="preview-ab" aria-label="A/B сравнение карточек ленты">
+            <h2>UI A/B для ленты события</h2>
+            <div class="preview-ab__grid">
+              {variantA && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${variantA.slug}/`)}>
+                  <strong>A · одна строка поверх карточки</strong>
+                  <span>Контроль: лайк справа снизу, поделиться по центру, «не интересно» слева внутри карточки.</span>
+                </a>
+              )}
+              {variantB && (
+                <a class="preview-ab__item" href={withBase(`/sobytiya/${variantB.slug}/`)}>
+                  <strong>B · две строки действий</strong>
+                  <span>Тест: внутри карточки — календарь/«не интересно», под карточкой справа — «Поделиться» и крупный лайк.</span>
+                </a>
+              )}
+            </div>
+            <p class="muted-note">Сравнение намеренно привязано к разным страницам событий: в каждой ленте все карточки используют один вариант, чтобы почувствовать поведение, а не смотреть смешанный макет.</p>
           </div>
         </div>
       </section>
@@ -57,7 +78,8 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <li>слабый адрес — карта скрывается, вместо неё выводится “уточняйте у организатора”;</li>
             <li>«Другие даты» для пары 6437/6438;</li>
             <li>единая статическая лента «Смотрите дальше» без API и без отдельного пользовательского блока для диверсификации.</li>
-            <li>явные реакции: лайк с локальным увеличением счётчика, отмена лайка, “не интересно” и локальный raw-журнал для будущего Supabase ingest.</li>
+            <li>явные реакции: лайк с локальным увеличением счётчика, отмена лайка, “не интересно” и компактный локальный журнал явных действий для будущего Supabase ingest.</li>
+            <li>A/B UI: страница 5878 использует вариант A с одной строкой действий поверх карточки; страница 6322 использует вариант B с двумя строками и лайком справа под карточкой.</li>
             <li>минимальные листинги /segodnya/ и /vyhodnye/.</li>
           </ul>
         </div>
@@ -66,7 +88,7 @@ const description = 'Открываемый preview Astro SSG страниц с�
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner feedback-report" data-feedback-report>
           <h2>Локальный отчёт по реакциям</h2>
-          <p class="muted-note">Preview хранит компактный raw-журнал только в этом браузере. В production такие события должны уходить в personalization Supabase через same-origin ingest/RPC и агрегироваться в отчёт по anonymous profile id.</p>
+          <p class="muted-note">Preview хранит компактный журнал явных действий только в этом браузере. В production такие события должны уходить в personalization Supabase через same-origin ingest/RPC и агрегироваться в отчёт по anonymous profile id.</p>
           <div class="feedback-report__summary">
             <span>Anonymous profile: <code data-feedback-profile>—</code></span>
             <span data-feedback-summary>Загрузка локального журнала…</span>

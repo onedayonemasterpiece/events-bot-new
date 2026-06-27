@@ -1,9 +1,10 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventHref } from '../lib/events';
-interface Props { event: PreviewEvent; label?: string }
-const { event, label } = Astro.props;
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, isCalendarEligible } from '../lib/events';
+type CardVariant = 'overlay-controls' | 'split-actions';
+interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
+const { event, label, variant = 'overlay-controls' } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
@@ -19,9 +20,12 @@ const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
 const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
-const feedbackClass = 'event-card__feedback';
+const canAddToCalendar = isCalendarEligible(event);
+const calendarHref = eventCalendarHref(event);
+const cardClass = ['event-card', `event-card--${variant}`].join(' ');
+const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
 ---
-<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
+<article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
       <span class={mediaShellClass}>
@@ -35,32 +39,34 @@ const feedbackClass = 'event-card__feedback';
       </span>
     )}
   </a>
-  <div class={feedbackClass} aria-label={`Оценить событие: ${event.title}`}>
-    <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
-      <Icon name="dislike" />
-      <span>Не интересно</span>
-    </button>
-    <button
-      type="button"
-      class="feedback-button feedback-button--share"
-      data-native-share
-      data-share-event-id={event.id}
-      data-share-event-title={event.title}
-      data-share-base-count={sharesCount}
-      data-share-title={event.title}
-      data-share-text={shareText}
-      data-share-url={absolute}
-      aria-label={`Поделиться событием: ${event.title}`}
-    >
-      <Icon name="share" />
-      <span class="share-label" data-share-label>Поделиться</span>
-      <span class="feedback-count" data-share-count>{shareCountLabel}</span>
-    </button>
-    <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
-      <Icon name="heart" />
-      <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
-    </button>
-  </div>
+  {variant === 'overlay-controls' && (
+    <div class={feedbackClass} aria-label={`Оценить событие: ${event.title}`}>
+      <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+        <Icon name="dislike" />
+        <span>Не интересно</span>
+      </button>
+      <button
+        type="button"
+        class="feedback-button feedback-button--share"
+        data-native-share
+        data-share-event-id={event.id}
+        data-share-event-title={event.title}
+        data-share-base-count={sharesCount}
+        data-share-title={event.title}
+        data-share-text={shareText}
+        data-share-url={absolute}
+        aria-label={`Поделиться событием: ${event.title}`}
+      >
+        <Icon name="share" />
+        <span class="share-label" data-share-label>Поделиться</span>
+        <span class="feedback-count" data-share-count>{shareCountLabel}</span>
+      </button>
+      <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
+        <Icon name="heart" />
+        <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
+      </button>
+    </div>
+  )}
 
   <div class="event-card__body">
     <div class="event-card__meta-row">
@@ -69,6 +75,44 @@ const feedbackClass = 'event-card__feedback';
     </div>
     <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     {place && <span class="event-card__footer">{place}</span>}
-
   </div>
+
+  {variant === 'split-actions' && (
+    <>
+      <div class="event-card__utility-row" aria-label={`Дополнительные действия: ${event.title}`}>
+        {canAddToCalendar && (
+          <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}>
+            <Icon name="calendar" />
+            <span>В календарь</span>
+          </a>
+        )}
+        <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+          <Icon name="dislike" />
+          <span>Не интересно</span>
+        </button>
+      </div>
+      <div class={feedbackClass} aria-label={`Оценить событие: ${event.title}`}>
+        <button
+          type="button"
+          class="feedback-button feedback-button--share"
+          data-native-share
+          data-share-event-id={event.id}
+          data-share-event-title={event.title}
+          data-share-base-count={sharesCount}
+          data-share-title={event.title}
+          data-share-text={shareText}
+          data-share-url={absolute}
+          aria-label={`Поделиться событием: ${event.title}`}
+        >
+          <Icon name="share" />
+          <span class="share-label" data-share-label>Поделиться</span>
+          <span class="feedback-count" data-share-count>{shareCountLabel}</span>
+        </button>
+        <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
+          <Icon name="heart" />
+          <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
+        </button>
+      </div>
+    </>
+  )}
 </article>

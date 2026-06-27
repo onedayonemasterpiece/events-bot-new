@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Static site pages / event-card UI A/B v18**: added preview `preview-20260627-event-pages-v18` with page-level feed-card variants: A keeps one overlay action row, B tests a two-row card with calendar/negative utility actions inside and right-aligned share + thumb-reachable like under the card; preview checks now cover both variants, feed calendar gating and parseable JSON-LD.
+
 - **Static site / Telegraph social footer v17**: added the shared editorial social footer to the Astro site with Telegram/VK/Max SVG icons and crawlable links (`@kenigevents`, `@kldevents`, `kenigeventsofficial`, `klgdevents`, VK channel, Max); added the Max link to the plain Telegraph footer and footer idempotency tests; preview target is `preview-20260627-event-pages-v17`.
 - **Telegraph footer / target attrs**: made social-footer replacement tolerate Telegraph-added `target="_blank"` anchor attributes so Max rollout/backfill does not duplicate existing footer blocks.
 - **Static site pages / personalization contract v16**: published `preview-20260627-event-pages-v16`; changed discovery JSON from display-only `events[]` to the documented `event_detail_related` manifest with `related_static[]`, moved client state to DB-compatible `ke_personalization_profile` UUID ids, added consent-gated local `rankEventDetailRelated` filtering/rerank/top-up, attached `served_list_id` / `served_list_hash` to local strong-action logs, and removed fake share-count fallback.

@@ -209,6 +209,7 @@ features:
     interface_references: docs/features/static-site-pages/interface-references.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
     target_bucket: kenigevents.ru
