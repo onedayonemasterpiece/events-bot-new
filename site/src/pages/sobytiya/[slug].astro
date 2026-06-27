@@ -18,6 +18,10 @@ if (!event) {
 }
 const similar = getRelatedEvents(event, 'similar');
 const explore = getRelatedEvents(event, 'explore');
+const discoveryFeed = [
+  ...similar.map((candidate) => ({ event: candidate, label: null })),
+  ...explore.map((candidate) => ({ event: candidate, label: 'Открыть новое' })),
+];
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
@@ -66,15 +70,14 @@ const shareText = [event.display_date, event.display_time, event.venue_name || e
 
       <section class="section-card section-card--quiet" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <details class="details-disclosure">
-            <summary>Описание и факты</summary>
-            <div class="prose" set:html={event.description_html} />
-            <EventFacts event={event} />
-            <div class="source-links" aria-label="Источники данных">
-              {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
-              {event.telegraph_url && <a href={event.telegraph_url} target="_blank" rel="noopener noreferrer nofollow">Telegraph</a>}
-            </div>
-          </details>
+          <h2>Описание</h2>
+          <div class="prose" set:html={event.description_html} />
+          <h2 style="margin-top: 1.2rem;">Факты и источники</h2>
+          <EventFacts event={event} />
+          <div class="source-links" aria-label="Источники данных">
+            {event.source_url && <a href={event.source_url} target="_blank" rel="noopener noreferrer nofollow">Источник</a>}
+            {event.telegraph_url && <a href={event.telegraph_url} target="_blank" rel="noopener noreferrer nofollow">Telegraph</a>}
+          </div>
         </div>
       </section>
 
@@ -82,7 +85,7 @@ const shareText = [event.display_date, event.display_time, event.venue_name || e
         <section class="section-card" style="margin-top: 1rem;">
           <div class="section-card__inner">
             <h2>Другие даты</h2>
-            <div class="cards-grid cards-grid--feed">
+            <div class="cards-grid cards-grid--immersive">
               {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
             </div>
           </div>
@@ -91,18 +94,10 @@ const shareText = [event.display_date, event.display_time, event.venue_name || e
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <h2>Похожие события</h2>
-          <div class="cards-grid cards-grid--feed">
-            {similar.map((candidate) => <EventCard event={candidate} />)}
-          </div>
-        </div>
-      </section>
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <h2>Попробовать другое</h2>
-          <div class="cards-grid cards-grid--feed">
-            {explore.map((candidate) => <EventCard event={candidate} label="Открыть новое" />)}
+          <h2>Смотрите дальше</h2>
+          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">Ещё события, которые можно быстро открыть, добавить в календарь или отправить друзьям.</p>
+          <div class="cards-grid cards-grid--immersive">
+            {discoveryFeed.map((item) => <EventCard event={item.event} label={item.label || undefined} />)}
           </div>
         </div>
       </section>

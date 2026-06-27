@@ -12,16 +12,16 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v3/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v3/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v3/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v4/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v4/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v4/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v4/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v4/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v4/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v4/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v4/__preview/>
 
-Preview `v3` applies the latest consultant P0 feedback: real Today/Weekend listing pages, poster-led related cards with calendar/share/open actions, same-date duplicate exclusion, copy-link fallback, honest source-only CTA copy, weak-address map gate and build-time HTML/ICS/sitemap/data-quality checks.
+Preview `v4` keeps the consultant P0 hardening (real Today/Weekend listing pages, poster cards, duplicate exclusion, honest CTA copy, weak-address map gate, build-time HTML/ICS/sitemap checks) and fixes the event-detail UX regression: visible description, one vertical `Смотрите дальше` feed, and always-visible native-share-first button.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 

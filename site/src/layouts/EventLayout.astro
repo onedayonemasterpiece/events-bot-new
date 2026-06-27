@@ -199,12 +199,13 @@ const safeDescription = description || 'Анонс события в Калин�
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
       .action-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; margin-top: 0.75rem; }
-      .native-share-button { display: none; cursor: pointer; }
-      .has-native-share .native-share-button { display: inline-flex; }
+      .native-share-button { cursor: pointer; }
       .share-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.85rem 0 0; padding: 0; list-style: none; }
       .share-list a { min-height: 44px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.45rem 0.75rem; border: 1px solid var(--line); background: #fff; color: var(--primary-strong); text-decoration: none; font-weight: 750; }
       .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
       .cards-grid { display: grid; gap: 0.9rem; }
+      .cards-grid--immersive { grid-template-columns: 1fr; gap: 1rem; }
+      .cards-grid--immersive .event-card__media { aspect-ratio: 4 / 5; }
       .cards-grid--feed {
         grid-auto-flow: column;
         grid-auto-columns: clamp(172px, 48vw, 220px);
@@ -270,6 +271,7 @@ const safeDescription = description || 'Анонс события в Калин�
         .facts-quick { grid-template-columns: repeat(2, 1fr); }
         .action-grid { grid-template-columns: 1fr 1fr; }
         .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .cards-grid--immersive { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .cards-grid--feed { grid-auto-flow: row; grid-auto-columns: initial; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; overscroll-behavior-inline: auto; scroll-snap-type: none; padding: 0; margin-inline: 0; }
         .hero-media { aspect-ratio: 16 / 10; }
       }
@@ -277,6 +279,7 @@ const safeDescription = description || 'Анонс события в Калин�
         main { padding-top: 2rem; padding-bottom: 3rem; }
         .event-grid { grid-template-columns: minmax(0, 8fr) minmax(280px, 4fr); gap: 1.25rem; align-items: start; }
         .side-col { position: sticky; top: 1rem; }
+        .cards-grid--immersive { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .cards-grid--feed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .mobile-sticky-cta { display: none; }
         footer { padding-bottom: 2rem; }
@@ -325,23 +328,33 @@ const safeDescription = description || 'Анонс события в Калин�
 
     <script is:inline>
       (() => {
-        if ('share' in navigator) {
-          document.documentElement.classList.add('has-native-share');
-          document.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-native-share]');
-            if (!button) return;
-            event.preventDefault();
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-native-share]');
+          if (!button) return;
+          event.preventDefault();
+          const url = button.dataset.shareUrl || location.href;
+          if ('share' in navigator) {
             try {
               await navigator.share({
                 title: button.dataset.shareTitle || document.title,
                 text: button.dataset.shareText || '',
-                url: button.dataset.shareUrl || location.href,
+                url,
               });
+              return;
             } catch (_) {
               // User cancelled or browser refused; keep fallback share links visible.
+              return;
             }
-          });
-        }
+          }
+          try {
+            await navigator.clipboard.writeText(url);
+            const original = button.textContent;
+            button.textContent = 'Ссылка скопирована';
+            setTimeout(() => { button.textContent = original || 'Поделиться'; }, 1800);
+          } catch (_) {
+            location.href = url;
+          }
+        });
         document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-copy-url]');
           if (!button) return;

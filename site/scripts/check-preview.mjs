@@ -35,6 +35,10 @@ if (/\bnull\b/.test(controlHtml)) throw new Error('Rendered HTML contains litera
 if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-prone event-card anchor leaked');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
 if (!controlHtml.includes('event-card__actions')) throw new Error('Control related cards miss quick actions');
+if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');
+if (controlHtml.includes('Похожие события') || controlHtml.includes('Попробовать другое')) throw new Error('Control page still renders split related/explore blocks');
+if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
+if (controlHtml.includes('<details class="details-disclosure"')) throw new Error('Control description is hidden in a details disclosure');
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
   if (!ics.includes(needle)) throw new Error(`Control ICS missing ${needle}`);
@@ -54,6 +58,9 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/__preview/`)) throw new
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/segodnya/`)) throw new Error('Sitemap misses today listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new Error('Sitemap misses weekend listing URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
+const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
+const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
+if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
 for (const event of eventsData.events) {
