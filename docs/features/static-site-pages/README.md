@@ -352,15 +352,17 @@ Exit criteria для отключения Telegraph как основного ev
 
 ## Yandex Cloud/Object Storage notes
 
-До получения доступов проектируем абстрактный publish target:
+Canonical publish target is now fixed:
 
-- bucket name;
-- public domain `kenigevents.ru`;
-- production/preview prefixes;
-- CDN/invalidation strategy;
-- cache-control policy for HTML/assets/sitemap;
-- 404/410/redirect handling;
-- secret/env names без хранения credentials в repo.
+- **production bucket:** `kenigevents.ru`;
+- **public domain:** `https://kenigevents.ru/`;
+- **Yandex website endpoint:** `http://kenigevents.ru.website.yandexcloud.net/`;
+- **production deploy:** static-tree upload to the root of `s3://kenigevents.ru/`;
+- **preview deploy:** static-tree upload to a unique prefix under `s3://kenigevents.ru/preview-<timestamp>-<random>/`;
+- **Fly/site secret names:** `KENIGEVENTS_SITE_YC_ACCESS_KEY_ID`, `KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY`, `KENIGEVENTS_SITE_YC_BUCKET=kenigevents.ru`, `KENIGEVENTS_SITE_YC_ENDPOINT=https://storage.yandexcloud.net`, `KENIGEVENTS_SITE_YC_REGION=ru-central1`, `KENIGEVENTS_SITE_PUBLIC_BASE_URL=https://kenigevents.ru`;
+- credentials stay in local `.env` / Fly secrets only and must not be committed.
+
+Do not use the generic media poster bucket default (`kenigevents`) as the static-site target. The personalized static site publishes HTML, JS, CSS, manifests, sitemap and robots to `kenigevents.ru`; poster/media uploads may keep using their existing storage settings.
 
 Из kdg80 нужно перенести два режима deploy:
 

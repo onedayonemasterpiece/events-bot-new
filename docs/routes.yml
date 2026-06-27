@@ -201,6 +201,9 @@ features:
     related_personalization: docs/features/unsigned-personalization/README.md
     interface_references: docs/features/static-site-pages/interface-references.md
     target_domain: https://kenigevents.ru/
+    target_bucket: kenigevents.ru
+    target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
+    target_secret_prefix: KENIGEVENTS_SITE_
     entrypoints: []
   unsigned_personalization:
     status: design

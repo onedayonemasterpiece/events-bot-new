@@ -10,6 +10,8 @@
 
 Связанный static-site contract: `docs/features/static-site-pages/README.md`.
 
+Canonical deploy target for this personalized static site: static HTML/CSS/JS/manifests are published to Yandex Object Storage bucket `kenigevents.ru` and served from `https://kenigevents.ru/`. Do not publish the site to the media/poster bucket default `kenigevents`.
+
 Исследовательская заметка про рекомендации/LLM/embeddings: `docs/features/unsigned-personalization/alanytics.md`.
 Решение по выбору моделей и статусу доступов: `docs/features/unsigned-personalization/model-selection.md`.
 Контролируемая таксономия признаков: `docs/features/unsigned-personalization/taxonomy.md`.

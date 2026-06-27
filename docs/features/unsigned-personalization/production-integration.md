@@ -15,6 +15,17 @@ Supabase/Postgres = compact accepted personalization telemetry + aggregates only
 Fly SQLite = canonical events, promo state, Smart Update/static rebuild state
 ```
 
+Static-site deployment is also fixed for the production integration:
+
+```text
+static HTML/CSS/JS/manifests/sitemap/robots -> s3://kenigevents.ru/
+public canonical origin -> https://kenigevents.ru/
+preview prefixes -> s3://kenigevents.ru/preview-<timestamp>-<random>/
+Fly/local secret prefix -> KENIGEVENTS_SITE_*
+```
+
+Do not reuse the generic media poster bucket default (`kenigevents`) as the site target. The same service-account credentials may be present in prod for poster uploads, but the site publisher must explicitly address bucket `kenigevents.ru`.
+
 Do not turn the Fly web machine into a general Node/Python backend. On the current Fly.io shape (`shared-cpu`, up to 2 GB RAM for the intended web role, with CPU burst/throttle behavior), the web process must survive crawler traffic, preview bots and ordinary CTA clicks even when personalization telemetry is unavailable.
 
 Telemetry has two production-compatible write paths:
