@@ -1,0 +1,42 @@
+---
+import EventLayout from '../../../../../layouts/EventLayout.astro';
+import EventHero, { type HeroComposition } from '../../../../../components/EventHero.astro';
+import { HERO_REVIEW_CASES, type HeroReviewCase } from '../../../../../lib/heroReview';
+import { absoluteUrl, getEvents, withBase } from '../../../../../lib/events';
+
+interface Props { reviewCase: HeroReviewCase }
+
+export function getStaticPaths() {
+  return HERO_REVIEW_CASES.map((reviewCase) => ({ params: { caseId: reviewCase.caseId }, props: { reviewCase } }));
+}
+
+const { reviewCase } = Astro.props;
+const event = getEvents().find((item) => item.id === reviewCase.eventId);
+if (!event) {
+  return Astro.redirect(withBase('/lab/hero/review/'));
+}
+const title = `${reviewCase.variant} | Hero review`;
+const canonicalUrl = absoluteUrl(`/lab/hero/review/${reviewCase.caseId}/`);
+---
+<EventLayout title={title} description={reviewCase.note} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={[]} heroChrome="immersive">
+  <main id="main">
+    <div class="page-shell page-shell--event-impact">
+      <article class="main-col section-card section-card--hero section-card--impact-hero">
+        <div class="section-card__inner section-card__inner--hero">
+          <EventHero event={event} composition={reviewCase.composition as HeroComposition} />
+        </div>
+      </article>
+      <section class="section-card section-card--quiet" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <p class="eyebrow">Hero review case</p>
+          <h2>{reviewCase.variant}</h2>
+          <p class="muted-note">{reviewCase.note}</p>
+          <p class="source-links">
+            <a href={withBase('/lab/hero/review/')}>Все варианты</a>
+            <a href={withBase(`/sobytiya/${event.slug}/`)}>Обычная страница события</a>
+          </p>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

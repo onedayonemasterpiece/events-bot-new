@@ -124,6 +124,7 @@ const FOOTER_SOCIAL_LINKS = [
       }
       .brand { display: inline-flex; flex-direction: column; text-decoration: none; line-height: 1.1; min-height: 44px; justify-content: center; }
       .brand__name { font-weight: 800; letter-spacing: -0.02em; }
+      .brand__name--mobile-tag { display: none; }
       .brand__sub { color: var(--muted); font-size: 0.82rem; }
       .site-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
       .site-nav a {
@@ -367,7 +368,7 @@ const FOOTER_SOCIAL_LINKS = [
       .hero-lab-item__meta strong { color: var(--text); }
       .hero-lab-item__meta a { color: var(--primary-strong); font-weight: 820; }
       .hero-review-grid { display: grid; gap: 1rem; margin-top: 1rem; }
-      .hero-review-card { overflow: hidden; }
+      .hero-review-card { overflow: hidden; padding: 0.85rem; border: 1px solid rgba(121,48,20,0.12); border-radius: 24px; background: #fffdf8; }
       .hero-phone-frame {
         width: min(100%, 430px);
         margin: 0.9rem auto 0;
@@ -447,28 +448,143 @@ const FOOTER_SOCIAL_LINKS = [
       }
       @media (max-width: 759px) {
         body.hero-chrome-immersive .site-header {
-          position: absolute;
+          position: fixed;
           inset-inline: 0;
           top: 0;
-          z-index: 18;
+          z-index: 28;
           border-bottom: 0;
-          background: linear-gradient(180deg, rgba(20, 15, 12, 0.62), rgba(20, 15, 12, 0));
+          background: transparent;
           color: #fff;
+          pointer-events: none;
+          transition: border-color 180ms ease, box-shadow 180ms ease;
         }
         body.hero-chrome-immersive .site-header__inner {
-          min-height: 64px;
-          padding-top: env(safe-area-inset-top);
+          width: 100%;
+          min-height: 0;
+          padding-top: 0;
+          display: block;
         }
-        body.hero-chrome-immersive .brand,
-        body.hero-chrome-immersive .site-nav a {
+        body.hero-chrome-immersive .brand {
+          position: absolute;
+          left: max(0.85rem, env(safe-area-inset-left));
+          top: calc(-1.15rem + env(safe-area-inset-top));
+          width: 7.7rem;
+          min-height: 5.55rem;
+          padding: 1.45rem 0.76rem 0.58rem;
+          justify-content: end;
+          border-radius: 0 0 10px 10px;
+          background: linear-gradient(160deg, #793014 0%, #a54821 100%);
+          color: #fffdf8;
+          box-shadow: 0 18px 34px rgba(121, 48, 20, 0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
+          pointer-events: auto;
+          text-shadow: none;
+        }
+        body.hero-chrome-immersive .brand::after {
+          content: "";
+          position: absolute;
+          left: 0.58rem;
+          right: 0.58rem;
+          bottom: -0.28rem;
+          height: 0.28rem;
+          border-radius: 999px;
+          background: rgba(121, 48, 20, 0.76);
+        }
+        body.hero-chrome-immersive .brand__name--desktop,
+        body.hero-chrome-immersive .brand__sub {
+          display: none;
+        }
+        body.hero-chrome-immersive .brand__name--mobile-tag {
+          display: grid;
+          gap: 0.16rem;
           color: #fff;
-          text-decoration: none;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.28);
+          letter-spacing: 0;
         }
-        body.hero-chrome-immersive .brand__sub { color: rgba(255,255,255,0.78); }
-        body.hero-chrome-immersive .site-nav a { border-color: rgba(255,255,255,0.24); background: rgba(24,18,14,0.32); }
+        body.hero-chrome-immersive .brand__tag-kicker {
+          font-size: 0.56rem;
+          font-weight: 850;
+          line-height: 1.05;
+          letter-spacing: 0.055em;
+          text-transform: uppercase;
+          opacity: 0.9;
+        }
+        body.hero-chrome-immersive .brand__tag-main {
+          font-size: 1.24rem;
+          font-weight: 950;
+          line-height: 0.9;
+          letter-spacing: -0.065em;
+        }
+        body.hero-chrome-immersive .site-nav {
+          display: none;
+        }
+        body.hero-chrome-immersive.is-past-hero .site-header {
+          border-bottom: 1px solid rgba(121, 48, 20, 0.12);
+          background: #fffdf8;
+          box-shadow: 0 10px 30px rgba(72,45,25,0.10);
+          color: var(--text);
+          pointer-events: auto;
+        }
+        body.hero-chrome-immersive.is-past-hero .site-header__inner {
+          width: min(100% - 24px, 1180px);
+          min-height: 64px;
+          margin: 0 auto;
+          padding-top: env(safe-area-inset-top);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand {
+          position: static;
+          width: auto;
+          min-height: 44px;
+          padding: 0;
+          border-radius: 0;
+          background: transparent;
+          color: var(--text);
+          box-shadow: none;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand::after {
+          display: none;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand__name--desktop {
+          display: none;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand__name--mobile-tag {
+          display: grid;
+          color: var(--text);
+          gap: 0.02rem;
+          letter-spacing: 0;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand__tag-kicker {
+          color: var(--muted);
+          font-size: 0.58rem;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand__tag-main {
+          color: var(--text);
+          font-size: 1.08rem;
+        }
+        body.hero-chrome-immersive.is-past-hero .brand__sub {
+          display: none;
+        }
+        body.hero-chrome-immersive.is-past-hero .site-nav {
+          display: flex;
+        }
+        body.hero-chrome-immersive.is-past-hero .site-nav a {
+          color: var(--muted);
+          border-color: transparent;
+          background: transparent;
+          text-shadow: none;
+        }
         body.hero-chrome-immersive main { padding-top: 0; }
         body.hero-chrome-immersive .page-shell--event-impact { width: min(100% - 24px, 1180px); }
+        body.hero-chrome-immersive .event-grid {
+          display: block;
+          width: 100vw;
+          margin-left: calc(50% - 50vw);
+          margin-right: calc(50% - 50vw);
+        }
+        body.hero-chrome-immersive .main-col.section-card--impact-hero {
+          width: 100vw;
+        }
         body.hero-chrome-immersive .crumbs--after-hero { display: none; }
         .event-hero--poster-billboard,
         .event-hero--poster-attached-card,
@@ -482,31 +598,40 @@ const FOOTER_SOCIAL_LINKS = [
         .event-hero--poster-attached-card .event-hero__visual,
         .event-hero--photo-cinematic-sheet .event-hero__visual,
         .event-hero--photo-parallax-sheet .event-hero__visual {
+          position: relative;
+          left: 50%;
           width: 100vw;
-          margin-left: calc(50% - 50vw);
-          margin-right: calc(50% - 50vw);
+          min-width: 100vw;
+          margin-left: 0;
+          margin-right: 0;
+          transform: translateX(-50%);
           border-radius: 0;
         }
         .event-hero--poster-billboard.event-hero--poster-stage .event-hero__visual,
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
-          min-height: min(60dvh, 540px);
-          max-height: min(60dvh, 540px);
-          padding: calc(3.75rem + env(safe-area-inset-top)) 0.75rem 1.35rem;
-          align-items: center;
+          min-height: 0;
+          max-height: none;
+          padding: 0;
+          align-items: flex-start;
+          overflow: visible;
+          box-shadow: none;
         }
         .event-hero--poster-billboard.event-hero--poster-stage .event-hero__image,
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__image {
-          width: auto;
-          max-width: min(calc(100vw - 1.5rem), 430px);
-          max-height: calc(min(60dvh, 540px) - 5.1rem - env(safe-area-inset-top));
+          width: 100vw;
+          min-width: 100vw;
+          max-width: none;
+          max-height: none;
+          height: auto;
           object-fit: contain;
-          object-position: center bottom;
-          border-radius: 20px;
+          object-position: center top;
+          border-radius: 0;
+          box-shadow: none;
         }
         .event-hero--poster-attached-card.event-hero--poster-stage .event-hero__visual {
-          min-height: min(64dvh, 560px);
-          max-height: min(64dvh, 560px);
-          padding-bottom: 2.8rem;
+          min-height: 0;
+          max-height: none;
+          padding-bottom: 0;
         }
         .event-hero--photo-cinematic-sheet.event-hero--photo-cover .event-hero__visual,
         .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__visual {
@@ -515,8 +640,8 @@ const FOOTER_SOCIAL_LINKS = [
           aspect-ratio: auto;
         }
         .event-hero--photo-parallax-sheet.event-hero--photo-cover .event-hero__image {
-          height: 110%;
-          transform: translate3d(0, 0, 0) scale(1.03);
+          height: 118%;
+          transform: translate3d(0, var(--hero-parallax-y, 0px), 0) scale(var(--hero-parallax-scale, 1.075));
           transform-origin: center;
           will-change: transform;
         }
@@ -633,7 +758,11 @@ const FOOTER_SOCIAL_LINKS = [
     <header class="site-header">
       <div class="site-header__inner">
         <a class="brand" href={withBase('/__preview/')} aria-label={`${SITE_NAME}: preview index`}>
-          <span class="brand__name">{SITE_NAME}</span>
+          <span class="brand__name brand__name--desktop">{SITE_NAME}</span>
+          <span class="brand__name brand__name--mobile-tag" aria-hidden="true">
+            <span class="brand__tag-kicker">Полюбить Калининград</span>
+            <span class="brand__tag-main">Анонсы</span>
+          </span>
           <span class="brand__sub">афиша событий</span>
         </a>
         <nav class="site-nav" aria-label="Основная навигация preview">
@@ -1763,6 +1892,25 @@ const FOOTER_SOCIAL_LINKS = [
           heroObserver.observe(heroForSticky);
         }
 
+        function hydrateImmersiveHeader() {
+          const hero = document.querySelector('[data-event-hero]');
+          if (!hero || !document.body.classList.contains('hero-chrome-immersive')) return;
+          let ticking = false;
+          const update = () => {
+            ticking = false;
+            const rect = hero.getBoundingClientRect();
+            document.body.classList.toggle('is-past-hero', rect.bottom <= 72);
+          };
+          const request = () => {
+            if (ticking) return;
+            ticking = true;
+            window.requestAnimationFrame(update);
+          };
+          update();
+          document.addEventListener('scroll', request, { passive: true });
+          window.addEventListener('resize', request, { passive: true });
+        }
+
         function renderFeedbackReport() {
           const root = document.querySelector('[data-feedback-report]');
           if (!root) return;
@@ -1812,9 +1960,11 @@ const FOOTER_SOCIAL_LINKS = [
               if (!image) return;
               const rect = visual.getBoundingClientRect();
               if (rect.bottom < -80 || rect.top > viewport + 80) return;
-              const progress = (viewport / 2 - (rect.top + rect.height / 2)) / Math.max(viewport, 1);
-              const offset = Math.max(-22, Math.min(22, progress * 38));
-              image.style.transform = `translate3d(0, ${offset}px, 0) scale(1.045)`;
+              const progress = Math.max(0, Math.min(1, (viewport - rect.top) / Math.max(viewport + rect.height, 1)));
+              const offset = (progress - 0.5) * 74;
+              const scale = 1.07 + progress * 0.065;
+              image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`);
+              image.style.setProperty('--hero-parallax-scale', scale.toFixed(3));
             });
           };
           const request = () => {
@@ -1827,6 +1977,7 @@ const FOOTER_SOCIAL_LINKS = [
           window.addEventListener('resize', request, { passive: true });
         }
 
+        hydrateImmersiveHeader();
         hydrateHeroParallax();
         applyFeedbackState();
       })();

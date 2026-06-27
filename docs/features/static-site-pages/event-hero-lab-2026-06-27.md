@@ -2,7 +2,7 @@
 
 ## Задача
 
-После визуального ревью v18/v19 mobile hero был признан недостаточно сильным: v19 стал технически безопаснее для изображений, но всё ещё выглядел как “картинка + текстовый блок”, а не как эмоциональная обложка события. Поэтому v20 разделяет два уровня:
+После визуального ревью v18/v19 mobile hero был признан недостаточно сильным: v19 стал технически безопаснее для изображений, но всё ещё выглядел как “картинка + текстовый блок”, а не как эмоциональная обложка события. Поэтому v20 разделил два уровня, а v21 усилил именно первый mobile экран:
 
 1. **image policy** — как безопасно показать исходную картинку;
 2. **hero composition** — как устроен первый экран события: размер картинки, связь H1 с афишей, CTA, header/breadcrumbs и возможная motion-динамика.
@@ -19,6 +19,20 @@
 
 Historic consultant artifacts for v19 are stored under `artifacts/codex/hero-consultation-v19/`. The user-supplied v20 critique is treated as the corrective brief: build a **composition lab**, not another image-mode lab.
 
+## v22 edge-to-edge / brand-color correction
+
+После проверки v21 отдельно зафиксировано: TASS был только референсом формы бирки, а не палитры, и hero image должен быть защищён от любых layout gutters. Поэтому v22 меняет brand tag на палитру сайта (`#793014` → `#a54821`) и делает mobile hero container/article full-viewport, а visual/image центрируется через `left: 50% + translateX(-50%)` с `width/min-width: 100vw`. Acceptance теперь проверяет именно bbox hero image `x=0,width=viewport`, а не только наличие CSS `100vw`.
+
+## v21 corrective pass
+
+Дополнительное ревью v20 зафиксировало: “сдвиг есть, но это ещё не hero”. В v21 внесены три обязательных корректировки:
+
+1. **Actual 100vw poster image on mobile.** Для `poster-billboard` / `poster-attached-card` на mobile 100% ширины viewport получает не только dark visual slab, а сама hero-картинка: `width: 100vw`, `max-width: none`, без боковых gutter/padding. OCR/unknown poster по-прежнему не crop-ится.
+2. **TASS-like brand tag.** Пока hero видим, обычная шапка заменена на компактную синюю “бирку” `Полюбить Калининград / Анонсы`, торчащую с верхнего края. Она оставляет hero первым визуальным объектом, но сохраняет название сервиса. После ухода hero включается полноценная fixed-шапка с навигацией.
+3. **Stronger premium parallax lab.** `photo-parallax-sheet` остаётся экспериментом, но теперь использует заметный, контролируемый transform: медленный vertical offset плюс scale/zoom через `--hero-parallax-y` и `--hero-parallax-scale`; `prefers-reduced-motion` продолжает выключать motion.
+
+Методология ревью также исправлена: `/lab/hero/review/` теперь показывает **same-event comparison**, то есть несколько композиций для одного и того же события, а не разные события под разными вариантами.
+
 ## Deterministic image policy
 
 `EventHero.astro` chooses media mode from build/export metadata, without runtime OCR/ML:
@@ -32,7 +46,7 @@ Historic consultant artifacts for v19 are stored under `artifacts/codex/hero-con
 
 Important: `poster-stage` is a hero-only exception. Discovery cards/listings keep the OCR-safe policy from v15: `ocr_text`/`unknown` render in natural ratio without fixed contain-frame; `visual_only` uses vertical `4:5` cover.
 
-## Hero composition variants in v20
+## Hero composition variants in v20/v21
 
 Hero composition is explicit via `data-hero-composition` and is independent from `data-hero-mode`:
 
@@ -54,13 +68,14 @@ Default event mapping in the current preview:
 
 ## Mobile header and breadcrumbs
 
-For event pages v20 uses `heroChrome="immersive"`:
+For event pages v22 uses `heroChrome="immersive"`:
 
-- on mobile the site header is an overlay over the top of the hero visual, so it does not consume the first screen before the image;
+- while the hero is visible on mobile, the full site header is replaced by the compact top brand tag; it is fixed over the image, but no longer reserves vertical space before the hero;
+- after the hero leaves the viewport, JS toggles `body.is-past-hero` and reveals the full fixed header with navigation;
 - breadcrumbs are rendered **after** the hero in HTML and hidden on mobile, while JSON-LD BreadcrumbList remains present for SEO/GEO;
 - the event type/city/status are represented inside the hero eyebrow/facts instead of a breadcrumb row above the image.
 
-This is a preview hypothesis. If the overlay header feels too heavy, the next alternative is “header below hero, sticky after scroll”, but that should be tested as a separate composition rather than mixed into the default.
+This is a preview hypothesis. The brand tag can still be tuned for exact size/placement if it hides meaningful poster text too aggressively, but the core rule is fixed: mobile event pages start with a full-width image-led hero, not with a standard header block.
 
 ## CTA hierarchy
 
@@ -80,29 +95,32 @@ CTA/calendar/share remain ordinary HTML links/buttons and work without personali
 Preview routes:
 
 - `/lab/hero/` — composition lab: all real fixture events rendered under all composition variants, with headings demoted to `h3` so the lab page has one `H1`.
-- `/lab/hero/review/` — public noindex review route with live 390×844 iframe frames for the main event-page variants. This replaces private-only screenshot evidence for external reviewers.
+- `/lab/hero/review/` — public noindex review route with live 390×844 iframe frames grouped by event. It compares several compositions on the same event: `5878 × {poster-billboard, poster-attached-card, compact-ticketing}`, `6322 × {photo-cinematic-sheet, photo-parallax-sheet, compact-ticketing}`, and `4913 × {photo-cinematic-sheet, poster-attached-card}`.
+- `/lab/hero/review/<case>/` — individual full-page review cases used by those iframes.
 
-Public v20 URLs:
+Public v22 URLs:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v20/__preview/>
-- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v20/lab/hero/>
-- Viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v20/lab/hero/review/>
-- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v20/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Photo Cinematic Sheet control: <https://kenigevents.ru/preview-20260627-event-pages-v20/sobytiya/den-valyaniya-v-sene-romanovo-6322/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v22/__preview/>
+- Hero composition lab: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/>
+- Same-event viewport review: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/review/>
+- Poster Billboard control: <https://kenigevents.ru/preview-20260627-event-pages-v22/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Photo Parallax review case: <https://kenigevents.ru/preview-20260627-event-pages-v22/lab/hero/review/6322-photo-parallax-sheet/>
 
 ## Acceptance checks
 
 `site/scripts/check-preview.mjs` verifies:
 
 - `lab/hero/index.html` and `lab/hero/review/index.html` exist and are in sitemap;
+- representative same-event review cases exist and are in sitemap;
 - control event `5878` renders `data-hero-mode="poster-stage"`, `data-hero-composition="poster-billboard"`, and `data-hero-image-text-mode="ocr_text"`;
+- event pages include the mobile brand tag and `is-past-hero` header transition contract;
 - every event page has exactly one visible `H1` and a composition marker;
 - event hero is rendered before after-hero breadcrumbs in HTML;
 - visual-only events render `photo-cover`; OCR/unknown events render `poster-stage`;
 - no `blur(`, duplicate/backdrop poster fill, repeated `--poster-image`, `media-backdrop`, `image-backdrop`, old `3:4` ratio, or fragile `100vh` leaks into CSS/HTML;
 - `poster-stage` hero has `object-fit: contain`, and `photo-cover` hero has `object-fit: cover`;
-- poster billboard visual is full viewport width on mobile;
-- parallax experiment is present with reduced-motion guard;
+- poster billboard visual **and image itself** are full viewport width on mobile;
+- parallax experiment is present with reduced-motion guard and uses zoom/scale variables;
 - split-actions under-card share/like remain transparent icon-style controls, not pill buttons.
 
-Playwright smoke evidence for v20 is stored under `artifacts/codex/hero-impact-v20/` and includes 375×667, 390×844 and 430×932 checks for hero visual share of the first screen, H1/CTA visibility, no horizontal overflow, full-bleed visual width, poster `contain`, photo `cover`, parallax transform change, lab/review route integrity and no accidental H1 overlay on OCR posters.
+Playwright smoke evidence for v22 is stored under `artifacts/codex/hero-impact-v21/` and checks: poster image bbox `x=0,width=390` on 390px viewport, top brand tag bbox protruding from the upper edge, full header after `is-past-hero`, parallax transform/scale change on scroll, same-event review iframe count, and screenshots for control/parallax/review states.

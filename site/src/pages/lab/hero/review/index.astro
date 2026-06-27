@@ -1,19 +1,16 @@
 ---
 import EventLayout from '../../../../layouts/EventLayout.astro';
+import { HERO_REVIEW_CASES, HERO_REVIEW_EVENT_GROUPS } from '../../../../lib/heroReview';
 import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../../lib/events';
 
 const events = getEvents();
-const reviewItems = [
-  { eventId: 5878, variant: 'A · Poster Billboard', note: 'OCR/poster default: 100vw slab, no crop, title/CTA sheet attached below.' },
-  { eventId: 4913, variant: 'B · Poster Attached Card', note: 'Smarter overlap over safe slab area; still no overlay H1 on poster text.' },
-  { eventId: 6322, variant: 'C · Photo Cinematic Sheet', note: 'visual_only: full-bleed cover, title/CTA sheet overlaps lower edge.' },
-  { eventId: 5370, variant: 'D · Photo Parallax Sheet', note: 'visual_only experiment with progressive parallax and reduced-motion guard.' },
-];
-const cards = reviewItems
-  .map((item) => ({ ...item, event: events.find((event) => event.id === item.eventId) }))
-  .filter((item) => item.event);
+const eventById = new Map(events.map((event) => [event.id, event]));
+const groupedCases = HERO_REVIEW_EVENT_GROUPS.map((eventId) => ({
+  event: eventById.get(eventId),
+  cases: HERO_REVIEW_CASES.filter((item) => item.eventId === eventId),
+})).filter((group) => group.event && group.cases.length);
 const title = `Hero viewport review | ${SITE_NAME}`;
-const description = 'Public noindex viewport review page for strong mobile event hero variants.';
+const description = 'Public noindex same-event viewport review page for strong mobile event hero variants.';
 const canonicalUrl = absoluteUrl('/lab/hero/review/');
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
@@ -22,8 +19,8 @@ const canonicalUrl = absoluteUrl('/lab/hero/review/');
       <section class="section-card">
         <div class="section-card__inner">
           <p class="eyebrow">Hero viewport review</p>
-          <h1>Mobile hero variants</h1>
-          <p class="lead">Публичная noindex-страница для внешнего ревью: внутри iframe показаны реальные event pages в мобильном viewport 390×844. Это не PNG-скриншоты, а живой HTML, чтобы можно было открыть событие, проверить H1/CTA/share/calendar и скролл.</p>
+          <h1>Same-event mobile hero comparison</h1>
+          <p class="lead">Публичная noindex-страница для внешнего ревью: теперь быстрый viewport review сравнивает несколько hero-композиций на одном и том же событии, а не “вариант + другое событие”. Внутри iframe — живой HTML 390×844, чтобы проверить 100vw hero, H1/CTA, sticky/header transition, share/calendar и скролл.</p>
           <div class="source-links">
             <a href={withBase('/lab/hero/')}>Composition lab</a>
             <a href={withBase('/__preview/')}>Preview index</a>
@@ -31,21 +28,27 @@ const canonicalUrl = absoluteUrl('/lab/hero/review/');
         </div>
       </section>
 
-      <section class="hero-review-grid" aria-label="Сравнение mobile hero вариантов">
-        {cards.map(({ event, variant, note }) => event && (
-          <article class="section-card hero-review-card">
-            <div class="section-card__inner">
-              <p class="eyebrow">{variant}</p>
-              <h2>{event.title}</h2>
-              <p class="muted-note">#{event.id} · {event.image_text_mode} · {note}</p>
-              <p class="source-links"><a href={withBase(`/sobytiya/${event.slug}/`)}>Открыть full page</a></p>
-              <div class="hero-phone-frame" aria-label={`Viewport 390 на 844: ${event.title}`}>
-                <iframe src={withBase(`/sobytiya/${event.slug}/`)} title={`${variant}: ${event.title}`}></iframe>
-              </div>
+      {groupedCases.map(({ event, cases }) => event && (
+        <section class="section-card" style="margin-top: 1rem;" aria-label={`Same-event review: ${event.title}`}>
+          <div class="section-card__inner">
+            <p class="eyebrow">Same event #{event.id} · {event.image_text_mode}</p>
+            <h2>{event.title}</h2>
+            <p class="muted-note">Сравниваем композицию, а не разные картинки/заголовки. Default выбирается только после просмотра этого блока на 390×844 и 375×667.</p>
+            <div class="hero-review-grid">
+              {cases.map((item) => (
+                <article class="hero-review-card">
+                  <p class="eyebrow">{item.variant}</p>
+                  <p class="muted-note">{item.note}</p>
+                  <p class="source-links"><a href={withBase(`/lab/hero/review/${item.caseId}/`)}>Открыть full review case</a></p>
+                  <div class="hero-phone-frame" aria-label={`Viewport 390 на 844: ${item.variant}`}>
+                    <iframe src={withBase(`/lab/hero/review/${item.caseId}/`)} title={item.variant}></iframe>
+                  </div>
+                </article>
+              ))}
             </div>
-          </article>
-        ))}
-      </section>
+          </div>
+        </section>
+      ))}
     </div>
   </main>
 </EventLayout>

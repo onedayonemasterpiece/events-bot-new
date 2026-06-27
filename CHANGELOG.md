@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site pages / mobile hero edge-to-edge v22**: published `preview-20260627-event-pages-v22`; hardened the event hero so the OCR/poster image itself is verified at full mobile viewport width (`x=0,width=viewport`), switched the TASS-inspired service tag from borrowed blue to the site brown palette, kept the full header reveal after `is-past-hero`, strengthened parallax lab zoom/offset checks, and made the hero review route compare variants on the same event.
 
 - **Static site pages / event hero composition v20**: published `preview-20260627-event-pages-v20` with a real mobile hero composition pass: full-bleed 100vw hero visuals, explicit `data-hero-composition` variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`), immersive mobile header, breadcrumbs moved below/hidden from the first mobile screen, dominant primary CTA with secondary calendar/share, sticky CTA suppressed over the hero, `/lab/hero/` composition lab and `/lab/hero/review/` live viewport review route while preserving OCR no-crop/no-blur policy and no runtime OCR/ML.
 

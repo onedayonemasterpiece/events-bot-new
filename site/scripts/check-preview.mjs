@@ -18,6 +18,9 @@ const required = [
   'preview-build.json',
   'lab/hero/index.html',
   'lab/hero/review/index.html',
+  'lab/hero/review/5878-poster-billboard/index.html',
+  'lab/hero/review/5878-poster-attached-card/index.html',
+  'lab/hero/review/6322-photo-parallax-sheet/index.html',
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -57,6 +60,7 @@ if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Er
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
 if (!controlHtml.includes('data-event-hero') || !controlHtml.includes('data-hero-mode="poster-stage"') || !controlHtml.includes('data-hero-composition="poster-billboard"') || !controlHtml.includes('data-hero-image-text-mode="ocr_text"')) throw new Error('Control event must render OCR-safe poster-billboard decision hero');
+if (!controlHtml.includes('brand__name--mobile-tag') || !controlHtml.includes('is-past-hero')) throw new Error('Immersive event pages must include mobile brand tag and after-hero header transition');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
 if (controlVisibleHtml.indexOf('data-event-hero') > controlVisibleHtml.indexOf('crumbs--after-hero')) throw new Error('Hero must render before mobile/after-hero breadcrumbs in event HTML');
@@ -156,6 +160,7 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/vyhodnye/`)) throw new 
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/sobytiya/${control.slug}/`)) throw new Error('Sitemap misses control event URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/`)) throw new Error('Sitemap misses hero lab URL');
 if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/`)) throw new Error('Sitemap misses hero viewport review URL');
+if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-poster-billboard/`)) throw new Error('Sitemap misses same-event hero review case URL');
 const cssFiles = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css'));
 const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
@@ -164,7 +169,10 @@ if (/event-card__media-shell--preserve[^}]*object-fit:\s*contain/iu.test(css)) t
 if (!/event-hero--poster-stage \.event-hero__image\{[^}]*object-fit:\s*contain/iu.test(css)) throw new Error('Poster-stage hero must contain OCR/text posters without crop');
 if (!/event-hero--photo-cover \.event-hero__image\{[^}]*object-fit:\s*cover/iu.test(css)) throw new Error('Photo-cover hero must crop only visual-safe images');
 if (!/event-hero--poster-billboard[\s\S]*?event-hero__visual[\s\S]*?width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero must make the hero visual full viewport width on mobile');
+if (!/event-hero--poster-billboard\.event-hero--poster-stage \.event-hero__image[\s\S]*?\{[^}]*width:\s*100vw/iu.test(css)) throw new Error('Poster billboard hero image itself must be full viewport width on mobile');
+if (!/body\.hero-chrome-immersive \.brand\{[^}]*background:\s*linear-gradient\([^}]*#793014[^}]*#a54821/iu.test(css) || !/body\.hero-chrome-immersive\.is-past-hero \.site-header/iu.test(css)) throw new Error('Immersive mobile header must use a site-palette top brand tag and transition to full header after hero');
 if (!/event-hero--photo-parallax-sheet/iu.test(css) || !controlHtml.includes('hydrateHeroParallax')) throw new Error('Hero parallax experiment and reduced-motion-aware hydrator must be present');
+if (!/--hero-parallax-scale/iu.test(css) || !controlHtml.includes('progress * 0.065')) throw new Error('Hero parallax must include stronger zoom-scale variables, not only a barely visible translate');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');
 if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual-only cover media must use vertical 4:5 ratio');
