@@ -43,7 +43,7 @@ const ctaLabel = eventTicketActionLabel(event);
         <span class="cta-button" aria-disabled="true">{ctaLabel}</span>
       )}
       <CalendarLink event={event} />
-      <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span>Поделиться</span></button>
+      <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
     <p class="muted-note">Если системное окно “Поделиться” недоступно в браузере или webview, ссылка копируется в буфер.</p>

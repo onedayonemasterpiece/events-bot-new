@@ -254,6 +254,13 @@ const safeDescription = description || 'Анонс события в Калин�
       .feedback-button--negative[aria-pressed="true"] { color: #1f1712; background: #f7efe3; }
       .event-card.is-not-interested { opacity: 0.58; filter: saturate(0.65); }
       .event-card.is-not-interested .event-card__title::after { content: " · скрыто из персональной выдачи"; color: rgba(255,255,255,0.7); font-weight: 700; }
+      .like-share-callout { position: absolute; right: 0.75rem; bottom: 4.7rem; z-index: 4; display: grid; gap: 0.12rem; min-width: 172px; max-width: min(252px, calc(100% - 1.5rem)); padding: 0.78rem 0.9rem 0.82rem; border: 1px solid rgba(255,255,255,0.22); border-radius: 20px; background: rgba(255, 253, 248, 0.96); color: #261a13; box-shadow: 0 18px 38px rgba(0,0,0,0.25); text-align: left; font: inherit; cursor: pointer; transform-origin: right bottom; animation: callout-pop 180ms ease-out; touch-action: manipulation; }
+      .like-share-callout[hidden] { display: none; }
+      .like-share-callout::after { content: ""; position: absolute; right: 1.65rem; bottom: -0.48rem; width: 0.9rem; height: 0.9rem; background: inherit; border-right: 1px solid rgba(255,255,255,0.22); border-bottom: 1px solid rgba(255,255,255,0.22); transform: rotate(45deg); }
+      .like-share-callout__text { color: #6d5c50; font-size: 0.78rem; font-weight: 850; }
+      .like-share-callout strong { display: inline-flex; align-items: center; gap: 0.42rem; font-size: 1rem; line-height: 1.1; }
+      .like-share-callout .icon { width: 1.15rem; height: 1.15rem; }
+      @keyframes callout-pop { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
       .event-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem; margin-top: 0.25rem; padding-right: 4.6rem; }
       .event-card__actions a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 0.35rem 0.45rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; font-size: 0.76rem; font-weight: 850; text-align: center; }
       .event-card__actions a:hover { background: rgba(255,255,255,0.18); }
@@ -319,6 +326,7 @@ const safeDescription = description || 'Анонс события в Калин�
         .section-card__inner { padding: 1rem; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
+        .like-share-callout { right: 0.7rem; bottom: 4.55rem; min-width: 160px; }
         .event-card__actions { padding-right: 4.3rem; }
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
@@ -360,7 +368,10 @@ const safeDescription = description || 'Анонс события в Калин�
         const PROFILE_KEY = 'ke_profile_id_v1';
         const STATE_KEY = 'ke_event_feedback_state_v1';
         const LOG_KEY = 'ke_event_feedback_log_v1';
+        const SHARE_PROMPT_KEY = 'ke_like_share_prompt_count_v1';
         const MAX_LOG = 240;
+        const MAX_SHARE_PROMPTS_PER_SESSION = 2;
+        let shareCalloutTimer = 0;
 
         function readJson(key, fallback) {
           try {
@@ -409,7 +420,53 @@ const safeDescription = description || 'Анонс события в Калин�
           return map[String(eventId)] || { liked: false, not_interested: false };
         }
 
-        function applyFeedbackState() {
+        function hideLikeShareCallouts() {
+          window.clearTimeout(shareCalloutTimer);
+          shareCalloutTimer = 0;
+          document.querySelectorAll('[data-like-share-callout]').forEach((callout) => {
+            callout.hidden = true;
+          });
+        }
+
+        function showLikeShareCallout(card) {
+          if (!card) return;
+          let count = 0;
+          try { count = Number(sessionStorage.getItem(SHARE_PROMPT_KEY) || '0'); } catch (_) {}
+          if (count >= MAX_SHARE_PROMPTS_PER_SESSION) return;
+          const callout = card.querySelector('[data-like-share-callout]');
+          if (!callout) return;
+          hideLikeShareCallouts();
+          callout.hidden = false;
+          try { sessionStorage.setItem(SHARE_PROMPT_KEY, String(count + 1)); } catch (_) {}
+          shareCalloutTimer = window.setTimeout(() => {
+            callout.hidden = true;
+          }, 4000);
+        }
+
+        function rerankFeed(feed, map, anchorEventId) {
+          const cards = Array.from(feed.querySelectorAll(':scope > [data-event-card]'));
+          const score = (value) => (value.liked ? 100 : 0) - (value.not_interested ? 100 : 0);
+          if (anchorEventId) {
+            const anchorIndex = cards.findIndex((card) => String(card.dataset.eventId) === String(anchorEventId));
+            if (anchorIndex >= 0) {
+              const frozen = cards.slice(0, anchorIndex + 1);
+              const tail = cards.slice(anchorIndex + 1).sort((a, b) => {
+                const av = eventState(map, a.dataset.eventId);
+                const bv = eventState(map, b.dataset.eventId);
+                return score(bv) - score(av);
+              });
+              [...frozen, ...tail].forEach((card) => feed.appendChild(card));
+              return;
+            }
+          }
+          cards.sort((a, b) => {
+            const av = eventState(map, a.dataset.eventId);
+            const bv = eventState(map, b.dataset.eventId);
+            return score(bv) - score(av);
+          }).forEach((card) => feed.appendChild(card));
+        }
+
+        function applyFeedbackState(options = {}) {
           const map = state();
           const cards = document.querySelectorAll('[data-event-card]');
           cards.forEach((card) => {
@@ -430,14 +487,7 @@ const safeDescription = description || 'Анонс события в Калин�
             });
           });
           document.querySelectorAll('[data-personalized-feed]').forEach((feed) => {
-            const ranked = Array.from(feed.querySelectorAll(':scope > [data-event-card]'));
-            ranked.sort((a, b) => {
-              const av = eventState(map, a.dataset.eventId);
-              const bv = eventState(map, b.dataset.eventId);
-              const score = (value) => (value.liked ? 100 : 0) - (value.not_interested ? 100 : 0);
-              return score(bv) - score(av);
-            });
-            ranked.forEach((card) => feed.appendChild(card));
+            rerankFeed(feed, map, options.anchorEventId);
           });
           renderFeedbackReport();
         }
@@ -451,24 +501,33 @@ const safeDescription = description || 'Анонс события в Калин�
           if (!eventId) return;
           const map = state();
           const current = eventState(map, eventId);
-          const title = button.dataset.eventTitle || button.closest('[data-event-card]')?.dataset.eventTitle || '';
+          const card = button.closest('[data-event-card]');
+          const title = button.dataset.eventTitle || card?.dataset.eventTitle || '';
+          let shouldShowSharePrompt = false;
           if (button.dataset.feedbackAction === 'like') {
             const liked = !current.liked;
             map[String(eventId)] = { liked, not_interested: liked ? false : current.not_interested };
             appendLog({ event_id: Number(eventId), event_title: title, action: liked ? 'like_event' : 'unlike_event' });
+            shouldShowSharePrompt = liked;
+            if (!liked) hideLikeShareCallouts();
           } else if (button.dataset.feedbackAction === 'not_interested') {
             const notInterested = !current.not_interested;
             map[String(eventId)] = { liked: notInterested ? false : current.liked, not_interested: notInterested };
             appendLog({ event_id: Number(eventId), event_title: title, action: notInterested ? 'not_interested' : 'undo_not_interested' });
+            hideLikeShareCallouts();
           }
           saveState(map);
-          applyFeedbackState();
+          applyFeedbackState({ anchorEventId: eventId });
+          if (shouldShowSharePrompt) {
+            showLikeShareCallout(document.querySelector(`[data-event-card][data-event-id="${CSS.escape(String(eventId))}"]`) || card);
+          }
         });
 
         document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-native-share]');
           if (!button) return;
           event.preventDefault();
+          hideLikeShareCallouts();
           const url = button.dataset.shareUrl || location.href;
           if ('share' in navigator) {
             try {
@@ -484,7 +543,7 @@ const safeDescription = description || 'Анонс события в Калин�
           }
           try {
             await navigator.clipboard.writeText(url);
-            const label = button.querySelector('span') || button;
+            const label = button.querySelector('[data-share-label]') || button.querySelector('span') || button;
             const original = label.textContent;
             label.textContent = 'Ссылка скопирована';
             setTimeout(() => { label.textContent = original || 'Поделиться'; }, 1800);
@@ -568,6 +627,13 @@ const safeDescription = description || 'Анонс события в Калин�
             }
           }
         }
+
+        document.addEventListener('scroll', hideLikeShareCallouts, { passive: true });
+        document.addEventListener('pointerdown', (event) => {
+          if (!event.target.closest('[data-like-share-callout]') && !event.target.closest('[data-feedback-action="like"]')) {
+            hideLikeShareCallouts();
+          }
+        }, { passive: true });
 
         applyFeedbackState();
       })();

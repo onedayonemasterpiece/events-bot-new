@@ -156,6 +156,7 @@ Guardrails:
 - legacy profiles containing `negative_tags` or missing/mismatched `feature_schema_version` / `taxonomy_version` are incompatible and fall back to static order until reset/migration;
 - explicit `like_event` is a direct positive action and may immediately boost that event in the local surface; `unlike_event` only removes this boost and must not be interpreted as negative interest;
 - explicit `not_interested` is the direct negative action and should hard-filter/demote that event in the local surface and feed `negative_interest_tags` during rollup;
+- explicit feedback must not cause orientation loss in the current viewport: when the user likes/unlikes/marks a card not interesting, the acted-on card and all cards above it stay in place; local rerank may only reorder cards below that anchor until the next page load/refresh;
 - selected telemetry write path unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
 - localStorage unavailable/corrupted means no profile mutation and static fallback.
 - `anon_id` and `session_id` must be UUID-compatible while the database schema uses `uuid` columns; legacy prefixed ids are incompatible and fall back to static order until reset/migration.

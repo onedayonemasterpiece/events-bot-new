@@ -12,16 +12,16 @@
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v7/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v7/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v7/vyhodnye/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v7/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v7/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v7/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v7/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v7/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v8/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v8/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v8/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v8/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v8/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v8/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v8/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v8/__preview/>
 
-Preview `v7` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions, single native-share-first button, favicon, prefetch for static links, sticky CTA hiding when the user reaches the feed, and a poster media rule: if OCR/text is present or unknown, the full poster must be preserved without crop; only verified visual-only media may fill/crop the 3:4 card frame.
+Preview `v8` keeps the consultant P0 hardening and adds explicit discovery feedback: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, icon calendar actions, single native-share-first button, favicon, prefetch for static links, sticky CTA hiding when the user reaches the feed, and a poster media rule: if OCR/text is present or unknown, the full poster must be preserved without crop; only verified visual-only media may fill/crop the 3:4 card frame. Preview `v8` also uses a Gemini Pro-reviewed post-like share callout: after a successful like, a non-layout-shifting bubble near the like button can invite the user to share via the native system sheet; explicit feedback rerank freezes the acted-on card and everything above it.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 

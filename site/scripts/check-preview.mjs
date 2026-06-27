@@ -39,6 +39,9 @@ if (!controlHtml.includes('event-card__media--preserve')) throw new Error('Text/
 if (!controlHtml.includes('event-card__actions')) throw new Error('Control related cards miss quick actions');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
+if (!controlHtml.includes('data-like-share-callout')) throw new Error('Control related cards miss post-like share callout');
+if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
+if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');

@@ -60,7 +60,7 @@ const shareText = [event.display_date, event.display_time, event.venue_name || e
             <div class="source-links event-main-actions" aria-label="Быстрые действия">
               {ctaHref && <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>}
               <CalendarLink event={event} className="secondary-button" />
-              <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}><Icon name="share" /> <span>Поделиться</span></button>
+              <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl}><Icon name="share" /> <span data-share-label>Поделиться</span></button>
             </div>
           </div>
         </article>
