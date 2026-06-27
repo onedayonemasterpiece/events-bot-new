@@ -1,6 +1,6 @@
 # Event reaction counters — source likes, service likes and static pages
 
-> **Status:** architecture decision for the next implementation slice. Preview `v14` shows total counters from a committed fixture, hides zero like/share counts in UI, and still treats production scanner-to-Supabase sync plus counter manifests as not implemented yet.
+> **Status:** source-counter sync slice implemented on 2026-06-27. Preview `v14` still renders build-time counters from a fixture, but the personalization Supabase counter table has been backfilled from production Fly SQLite source metrics. Telegram/VK metric upserts now queue a best-effort Supabase source-counter refresh when personalization secrets are available. Counter manifests and first-party site-like persistence are still separate follow-up slices.
 > **Related DB:** separate personalization Supabase/Postgres project, not the core Fly SQLite database.
 
 ## Product rule
@@ -19,17 +19,20 @@ likes_count = source_likes_count + service_likes_count
 
 ## Current status
 
-Implemented in the preview:
+Implemented:
 
-- Supabase table `public.personalization_event_reaction_counter` exists and is seeded for the preview events.
+- Supabase table `public.personalization_event_reaction_counter` exists.
+- The table has been backfilled from the 2026-06-27 production Fly SQLite snapshot: `2863` production events with source metrics were upserted, with `31823` raw source likes, `1544342` raw source views and `4312` distinct source-post metric links. Existing zero preview rows without source metrics remain zero.
+- `reaction_counter_sync.py` aggregates source metrics per `event_id` from canonical SQLite tables and upserts **source fields only** to Supabase. It does not touch `service_likes_count`, `not_interested_count` or `share_count`.
+- `source_parsing/post_metrics.py` now queues the same source-counter refresh after Telegram/VK metric upserts, so future monitoring/parsing runs can refresh Supabase when the production process has `PERSONALIZATION_SUPABASE_URL` + `PERSONALIZATION_SUPABASE_SECRET_KEY`. The hook is best-effort and does not break TG/VK monitoring if Supabase is unavailable.
 - RLS/grants expose only public total columns: `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`.
 - Static preview cards render only the total number.
 
 Not implemented yet:
 
-- main bot scanners do **not** currently write source metrics into the new personalization DB;
 - first-party site likes are local/preview-only and are not persisted to Supabase yet;
-- static pages do not yet fetch a small live counter manifest after first paint.
+- static pages do not yet fetch a small live counter manifest after first paint;
+- production Fly currently needs the personalization Supabase secrets to be present before the runtime hook can write counters from the deployed bot process.
 
 ## Recommended freshness architecture
 
@@ -38,7 +41,7 @@ Do **not** rebuild every static event page just because a like counter changed. 
 Recommended hybrid:
 
 1. **Core import/scanners stay authoritative for source metrics.** Existing Telegram/VK monitoring keeps writing post metrics into Fly SQLite (`telegram_post_metric`, `vk_post_metric`) and event-source mappings into canonical event tables.
-2. **Non-blocking source-counter sync job** reads Fly SQLite, aggregates per `event_id`, and upserts only source fields into Supabase:
+2. **Non-blocking source-counter sync job/hook** reads Fly SQLite, aggregates per `event_id`, and upserts only source fields into Supabase:
    - `source_likes_count`, `source_views_count`, `source_engagement_sources_count`, `source_refreshed_at`;
    - it must preserve `service_likes_count`.
 3. **First-party reaction ingest** writes compact strong actions/state to Supabase through the selected safe write path, then updates `service_likes_count` aggregate.
@@ -75,11 +78,11 @@ Direct Supabase Data API reads are acceptable as a debug/fallback path but shoul
 
 ## Source-counter sync details
 
-The sync job should run outside scanner hot paths. A Supabase outage must not break Telegram/VK monitoring or event import.
+The sync job/hook must stay outside the canonical event-import transaction. A Supabase outage must not break Telegram/VK monitoring or event import. The current implementation queues a debounced best-effort refresh from metric upserts and also provides a bulk backfill CLI: `scripts/sync_reaction_counters_to_supabase.py --sqlite-db /data/db.sqlite`.
 
 Aggregation contract:
 
-- For each source post, use the latest/highest collected value across age buckets (`MAX(likes)`, `MAX(views)`) so repeated scans do not double-count.
+- For each source post, use the latest/highest collected raw value across age buckets (`MAX(likes)`, `MAX(views)`) so repeated scans do not double-count. No source-specific boosting or coefficients are applied.
 - Then sum distinct source posts attached to the same `event_id`.
 - Telegram mapping should prefer canonical `event_source.source_chat_username/source_message_id` or canonical `source_url` to join source metrics.
 - VK mapping should use `vk_inbox_import_event` + `vk_inbox` + `vk_post_metric`, or a parsed canonical `event_source.source_url` fallback when the inbox mapping is absent.

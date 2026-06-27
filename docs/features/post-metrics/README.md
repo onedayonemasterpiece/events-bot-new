@@ -5,7 +5,7 @@
 Это **не про “посты” как сущность**, а про то, как статистика постов становится сигналом для:
 
 - маркировки событий в отчётах Smart Update (`⭐/👍` уровни);
-- будущих фич (см. ниже): автопубликации анонсов и приоритизации видеоанонсов.
+- будущих фич (см. ниже): автопубликации анонсов, приоритизации видеоанонсов и честных публичных счётчиков лайков на статических страницах.
 
 ## Канонический код (одна точка)
 
@@ -13,7 +13,8 @@
 
 - сохранение снапшотов: `upsert_telegram_post_metric`, `upsert_vk_post_metric`;
 - вычисление бейзлайна: `load_telegram_popularity_baseline`, `load_vk_popularity_baseline`;
-- вычисление маркеров: `popularity_marks`.
+- вычисление маркеров: `popularity_marks`;
+- best-effort bridge в публичные агрегаты персонализации: после TG/VK metric upsert вызывается `reaction_counter_sync.py`, который пересчитывает raw source counters для затронутых событий и, если настроены `PERSONALIZATION_SUPABASE_URL` + `PERSONALIZATION_SUPABASE_SECRET_KEY`, upsert-ит их в отдельную Supabase/Postgres БД персонализации.
 
 Обе пайплайны (TG/VK) используют **тот же код** и одинаковые ENV параметры.
 
@@ -30,9 +31,27 @@
 - `1` — вторые 24 часа;
 - `2` — третьи 24 часа (по умолчанию).
 
-Метрики сохраняются только для `age_day <= POST_POPULARITY_MAX_AGE_DAY`, чтобы рост БД был ограничен.
+Метрики сохраняются только для `age_day <= POST_POPULARITY_MAX_AGE_DAY`, чтобы рост БД был ограничен. Для публичного счётчика события повторные age buckets не суммируются: берётся `MAX(likes)`/`MAX(views)` по исходному посту, затем raw значения суммируются по разным source posts без повышающих коэффициентов.
 
 Снапшоты очищаются job’ом `post_metrics_cleanup` (retention по умолчанию = `POST_POPULARITY_HORIZON_DAYS`).
+
+## Public source-like counters for static pages
+
+`reaction_counter_sync.py` is the compact bridge from production post metrics to the personalization Supabase table `personalization_event_reaction_counter`:
+
+- source of truth: Fly SQLite `telegram_post_metric`, `vk_post_metric`, `event_source`, and VK `vk_inbox_import_event` when available;
+- aggregation: distinct source post per event, `MAX(raw likes/views)` across age buckets, then sum across source posts;
+- no coefficients, no popularity normalization, no “boosts”;
+- upsert fields: `source_likes_count`, `source_views_count`, `source_engagement_sources_count`, `source_refreshed_at`, `updated_at`;
+- service fields (`service_likes_count`, `not_interested_count`, `share_count`) are not touched by source sync.
+
+Bulk backfill/runbook:
+
+```bash
+scripts/sync_reaction_counters_to_supabase.py --sqlite-db /data/db.sqlite
+```
+
+Runtime writes require personalization Supabase backend credentials in the bot process. Without them the post metric upsert stays successful and the bridge is skipped.
 
 ## Бейзлайн (медианы)
 

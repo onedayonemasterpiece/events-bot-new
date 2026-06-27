@@ -209,6 +209,7 @@ features:
     interface_references: docs/features/static-site-pages/interface-references.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
+    reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
@@ -236,6 +237,8 @@ features:
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs
+      - reaction_counter_sync.py
+      - scripts/sync_reaction_counters_to_supabase.py
   unsigned_personalization:
     status: design
     docs: docs/features/unsigned-personalization/README.md
@@ -309,6 +312,8 @@ features:
     docs: docs/features/post-metrics/README.md
     entrypoints:
       - source_parsing/post_metrics.py
+      - reaction_counter_sync.py
+      - scripts/sync_reaction_counters_to_supabase.py
       - db.py
   smart_event_update:
     status: implemented

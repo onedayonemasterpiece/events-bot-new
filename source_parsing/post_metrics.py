@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import math
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -269,6 +270,22 @@ async def upsert_telegram_post_metric(
             ),
         )
         await conn.commit()
+    try:
+        from reaction_counter_sync import sync_source_reaction_counters_for_telegram_metric
+
+        await sync_source_reaction_counters_for_telegram_metric(
+            db,
+            source_id=int(source_id),
+            message_id=int(message_id),
+            source_url=str(source_url) if source_url else None,
+        )
+    except Exception:
+        logging.warning(
+            "Failed to queue personalization source counters for Telegram metric source_id=%s message_id=%s",
+            source_id,
+            message_id,
+            exc_info=True,
+        )
 
 
 async def load_telegram_popularity_baseline(
@@ -468,6 +485,22 @@ async def upsert_vk_post_metric(
             ),
         )
         await conn.commit()
+    try:
+        from reaction_counter_sync import sync_source_reaction_counters_for_vk_metric
+
+        await sync_source_reaction_counters_for_vk_metric(
+            db,
+            group_id=int(group_id),
+            post_id=int(post_id),
+            source_url=str(source_url) if source_url else None,
+        )
+    except Exception:
+        logging.warning(
+            "Failed to queue personalization source counters for VK metric group_id=%s post_id=%s",
+            group_id,
+            post_id,
+            exc_info=True,
+        )
 
 
 async def load_vk_popularity_baseline(
