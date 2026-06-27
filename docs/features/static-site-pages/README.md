@@ -4,6 +4,12 @@
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Out of scope for MVP:** экскурсии как отдельный домен, авторизация, перенос core event DB в Supabase, полная миграция всех Telegraph surfaces.
 
+## Implementation status
+
+В `events-bot-new` пока **нет Astro-сборки статических страниц**: в репозитории отсутствуют `astro.config.*` и `site/package.json` для `kenigevents.ru`; есть только standalone demo персонализации в `static_site/personalization/`.
+
+Следующий production-oriented шаг — не одноразовая “тестовая HTML-сборка”, а **Astro SSG vertical slice** по паттерну соседнего `kgd80/site`: export production-like events → `getStaticPaths()` → `/sobytiya/<stable-slug>/index.html` → sitemap/robots/JSON-LD/assets → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`.
+
 ## Цель продукта
 
 Перейти от ограниченных `telegra.ph`-страниц к собственным статическим страницам событий на `kenigevents.ru`, чтобы:
@@ -33,6 +39,7 @@
 - Independent Opus UI/UX variant for the event page: `docs/features/static-site-pages/opus-event-page-ui-ux-2026-06-27.md`.
 - Consultant comparison brief for Variant A vs Variant B: `docs/features/static-site-pages/event-page-ui-ux-comparison-brief.md`.
 - Gemini comparison review supplied by the user: `docs/features/static-site-pages/gemini-event-page-comparison-2026-06-27.md`.
+- External MVP review after the first merged skeleton: `docs/features/static-site-pages/consultant-event-page-mvp-review-2026-06-27.md`.
 - Merged implementation skeleton for the first page build: `docs/features/static-site-pages/event-page-merged-skeleton.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.

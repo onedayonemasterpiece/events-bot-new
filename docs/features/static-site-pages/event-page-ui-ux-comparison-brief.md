@@ -10,9 +10,10 @@
 1. **Variant A — internal product/design spec:** [event-page-product-design.md](event-page-product-design.md)
 2. **Variant B — independent Opus UI/UX variant:** [opus-event-page-ui-ux-2026-06-27.md](opus-event-page-ui-ux-2026-06-27.md)
 3. **Gemini comparison review supplied by the user:** [gemini-event-page-comparison-2026-06-27.md](gemini-event-page-comparison-2026-06-27.md)
-4. **Merged implementation skeleton:** [event-page-merged-skeleton.md](event-page-merged-skeleton.md)
+4. **External MVP review after the first merged skeleton:** [consultant-event-page-mvp-review-2026-06-27.md](consultant-event-page-mvp-review-2026-06-27.md)
+5. **Merged implementation skeleton:** [event-page-merged-skeleton.md](event-page-merged-skeleton.md)
 
-Current merged decision: implement Variant A's static/MVP constraints, adopt Variant B's desktop 8/4 grid, sticky mobile CTA, dedicated “Другие жанры рядом” anti-bubble block, separate labeled promo slot, and concrete SEO/GEO/schema/fact-block mechanics. Keep `H1` in the main content column, not in the desktop sidebar.
+Current merged decision: implement Variant A's static/MVP constraints as an **Astro SSG vertical slice**; adopt selected Variant B mechanics: desktop 8/4 grid, sticky mobile CTA, dedicated “Другие жанры рядом” anti-bubble block and concrete SEO/GEO/schema/fact-block mechanics. Keep `H1` in the main content column, not in the desktop sidebar. Promo is omitted by default; if needed, it is one clearly labeled native card after organic context, not an unlabeled recommendation.
 
 Related architecture context:
 
