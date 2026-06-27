@@ -1,7 +1,7 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
 
@@ -9,11 +9,13 @@
 
 Current public preview, built and deployed 2026-06-27:
 
-- index: <https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/>
-- control event: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v2/sitemap.xml>
-- robots: <https://kenigevents.ru/preview-20260627-event-pages-v2/robots.txt>
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/>
+- today listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/segodnya/>
+- weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/vyhodnye/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v3/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v3/robots.txt>
 
 Runbook/code map: [Astro SSG preview](astro-preview.md).
 
@@ -28,7 +30,7 @@ The page must be implemented as **Astro SSG**:
 - keep preview builds under a `noindex` prefix;
 - reuse `kgd80/site` patterns where applicable: `getStaticPaths()`, shared layout, event cards, asset gates, preview deploy rewrite, sitemap generation.
 
-This is **not** currently an Astro build and must not be treated as an already working test сборка.
+The current artifact is an Astro build, but still **preview-only**: production canary requires a regular Fly SQLite export/manifest, production canonical URLs, retention policy and visual/regression gates over a larger event sample.
 
 ## 2. Decision summary
 
@@ -40,7 +42,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 - desktop uses an 8/4 grid, but sidebar is only transactional: date, place, status, CTA, actions, facts;
 - mobile uses one-column decision flow plus sticky bottom CTA after the main CTA scrolls out;
 - `search_digest` appears high on mobile before long description;
-- anti-bubble exploration is a separate static block, not mixed into “Похожие”; the public UI label in v2 is **«Попробовать другое»** instead of the internal working label «Другие жанры рядом»;
+- anti-bubble exploration is a separate static block, not mixed into “Похожие”; the public UI label is **«Попробовать другое»** instead of the internal working label «Другие жанры рядом»;
 - promo is omitted by default; if present, it is one clearly labeled native/static card and never an unlabeled recommendation;
 - omit MVP over-engineering: client-side related API, FAQ schema, gallery/lightbox, hidden LLM fragments, `llms.txt` as a release blocker, complex promo frequency cap, save action and dark mode.
 
@@ -61,7 +63,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 ## 4. Global header
 
 12. Brand bar: «Полюбить Калининград Анонсы».
-13. Compact MVP navigation: `Сегодня`, `Выходные`; later category/date/search links.
+13. Compact MVP navigation: `Сегодня`, `Выходные`; in preview these are real static `/segodnya/` and `/vyhodnye/` pages, not loopback QA anchors.
 14. Header and breadcrumbs must not push event facts below the first mobile viewport.
 
 ## 5. Layout
@@ -75,7 +77,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 
 19. Breadcrumbs: `Афиша > Светлогорск > Концерты` or best available taxonomy.
 20. `H1` event title in the main column on all viewports.
-21. Hero image with fixed aspect ratio (`16:9` or `16:10`) and reserved dimensions to prevent CLS; graceful fallback when media is absent/unsafe.
+21. Hero image with fixed aspect ratio and reserved dimensions to prevent CLS; mobile keeps the poster visible (`object-fit: contain`), desktop may use wider hero geometry; graceful fallback when media is absent/unsafe.
 22. Badges only for known fields: event type, lifecycle/status, festival; do not render empty/null badges.
 23. Top facts: date/time, venue, city/address and ticket status.
 24. Mobile/high-priority summary: `search_digest` in 1–2 sentences before long description.
@@ -83,19 +85,19 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 26. Fact block `<dl>` contains only non-empty verified fields: type, date, venue, city, age limit, duration, Pushkin card, organizer.
 27. Source/provenance and temporary Telegraph dual-run link appear below facts/description.
 28. “Другие даты” shows only same event occurrence group and only future/active occurrences.
-29. `H2` “Похожие события”: static fallback HTML, 3–6 cards, current/past/expired events excluded by freshness gate.
-30. `H2` “Попробовать другое”: separate static anti-bubble exploration block, 1–2 cards.
+29. `H2` “Похожие события”: static fallback HTML, 3–6 visual poster cards, current/past/expired and same-occurrence/other-date events excluded by freshness gate.
+30. `H2` “Попробовать другое”: separate static anti-bubble exploration block, 1–2 visual cards.
 31. Promo is omitted by default. If a real campaign exists, show at most one clearly labeled `Партнёр`/`Реклама` native card after organic context, not between H1/facts and primary CTA and not as an unlabeled related item.
 
 ## 7. Sidebar / mobile transaction block
 
 32. Date and time, with timezone implied by region or explicitly generated.
-33. Venue, city, reliable address and map link when address exists.
+33. Venue, city, reliable address and map link only when address/coordinates are reliable; weak-address pages say “Точный адрес уточняйте у организатора”.
 34. Primary CTA is a real `href`: `Купить билет`, `Зарегистрироваться`, `Позвонить`, `Уточнить у организатора`, or status-only for sold-out/cancelled.
 35. For `ticket_status=sale` and valid `ticket_link`, show `Купить билет`.
 36. Status indicator uses text plus color/icon: tickets in sale, free, sold out, cancelled/postponed.
 37. `.ics` calendar link works without JS.
-38. Share uses Web Share API only as enhancement; fallback links/visible URL remain.
+38. Share uses Web Share API only as enhancement; fallback Telegram/VK/WhatsApp links and visible page URL link remain.
 39. Copy link is JS enhancement only; core page does not depend on it.
 
 ## 8. Mobile sticky CTA
@@ -113,6 +115,7 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 47. No visible reorder/jump after the related block is in viewport.
 48. Current event, past events and expired lifecycle statuses are excluded.
 49. “Другие даты” is separated from recommendations.
+    - Related/event cards must not use nested anchors: media/title/action links are separate, and every card has a visual slot plus `.ics` calendar action.
 
 ## 10. P0 acceptance gates
 
@@ -129,8 +132,10 @@ The first vertical slice uses **Variant A as canonical product/MVP contract** an
 60. `.ics` file exists and downloads.
 61. `Event`/`MusicEvent` JSON-LD validates and matches visible facts.
 62. Breadcrumb links and sitemap entries are generated and valid.
+    - `/segodnya/` and `/vyhodnye/` are generated, linked from header and included in sitemap.
 63. Preview pages are `noindex`; production pages are indexable.
 64. Related freshness gate excludes current/past/expired events.
+    - Related gate excludes `other_date_ids` / same occurrence group duplicates.
 65. Promo is omitted or clearly labeled and separated.
 66. Analytics are compact or disabled; no raw telemetry firehose in MVP.
 67. Rollback path exists: previous static tree or disabling links to generated event pages.

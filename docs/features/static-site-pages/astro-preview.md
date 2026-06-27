@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v2`  
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/>
+> **Build ID:** `preview-20260627-event-pages-v3`  
+> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry, no client recommendation API and no LLM fragments in rendered HTML.
 
@@ -10,12 +10,14 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v2/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v2/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v2/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/vyhodnye/>
+- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v3/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v3/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v3/__preview/>
 
 ## Code layout
 
@@ -28,6 +30,8 @@ site/
   scripts/check-preview.mjs
   scripts/deploy-preview-yc.mjs
   src/pages/[preview]/index.astro        # emits /__preview/
+  src/pages/segodnya/index.astro
+  src/pages/vyhodnye/index.astro
   src/pages/sobytiya/[slug].astro
   src/pages/sobytiya/[slug]/event.ics.ts
   src/pages/sitemap.xml.ts
@@ -37,6 +41,7 @@ site/
   src/components/EventCtaPanel.astro
   src/components/EventFacts.astro
   src/components/EventCard.astro
+  src/components/EventListItem.astro
   src/components/CalendarLink.astro
   src/data/preview-events.json
   src/data/preview-related.json
@@ -54,6 +59,7 @@ The preview uses 10 real production event rows exported read-only from Fly SQLit
 - long Russian title wrapping in main column;
 - no local image hero fallback;
 - weak/missing address fallback;
+- static `/segodnya/` and `/vyhodnye/` listing pages from the same fixture;
 - related “Другие даты” pair `6437`/`6438`;
 - static “Похожие события” plus separate anti-bubble “Попробовать другое”.
 
@@ -69,7 +75,7 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v2/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260627-event-pages-v3/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD only from visible facts.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
 
@@ -78,16 +84,16 @@ Disallow: /
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v2 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v2 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v2 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v3 npm run build:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v3 npm run check:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v3 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` metadata.
 
-## Visual review pass v2
+## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v2` makes the event page more mobile/feed-oriented:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v3` makes the event page more mobile/feed-oriented:
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
 - the hero poster uses `object-fit: contain` so the poster is not cropped;
@@ -95,6 +101,15 @@ The first public preview (`preview-20260627-event-pages-v1`) was superseded afte
 - native mobile share is a Web Share API enhancement behind a real `Поделиться` button, with Telegram/VK/WhatsApp fallback links still present;
 - the anti-bubble block label is now `Попробовать другое`, replacing the unnatural `Другие жанры рядом`.
 
+After consultant review, `preview-20260627-event-pages-v3` additionally hardens the first discovery layer:
+
+- header links now open real static `/segodnya/` and `/vyhodnye/` pages, not QA anchors;
+- related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot, direct page link, `.ics` calendar action and share link;
+- `6437`/`6438` same-occurrence duplicates are excluded from “Похожие события” and remain only in “Другие даты”;
+- source-only paid events use honest `Платный вход` copy instead of implying direct ticket purchase;
+- weak-address pages do not show “Открыть на карте”;
+- raw markdown/facts artifacts, hashtags in venue names, `null`/`undefined`/`NaN`, sitemap entries and all event `.ics` files are covered by `npm run check:preview`.
+
 ## Verified on 2026-06-27
 
-`curl` checks returned HTTP 200 for the preview index, control event, control `event.ics`, `sitemap.xml`, `robots.txt`, and the Yandex website endpoint fallback. The control ICS was checked for `DTSTART:20260711T193000Z` and absence of `DTEND`.
+`curl` checks returned HTTP 200 for the preview index, `/segodnya/`, `/vyhodnye/`, control event, source-only paid event `6437`, weak-address event `5690`, control `event.ics`, `sitemap.xml`, and `robots.txt`. The control ICS was checked for `DTSTART:20260711T193000Z` and absence of `DTEND`. Public HTML spot checks confirmed visual related cards, copy-link fallback, `Платный вход` for source-only paid events, and no map CTA on weak-address pages.

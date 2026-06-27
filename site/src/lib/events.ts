@@ -22,6 +22,10 @@ export function getEvents(): PreviewEvent[] {
   });
 }
 
+export function getCurrentDate(): string {
+  return data.build.current_date;
+}
+
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
   return data.events.find((event) => event.slug === slug);
 }
@@ -63,10 +67,53 @@ export function getOtherDates(event: PreviewEvent): PreviewEvent[] {
 }
 
 export function getRelatedEvents(event: PreviewEvent, kind: 'similar' | 'explore'): PreviewEvent[] {
+  const excludedIds = new Set([event.id, ...event.other_date_ids]);
   const ids = related.related[String(event.id)]?.[kind] || [];
   return ids
     .map((id) => getEventById(id))
-    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && candidate.id !== event.id);
+    .filter((candidate): candidate is PreviewEvent => {
+      if (!candidate) return false;
+      if (excludedIds.has(candidate.id)) return false;
+      if (candidate.other_date_ids.includes(event.id)) return false;
+      return eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31');
+    });
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function eventIntersectsDateRange(event: PreviewEvent, fromDate: string, toDate: string): boolean {
+  const starts = event.start_date;
+  const ends = event.end_date || event.start_date;
+  return starts <= toDate && ends >= fromDate;
+}
+
+export function getTodayEvents(): PreviewEvent[] {
+  const current = getCurrentDate();
+  return getEvents().filter((event) => eventIntersectsDateRange(event, current, current));
+}
+
+export function getWeekendRange(): { start: string; end: string; label: string } {
+  const current = new Date(`${getCurrentDate()}T00:00:00Z`);
+  const day = current.getUTCDay();
+  const daysUntilSaturday = day === 0 ? -1 : day === 6 ? 0 : 6 - day;
+  const saturday = addDays(current, daysUntilSaturday);
+  const sunday = addDays(saturday, 1);
+  const start = toIsoDate(saturday);
+  const end = toIsoDate(sunday);
+  return { start, end, label: `${start} — ${end}` };
+}
+
+export function getWeekendEvents(): PreviewEvent[] {
+  const range = getWeekendRange();
+  return getEvents().filter((event) => eventIntersectsDateRange(event, range.start, range.end));
 }
 
 export function isExternalHttpUrl(href: string | null | undefined): boolean {

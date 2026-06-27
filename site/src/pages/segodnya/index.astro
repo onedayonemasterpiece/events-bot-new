@@ -1,0 +1,42 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventListItem from '../../components/EventListItem.astro';
+import { absoluteUrl, getCurrentDate, getTodayEvents, SITE_NAME, withBase } from '../../lib/events';
+
+const events = getTodayEvents();
+const currentDate = getCurrentDate();
+const canonicalUrl = absoluteUrl('/segodnya/');
+const title = `События сегодня в Калининграде | ${SITE_NAME}`;
+const description = `Статический preview-листинг событий на ${currentDate}: афиша, билеты, регистрация и добавление в календарь.`;
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Сегодня</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Сегодня</p>
+          <h1 style="max-width: 14ch;">Что идёт сегодня</h1>
+          <p class="lead">События, которые начинаются или продолжаются {currentDate}. Листинг статический: без API, авторизации и персонализации.</p>
+          <div class="source-links">
+            <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
+            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>{events.length ? `Найдено: ${events.length}` : 'На сегодня в fixture нет событий'}</h2>
+          <div class="listing-stack">
+            {events.map((event) => <EventListItem event={event} />)}
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

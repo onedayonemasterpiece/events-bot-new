@@ -1,0 +1,42 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventListItem from '../../components/EventListItem.astro';
+import { absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
+
+const events = getWeekendEvents();
+const weekend = getWeekendRange();
+const canonicalUrl = absoluteUrl('/vyhodnye/');
+const title = `События на выходные в Калининграде | ${SITE_NAME}`;
+const description = `Статический preview-листинг событий на ближайшие выходные ${weekend.label}: афиша, билеты, регистрация и календарь.`;
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Выходные</span>
+      </nav>
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Выходные</p>
+          <h1 style="max-width: 14ch;">Куда сходить на выходных</h1>
+          <p class="lead">События, которые начинаются или продолжаются в интервале {weekend.label}. Это первый static-list слой перед будущими фильтрами.</p>
+          <div class="source-links">
+            <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
+            <a href={withBase('/__preview/')}>Все тестовые страницы</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>{events.length ? `Найдено: ${events.length}` : 'На эти выходные в fixture нет событий'}</h2>
+          <div class="listing-stack">
+            {events.map((event) => <EventListItem event={event} />)}
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

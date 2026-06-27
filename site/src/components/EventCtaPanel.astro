@@ -13,6 +13,7 @@ const vkShare = `https://vk.com/share.php?url=${encodeURIComponent(absolute)}`;
 const whatsappShare = `https://wa.me/?text=${encodeURIComponent(`${event.title} ${absolute}`)}`;
 const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
+const hasReliableMap = Boolean(event.address && event.map_query);
 ---
 <aside class="section-card cta-panel" aria-label="Билеты и действия">
   <div class="cta-panel__top">
@@ -25,7 +26,11 @@ const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
       <p class="eyebrow">Где</p>
       <strong>{event.venue_name || event.city || 'Место уточняется'}</strong>
       {(event.address || event.city) && <div class="muted-note">{[event.address, event.city].filter(Boolean).join(', ')}</div>}
-      {event.map_query && <a class="muted-note" href={`https://yandex.ru/maps/?text=${encodeURIComponent(event.map_query)}`} rel="noopener noreferrer nofollow" target="_blank">Открыть на карте</a>}
+      {hasReliableMap ? (
+        <a class="muted-note" href={`https://yandex.ru/maps/?text=${encodeURIComponent(event.map_query || '')}`} rel="noopener noreferrer nofollow" target="_blank">Открыть на карте</a>
+      ) : (
+        <p class="muted-note">Точный адрес уточняйте у организатора.</p>
+      )}
     </div>
     <div>
       <p class="eyebrow">Статус</p>
@@ -40,6 +45,7 @@ const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
       )}
       <CalendarLink event={event} />
       <button type="button" class="secondary-button native-share-button" data-native-share data-share-title={event.title} data-share-text={shareText} data-share-url={absolute}>Поделиться</button>
+      <button type="button" class="secondary-button" data-copy-url={absolute}>Скопировать ссылку</button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
     <div>
@@ -48,8 +54,9 @@ const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
         <li><a href={tgShare} target="_blank" rel="noopener noreferrer nofollow">Telegram</a></li>
         <li><a href={vkShare} target="_blank" rel="noopener noreferrer nofollow">VK</a></li>
         <li><a href={whatsappShare} target="_blank" rel="noopener noreferrer nofollow">WhatsApp</a></li>
+        <li><a href={absolute}>Ссылка</a></li>
       </ul>
-      <p class="muted-note">Ссылки работают без JavaScript; на телефоне откроется выбранное приложение, если оно установлено.</p>
+      <p class="muted-note">Ссылки работают без JavaScript; кнопка копирования — улучшение поверх обычной ссылки.</p>
     </div>
   </div>
 </aside>

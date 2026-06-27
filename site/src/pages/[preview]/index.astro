@@ -27,6 +27,8 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Текущая дата данных</strong><span>{build.current_date}</span></div></div>
           </div>
           <div class="source-links">
+            <a href={withBase('/segodnya/')}>Сегодня</a>
+            <a href={withBase('/vyhodnye/')}>Выходные</a>
             <a href={withBase('/sitemap.xml')}>sitemap.xml</a>
             <a href={withBase('/robots.txt')}>robots.txt</a>
           </div>
@@ -52,9 +54,10 @@ const description = 'Открываемый preview Astro SSG страниц с�
             <li>source-only CTA без прямого ticket-link;</li>
             <li>длинный H1;</li>
             <li>нет локального изображения — hero fallback;</li>
-            <li>слабый адрес — карта не ломает страницу;</li>
+            <li>слабый адрес — карта скрывается, вместо неё выводится “уточняйте у организатора”;</li>
             <li>«Другие даты» для пары 6437/6438;</li>
             <li>статические «Похожие» и «Попробовать другое» без API.</li>
+            <li>минимальные листинги /segodnya/ и /vyhodnye/.</li>
           </ul>
         </div>
       </section>

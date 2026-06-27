@@ -8,16 +8,20 @@
 
 В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
-Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/sobytiya/<stable-slug>/index.html` → `event.ics` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
+Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/segodnya/`, `/vyhodnye/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
 
 ## Текущий публичный preview
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/>
-- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v2/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v2/sitemap.xml>
-- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v2/robots.txt>
-- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v2/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v3/vyhodnye/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v3/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v3/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v3/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v3/__preview/>
+
+Preview `v3` applies the latest consultant P0 feedback: real Today/Weekend listing pages, poster-led related cards with calendar/share/open actions, same-date duplicate exclusion, copy-link fallback, honest source-only CTA copy, weak-address map gate and build-time HTML/ICS/sitemap/data-quality checks.
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 
@@ -286,7 +290,7 @@ Google Event structured data требует добавлять required properti
 - HTML должен показывать fallback related block без JS/Supabase;
 - “Другие даты” рендерятся отдельным блоком и не смешиваются с “Похожие события”;
 - client island может после consent переупорядочить уже полезный block, но не должен ломать CTA/SEO;
-- desktop рендерит related как module/right rail/grid, mobile — короткий vertical block + “Показать ещё”.
+- desktop рендерит related как 3-column visual grid/module, mobile — горизонтальный snap-scroll poster rail с `.ics`/open/share actions; не текстовый список и не бесконечный TikTok-feed.
 
 Детальный contract: `docs/features/unsigned-personalization/event-detail-related.md`.
 

@@ -1,0 +1,34 @@
+---
+import type { PreviewEvent } from '../lib/types';
+import { eventCalendarHref, eventHref, isExternalHttpUrl } from '../lib/events';
+
+interface Props { event: PreviewEvent }
+const { event } = Astro.props;
+const href = eventHref(event);
+const calendarHref = eventCalendarHref(event);
+const ctaHref = event.ticket.href;
+const ctaRel = isExternalHttpUrl(ctaHref) ? 'noopener noreferrer nofollow' : undefined;
+const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
+---
+<article class="listing-item">
+  <a class="listing-item__media" href={href} aria-label={`Открыть событие: ${event.title}`}>
+    {event.image_url ? (
+      <img src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="240" height="320" loading="lazy" decoding="async" />
+    ) : (
+      <span class="listing-item__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
+    )}
+  </a>
+  <div class="listing-item__body">
+    <div class="listing-item__meta">
+      <span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
+      <span>{event.ticket.price_label || event.status_label}</span>
+    </div>
+    <a class="listing-item__title" href={href}>{event.title}</a>
+    {place && <p>{place}</p>}
+    <div class="listing-item__actions">
+      {ctaHref && <a class="cta-button" href={ctaHref} target={isExternalHttpUrl(ctaHref) ? '_blank' : undefined} rel={ctaRel}>{event.ticket.label}</a>}
+      <a class="secondary-button" href={calendarHref} download={`kenigevents-${event.slug}.ics`} type="text/calendar">В календарь</a>
+      <a class="secondary-button" href={href}>Открыть</a>
+    </div>
+  </div>
+</article>

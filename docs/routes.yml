@@ -212,11 +212,13 @@ features:
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v2/__preview/
+    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v3/__preview/
     entrypoints:
       - site/package.json
       - site/astro.config.mjs
       - site/src/pages/[preview]/index.astro
+      - site/src/pages/segodnya/index.astro
+      - site/src/pages/vyhodnye/index.astro
       - site/src/pages/sobytiya/[slug].astro
       - site/src/pages/sobytiya/[slug]/event.ics.ts
       - site/src/pages/sitemap.xml.ts
@@ -226,6 +228,7 @@ features:
       - site/src/components/EventCtaPanel.astro
       - site/src/components/EventFacts.astro
       - site/src/components/EventCard.astro
+      - site/src/components/EventListItem.astro
       - site/src/components/CalendarLink.astro
       - site/src/data/preview-events.json
       - site/src/data/preview-related.json
