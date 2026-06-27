@@ -19,6 +19,7 @@ const required = [
   ...eventsData.events.flatMap((event) => [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
+    `data/discovery/${event.id}.json`,
   ]),
 ];
 for (const rel of required) {
@@ -37,7 +38,7 @@ if (controlHtml.includes('<a class="event-card"')) throw new Error('Nested-link-
 if (!controlHtml.includes('data-card-href=')) throw new Error('Event cards must expose full-card navigation href');
 if (!controlHtml.includes('event-card__media')) throw new Error('Control related cards do not expose visual media slot');
 if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error('Text/OCR poster cards must preserve full natural poster ratio without crop');
-if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 3:4 cover media shell');
+if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 4:5 cover media shell');
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || controlHtml.includes('--poster-image') || /background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(controlHtml)) throw new Error('Duplicate/backdrop poster fill leaked into event page');
 if (/data-(?:feedback|share)-count[^>]*>0<\/span>/u.test(controlHtml)) throw new Error('Zero like/share counters must be hidden, not rendered as 0');
 if (/object-fit:\s*contain/u.test(controlHtml)) throw new Error('OCR-safe media must use natural image ratio, not contain over a fixed frame');
@@ -50,12 +51,14 @@ if (!controlHtml.includes('M11.996 3.725') || controlHtml.includes('M4.2 16.1c3.
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
 if (controlHtml.includes('double_tap_like_event')) throw new Error('Double-tap like must not conflict with full-card navigation');
-for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [4913, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
+for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [4913, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
   const item = eventsData.events.find((event) => event.id === id);
   if (!item || item.image_text_mode !== expectedMode) throw new Error(`Event ${id} image_text_mode must be ${expectedMode} for media regression guard`);
 }
 if (!controlHtml.includes('ke_like_share_prompt_count_v1')) throw new Error('Control page misses post-like share prompt limiter');
 if (!controlHtml.includes('anchorEventId')) throw new Error('Control page misses stable anchored rerank logic');
+if (!controlHtml.includes('sessionPinnedNotInterested')) throw new Error('Control page misses current-page not-interested plate persistence');
+if (!controlHtml.includes('data-discovery-src') || !controlHtml.includes('data-discovery-load-more') || !controlHtml.includes('hydrateDiscoveryFeeds')) throw new Error('Control page misses static-seed + JSON discovery hydration contract');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
@@ -66,6 +69,12 @@ if (controlHtml.includes('class="share-list"')) throw new Error('Duplicate share
 if (/download="kenigevents-/u.test(controlHtml)) throw new Error('Calendar links still force download instead of opening .ics');
 if (controlHtml.includes('cards-grid--feed')) throw new Error('Control page still uses horizontal related rail class');
 if (controlHtml.includes('<details class="details-disclosure"')) throw new Error('Control description is hidden in a details disclosure');
+if (controlHtml.includes('11 июля 2026')) throw new Error('Visible current-year date should omit year in event UI');
+const discoveryJson = JSON.parse(readFileSync(join(root, `data/discovery/${control.id}.json`), 'utf8'));
+if (discoveryJson.preload_target !== 10 || discoveryJson.page_size !== 10) throw new Error('Discovery JSON must declare 10-item preload/page contract');
+if (!Array.isArray(discoveryJson.events) || discoveryJson.events.length < 5) throw new Error('Discovery JSON must contain candidate events for light client hydration');
+if (discoveryJson.events.some((item) => item.id === control.id)) throw new Error('Discovery JSON must not include current event');
+if (discoveryJson.events.some((item) => /2026\b/u.test(item.display_date) && !/2027\b/u.test(item.display_date))) throw new Error('Discovery JSON display dates should omit current year unless crossing year');
 const ics = readFileSync(join(root, `sobytiya/${control.slug}/event.ics`), 'utf8');
 for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART:20260711T193000Z', 'SUMMARY:Песни СССР', 'END:VCALENDAR']) {
   if (!ics.includes(needle)) throw new Error(`Control ICS missing ${needle}`);
@@ -95,6 +104,8 @@ const css = cssFiles.map((name) => readFileSync(join(root, '_astro', name), 'utf
 if (/native-share-button\{display:none/u.test(css)) throw new Error('Native share button is hidden by default');
 if (/media-backdrop|image-backdrop|--poster-image|background-image:\s*linear-gradient\([^;]*var\(--poster-image\)|blur\(/u.test(css)) throw new Error('Duplicate/backdrop poster fill leaked into CSS');
 if (/object-fit:\s*contain/u.test(css)) throw new Error('OCR-safe media must not use contain over a fixed frame');
+if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual-only cover media must use vertical 4:5 ratio');
+if (/aspect-ratio:3\/4/u.test(css.replace(/\s+/g, ''))) throw new Error('Old 3:4 visual-only ratio leaked into CSS');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
 for (const event of eventsData.events) {

@@ -1,17 +1,19 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAbsoluteUrl, eventHref } from '../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventHref } from '../lib/events';
 interface Props { event: PreviewEvent; label?: string }
 const { event, label } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
-const metaLabel = [label, event.display_date + (event.display_time ? ` · ${event.display_time}` : '')].filter(Boolean).join(' · ');
+const dateLabel = displayDate(event);
+const dateTimeLabel = displayDateTime(event);
+const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? Math.max(0, Math.round(likesCount * 0.18));
-const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
+const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaShellClass = ['event-card__media-shell', preservePoster ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover'].join(' ');
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
@@ -19,7 +21,7 @@ const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const feedbackClass = 'event-card__feedback';
 ---
-<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${event.display_date}`}>
+<article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
       <span class={mediaShellClass}>
@@ -27,7 +29,7 @@ const feedbackClass = 'event-card__feedback';
       </span>
     ) : (
       <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">
-        <span>{event.display_date}</span>
+        <span>{dateLabel}</span>
         <strong>{event.event_type || 'событие'}</strong>
         {event.city && <span>{event.city}</span>}
       </span>

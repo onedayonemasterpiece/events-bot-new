@@ -1,9 +1,11 @@
 ---
 import type { PreviewEvent } from '../lib/types';
+import { displayDate } from '../lib/events';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
+const dateLabel = displayDate(event);
 const rows = [
-  ['Дата', event.display_date],
+  ['Дата', dateLabel],
   ['Время', event.display_time ? `${event.display_time} (${event.timezone})` : `уточняется (${event.timezone})`],
   ['Город', event.city],
   ['Площадка', event.venue_name],

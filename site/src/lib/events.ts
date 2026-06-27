@@ -26,6 +26,53 @@ export function getCurrentDate(): string {
   return data.build.current_date;
 }
 
+const RU_MONTHS = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value || '');
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+function formatRuDate(value: string, includeYear: boolean): string {
+  const parts = parseIsoDateParts(value);
+  if (!parts || parts.month < 1 || parts.month > 12) return value;
+  return `${parts.day} ${RU_MONTHS[parts.month - 1]}${includeYear ? ` ${parts.year}` : ''}`;
+}
+
+export function displayDate(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): string {
+  const currentYear = Number(getCurrentDate().slice(0, 4));
+  const start = parseIsoDateParts(event.start_date);
+  const endDate = event.end_date || event.start_date;
+  const end = parseIsoDateParts(endDate);
+  if (!start || !end) return event.end_date && event.end_date !== event.start_date ? `${event.start_date} — до ${event.end_date}` : event.start_date;
+  const crossesYear = start.year !== end.year;
+  const includeStartYear = crossesYear || start.year !== currentYear;
+  const includeEndYear = crossesYear || end.year !== currentYear;
+  if (event.end_date && event.end_date !== event.start_date) {
+    return `${formatRuDate(event.start_date, includeStartYear)} — до ${formatRuDate(event.end_date, includeEndYear)}`;
+  }
+  return formatRuDate(event.start_date, includeStartYear);
+}
+
+export function displayDateTime(event: Pick<PreviewEvent, 'start_date' | 'end_date' | 'display_time'>): string {
+  return [displayDate(event), event.display_time].filter(Boolean).join(' · ');
+}
+
+
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
   return data.events.find((event) => event.slug === slug);
 }
@@ -82,6 +129,69 @@ export function getRelatedEvents(event: PreviewEvent, kind: 'similar' | 'explore
       return eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31');
     });
 }
+
+export function getPreloadedDiscoveryEvents(event: PreviewEvent, limit = 10): PreviewEvent[] {
+  const excludedIds = new Set([event.id, ...event.other_date_ids]);
+  const result: PreviewEvent[] = [];
+  const add = (candidate: PreviewEvent | undefined) => {
+    if (!candidate) return;
+    if (excludedIds.has(candidate.id)) return;
+    if (candidate.other_date_ids.includes(event.id)) return;
+    if (!eventIntersectsDateRange(candidate, getCurrentDate(), '9999-12-31')) return;
+    if (result.some((item) => item.id === candidate.id)) return;
+    result.push(candidate);
+  };
+  getRelatedEvents(event, 'similar').forEach(add);
+  getRelatedEvents(event, 'explore').forEach(add);
+  getEvents().forEach(add);
+  return result.slice(0, Math.max(0, limit));
+}
+
+export interface DiscoveryEventPayloadItem {
+  id: number;
+  title: string;
+  href: string;
+  absolute_url: string;
+  event_type: string | null;
+  image_url: string | null;
+  image_alt: string;
+  image_text_mode: PreviewEvent['image_text_mode'];
+  display_date: string;
+  display_time: string | null;
+  display_date_time: string;
+  city: string | null;
+  venue_name: string | null;
+  place: string;
+  status_label: string;
+  price_label: string | null;
+  likes_count: number;
+  shares_count: number;
+}
+
+export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
+  const likesCount = event.likes_count || 0;
+  return {
+    id: event.id,
+    title: event.title,
+    href: eventHref(event),
+    absolute_url: eventAbsoluteUrl(event),
+    event_type: event.event_type,
+    image_url: event.image_url,
+    image_alt: event.image_alt || `Афиша события «${event.title}»`,
+    image_text_mode: event.image_text_mode,
+    display_date: displayDate(event),
+    display_time: event.display_time,
+    display_date_time: displayDateTime(event),
+    city: event.city,
+    venue_name: event.venue_name,
+    place: [event.city, event.venue_name].filter(Boolean).join(' · '),
+    status_label: event.status_label,
+    price_label: event.ticket.price_label,
+    likes_count: likesCount,
+    shares_count: event.shares_count ?? Math.max(0, Math.round(likesCount * 0.18)),
+  };
+}
+
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);

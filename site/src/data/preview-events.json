@@ -275,11 +275,12 @@
       "pushkin_card": true,
       "other_date_ids": [],
       "data_quality_notes": [
-        "no_exact_start_time"
+        "no_exact_start_time",
+        "visual_only_small_ocr_not_meaningful"
       ],
       "updated_at": "2026-05-14 00:07:41.203895",
       "likes_count": 13,
-      "image_text_mode": "ocr_text",
+      "image_text_mode": "visual_only",
       "source_likes_count": 13,
       "service_likes_count": 0,
       "source_views_count": 601,

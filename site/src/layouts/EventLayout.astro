@@ -160,7 +160,7 @@ const safeDescription = description || 'Анонс события в Калин�
       }
       .badge--status { background: var(--accent-soft); color: #0f544f; border-color: rgba(15, 118, 110, 0.2); }
       .hero-media { margin: 1rem auto 0; border-radius: 24px; overflow: hidden; border: 1px solid rgba(121, 48, 20, 0.14); background: #15110f; }
-      .hero-media--cover { position: relative; aspect-ratio: 3 / 4; max-height: min(78dvh, 820px); background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; }
+      .hero-media--cover { position: relative; aspect-ratio: 4 / 5; max-height: min(78dvh, 820px); background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.18), transparent 16rem), #15110f; }
       .hero-media--cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .hero-media--preserve { background: #15110f; }
       .hero-media--preserve img { display: block; width: 100%; height: auto; }
@@ -210,7 +210,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .muted-note { color: var(--muted); font-size: 0.88rem; margin: 0.65rem 0 0; }
       .cards-grid { display: grid; gap: 0.9rem; }
       .cards-grid--immersive { grid-template-columns: 1fr; gap: 1rem; }
-      .cards-grid--immersive .event-card__media-shell--cover { aspect-ratio: 3 / 4; }
+      .cards-grid--immersive .event-card__media-shell--cover { aspect-ratio: 4 / 5; }
       .cards-grid--feed {
         grid-auto-flow: column;
         grid-auto-columns: clamp(172px, 48vw, 220px);
@@ -235,7 +235,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card:hover { border-color: rgba(165,72,33,0.48); box-shadow: 0 18px 38px rgba(72,45,25,0.2); }
       .event-card__media-link { display: block; color: inherit; text-decoration: none; background: #15110f; }
       .event-card__media-shell { display: block; width: 100%; overflow: hidden; background: #15110f; }
-      .event-card__media-shell--cover { position: relative; aspect-ratio: 3 / 4; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
+      .event-card__media-shell--cover { position: relative; aspect-ratio: 4 / 5; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
       .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .event-card__media-shell--preserve { background: #15110f; }
       .event-card__media-shell--preserve .event-card__media { display: block; width: 100%; height: auto; }
@@ -275,7 +275,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .listing-stack { display: grid; gap: 0.85rem; }
       .listing-item { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 0.85rem; align-items: stretch; padding: 0.75rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 22px; background: #fffdf8; }
       .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
-      .listing-item__media--cover { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background: linear-gradient(135deg, #8a3f23, #0f766e); }
+      .listing-item__media--cover { position: relative; aspect-ratio: 4 / 5; background: linear-gradient(135deg, #8a3f23, #0f766e); }
       .listing-item__media--cover .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .listing-item__media--preserve { background: #15110f; }
       .listing-item__media--preserve .listing-item__image { display: block; width: 100%; height: auto; }
@@ -291,6 +291,7 @@ const safeDescription = description || 'Анонс события в Калин�
       .source-links { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
       .source-links a, .source-links button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0.45rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--primary-strong); background: #fff; font: inherit; font-weight: 850; }
       .source-links .cta-button { color: var(--primary-text); background: var(--primary); border-color: transparent; padding: 0.75rem 1rem; }
+      .discovery-load-more { margin: 1rem auto 0; width: min(100%, 320px); }
       .mobile-sticky-cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 0.7rem max(1rem, env(safe-area-inset-left)) calc(0.7rem + env(safe-area-inset-bottom)); background: rgba(255, 253, 248, 0.94); border-top: 1px solid var(--line); box-shadow: 0 -12px 30px rgba(72,45,25,0.12); transition: transform 180ms ease, opacity 180ms ease; }
       .mobile-sticky-cta.is-hidden { transform: translateY(120%); opacity: 0; pointer-events: none; }
       .mobile-sticky-cta__inner { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: center; }
@@ -341,7 +342,7 @@ const safeDescription = description || 'Анонс события в Калин�
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
         .listing-item { grid-template-columns: 88px minmax(0, 1fr); gap: 0.65rem; padding: 0.65rem; }
-        .listing-item__media, .listing-item__fallback { min-height: 120px; }
+        .listing-item__fallback { min-height: 110px; }
         .listing-item__actions .cta-button, .listing-item__actions .secondary-button { width: auto; flex: 1 1 120px; }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -381,6 +382,7 @@ const safeDescription = description || 'Анонс события в Калин�
         const SHARE_PROMPT_KEY = 'ke_like_share_prompt_count_v1';
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
+        const sessionPinnedNotInterested = new Set();
         let shareCalloutTimer = 0;
 
         function readJson(key, fallback) {
@@ -521,6 +523,102 @@ const safeDescription = description || 'Анонс события в Калин�
           return number > 0 ? String(number) : '';
         }
 
+        function escapeHtml(value) {
+          return String(value || '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char] || char));
+        }
+
+        function eventCardHtml(item) {
+          const preserve = item.image_text_mode !== 'visual_only';
+          const mediaClass = preserve ? 'event-card__media-shell--preserve' : 'event-card__media-shell--cover';
+          const likes = Number(item.likes_count || 0);
+          const shares = Number(item.shares_count || 0);
+          const likeCount = likes > 0 ? String(likes) : '';
+          const shareCount = shares > 0 ? String(shares) : '';
+          const status = item.price_label || item.status_label || '';
+          const image = item.image_url
+            ? `<span class="event-card__media-shell ${mediaClass}"><img class="event-card__media" src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.image_alt || `Афиша события «${item.title}»`)}" loading="lazy" decoding="async"></span>`
+            : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(item.display_date)}</span><strong>${escapeHtml(item.event_type || 'событие')}</strong>${item.city ? `<span>${escapeHtml(item.city)}</span>` : ''}</span>`;
+          return `<article class="event-card" data-event-card data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" data-card-href="${escapeHtml(item.href)}" tabindex="0" aria-label="${escapeHtml(`${item.title}: ${item.display_date}`)}">
+            <a class="event-card__media-link" href="${escapeHtml(item.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${item.title}`)}">${image}</a>
+            <div class="event-card__feedback" aria-label="${escapeHtml(`Оценить событие: ${item.title}`)}">
+              <button type="button" class="feedback-button feedback-button--negative" data-feedback-action="not_interested" data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" aria-pressed="false" aria-label="${escapeHtml(`Не интересно: ${item.title}`)}"><svg class="icon icon--dislike" aria-hidden="true" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M335.003,63.091v278.283h93.308V63.091H335.003z M393.245,303.962h-21.439v-19.534h21.439V303.962z"></path><polygon points="459.307,105.002 459.307,316.643 512,316.643 512,105.002"></polygon><path d="M302.309,263.539V115.813l-67.165-27.147c0,0-22.86-7.855-47.864-7.855H30.249c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244H61.17v0.002H30.244C13.546,266.22,0,279.756,0,296.463v1.318c0,16.704,13.541,30.245,30.244,30.245h108.455l-45.595,74.1c-8.745,14.222-4.308,32.848,9.914,41.605l1.115,0.686c14.232,8.756,32.859,4.319,41.615-9.903l59.966-97.461c1.396-2.268,3.405-4.094,5.796-5.266l90.748-44.473l0.057-0.028v-23.746H302.309z"></path></svg><span>Не интересно</span></button>
+              <button type="button" class="feedback-button feedback-button--share" data-native-share data-share-event-id="${item.id}" data-share-event-title="${escapeHtml(item.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(item.title)}" data-share-text="${escapeHtml([item.display_date, item.display_time, item.venue_name || item.city].filter(Boolean).join(' · '))}" data-share-url="${escapeHtml(item.absolute_url)}" aria-label="${escapeHtml(`Поделиться событием: ${item.title}`)}"><svg class="icon icon--share" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M11.996 3.725A2.15 2.15 0 0 0 10 5.87l-.001 2.117-.02.005a9.904 9.904 0 0 0-7.827 10.721c.083.811 1.116 1.103 1.611.455l.187-.237a9.08 9.08 0 0 1 5.836-3.265l.213-.026.001 2.494a2.15 2.15 0 0 0 3.476 1.692l7.824-6.132a2.15 2.15 0 0 0 0-3.384l-7.824-6.132a2.15 2.15 0 0 0-1.326-.458zm.154 1.795a.35.35 0 0 1 .216.075l7.824 6.132a.35.35 0 0 1 0 .55l-7.824 6.133a.35.35 0 0 1-.566-.276l-.001-3.447a.9.9 0 0 0-.915-.9l-.233.004-.342.017a10.9 10.9 0 0 0-6.119 2.365l-.174.144.024-.135a8.1 8.1 0 0 1 6.968-6.537.9.9 0 0 0 .791-.893L11.8 5.87a.35.35 0 0 1 .35-.35"></path></svg><span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>
+              <button type="button" class="feedback-button feedback-button--like" data-feedback-action="like" data-event-id="${item.id}" data-event-title="${escapeHtml(item.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${item.title}. Сейчас ${likes}` : `Поставить лайк: ${item.title}`)}"><svg class="icon icon--heart" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3z"></path></svg><span class="feedback-count" data-feedback-count>${likeCount}</span></button>
+            </div>
+            <div class="event-card__body"><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(item.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div><a class="event-card__title" href="${escapeHtml(item.href)}" data-prefetch>${escapeHtml(item.title)}</a>${item.place ? `<span class="event-card__footer">${escapeHtml(item.place)}</span>` : ''}</div>
+          </article>`;
+        }
+
+        function visibleFeedCardCount(feed) {
+          return Array.from(feed.querySelectorAll(':scope > [data-event-card]')).filter((card) => !card.hidden).length;
+        }
+
+        function filterFeedByInterest(feed, map, anchorEventId) {
+          feed.querySelectorAll(':scope > [data-event-card]').forEach((card) => {
+            const eventId = String(card.dataset.eventId || '');
+            const current = eventState(map, eventId);
+            const isCurrentPagePlate = sessionPinnedNotInterested.has(eventId) || String(anchorEventId || '') === eventId;
+            card.hidden = Boolean(current.not_interested) && !isCurrentPagePlate;
+          });
+        }
+
+        const discoveryStores = new WeakMap();
+
+        async function ensureDiscoveryStore(feed) {
+          const existing = discoveryStores.get(feed);
+          if (existing) return existing;
+          const source = feed.dataset.discoverySrc;
+          const store = { events: [], cursor: 0, fetched: false, autoLoaded: false };
+          discoveryStores.set(feed, store);
+          if (!source) return store;
+          try {
+            const response = await fetch(source, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return store;
+            const payload = await response.json();
+            store.events = Array.isArray(payload.events) ? payload.events : [];
+            store.fetched = true;
+          } catch (_) {
+            store.fetched = false;
+          }
+          return store;
+        }
+
+        function appendDiscoveryEvents(feed, store, options = {}) {
+          const map = state();
+          const existingIds = new Set(Array.from(feed.querySelectorAll(':scope > [data-event-card]')).map((card) => String(card.dataset.eventId || '')));
+          const pageSize = Number(options.pageSize || 10);
+          let added = 0;
+          while (store.cursor < store.events.length && added < pageSize) {
+            const item = store.events[store.cursor];
+            store.cursor += 1;
+            if (!item || existingIds.has(String(item.id))) continue;
+            if (eventState(map, item.id).not_interested) continue;
+            feed.insertAdjacentHTML('beforeend', eventCardHtml(item));
+            existingIds.add(String(item.id));
+            added += 1;
+          }
+          applyFeedbackState({ skipDiscoveryHydration: true });
+          return added;
+        }
+
+        async function hydrateDiscoveryFeeds({ automatic = false } = {}) {
+          const feeds = Array.from(document.querySelectorAll('[data-personalized-feed]'));
+          for (const feed of feeds) {
+            const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
+            const store = await ensureDiscoveryStore(feed);
+            if (automatic && store.autoLoaded) continue;
+            if (automatic) store.autoLoaded = true;
+            const target = 10;
+            if (automatic && visibleFeedCardCount(feed) >= target) {
+              if (button && store.cursor < store.events.length) button.hidden = false;
+              continue;
+            }
+            appendDiscoveryEvents(feed, store, { pageSize: target });
+            if (button) button.hidden = store.cursor >= store.events.length;
+          }
+        }
+
+
         function applyFeedbackState(options = {}) {
           const map = state();
           const cards = document.querySelectorAll('[data-event-card]');
@@ -551,8 +649,12 @@ const safeDescription = description || 'Анонс события в Калин�
             });
           });
           document.querySelectorAll('[data-personalized-feed]').forEach((feed) => {
+            filterFeedByInterest(feed, map, options.anchorEventId);
             rerankFeed(feed, map, options.anchorEventId);
           });
+          if (!options.skipDiscoveryHydration) {
+            hydrateDiscoveryFeeds({ automatic: true });
+          }
           renderFeedbackReport();
         }
 
@@ -578,6 +680,11 @@ const safeDescription = description || 'Анонс события в Калин�
           } else if (button.dataset.feedbackAction === 'not_interested') {
             const notInterested = !current.not_interested;
             map[String(eventId)] = { ...current, liked: notInterested ? false : current.liked, not_interested: notInterested };
+            if (notInterested) {
+              sessionPinnedNotInterested.add(String(eventId));
+            } else {
+              sessionPinnedNotInterested.delete(String(eventId));
+            }
             appendLog({ event_id: Number(eventId), event_title: title, action: notInterested ? 'not_interested' : 'undo_not_interested' });
             hideLikeShareCallouts();
           }
@@ -692,6 +799,17 @@ const safeDescription = description || 'Анонс события в Калин�
         }, { passive: true });
         const idle = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
         idle(() => document.querySelectorAll('[data-personalized-feed] a[data-prefetch]').forEach((anchor) => prefetch(anchor.href)));
+
+        document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-discovery-load-more]');
+          if (!button) return;
+          event.preventDefault();
+          const feed = button.parentElement?.querySelector('[data-personalized-feed]');
+          if (!feed) return;
+          const store = await ensureDiscoveryStore(feed);
+          appendDiscoveryEvents(feed, store, { pageSize: 10 });
+          button.hidden = store.cursor >= store.events.length;
+        });
 
         const sticky = document.querySelector('[data-sticky-cta]');
         const marker = document.querySelector('[data-hide-sticky-after]');

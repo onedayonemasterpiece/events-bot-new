@@ -7,7 +7,7 @@ import EventCard from '../../components/EventCard.astro';
 import CalendarLink from '../../components/CalendarLink.astro';
 import Icon from '../../components/Icon.astro';
 import { buildBreadcrumbJsonLd, buildEventJsonLd, eventTitle } from '../../lib/seo';
-import { eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getRelatedEvents, isCalendarEligible, withBase } from '../../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, getPreloadedDiscoveryEvents, isCalendarEligible, withBase } from '../../lib/events';
 
 export function getStaticPaths() {
   return getEvents().map((event) => ({ params: { slug: event.slug } }));
@@ -17,18 +17,16 @@ const event = getEventBySlug(Astro.params.slug ?? '');
 if (!event) {
   return Astro.redirect(withBase('/__preview/'));
 }
-const similar = getRelatedEvents(event, 'similar');
-const explore = getRelatedEvents(event, 'explore');
-const discoveryFeed = [...similar, ...explore].filter(
-  (candidate, index, candidates) => candidates.findIndex((item) => item.id === candidate.id) === index,
-);
+const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
 const otherDates = getOtherDates(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
 const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
 const ctaHref = event.ticket.href;
 const ctaLabel = eventTicketActionLabel(event);
-const shareText = [event.display_date, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
+const dateLabel = displayDate(event);
+const dateTimeLabel = displayDateTime(event);
+const shareText = [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · ');
 const canAddToCalendar = isCalendarEligible(event);
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={event.image_url} structuredData={structuredData}>
@@ -55,7 +53,7 @@ const canAddToCalendar = isCalendarEligible(event);
             <EventHero event={event} />
             <p class="lead">{event.summary}</p>
             <div class="facts-quick facts-quick--compact" aria-label="Главные факты">
-              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Когда</strong><span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span></div></div>
+              <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Когда</strong><span>{dateTimeLabel}</span></div></div>
               <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Где</strong><span>{[event.venue_name, event.city].filter(Boolean).join(' · ') || 'уточняется'}</span></div></div>
             </div>
             <div class="source-links event-main-actions" aria-label="Быстрые действия">
@@ -97,10 +95,11 @@ const canAddToCalendar = isCalendarEligible(event);
       <section id="discovery-feed" class="section-card" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
           <h2>Смотрите дальше</h2>
-          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">Ещё события, которые можно быстро открыть, сохранить в календарь, если это короткое событие, или отправить друзьям.</p>
-          <div class="cards-grid cards-grid--immersive" data-personalized-feed>
+          <p class="muted-note" style="margin-top: -0.35rem; margin-bottom: 0.9rem;">В HTML сразу предзагружены до 10 событий. После запуска скрипта лента убирает явно неинтересное и один раз мягко догружает подходящие варианты из JSON; дальше — только по кнопке.</p>
+          <div class="cards-grid cards-grid--immersive" data-personalized-feed data-current-event-id={event.id} data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}>
             {discoveryFeed.map((candidate) => <EventCard event={candidate} />)}
           </div>
+          <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>
       </section>
     </div>
@@ -108,7 +107,7 @@ const canAddToCalendar = isCalendarEligible(event);
   {ctaHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">
-        <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span></div>
+        <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{dateTimeLabel}</span></div>
         <a class="cta-button" href={ctaHref} target={ctaHref.startsWith('http') ? '_blank' : undefined} rel={ctaHref.startsWith('http') ? 'noopener noreferrer nofollow' : undefined}>{ctaLabel}</a>
       </div>
     </div>

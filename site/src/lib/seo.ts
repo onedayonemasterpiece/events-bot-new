@@ -1,8 +1,8 @@
 import type { PreviewEvent } from './types';
-import { eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
 
 export function eventTitle(event: PreviewEvent): string {
-  const place = [event.display_date, event.venue_name || event.city].filter(Boolean).join(', ');
+  const place = [displayDate(event), event.venue_name || event.city].filter(Boolean).join(', ');
   return `${event.title} — ${place} | ${SITE_NAME}`;
 }
 

@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref, eventHref, eventTicketActionLabel, isCalendarEligible, isExternalHttpUrl } from '../lib/events';
+import { displayDateTime, eventCalendarHref, eventHref, eventTicketActionLabel, isCalendarEligible, isExternalHttpUrl } from '../lib/events';
 
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
@@ -12,6 +12,7 @@ const ctaHref = event.ticket.href;
 const ctaRel = isExternalHttpUrl(ctaHref) ? 'noopener noreferrer nofollow' : undefined;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const ctaLabel = eventTicketActionLabel(event);
+const dateTimeLabel = displayDateTime(event);
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__media--preserve' : 'listing-item__media--cover'].join(' ');
 ---
@@ -25,7 +26,7 @@ const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__m
   </a>
   <div class="listing-item__body">
     <div class="listing-item__meta">
-      <span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
+      <span>{dateTimeLabel}</span>
       <span>{event.ticket.price_label || event.status_label}</span>
     </div>
     <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>

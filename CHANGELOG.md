@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **Static site pages / discovery hydration and 4:5 media v15**: published `preview-20260627-event-pages-v15`; changed `visual_only` / no-meaningful-OCR media from vertical 3:4 to vertical 4:5 cover frames, reclassified event `4913` («Пионеры советской археологической науки…») as `visual_only`, omitted the current year in visible same-year dates, and added a static-seed discovery contract: up to 10 preloaded feed cards in HTML, local negative-interest filtering after JS activation, one automatic same-origin `/data/discovery/<event_id>.json` top-up, then explicit `Показать ещё`.
+
 - **Static site pages / production source-like counters**: added `reaction_counter_sync.py` plus `scripts/sync_reaction_counters_to_supabase.py` to aggregate raw Telegram/VK source likes/views from Fly SQLite into the separate personalization Supabase counter table without coefficients; backfilled Supabase from the 2026-06-27 production snapshot (`2863` events, `31823` raw source likes, `1544342` views) and wired TG/VK metric upserts to queue best-effort source-counter refreshes when personalization Supabase secrets are configured.
 
 - **Static site pages / visual-only media and feed-card fit v14**: published `preview-20260627-event-pages-v14`; corrected selected no-meaningful-OCR preview images (`4512`, `3730`, `6322`) to `visual_only` so they crop/fill strict vertical 3:4 frames, kept real OCR posters in natural-ratio preserve mode, and removed the calendar icon from feed cards while keeping `.ics` calendar actions on event detail pages.
