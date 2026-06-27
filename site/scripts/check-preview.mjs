@@ -65,6 +65,20 @@ if (!controlHtml.includes('ke_personalization_profile') || controlHtml.includes(
 if (!controlHtml.includes('isCompatibleProfile') || !controlHtml.includes('rankEventDetailRelated') || !controlHtml.includes('served_list_id') || !controlHtml.includes('createServedListSummary')) throw new Error('Control page misses event_detail_related local-rerank/served-list contract');
 if (!controlHtml.includes('event_detail_related') || !controlHtml.includes('local_related_rerank_v1_fallback')) throw new Error('Control page misses event_detail_related surface/algorithm markers');
 if (!controlHtml.includes('/favicon.svg')) throw new Error('Control page misses favicon link');
+const footerSocialUrls = [
+  'https://t.me/kenigevents',
+  'https://t.me/kldevents',
+  'https://vk.com/kenigeventsofficial',
+  'https://vk.com/klgdevents',
+  'https://vk.ru/im/channels/-239844596',
+  'https://max.ru/join/do_4eLW85-yK_dXcc6f2cmKp9utJuFl_hCo0cxnJ1QA',
+];
+for (const url of footerSocialUrls) {
+  if (!controlHtml.includes(url)) throw new Error(`Footer social URL missing: ${url}`);
+}
+for (const cls of ['site-footer__social', 'social-icon--telegram', 'social-icon--vk', 'social-icon--max']) {
+  if (!controlHtml.includes(cls)) throw new Error(`Footer social icon/class missing: ${cls}`);
+}
 if (!controlHtml.includes('data-prefetch')) throw new Error('Control page misses fast-navigation prefetch markers');
 if (!controlHtml.includes('data-sticky-cta') || !controlHtml.includes('data-hide-sticky-after')) throw new Error('Control page misses sticky CTA feed-hide markers');
 if (!controlHtml.includes('Смотрите дальше')) throw new Error('Control page misses single discovery feed heading');

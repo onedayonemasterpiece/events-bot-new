@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Static site / Telegraph social footer v17**: added the shared editorial social footer to the Astro site with Telegram/VK/Max SVG icons and crawlable links (`@kenigevents`, `@kldevents`, `kenigeventsofficial`, `klgdevents`, VK channel, Max); added the Max link to the plain Telegraph footer and footer idempotency tests; preview target is `preview-20260627-event-pages-v17`.
 - **Static site pages / personalization contract v16**: published `preview-20260627-event-pages-v16`; changed discovery JSON from display-only `events[]` to the documented `event_detail_related` manifest with `related_static[]`, moved client state to DB-compatible `ke_personalization_profile` UUID ids, added consent-gated local `rankEventDetailRelated` filtering/rerank/top-up, attached `served_list_id` / `served_list_hash` to local strong-action logs, and removed fake share-count fallback.
 - **Static site pages / discovery hydration and 4:5 media v15**: published `preview-20260627-event-pages-v15`; changed `visual_only` / no-meaningful-OCR media from vertical 3:4 to vertical 4:5 cover frames, reclassified event `4913` («Пионеры советской археологической науки…») as `visual_only`, omitted the current year in visible same-year dates, and added a static-seed discovery contract: up to 10 preloaded feed cards in HTML, local negative-interest filtering after JS activation, one automatic same-origin `/data/discovery/<event_id>.json` top-up, then explicit `Показать ещё`.
 

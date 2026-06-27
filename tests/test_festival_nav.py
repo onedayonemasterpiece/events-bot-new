@@ -19,7 +19,7 @@ def test_apply_festival_nav_insert_when_missing():
     assert '<!-- FEST_NAV_END -->' not in updated
     assert '<!--FEST_NAV_START-->' not in updated
     assert '<!--FEST_NAV_END-->' not in updated
-    assert '<!--NAV_HASH:' in updated
+    assert '#near-festivals:hash:' in updated
     assert updated.endswith(FOOTER_LINK_HTML)
 
 
@@ -112,4 +112,43 @@ def test_apply_footer_link_idempotent():
     second = main.apply_footer_link(first)
     assert first == second
     assert second.count('https://t.me/kenigevents') == 1
+    assert second.count('https://t.me/kldevents') == 1
+    assert second.count('https://vk.com/kenigeventsofficial') == 1
+    assert second.count('https://vk.com/klgdevents') == 1
+    assert second.count('https://vk.ru/im/channels/-239844596') == 1
+    assert second.count(main.MAX_SOCIAL_URL) == 1
+    assert '<p><b>Полюбить Калининград</b></p>' in second
+    assert '<p>Telegram:' in second
+    assert '<p>ВК:' in second
+    assert '<p>Max:' in second
 
+
+def test_apply_footer_link_replaces_legacy_single_link_footer():
+    html = (
+        '<p>start</p>'
+        '<p>&#8203;</p>'
+        '<p><a href="https://t.me/kenigevents">Полюбить Калининград Анонсы</a></p>'
+        '<p>&#8203;</p>'
+    )
+    updated = main.apply_footer_link(html)
+    assert updated.count('https://t.me/kenigevents') == 1
+    assert 'Полюбить Калининград Анонсы</a></p>' not in updated
+    assert updated.endswith(FOOTER_LINK_HTML)
+
+
+def test_apply_footer_link_replaces_social_footer_without_max():
+    html = (
+        '<p>start</p>'
+        '<p>&#8203;</p>'
+        '<p><b>Полюбить Калининград</b></p>'
+        '<p>Telegram: <a href="https://t.me/kenigevents">Анонсы</a> · '
+        '<a href="https://t.me/kldevents">Афиша</a></p>'
+        '<p>ВК: <a href="https://vk.com/kenigeventsofficial">Анонсы</a> · '
+        '<a href="https://vk.com/klgdevents">Афиша</a> · '
+        '<a href="https://vk.ru/im/channels/-239844596">канал Афиши</a></p>'
+        '<p>&#8203;</p>'
+    )
+    updated = main.apply_footer_link(html)
+    assert updated.count(main.MAX_SOCIAL_URL) == 1
+    assert updated.count('<p><b>Полюбить Калининград</b></p>') == 1
+    assert updated.endswith(FOOTER_LINK_HTML)
