@@ -225,6 +225,10 @@ features:
       - video_announce/poller.py
       - main.py
       - main_part2.py
+  subscriber_acquisition:
+    status: draft
+    docs: docs/features/subscriber-acquisition/README.md
+    requirements: docs/features/subscriber-acquisition/requirements.md
   afishaengagement:
     status: debug_shadow
     docs: docs/features/afishaengagement/README.md
