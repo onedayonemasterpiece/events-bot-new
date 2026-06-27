@@ -36,6 +36,7 @@ export interface PreviewEvent {
   telegraph_url: string | null;
   image_url: string | null;
   image_alt: string;
+  image_text_mode: 'ocr_text' | 'visual_only' | 'unknown';
   summary: string;
   meta_description: string;
   description_html: string;

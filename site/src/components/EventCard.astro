@@ -10,11 +10,12 @@ const calendarHref = eventCalendarHref(event);
 const metaLabel = [label, event.display_date + (event.display_time ? ` · ${event.display_time}` : '')].filter(Boolean).join(' · ');
 const statusLabel = event.ticket.price_label || event.status_label;
 const likesCount = event.likes_count || 0;
+const mediaClass = ['event-card__media', event.image_text_mode === 'visual_only' ? 'event-card__media--cover' : 'event-card__media--preserve'].join(' ');
 ---
 <article class="event-card" data-event-card data-event-id={event.id} data-event-title={event.title} aria-label={`${event.title}: ${event.display_date}`}>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
-      <img class="event-card__media" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="480" height="640" loading="lazy" decoding="async" />
+      <img class={mediaClass} src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} width="480" height="640" loading="lazy" decoding="async" />
     ) : (
       <span class="event-card__media event-card__fallback" aria-hidden="true">
         <span>{event.display_date}</span>

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Static site pages / OCR-safe poster media**: published `preview-20260627-event-pages-v7` with `image_text_mode` metadata and card/list media rules that preserve full posters when OCR/text is present or unknown, while allowing verified visual-only images to fill the vertical 3:4 frame.
 - **Static site pages / explicit feedback controls**: published `preview-20260627-event-pages-v6` with right-thumb like buttons and visible aggregate counts, unlike/not-interested local feedback, compact local raw feedback report, icon calendar links served as inline `.ics`, clearer source-only CTA copy, favicon, duplicate share UI removal, fast same-origin prefetch markers, and sticky CTA hiding when the discovery feed is reached.
 - **Static site pages / neutral discovery feed**: published `preview-20260627-event-pages-v5` so anti-bubble/diversity is treated as an internal ranking/composition constraint inside `Смотрите дальше`, not as a visible `Попробовать другое`/`Открыть новое` user-facing block.
 - **Static site pages / event page UX rollback-forward**: published `preview-20260627-event-pages-v4` to correct the v3 event-detail regressions: the full description is visible again instead of hidden in `<details>`, split horizontal related/explore rails were replaced by one mobile-first vertical `Смотрите дальше` discovery feed with desktop grid behavior, and the `Поделиться` button is always visible with native Web Share API first plus copy-link fallback when the browser/webview does not expose system share.

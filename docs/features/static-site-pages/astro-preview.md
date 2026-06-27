@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v6`
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v6/__preview/>
+> **Build ID:** `preview-20260627-event-pages-v7`
+> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v7/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry, no client recommendation API and no LLM fragments in rendered HTML.
 
@@ -10,14 +10,14 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v6/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v6/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v6/vyhodnye/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v6/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v6/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v6/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v6/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v6/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v7/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v7/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v7/vyhodnye/>
+- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v7/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v7/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v7/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v7/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v7/__preview/>
 
 ## Code layout
 
@@ -79,7 +79,7 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v6/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260627-event-pages-v7/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD only from visible facts.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
 
@@ -88,26 +88,27 @@ Disallow: /
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v6 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v6 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v6 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v7 npm run build:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v7 npm run check:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v7 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
 
 ## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v6` makes the event page more mobile/feed-oriented and feedback-aware:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v7` makes the event page more mobile/feed-oriented and feedback-aware:
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
 - the hero poster uses `object-fit: contain` so the poster is not cropped;
+- discovery/listing media follows the same OCR-safe rule: `image_text_mode=ocr_text|unknown` uses `object-fit: contain`; only `image_text_mode=visual_only` may use cover/crop inside the 3:4 card frame;
 - duplicated facts/source/debug notes were removed from the first screen;
 - the long description is visible HTML, followed by facts and sources;
 - native mobile share is attempted by one visible `Поделиться` button; duplicate Telegram/VK/WhatsApp share pills were removed, and fallback copies the URL when system share is unavailable.
 - a favicon is emitted from the selected SVG calendar/heart motif so browser/share surfaces have a site icon.
 
 
-After direct product review, `preview-20260627-event-pages-v6` rolls back the UX regressions introduced by the split recommendation rails:
+After direct product review, `preview-20260627-event-pages-v7` rolls back the UX regressions introduced by the split recommendation rails:
 
 - event description is visible HTML again, not hidden behind a collapsed `<details>` block;
 - event continuation is one vertical mobile-first discovery feed (`Смотрите дальше`), not two horizontal scroll blocks and not a visible “try something else” module;
@@ -118,8 +119,9 @@ After direct product review, `preview-20260627-event-pages-v6` rolls back the UX
 - “Не интересно” is the explicit negative signal; the preview dims and demotes the card instead of inventing a visible anti-bubble block.
 - the bottom sticky CTA is hidden after the discovery feed enters the viewport.
 - same-origin event links have lightweight prefetch markers so static page transitions can warm the next HTML document.
+- cards retain a vertical 3:4 media frame; text-heavy posters are fitted inside it without crop, while verified visual-only images may fill the frame.
 
-After consultant review, `preview-20260627-event-pages-v6` additionally hardens the first discovery layer:
+After consultant review, `preview-20260627-event-pages-v7` additionally hardens the first discovery layer:
 
 - header links now open real static `/segodnya/` and `/vyhodnye/` pages, not QA anchors;
 - related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot, direct page link and icon-led `.ics` calendar action;

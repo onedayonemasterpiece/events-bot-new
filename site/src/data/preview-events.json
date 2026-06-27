@@ -55,7 +55,8 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-06-10 17:08:21.268304",
-      "likes_count": 42
+      "likes_count": 42,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 5370,
@@ -102,7 +103,8 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-27 09:00:22.114199",
-      "likes_count": 31
+      "likes_count": 31,
+      "image_text_mode": "visual_only"
     },
     {
       "id": 6093,
@@ -153,7 +155,8 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-17 00:50:53.566675",
-      "likes_count": 7
+      "likes_count": 7,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 6322,
@@ -206,7 +209,8 @@
         "weak_address"
       ],
       "updated_at": "2026-06-23 14:27:14.119278",
-      "likes_count": 15
+      "likes_count": 15,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 4913,
@@ -257,7 +261,8 @@
         "no_exact_start_time"
       ],
       "updated_at": "2026-05-14 00:07:41.203895",
-      "likes_count": 22
+      "likes_count": 22,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 4512,
@@ -308,7 +313,8 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-02 23:51:01.674869",
-      "likes_count": 18
+      "likes_count": 18,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 5690,
@@ -358,7 +364,8 @@
         "no_local_image"
       ],
       "updated_at": "2026-06-04 23:33:21.476164",
-      "likes_count": 11
+      "likes_count": 11,
+      "image_text_mode": "unknown"
     },
     {
       "id": 6437,
@@ -411,7 +418,8 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-26 00:03:11.187637",
-      "likes_count": 5
+      "likes_count": 5,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 6438,
@@ -464,7 +472,8 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-26 00:03:35.777877",
-      "likes_count": 4
+      "likes_count": 4,
+      "image_text_mode": "ocr_text"
     },
     {
       "id": 3730,
@@ -512,7 +521,8 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-04-08 12:54:17.921188",
-      "likes_count": 29
+      "likes_count": 29,
+      "image_text_mode": "ocr_text"
     }
   ]
 }
