@@ -22,6 +22,8 @@
   CTA, and the VK Favorites draft `msgid=287` was edited in place.
 - Added the Max announcement link to the plain Telegraph editorial footer and kept footer replacement idempotent for already-published social footers without Max.
 - Fixed Telegraph social-footer replacement to tolerate Telegraph-added `target="_blank"` anchor attributes, preventing duplicate footer blocks during the Max backfill.
+- Fixed Telegraph page HTML reads to use python-telegraph `content` when `return_html=True`, preventing maintenance backfills from treating existing pages as empty.
+- **Incident / Telegraph footer backfill content loss (INC-2026-06-27)**: formalized the production Telegraph content-loss incident from the Max backfill and made it an active regression contract for all future Telegraph bulk maintenance.
 - Replaced the single Telegram-only Telegraph footer link with a compact three-line `Полюбить Калининград` social footer linking both Telegram channels, both VK communities, and the VK Afisha channel.
 - **CrumpleVideo missing video output (INC-2026-06-26)**: hardened the Kaggle notebook against missing static asset mount paths by searching all `/kaggle/input/*` roots, added required intro fonts to the per-session dataset fallback, and made the notebook fail hard when the final mp4 is not produced instead of reporting a green `render_done`/`report_written` status.
 - **CrumpleVideo GPU quota guard (INC-2026-06-26)**: CrumpleVideo no longer silently retries Kaggle launches without GPU after a weekly GPU quota error. The launch now fails fast instead of starting an hours-long Blender/Cycles CPU render that blocks the production video lane and delays Telegram story publication.

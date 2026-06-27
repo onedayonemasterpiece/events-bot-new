@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-06-27-telegraph-footer-backfill-content-loss.md`
+  - Scope: Telegraph event-page bulk maintenance/backfills, python-telegraph `get_page(..., return_html=True)` response handling, and social footer rollout.
+  - Must not regress: existing Telegraph page body must never be treated as empty because HTML is in `content` instead of `content_html`; bulk footer/nav/image fixes require a canary plus public content-preservation smoke before editing all active/future pages.
 - `INC-2026-05-30-active-duplicate-events-recall-gate.md`
   - Scope: Smart Update duplicate recall when exact location/time gates miss same real events; widened candidate recall, LLM dedup adjudication, and safety rails for multi-session/source-time conflicts.
   - Must not regress: after ordinary match/create, rescue, and pre-create probes fail, a same-date/date-adjacent plausible duplicate must still be visible to an LLM adjudicator; high-confidence same-event decisions may merge only when date/venue/time/source-session safety checks do not conflict; explicit same-source multi-session schedules must remain separate.

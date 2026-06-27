@@ -2633,6 +2633,30 @@ async def telegraph_call(func, /, *args, retries: int = 3, **kwargs):
         raise TelegraphException("Telegraph request failed") from last_exc
 
 
+def telegraph_page_html(page: dict | None) -> str:
+    """Return Telegraph page body HTML from python-telegraph responses.
+
+    python-telegraph stores HTML in `content` when get_page(..., return_html=True)
+    is used. Older/local probes sometimes expected `content_html`; support both so
+    maintenance scripts and image/nav fixups never treat an existing page as empty.
+    """
+    if not isinstance(page, dict):
+        return ""
+    value = page.get("content")
+    if value is None:
+        value = page.get("content_html")
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    try:
+        from telegraph.utils import nodes_to_html
+
+        return nodes_to_html(value)
+    except Exception:
+        return str(value or "")
+
+
 async def telegraph_create_page(
     tg: Telegraph, *args, caller: str = "event_pipeline", eid: int | None = None, **kwargs
 ):
@@ -7153,7 +7177,7 @@ async def sync_festivals_index_page(db: Database) -> None:
             url = normalize_telegraph_url(data.get("url"))
             path = data.get("path")
         page = await telegraph_call(tg.get_page, path, return_html=True)
-        page_html = page.get("content_html", "")
+        page_html = telegraph_page_html(page)
         page_html, img_ok, img_fix = _ensure_img_links(page_html, link_map)
         if img_fix:
             page_html = sanitize_telegraph_html(page_html)
@@ -7350,7 +7374,7 @@ async def rebuild_festivals_index_if_needed(
             status = "built"
 
         page = await telegraph_call(telegraph.get_page, path, return_html=True)
-        page_html = page.get("content_html", "")
+        page_html = telegraph_page_html(page)
         page_html, img_ok, img_fix = _ensure_img_links(page_html, link_map)
         if img_fix:
             page_html = sanitize_telegraph_html(page_html)
@@ -19298,12 +19322,8 @@ async def patch_month_page_for_date(
             tg_call(telegraph.get_page, page.path, return_html=True),
             tg_call(telegraph.get_page, page.path2, return_html=True),
         )
-        html1 = unescape_html_comments(
-            data1.get("content") or data1.get("content_html") or ""
-        )
-        html2 = unescape_html_comments(
-            data2.get("content") or data2.get("content_html") or ""
-        )
+        html1 = unescape_html_comments(telegraph_page_html(data1))
+        html2 = unescape_html_comments(telegraph_page_html(data2))
 
         from telegraph.utils import html_to_nodes
 
@@ -20900,7 +20920,7 @@ async def update_festival_tg_nav(event_id: int, db: Database, bot: Bot | None) -
         path = fest.telegraph_path
         try:
             page = await telegraph_call(tg.get_page, path, return_html=True)
-            html_content = page.get("content") or page.get("content_html") or ""
+            html_content = telegraph_page_html(page)
             title = page.get("title") or fest.full_name or fest.name
             m = re.search(r"<!--NAV_HASH:([0-9a-f]+)-->", html_content)
             old_hash = m.group(1) if m else ""
@@ -21322,7 +21342,7 @@ async def check_month_page_markers(tg, path: str) -> None:
     except Exception as e:
         logging.error("check_month_page_markers failed: %s", e)
         return
-    html = page.get("content") or page.get("content_html") or ""
+    html = telegraph_page_html(page)
     html = unescape_html_comments(html)
     if "<!--DAY" in html:
         logging.info("month_rebuild_markers_present")
