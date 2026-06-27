@@ -1,0 +1,11 @@
+---
+import type { PreviewEvent } from '../lib/types';
+import { eventHref } from '../lib/events';
+interface Props { event: PreviewEvent; label?: string }
+const { event, label } = Astro.props;
+---
+<a class="event-card" href={eventHref(event)}>
+  <span class="event-card__meta">{label || event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
+  <span class="event-card__title">{event.title}</span>
+  <span class="event-card__footer">{[event.city, event.venue_name].filter(Boolean).join(' · ')}</span>
+</a>

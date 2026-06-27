@@ -1,0 +1,20 @@
+{
+  "name": "kenigevents-static-site",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "build": "astro build",
+    "build:preview": "node scripts/build-preview.mjs",
+    "check:preview": "node scripts/check-preview.mjs",
+    "deploy:preview": "node scripts/deploy-preview-yc.mjs",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^6.0.5"
+  }
+}

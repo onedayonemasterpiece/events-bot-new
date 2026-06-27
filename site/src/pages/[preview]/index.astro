@@ -1,0 +1,63 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventCard from '../../components/EventCard.astro';
+import { absoluteUrl, getEvents, getPreviewBuild, PREVIEW_BUILD_ID, SITE_NAME, withBase } from '../../lib/events';
+
+export function getStaticPaths() {
+  return [{ params: { preview: '__preview' } }];
+}
+
+const events = getEvents();
+const build = getPreviewBuild();
+const canonicalUrl = absoluteUrl('/__preview/');
+const title = `Preview статических страниц событий | ${SITE_NAME}`;
+const description = 'Открываемый preview Astro SSG страниц событий для kenigevents.ru.';
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell">
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Astro SSG preview</p>
+          <h1 style="max-width: 13ch;">Страницы событий</h1>
+          <p class="lead">Публично открываемая preview-сборка под prefix <code>{PREVIEW_BUILD_ID}</code>. Все страницы закрыты от индексации и используют preview canonical.</p>
+          <div class="facts-quick" id="today">
+            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Источник</strong><span>{build.source}</span></div></div>
+            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Сгенерировано</strong><span>{build.generated_at}</span></div></div>
+            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Текущая дата данных</strong><span>{build.current_date}</span></div></div>
+          </div>
+          <div class="source-links">
+            <a href={withBase('/sitemap.xml')}>sitemap.xml</a>
+            <a href={withBase('/robots.txt')}>robots.txt</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;" id="weekend">
+        <div class="section-card__inner">
+          <h2>Тестовые страницы</h2>
+          <div class="cards-grid">
+            {events.map((event) => <EventCard event={event} />)}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Покрытые состояния</h2>
+          <ul class="prose">
+            <li>платное событие с ticket-link: event 5878 «Песни СССР»;</li>
+            <li>бесплатное / регистрационное событие;</li>
+            <li>phone-only CTA;</li>
+            <li>source-only CTA без прямого ticket-link;</li>
+            <li>длинный H1;</li>
+            <li>нет локального изображения — hero fallback;</li>
+            <li>слабый адрес — карта не ломает страницу;</li>
+            <li>«Другие даты» для пары 6437/6438;</li>
+            <li>статические «Похожие» и «Другие жанры рядом» без API.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

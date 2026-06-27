@@ -1,0 +1,53 @@
+---
+import CalendarLink from './CalendarLink.astro';
+import type { PreviewEvent } from '../lib/types';
+import { eventAbsoluteUrl, isExternalHttpUrl, isTelephoneUrl } from '../lib/events';
+interface Props { event: PreviewEvent }
+const { event } = Astro.props;
+const href = event.ticket.href;
+const external = isExternalHttpUrl(href);
+const telephone = isTelephoneUrl(href);
+const absolute = eventAbsoluteUrl(event);
+const tgShare = `https://t.me/share/url?url=${encodeURIComponent(absolute)}&text=${encodeURIComponent(event.title)}`;
+const vkShare = `https://vk.com/share.php?url=${encodeURIComponent(absolute)}`;
+const whatsappShare = `https://wa.me/?text=${encodeURIComponent(`${event.title} ${absolute}`)}`;
+const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
+---
+<aside class="section-card cta-panel" aria-label="Билеты и действия">
+  <div class="cta-panel__top">
+    <div>
+      <p class="eyebrow">Когда</p>
+      <div class="cta-panel__date">{event.display_date}</div>
+      {event.display_time && <div class="muted-note">{event.display_time} · {event.timezone}</div>}
+    </div>
+    <div>
+      <p class="eyebrow">Где</p>
+      <strong>{event.venue_name || event.city || 'Место уточняется'}</strong>
+      {(event.address || event.city) && <div class="muted-note">{[event.address, event.city].filter(Boolean).join(', ')}</div>}
+      {event.map_query && <a class="muted-note" href={`https://yandex.ru/maps/?text=${encodeURIComponent(event.map_query)}`} rel="noopener noreferrer nofollow" target="_blank">Открыть на карте</a>}
+    </div>
+    <div>
+      <p class="eyebrow">Статус</p>
+      <strong>{event.status_label}</strong>
+      {event.ticket.note && <p class="muted-note">{event.ticket.note}</p>}
+    </div>
+    <div class="action-grid">
+      {href ? (
+        <a class="cta-button" href={href} target={external ? '_blank' : undefined} rel={ctaRel}>{event.ticket.label}</a>
+      ) : (
+        <span class="cta-button" aria-disabled="true">{event.ticket.label}</span>
+      )}
+      <CalendarLink event={event} />
+    </div>
+    {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}
+    <div>
+      <p class="eyebrow">Поделиться</p>
+      <ul class="share-list" aria-label="Поделиться событием">
+        <li><a href={tgShare} target="_blank" rel="noopener noreferrer nofollow">Telegram</a></li>
+        <li><a href={vkShare} target="_blank" rel="noopener noreferrer nofollow">VK</a></li>
+        <li><a href={whatsappShare} target="_blank" rel="noopener noreferrer nofollow">WhatsApp</a></li>
+      </ul>
+      <p class="muted-note">Ссылки работают без JavaScript; на телефоне откроется выбранное приложение, если оно установлено.</p>
+    </div>
+  </div>
+</aside>

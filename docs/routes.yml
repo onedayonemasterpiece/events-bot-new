@@ -194,7 +194,7 @@ features:
       - main.py
       - main_part2.py
   static_site_pages:
-    status: design
+    status: preview
     docs: docs/features/static-site-pages/README.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
@@ -207,11 +207,31 @@ features:
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
     interface_references: docs/features/static-site-pages/interface-references.md
+    astro_preview: docs/features/static-site-pages/astro-preview.md
     target_domain: https://kenigevents.ru/
     target_bucket: kenigevents.ru
     target_website_endpoint: http://kenigevents.ru.website.yandexcloud.net/
     target_secret_prefix: KENIGEVENTS_SITE_
-    entrypoints: []
+    preview_url: https://kenigevents.ru/preview-20260627-event-pages-v1/__preview/
+    entrypoints:
+      - site/package.json
+      - site/astro.config.mjs
+      - site/src/pages/[preview]/index.astro
+      - site/src/pages/sobytiya/[slug].astro
+      - site/src/pages/sobytiya/[slug]/event.ics.ts
+      - site/src/pages/sitemap.xml.ts
+      - site/src/pages/robots.txt.ts
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/EventHero.astro
+      - site/src/components/EventCtaPanel.astro
+      - site/src/components/EventFacts.astro
+      - site/src/components/EventCard.astro
+      - site/src/components/CalendarLink.astro
+      - site/src/data/preview-events.json
+      - site/src/data/preview-related.json
+      - site/scripts/build-preview.mjs
+      - site/scripts/check-preview.mjs
+      - site/scripts/deploy-preview-yc.mjs
   unsigned_personalization:
     status: design
     docs: docs/features/unsigned-personalization/README.md

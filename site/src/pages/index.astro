@@ -1,0 +1,19 @@
+---
+import EventLayout from '../layouts/EventLayout.astro';
+import { absoluteUrl, withBase, SITE_NAME } from '../lib/events';
+const canonicalUrl = absoluteUrl('/');
+---
+<EventLayout title={`Preview | ${SITE_NAME}`} description="Preview entrypoint" canonicalUrl={canonicalUrl}>
+  <main id="main">
+    <div class="page-shell">
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Preview</p>
+          <h1>Полюбить Калининград Анонсы</h1>
+          <p class="lead">Откройте индекс preview-сборки.</p>
+          <p><a class="cta-button" href={withBase('/__preview/')}>Перейти к preview</a></p>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>

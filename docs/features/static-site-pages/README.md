@@ -1,14 +1,25 @@
 # Static Site Event Pages
 
-> **Status:** product/system design, not implemented  
+> **Status:** Astro SSG preview implemented; production rollout pending  
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Out of scope for MVP:** экскурсии как отдельный домен, авторизация, перенос core event DB в Supabase, полная миграция всех Telegraph surfaces.
 
 ## Implementation status
 
-В `events-bot-new` пока **нет Astro-сборки статических страниц**: в репозитории отсутствуют `astro.config.*` и `site/package.json` для `kenigevents.ru`; есть только standalone demo персонализации в `static_site/personalization/`.
+В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
 
-Следующий production-oriented шаг — не одноразовая “тестовая HTML-сборка”, а **Astro SSG vertical slice** по паттерну соседнего `kgd80/site`: export production-like events → `getStaticPaths()` → `/sobytiya/<stable-slug>/index.html` → sitemap/robots/JSON-LD/assets → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`.
+Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: committed production-like fixture → `getStaticPaths()` → `/sobytiya/<stable-slug>/index.html` → `event.ics` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Следующий шаг — заменить fixture на регулярный export из Fly SQLite/static page manifest и включить production canonical после canary-gate.
+
+## Текущий публичный preview
+
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v1/__preview/>
+- Control event `5878`: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v1/sitemap.xml>
+- Robots: <https://kenigevents.ru/preview-20260627-event-pages-v1/robots.txt>
+- Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v1/__preview/>
+
+Build/runbook: `docs/features/static-site-pages/astro-preview.md`.
 
 ## Цель продукта
 
@@ -32,6 +43,7 @@
 
 ## Связанные документы
 
+- Astro SSG preview runbook and public URLs: `docs/features/static-site-pages/astro-preview.md`.
 - Исторический backlog/research: `docs/backlog/features/static-event-pages/README.md`.
 - Anonymous personalization: `docs/features/unsigned-personalization/README.md`.
 - MVP-0 related recommendations surface: `docs/features/unsigned-personalization/event-detail-related.md`.

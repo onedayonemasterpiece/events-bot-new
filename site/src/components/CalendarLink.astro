@@ -1,0 +1,7 @@
+---
+import type { PreviewEvent } from '../lib/types';
+import { eventCalendarHref } from '../lib/events';
+interface Props { event: PreviewEvent; className?: string }
+const { event, className = 'secondary-button' } = Astro.props;
+---
+<a class={className} href={eventCalendarHref(event)} download={`kenigevents-${event.slug}.ics`} type="text/calendar">Добавить в календарь</a>

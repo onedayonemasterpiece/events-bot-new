@@ -1,9 +1,21 @@
 # Event Page Merged Skeleton — «Полюбить Калининград Анонсы»
 
 > **Status:** implementation target for the first static event-page vertical slice after Variant A/B comparison, Gemini comparison and external MVP review.
-> **Implementation status in `events-bot-new`:** **not implemented yet**. There is no Astro project/config in this repo at the time of this document; only docs and a standalone personalization demo exist. The first build should be an **Astro SSG implementation**, based on the proven neighboring `kgd80/site` pattern, not a one-off test HTML generator.
+> **Implementation status in `events-bot-new`:** first **Astro SSG preview vertical slice is implemented** under `site/` and published at `https://kenigevents.ru/preview-20260627-event-pages-v1/__preview/`. Production rollout is still pending: the current build uses a compact committed fixture from real production rows, preview `noindex`, and preview canonical URLs.
 > **Source reviews:** [Variant A product/design spec](event-page-product-design.md), [Variant B Opus UI/UX variant](opus-event-page-ui-ux-2026-06-27.md), [Gemini comparison review](gemini-event-page-comparison-2026-06-27.md), [consultant MVP review](consultant-event-page-mvp-review-2026-06-27.md).
 > **Control event:** production event `5878` — «Песни СССР», 2026-07-11 21:30, Янтарь-холл, Светлогорск.
+
+## 0. Implemented preview artifact
+
+Current public preview, built and deployed 2026-06-27:
+
+- index: <https://kenigevents.ru/preview-20260627-event-pages-v1/__preview/>
+- control event: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- control ICS: <https://kenigevents.ru/preview-20260627-event-pages-v1/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v1/sitemap.xml>
+- robots: <https://kenigevents.ru/preview-20260627-event-pages-v1/robots.txt>
+
+Runbook/code map: [Astro SSG preview](astro-preview.md).
 
 ## 1. Platform decision
 

@@ -1,0 +1,14 @@
+---
+import type { PreviewEvent } from '../lib/types';
+interface Props { event: PreviewEvent }
+const { event } = Astro.props;
+---
+<div class="hero-media">
+  {event.image_url ? (
+    <img src={event.image_url} alt={event.image_alt} width="1200" height="675" loading="eager" decoding="async" />
+  ) : (
+    <div class="hero-fallback" role="img" aria-label={`Обложка без изображения: ${event.title}`}>
+      <strong>{event.title}</strong>
+    </div>
+  )}
+</div>

@@ -77,3 +77,8 @@ test_parser_output/
 output/
 frames/
 render/
+
+# Static site local build outputs
+site/node_modules/
+site/dist/
+site/.astro/
