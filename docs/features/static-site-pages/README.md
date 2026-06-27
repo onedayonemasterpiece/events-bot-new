@@ -40,6 +40,7 @@
 - Consultant comparison brief for Variant A vs Variant B: `docs/features/static-site-pages/event-page-ui-ux-comparison-brief.md`.
 - Gemini comparison review supplied by the user: `docs/features/static-site-pages/gemini-event-page-comparison-2026-06-27.md`.
 - External MVP review after the first merged skeleton: `docs/features/static-site-pages/consultant-event-page-mvp-review-2026-06-27.md`.
+- Traceability matrix showing how the consultant review was applied: `docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md`.
 - Merged implementation skeleton for the first page build: `docs/features/static-site-pages/event-page-merged-skeleton.md`.
 - Interface reference board for event detail and continuation blocks: `docs/features/static-site-pages/interface-references.md`.
 - Bot/automation contract for personalization-safe static pages: `docs/features/unsigned-personalization/bots-and-automation.md`.
