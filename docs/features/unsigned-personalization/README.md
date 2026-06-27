@@ -28,6 +28,7 @@ Thin-runtime architectural gate / production integration: `docs/features/unsigne
 - MVP-0 probe report: `docs/features/unsigned-personalization/event-detail-related-probe.md`;
 - generated static manifest example: `docs/features/unsigned-personalization/samples/event-detail-related-manifest.sample.json`;
 - probe script: `scripts/probe_event_detail_related.py`;
+- critical self + Gemini write-path review: `docs/features/unsigned-personalization/gemini-review-2026-06-27.md`;
 - Gherkin сценарии: `tests/e2e/features/static_site_personalization.feature`;
 - reference client module/demo: `static_site/personalization/personalization.js` and `static_site/personalization/demo.html`;
 - Playwright contract test: `tests/playwright/static_personalization_contract.spec.ts`;

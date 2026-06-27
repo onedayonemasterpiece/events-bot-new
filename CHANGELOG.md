@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - **Personalization / gated Supabase RPC ingest**: refined the thin-runtime write-path policy so production still defaults to `same_origin_endpoint_v1`, but `supabase_rpc_ingest_v1` is now an allowed lightweight mode when implemented as a dedicated append-only RPC with closed table grants, explicit function execute grants, fixed `search_path` for `SECURITY DEFINER`, compact typed payloads, dedupe/quota/storage guards and no raw JSON persistence; direct browser table insert/update/select remains forbidden.
+- **Personalization / write-path critical review**: added a self-review plus transparent Gemini review artifact for commit `634a896c`, keeping the status at engineering-spike only and recording the next P0 gates: first canary through `same_origin_endpoint_v1`, `supabase_rpc_ingest_v1` as a gated spike, SQL grants/RLS tests, storage/quota/kill-switch guards, surface cap `24` for `event_detail_related`, bot fail-closed behavior and write-path equivalence fixtures.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with
