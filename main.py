@@ -7345,18 +7345,18 @@ def strip_footer_link(html_content: str) -> str:
     """Remove the common editorial Telegraph footer if it is already present."""
     spacer = r"<p>(?:&nbsp;|&#8203;|\u200b)</p>"
     legacy_footer_re = re.compile(
-        rf"(?:{spacer}\s*)?<p><a href=\"https://t\.me/kenigevents\">[^<]+</a></p>\s*{spacer}",
+        rf"(?:{spacer}\s*)?<p><a\b[^>]*href=\"https://t\.me/kenigevents\"[^>]*>[^<]+</a></p>\s*{spacer}",
         flags=re.IGNORECASE,
     )
     social_footer_re = re.compile(
         rf"(?:{spacer}\s*)?"
         r"<p><(?:b|strong)>Полюбить Калининград</(?:b|strong)></p>\s*"
-        r"<p>Telegram:\s*<a href=\"https://t\.me/kenigevents\">Анонсы</a>\s*·\s*"
-        r"<a href=\"https://t\.me/kldevents\">Афиша</a></p>\s*"
-        r"<p>ВК:\s*<a href=\"https://vk\.com/kenigeventsofficial\">Анонсы</a>\s*·\s*"
-        r"<a href=\"https://vk\.com/klgdevents\">Афиша</a>\s*·\s*"
-        r"<a href=\"https://vk\.ru/im/channels/-239844596\">канал Афиши</a></p>\s*"
-        r"(?:<p>Max:\s*<a href=\"https://max\.ru/join/[^\"]+\">Анонсы</a></p>\s*)?"
+        r"<p>Telegram:\s*<a\b[^>]*href=\"https://t\.me/kenigevents\"[^>]*>Анонсы</a>\s*·\s*"
+        r"<a\b[^>]*href=\"https://t\.me/kldevents\"[^>]*>Афиша</a></p>\s*"
+        r"<p>ВК:\s*<a\b[^>]*href=\"https://vk\.com/kenigeventsofficial\"[^>]*>Анонсы</a>\s*·\s*"
+        r"<a\b[^>]*href=\"https://vk\.com/klgdevents\"[^>]*>Афиша</a>\s*·\s*"
+        r"<a\b[^>]*href=\"https://vk\.ru/im/channels/-239844596\"[^>]*>канал Афиши</a></p>\s*"
+        r"(?:<p>Max:\s*<a\b[^>]*href=\"https://max\.ru/join/[^\"]+\"[^>]*>Анонсы</a></p>\s*)?"
         rf"{spacer}",
         flags=re.IGNORECASE,
     )

@@ -152,3 +152,21 @@ def test_apply_footer_link_replaces_social_footer_without_max():
     assert updated.count(main.MAX_SOCIAL_URL) == 1
     assert updated.count('<p><b>Полюбить Калининград</b></p>') == 1
     assert updated.endswith(FOOTER_LINK_HTML)
+
+def test_apply_footer_link_replaces_telegraph_target_attrs_footer_without_max():
+    html = (
+        '<p>start</p>'
+        '<p>\u200b</p>'
+        '<p><b>Полюбить Калининград</b></p>'
+        '<p>Telegram: <a href="https://t.me/kenigevents" target="_blank">Анонсы</a> · '
+        '<a href="https://t.me/kldevents" target="_blank">Афиша</a></p>'
+        '<p>ВК: <a href="https://vk.com/kenigeventsofficial" target="_blank">Анонсы</a> · '
+        '<a href="https://vk.com/klgdevents" target="_blank">Афиша</a> · '
+        '<a href="https://vk.ru/im/channels/-239844596" target="_blank">канал Афиши</a></p>'
+        '<p>\u200b</p>'
+    )
+    updated = main.apply_footer_link(html)
+    assert updated.count('<p><b>Полюбить Калининград</b></p>') == 1
+    assert updated.count(main.MAX_SOCIAL_URL) == 1
+    assert 'target="_blank">канал Афиши</a></p><p>\u200b</p><p>&#8203;</p>' not in updated
+    assert updated.endswith(FOOTER_LINK_HTML)
