@@ -18,9 +18,10 @@ As of 2026-06-24 the separate personalization Supabase database is effectively e
 This schema is not a raw telemetry sink. It is shaped by `production-integration.md`:
 
 - browser `anon_id` and `session_id` are UUID-compatible when SQL columns are `uuid`; legacy prefixed ids are rejected/reset by the client before trusted telemetry;
-- browser payloads are never inserted directly as DB rows; the same-origin endpoint validates, annotates, compacts and may drop/quarantine before insert;
+- browser payloads are never inserted directly as DB rows; the selected write path validates, annotates, compacts and may drop/quarantine before insert;
 - accepted served-list rows target `<2 KB`; full reason-code JSON is sampled/debug-only;
-- direct browser -> Supabase writes are off by default and canary-only;
+- direct browser -> Supabase table writes are forbidden in production;
+- browser -> Supabase RPC ingest is allowed only as `supabase_rpc_ingest_v1` with explicit execute grants, quota/dedupe/storage guards and no raw JSON persistence;
 - retention/aggregation jobs run from backend/worker/SQL jobs, not from the web page.
 
 ## Supabase constraints that shape the schema
@@ -28,7 +29,7 @@ This schema is not a raw telemetry sink. It is shaped by `production-integration
 - New Supabase projects no longer expose new `public` tables to Data API automatically; explicit `GRANT` is required for `anon`/`authenticated` roles. RLS and grants are separate layers.
 - Any table exposed to Data API must have RLS enabled.
 - Browser code may use only `PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY`; secret/service/direct DB credentials stay backend-only.
-- MVP should avoid public `SECURITY DEFINER` RPCs. If a future RPC is needed, keep the function minimal, revoke default `PUBLIC` execute, grant only required roles, and add abuse/rate controls.
+- Public RPCs are not a shortcut around table security. If `supabase_rpc_ingest_v1` is selected, keep the function append-only/minimal, revoke default `PUBLIC` execute, grant only the specific ingest function to `anon`, set a fixed `search_path` for `SECURITY DEFINER`, and add abuse/rate/storage controls.
 
 Official references:
 
@@ -37,6 +38,7 @@ Official references:
 - RLS guide: <https://supabase.com/docs/guides/database/postgres/row-level-security>
 - API keys: <https://supabase.com/docs/guides/getting-started/api-keys>
 - pgvector: <https://supabase.com/docs/guides/database/extensions/pgvector>
+- Database functions, function privileges and `security definer`/`search_path`: <https://supabase.com/docs/guides/database/functions>
 
 ## Data ownership boundary
 
@@ -48,7 +50,7 @@ The MVP write path should be **compact summaries first**, not a raw event fireho
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, maps the client contract to the server row contract, and inserts with service-role/direct DB credentials. Direct browser insert with the Supabase publishable key is allowed only as an explicitly approved canary/static-only mode with payload caps, WAF/CDN rate limits, cleanup, and growth alerts. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`; `presentation_mode` and `current_event_id` are dedicated columns on served-list summaries and metadata fields elsewhere. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
+Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, maps the client contract to the server row contract, and inserts with service-role/direct DB credentials or calls a private DB RPC. Allowed lightweight path: browser calls only a dedicated append-only `supabase_rpc_ingest_v1` function that performs the same validation/compaction/dedupe/quota checks inside Postgres. Direct browser table insert/update/select with the Supabase publishable key is forbidden in production. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`; `presentation_mode` and `current_event_id` are dedicated columns on served-list summaries and metadata fields elsewhere. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
 
 ### Private schema `personalization`
 
@@ -86,7 +88,7 @@ Retention should run from backend/cron/SQL jobs with direct DB credentials, not 
 
 ## Client payload -> accepted row mapping
 
-The browser client may emit a convenient JSON payload for local/demo use, but the production endpoint maps it to compact SQL fields:
+The browser client may emit a convenient JSON payload for local/demo use, but the selected production write path maps it to compact SQL fields. For `same_origin_endpoint_v1` the mapping happens on Fly before DB insert/RPC. For `supabase_rpc_ingest_v1` the mapping happens inside the dedicated Postgres function before any accepted insert:
 
 | Client field | Server handling |
 | --- | --- |
@@ -117,19 +119,21 @@ Avoid indexes on every JSON field before usage is known. Compact summaries/profi
 
 ## Abuse and rate-limit policy
 
-RLS and insert-only policies do not stop abuse by themselves. Before production
+RLS, grants and insert/RPC policies do not stop abuse by themselves. Before production
 public writes, one of these modes must be explicitly selected:
 
-1. **Preferred production mode:** same-origin endpoint
+1. **Default production mode:** same-origin endpoint
    `/api/personalization/summary` validates payloads, rate-limits by IP/session,
-   and inserts with service-role/direct DB credentials. The browser never sees a
-   secret key.
-2. **Static-only canary mode:** direct Supabase insert with publishable key is
-   allowed only with strict payload `CHECK`s, unique client ids, sampled raw
-   telemetry disabled, WAF/CDN rate limits for `/rest/v1`, nightly cleanup, and
-   table-growth alerts.
+   and inserts with service-role/direct DB credentials or calls a private DB RPC.
+   The browser never sees a secret key.
+2. **Allowed lightweight mode:** browser calls only
+   `public.ingest_personalization_summary_v1(...)` through Supabase RPC with the
+   publishable key. The function is the backend: it validates, compacts, dedupes,
+   enforces quota/storage caps, and writes only compact accepted rows or tiny
+   quarantine evidence.
 
-No mode allows public SELECT by `anon_id` in the anonymous MVP. Server profile
+No mode allows direct browser table INSERT/UPDATE/SELECT, raw payload -> DB row,
+or public SELECT by `anon_id` in the anonymous MVP. Server profile
 snapshots are analytics/eval/post-MVP server-ranker evidence until a safe
 same-origin recommendation endpoint exists. Accepted payloads must carry or be
 annotated with `actor_class` (`human_likely`, `unknown`, `preview_bot`,
@@ -137,6 +141,24 @@ annotated with `actor_class` (`human_likely`, `unknown`, `preview_bot`,
 `trust_state` (`accepted`, `quarantined`, `dropped`, `diagnostic`). Only
 `accepted` human/unknown consented summaries can update profiles or training
 sets.
+
+## Optional Supabase RPC ingest contract
+
+`supabase_rpc_ingest_v1` is allowed only as a consciously selected write path, not as a generic public API. It is effectively a tiny backend running in Postgres.
+
+Function contract options:
+
+- preferred: typed parameters (`uuid`, `text`, `bigint[]`, `smallint[]`, `integer[]`) so PostgREST/Postgres rejects malformed shapes early;
+- acceptable: one `jsonb` payload only if the function immediately validates and maps it to typed local variables, drops unknown fields and never persists raw JSON as an accepted row.
+
+Minimum RPC gates:
+
+- revoke execute on all functions in exposed schemas from `PUBLIC`, `anon`, `authenticated`; grant execute only on the specific ingest function to `anon`;
+- keep telemetry/profile tables closed to `anon`/`authenticated`; the function writes with tightly reviewed privileges;
+- use `security invoker` when possible; if `security definer` is necessary to insert into closed tables, set a fixed `search_path` and explicitly schema-qualify relations;
+- ignore client `actor_class`, `trust_state`, `training_eligible`, quota/debug flags and server timestamps;
+- enforce payload size, shown list length, enum/version checks, dedupe by `served_list_hash`/`client_summary_id`, per-anon/session time-bucket quota and emergency storage caps before accepted insert;
+- return void/minimal success only; no profiles, recommendations or debug details.
 
 ## Draft SQL
 
@@ -195,21 +217,8 @@ alter table public.personalization_session_summary enable row level security;
 revoke all on public.personalization_session_summary from anon, authenticated;
 grant select, insert, update, delete on public.personalization_session_summary to service_role;
 
--- Preferred production path: same-origin endpoint inserts with service_role/direct DB.
--- Enable anon insert only for an explicitly approved static-only canary with
--- WAF/CDN rate limits, cleanup, and growth alerts:
--- grant insert on public.personalization_session_summary to anon;
--- create policy "anon can append compact personalization summaries"
---   on public.personalization_session_summary
---   for insert
---   to anon
---   with check (
---     consent_state = 'accepted'
---     and anon_id is not null
---     and session_id is not null
---     and client_summary_id is not null
---     and length(client_summary_id) <= 120
---   );
+-- Production writes come from the same-origin backend/service role or from a
+-- dedicated ingest RPC. Do not grant direct table INSERT to anon/authenticated.
 
 create index if not exists personalization_session_summary_anon_time_idx
   on public.personalization_session_summary (anon_id, ended_at desc);
@@ -268,19 +277,8 @@ alter table public.personalization_served_list_summary enable row level security
 revoke all on public.personalization_served_list_summary from anon, authenticated;
 grant select, insert, update, delete on public.personalization_served_list_summary to service_role;
 
--- Optional static-only canary direct insert; keep disabled by default:
--- grant insert on public.personalization_served_list_summary to anon;
--- create policy "anon can append compact served-list summaries"
---   on public.personalization_served_list_summary
---   for insert
---   to anon
---   with check (
---     consent_state = 'accepted'
---     and anon_id is not null
---     and session_id is not null
---     and served_list_id is not null
---     and length(served_list_id) <= 120
---   );
+-- Production writes come from the same-origin backend/service role or from a
+-- dedicated ingest RPC. Do not grant direct table INSERT to anon/authenticated.
 
 create index if not exists personalization_served_list_anon_time_idx
   on public.personalization_served_list_summary (anon_id, requested_at desc);
@@ -288,6 +286,47 @@ create index if not exists personalization_served_list_session_time_idx
   on public.personalization_served_list_summary (session_id, requested_at desc);
 create index if not exists personalization_served_list_received_idx
   on public.personalization_served_list_summary (received_at desc);
+
+-- Optional RPC ingest shape. Keep table grants closed; grant only function execute.
+-- Review and harden before applying; this is a contract sketch, not final SQL.
+-- revoke execute on all functions in schema public from public;
+-- revoke execute on all functions in schema public from anon, authenticated;
+-- create or replace function public.ingest_personalization_summary_v1(
+--   p_anon_id uuid,
+--   p_session_id uuid,
+--   p_served_list_id text,
+--   p_served_list_hash text,
+--   p_surface text,
+--   p_current_event_id bigint,
+--   p_algorithm_id text,
+--   p_viewport_class text,
+--   p_layout_mode text,
+--   p_presentation_mode text,
+--   p_shown_event_ids bigint[],
+--   p_scores_0_1000 smallint[],
+--   p_reason_masks integer[],
+--   p_consent_version text,
+--   p_client_created_at timestamptz
+-- )
+-- returns void
+-- language plpgsql
+-- security definer
+-- set search_path = ''
+-- as $$
+-- begin
+--   -- validate versions/enums/cardinality/quota/dedupe; ignore client trust fields;
+--   -- insert only compact mapped fields into public.personalization_served_list_summary;
+--   -- optionally write tiny public/private quarantine evidence without raw payload.
+-- end;
+-- $$;
+-- revoke execute on function public.ingest_personalization_summary_v1(
+--   uuid, uuid, text, text, text, bigint, text, text, text, text,
+--   bigint[], smallint[], integer[], text, timestamptz
+-- ) from public, authenticated;
+-- grant execute on function public.ingest_personalization_summary_v1(
+--   uuid, uuid, text, text, text, bigint, text, text, text, text,
+--   bigint[], smallint[], integer[], text, timestamptz
+-- ) to anon;
 
 -- Compact quarantine evidence. Private schema only; never used for training/profile updates.
 create table if not exists personalization.telemetry_quarantine (
@@ -354,23 +393,9 @@ create table if not exists public.personalization_interaction_event (
 alter table public.personalization_interaction_event enable row level security;
 
 revoke all on public.personalization_interaction_event from anon, authenticated;
--- Enable only if raw-event sampling/debug is intentionally used:
--- grant insert on public.personalization_interaction_event to anon;
+-- Raw-event debug writes stay backend/RPC-only. Do not grant direct table INSERT
+-- to anon/authenticated.
 grant select, insert, update, delete on public.personalization_interaction_event to service_role;
-
--- Optional raw-event insert policy. Keep disabled for MVP unless sampling/debug is approved.
--- create policy "anon can append accepted personalization telemetry"
---   on public.personalization_interaction_event
---   for insert
---   to anon
---   with check (
---     consent_state = 'accepted'
---     and anon_id is not null
---     and session_id is not null
---     and client_event_id is not null
---     and length(client_event_id) <= 120
---     and length(page_url) <= 2048
---   );
 
 create index if not exists personalization_interaction_event_occurred_idx
   on public.personalization_interaction_event (occurred_at desc);
@@ -528,7 +553,7 @@ Anonymous personalization without auth cannot strongly prove that a browser owns
 
 1. static site reads same-origin manifests;
 2. browser stores local profile in localStorage;
-3. browser sends compact append-only telemetry after consent, preferably through a same-origin rate-limited endpoint;
-4. backend aggregates profiles and can later publish coarse recommendation manifests or serve a rate-limited endpoint.
+3. browser sends compact append-only telemetry after consent through either the same-origin rate-limited endpoint or the dedicated `supabase_rpc_ingest_v1` function;
+4. backend/SQL jobs aggregate profiles and can later publish coarse recommendation manifests or serve a rate-limited endpoint.
 
-Future direct personalized RPC is possible, but it must be treated as a new security design, not a default table SELECT.
+Future direct personalized read RPC is possible, but it must be treated as a new security design, not a default table SELECT.

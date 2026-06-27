@@ -69,7 +69,7 @@ Earlier accepted design points remain:
 - legacy `negative_tags` is no longer shared between event fields and user dislikes; use `audience_exclusion_tags` for events and `negative_interest_tags` for visitors;
 - compact telemetry now includes both `session_summary` and `served_list_summary`, so future rankers get exposure context;
 - server profile snapshots are analytics/post-MVP ranker evidence, not an MVP browser-read dependency while public SELECT by `anon_id` is forbidden;
-- public Supabase writes require abuse/rate-limit/cleanup/growth-alert controls, with same-origin endpoint preferred for production;
+- public Supabase table writes remain forbidden; Supabase RPC ingest is allowed only as a gated append-only write path, with same-origin endpoint still the production default;
 - LLM eval is reviewer evidence only; deterministic assertions and human/golden personas are required for acceptance;
 - early offline semantic embedding eval is part of MVP hardening, but no embedding provider is in the online hot path;
 - MVP-0 starts from `event_detail_related` on an event page, not from a personalized homepage/feed.
@@ -85,7 +85,7 @@ Traceability for the review:
 | Event exclusion vs user dislike ambiguity | Event field is `audience_exclusion_tags`; user field is `negative_interest_tags`; original research wording is treated as legacy. |
 | Need exposure context for future ranker training | `database.md` and `neural-flow.md` add `personalization_served_list_summary` / `served_list_id`. |
 | Server profile snapshots do not power anonymous MVP reads | MVP product path is local-first; server snapshots are analytics/post-MVP evidence only. |
-| Public Supabase insert abuse risk | Production preference is same-origin rate-limited endpoint; direct anon insert is canary-only with caps/cleanup/alerts. |
+| Public Supabase write abuse risk | Production default is same-origin rate-limited endpoint; direct browser table writes are forbidden; browser -> Supabase RPC ingest is allowed only as a dedicated compact append-only function with grants/quota/dedupe/storage guards. |
 | Embeddings should be evaluated early, but not online | Early offline comparison against `gemini-embedding-001` and local/Kaggle candidates is an MVP hardening gate. |
 | LLM eval is not enough | Acceptance requires deterministic assertions + human/golden personas + optional LLM reviewer. |
 | MVP too broad for first proof | Add MVP-0 surface `event_detail_related`: static related block first, local rerank after consent, browser prototype before full Astro integration. |
@@ -99,8 +99,8 @@ Traceability for the review:
   - localStorage — лёгкий, быстрый, browser-local профиль;
   - Supabase/Postgres — compact accepted telemetry, debugging/eval, aggregates, and server snapshots for analytics/post-MVP ranker (not a browser read dependency in MVP).
 - Supabase не является source of truth для событий; event catalog приходит из Fly SQLite через static export/snapshots.
-- Персонализация должна иметь fallback: если Supabase/API недоступен, пользователь видит обычный static feed.
-- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control, а same-origin endpoint используется для записи compact telemetry; Supabase не является массовым read/write path из браузера.
+- Персонализация должна иметь fallback: если выбранный trusted write path (Fly endpoint или Supabase RPC ingest) недоступен, пользователь видит обычный static/local feed и CTA работает.
+- Для read-heavy динамики предпочтителен **manifest-first** подход: статический сайт сначала читает same-origin JSON snapshot/recommendation manifest с коротким cache-control. Для записи compact telemetry production default — same-origin endpoint; допустимый lightweight mode — dedicated Supabase RPC ingest. Supabase не является массовым read-path из браузера, а прямые table writes запрещены.
 - Первый проверочный MVP surface — `event_detail_related` на странице конкретного события: static fallback “Похожие события” + local rerank after consent. Персонализированная главная/бесконечная лента не входит в MVP-0. Fly web runtime остаётся thin: static/API минимум, без LLM/ML/static-build/analytics aggregation в hot path.
 
 ## Что оптимизируем
@@ -393,7 +393,7 @@ Acceptance для модели: качество top-k и объяснимых �
 - generic recommendations можно публиковать рядом со static build как `/data/recommendations/generic.json`;
 - event feature snapshot можно публиковать как `/data/events/features.json` или разбить по датам/городам;
 - персональный client-side слой сначала берёт static manifest и localStorage profile;
-- Supabase RPC вызывается только после consent и только если нужен server-side profile/cache;
+- Supabase RPC вызывается только после consent и только как специально спроектированный ingest/profile/cache endpoint; direct table writes из браузера запрещены;
 - при Supabase timeout UI остаётся на static/local rerank.
 
 Это снижает read-нагрузку на Supabase free tier и делает деградацию честной.
@@ -403,10 +403,12 @@ Acceptance для модели: качество top-k и объяснимых �
 - Frontend использует только `PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY`.
 - Backend/migrations используют secret/direct connection string.
 - Все exposed tables с RLS.
-- Public browser insert — только явно approved canary; production default предпочитает same-origin endpoint с rate-limit и service-role/direct DB insert.
+- Public browser table insert/update/select запрещены в production; таблицы остаются закрыты для `anon`/`authenticated`.
+- Production default предпочитает same-origin endpoint с rate-limit и service-role/direct DB insert/RPC.
+- Lightweight mode разрешает только dedicated append-only Supabase RPC ingest (`supabase_rpc_ingest_v1`): explicit execute grant, fixed `search_path` при `security definer`, compact typed payload, dedupe/quota/storage guards, no raw JSON row.
 - Сырые profiles не доступны на SELECT по anon id.
-- Public RPC/view возвращает только безопасный recommendation result, а не полный профиль.
-- Для anonymous telemetry обязательны rate limits/abuse guard на уровне endpoint/CDN/WAF, payload caps, cleanup и table-growth alerts.
+- Public RPC/view возвращает только безопасный ingest result/recommendation result, а не полный профиль.
+- Для anonymous telemetry обязательны rate limits/abuse guard на уровне write path/CDN/WAF/SQL quota, payload caps, cleanup и table-growth alerts.
 
 ## Consent UX
 
@@ -492,7 +494,7 @@ Browser reference prototype уже покрывает `event_detail_related`, а
 5. **Consent + local profile island**: localStorage profile, reset personalization, no telemetry before OK.
 6. **Supabase schema/RLS**: compact session summaries, served-list summaries, optional sampled strong actions, profile snapshots for analytics/post-MVP ranker, retention jobs/aggregates, abuse controls.
 7. **Client reranker**: local-first ranking, mobile feed chunking, desktop grid/module sorting, fallback on timeout.
-8. **Server profile/RPC**: optional post-MVP RPC for profile snapshots and recommendation cache; not required for first paint.
+8. **Write path / server profile / RPC**: choose `same_origin_endpoint_v1` or gated `supabase_rpc_ingest_v1` for compact telemetry; optional post-MVP RPC for profile snapshots and recommendation cache; not required for first paint.
 9. **Metrics/E2E**: personas, viewport split, no-consent/no-Supabase fallback, cross-persona isolation.
 10. **Rollout**: preview, internal QA, 1-month Telegraph dual-run, canonical switch criteria.
 
@@ -522,7 +524,7 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 - no-seed consent creates an empty profile, legacy `negative_tags` profiles and missing `taxonomy_version` profiles are rejected;
 - blocked localStorage does not enable trusted personalization;
 - desktop — `presentation_mode=grid_related`, не mobile feed/infinite feed, current-event context dominates long-term profile;
-- telemetry endpoint/Supabase timeout — local fallback и CTA/buttons остаются доступны.
+- selected write path/Supabase timeout — local fallback и CTA/buttons остаются доступны.
 
 Этот тест не заменяет будущие E2E на реальном `kenigevents.ru`, но уже защищает ключевой контракт персонализации при разработке client island.
 
@@ -554,6 +556,7 @@ npx playwright test tests/playwright/static_personalization_contract.spec.ts --b
 - Какой retention raw telemetry: 30, 60 или 90 дней?
 - Сколько event feature fields храним в Supabase, чтобы не дублировать core DB?
 - Делаем ли first MVP recommendation полностью local-first или сразу Supabase RPC?
+- Какой write path выбираем для telemetry canary: `same_origin_endpoint_v1` или `supabase_rpc_ingest_v1`, и где будут rate/quota/storage guards?
 - Где будет backend endpoint для rate-limited recommendation RPC: Fly app, Supabase Edge Function или прямой PostgREST RPC?
 - Какой desktop layout выбираем для MVP: grid + filters, grid + right rail, или несколько персональных секций на главной?
 - Какой embedding provider выбираем после Russian/persona eval: OpenAI, Google, локальный open-source или staged fallback?

@@ -17,6 +17,14 @@ Fly SQLite = canonical events, promo state, Smart Update/static rebuild state
 
 Do not turn the Fly web machine into a general Node/Python backend. On the current Fly.io shape (`shared-cpu`, up to 2 GB RAM for the intended web role, with CPU burst/throttle behavior), the web process must survive crawler traffic, preview bots and ordinary CTA clicks even when personalization telemetry is unavailable.
 
+Telemetry has two production-compatible write paths:
+
+```text
+write_path = same_origin_endpoint_v1 | supabase_rpc_ingest_v1
+```
+
+Default remains `same_origin_endpoint_v1` because it can drop abuse before the DB. `supabase_rpc_ingest_v1` is an allowed lightweight mode for reducing Fly load, but it moves backend validation into Postgres/RPC and must pass its own gates. Direct browser table writes and raw browser JSON stored as DB rows remain forbidden.
+
 ## Production data baseline
 
 Live read-only production SQL on 2026-06-26 returned `pragma quick_check = ok` and this current event/promo shape:
@@ -41,8 +49,8 @@ The MVP optimizes for a small, uneven real catalog, not a marketplace/vector-sea
 
 - serve static HTML/CSS/JS and same-origin JSON/manifests;
 - render/serve a thin event page shell if needed;
-- accept a tiny `POST /api/personalization/summary` telemetry request;
-- validate/classify/dedupe the request and insert a compact accepted row with a short timeout;
+- optionally accept a tiny `POST /api/personalization/summary` telemetry request when `same_origin_endpoint_v1` is selected;
+- if the endpoint is selected, validate/classify/dedupe the request and insert/call DB RPC with a short timeout;
 - return quickly without blocking navigation/CTA.
 
 **Fly web process must never:**
@@ -56,7 +64,7 @@ The MVP optimizes for a small, uneven real catalog, not a marketplace/vector-sea
 Required deployment shape before canary:
 
 ```text
-web process        static delivery + tiny telemetry endpoint
+web process        static delivery + optional tiny telemetry endpoint
 builder/job process Smart Update outputs -> event feature snapshots/manifests/static pages
 analytics worker   short scheduled aggregation/retention job, not long-running by default
 ```
@@ -83,7 +91,7 @@ Rejected / reset to static fallback:
 
 ### P0.3 Browser payload is not the DB row
 
-The browser sends a client telemetry contract. The endpoint owns the server row contract.
+The browser sends a client telemetry contract. The selected write path owns the server row contract.
 
 ```text
 browser payload
@@ -96,7 +104,7 @@ browser payload
   -> accepted insert OR tiny quarantine/drop
 ```
 
-The endpoint annotates fields that the browser must not authoritatively set:
+The selected write path annotates fields that the browser must not authoritatively set:
 
 - `requested_at` / `received_at`;
 - `consent_version` / server consent interpretation;
@@ -107,17 +115,28 @@ The endpoint annotates fields that the browser must not authoritatively set:
 
 No design or test may assume that raw browser JSON can be inserted directly into Supabase tables.
 
-### P0.4 Same-origin endpoint gate
+### P0.4 Telemetry write-path gate
 
-Production mode is:
+Default production mode:
 
 ```text
-browser -> same-origin Fly endpoint -> validate/drop/quarantine before DB -> Supabase/Postgres insert
+browser -> same-origin Fly endpoint -> validate/drop/quarantine before DB -> Supabase/Postgres insert/RPC
 ```
 
-Direct browser writes to Supabase/PostgREST are canary-only and off by default. They are not production until RLS, insert policies, external rate limits, cleanup and storage alerts are proven.
+Allowed lightweight mode:
 
-Endpoint behavior:
+```text
+browser -> Supabase RPC public.ingest_personalization_summary_v1(...) -> validate/compact/dedupe/quota -> accepted row or tiny quarantine/drop
+```
+
+Forbidden in production:
+
+```text
+browser -> direct table insert/update/select
+browser -> RPC that accepts raw JSON and persists it as-is
+```
+
+Same-origin endpoint behavior:
 
 ```text
 POST /api/personalization/summary
@@ -126,11 +145,23 @@ POST /api/personalization/summary
   actor_class/trust_state classification
   dedupe by served_list_hash/client_summary_id
   bounded rate-limit maps
-  DB insert timeout: target 300-500 ms, max 800 ms
+  DB insert/RPC timeout: target 300-500 ms, max 800 ms
   DB unavailable/timeout: drop disposable telemetry, return 204/202
 ```
 
-CTA/navigation must never wait for this endpoint. Telemetry is disposable; event page UX is not.
+Supabase RPC ingest may be used only if all are true:
+
+- no `anon`/`authenticated` direct INSERT/UPDATE/SELECT grants on telemetry/profile tables;
+- only a dedicated append-only ingest function is executable by `anon`;
+- function execute is revoked from `PUBLIC` by default and re-granted only for the specific function/role;
+- if `security definer` is used, it sets a fixed `search_path` and references relations explicitly;
+- input is compact typed parameters or immediately normalized JSONB, never raw JSON persisted as a row;
+- function validates UUID ids, schema/taxonomy/consent/surface/layout/algorithm enums and shown-list cardinality;
+- client-supplied `actor_class`, `trust_state`, `training_eligible`, quota/debug flags and server timestamps are ignored;
+- dedupe, per-anon/session/time-bucket quota and emergency storage caps run before accepted insert;
+- return value is void or minimal `{ok:true}` and never returns profiles/recommendations/debug internals.
+
+CTA/navigation must never wait for either write path. Telemetry is disposable; event page UX is not.
 
 ## P1 gates before canary
 
@@ -150,7 +181,7 @@ CTA/navigation must never wait for this endpoint. Telemetry is disposable; event
 Failure modes must be safe:
 
 - DB unavailable -> drop telemetry, page/CTA works;
-- endpoint overloaded -> drop/204 for normal telemetry or 429 for abuse, page/CTA works;
+- write path overloaded -> drop/204 for normal telemetry or 429 for abuse, page/CTA works;
 - manifest missing -> static HTML fallback or empty related block, no crash;
 - localStorage blocked -> static order, no profile mutation;
 - crawler/preview -> static fallback and no trusted telemetry.
@@ -213,9 +244,9 @@ Promo is an explicit campaign layer, not hidden interest inference.
 - `event_detail_related`: at most one promo in the first 6 cards unless shown as a separate labelled module.
 - Promo exposure is labelled in telemetry so it does not bias profile/ranker training as organic interest.
 
-### P1.5 Bot/automation endpoint gate
+### P1.5 Bot/automation write-path gate
 
-The documentation contract must become executable endpoint tests:
+The documentation contract must become executable endpoint/RPC tests:
 
 | Scenario | Expected result |
 | --- | --- |
@@ -277,7 +308,7 @@ Key product reports:
 - exploration slot CTR/hide rate;
 - promo exposure/click/fatigue;
 - bot quarantine/drop rate;
-- fallback rate by endpoint/storage/schema incompatibility.
+- fallback rate by write-path/storage/schema incompatibility.
 
 ## Future auth/linking gate
 
@@ -319,18 +350,19 @@ The next PR is not another broad concept document. It must prove the thin runtim
 - [ ] Static fallback is visible without JS.
 - [ ] No consent -> no local profile mutation and no trusted telemetry.
 - [ ] localStorage blocked -> static fallback, no crash.
-- [ ] Endpoint unavailable -> local CTA works, no trusted remote telemetry.
+- [ ] Telemetry write path unavailable -> local CTA works, no trusted remote telemetry.
 - [ ] Bot/preview/automation payloads are dropped/quarantined before DB insert.
 - [ ] Oversized/repeated payloads are dropped before DB insert.
 - [ ] Request body cap is enforced.
 - [ ] In-memory rate-limit/dedupe maps are bounded.
+- [ ] If `supabase_rpc_ingest_v1` is selected: table grants remain closed to `anon`, function execute grants/search_path are audited, quota/dedupe/storage guards are tested.
 - [ ] No LLM/vector/embedding call in web runtime.
 - [ ] No static rebuild or Smart Update job in web process.
 - [ ] DB insert timeout/circuit breaker is implemented.
 - [ ] The four negative-interest WARN cases are manually classified.
 - [ ] Promo candidates are labelled/capped if included in manifest.
-- [ ] `node --check`, Playwright and endpoint tests pass from a clean checkout.
+- [ ] `node --check`, Playwright and write-path endpoint/RPC tests pass from a clean checkout.
 
 ## Explicit non-goals now
 
-Do not implement yet: server-side ranker, pgvector serving, CatBoost/LightGBM serving, two-tower, online embeddings, online LLM, personalized homepage, infinite feed, direct browser -> Supabase production writes, raw impression firehose, server profile read by `anon_id`, or Smart Update influenced by telemetry.
+Do not implement yet: server-side ranker, pgvector serving, CatBoost/LightGBM serving, two-tower, online embeddings, online LLM, personalized homepage, infinite feed, browser -> Supabase direct table writes, raw browser payload -> DB row RPC, raw impression firehose, server profile read by `anon_id`, or Smart Update influenced by telemetry.

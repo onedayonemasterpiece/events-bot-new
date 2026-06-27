@@ -29,10 +29,10 @@ Personalization is disabled when any of these is true:
 - incompatible `profile_version`, `feature_schema_version`, `taxonomy_version` or legacy fields such as `negative_tags`;
 - localStorage unavailable or corrupted;
 - manifest schema mismatch;
-- same-origin telemetry endpoint is unavailable for trusted telemetry/server mutation;
+- the selected trusted telemetry write path (`same_origin_endpoint_v1` or `supabase_rpc_ingest_v1`) is unavailable for trusted server mutation;
 - request exceeds rate/shape limits or lands in quarantine.
 
-For crawler/preview/monitor/bot/no-consent/schema-mismatch cases, disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation. If only the telemetry endpoint is unavailable, trusted telemetry/server writes are disabled, but a consented compatible localStorage profile may still run local rerank as a local fallback; CTA/navigation must remain usable. Reference/demo code may record local debug-only events, but they must be marked as not trusted remote telemetry and must not reach Supabase/profile updates.
+For crawler/preview/monitor/bot/no-consent/schema-mismatch cases, disabled means: keep the static related order, do not mutate profile, do not send trusted telemetry, and do not block CTA/navigation. If only the selected write path is unavailable, trusted telemetry/server writes are disabled, but a consented compatible localStorage profile may still run local rerank as a local fallback; CTA/navigation must remain usable. Reference/demo code may record local debug-only events, but they must be marked as not trusted remote telemetry and must not reach Supabase/profile updates.
 
 ## Accepted telemetry payloads
 
@@ -63,14 +63,14 @@ Quarantined payloads must not update profiles, training sets, popularity or edit
 Initial budgets:
 
 - browser dedupe `served_list_summary` by `served_list_hash` for 10–30 minutes;
-- endpoint rate limit by anon id + session id + IP prefix + actor class;
+- write-path rate limit/quota by anon id + session id + IP prefix when available + actor class;
 - cap one visible `event_detail_related` served summary per render list hash;
 - cap strong actions per session/event;
-- reject payloads above the documented schema size; endpoint hard cap `8-16 KB`, accepted served-list target `<2 KB`, session summary target `<1-3 KB`.
+- reject payloads above the documented schema size; write-path hard cap `8-16 KB`, accepted served-list target `<2 KB`, session summary target `<1-3 KB`.
 
-## Endpoint policy
+## Write-path policy
 
-Use a same-origin endpoint first:
+Use a same-origin endpoint first by default:
 
 ```text
 POST /api/personalization/summary
@@ -83,19 +83,30 @@ POST /api/personalization/summary
   return 204/202 for accepted or normal dropped telemetry
 ```
 
-The browser must not use the Supabase secret key. Direct public Supabase writes are a fallback only after RLS/policies/rate limits are proven and still must expose only insert-only summary tables/views, not raw profile internals.
+Allowed Supabase RPC ingest mode:
 
-Endpoint test matrix before canary:
+```text
+supabase.rpc('ingest_personalization_summary_v1', typed_compact_payload)
+  validate UUID/schema/taxonomy/consent/enums/cardinality
+  ignore client actor_class/trust_state/training flags
+  dedupe/quota/storage-cap before accepted insert
+  insert only compact arrays/bitmasks or tiny quarantine evidence
+  return void/minimal success, no profiles/debug details
+```
+
+The browser must not use the Supabase secret key. Direct browser table writes are forbidden in production. Browser -> Supabase RPC is allowed only through a dedicated append-only ingest function (`supabase_rpc_ingest_v1`) that validates/compacts/dedupes/quotas before insert, keeps table grants closed to `anon`, revokes broad function execute rights, and never persists raw JSON as an accepted row.
+
+Write-path test matrix before canary:
 
 | Scenario | Required behavior |
 | --- | --- |
 | preview/social UA | drop with `204`, no accepted DB row |
 | Googlebot-like UA without verification | never mark `crawler_verified` from UA alone |
 | no consent or missing taxonomy/profile version | drop/quarantine, no profile update |
-| oversized payload | reject/drop before DB insert |
-| repeated `served_list_hash` | dedupe before DB insert |
+| oversized payload | reject/drop before accepted DB insert |
+| repeated `served_list_hash` | dedupe before accepted DB insert |
 | click before served list | quarantine/drop |
-| many summaries/minute | rate-limit with bounded memory |
+| many summaries/minute | rate-limit/quota with bounded memory or bounded SQL buckets |
 
 ## SEO and preview safety
 

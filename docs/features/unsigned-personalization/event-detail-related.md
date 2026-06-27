@@ -152,7 +152,7 @@ Guardrails:
 - if the current page is a jazz concert and the long-term profile likes theatre, the block must not become a theatre подборка. It may slightly raise compatible evening/live-music events, but the page context remains primary;
 - `audience_exclusion_tags` belong to the event and are not user dislikes. A 18+/adult jazz event with `audience_exclusion_tags: ["kids"]` must not be penalized for a visitor whose `negative_interest_tags.kids` means “do not show me children's events”;
 - legacy profiles containing `negative_tags` or missing/mismatched `feature_schema_version` / `taxonomy_version` are incompatible and fall back to static order until reset/migration;
-- telemetry endpoint unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
+- selected telemetry write path unavailable disables trusted telemetry/server mutation, but a consented compatible local profile may still run local rerank as `local_related_rerank_v1_fallback`;
 - localStorage unavailable/corrupted means no profile mutation and static fallback.
 - `anon_id` and `session_id` must be UUID-compatible while the database schema uses `uuid` columns; legacy prefixed ids are incompatible and fall back to static order until reset/migration.
 
@@ -200,7 +200,7 @@ Every rendered/reranked related block should be summarizable without storing raw
 }
 ```
 
-This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context. The production endpoint maps `shown[]` JSON into compact arrays/reason masks before DB insert; full reason JSON is debug/sample-only. The reference client creates `served_list_id` before rendering cards, attaches the same id/hash to strong actions, dedupes repeated `served_list_summary` emissions by `served_list_hash` for the configured window, and keeps that in-memory dedupe map bounded so resize/re-render does not create a raw firehose. When `backendAvailable=false`, the reference client disables trusted telemetry and can emit local debug-only records only through `debugTelemetrySink`.
+This extends `personalization_served_list_summary` and gives future ranker/eval code exposure context. The selected production write path maps `shown[]` JSON into compact arrays/reason masks before DB insert; full reason JSON is debug/sample-only. The reference client creates `served_list_id` before rendering cards, attaches the same id/hash to strong actions, dedupes repeated `served_list_summary` emissions by `served_list_hash` for the configured window, and keeps that in-memory dedupe map bounded so resize/re-render does not create a raw firehose. When `backendAvailable=false`, the reference client disables trusted telemetry and can emit local debug-only records only through `debugTelemetrySink`.
 
 Session summary and strong actions stay compact:
 
@@ -312,7 +312,7 @@ Before full Astro integration, the reference artifacts are:
 
 The demo covers only this MVP-0 surface first: static related block, consent,
 local profile, hide/not interested, mobile module, desktop module, telemetry
-endpoint/Supabase timeout fallback, strict profile compatibility, event-exclusion separation from user negative interests, served-list id/hash lifecycle and resize/render telemetry dedupe.
+write-path/Supabase timeout fallback, strict profile compatibility, event-exclusion separation from user negative interests, served-list id/hash lifecycle and resize/render telemetry dedupe.
 
 Verification:
 

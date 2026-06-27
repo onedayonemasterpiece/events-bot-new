@@ -481,8 +481,9 @@ The analytics document's target architecture is preserved:
    - `served_list_summary` for exposure context/future ranker labels;
    - raw weak telemetry remains off by default; strong raw actions are short-retention/debug only.
 7. Add abuse controls before public write rollout:
-   - preferred production path: same-origin endpoint with IP/session rate-limit and service-role/direct DB insert;
-   - direct Supabase insert is canary-only unless protected by payload caps, WAF/CDN rate limits, cleanup, and table-growth alerts.
+   - default production path: `same_origin_endpoint_v1` with IP/session rate-limit and service-role/direct DB insert/RPC;
+   - allowed lightweight path: `supabase_rpc_ingest_v1`, a dedicated append-only RPC with explicit execute grants, fixed `search_path` if `security definer`, typed/compacted payload, dedupe/quota/storage guards and no raw JSON persistence;
+   - direct browser -> Supabase table insert/update/select remains forbidden in production.
 8. Add offline eval report over deterministic assertions + human/golden personas + optional LLM reviewer.
 9. Add profile horizon aggregation for analytics/post-MVP server ranker:
    - local immediate session/short updates are product-critical;

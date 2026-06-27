@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- **Personalization / thin-runtime architectural gate**: converted the production integration plan into a Fly.io 2GB thin-runtime gate (web serves static/API only; Smart Update/static builds, LLM/ML, embeddings and bulk analytics stay in worker/CI jobs), tightened the Supabase contract to compact accepted rows with client-payload -> DB mapping and no direct production browser writes, made browser `anon_id`/`session_id` UUID-compatible, bounded served-list dedupe state, separated trusted telemetry from debug-only local fallback, refreshed docs for bot endpoint tests/retention/CTA/promo/anti-bubble gates, and expanded Playwright coverage to `9 passed`.
+- **Personalization / gated Supabase RPC ingest**: refined the thin-runtime write-path policy so production still defaults to `same_origin_endpoint_v1`, but `supabase_rpc_ingest_v1` is now an allowed lightweight mode when implemented as a dedicated append-only RPC with closed table grants, explicit function execute grants, fixed `search_path` for `SECURITY DEFINER`, compact typed payloads, dedupe/quota/storage guards and no raw JSON persistence; direct browser table insert/update/select remains forbidden.
 - **Contour SVG generator / FLUX line-art probe**: added a separate Kaggle
   research probe for FLUX raster line-art experiments. The default path uses
   public non-gated `ModelsLab/flux.1-dev` via `FluxImg2ImgPipeline` with
