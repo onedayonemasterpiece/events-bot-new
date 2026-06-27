@@ -1,8 +1,8 @@
 # Astro SSG preview — event pages
 
 > **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** `preview-20260627-event-pages-v10`
-> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v10/__preview/>
+> **Build ID:** `preview-20260627-event-pages-v11`
+> **Public preview index:** <https://kenigevents.ru/preview-20260627-event-pages-v11/__preview/>
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase write path, no personalization telemetry, no client recommendation API and no LLM fragments in rendered HTML.
 
@@ -10,14 +10,14 @@ This is the first real Astro SSG implementation for `kenigevents.ru` event detai
 
 Required openable URLs for the current preview:
 
-- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v10/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v10/segodnya/>
-- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v10/vyhodnye/>
-- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v10/sobytiya/pesni-sssr-svetlogorsk-5878/>
-- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v10/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
-- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v10/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v10/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v10/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260627-event-pages-v11/__preview/>
+- Today listing: <https://kenigevents.ru/preview-20260627-event-pages-v11/segodnya/>
+- Weekend listing: <https://kenigevents.ru/preview-20260627-event-pages-v11/vyhodnye/>
+- Control event page: <https://kenigevents.ru/preview-20260627-event-pages-v11/sobytiya/pesni-sssr-svetlogorsk-5878/>
+- Control event calendar file: <https://kenigevents.ru/preview-20260627-event-pages-v11/sobytiya/pesni-sssr-svetlogorsk-5878/event.ics>
+- Preview sitemap: <https://kenigevents.ru/preview-20260627-event-pages-v11/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260627-event-pages-v11/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260627-event-pages-v11/__preview/>
 
 ## Code layout
 
@@ -65,7 +65,8 @@ The preview uses 10 real production event rows exported read-only from Fly SQLit
 - related “Другие даты” pair `6437`/`6438`;
 - one static neutral `Смотрите дальше` discovery feed; diversification is an internal ranking constraint, not a separate user-facing block;
 - explicit card reactions: like count + toggle like/unlike, “Не интересно”, local compact raw log/report for the current anonymous browser profile;
-- icon calendar action links that open `.ics` directly rather than forcing a download.
+- honest like baseline: visible `likes_count` is `source_likes_count + service_likes_count`; `source_likes_count` is aggregated from available production TG/VK source-post metrics, while `service_likes_count` is the future first-party KenigEvents counter and remains `0` in this static preview; public HTML/UI shows only the total count; source/service split is technical and must not be rendered as copy or data attributes;
+- icon calendar action links that open `.ics` directly rather than forcing a download, but only for one-day/short events; multi-day exhibitions/long-running events do not show “В календарь” in cards or primary action blocks.
 
 No future active sold-out/cancelled/postponed event was present in the active export used for this slice, so that optional state is not represented yet.
 
@@ -79,7 +80,7 @@ User-agent: *
 Disallow: /
 ```
 
-- Preview canonical and `og:url` include `/preview-20260627-event-pages-v10/`; production canonical is not emitted by the preview build.
+- Preview canonical and `og:url` include `/preview-20260627-event-pages-v11/`; production canonical is not emitted by the preview build.
 - Event pages render `schema.org/Event` / `MusicEvent` JSON-LD only from visible facts.
 - The control `.ics` is a no-JS link and contains `DTSTART:20260711T193000Z`; it deliberately has no `DTEND` because reliable duration/end was not exported for event `5878`.
 
@@ -88,16 +89,16 @@ Disallow: /
 ```bash
 cd site
 npm install
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v10 npm run build:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v10 npm run check:preview
-PREVIEW_BUILD_ID=preview-20260627-event-pages-v10 npm run deploy:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v11 npm run build:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v11 npm run check:preview
+PREVIEW_BUILD_ID=preview-20260627-event-pages-v11 npm run deploy:preview
 ```
 
 `deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
 
 ## Visual review passes
 
-The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v10` makes the event page more mobile/feed-oriented and feedback-aware:
+The first public preview (`preview-20260627-event-pages-v1`) was superseded after visual review. `preview-20260627-event-pages-v11` makes the event page more mobile/feed-oriented and feedback-aware:
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
 - the hero poster uses `object-fit: contain` so the poster is not cropped;
@@ -108,7 +109,7 @@ The first public preview (`preview-20260627-event-pages-v1`) was superseded afte
 - a favicon is emitted from the selected SVG calendar/heart motif so browser/share surfaces have a site icon.
 
 
-After direct product review, `preview-20260627-event-pages-v10` rolls back the UX regressions introduced by the split recommendation rails:
+After direct product review, `preview-20260627-event-pages-v11` rolls back the UX regressions introduced by the split recommendation rails:
 
 - event description is visible HTML again, not hidden behind a collapsed `<details>` block;
 - event continuation is one vertical mobile-first discovery feed (`Смотрите дальше`), not two horizontal scroll blocks and not a visible “try something else” module;
@@ -121,11 +122,13 @@ After direct product review, `preview-20260627-event-pages-v10` rolls back the U
 - same-origin event links have lightweight prefetch markers so static page transitions can warm the next HTML document.
 - hero and card media use the same vertical 3:4 frame: `visual_only` uses `cover`; `ocr_text` and `unknown` keep the full poster visible with `contain` over a non-blurred same-poster cover underlay, so OCR text is not cropped and no blur fill is used.
 - The share action is a permanent bottom-row button with a VK-like outlined arrow, visible `Поделиться` label and share count. After a successful like it is highlighted instead of showing a floating bubble. The same bottom row contains `Не интересно`, calendar, share and like; the old explicit `Открыть` card button is removed because media/title links plus full-card JS navigation preserve crawlable SEO/GEO links while reducing UI noise.
+- The calendar slot is conditional: it is present only when `end_date` is empty or equals `start_date`; multi-day/long-running events keep the CTA/share/like row but do not expose their own `.ics` action.
+- The like button shows only the total like count. The source/service split is kept in the fixture/DB for consistency and audit, but is not rendered into the public page.
 - single tap/click on a non-interactive part of a card navigates to the event detail page; double tap likes the card, shows a heart-burst animation, updates the like button, and does not navigate.
 - marking `Не интересно` turns the current card into a grey explanatory plate (`Вы пометили: не интересует`) and keeps it in place until the next page/reload; later personalization may remove/demote similar events on subsequent surfaces.
 - explicit-feedback rerank is viewport-stable: after a user action, the acted-on card and all cards above it keep their positions; only cards below the action anchor may be re-ordered.
 
-After consultant review, `preview-20260627-event-pages-v10` additionally hardens the first discovery layer:
+After consultant review, `preview-20260627-event-pages-v11` additionally hardens the first discovery layer:
 
 - header links now open real static `/segodnya/` and `/vyhodnye/` pages, not QA anchors;
 - related cards use a no-nested-anchor poster-card component with mandatory image/generated visual slot, direct page link and icon-led `.ics` calendar action;

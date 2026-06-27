@@ -248,10 +248,11 @@ const safeDescription = description || 'Анонс события в Калин�
       .event-card__title { color: #fff; text-decoration: none; font-weight: 900; line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .event-card__title:hover { text-decoration: underline; text-decoration-thickness: 0.08em; }
       .event-card__footer { color: rgba(255,255,255,0.84); font-weight: 760; font-size: 0.86rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 6; display: grid; grid-template-columns: 52px 52px minmax(118px, 1fr) 74px; align-items: end; gap: 0.38rem; pointer-events: none; }
+      .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 6; display: grid; grid-template-columns: 52px 52px minmax(112px, 1fr) 88px; align-items: end; gap: 0.38rem; pointer-events: none; }
+      .event-card__feedback--no-calendar { grid-template-columns: 52px minmax(126px, 1fr) 88px; }
       .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: 900; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
       .feedback-button .icon { width: 1.25rem; height: 1.25rem; }
-      .feedback-button--like { min-width: 74px; padding: 0.52rem 0.74rem; font-size: 1.04rem; }
+      .feedback-button--like { min-width: 88px; padding: 0.44rem 0.58rem; font-size: 1.04rem; }
       .feedback-button--calendar { padding: 0.48rem; text-decoration: none; color: rgba(255,255,255,0.94); }
       .feedback-button--calendar .icon { width: 1.18rem; height: 1.18rem; }
       .feedback-button--share { min-width: 0; padding: 0.5rem 0.55rem; color: rgba(229,235,244,0.96); font-size: 0.84rem; white-space: nowrap; }
@@ -278,7 +279,8 @@ const safeDescription = description || 'Анонс события в Калин�
       .listing-item__media { display: block; border-radius: 18px; overflow: hidden; background: #15110f; text-decoration: none; align-self: start; }
       .listing-item__media--cover { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background: linear-gradient(135deg, #8a3f23, #0f766e); }
       .listing-item__media--cover .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-      .listing-item__media--preserve .listing-item__image { display: block; width: 100%; height: auto; }
+      .listing-item__media--preserve { position: relative; min-height: 138px; aspect-ratio: 3 / 4; background-image: linear-gradient(rgba(12,10,9,0.52), rgba(12,10,9,0.52)), var(--poster-image); background-size: cover; background-position: center; }
+      .listing-item__media--preserve .listing-item__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
       .listing-item__fallback { width: 100%; height: 100%; min-height: 138px; display: grid; place-items: center; color: #fff; padding: 0.7rem; text-align: center; font-weight: 900; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.07em; }
       .listing-item__body { min-width: 0; display: grid; gap: 0.42rem; align-content: center; }
       .listing-item__meta { display: flex; flex-wrap: wrap; gap: 0.4rem; color: var(--muted); font-size: 0.84rem; font-weight: 800; }
@@ -312,7 +314,6 @@ const safeDescription = description || 'Анонс события в Калин�
         .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .cards-grid--immersive { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .cards-grid--feed { grid-auto-flow: row; grid-auto-columns: initial; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; overscroll-behavior-inline: auto; scroll-snap-type: none; padding: 0; margin-inline: 0; }
-        .hero-media { aspect-ratio: 16 / 10; }
       }
       @media (max-width: 1023px) {
         .side-col { display: none; }
@@ -335,9 +336,11 @@ const safeDescription = description || 'Анонс события в Калин�
         .section-card__inner { padding: 1rem; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
-        .event-card__feedback { grid-template-columns: 52px 48px minmax(116px, 1fr) 74px; gap: 0.32rem; }
+        .event-card__feedback { grid-template-columns: 48px 44px minmax(110px, 1fr) 82px; gap: 0.28rem; left: 0.56rem; right: 0.56rem; }
+        .event-card__feedback--no-calendar { grid-template-columns: 48px minmax(118px, 1fr) 82px; }
         .feedback-button--share { padding-inline: 0.46rem; font-size: 0.82rem; }
         .feedback-button--share .icon { width: 1.18rem; height: 1.18rem; }
+        .feedback-button--like { min-width: 82px; padding-inline: 0.5rem; }
         .mobile-sticky-cta__inner { grid-template-columns: minmax(0, 1fr); }
         .mobile-sticky-cta__title { display: none; }
         .listing-item { grid-template-columns: 88px minmax(0, 1fr); gap: 0.65rem; padding: 0.65rem; }
@@ -528,9 +531,11 @@ const safeDescription = description || 'Анонс события в Калин�
             card.classList.toggle('is-not-interested', Boolean(current.not_interested));
             card.querySelectorAll('[data-feedback-action="like"]').forEach((button) => {
               const base = Number(button.dataset.baseCount || '0');
+              const localLike = current.liked ? 1 : 0;
               button.setAttribute('aria-pressed', current.liked ? 'true' : 'false');
+              button.setAttribute('aria-label', `${current.liked ? 'Убрать лайк' : 'Поставить лайк'}: ${card.dataset.eventTitle || 'событие'}. Сейчас ${base + localLike}`);
               const count = button.querySelector('[data-feedback-count]');
-              if (count) count.textContent = String(base + (current.liked ? 1 : 0));
+              if (count) count.textContent = String(base + localLike);
             });
             card.querySelectorAll('[data-share-count]').forEach((count) => {
               const shareButton = count.closest('[data-native-share]');

@@ -6,7 +6,8 @@
     "notes": [
       "Preview fixture uses real production event rows only.",
       "No future active sold-out/cancelled/postponed example was found in the active export, so that optional state is not included.",
-      "Preview pages are deliberately noindex and use preview canonical URLs."
+      "Preview pages are deliberately noindex and use preview canonical URLs.",
+      "likes_count is source_likes_count + service_likes_count; source_likes_count comes from production TG/VK post metrics when available, service_likes_count is zero in the static preview until first-party likes are persisted."
     ]
   },
   "events": [
@@ -55,8 +56,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-06-10 17:08:21.268304",
-      "likes_count": 42,
-      "image_text_mode": "ocr_text"
+      "likes_count": 9,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 9,
+      "service_likes_count": 0,
+      "source_views_count": 393,
+      "source_engagement_sources_count": 1
     },
     {
       "id": 5370,
@@ -103,8 +108,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-27 09:00:22.114199",
-      "likes_count": 31,
-      "image_text_mode": "visual_only"
+      "likes_count": 139,
+      "image_text_mode": "visual_only",
+      "source_likes_count": 139,
+      "service_likes_count": 0,
+      "source_views_count": 6615,
+      "source_engagement_sources_count": 3
     },
     {
       "id": 6093,
@@ -155,8 +164,12 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-17 00:50:53.566675",
-      "likes_count": 7,
-      "image_text_mode": "ocr_text"
+      "likes_count": 1,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 1,
+      "service_likes_count": 0,
+      "source_views_count": 68,
+      "source_engagement_sources_count": 1
     },
     {
       "id": 6322,
@@ -209,8 +222,12 @@
         "weak_address"
       ],
       "updated_at": "2026-06-23 14:27:14.119278",
-      "likes_count": 15,
-      "image_text_mode": "ocr_text"
+      "likes_count": 25,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 25,
+      "service_likes_count": 0,
+      "source_views_count": 402,
+      "source_engagement_sources_count": 2
     },
     {
       "id": 4913,
@@ -261,8 +278,12 @@
         "no_exact_start_time"
       ],
       "updated_at": "2026-05-14 00:07:41.203895",
-      "likes_count": 22,
-      "image_text_mode": "ocr_text"
+      "likes_count": 13,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 13,
+      "service_likes_count": 0,
+      "source_views_count": 601,
+      "source_engagement_sources_count": 3
     },
     {
       "id": 4512,
@@ -313,8 +334,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-05-02 23:51:01.674869",
-      "likes_count": 18,
-      "image_text_mode": "ocr_text"
+      "likes_count": 7,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 7,
+      "service_likes_count": 0,
+      "source_views_count": 114,
+      "source_engagement_sources_count": 1
     },
     {
       "id": 5690,
@@ -364,8 +389,12 @@
         "no_local_image"
       ],
       "updated_at": "2026-06-04 23:33:21.476164",
-      "likes_count": 11,
-      "image_text_mode": "unknown"
+      "likes_count": 0,
+      "image_text_mode": "unknown",
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 0,
+      "source_engagement_sources_count": 0
     },
     {
       "id": 6437,
@@ -418,8 +447,12 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-26 00:03:11.187637",
-      "likes_count": 5,
-      "image_text_mode": "ocr_text"
+      "likes_count": 0,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 0,
+      "source_engagement_sources_count": 0
     },
     {
       "id": 6438,
@@ -472,8 +505,12 @@
         "no_ticket_link"
       ],
       "updated_at": "2026-06-26 00:03:35.777877",
-      "likes_count": 4,
-      "image_text_mode": "ocr_text"
+      "likes_count": 0,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 0,
+      "source_engagement_sources_count": 0
     },
     {
       "id": 3730,
@@ -521,8 +558,12 @@
       "other_date_ids": [],
       "data_quality_notes": [],
       "updated_at": "2026-04-08 12:54:17.921188",
-      "likes_count": 29,
-      "image_text_mode": "ocr_text"
+      "likes_count": 0,
+      "image_text_mode": "ocr_text",
+      "source_likes_count": 0,
+      "service_likes_count": 0,
+      "source_views_count": 0,
+      "source_engagement_sources_count": 0
     }
   ]
 }

@@ -40,8 +40,10 @@ if (!controlHtml.includes('event-card__media-shell--preserve')) throw new Error(
 if (!controlHtml.includes('event-card__media-shell--cover')) throw new Error('Visual-only poster cards must keep 3:4 cover media shell');
 if (controlHtml.includes('media-backdrop') || controlHtml.includes('image-backdrop') || /blur\(/u.test(controlHtml)) throw new Error('Blur/backdrop poster fill leaked into event page');
 if (controlHtml.includes('event-card__actions')) throw new Error('Old separate card action row leaked');
-if (!controlHtml.includes('feedback-button--calendar')) throw new Error('Control related cards miss calendar action in bottom action row');
+if (!controlHtml.includes('feedback-button--calendar')) throw new Error('Control related cards miss calendar action for short one-day events');
+if (!controlHtml.includes('event-card__feedback--no-calendar')) throw new Error('Control related cards must hide calendar action for multi-day events');
 if (!controlHtml.includes('data-feedback-action="like"') || !controlHtml.includes('data-feedback-count')) throw new Error('Control related cards miss explicit like buttons');
+if (controlHtml.includes('data-source-likes-count') || controlHtml.includes('data-service-likes-count') || controlHtml.includes('data-like-origin-label') || controlHtml.includes('feedback-origin-label') || controlHtml.includes('event-card__social-proof') || /ист\.\s*\+|из источников|в сервисе/u.test(controlHtml)) throw new Error('Technical source/service like breakdown leaked into public HTML/UI');
 if (!controlHtml.includes('feedback-button--share') || !controlHtml.includes('data-share-count')) throw new Error('Control related cards miss explicit share button/count');
 if (!controlHtml.includes('data-feedback-action="not_interested"')) throw new Error('Control related cards miss not-interested buttons');
 if (!controlHtml.includes('share-label') || !controlHtml.includes('is-share-prompt')) throw new Error('Control related cards miss post-like share prompt expansion');
@@ -65,6 +67,9 @@ for (const needle of ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'DTSTART
 if (/^DTEND:/m.test(ics)) throw new Error('Control ICS must not include DTEND without reliable duration');
 for (const event of eventsData.events) {
   if (!Number.isInteger(event.likes_count) || event.likes_count < 0) throw new Error(`Event ${event.id} has invalid likes_count`);
+  if (!Number.isInteger(event.source_likes_count) || event.source_likes_count < 0) throw new Error(`Event ${event.id} has invalid source_likes_count`);
+  if (!Number.isInteger(event.service_likes_count) || event.service_likes_count < 0) throw new Error(`Event ${event.id} has invalid service_likes_count`);
+  if (event.likes_count !== event.source_likes_count + event.service_likes_count) throw new Error(`Event ${event.id} likes_count must equal source_likes_count + service_likes_count`);
   if (!['ocr_text', 'visual_only', 'unknown'].includes(event.image_text_mode)) throw new Error(`Event ${event.id} has invalid image_text_mode`);
   const eventIcs = readFileSync(join(root, `sobytiya/${event.slug}/event.ics`), 'utf8');
   for (const needle of ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:', 'SUMMARY:', 'URL:', 'END:VCALENDAR']) {
@@ -114,6 +119,10 @@ const badHtmlPatterns = [
 ];
 for (const event of eventsData.events) {
   const html = readFileSync(join(root, `sobytiya/${event.slug}/index.html`), 'utf8');
+  const ownCalendarHref = `sobytiya/${event.slug}/event.ics`;
+  const calendarEligible = !event.end_date || event.end_date === event.start_date;
+  if (calendarEligible && !html.includes(ownCalendarHref)) throw new Error(`Short event ${event.id} misses own calendar link`);
+  if (!calendarEligible && html.includes(ownCalendarHref)) throw new Error(`Multi-day event ${event.id} must not expose own calendar link`);
   for (const [label, pattern] of badHtmlPatterns) {
     if (pattern.test(html)) throw new Error(`Rendered page ${event.id} contains ${label}`);
   }

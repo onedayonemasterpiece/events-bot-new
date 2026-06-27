@@ -60,6 +60,10 @@ export function eventCalendarHref(event: Pick<PreviewEvent, 'slug'>): string {
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }
 
+export function isCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): boolean {
+  return !event.end_date || event.end_date === event.start_date;
+}
+
 export function getOtherDates(event: PreviewEvent): PreviewEvent[] {
   return event.other_date_ids
     .map((id) => getEventById(id))

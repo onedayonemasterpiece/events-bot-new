@@ -41,7 +41,14 @@ export interface PreviewEvent {
   meta_description: string;
   description_html: string;
   topics: string[];
+  /** Total visible likes: source_likes_count + service_likes_count. */
   likes_count: number;
+  /** Aggregated public reactions from source posts (TG/VK post metrics when available). */
+  source_likes_count: number;
+  /** First-party likes already persisted by KenigEvents. Static preview keeps it 0 until backend ingest exists. */
+  service_likes_count: number;
+  source_views_count?: number;
+  source_engagement_sources_count?: number;
   shares_count?: number;
   pushkin_card: boolean;
   other_date_ids: number[];

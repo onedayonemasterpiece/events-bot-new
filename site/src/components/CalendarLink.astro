@@ -1,8 +1,11 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref } from '../lib/events';
+import { eventCalendarHref, isCalendarEligible } from '../lib/events';
 interface Props { event: PreviewEvent; className?: string; label?: string }
 const { event, className = 'secondary-button', label = 'В календарь' } = Astro.props;
+const canAddToCalendar = isCalendarEligible(event);
 ---
-<a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>
+{canAddToCalendar && (
+  <a class={className} href={eventCalendarHref(event)} type="text/calendar" aria-label={`Добавить в календарь: ${event.title}`}><Icon name="calendar" /> <span>{label}</span></a>
+)}

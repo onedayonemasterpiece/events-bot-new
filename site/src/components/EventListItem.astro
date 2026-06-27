@@ -1,21 +1,23 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref, eventHref, eventTicketActionLabel, isExternalHttpUrl } from '../lib/events';
+import { eventCalendarHref, eventHref, eventTicketActionLabel, isCalendarEligible, isExternalHttpUrl } from '../lib/events';
 
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
 const href = eventHref(event);
 const calendarHref = eventCalendarHref(event);
+const canAddToCalendar = isCalendarEligible(event);
 const ctaHref = event.ticket.href;
 const ctaRel = isExternalHttpUrl(ctaHref) ? 'noopener noreferrer nofollow' : undefined;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const ctaLabel = eventTicketActionLabel(event);
 const preservePoster = event.image_text_mode !== 'visual_only';
 const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__media--preserve' : 'listing-item__media--cover'].join(' ');
+const posterStyle = event.image_url ? `--poster-image: url('${event.image_url}')` : undefined;
 ---
 <article class="listing-item">
-  <a class={mediaLinkClass} href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class={mediaLinkClass} href={href} style={posterStyle} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {event.image_url ? (
       <img class="listing-item__image" src={event.image_url} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
     ) : (
@@ -31,7 +33,7 @@ const mediaLinkClass = ['listing-item__media', preservePoster ? 'listing-item__m
     {place && <p>{place}</p>}
     <div class="listing-item__actions">
       {ctaHref && <a class="cta-button" href={ctaHref} target={isExternalHttpUrl(ctaHref) ? '_blank' : undefined} rel={ctaRel}>{ctaLabel}</a>}
-      <a class="secondary-button" href={calendarHref} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>
+      {canAddToCalendar && <a class="secondary-button" href={calendarHref} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>}
       <a class="secondary-button" href={href} data-prefetch>Открыть</a>
     </div>
   </div>

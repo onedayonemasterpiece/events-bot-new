@@ -1,6 +1,6 @@
 # Personalization Database Design
 
-> **Status:** design/draft, SQL not applied yet; aligned with the thin-runtime architectural gate
+> **Status:** full telemetry schema remains design/draft; minimal public counter table `public.personalization_event_reaction_counter` was applied to the personalization Supabase project on 2026-06-27 for the event-page preview
 > **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)
 > **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions or static rebuild queues.
 
@@ -46,11 +46,12 @@ Official references:
 
 The MVP write path should be **compact summaries first**, not a raw event firehose:
 
+- `public.personalization_event_reaction_counter` — **applied 2026-06-27** compact public aggregate for event-card counters. It stores `source_likes_count` (TG/VK/source-post metrics imported by backend) and `service_likes_count` (first-party KenigEvents likes) in the same row, with generated `likes_count = source_likes_count + service_likes_count`. Browser/Data API roles may select only `event_id`, `likes_count`, `not_interested_count`, `share_count`, `updated_at`; source/service split, source views and metadata remain backend-only. UI copy must show only total counts.
 - `public.personalization_session_summary` — compact session/profile deltas after consent;
 - `public.personalization_served_list_summary` — compact exposure context per feed/list/module chunk for future ranker labels;
 - `public.personalization_interaction_event` — optional short-retention/debug/sampled strong raw actions, not the default path for every impression.
 
-Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, maps the client contract to the server row contract, and inserts with service-role/direct DB credentials or calls a private DB RPC. Allowed lightweight path: browser calls only a dedicated append-only `supabase_rpc_ingest_v1` function that performs the same validation/compaction/dedupe/quota checks inside Postgres. Direct browser table insert/update/select with the Supabase publishable key is forbidden in production. All exposed tables have RLS and **no public SELECT**. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`; `presentation_mode` and `current_event_id` are dedicated columns on served-list summaries and metadata fields elsewhere. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
+Preferred production path: same-origin endpoint validates/rate-limits payload, classifies `actor_class`/trust, maps the client contract to the server row contract, and inserts with service-role/direct DB credentials or calls a private DB RPC. Allowed lightweight path: browser calls only a dedicated append-only `supabase_rpc_ingest_v1` function that performs the same validation/compaction/dedupe/quota checks inside Postgres. Direct browser table insert/update/select with the Supabase publishable key is forbidden for telemetry/profile tables in production. Exposed telemetry tables have RLS and **no public SELECT**; the only current exception is the deliberately narrow aggregate counter `public.personalization_event_reaction_counter`, where anon/authenticated may select only total public columns. For MVP-0 `event_detail_related`, store `surface='event_detail_related'`, `layout_mode='module'`; `presentation_mode` and `current_event_id` are dedicated columns on served-list summaries and metadata fields elsewhere. Crawler/preview/monitor/bot-like payloads are dropped or quarantined and never feed profiles/training; see `bots-and-automation.md`.
 
 ### Private schema `personalization`
 
@@ -454,14 +455,40 @@ create index if not exists personalization_event_reaction_anon_time_idx
 create index if not exists personalization_event_reaction_event_kind_idx
   on public.personalization_event_reaction (event_id, reaction_kind, occurred_at desc);
 
--- Aggregate snapshot used by static export/build to render card like counts.
--- It is derived from trusted reaction rows, not from Fly SQLite.
-create table if not exists personalization.event_reaction_counter (
+-- Applied minimal public aggregate used by static export/build and optional
+-- browser Data API reads to render card counters. Source metrics are imported
+-- from production TG/VK/source-post metrics by backend jobs; first-party likes
+-- are folded in from trusted reaction rows. UI must show only likes_count.
+create table if not exists public.personalization_event_reaction_counter (
   event_id bigint primary key,
-  like_count integer not null default 0 check (like_count >= 0),
+  source_likes_count integer not null default 0 check (source_likes_count >= 0),
+  service_likes_count integer not null default 0 check (service_likes_count >= 0),
+  likes_count integer generated always as (source_likes_count + service_likes_count) stored,
   not_interested_count integer not null default 0 check (not_interested_count >= 0),
-  updated_at timestamptz not null default now()
+  share_count integer not null default 0 check (share_count >= 0),
+  source_views_count integer not null default 0 check (source_views_count >= 0),
+  source_engagement_sources_count integer not null default 0 check (source_engagement_sources_count >= 0),
+  source_refreshed_at timestamptz,
+  service_refreshed_at timestamptz,
+  updated_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb,
+  constraint personalization_event_reaction_counter_metadata_size_chk check (length(metadata::text) <= 2048)
 );
+
+alter table public.personalization_event_reaction_counter enable row level security;
+revoke all on public.personalization_event_reaction_counter from anon, authenticated;
+grant select(event_id, likes_count, not_interested_count, share_count, updated_at)
+  on public.personalization_event_reaction_counter to anon, authenticated;
+grant all on public.personalization_event_reaction_counter to service_role;
+
+create policy personalization_event_reaction_counter_public_read
+  on public.personalization_event_reaction_counter
+  for select
+  to anon, authenticated
+  using (true);
+
+create index if not exists personalization_event_reaction_counter_updated_idx
+  on public.personalization_event_reaction_counter (updated_at desc);
 
 create table if not exists personalization.anonymous_visitor (
   anon_id uuid primary key,
@@ -601,6 +628,8 @@ grant select, insert, update, delete on all tables in schema personalization to 
 ```
 
 ## Why no public SELECT in MVP
+
+This rule applies to profile/telemetry/personalized reads by `anon_id`; the public aggregate counter table is a narrow exception because it exposes only event-level totals and no visitor/profile data.
 
 Anonymous personalization without auth cannot strongly prove that a browser owns a given `anon_id`. Therefore public reads by `anon_id` are avoided in MVP. The safe flow is:
 

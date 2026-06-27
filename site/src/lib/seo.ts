@@ -1,5 +1,5 @@
 import type { PreviewEvent } from './types';
-import { eventAbsoluteUrl, eventCalendarHref, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
+import { eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN, withBase } from './events';
 
 export function eventTitle(event: PreviewEvent): string {
   const place = [event.display_date, event.venue_name || event.city].filter(Boolean).join(', ');
@@ -56,13 +56,13 @@ export function buildEventJsonLd(event: PreviewEvent) {
       '@type': 'WebPage',
       '@id': absolute,
     },
-    potentialAction: [
+    potentialAction: isCalendarEligible(event) ? [
       {
         '@type': 'AddAction',
         target: new URL(eventCalendarHref(event), `${SITE_ORIGIN}/`).toString(),
         name: 'Добавить в календарь',
       },
-    ],
+    ] : undefined,
   };
 }
 
