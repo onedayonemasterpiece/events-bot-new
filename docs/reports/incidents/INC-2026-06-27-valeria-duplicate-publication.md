@@ -1,10 +1,10 @@
 # INC-2026-06-27-valeria-duplicate-publication Deterministic title guard overruled a correct LLM duplicate match for Валерия
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Smart Update dedup / managed Telegram and VK event publication
 Opened: 2026-06-27
-Closed: —
+Closed: 2026-06-27
 Owners: Smart Update / publication pipeline owner
 Related incidents: `INC-2026-05-30-active-duplicate-events-recall-gate`, `INC-2026-05-11-pre-create-dup-probe-missed-identical-ticket-merge`, `INC-2026-05-05-event-quality-regression`
 Related docs: `docs/features/smart-event-update/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -85,15 +85,14 @@ On 2026-06-27 production published two managed VK posts, and started publishing 
 
 ## Immediate Mitigation
 
-Pending: merge/archive duplicate event `6460`, cancel its pending Telegram publication, and remove or reconcile the lower-quality duplicate VK post. Keep the richer source facts/time/ticket/media on the canonical survivor.
+Completed on 2026-06-27: duplicate event `6460` was archived as `lifecycle_status=duplicate`, its pending `tg_event_publish` job was stopped, richer source facts/time/ticket/link were merged into canonical event `5152`, stale May 29 linked rows `4241`/`5048` were marked postponed, and the lower-quality managed VK duplicate was deleted.
 
 ## Corrective Actions
-
-Pending in this incident branch:
 
 - `_titles_look_related()` now handles narrow Russian inflection differences for meaningful title tokens, covering `Валерия` vs `Концерт Валерии` without broad semantic regex matching.
 - High-confidence LLM matches (`confidence >= 0.95`) with matching/non-conflicting hard anchors (date, venue, time) are protected from title-only deterministic vetoes in both the single-candidate sanity path and the later `unrelated_titles` overrule.
 - Added targeted regression tests for the Валерия failure class.
+- Production data repair left one active canonical row (`5152`) with `time=19:00`, direct Янтарь-холл ticket URL, `source_vk_post_url=https://vk.com/wall-231920894_4681`, and `tg_event_post_url=https://t.me/c/3954607218/1431`; duplicate row `6460` is non-active and has no pending TG fanout.
 
 ## Follow-up Actions
 
@@ -102,10 +101,19 @@ Pending in this incident branch:
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: —
-- post-deploy verification: —
+- deployed SHA: `5ad5b4417cf0e32d33ddce248e1501c1d68373de` (`incident/2026-06-27-valeria-dedup`, deployed image `events-bot-new-wngqia:deployment-01KW47CPNPWD1N847Q81S07SSJ`; docs-only closure evidence committed afterward).
+- deploy path: `flyctl deploy --remote-only --app events-bot-new-wngqia` from a clean linked worktree created from `origin/main`.
+- regression checks:
+  - `.venv/bin/python -m pytest tests/test_smart_event_update_duplicate_guards.py::test_title_related_allows_russian_inflection_artist_title tests/test_smart_event_update_duplicate_guards.py::test_high_confidence_llm_match_is_not_vetoed_by_title_wrapper_drift -q` -> `2 passed`.
+  - `.venv/bin/python -m py_compile smart_event_update.py`.
+  - Release-governance branch audit: current branch from `origin/main`; stale `release/*`/`hotfix/*` branches with ahead counts were recorded, none blocked this incident deploy.
+- production repair evidence:
+  - backup tables: `codex_backup_event_20260627_valeria_dedup`, `codex_backup_event_source_20260627_valeria_dedup`, `codex_backup_eventposter_20260627_valeria_dedup`, `codex_backup_joboutbox_20260627_valeria_dedup`, plus stale-date backup `codex_backup_event_20260627_valeria_stale_dates`.
+  - DB verification: only event `5152` remains active for Валерия on 2026-07-01; event `6460` is `duplicate`, `tg_event_publish:6460` is stopped with `duplicate_archived_to_event_5152`, and stale May 29 rows `4241`/`5048` are `postponed`.
+  - VK API verification: before cleanup both live managed posts existed (`4681`, `4691`); `wall.delete owner_id=-231920894 post_id=4691` returned `1`; after cleanup only `4681` remained.
+  - Telegram verification: Telethon read of `https://t.me/c/3954607218/1431` shows edited message `2026-06-27T09:38:59+00:00` with `🎤 Валерия`, `1 июля 19:00`, Янтарь холл, and rich current-source description.
+  - Telegraph verification: `https://telegra.ph/Koncert-Valerii-05-20` shows `Валерия`, `1 июля в 19:00`, Янтарь холл, direct ticket block, and no stale `Другие даты: 29 мая`.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, `db=ok`, `issues=[]`; Fly machine `683961db016e28`, version `1502`, checks `1 passing`.
 
 ## Prevention
 
